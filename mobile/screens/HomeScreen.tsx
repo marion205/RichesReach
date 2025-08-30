@@ -13,20 +13,43 @@ import {
   Platform,
   Pressable,
   FlatList,
+  RefreshControl,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Feather';
 import * as ImagePicker from 'expo-image-picker';
-import { gql, useMutation } from '@apollo/client';
+import { gql, useMutation, useQuery, useApolloClient } from '@apollo/client';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // -------- Types --------
 type Post = {
-  id: number;
-  author: string;
+  id: string;
   content: string;
+  createdAt: string;
+  likesCount: number;
+  commentsCount: number;
+  isLikedByUser: boolean;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    followersCount: number;
+    followingCount: number;
+    isFollowingUser: boolean;
+    isFollowedByUser: boolean;
+  };
   image?: string;
+};
+
+type Comment = {
+  id: string;
+  content: string;
+  createdAt: string;
+  user: {
+    id: string;
+    name: string;
+  };
 };
 
 type ChatMsg = {
@@ -38,15 +61,141 @@ type ChatMsg = {
 };
 
 // -------- GraphQL --------
+const CREATE_CHAT_SESSION = gql`
+  mutation CreateChatSession {
+    createChatSession {
+      session {
+        id
+      }
+    }
+  }
+`;
+
 const SEND_MESSAGE = gql`
   mutation SendMessage($sessionId: ID!, $content: String!) {
     sendMessage(sessionId: $sessionId, content: $content) {
+      message {
+        id
+        role
+        content
+        createdAt
+        confidence
+        sources { title url snippet }
+      }
+    }
+  }
+`;
+
+const CREATE_POST = gql`
+  mutation CreatePost($content: String!) {
+    createPost(content: $content) {
+      post {
+        id
+        content
+        createdAt
+        likesCount
+        commentsCount
+        isLikedByUser
+        user {
+          id
+          name
+          email
+          followersCount
+          followingCount
+          isFollowingUser
+          isFollowedByUser
+        }
+      }
+    }
+  }
+`;
+
+const GET_POSTS = gql`
+  query GetPosts {
+    wallPosts {
       id
-      role
       content
       createdAt
-      confidence
-      sources { title url snippet }
+      likesCount
+      commentsCount
+      isLikedByUser
+      user {
+        id
+        name
+        email
+        followersCount
+        followingCount
+        isFollowingUser
+        isFollowedByUser
+      }
+    }
+  }
+`;
+
+const GET_ME = gql`
+  query GetMe {
+    me {
+      id
+      name
+      email
+    }
+  }
+`;
+
+const TOGGLE_LIKE = gql`
+  mutation ToggleLike($postId: ID!) {
+    toggleLike(postId: $postId) {
+      post {
+        id
+        likesCount
+        isLikedByUser
+      }
+      liked
+    }
+  }
+`;
+
+const CREATE_COMMENT = gql`
+  mutation CreateComment($postId: ID!, $content: String!) {
+    createComment(postId: $postId, content: $content) {
+      comment {
+        id
+        content
+        createdAt
+        user {
+          id
+          name
+        }
+      }
+    }
+  }
+`;
+
+const TOGGLE_FOLLOW = gql`
+  mutation ToggleFollow($userId: ID!) {
+    toggleFollow(userId: $userId) {
+      user {
+        id
+        followersCount
+        followingCount
+        isFollowingUser
+        isFollowedByUser
+      }
+      following
+    }
+  }
+`;
+
+const GET_POST_COMMENTS = gql`
+  query GetPostComments($postId: ID!) {
+    postComments(postId: $postId) {
+      id
+      content
+      createdAt
+      user {
+        id
+        name
+      }
     }
   }
 `;
@@ -60,11 +209,12 @@ export default function HomeScreen() {
   const [showPostForm, setShowPostForm] = useState(false);
   const [newPost, setNewPost] = useState('');
   const [imageUri, setImageUri] = useState<string | null>(null);
-  const [posts, setPosts] = useState<Post[]>([
-    { id: 1, author: 'Alice', content: 'Just joined RichesReach! 🚀' },
-    { id: 2, author: 'Bob', content: 'Excited about financial freedom! 💰' },
-    { id: 3, author: 'Clara', content: 'Investing in crypto and stocks 📈' },
-  ]);
+  const [posts, setPosts] = useState<Post[]>([]);
+  
+  // comments
+  const [showComments, setShowComments] = useState<string | null>(null);
+  const [commentInput, setCommentInput] = useState('');
+  const [comments, setComments] = useState<Comment[]>([]);
 
   // chatbot
   const [chatOpen, setChatOpen] = useState(false);
@@ -76,19 +226,90 @@ export default function HomeScreen() {
   // chat session id persisted on device
   const [sessionId, setSessionId] = useState<string>('');
 
+  const [createChatSession] = useMutation(CREATE_CHAT_SESSION);
+  const [mutateSendMessage] = useMutation(SEND_MESSAGE);
+  const [createPost] = useMutation(CREATE_POST);
+  const [toggleLike] = useMutation(TOGGLE_LIKE);
+  const [createComment] = useMutation(CREATE_COMMENT);
+  const [toggleFollow] = useMutation(TOGGLE_FOLLOW);
+  const { data: postsData, loading: postsLoading, refetch: refetchPosts } = useQuery(GET_POSTS);
+  const { data: meData, loading: meLoading } = useQuery(GET_ME);
+  
+  // Debug logging for meData
+  useEffect(() => {
+    console.log('meData:', meData);
+    console.log('meData?.me?.id:', meData?.me?.id);
+  }, [meData]);
+  
+  // Test log to verify console is working
+  useEffect(() => {
+    console.log('🚀 HomeScreen loaded - console logging is working!');
+  }, []);
+  const client = useApolloClient();
+
+  // Function to create a new chat session
+  const createNewSession = async (): Promise<string | null> => {
+    try {
+      console.log('Creating new chat session...');
+      const { data } = await createChatSession();
+      const sid = data?.createChatSession?.session?.id;
+      if (sid && !isNaN(Number(sid))) {
+        console.log('Created session with ID:', sid);
+        await AsyncStorage.setItem('chat_session_id', sid);
+        setSessionId(sid);
+        return sid;
+      }
+      return null;
+    } catch (error) {
+      console.error('Failed to create chat session:', error);
+      return null;
+    }
+  };
+
+  // Load posts from backend
+  useEffect(() => {
+    if (postsData?.wallPosts) {
+      setPosts(postsData.wallPosts);
+    }
+  }, [postsData]);
+
   useEffect(() => {
     (async () => {
       const key = 'chat_session_id';
       let sid = await AsyncStorage.getItem(key);
-      if (!sid) {
-        sid = `session-${Date.now()}`;
-        await AsyncStorage.setItem(key, sid);
+      
+      // Check if we have a valid numeric session ID
+      if (sid && !isNaN(Number(sid))) {
+        console.log('Using existing session ID:', sid);
+        setSessionId(sid);
+        return;
       }
-      setSessionId(sid);
+      
+      // Clear invalid session ID
+      if (sid) {
+        console.log('Clearing invalid session ID:', sid);
+        await AsyncStorage.removeItem(key);
+      }
+      
+      // If no valid session exists, create a new one
+      try {
+        console.log('Creating new chat session...');
+        const { data } = await createChatSession();
+        sid = data?.createChatSession?.session?.id;
+        if (sid && !isNaN(Number(sid))) {
+          console.log('Created session with ID:', sid);
+          await AsyncStorage.setItem(key, sid);
+          setSessionId(sid);
+        } else {
+          console.error('Invalid session ID received:', sid);
+          setSessionId('');
+        }
+      } catch (error) {
+        console.error('Failed to create chat session:', error);
+        setSessionId('');
+      }
     })();
-  }, []);
-
-  const [mutateSendMessage] = useMutation(SEND_MESSAGE);
+  }, [createChatSession]);
 
   useLayoutEffect(() => {
     // @ts-ignore
@@ -104,19 +325,118 @@ export default function HomeScreen() {
   };
 
   // -------- Posts --------
-  const handleSubmitPost = () => {
+    const handleSubmitPost = async () => {
     const content = newPost.trim();
     if (!content && !imageUri) return;
 
-    const newPostData: Post = {
-      id: Date.now(),
-      author: 'You',
-      content,
-      image: imageUri || undefined,
-    };
+    try {
+      console.log('Creating post with content:', content);
+      const { data } = await createPost({
+        variables: { content },
+      });
+      
+      console.log('Post creation response:', data);
+      
+      if (data?.createPost?.post) {
+        console.log('Post created successfully!');
+        // Clear the form
+        resetComposer();
+        
+        // Force a refetch to ensure the post appears
+        setTimeout(async () => {
+          try {
+            console.log('Forcing refetch to ensure post appears...');
+            await refetchPosts({ fetchPolicy: 'network-only' });
+            console.log('Refetch completed');
+          } catch (error) {
+            console.error('Refetch failed:', error);
+          }
+        }, 100);
+      } else {
+        console.warn('No post data returned from creation');
+        resetComposer();
+      }
+    } catch (error) {
+      console.error('Failed to create post:', error);
+      Alert.alert('Error', 'Failed to create post. Please try again.');
+    }
+  };
 
-    setPosts((prev) => [newPostData, ...prev]);
-    resetComposer();
+  const handleToggleLike = async (postId: string) => {
+    try {
+      await toggleLike({
+        variables: { postId },
+      });
+      // Refresh posts to get updated like counts
+      await refetchPosts();
+    } catch (error) {
+      console.error('Failed to toggle like:', error);
+      Alert.alert('Error', 'Failed to like/unlike post. Please try again.');
+    }
+  };
+
+  const handleToggleFollow = async (userId: string) => {
+    try {
+      await toggleFollow({
+        variables: { userId },
+      });
+      // Refresh posts to get updated follow counts
+      await refetchPosts();
+    } catch (error) {
+      console.error('Failed to toggle follow:', error);
+      Alert.alert('Error', 'Failed to follow/unfollow user. Please try again.');
+    }
+  };
+
+  const handleCreateComment = async (postId: string) => {
+    const content = commentInput.trim();
+    if (!content) return;
+
+    try {
+      await createComment({
+        variables: { postId, content },
+      });
+      setCommentInput('');
+      
+      // Refresh posts to get updated comment counts
+      await refetchPosts();
+      
+      // Refresh comments for this post
+      const { data } = await client.query({
+        query: GET_POST_COMMENTS,
+        variables: { postId },
+      });
+      
+      if (data?.postComments) {
+        setComments(data.postComments);
+      }
+    } catch (error) {
+      console.error('Failed to create comment:', error);
+      Alert.alert('Error', 'Failed to create comment. Please try again.');
+    }
+  };
+
+  const handleShowComments = async (postId: string) => {
+    if (showComments === postId) {
+      setShowComments(null);
+      return;
+    }
+    
+    setShowComments(postId);
+    
+    // Fetch comments for this post
+    try {
+      const { data } = await client.query({
+        query: GET_POST_COMMENTS,
+        variables: { postId },
+      });
+      
+      if (data?.postComments) {
+        setComments(data.postComments);
+      }
+    } catch (error) {
+      console.error('Failed to fetch comments:', error);
+    }
   };
 
   const resetComposer = () => {
@@ -186,11 +506,26 @@ export default function HomeScreen() {
   // mutation-backed sender
   async function sendToBackend(question: string): Promise<ChatMsg | null> {
     try {
+      // Check if we have a valid session ID
+      let currentSessionId = sessionId;
+      if (!currentSessionId || isNaN(Number(currentSessionId))) {
+        console.log('Invalid session ID, creating new session...');
+        currentSessionId = await createNewSession();
+        if (!currentSessionId) {
+          console.error('Failed to create new session');
+          return null;
+        }
+      }
+      
+      console.log('Sending message to backend with sessionId:', currentSessionId);
       const { data } = await mutateSendMessage({
-        variables: { sessionId, content: question },
+        variables: { sessionId: currentSessionId, content: question },
       });
-      const resp = data?.sendMessage;
-      if (!resp) return null;
+      const resp = data?.sendMessage?.message;
+      if (!resp) {
+        console.warn('No response from sendMessage mutation');
+        return null;
+      }
       return {
         id: resp.id ?? `${Date.now()}-a`,
         role: resp.role ?? 'assistant',
@@ -199,7 +534,12 @@ export default function HomeScreen() {
         confidence: resp.confidence ?? null,
       };
     } catch (e: any) {
-      console.warn('sendMessage error:', e?.networkError?.result || e?.message || e);
+      console.error('sendMessage error:', {
+        message: e?.message,
+        networkError: e?.networkError?.result,
+        graphQLErrors: e?.graphQLErrors,
+        fullError: e
+      });
       return null;
     }
   }
@@ -207,6 +547,13 @@ export default function HomeScreen() {
   const handleChatSend = async (seed?: string) => {
     const q = (seed ?? chatInput).trim();
     if (!q || chatSending || !sessionId) return;
+
+    // Check if user is logged in
+    const token = await AsyncStorage.getItem('token');
+    if (!token) {
+      Alert.alert('Login Required', 'Please log in to use the chatbot.');
+      return;
+    }
 
     setChatSending(true);
     const u: ChatMsg = { id: `${Date.now()}-u`, role: 'user', content: q };
@@ -235,8 +582,20 @@ export default function HomeScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.headerBar}>
-        <TouchableOpacity onPress={() => setShowDropdown((v) => !v)}>
-          <Text style={styles.icon}>👤</Text>
+        <TouchableOpacity 
+          style={styles.profileButton}
+                     onPress={() => {
+             if (!meLoading && meData?.me?.id) {
+               // @ts-ignore
+               navigation.navigate('Profile', { userId: meData.me.id });
+             }
+           }}
+        >
+          <View style={styles.profileAvatar}>
+                         <Text style={styles.profileAvatarText}>
+               {!meLoading && meData?.me?.name ? meData.me.name.charAt(0).toUpperCase() : 'U'}
+             </Text>
+          </View>
         </TouchableOpacity>
 
         <Image source={require('../assets/whitelogo1.png')} style={styles.logo} />
@@ -246,24 +605,137 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Dropdown */}
-      {showDropdown && (
-        <View style={styles.dropdown}>
-          <TouchableOpacity onPress={handleLogout}>
-            <Text style={styles.dropdownItem}>🔓 Logout</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
       {/* Feed */}
-      <ScrollView contentContainerStyle={styles.feed}>
-        {posts.map((post) => (
-          <View key={post.id} style={styles.postCard}>
-            <Text style={styles.author}>{post.author}</Text>
-            <Text style={styles.content}>{post.content}</Text>
-            {!!post.image && <Image source={{ uri: post.image }} style={styles.postImage} />}
+      <ScrollView 
+        contentContainerStyle={styles.feed}
+        refreshControl={
+          <RefreshControl
+            refreshing={postsLoading}
+            onRefresh={refetchPosts}
+            colors={['#00cc99']}
+            tintColor="#00cc99"
+          />
+        }
+      >
+        {postsLoading ? (
+          <View style={styles.loadingContainer}>
+            <Text style={styles.loadingText}>Loading posts...</Text>
           </View>
-        ))}
+        ) : posts.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>No posts yet. Be the first to share! 🚀</Text>
+          </View>
+        ) : (
+          posts.map((post) => (
+            <View key={post.id} style={styles.postCard}>
+              <View style={styles.postHeader}>
+                <TouchableOpacity 
+                  style={styles.userInfo}
+                  onPress={() => {
+                    // @ts-ignore
+                    navigation.navigate('Profile', { userId: post.user.id });
+                  }}
+                >
+                  <View style={styles.avatar}>
+                    <Text style={styles.avatarText}>{post.user.name.charAt(0).toUpperCase()}</Text>
+                  </View>
+                  <Text style={styles.author}>{post.user.name}</Text>
+                                     {!meLoading && meData?.me?.id && meData.me.id === post.user.id && (
+                    <View style={styles.youBadge}>
+                      <Text style={styles.youBadgeText}>You</Text>
+                    </View>
+                  )}
+                  <Icon name="chevron-right" size={12} color="#00cc99" style={{ marginLeft: 4 }} />
+                </TouchableOpacity>
+                <Text style={styles.timestamp}>
+                  {new Date(post.createdAt).toLocaleDateString()}
+                </Text>
+              </View>
+              <Text style={styles.content}>{post.content}</Text>
+              {!!post.image && <Image source={{ uri: post.image }} style={styles.postImage} />}
+              
+              <View style={styles.postActions}>
+                <TouchableOpacity 
+                  style={styles.likeButton} 
+                  onPress={() => handleToggleLike(post.id)}
+                >
+                  <Icon 
+                    name={post.isLikedByUser ? "heart" : "heart"} 
+                    size={20} 
+                    color={post.isLikedByUser ? "#ff4757" : "#666"} 
+                    style={{ opacity: post.isLikedByUser ? 1 : 0.6 }}
+                  />
+                  <Text style={[styles.likeCount, post.isLikedByUser && styles.likedText]}>
+                    {post.likesCount}
+                  </Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.commentButton} 
+                  onPress={() => handleShowComments(post.id)}
+                >
+                  <Icon name="message-circle" size={20} color="#666" />
+                  <Text style={styles.commentCount}>{post.commentsCount}</Text>
+                </TouchableOpacity>
+                
+                {!meLoading && meData?.me?.id && meData.me.id !== post.user.id && (
+                  <TouchableOpacity 
+                    style={styles.followButton} 
+                    onPress={() => handleToggleFollow(post.user.id)}
+                  >
+                    <Icon 
+                      name={post.user.isFollowingUser ? "user-check" : "user-plus"} 
+                      size={20} 
+                      color={post.user.isFollowingUser ? "#00cc99" : "#666"} 
+                    />
+                    <Text style={[styles.followText, post.user.isFollowingUser && styles.followingText]}>
+                      {post.user.isFollowingUser ? "Following" : "Follow"}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+              
+              {/* Comments Section */}
+              {showComments === post.id && (
+                <View style={styles.commentsSection}>
+                  {/* Display existing comments */}
+                  {comments.length > 0 && (
+                    <View style={styles.commentsList}>
+                      {comments.map((comment) => (
+                        <View key={comment.id} style={styles.commentItem}>
+                          <View style={styles.commentHeader}>
+                            <Text style={styles.commentAuthor}>{comment.user.name}</Text>
+                            <Text style={styles.commentDate}>
+                              {new Date(comment.createdAt).toLocaleDateString()}
+                            </Text>
+                          </View>
+                          <Text style={styles.commentContent}>{comment.content}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                  
+                  {/* Comment input */}
+                  <View style={styles.commentInputContainer}>
+                    <TextInput
+                      style={styles.commentInput}
+                      placeholder="Write a comment..."
+                      value={commentInput}
+                      onChangeText={setCommentInput}
+                      multiline
+                    />
+                    <TouchableOpacity 
+                      style={styles.commentSubmitButton}
+                      onPress={() => handleCreateComment(post.id)}
+                    >
+                      <Text style={styles.commentSubmitText}>Post</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+            </View>
+          ))
+        )}
       </ScrollView>
 
       {/* Post Composer Modal */}
@@ -405,7 +877,7 @@ export default function HomeScreen() {
 
 // ---------------- Styles ----------------
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
+  container: { flex: 1, backgroundColor: '#f8f9fa' },
 
   headerBar: {
     flexDirection: 'row',
@@ -416,10 +888,41 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: '#e9ecef',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
 
   icon: { fontSize: 24 },
+  profileButton: { padding: 4 },
+  profileAvatar: { 
+    width: 36, 
+    height: 36, 
+    borderRadius: 18, 
+    backgroundColor: '#00cc99', 
+    alignItems: 'center', 
+    justifyContent: 'center' 
+  },
+  profileAvatarText: { 
+    fontSize: 16, 
+    fontWeight: 'bold', 
+    color: '#fff' 
+  },
+  youBadge: {
+    backgroundColor: '#00cc99',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginLeft: 6,
+  },
+  youBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
   logo: { width: 90, height: 90, resizeMode: 'contain' },
 
   dropdown: {
@@ -439,10 +942,99 @@ const styles = StyleSheet.create({
   dropdownItem: { fontSize: 16, paddingVertical: 8, paddingHorizontal: 12 },
 
   feed: { padding: 20, paddingBottom: 140 },
-  postCard: { backgroundColor: '#f2f2f2', padding: 15, borderRadius: 8, marginBottom: 15, elevation: 2 },
-  author: { fontWeight: 'bold', marginBottom: 5 },
+  postCard: { 
+    backgroundColor: '#fff', 
+    padding: 20, 
+    borderRadius: 12, 
+    marginBottom: 15, 
+    marginHorizontal: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  postHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  userInfo: { flexDirection: 'row', alignItems: 'center', padding: 4, borderRadius: 8 },
+  avatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#00cc99', alignItems: 'center', justifyContent: 'center', marginRight: 8 },
+  avatarText: { fontSize: 14, fontWeight: 'bold', color: '#fff' },
+  author: { fontWeight: 'bold', fontSize: 16, color: '#00cc99', textDecorationLine: 'underline' },
+  timestamp: { color: '#666', fontSize: 12 },
   content: { fontSize: 16, marginBottom: 5 },
   postImage: { width: '100%', height: 200, borderRadius: 8, marginTop: 5 },
+  loadingContainer: { alignItems: 'center', padding: 40 },
+  loadingText: { fontSize: 16, color: '#666' },
+  emptyContainer: { alignItems: 'center', padding: 40 },
+  emptyText: { fontSize: 16, color: '#666', textAlign: 'center' },
+  postActions: { 
+    flexDirection: 'row', 
+    marginTop: 15, 
+    paddingTop: 15, 
+    borderTopWidth: 1, 
+    borderTopColor: '#f1f3f4',
+    justifyContent: 'space-around',
+  },
+  likeButton: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#f8f9fa',
+  },
+  likeCount: { marginLeft: 5, fontSize: 14, color: '#666', fontWeight: '500' },
+  likedText: { color: '#ff4757', fontWeight: 'bold' },
+  commentButton: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#f8f9fa',
+  },
+  commentCount: { marginLeft: 5, fontSize: 14, color: '#666', fontWeight: '500' },
+  followButton: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#f8f9fa',
+  },
+  followText: { marginLeft: 5, fontSize: 14, color: '#666', fontWeight: '500' },
+  followingText: { color: '#00cc99', fontWeight: 'bold' },
+  commentsSection: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#eee' },
+  commentsList: { marginBottom: 15 },
+  commentItem: { 
+    backgroundColor: '#f8f9fa', 
+    padding: 12, 
+    borderRadius: 8, 
+    marginBottom: 8 
+  },
+  commentHeader: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    marginBottom: 4 
+  },
+  commentAuthor: { 
+    fontWeight: 'bold', 
+    fontSize: 14, 
+    color: '#333' 
+  },
+  commentDate: { 
+    fontSize: 12, 
+    color: '#666' 
+  },
+  commentContent: { 
+    fontSize: 14, 
+    color: '#333', 
+    lineHeight: 20 
+  },
+  commentInputContainer: { flexDirection: 'row', alignItems: 'flex-end' },
+  commentInput: { flex: 1, borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 8, marginRight: 10, minHeight: 40 },
+  commentSubmitButton: { backgroundColor: '#00cc99', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 6 },
+  commentSubmitText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
 
   // Post composer styles
   modalContainer: {
@@ -497,17 +1089,17 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 20,
     bottom: 30,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: '#00cc99',
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 6,
+    elevation: 8,
     shadowColor: '#000',
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
   },
 
   // chatbot sheet

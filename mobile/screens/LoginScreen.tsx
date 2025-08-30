@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { gql, useMutation } from '@apollo/client';
+import { gql, useMutation, useApolloClient } from '@apollo/client';
 import { View, TextInput, Text, TouchableOpacity, StyleSheet, Image, ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const SIGNUP = gql`
   mutation Signup($email: String!, $name: String!, $password: String!) {
@@ -29,6 +30,7 @@ export default function LoginScreen({ navigation }) {
 
   const [signup, { loading: signupLoading, error: signupError }] = useMutation(SIGNUP);
   const [tokenAuth, { loading: loginLoading, error: loginError }] = useMutation(LOGIN);
+  const client = useApolloClient();
 
   const handleSignup = async () => {
     try {
@@ -40,13 +42,78 @@ export default function LoginScreen({ navigation }) {
   };
 
   const handleLogin = async () => {
+    // Validate inputs
+    if (!email.trim() || !password.trim()) {
+      console.error('Email or password is empty');
+      return;
+    }
+    
     try {
-      const response = await tokenAuth({ variables: { email: email.trim().toLowerCase(), password } });
-      const token = response.data.tokenAuth.token;
+      // Clear Apollo cache before login attempt
+      await client.clearStore();
+      console.log('Apollo cache cleared');
+      
+      const loginEmail = email.trim().toLowerCase();
+      const loginPassword = password;
+      
+      console.log('Attempting login with:', { 
+        email: loginEmail, 
+        password: loginPassword ? '***' : 'empty',
+        emailLength: loginEmail.length,
+        passwordLength: loginPassword.length
+      });
+      
+      // Test the exact mutation that will be sent
+      const testQuery = `
+        mutation TokenAuth($email: String!, $password: String!) {
+          tokenAuth(email: $email, password: $password) {
+            token
+          }
+        }
+      `;
+      console.log('GraphQL Query:', testQuery);
+      console.log('Variables:', { email: loginEmail, password: loginPassword });
+      
+      const response = await tokenAuth({ 
+        variables: { 
+          email: loginEmail, 
+          password: loginPassword 
+        },
+        errorPolicy: 'all'
+      });
+      
+      if (response.errors) {
+        console.error('Response errors:', response.errors);
+        throw new Error('GraphQL errors in response');
+      }
+      
+      const token = response.data?.tokenAuth?.token;
+      if (!token) {
+        console.error('No token in response:', response);
+        throw new Error('No token received');
+      }
+      
       console.log('✅ Logged in! Token:', token);
+      
+      // Store the token for future requests
+      await AsyncStorage.setItem('token', token);
+      
       navigation.replace('Home');
     } catch (err) {
       console.error('Login failed:', err);
+      console.error('Error details:', {
+        message: err?.message,
+        graphQLErrors: err?.graphQLErrors,
+        networkError: err?.networkError,
+        fullError: err
+      });
+      
+      // Log the exact error message
+      if (err?.graphQLErrors) {
+        err.graphQLErrors.forEach((error, index) => {
+          console.error(`GraphQL Error ${index}:`, error);
+        });
+      }
     }
   };
 

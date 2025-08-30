@@ -1,22 +1,29 @@
 # core/ai_service.py
 import os
-import openai
 from django.conf import settings
 from typing import List, Dict, Optional
 import logging
 
 logger = logging.getLogger(__name__)
 
+# Try to import openai, but don't fail if it's not available
+try:
+    import openai
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+    logger.warning("OpenAI package not installed. AI features will use fallback responses.")
+
 class AIService:
     def __init__(self):
-        self.api_key = os.getenv('OPENAI_API_KEY') or settings.OPENAI_API_KEY
+        self.api_key = os.getenv('OPENAI_API_KEY') or getattr(settings, 'OPENAI_API_KEY', None)
         self.model = getattr(settings, 'OPENAI_MODEL', 'gpt-3.5-turbo')
         self.max_tokens = getattr(settings, 'OPENAI_MAX_TOKENS', 1000)
         
-        if self.api_key:
+        if self.api_key and OPENAI_AVAILABLE:
             openai.api_key = self.api_key
         else:
-            logger.warning("OpenAI API key not found. AI features will be limited.")
+            logger.warning("OpenAI API key not found or package not available. AI features will use fallback responses.")
     
     def get_chat_response(self, messages: List[Dict], user_context: Optional[str] = None) -> Dict:
         """
@@ -29,7 +36,7 @@ class AIService:
         Returns:
             Dictionary containing response content, confidence, and token usage
         """
-        if not self.api_key:
+        if not self.api_key or not OPENAI_AVAILABLE:
             return self._get_fallback_response(messages[-1]['content'] if messages else "")
         
         try:
@@ -78,7 +85,7 @@ class AIService:
     
     def generate_session_title(self, first_message: str) -> str:
         """Generate a title for a chat session based on the first message"""
-        if not self.api_key:
+        if not self.api_key or not OPENAI_AVAILABLE:
             return "Financial Chat Session"
         
         try:

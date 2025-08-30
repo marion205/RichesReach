@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from graphql import GraphQLError
 from datetime import datetime, timezone
 from .types import UserType, PostType, ChatMessageType, SourceType, ChatSessionType
-from .models import Post, ChatSession, ChatMessage, Source
+from .models import Post, ChatSession, ChatMessage, Source, Like, Comment, Follow
 from .ai_service import AIService
 import graphql_jwt
 
@@ -38,6 +38,91 @@ class CreatePost(graphene.Mutation):
             raise GraphQLError("Login required to post.")
         post = Post.objects.create(user=user, content=content)
         return CreatePost(post=post)
+
+class ToggleLike(graphene.Mutation):
+    post = graphene.Field(PostType)
+    liked = graphene.Boolean()
+
+    class Arguments:
+        post_id = graphene.ID(required=True)
+
+    def mutate(self, info, post_id):
+        user = info.context.user
+        if user.is_anonymous:
+            raise GraphQLError("Login required to like posts.")
+        
+        try:
+            post = Post.objects.get(id=post_id)
+        except Post.DoesNotExist:
+            raise GraphQLError("Post not found.")
+        
+        # Check if user already liked the post
+        existing_like = Like.objects.filter(user=user, post=post).first()
+        
+        if existing_like:
+            # Unlike
+            existing_like.delete()
+            liked = False
+        else:
+            # Like
+            Like.objects.create(user=user, post=post)
+            liked = True
+        
+        return ToggleLike(post=post, liked=liked)
+
+class CreateComment(graphene.Mutation):
+    comment = graphene.Field('core.types.CommentType')
+
+    class Arguments:
+        post_id = graphene.ID(required=True)
+        content = graphene.String(required=True)
+
+    def mutate(self, info, post_id, content):
+        user = info.context.user
+        if user.is_anonymous:
+            raise GraphQLError("Login required to comment.")
+        
+        try:
+            post = Post.objects.get(id=post_id)
+        except Post.DoesNotExist:
+            raise GraphQLError("Post not found.")
+        
+        comment = Comment.objects.create(user=user, post=post, content=content)
+        return CreateComment(comment=comment)
+
+class ToggleFollow(graphene.Mutation):
+    user = graphene.Field(UserType)
+    following = graphene.Boolean()
+
+    class Arguments:
+        user_id = graphene.ID(required=True)
+
+    def mutate(self, info, user_id):
+        user = info.context.user
+        if user.is_anonymous:
+            raise GraphQLError("Login required to follow users.")
+        
+        try:
+            user_to_follow = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            raise GraphQLError("User not found.")
+        
+        if user == user_to_follow:
+            raise GraphQLError("Cannot follow yourself.")
+        
+        # Check if already following
+        existing_follow = Follow.objects.filter(follower=user, following=user_to_follow).first()
+        
+        if existing_follow:
+            # Unfollow
+            existing_follow.delete()
+            following = False
+        else:
+            # Follow
+            Follow.objects.create(follower=user, following=user_to_follow)
+            following = True
+        
+        return ToggleFollow(user=user_to_follow, following=following)
 
 class CreateChatSession(graphene.Mutation):
     session = graphene.Field(ChatSessionType)
@@ -148,11 +233,14 @@ class GetChatHistory(graphene.Mutation):
 class Mutation(graphene.ObjectType):
     create_user = CreateUser.Field()
     create_post = CreatePost.Field()
+    toggle_like = ToggleLike.Field()
+    create_comment = CreateComment.Field()
+    toggle_follow = ToggleFollow.Field()
     create_chat_session = CreateChatSession.Field()
     send_message = SendMessage.Field()
     get_chat_history = GetChatHistory.Field()
     
     # JWT Authentication
-    token_auth = graphql_jwt.ObtainJSONWebToken.Field()
+    tokenAuth = graphql_jwt.ObtainJSONWebToken.Field()
     verify_token = graphql_jwt.Verify.Field()
     refresh_token = graphql_jwt.Refresh.Field()

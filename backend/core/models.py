@@ -30,6 +30,24 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return self.email
+    
+    @property
+    def followers_count(self):
+        return self.followers.count()
+    
+    @property
+    def following_count(self):
+        return self.following.count()
+    
+    def is_following(self, user):
+        if user.is_anonymous:
+            return False
+        return self.following.filter(following=user).exists()
+    
+    def is_followed_by(self, user):
+        if user.is_anonymous:
+            return False
+        return self.followers.filter(follower=user).exists()
 
 class Post(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='posts')
@@ -38,6 +56,19 @@ class Post(models.Model):
 
     def __str__(self):
         return f"{self.user.name}: {self.content[:30]}"
+    
+    @property
+    def likes_count(self):
+        return self.likes.count()
+    
+    @property
+    def comments_count(self):
+        return self.comments.count()
+    
+    def is_liked_by(self, user):
+        if user.is_anonymous:
+            return False
+        return self.likes.filter(user=user).exists()
 
 class ChatSession(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='chat_sessions')
@@ -76,3 +107,42 @@ class Source(models.Model):
     
     def __str__(self):
         return self.title
+
+class Like(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='likes')
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='likes')
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ['user', 'post']
+        db_table = 'core_like'
+    
+    def __str__(self):
+        return f"{self.user.name} likes {self.post.content[:30]}"
+
+class Comment(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='comments')
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='comments')
+    content = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['created_at']
+        db_table = 'core_comment'
+        verbose_name = 'Comment'
+        verbose_name_plural = 'Comments'
+    
+    def __str__(self):
+        return f"{self.user.name}: {self.content[:30]}"
+
+class Follow(models.Model):
+    follower = models.ForeignKey(User, on_delete=models.CASCADE, related_name='following')
+    following = models.ForeignKey(User, on_delete=models.CASCADE, related_name='followers')
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ['follower', 'following']
+        db_table = 'core_follow'
+    
+    def __str__(self):
+        return f"{self.follower.name} follows {self.following.name}"

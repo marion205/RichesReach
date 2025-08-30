@@ -137,6 +137,12 @@ GRAPHENE = {
 
 AUTH_USER_MODEL = "core.User"
 
+# Authentication backends
+AUTHENTICATION_BACKENDS = [
+    'graphql_jwt.backends.JSONWebTokenBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
+
 # OpenAI Configuration
 OPENAI_API_KEY = None  # Set this in environment variable OPENAI_API_KEY
 OPENAI_MODEL = "gpt-3.5-turbo"  # Default model to use
