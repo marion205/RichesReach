@@ -3,8 +3,10 @@ import graphene
 from django.contrib.auth import get_user_model
 from graphql import GraphQLError
 from datetime import datetime, timezone
-from .types import UserType, PostType, ChatMessageType, SourceType
-from .models import Post
+from .types import UserType, PostType, ChatMessageType, SourceType, ChatSessionType
+from .models import Post, ChatSession, ChatMessage, Source
+from .ai_service import AIService
+import graphql_jwt
 
 User = get_user_model()
 
@@ -37,40 +39,120 @@ class CreatePost(graphene.Mutation):
         post = Post.objects.create(user=user, content=content)
         return CreatePost(post=post)
 
-# --- NEW: chatbot mutation ---
+class CreateChatSession(graphene.Mutation):
+    session = graphene.Field(ChatSessionType)
+
+    class Arguments:
+        title = graphene.String(required=False)
+
+    def mutate(self, info, title=None):
+        user = info.context.user
+        if user.is_anonymous:
+            raise GraphQLError("Login required to create chat session.")
+        
+        if not title:
+            title = f"Chat Session {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+        
+        session = ChatSession.objects.create(user=user, title=title)
+        return CreateChatSession(session=session)
+
 class SendMessage(graphene.Mutation):
+    message = graphene.Field(ChatMessageType)
+    session = graphene.Field(ChatSessionType)
+
     class Arguments:
         session_id = graphene.ID(required=True)
         content = graphene.String(required=True)
 
-    Output = ChatMessageType
-
     def mutate(self, info, session_id, content):
-        # TODO: replace with real bot call; this is a safe placeholder
-        now = datetime.now(timezone.utc)
-        answer = "\n".join([
-            "Educational only — not financial advice.",
-            f"You asked: {content}",
-            "General pointers:",
-            "• Define time horizon & risk tolerance.",
-            "• Diversify and watch fees (broad index funds are common).",
-            "• investor.gov has unbiased explainers."
-        ])
-        return ChatMessageType(
-            id=str(int(now.timestamp())),
-            role="assistant",
-            content=answer,
-            created_at=now,
-            confidence=0.6,
-            sources=[SourceType(
-                title="Investor.gov: Introduction to Investing",
-                url="https://www.investor.gov/introduction-investing",
-                snippet="Official SEC resource on investing basics."
-            )],
+        user = info.context.user
+        if user.is_anonymous:
+            raise GraphQLError("Login required to send messages.")
+        
+        try:
+            session = ChatSession.objects.get(id=session_id, user=user)
+        except ChatSession.DoesNotExist:
+            raise GraphQLError("Chat session not found.")
+        
+        # Save user message
+        user_message = ChatMessage.objects.create(
+            session=session,
+            role='user',
+            content=content
         )
+        
+        # Generate AI response
+        ai_service = AIService()
+        
+        # Get conversation history for context
+        previous_messages = []
+        for msg in session.messages.all()[:10]:  # Last 10 messages for context
+            previous_messages.append({
+                'role': msg.role,
+                'content': msg.content
+            })
+        
+        # Add current user message
+        previous_messages.append({
+            'role': 'user',
+            'content': content
+        })
+        
+        # Get user context for AI
+        user_context = f"User: {user.name} (ID: {user.id})"
+        
+        # Get AI response
+        ai_response = ai_service.get_chat_response(previous_messages, user_context)
+        
+        # Save AI response
+        ai_message = ChatMessage.objects.create(
+            session=session,
+            role='assistant',
+            content=ai_response['content'],
+            confidence=ai_response['confidence'],
+            tokens_used=ai_response['tokens_used']
+        )
+        
+        # Generate session title if this is the first message
+        if session.messages.count() == 2:  # User message + AI response
+            title = ai_service.generate_session_title(content)
+            session.title = title
+            session.save()
+        
+        # Update session timestamp
+        session.save()  # This updates the updated_at field
+        
+        return SendMessage(message=ai_message, session=session)
+
+class GetChatHistory(graphene.Mutation):
+    messages = graphene.List(ChatMessageType)
+    session = graphene.Field(ChatSessionType)
+
+    class Arguments:
+        session_id = graphene.ID(required=True)
+
+    def mutate(self, info, session_id):
+        user = info.context.user
+        if user.is_anonymous:
+            raise GraphQLError("Login required to view chat history.")
+        
+        try:
+            session = ChatSession.objects.get(id=session_id, user=user)
+        except ChatSession.DoesNotExist:
+            raise GraphQLError("Chat session not found.")
+        
+        messages = session.messages.all()
+        return GetChatHistory(messages=messages, session=session)
 
 # Root mutation
 class Mutation(graphene.ObjectType):
     create_user = CreateUser.Field()
     create_post = CreatePost.Field()
-    send_message = SendMessage.Field()   # <-- added
+    create_chat_session = CreateChatSession.Field()
+    send_message = SendMessage.Field()
+    get_chat_history = GetChatHistory.Field()
+    
+    # JWT Authentication
+    token_auth = graphql_jwt.ObtainJSONWebToken.Field()
+    verify_token = graphql_jwt.Verify.Field()
+    refresh_token = graphql_jwt.Refresh.Field()

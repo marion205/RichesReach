@@ -2,7 +2,7 @@
 import graphene
 from graphene_django.types import DjangoObjectType
 from django.contrib.auth import get_user_model
-from .models import Post
+from .models import Post, ChatSession, ChatMessage, Source
 
 User = get_user_model()
 
@@ -16,16 +16,22 @@ class PostType(DjangoObjectType):
         model = Post
         fields = ("id", "user", "content", "created_at")
 
-# ---- Add these non-Django GraphQL types for the chatbot ----
-class SourceType(graphene.ObjectType):
-    title = graphene.String()
-    url = graphene.String()
-    snippet = graphene.String()
+class ChatSessionType(DjangoObjectType):
+    class Meta:
+        model = ChatSession
+        fields = ("id", "user", "title", "created_at", "updated_at")
 
-class ChatMessageType(graphene.ObjectType):
-    id = graphene.ID(required=True)
-    role = graphene.String(required=True)      # "assistant" | "user"
-    content = graphene.String(required=True)
-    created_at = graphene.DateTime()
-    confidence = graphene.Float()
+class SourceType(DjangoObjectType):
+    class Meta:
+        model = Source
+        fields = ("id", "title", "url", "snippet")
+
+class ChatMessageType(DjangoObjectType):
     sources = graphene.List(SourceType)
+    
+    class Meta:
+        model = ChatMessage
+        fields = ("id", "session", "role", "content", "created_at", "confidence", "tokens_used")
+    
+    def resolve_sources(self, info):
+        return self.sources.all()

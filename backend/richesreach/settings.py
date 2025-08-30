@@ -136,3 +136,8 @@ GRAPHENE = {
 }
 
 AUTH_USER_MODEL = "core.User"
+
+# OpenAI Configuration
+OPENAI_API_KEY = None  # Set this in environment variable OPENAI_API_KEY
+OPENAI_MODEL = "gpt-3.5-turbo"  # Default model to use
+OPENAI_MAX_TOKENS = 1000  # Maximum tokens for responses
