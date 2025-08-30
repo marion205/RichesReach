@@ -38,3 +38,41 @@ class Post(models.Model):
 
     def __str__(self):
         return f"{self.user.name}: {self.content[:30]}"
+
+class ChatSession(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='chat_sessions')
+    title = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.user.name} - {self.title or 'Chat Session'} ({self.created_at.strftime('%Y-%m-%d %H:%M')})"
+
+class ChatMessage(models.Model):
+    ROLE_CHOICES = [
+        ('user', 'User'),
+        ('assistant', 'Assistant'),
+        ('system', 'System'),
+    ]
+    
+    session = models.ForeignKey(ChatSession, on_delete=models.CASCADE, related_name='messages')
+    role = models.CharField(max_length=10, choices=ROLE_CHOICES)
+    content = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    confidence = models.FloatField(null=True, blank=True)
+    tokens_used = models.IntegerField(null=True, blank=True)
+    
+    class Meta:
+        ordering = ['created_at']
+    
+    def __str__(self):
+        return f"{self.role}: {self.content[:50]}..."
+
+class Source(models.Model):
+    message = models.ForeignKey(ChatMessage, on_delete=models.CASCADE, related_name='sources')
+    title = models.CharField(max_length=255)
+    url = models.URLField()
+    snippet = models.TextField()
+    
+    def __str__(self):
+        return self.title
