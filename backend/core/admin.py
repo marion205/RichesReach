@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import User, Post, ChatSession, ChatMessage, Source
+from .models import User, Post, ChatSession, ChatMessage, Source, Like, Comment, Follow
 
 @admin.register(User)
 class UserAdmin(admin.ModelAdmin):
@@ -45,3 +45,28 @@ class SourceAdmin(admin.ModelAdmin):
     def message_preview(self, obj):
         return obj.message.content[:50] + '...' if obj.message.content else 'No content'
     message_preview.short_description = 'Message'
+
+@admin.register(Like)
+class LikeAdmin(admin.ModelAdmin):
+    list_display = ('user', 'post', 'created_at')
+    list_filter = ('created_at',)
+    search_fields = ('user__name', 'user__email', 'post__content')
+    ordering = ('-created_at',)
+
+@admin.register(Comment)
+class CommentAdmin(admin.ModelAdmin):
+    list_display = ('user', 'post', 'content_preview', 'created_at')
+    list_filter = ('created_at',)
+    search_fields = ('content', 'user__name', 'user__email', 'post__content')
+    ordering = ('-created_at',)
+    
+    def content_preview(self, obj):
+        return obj.content[:50] + '...' if len(obj.content) > 50 else obj.content
+    content_preview.short_description = 'Content'
+
+@admin.register(Follow)
+class FollowAdmin(admin.ModelAdmin):
+    list_display = ('follower', 'following', 'created_at')
+    list_filter = ('created_at',)
+    search_fields = ('follower__name', 'follower__email', 'following__name', 'following__email')
+    ordering = ('-created_at',)

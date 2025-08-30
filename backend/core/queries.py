@@ -1,7 +1,7 @@
 import graphene
 from django.contrib.auth import get_user_model
-from .types import UserType, PostType, ChatSessionType, ChatMessageType
-from .models import Post, ChatSession, ChatMessage
+from .types import UserType, PostType, ChatSessionType, ChatMessageType, CommentType
+from .models import Post, ChatSession, ChatMessage, Comment, User
 
 User = get_user_model()
 
@@ -9,6 +9,9 @@ class Query(graphene.ObjectType):
     all_users = graphene.List(UserType)
     me = graphene.Field(UserType)
     wall_posts = graphene.List(PostType)
+    user = graphene.Field(UserType, id=graphene.ID(required=True))
+    user_posts = graphene.List(PostType, user_id=graphene.ID(required=True))
+    post_comments = graphene.List(CommentType, post_id=graphene.ID(required=True))
     
     # Chat queries
     my_chat_sessions = graphene.List(ChatSessionType)
@@ -50,4 +53,24 @@ class Query(graphene.ObjectType):
             session = ChatSession.objects.get(id=session_id, user=user)
             return session.messages.all()
         except ChatSession.DoesNotExist:
+            return []
+    
+    def resolve_user(self, info, id):
+        try:
+            return User.objects.get(id=id)
+        except User.DoesNotExist:
+            return None
+    
+    def resolve_user_posts(self, info, user_id):
+        try:
+            user = User.objects.get(id=user_id)
+            return user.posts.all().order_by('-created_at')
+        except User.DoesNotExist:
+            return []
+    
+    def resolve_post_comments(self, info, post_id):
+        try:
+            post = Post.objects.get(id=post_id)
+            return post.comments.all()
+        except Post.DoesNotExist:
             return []
