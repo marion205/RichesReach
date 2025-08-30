@@ -1,32 +1,3 @@
-# --- Mobile / RN / Expo ---
-node_modules/
-.expo/
-.expo-shared/
-dist/
-*.map
-npm-debug.log*
-yarn-error.log*
-# iOS
-ios/Pods/
-ios/build/
-# Android (if you add it later)
-android/.gradle/
-android/app/build/
-android/build/
-# Xcode
-*.xcworkspace/xcuserdata/
-DerivedData/
-
-# --- Python / Django ---
-backend/venv/
-backend/**/__pycache__/
-backend/**/*.pyc
-backend/db.sqlite3
-.env
-.DS_Store
-
-# Misc
-coverage/
 # macOS
 .DS_Store
 
@@ -41,3 +12,9 @@ backend/.env
 node_modules/
 .expo/
 .expo-shared/
+
+# iOS build junk
+ios/Pods/
+ios/build/
+DerivedData/
+*.xcworkspace/xcuserdata/
