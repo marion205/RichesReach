@@ -7,45 +7,45 @@ from .models import Post, ChatSession, ChatMessage, Source, Like, Comment, Follo
 User = get_user_model()
 
 class UserType(DjangoObjectType):
-    followers_count = graphene.Int()
-    following_count = graphene.Int()
-    is_following_user = graphene.Boolean()
-    is_followed_by_user = graphene.Boolean()
+    followersCount = graphene.Int()
+    followingCount = graphene.Int()
+    isFollowingUser = graphene.Boolean()
+    isFollowedByUser = graphene.Boolean()
     
     class Meta:
         model = User
-        fields = ("id", "email", "name")
+        fields = ("id", "email", "name", "profile_pic")
     
-    def resolve_followers_count(self, info):
+    def resolve_followersCount(self, info):
         return self.followers_count
     
-    def resolve_following_count(self, info):
+    def resolve_followingCount(self, info):
         return self.following_count
     
-    def resolve_is_following_user(self, info):
+    def resolve_isFollowingUser(self, info):
         user = info.context.user
-        return self.is_following(user)
+        return user.is_following(self)  # Check if current user follows this user
     
-    def resolve_is_followed_by_user(self, info):
+    def resolve_isFollowedByUser(self, info):
         user = info.context.user
         return self.is_followed_by(user)
 
 class PostType(DjangoObjectType):
-    likes_count = graphene.Int()
-    comments_count = graphene.Int()
-    is_liked_by_user = graphene.Boolean()
+    likesCount = graphene.Int()
+    commentsCount = graphene.Int()
+    isLikedByUser = graphene.Boolean()
     
     class Meta:
         model = Post
-        fields = ("id", "user", "content", "created_at")
+        fields = ("id", "user", "content", "image", "created_at")
     
-    def resolve_likes_count(self, info):
+    def resolve_likesCount(self, info):
         return self.likes_count
     
-    def resolve_comments_count(self, info):
+    def resolve_commentsCount(self, info):
         return self.comments_count
     
-    def resolve_is_liked_by_user(self, info):
+    def resolve_isLikedByUser(self, info):
         user = info.context.user
         return self.is_liked_by(user)
 

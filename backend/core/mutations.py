@@ -17,11 +17,12 @@ class CreateUser(graphene.Mutation):
         email = graphene.String(required=True)
         name = graphene.String(required=True)
         password = graphene.String(required=True)
+        profilePic = graphene.String(required=False)
 
-    def mutate(self, info, email, name, password):
+    def mutate(self, info, email, name, password, profilePic=None):
         if User.objects.filter(email=email).exists():
             raise GraphQLError("A user with that email already exists.")
-        user = User(email=email.strip().lower(), name=name)
+        user = User(email=email.strip().lower(), name=name, profile_pic=profilePic)
         user.set_password(password)
         user.save()
         return CreateUser(user=user)
@@ -31,12 +32,13 @@ class CreatePost(graphene.Mutation):
 
     class Arguments:
         content = graphene.String(required=True)
+        image = graphene.String(required=False)
 
-    def mutate(self, info, content):
+    def mutate(self, info, content, image=None):
         user = info.context.user
         if user.is_anonymous:
             raise GraphQLError("Login required to post.")
-        post = Post.objects.create(user=user, content=content)
+        post = Post.objects.create(user=user, content=content, image=image)
         return CreatePost(post=post)
 
 class ToggleLike(graphene.Mutation):
@@ -89,6 +91,30 @@ class CreateComment(graphene.Mutation):
         
         comment = Comment.objects.create(user=user, post=post, content=content)
         return CreateComment(comment=comment)
+
+class DeleteComment(graphene.Mutation):
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    class Arguments:
+        comment_id = graphene.ID(required=True)
+
+    def mutate(self, info, comment_id):
+        user = info.context.user
+        if user.is_anonymous:
+            raise GraphQLError("Login required to delete comments.")
+        
+        try:
+            comment = Comment.objects.get(id=comment_id)
+        except Comment.DoesNotExist:
+            raise GraphQLError("Comment not found.")
+        
+        # Check if user owns the comment
+        if comment.user != user:
+            raise GraphQLError("You can only delete your own comments.")
+        
+        comment.delete()
+        return DeleteComment(success=True, message="Comment deleted successfully.")
 
 class ToggleFollow(graphene.Mutation):
     user = graphene.Field(UserType)
@@ -235,6 +261,7 @@ class Mutation(graphene.ObjectType):
     create_post = CreatePost.Field()
     toggle_like = ToggleLike.Field()
     create_comment = CreateComment.Field()
+    delete_comment = DeleteComment.Field()
     toggle_follow = ToggleFollow.Field()
     create_chat_session = CreateChatSession.Field()
     send_message = SendMessage.Field()

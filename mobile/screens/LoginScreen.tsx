@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { gql, useMutation, useApolloClient } from '@apollo/client';
 import { View, TextInput, Text, TouchableOpacity, StyleSheet, Image, ScrollView } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const SIGNUP = gql`
@@ -24,7 +23,7 @@ const LOGIN = gql`
   }
 `;
 
-export default function LoginScreen({ navigation }) {
+export default function LoginScreen({ navigateTo }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
@@ -98,7 +97,7 @@ export default function LoginScreen({ navigation }) {
       // Store the token for future requests
       await AsyncStorage.setItem('token', token);
       
-      navigation.replace('Home');
+      navigateTo('Home');
     } catch (err) {
       console.error('Login failed:', err);
       console.error('Error details:', {
@@ -144,7 +143,7 @@ export default function LoginScreen({ navigation }) {
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => navigation.navigate('SignUp')}>
+        <TouchableOpacity onPress={() => navigateTo('SignUp')}>
           <Text style={{ textAlign: 'center', marginTop: 10, color: '#007aff' }}>
             Don't have an account? Sign up here.
           </Text>

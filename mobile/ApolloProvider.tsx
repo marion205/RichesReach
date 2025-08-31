@@ -79,10 +79,6 @@ const client = new ApolloClient({
       errorPolicy: 'all',
     },
   },
-  // Use the new devtools configuration
-  devtools: {
-    enabled: true,
-  },
 });
 
 export default function ApolloWrapper({ children }: { children: React.ReactNode }) {
