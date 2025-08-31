@@ -7,6 +7,7 @@ from .types import UserType, PostType, ChatMessageType, SourceType, ChatSessionT
 from .models import Post, ChatSession, ChatMessage, Source, Like, Comment, Follow
 from .ai_service import AIService
 import graphql_jwt
+from .models import Stock, Watchlist
 
 User = get_user_model()
 
@@ -255,6 +256,90 @@ class GetChatHistory(graphene.Mutation):
         messages = session.messages.all()
         return GetChatHistory(messages=messages, session=session)
 
+class AddToWatchlist(graphene.Mutation):
+    watchlist_item = graphene.Field('core.types.WatchlistType')
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    class Arguments:
+        stock_symbol = graphene.String(required=True)
+        notes = graphene.String(required=False)
+
+    def mutate(self, info, stock_symbol, notes=None):
+        user = info.context.user
+        if user.is_anonymous:
+            raise GraphQLError("Login required to add stocks to watchlist.")
+        
+        try:
+            stock = Stock.objects.get(symbol=stock_symbol.upper())
+        except Stock.DoesNotExist:
+            raise GraphQLError("Stock not found.")
+        
+        # Check if already in watchlist
+        if Watchlist.objects.filter(user=user, stock=stock).exists():
+            raise GraphQLError("Stock is already in your watchlist.")
+        
+        watchlist_item = Watchlist.objects.create(user=user, stock=stock, notes=notes)
+        return AddToWatchlist(
+            watchlist_item=watchlist_item,
+            success=True,
+            message="Stock added to watchlist successfully."
+        )
+
+class RemoveFromWatchlist(graphene.Mutation):
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    class Arguments:
+        stock_symbol = graphene.String(required=True)
+
+    def mutate(self, info, stock_symbol):
+        user = info.context.user
+        if user.is_anonymous:
+            raise GraphQLError("Login required to remove stocks from watchlist.")
+        
+        try:
+            stock = Stock.objects.get(symbol=stock_symbol.upper())
+            watchlist_item = Watchlist.objects.get(user=user, stock=stock)
+            watchlist_item.delete()
+            return RemoveFromWatchlist(
+                success=True,
+                message="Stock removed from watchlist successfully."
+            )
+        except Stock.DoesNotExist:
+            raise GraphQLError("Stock not found.")
+        except Watchlist.DoesNotExist:
+            raise GraphQLError("Stock is not in your watchlist.")
+
+class UpdateWatchlistNotes(graphene.Mutation):
+    watchlist_item = graphene.Field('core.types.WatchlistType')
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    class Arguments:
+        stock_symbol = graphene.String(required=True)
+        notes = graphene.String(required=True)
+
+    def mutate(self, info, stock_symbol, notes):
+        user = info.context.user
+        if user.is_anonymous:
+            raise GraphQLError("Login required to update watchlist notes.")
+        
+        try:
+            stock = Stock.objects.get(symbol=stock_symbol.upper())
+            watchlist_item = Watchlist.objects.get(user=user, stock=stock)
+            watchlist_item.notes = notes
+            watchlist_item.save()
+            return UpdateWatchlistNotes(
+                watchlist_item=watchlist_item,
+                success=True,
+                message="Watchlist notes updated successfully."
+            )
+        except Stock.DoesNotExist:
+            raise GraphQLError("Stock not found.")
+        except Watchlist.DoesNotExist:
+            raise GraphQLError("Stock is not in your watchlist.")
+
 # Root mutation
 class Mutation(graphene.ObjectType):
     create_user = CreateUser.Field()
@@ -266,6 +351,11 @@ class Mutation(graphene.ObjectType):
     create_chat_session = CreateChatSession.Field()
     send_message = SendMessage.Field()
     get_chat_history = GetChatHistory.Field()
+    
+    # Watchlist mutations
+    add_to_watchlist = AddToWatchlist.Field()
+    remove_from_watchlist = RemoveFromWatchlist.Field()
+    update_watchlist_notes = UpdateWatchlistNotes.Field()
     
     # JWT Authentication
     tokenAuth = graphql_jwt.ObtainJSONWebToken.Field()

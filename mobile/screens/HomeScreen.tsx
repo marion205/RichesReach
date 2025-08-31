@@ -497,6 +497,13 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
 
         <View style={styles.headerRight}>
           <TouchableOpacity 
+            style={styles.stocksButton}
+            onPress={() => navigateTo('Stocks')}
+          >
+            <Icon name="trending-up" size={20} color="#00cc99" />
+          </TouchableOpacity>
+
+          <TouchableOpacity 
             style={styles.discoverButton}
             onPress={() => navigateTo('DiscoverUsers')}
           >
@@ -840,6 +847,10 @@ const styles = {
   icon: {
     fontSize: 24,
     color: '#00cc99',
+  },
+  stocksButton: {
+    padding: 4,
+    marginRight: 8,
   },
   discoverButton: {
     padding: 4,

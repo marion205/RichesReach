@@ -5,6 +5,7 @@ import SignUpScreen from './screens/SignUpScreen';
 import HomeScreen from './screens/HomeScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import DiscoverUsersScreen from './screens/DiscoverUsersScreen';
+import StockScreen from './screens/StockScreen';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('Login');
@@ -46,6 +47,8 @@ export default function App() {
         return <ProfileScreen navigateTo={navigateTo} data={navigationData} />;
       case 'DiscoverUsers':
         return <DiscoverUsersScreen navigateTo={navigateTo} data={navigationData} />;
+      case 'Stocks':
+        return <StockScreen navigateTo={navigateTo} data={navigationData} />;
       default:
         return <LoginScreen navigateTo={navigateTo} />;
     }

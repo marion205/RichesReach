@@ -1,7 +1,7 @@
 import graphene
 from django.contrib.auth import get_user_model
-from .types import UserType, PostType, ChatSessionType, ChatMessageType, CommentType
-from .models import Post, ChatSession, ChatMessage, Comment, User
+from .types import UserType, PostType, ChatSessionType, ChatMessageType, CommentType, StockType, StockDataType, WatchlistType
+from .models import Post, ChatSession, ChatMessage, Comment, User, Stock, StockData, Watchlist
 import django.db.models as models
 
 User = get_user_model()
@@ -19,6 +19,12 @@ class Query(graphene.ObjectType):
     my_chat_sessions = graphene.List(ChatSessionType)
     chat_session = graphene.Field(ChatSessionType, id=graphene.ID(required=True))
     chat_messages = graphene.List(ChatMessageType, session_id=graphene.ID(required=True))
+    
+    # Stock queries
+    stocks = graphene.List(StockType, search=graphene.String(required=False))
+    stock = graphene.Field(StockType, symbol=graphene.String(required=True))
+    my_watchlist = graphene.List(WatchlistType)
+    beginner_friendly_stocks = graphene.List(StockType)
 
     def resolve_all_users(root, info):
         user = info.context.user
@@ -108,6 +114,36 @@ class Query(graphene.ObjectType):
     def resolve_post_comments(self, info, post_id):
         try:
             post = Post.objects.get(id=post_id)
-            return post.comments.all()
+            return post.comments.all().order_by('-created_at')
         except Post.DoesNotExist:
             return []
+    
+    def resolve_stocks(self, info, search=None):
+        """Get all stocks or search by symbol/company name"""
+        if search:
+            return Stock.objects.filter(
+                models.Q(symbol__icontains=search.upper()) |
+                models.Q(company_name__icontains=search)
+            )[:50]  # Limit search results
+        return Stock.objects.all()[:100]  # Limit to 100 stocks
+    
+    def resolve_stock(self, info, symbol):
+        """Get a specific stock by symbol"""
+        try:
+            return Stock.objects.get(symbol=symbol.upper())
+        except Stock.DoesNotExist:
+            return None
+    
+    def resolve_my_watchlist(self, info):
+        """Get current user's watchlist"""
+        user = info.context.user
+        if user.is_anonymous:
+            return []
+        return Watchlist.objects.filter(user=user).select_related('stock').order_by('-added_at')
+    
+    def resolve_beginner_friendly_stocks(self, info):
+        """Get stocks suitable for beginner investors (under $30k/year)"""
+        return Stock.objects.filter(
+            beginner_friendly_score__gte=80,  # High beginner-friendly score
+            market_cap__gte=100000000000,    # Large cap companies (>$100B)
+        ).order_by('-beginner_friendly_score')[:20]
