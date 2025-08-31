@@ -1,6 +1,6 @@
 import graphene
 from django.contrib.auth import get_user_model
-from .types import UserType, PostType, ChatSessionType, ChatMessageType, CommentType, StockType, StockDataType, WatchlistType
+from .types import UserType, PostType, ChatSessionType, ChatMessageType, CommentType, StockType, StockDataType, WatchlistType, RustStockAnalysisType, RustRecommendationType, RustHealthType, TechnicalIndicatorsType, FundamentalAnalysisType
 from .models import Post, ChatSession, ChatMessage, Comment, User, Stock, StockData, Watchlist
 import django.db.models as models
 
@@ -25,6 +25,11 @@ class Query(graphene.ObjectType):
     stock = graphene.Field(StockType, symbol=graphene.String(required=True))
     my_watchlist = graphene.List(WatchlistType)
     beginner_friendly_stocks = graphene.List(StockType)
+    
+    # Rust Engine queries
+    rust_stock_analysis = graphene.Field(RustStockAnalysisType, symbol=graphene.String(required=True))
+    rust_recommendations = graphene.List(RustRecommendationType)
+    rust_health = graphene.Field(RustHealthType)
 
     def resolve_all_users(root, info):
         user = info.context.user
@@ -121,10 +126,30 @@ class Query(graphene.ObjectType):
     def resolve_stocks(self, info, search=None):
         """Get all stocks or search by symbol/company name"""
         if search:
-            return Stock.objects.filter(
+            # First try to find in database
+            db_stocks = Stock.objects.filter(
                 models.Q(symbol__icontains=search.upper()) |
                 models.Q(company_name__icontains=search)
             )[:50]  # Limit search results
+            
+            # If we have results, return them
+            if db_stocks.exists():
+                return db_stocks
+            
+            # If no results, try API search
+            try:
+                from .stock_service import AlphaVantageService
+                service = AlphaVantageService()
+                api_stocks = service.search_and_sync_stocks(search)
+                
+                if api_stocks:
+                    return api_stocks
+                else:
+                    return Stock.objects.none()
+            except Exception as e:
+                print(f"API search error: {e}")
+                return Stock.objects.none()
+        
         return Stock.objects.all()[:100]  # Limit to 100 stocks
     
     def resolve_stock(self, info, symbol):
@@ -147,3 +172,92 @@ class Query(graphene.ObjectType):
             beginner_friendly_score__gte=80,  # High beginner-friendly score
             market_cap__gte=100000000000,    # Large cap companies (>$100B)
         ).order_by('-beginner_friendly_score')[:20]
+    
+    def resolve_rust_stock_analysis(self, info, symbol):
+        """Get advanced stock analysis using Rust engine"""
+        try:
+            from .stock_service import AlphaVantageService
+            service = AlphaVantageService()
+            # Try with technical analysis first, fallback to fundamental only
+            analysis = service.analyze_stock_with_rust(symbol, include_technical=True, include_fundamental=True)
+            if not analysis:
+                # Fallback to fundamental analysis only
+                analysis = service.analyze_stock_with_rust(symbol, include_technical=False, include_fundamental=True)
+            if analysis:
+                # Create TechnicalIndicatorsType
+                technical_indicators = TechnicalIndicatorsType(
+                    rsi=analysis.get('technicalIndicators', {}).get('rsi'),
+                    macd=analysis.get('technicalIndicators', {}).get('macd'),
+                    macdSignal=analysis.get('technicalIndicators', {}).get('macdSignal'),
+                    macdHistogram=analysis.get('technicalIndicators', {}).get('macdHistogram'),
+                    sma20=analysis.get('technicalIndicators', {}).get('sma20'),
+                    sma50=analysis.get('technicalIndicators', {}).get('sma50'),
+                    ema12=analysis.get('technicalIndicators', {}).get('ema12'),
+                    ema26=analysis.get('technicalIndicators', {}).get('ema26'),
+                    bollingerUpper=analysis.get('technicalIndicators', {}).get('bollingerUpper'),
+                    bollingerLower=analysis.get('technicalIndicators', {}).get('bollingerLower'),
+                    bollingerMiddle=analysis.get('technicalIndicators', {}).get('bollingerMiddle')
+                )
+                
+                # Create FundamentalAnalysisType
+                fundamental_analysis = FundamentalAnalysisType(
+                    valuationScore=analysis.get('fundamentalAnalysis', {}).get('valuationScore', 0),
+                    growthScore=analysis.get('fundamentalAnalysis', {}).get('growthScore', 0),
+                    stabilityScore=analysis.get('fundamentalAnalysis', {}).get('stabilityScore', 0),
+                    dividendScore=analysis.get('fundamentalAnalysis', {}).get('dividendScore', 0),
+                    debtScore=analysis.get('fundamentalAnalysis', {}).get('debtScore', 0)
+                )
+                
+                # Create RustStockAnalysisType
+                return RustStockAnalysisType(
+                    symbol=analysis.get('symbol', symbol),
+                    beginnerFriendlyScore=analysis.get('beginnerFriendlyScore', 0),
+                    riskLevel=analysis.get('riskLevel', 'Unknown'),
+                    recommendation=analysis.get('recommendation', 'Hold'),
+                    technicalIndicators=technical_indicators,
+                    fundamentalAnalysis=fundamental_analysis,
+                    reasoning=analysis.get('reasoning', [])
+                )
+            return None
+        except Exception as e:
+            print(f"Rust analysis error: {e}")
+            return None
+    
+    def resolve_rust_recommendations(self, info):
+        """Get beginner-friendly recommendations from Rust engine"""
+        try:
+            from .stock_service import AlphaVantageService
+            service = AlphaVantageService()
+            recommendations = service.get_rust_recommendations()
+            if recommendations:
+                return [
+                    RustRecommendationType(
+                        symbol=rec.get('symbol', ''),
+                        reason=rec.get('reason', ''),
+                        riskLevel=rec.get('riskLevel', 'Unknown'),
+                        beginnerScore=rec.get('beginnerScore', 0)
+                    )
+                    for rec in recommendations
+                ]
+            return []
+        except Exception as e:
+            print(f"Rust recommendations error: {e}")
+            return []
+    
+    def resolve_rust_health(self, info):
+        """Check Rust service health"""
+        try:
+            from .rust_stock_service import rust_stock_service
+            health = rust_stock_service.health_check()
+            return RustHealthType(
+                status=health.get('status', 'unknown'),
+                service=health.get('service', 'stock_engine'),
+                timestamp=health.get('timestamp', '')
+            )
+        except Exception as e:
+            print(f"Rust health check error: {e}")
+            return RustHealthType(
+                status='unhealthy',
+                service='stock_engine',
+                timestamp=''
+            )

@@ -3,6 +3,7 @@ import { gql, useMutation, useApolloClient } from '@apollo/client';
 import { View, TextInput, Text, TouchableOpacity, StyleSheet, Image, ScrollView } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+
 const SIGNUP = gql`
   mutation Signup($email: String!, $name: String!, $password: String!) {
     createUser(email: $email, name: $name, password: $password) {

@@ -85,9 +85,15 @@ class FollowType(DjangoObjectType):
         fields = ("id", "follower", "following", "created_at")
 
 class StockType(DjangoObjectType):
-    current_price = graphene.Float()
-    price_change = graphene.Float()
-    price_change_percent = graphene.Float()
+    currentPrice = graphene.Float()
+    priceChange = graphene.Float()
+    priceChangePercent = graphene.Float()
+    marketCap = graphene.BigInt()
+    peRatio = graphene.Decimal()
+    dividendYield = graphene.Decimal()
+    debtRatio = graphene.Decimal()
+    volatility = graphene.Decimal()
+    beginnerFriendlyScore = graphene.Int()
     
     class Meta:
         model = Stock
@@ -95,17 +101,35 @@ class StockType(DjangoObjectType):
                  "dividend_yield", "debt_ratio", "volatility", "beginner_friendly_score", 
                  "last_updated")
     
-    def resolve_current_price(self, info):
+    def resolve_currentPrice(self, info):
         # This will be populated by the Alpha Vantage API
         return None
     
-    def resolve_price_change(self, info):
+    def resolve_priceChange(self, info):
         # This will be populated by the Alpha Vantage API
         return None
     
-    def resolve_price_change_percent(self, info):
+    def resolve_priceChangePercent(self, info):
         # This will be populated by the Alpha Vantage API
         return None
+    
+    def resolve_marketCap(self, info):
+        return self.market_cap
+    
+    def resolve_peRatio(self, info):
+        return self.pe_ratio
+    
+    def resolve_dividendYield(self, info):
+        return self.dividend_yield
+    
+    def resolve_debtRatio(self, info):
+        return self.debt_ratio
+    
+    def resolve_volatility(self, info):
+        return self.volatility
+    
+    def resolve_beginnerFriendlyScore(self, info):
+        return self.beginner_friendly_score
 
 class StockDataType(DjangoObjectType):
     class Meta:
@@ -117,3 +141,44 @@ class WatchlistType(DjangoObjectType):
     class Meta:
         model = Watchlist
         fields = ("id", "user", "stock", "added_at", "notes")
+
+# Rust Analysis Types
+class TechnicalIndicatorsType(graphene.ObjectType):
+    rsi = graphene.Float()
+    macd = graphene.Float()
+    macdSignal = graphene.Float()
+    macdHistogram = graphene.Float()
+    sma20 = graphene.Float()
+    sma50 = graphene.Float()
+    ema12 = graphene.Float()
+    ema26 = graphene.Float()
+    bollingerUpper = graphene.Float()
+    bollingerLower = graphene.Float()
+    bollingerMiddle = graphene.Float()
+
+class FundamentalAnalysisType(graphene.ObjectType):
+    valuationScore = graphene.Int()
+    growthScore = graphene.Int()
+    stabilityScore = graphene.Int()
+    dividendScore = graphene.Int()
+    debtScore = graphene.Int()
+
+class RustStockAnalysisType(graphene.ObjectType):
+    symbol = graphene.String()
+    beginnerFriendlyScore = graphene.Int()
+    riskLevel = graphene.String()
+    recommendation = graphene.String()
+    technicalIndicators = graphene.Field(TechnicalIndicatorsType)
+    fundamentalAnalysis = graphene.Field(FundamentalAnalysisType)
+    reasoning = graphene.List(graphene.String)
+
+class RustRecommendationType(graphene.ObjectType):
+    symbol = graphene.String()
+    reason = graphene.String()
+    riskLevel = graphene.String()
+    beginnerScore = graphene.Int()
+
+class RustHealthType(graphene.ObjectType):
+    status = graphene.String()
+    service = graphene.String()
+    timestamp = graphene.String()
