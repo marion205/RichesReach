@@ -1,0 +1,11 @@
+/Users/marioncollins/RichesReach/backend/rust_stock_engine/target/debug/deps/libjson5-6931e85eac07ca6c.rmeta: /Users/marioncollins/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/json5-0.4.1/src/lib.rs /Users/marioncollins/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/json5-0.4.1/src/de.rs /Users/marioncollins/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/json5-0.4.1/src/error.rs /Users/marioncollins/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/json5-0.4.1/src/ser.rs /Users/marioncollins/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/json5-0.4.1/src/json5.pest
+
+/Users/marioncollins/RichesReach/backend/rust_stock_engine/target/debug/deps/libjson5-6931e85eac07ca6c.rlib: /Users/marioncollins/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/json5-0.4.1/src/lib.rs /Users/marioncollins/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/json5-0.4.1/src/de.rs /Users/marioncollins/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/json5-0.4.1/src/error.rs /Users/marioncollins/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/json5-0.4.1/src/ser.rs /Users/marioncollins/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/json5-0.4.1/src/json5.pest
+
+/Users/marioncollins/RichesReach/backend/rust_stock_engine/target/debug/deps/json5-6931e85eac07ca6c.d: /Users/marioncollins/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/json5-0.4.1/src/lib.rs /Users/marioncollins/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/json5-0.4.1/src/de.rs /Users/marioncollins/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/json5-0.4.1/src/error.rs /Users/marioncollins/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/json5-0.4.1/src/ser.rs /Users/marioncollins/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/json5-0.4.1/src/json5.pest
+
+/Users/marioncollins/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/json5-0.4.1/src/lib.rs:
+/Users/marioncollins/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/json5-0.4.1/src/de.rs:
+/Users/marioncollins/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/json5-0.4.1/src/error.rs:
+/Users/marioncollins/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/json5-0.4.1/src/ser.rs:
+/Users/marioncollins/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/json5-0.4.1/src/json5.pest:

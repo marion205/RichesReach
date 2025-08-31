@@ -5,6 +5,7 @@ from typing import Dict, List, Optional
 from decimal import Decimal
 from .models import Stock, StockData
 from django.conf import settings
+from .rust_stock_service import rust_stock_service
 
 class AlphaVantageService:
     """Service for interacting with Alpha Vantage API"""
@@ -161,4 +162,42 @@ class AlphaVantageService:
             
         except Exception as e:
             print(f"Error syncing stock data for {symbol}: {e}")
+            return None
+    
+    def analyze_stock_with_rust(self, symbol: str, include_technical: bool = True, include_fundamental: bool = True) -> Optional[Dict]:
+        """
+        Analyze a stock using the high-performance Rust engine
+        """
+        try:
+            if not rust_stock_service.is_available():
+                print("Rust service not available, falling back to Python analysis")
+                return None
+            
+            # Use Rust engine for analysis
+            analysis = rust_stock_service.analyze_stock(symbol, include_technical, include_fundamental)
+            
+            if analysis.get('success') and analysis.get('analysis'):
+                return analysis['analysis']
+            else:
+                print(f"Rust analysis failed for {symbol}: {analysis.get('error', 'Unknown error')}")
+                return None
+                
+        except Exception as e:
+            print(f"Error using Rust engine for {symbol}: {e}")
+            return None
+    
+    def get_rust_recommendations(self) -> Optional[List[Dict]]:
+        """
+        Get beginner-friendly stock recommendations from Rust engine
+        """
+        try:
+            if not rust_stock_service.is_available():
+                print("Rust service not available")
+                return None
+            
+            recommendations = rust_stock_service.get_recommendations()
+            return recommendations.get('recommendations', [])
+            
+        except Exception as e:
+            print(f"Error getting Rust recommendations: {e}")
             return None

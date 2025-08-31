@@ -437,6 +437,36 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
     }
   };
 
+  const handleQuickPrompt = (prompt: string) => {
+    // Don't set chatInput since we're auto-submitting
+    // Create and send the message directly
+    const userMessage: ChatMsg = {
+      id: String(Date.now()),
+      role: 'user',
+      content: prompt,
+    };
+
+    setChatMessages(prev => [...prev, userMessage]);
+    setChatSending(true);
+
+    try {
+      // Simulate AI response
+      setTimeout(() => {
+        const aiResponse: ChatMsg = {
+          id: String(Date.now() + 1),
+          role: 'assistant',
+          content: `I understand you're asking about "${prompt}". This is a great question about personal finance! While I can provide general educational information, remember that this is not financial advice. For personalized guidance, consider consulting with a qualified financial advisor.`,
+        };
+        setChatMessages(prev => [...prev, aiResponse]);
+        setChatSending(false);
+        setTimeout(() => listRef.current?.scrollToEnd?.({ animated: true }), 100);
+      }, 1000);
+    } catch (error) {
+      console.error('Failed to send message:', error);
+      setChatSending(false);
+    }
+  };
+
   const handleToggleFollow = async (userId: string) => {
     try {
       await toggleFollow({ variables: { userId } });
@@ -495,25 +525,11 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
           <Image source={require('../assets/whitelogo1.png')} style={styles.logo} />
         </View>
 
-        <View style={styles.headerRight}>
-          <TouchableOpacity 
-            style={styles.stocksButton}
-            onPress={() => navigateTo('Stocks')}
-          >
-            <Icon name="trending-up" size={20} color="#00cc99" />
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.discoverButton}
-            onPress={() => navigateTo('DiscoverUsers')}
-          >
-            <Icon name="users" size={20} color="#00cc99" />
-          </TouchableOpacity>
-
-          <TouchableOpacity onPress={() => setShowPostForm(true)}>
-            <Text style={styles.icon}>➕</Text>
-          </TouchableOpacity>
-        </View>
+              <View style={styles.headerRight}>
+        <TouchableOpacity onPress={() => setShowPostForm(true)}>
+          <Text style={styles.icon}>➕</Text>
+        </TouchableOpacity>
+      </View>
       </View>
 
       {/* Post Creation Form */}
@@ -736,17 +752,19 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
           </View>
 
           {/* Quick Prompts */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickPromptsContainer}>
-            {quickPrompts.map((prompt, index) => (
-              <TouchableOpacity
+          <View style={styles.quickPromptsContainer}>
+            <View style={styles.quickPromptsGrid}>
+              {quickPrompts.map((prompt, index) => (
+                              <TouchableOpacity
                 key={index}
                 style={styles.quickPromptButton}
-                onPress={() => setChatInput(prompt)}
+                onPress={() => handleQuickPrompt(prompt)}
               >
                 <Text style={styles.quickPromptText}>{prompt}</Text>
               </TouchableOpacity>
-            ))}
-          </ScrollView>
+              ))}
+            </View>
+          </View>
 
           {/* Chat Messages */}
           <FlatList
@@ -794,6 +812,41 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
           </View>
         </View>
       )}
+
+      {/* Bottom Tab Navigation */}
+      <View style={styles.bottomTabBar}>
+        <TouchableOpacity 
+          style={[styles.tabItem, styles.activeTabItem]} 
+          onPress={() => navigateTo('Home')}
+        >
+          <Icon name="home" size={24} color="#00cc99" />
+          <Text style={styles.tabLabel}>Home</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={styles.tabItem} 
+          onPress={() => navigateTo('Stocks')}
+        >
+          <Icon name="trending-up" size={24} color="#999" />
+          <Text style={styles.tabLabel}>Stocks</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={styles.tabItem} 
+          onPress={() => navigateTo('DiscoverUsers')}
+        >
+          <Icon name="users" size={24} color="#999" />
+          <Text style={styles.tabLabel}>Discover</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={styles.tabItem} 
+          onPress={() => navigateTo('Profile')}
+        >
+          <Icon name="user" size={24} color="#999" />
+          <Text style={styles.tabLabel}>Profile</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -1192,7 +1245,7 @@ const styles = {
   // Chatbot
   chatButton: {
     position: 'absolute',
-    bottom: 30,
+    bottom: 100, // Moved up to be above the bottom tab navigation
     right: 30,
     backgroundColor: '#00cc99',
     width: 60,
@@ -1208,6 +1261,7 @@ const styles = {
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
+    zIndex: 999, // Ensure it's above other elements
   },
   chatModal: {
     position: 'absolute',
@@ -1245,22 +1299,38 @@ const styles = {
   },
   quickPromptsContainer: {
     paddingHorizontal: 20,
-    paddingVertical: 15,
+    paddingVertical: 20,
+    marginTop: 40,
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
   },
+  quickPromptsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-start',
+  },
   quickPromptButton: {
     backgroundColor: '#f8f9fa',
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginRight: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginRight: 8,
+    marginBottom: 8,
     borderWidth: 1,
     borderColor: '#e2e8f0',
+    minWidth: 70,
+    maxWidth: 100,
+    height: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   quickPromptText: {
-    fontSize: 14,
+    fontSize: 11,
     color: '#333',
+    textAlign: 'center',
+    fontWeight: '500',
+    lineHeight: 14,
   },
   chatMessages: {
     flex: 1,
@@ -1300,9 +1370,11 @@ const styles = {
     flexDirection: 'row',
     alignItems: 'flex-end',
     padding: 20,
+    paddingBottom: 30,
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',
     backgroundColor: '#fff',
+    marginBottom: 20,
   },
   chatInput: {
     flex: 1,
@@ -1325,5 +1397,27 @@ const styles = {
   },
   chatSendButtonDisabled: {
     backgroundColor: '#ccc',
+  },
+  bottomTabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#e9ecef',
+    paddingBottom: 20,
+    paddingTop: 10,
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  activeTabItem: {
+    // Active tab styling is handled by icon color
+  },
+  tabLabel: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 4,
+    fontWeight: '500',
   },
 };

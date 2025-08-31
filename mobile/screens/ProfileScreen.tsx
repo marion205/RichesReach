@@ -9,7 +9,7 @@ import {
   RefreshControl,
   Image,
 } from 'react-native';
-import { gql, useQuery, useMutation } from '@apollo/client';
+import { gql, useQuery, useMutation, useApolloClient } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -97,8 +97,11 @@ type Post = {
 export default function ProfileScreen({ navigateTo, data }) {
   // Remove the insets usage since we're not using safe area context anymore
   
-  // @ts-ignore
-  const userId = data?.userId;
+  // Get current user data first
+  const { data: meData, loading: meLoading } = useQuery(GET_ME);
+  
+  // Use provided userId or default to current user's ID
+  const userId = data?.userId || meData?.me?.id;
   
   const { data: userData, loading: userLoading, refetch: refetchUser } = useQuery(GET_USER, {
     variables: { id: userId },
@@ -110,10 +113,9 @@ export default function ProfileScreen({ navigateTo, data }) {
     skip: !userId,
   });
   
-  const { data: meData, loading: meLoading } = useQuery(GET_ME);
-  
   const [toggleFollow] = useMutation(TOGGLE_FOLLOW);
   const [refreshing, setRefreshing] = useState(false);
+  const client = useApolloClient();
 
   const user: User | null = userData?.user;
   const posts: Post[] = postsData?.userPosts || [];
@@ -279,6 +281,41 @@ export default function ProfileScreen({ navigateTo, data }) {
               </View>
             ))
           )}
+        </View>
+
+        {/* Bottom Tab Navigation */}
+        <View style={styles.bottomTabBar}>
+          <TouchableOpacity 
+            style={styles.tabItem} 
+            onPress={() => navigateTo('Home')}
+          >
+            <Icon name="home" size={24} color="#999" />
+            <Text style={styles.tabLabel}>Home</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.tabItem} 
+            onPress={() => navigateTo('Stocks')}
+          >
+            <Icon name="trending-up" size={24} color="#999" />
+            <Text style={styles.tabLabel}>Stocks</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.tabItem} 
+            onPress={() => navigateTo('DiscoverUsers')}
+          >
+            <Icon name="users" size={24} color="#999" />
+            <Text style={styles.tabLabel}>Discover</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.tabItem, styles.activeTabItem]} 
+            onPress={() => navigateTo('Profile')}
+          >
+            <Icon name="user" size={24} color="#00cc99" />
+            <Text style={styles.tabLabel}>Profile</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </View>
@@ -470,5 +507,27 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     marginTop: 20,
+  },
+  bottomTabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#e9ecef',
+    paddingBottom: 20,
+    paddingTop: 10,
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  activeTabItem: {
+    // Active tab styling is handled by icon color
+  },
+  tabLabel: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 4,
+    fontWeight: '500',
   },
 });

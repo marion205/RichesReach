@@ -10,6 +10,50 @@ class Command(BaseCommand):
         # Sample stocks that are beginner-friendly
         sample_stocks = [
             {
+                'symbol': 'META',
+                'company_name': 'Meta Platforms, Inc.',
+                'sector': 'Technology',
+                'market_cap': 1200000000000,  # $1.2T
+                'pe_ratio': Decimal('22.8'),
+                'dividend_yield': Decimal('0.0'),
+                'debt_ratio': Decimal('0.3'),
+                'volatility': Decimal('1.8'),
+                'beginner_friendly_score': 75
+            },
+            {
+                'symbol': 'GOOGL',
+                'company_name': 'Alphabet Inc.',
+                'sector': 'Technology',
+                'market_cap': 1800000000000,  # $1.8T
+                'pe_ratio': Decimal('26.4'),
+                'dividend_yield': Decimal('0.0'),
+                'debt_ratio': Decimal('0.2'),
+                'volatility': Decimal('1.5'),
+                'beginner_friendly_score': 78
+            },
+            {
+                'symbol': 'TSLA',
+                'company_name': 'Tesla, Inc.',
+                'sector': 'Consumer Cyclical',
+                'market_cap': 800000000000,  # $800B
+                'pe_ratio': Decimal('45.2'),
+                'dividend_yield': Decimal('0.0'),
+                'debt_ratio': Decimal('0.8'),
+                'volatility': Decimal('2.5'),
+                'beginner_friendly_score': 65
+            },
+            {
+                'symbol': 'NVDA',
+                'company_name': 'NVIDIA Corporation',
+                'sector': 'Technology',
+                'market_cap': 2200000000000,  # $2.2T
+                'pe_ratio': Decimal('35.1'),
+                'dividend_yield': Decimal('0.1'),
+                'debt_ratio': Decimal('0.4'),
+                'volatility': Decimal('2.1'),
+                'beginner_friendly_score': 70
+            },
+            {
                 'symbol': 'AAPL',
                 'company_name': 'Apple Inc.',
                 'sector': 'Technology',
