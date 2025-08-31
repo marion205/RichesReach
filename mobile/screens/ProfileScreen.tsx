@@ -7,9 +7,8 @@ import {
   ScrollView,
   Alert,
   RefreshControl,
+  Image,
 } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { gql, useQuery, useMutation } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -20,6 +19,7 @@ const GET_USER = gql`
       id
       name
       email
+      profilePic
       followersCount
       followingCount
       isFollowingUser
@@ -34,6 +34,7 @@ const GET_ME = gql`
       id
       name
       email
+      profilePic
     }
   }
 `;
@@ -93,13 +94,11 @@ type Post = {
   };
 };
 
-export default function ProfileScreen() {
-  const navigation = useNavigation();
-  const route = useRoute();
-  const insets = useSafeAreaInsets();
+export default function ProfileScreen({ navigateTo, data }) {
+  // Remove the insets usage since we're not using safe area context anymore
   
   // @ts-ignore
-  const userId = route.params?.userId;
+  const userId = data?.userId;
   
   const { data: userData, loading: userLoading, refetch: refetchUser } = useQuery(GET_USER, {
     variables: { id: userId },
@@ -126,6 +125,8 @@ export default function ProfileScreen() {
       await toggleFollow({
         variables: { userId: user.id },
       });
+      // Clear cache and refetch to ensure fresh data
+      await client.resetStore();
       await refetchUser();
     } catch (error) {
       console.error('Failed to toggle follow:', error);
@@ -163,8 +164,8 @@ export default function ProfileScreen() {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+      <View style={[styles.header, { paddingTop: 50 }]}>
+        <TouchableOpacity onPress={() => navigateTo('Back')}>
           <Icon name="arrow-left" size={24} color="#333" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Profile</Text>
@@ -185,7 +186,14 @@ export default function ProfileScreen() {
         {/* User Info */}
         <View style={styles.userInfo}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{user.name.charAt(0).toUpperCase()}</Text>
+            {!meLoading && meData?.me?.profilePic ? (
+              <Image 
+                source={{ uri: meData.me.profilePic }} 
+                style={styles.avatarImage} 
+              />
+            ) : (
+              <Text style={styles.avatarText}>{user.name.charAt(0).toUpperCase()}</Text>
+            )}
           </View>
           
           <Text style={styles.userName}>{user.name}</Text>
@@ -236,7 +244,7 @@ export default function ProfileScreen() {
                 await AsyncStorage.removeItem('token');
                 Alert.alert('Logged out', 'You have been successfully logged out.');
                 // @ts-ignore
-                navigation.navigate('Login');
+                navigateTo('Login');
               }}
             >
               <Icon name="log-out" size={16} color="#ff4757" />
@@ -324,6 +332,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 15,
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 40,
   },
   avatarText: {
     fontSize: 32,
