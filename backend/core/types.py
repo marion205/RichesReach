@@ -2,7 +2,7 @@
 import graphene
 from graphene_django.types import DjangoObjectType
 from django.contrib.auth import get_user_model
-from .models import Post, ChatSession, ChatMessage, Source, Like, Comment, Follow
+from .models import Post, ChatSession, ChatMessage, Source, Like, Comment, Follow, Stock, StockData, Watchlist
 
 User = get_user_model()
 
@@ -83,3 +83,37 @@ class FollowType(DjangoObjectType):
     class Meta:
         model = Follow
         fields = ("id", "follower", "following", "created_at")
+
+class StockType(DjangoObjectType):
+    current_price = graphene.Float()
+    price_change = graphene.Float()
+    price_change_percent = graphene.Float()
+    
+    class Meta:
+        model = Stock
+        fields = ("id", "symbol", "company_name", "sector", "market_cap", "pe_ratio", 
+                 "dividend_yield", "debt_ratio", "volatility", "beginner_friendly_score", 
+                 "last_updated")
+    
+    def resolve_current_price(self, info):
+        # This will be populated by the Alpha Vantage API
+        return None
+    
+    def resolve_price_change(self, info):
+        # This will be populated by the Alpha Vantage API
+        return None
+    
+    def resolve_price_change_percent(self, info):
+        # This will be populated by the Alpha Vantage API
+        return None
+
+class StockDataType(DjangoObjectType):
+    class Meta:
+        model = StockData
+        fields = ("id", "stock", "date", "open_price", "high_price", "low_price", 
+                 "close_price", "volume")
+
+class WatchlistType(DjangoObjectType):
+    class Meta:
+        model = Watchlist
+        fields = ("id", "user", "stock", "added_at", "notes")

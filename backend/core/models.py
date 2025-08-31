@@ -148,3 +148,50 @@ class Follow(models.Model):
     
     def __str__(self):
         return f"{self.follower.name} follows {self.following.name}"
+
+class Stock(models.Model):
+    """Stock model to store basic stock information"""
+    symbol = models.CharField(max_length=10, unique=True)
+    company_name = models.CharField(max_length=255)
+    sector = models.CharField(max_length=100, blank=True, null=True)
+    market_cap = models.BigIntegerField(blank=True, null=True)  # Market capitalization
+    pe_ratio = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    dividend_yield = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)
+    debt_ratio = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)
+    volatility = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)
+    beginner_friendly_score = models.IntegerField(default=0)  # 0-100 score for beginners
+    last_updated = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.symbol} - {self.company_name}"
+    
+    class Meta:
+        ordering = ['symbol']
+
+class StockData(models.Model):
+    """Historical stock price data"""
+    stock = models.ForeignKey(Stock, on_delete=models.CASCADE, related_name='price_data')
+    date = models.DateField()
+    open_price = models.DecimalField(max_digits=10, decimal_places=2)
+    high_price = models.DecimalField(max_digits=10, decimal_places=2)
+    low_price = models.DecimalField(max_digits=10, decimal_places=2)
+    close_price = models.DecimalField(max_digits=10, decimal_places=2)
+    volume = models.BigIntegerField()
+    
+    class Meta:
+        unique_together = ['stock', 'date']
+        ordering = ['-date']
+
+class Watchlist(models.Model):
+    """User's stock watchlist"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='watchlists')
+    stock = models.ForeignKey(Stock, on_delete=models.CASCADE, related_name='watchlisted_by')
+    added_at = models.DateTimeField(auto_now_add=True)
+    notes = models.TextField(blank=True, null=True)  # User's personal notes about the stock
+    
+    class Meta:
+        unique_together = ['user', 'stock']
+        ordering = ['-added_at']
+    
+    def __str__(self):
+        return f"{self.user.name} - {self.stock.symbol}"

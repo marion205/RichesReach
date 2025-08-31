@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import User, Post, ChatSession, ChatMessage, Source, Like, Comment, Follow
+from .models import User, Post, ChatSession, ChatMessage, Source, Like, Comment, Follow, Stock, StockData, Watchlist
 
 @admin.register(User)
 class UserAdmin(admin.ModelAdmin):
@@ -70,3 +70,29 @@ class FollowAdmin(admin.ModelAdmin):
     list_filter = ('created_at',)
     search_fields = ('follower__name', 'follower__email', 'following__name', 'following__email')
     ordering = ('-created_at',)
+
+@admin.register(Stock)
+class StockAdmin(admin.ModelAdmin):
+    list_display = ('symbol', 'company_name', 'sector', 'market_cap', 'pe_ratio', 'beginner_friendly_score', 'last_updated')
+    list_filter = ('sector', 'beginner_friendly_score', 'last_updated')
+    search_fields = ('symbol', 'company_name', 'sector')
+    ordering = ('symbol',)
+    readonly_fields = ('last_updated',)
+
+@admin.register(StockData)
+class StockDataAdmin(admin.ModelAdmin):
+    list_display = ('stock', 'date', 'open_price', 'high_price', 'low_price', 'close_price', 'volume')
+    list_filter = ('date', 'stock__sector')
+    search_fields = ('stock__symbol', 'stock__company_name')
+    ordering = ('-date', 'stock__symbol')
+
+@admin.register(Watchlist)
+class WatchlistAdmin(admin.ModelAdmin):
+    list_display = ('user', 'stock', 'added_at', 'notes_preview')
+    list_filter = ('added_at', 'stock__sector')
+    search_fields = ('user__name', 'user__email', 'stock__symbol', 'stock__company_name')
+    ordering = ('-added_at',)
+    
+    def notes_preview(self, obj):
+        return obj.notes[:50] + '...' if obj.notes and len(obj.notes) > 50 else obj.notes or 'No notes'
+    notes_preview.short_description = 'Notes'
