@@ -166,40 +166,7 @@ export default function DiscoverUsersScreen({ navigateTo }) {
         }
       />
 
-      {/* Bottom Tab Navigation */}
-      <View style={styles.bottomTabBar}>
-        <TouchableOpacity 
-          style={styles.tabItem} 
-          onPress={() => navigateTo('Home')}
-        >
-          <Icon name="home" size={24} color="#999" />
-          <Text style={styles.tabLabel}>Home</Text>
-        </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={styles.tabItem} 
-          onPress={() => navigateTo('Stocks')}
-        >
-          <Icon name="trending-up" size={24} color="#999" />
-          <Text style={styles.tabLabel}>Stocks</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={[styles.tabItem, styles.activeTabItem]} 
-          onPress={() => navigateTo('DiscoverUsers')}
-        >
-          <Icon name="users" size={24} color="#00cc99" />
-          <Text style={styles.tabLabel}>Discover</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={styles.tabItem} 
-          onPress={() => navigateTo('Profile')}
-        >
-          <Icon name="user" size={24} color="#999" />
-          <Text style={styles.tabLabel}>Profile</Text>
-        </TouchableOpacity>
-      </View>
     </View>
   );
 }
@@ -337,26 +304,5 @@ const styles = StyleSheet.create({
     color: '#999',
     marginTop: 10,
   },
-  bottomTabBar: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#e9ecef',
-    paddingBottom: 20,
-    paddingTop: 10,
-  },
-  tabItem: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  activeTabItem: {
-    // Active tab styling is handled by icon color
-  },
-  tabLabel: {
-    fontSize: 12,
-    color: '#999',
-    marginTop: 4,
-    fontWeight: '500',
-  },
+
 });

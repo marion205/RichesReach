@@ -30,7 +30,7 @@ SECRET_KEY = 'django-insecure-wk_qy339*l)1xg=(f6_e@9+d7sgi7%#0t!e17a3nkeu&p#@zq9
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
+ALLOWED_HOSTS = ["127.0.0.1", "localhost", "10.0.0.64"]
 
 
 # Application definition
@@ -44,7 +44,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'core',
     'graphene_django',
-    'corsheaders'
+    'corsheaders',
+    'django_celery_results',
 ]
 
 MIDDLEWARE = [
@@ -152,3 +153,71 @@ AUTHENTICATION_BACKENDS = [
 OPENAI_API_KEY = None  # Set this in environment variable OPENAI_API_KEY
 OPENAI_MODEL = "gpt-3.5-turbo"  # Default model to use
 OPENAI_MAX_TOKENS = 1000  # Maximum tokens for responses
+
+# Redis Configuration for Caching
+REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
+REDIS_PORT = int(os.getenv('REDIS_PORT', 6379))
+REDIS_DB = int(os.getenv('REDIS_DB', 0))
+REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', None)
+
+# Cache Configuration
+CACHES = {
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}',
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            'PASSWORD': REDIS_PASSWORD,
+            'SOCKET_CONNECT_TIMEOUT': 5,
+            'SOCKET_TIMEOUT': 5,
+        },
+        'KEY_PREFIX': 'richesreach',
+        'TIMEOUT': 300,  # 5 minutes default
+    }
+}
+
+# Use Redis for session storage as well
+SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
+SESSION_CACHE_ALIAS = 'default'
+
+# Stock Analysis Configuration
+STOCK_ANALYSIS_CONFIG = {
+    'CACHE_TIMEOUT': {
+        'QUOTE_DATA': 300,      # 5 minutes for real-time quotes
+        'OVERVIEW_DATA': 3600,  # 1 hour for company overview
+        'HISTORICAL_DATA': 86400,  # 24 hours for historical data
+        'ANALYSIS_RESULT': 1800,   # 30 minutes for analysis results
+    },
+    'RATE_LIMITS': {
+        'ALPHA_VANTAGE': {
+            'REQUESTS_PER_MINUTE': 5,
+            'REQUESTS_PER_DAY': 500,
+            'BURST_LIMIT': 10,
+        }
+    },
+    'BATCH_PROCESSING': {
+        'MAX_STOCKS_PER_BATCH': 10,
+        'BATCH_DELAY_SECONDS': 2,
+        'MAX_CONCURRENT_BATCHES': 3,
+    }
+}
+
+# Celery Configuration
+CELERY_BROKER_URL = f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}'
+CELERY_RESULT_BACKEND = f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE
+
+# Celery Beat Schedule
+CELERY_BEAT_SCHEDULE = {
+    'update-stock-data': {
+        'task': 'core.stock_service.update_stock_data_periodic',
+        'schedule': 3600.0,  # Every hour
+    },
+    'cleanup-old-cache': {
+        'task': 'core.stock_service.cleanup_old_cache',
+        'schedule': 86400.0,  # Every day
+    },
+}

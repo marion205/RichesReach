@@ -10,13 +10,48 @@ import {
   KeyboardAvoidingView,
   Platform,
   Dimensions,
-  Image
+  Image,
+  SafeAreaView
 } from 'react-native';
 import { gql, useMutation, useApolloClient } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
 import * as ImagePicker from 'expo-image-picker';
 
 const { width } = Dimensions.get('window');
+
+// Income Profile Constants
+const incomeBrackets = [
+  'Under $30,000',
+  '$30,000 - $50,000',
+  '$50,000 - $75,000',
+  '$75,000 - $100,000',
+  '$100,000 - $150,000',
+  'Over $150,000'
+];
+
+const investmentGoals = [
+  'Retirement Savings',
+  'Buy a Home',
+  'Emergency Fund',
+  'Wealth Building',
+  'Passive Income',
+  'Tax Benefits',
+  'College Fund',
+  'Travel Fund'
+];
+
+const riskToleranceOptions = [
+  'Conservative',
+  'Moderate',
+  'Aggressive'
+];
+
+const investmentHorizonOptions = [
+  '1-3 years',
+  '3-5 years',
+  '5-10 years',
+  '10+ years'
+];
 
 const SIGNUP = gql`
   mutation Signup($email: String!, $name: String!, $password: String!, $profilePic: String) {
@@ -31,16 +66,30 @@ const SIGNUP = gql`
   }
 `;
 
-export default function SignUpScreen({ navigateTo }) {
+interface SignUpScreenProps {
+  navigateTo: (screen: string) => void;
+  onSignUp: () => void;
+  onNavigateToLogin: () => void;
+}
+
+export default function SignUpScreen({ navigateTo, onSignUp, onNavigateToLogin }: SignUpScreenProps) {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [profilePic, setProfilePic] = useState(null);
+  const [profilePic, setProfilePic] = useState<string | null>(null);
+  
+  // Income Profile Fields
+  const [incomeBracket, setIncomeBracket] = useState('');
+  const [age, setAge] = useState('');
+  const [selectedGoals, setSelectedGoals] = useState<string[]>([]);
+  const [riskTolerance, setRiskTolerance] = useState('');
+  const [investmentHorizon, setInvestmentHorizon] = useState('');
+  const [showIncomeProfile, setShowIncomeProfile] = useState(false);
   const [signup, { loading, error }] = useMutation(SIGNUP);
   const client = useApolloClient();
 
-  const pickImage = async (source) => {
+  const pickImage = async (source: 'camera' | 'gallery') => {
     try {
       let result;
       
@@ -95,6 +144,19 @@ export default function SignUpScreen({ navigateTo }) {
     setProfilePic(null);
   };
 
+  // Income Profile Helpers
+  const handleGoalToggle = (goal: string) => {
+    if (selectedGoals.includes(goal)) {
+      setSelectedGoals(selectedGoals.filter(g => g !== goal));
+    } else {
+      setSelectedGoals([...selectedGoals, goal]);
+    }
+  };
+
+  const toggleIncomeProfile = () => {
+    setShowIncomeProfile(!showIncomeProfile);
+  };
+
   const validateForm = () => {
     if (!name.trim()) {
       Alert.alert('Validation Error', 'Please enter your name');
@@ -131,7 +193,7 @@ export default function SignUpScreen({ navigateTo }) {
       Alert.alert(
         'Success! 🎉', 
         'Your account has been created successfully! Please log in.',
-        [{ text: 'OK', onPress: () => navigateTo('Login') }]
+        [{ text: 'OK', onPress: onSignUp }]
       );
       // Clear cache after successful signup
       await client.resetStore();
@@ -142,10 +204,11 @@ export default function SignUpScreen({ navigateTo }) {
   };
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container} 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView 
+        style={styles.keyboardContainer} 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
       <ScrollView 
         contentContainerStyle={styles.scrollContainer}
         showsVerticalScrollIndicator={false}
@@ -239,6 +302,141 @@ export default function SignUpScreen({ navigateTo }) {
             </TouchableOpacity>
           </View>
 
+          {/* Income Profile Section */}
+          <View style={styles.incomeProfileSection}>
+            <TouchableOpacity 
+              style={styles.incomeProfileToggle} 
+              onPress={toggleIncomeProfile}
+              activeOpacity={0.7}
+            >
+              <Icon name="trending-up" size={20} color="#00cc99" />
+              <Text style={styles.incomeProfileToggleText}>
+                {showIncomeProfile ? 'Hide' : 'Add'} Financial Profile (Optional)
+              </Text>
+              <Icon 
+                name={showIncomeProfile ? "chevron-up" : "chevron-down"} 
+                size={20} 
+                color="#666" 
+              />
+            </TouchableOpacity>
+            
+            {showIncomeProfile && (
+              <View style={styles.incomeProfileForm}>
+                <Text style={styles.incomeProfileSubtitle}>
+                  Help us provide personalized AI investment recommendations
+                </Text>
+                
+                {/* Income Bracket */}
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Annual Income</Text>
+                  <View style={styles.optionsGrid}>
+                    {incomeBrackets.map((bracket) => (
+                      <TouchableOpacity
+                        key={bracket}
+                        style={[
+                          styles.optionButton,
+                          incomeBracket === bracket && styles.selectedOption
+                        ]}
+                        onPress={() => setIncomeBracket(bracket)}
+                      >
+                        <Text style={[
+                          styles.optionText,
+                          incomeBracket === bracket && styles.selectedOptionText
+                        ]}>
+                          {bracket}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                {/* Age */}
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Age</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={age}
+                    onChangeText={setAge}
+                    placeholder="Enter your age"
+                    keyboardType="numeric"
+                  />
+                </View>
+
+                {/* Investment Goals */}
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Investment Goals (Select all that apply)</Text>
+                  <View style={styles.optionsGrid}>
+                    {investmentGoals.map((goal) => (
+                      <TouchableOpacity
+                        key={goal}
+                        style={[
+                          styles.optionButton,
+                          selectedGoals.includes(goal) && styles.selectedOption
+                        ]}
+                        onPress={() => handleGoalToggle(goal)}
+                      >
+                        <Text style={[
+                          styles.optionText,
+                          selectedGoals.includes(goal) && styles.selectedOptionText
+                        ]}>
+                          {goal}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                {/* Risk Tolerance */}
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Risk Tolerance</Text>
+                  <View style={styles.optionsGrid}>
+                    {riskToleranceOptions.map((option) => (
+                      <TouchableOpacity
+                        key={option}
+                        style={[
+                          styles.optionButton,
+                          riskTolerance === option && styles.selectedOption
+                        ]}
+                        onPress={() => setRiskTolerance(option)}
+                      >
+                        <Text style={[
+                          styles.optionText,
+                          riskTolerance === option && styles.selectedOptionText
+                        ]}>
+                          {option}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                {/* Investment Horizon */}
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Investment Time Horizon</Text>
+                  <View style={styles.optionsGrid}>
+                    {investmentHorizonOptions.map((option) => (
+                      <TouchableOpacity
+                        key={option}
+                        style={[
+                          styles.optionButton,
+                          investmentHorizon === option && styles.selectedOption
+                        ]}
+                        onPress={() => setInvestmentHorizon(option)}
+                      >
+                        <Text style={[
+                          styles.optionText,
+                          investmentHorizon === option && styles.selectedOptionText
+                        ]}>
+                          {option}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              </View>
+            )}
+          </View>
+
           {/* Sign Up Button */}
           <TouchableOpacity 
             style={[styles.button, loading && styles.buttonDisabled]} 
@@ -267,7 +465,7 @@ export default function SignUpScreen({ navigateTo }) {
           {/* Login Link */}
           <View style={styles.loginLink}>
             <Text style={styles.loginText}>Already have an account? </Text>
-            <TouchableOpacity onPress={() => navigateTo('Login')} activeOpacity={0.7}>
+            <TouchableOpacity onPress={onNavigateToLogin} activeOpacity={0.7}>
               <Text style={styles.loginLinkText}>Log in here</Text>
             </TouchableOpacity>
           </View>
@@ -278,7 +476,8 @@ export default function SignUpScreen({ navigateTo }) {
           <Text style={styles.footerText}>By signing up, you agree to our Terms of Service and Privacy Policy</Text>
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
@@ -287,10 +486,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8fafc',
   },
+  keyboardContainer: {
+    flex: 1,
+  },
   scrollContainer: {
     flexGrow: 1,
     paddingHorizontal: 24,
-    paddingTop: 60,
+    paddingTop: 80,
     paddingBottom: 40,
   },
   header: {
@@ -473,5 +675,75 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center',
     lineHeight: 16,
+  },
+  // Income Profile Styles
+  incomeProfileSection: {
+    marginBottom: 24,
+  },
+  incomeProfileToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  incomeProfileToggleText: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1e293b',
+    marginLeft: 12,
+  },
+  incomeProfileForm: {
+    marginTop: 16,
+    padding: 20,
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  incomeProfileSubtitle: {
+    fontSize: 14,
+    color: '#64748b',
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  formGroup: {
+    marginBottom: 20,
+  },
+  label: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 10,
+  },
+  optionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  optionButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    backgroundColor: '#fff',
+  },
+  selectedOption: {
+    backgroundColor: '#00cc99',
+    borderColor: '#00cc99',
+  },
+  optionText: {
+    fontSize: 14,
+    color: '#374151',
+  },
+  selectedOptionText: {
+    color: '#fff',
+    fontWeight: '600',
   },
 });

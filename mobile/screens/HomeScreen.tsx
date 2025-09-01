@@ -2,49 +2,23 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
-  TextInput,
-  TouchableOpacity,
+  StyleSheet,
   ScrollView,
-  Alert,
-  Image,
-  FlatList,
+  TouchableOpacity,
   RefreshControl,
-  KeyboardAvoidingView,
-  Platform,
+  Alert,
   Dimensions,
+  SafeAreaView,
+  FlatList,
+  TextInput,
 } from 'react-native';
-import { useMutation, useQuery, useApolloClient } from '@apollo/client';
+import { useQuery, useApolloClient, useMutation } from '@apollo/client';
 import { gql } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
-import * as ImagePicker from 'expo-image-picker';
 
 const { width: screenWidth } = Dimensions.get('window');
 
 // GraphQL Queries
-const GET_POSTS = gql`
-  query GetPosts {
-    wallPosts {
-      id
-      content
-      image
-      createdAt
-      likesCount
-      isLikedByUser
-      commentsCount
-      user {
-        id
-        name
-        email
-        profilePic
-        followersCount
-        followingCount
-        isFollowingUser
-        isFollowedByUser
-      }
-    }
-  }
-`;
-
 const GET_ME = gql`
   query GetMe {
     me {
@@ -56,82 +30,28 @@ const GET_ME = gql`
   }
 `;
 
-const GET_POST_COMMENTS = gql`
-  query GetPostComments($postId: ID!) {
-    postComments(postId: $postId) {
+const GET_MY_WATCHLIST = gql`
+  query GetMyWatchlist {
+    myWatchlist {
       id
-      content
-      createdAt
-      user {
+      stock {
         id
-        name
+        symbol
+        companyName
+        sector
+        beginnerFriendlyScore
       }
+      addedAt
+      notes
     }
   }
 `;
 
-// GraphQL Mutations
-const CREATE_POST = gql`
-  mutation CreatePost($content: String!) {
-    createPost(content: $content) {
-      post {
-        id
-        content
-        createdAt
-        user {
-          id
-          name
-        }
-      }
-    }
-  }
-`;
-
-const TOGGLE_LIKE = gql`
-  mutation ToggleLike($postId: ID!) {
-    toggleLike(postId: $postId) {
-      post {
-        id
-        likesCount
-        isLikedByUser
-      }
-    }
-  }
-`;
-
-const CREATE_COMMENT = gql`
-  mutation CreateComment($postId: ID!, $content: String!) {
-    createComment(postId: $postId, content: $content) {
-      comment {
-        id
-        content
-        createdAt
-        user {
-          id
-          name
-        }
-      }
-    }
-  }
-`;
-
-const DELETE_COMMENT = gql`
-  mutation DeleteComment($commentId: ID!) {
-    deleteComment(commentId: $commentId) {
+const ADD_TO_WATCHLIST = gql`
+  mutation AddToWatchlist($stockSymbol: String!, $notes: String) {
+    addToWatchlist(stockSymbol: $stockSymbol, notes: $notes) {
       success
-    }
-  }
-`;
-
-const TOGGLE_FOLLOW = gql`
-  mutation ToggleFollow($userId: ID!) {
-    toggleFollow(userId: $userId) {
-      user {
-        id
-        isFollowingUser
-        followersCount
-      }
-      following
+      message
     }
   }
 `;
@@ -142,31 +62,35 @@ interface User {
   name: string;
   email: string;
   profilePic?: string;
-  followersCount: number;
-  followingCount: number;
-  isFollowingUser: boolean;
-  isFollowedByUser: boolean;
 }
 
-interface Post {
+interface Stock {
   id: string;
-  content: string;
-  image?: string;
-  createdAt: string;
-  likesCount: number;
-  isLikedByUser: boolean;
-  commentsCount: number;
-  user: User;
+  symbol: string;
+  companyName: string;
+  sector?: string;
+  marketCap?: number;
+  peRatio?: number;
+  dividendYield?: number;
+  debtRatio?: number;
+  volatility?: number;
+  beginnerFriendlyScore?: number;
 }
 
-interface Comment {
+interface WatchlistItem {
   id: string;
-  content: string;
-  createdAt: string;
-  user: {
-    id: string;
-    name: string;
-  };
+  stock: Stock;
+  addedAt: string;
+  notes?: string;
+}
+
+interface Watchlist {
+  id: string;
+  name: string;
+  description?: string;
+  is_public: boolean;
+  is_shared: boolean;
+  items: WatchlistItem[];
 }
 
 interface ChatMsg {
@@ -179,15 +103,8 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
   const client = useApolloClient();
   
   // State
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [newPost, setNewPost] = useState('');
-  const [imageUri, setImageUri] = useState<string | null>(null);
-  const [showPostForm, setShowPostForm] = useState(false);
-  const [showComments, setShowComments] = useState<string | null>(null);
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [newComment, setNewComment] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedStock, setSelectedStock] = useState<Stock | null>(null);
 
   // Chatbot state
   const [chatOpen, setChatOpen] = useState(false);
@@ -197,165 +114,124 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
   const listRef = useRef<FlatList<ChatMsg>>(null);
 
   // Queries
-  const { data: postsData, loading: postsLoading, refetch: refetchPosts } = useQuery(GET_POSTS);
-  const { data: meData, loading: meLoading } = useQuery(GET_ME);
+  const { data: meData, loading: meLoading, error: meError } = useQuery(GET_ME);
+  const { data: watchlistData, loading: watchlistLoading, error: watchlistError, refetch: refetchWatchlist } = useQuery(GET_MY_WATCHLIST);
 
   // Mutations
-  const [createPost] = useMutation(CREATE_POST, {
-    refetchQueries: [{ query: GET_POSTS }],
-    awaitRefetchQueries: true,
-  });
+  const [addToWatchlist, { loading: addingToWatchlist }] = useMutation(ADD_TO_WATCHLIST);
 
-  const [toggleLike] = useMutation(TOGGLE_LIKE);
-  const [createComment] = useMutation(CREATE_COMMENT, {
-    refetchQueries: [{ query: GET_POST_COMMENTS, variables: { postId: showComments } }],
-    awaitRefetchQueries: true,
-  });
-  const [deleteComment] = useMutation(DELETE_COMMENT);
-  const [toggleFollow] = useMutation(TOGGLE_FOLLOW);
-
-  // Effects
-  useEffect(() => {
-    if (postsData?.wallPosts) {
-      setPosts(postsData.wallPosts);
-    }
-  }, [postsData]);
-
-  useEffect(() => {
-    console.log('🚀 HomeScreen loaded - console logging is working!');
-  }, []);
-
-  // Handlers
-  const handleCreatePost = async () => {
-    if (!newPost.trim() && !imageUri) {
-      Alert.alert('Error', 'Please enter some content or add an image.');
-      return;
-    }
-
-    setIsSubmitting(true);
+  // Test function to add a stock to watchlist
+  const testAddToWatchlist = async () => {
     try {
-      await createPost({
+      console.log('🧪 Testing Add to Watchlist...');
+      console.log('📤 Mutation Variables:', { stockSymbol: 'AAPL', notes: 'Test stock from HomeScreen' });
+      
+      const result = await addToWatchlist({
         variables: {
-          content: newPost.trim(),
-        },
+          stockSymbol: 'AAPL',
+          notes: 'Test stock from HomeScreen'
+        }
       });
       
-      resetComposer();
-      Alert.alert('Success! 🎉', 'Your post has been created!');
-    } catch (error) {
-      console.error('Failed to create post:', error);
-      Alert.alert('Error', 'Failed to create post. Please try again.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleToggleLike = async (postId: string) => {
-    try {
-      await toggleLike({ variables: { postId } });
-    } catch (error) {
-      console.error('Failed to toggle like:', error);
-    }
-  };
-
-  const handleShowComments = async (postId: string) => {
-    if (showComments === postId) {
-      setShowComments(null);
-      setComments([]);
-      return;
-    }
-
-    setShowComments(postId);
-    try {
-      const { data } = await client.query({
-        query: GET_POST_COMMENTS,
-        variables: { postId },
-      });
-      setComments(data.postComments || []);
-    } catch (error) {
-      console.error('Failed to fetch comments:', error);
-      setComments([]);
-    }
-  };
-
-  const handleCreateComment = async () => {
-    if (!newComment.trim() || !showComments) return;
-
-    try {
-      await createComment({
-        variables: {
-          postId: showComments,
-          content: newComment.trim(),
-        },
-      });
+      console.log('✅ Add to Watchlist Result:', result);
+      console.log('📊 Result Data:', result.data);
+      console.log('📊 Result Success:', result.data?.addToWatchlist?.success);
+      console.log('📊 Result Message:', result.data?.addToWatchlist?.message);
       
-      setNewComment('');
-      Alert.alert('Success! 💬', 'Your comment has been added!');
+      // Refresh the watchlist after adding
+      console.log('🔄 Refreshing watchlist...');
+      await refetchWatchlist();
+      console.log('✅ Watchlist refreshed');
     } catch (error) {
-      console.error('Failed to create comment:', error);
-      Alert.alert('Error', 'Failed to create comment. Please try again.');
+      console.error('❌ Add to Watchlist Error:', error);
     }
   };
 
-  const handleDeleteComment = async (commentId: string) => {
-    Alert.alert('Confirm Delete', 'Are you sure you want to delete this comment?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await deleteComment({ variables: { commentId } });
-            setShowComments(null); // Close comments section
-            await refetchPosts();
-            Alert.alert('Comment Deleted', 'Your comment has been deleted.');
-          } catch (error) {
-            console.error('Failed to delete comment:', error);
-            Alert.alert('Error', 'Failed to delete comment. Please try again.');
-          }
-        },
-      },
-    ]);
-  };
-
-  const createTestPost = async () => {
-    try {
-      await createPost({
-        variables: { content: "Hello! This is my first post from the new account! 🚀" },
-      });
-      await refetchPosts();
-      Alert.alert('Test Post Created', 'Your test post has been created! You should now see it in the feed.');
-    } catch (error) {
-      console.error('Failed to create test post:', error);
-      Alert.alert('Error', 'Failed to create test post. Please try again.');
-    }
-  };
-
-  const resetComposer = () => {
-    setNewPost('');
-    setImageUri(null);
-    setShowPostForm(false);
-  };
-
-  const pickImage = async () => {
-    const { granted } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!granted) {
-      Alert.alert('Permission needed', 'Please allow photo library access to add an image.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 1,
-      selectionLimit: 1,
+  // Debug logging
+  useEffect(() => {
+    console.log('🔍 HomeScreen Debug:', {
+      meData,
+      meLoading,
+      meError,
+      watchlistData,
+      watchlistLoading,
+      watchlistError
     });
-    if (!result.canceled && result.assets.length > 0) {
-      setImageUri(result.assets[0].uri);
+  }, [meData, meLoading, meError, watchlistData, watchlistLoading, watchlistError]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refetchWatchlist();
+    } catch (error) {
+      console.error('Error refreshing watchlist:', error);
+    } finally {
+      setRefreshing(false);
     }
   };
 
-  const canPost = newPost.trim().length > 0 || !!imageUri;
+  const handleStockPress = (stock: Stock) => {
+    setSelectedStock(stock);
+    // Navigate to detailed stock view
+    navigateTo('Stock', { stock });
+  };
+
+  const handleAddStock = () => {
+    // Navigate to stock search/add screen
+    navigateTo('Stock');
+  };
+
+  const formatCurrency = (value?: number) => {
+    if (value === undefined || value === null) return 'N/A';
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
+  };
+
+  const formatMarketCap = (value?: number) => {
+    if (value === undefined || value === null) return 'N/A';
+    if (value >= 1e12) return `$${(value / 1e12).toFixed(2)}T`;
+    if (value >= 1e9) return `$${(value / 1e9).toFixed(2)}B`;
+    if (value >= 1e6) return `$${(value / 1e6).toFixed(2)}M`;
+    return formatCurrency(value);
+  };
+
+  const formatPercentage = (value?: number) => {
+    if (value === undefined || value === null) return 'N/A';
+    return `${value.toFixed(2)}%`;
+  };
+
+  const renderStockCard = (watchlistItem: WatchlistItem) => {
+    const { stock } = watchlistItem;
+    
+    return (
+      <TouchableOpacity
+        key={watchlistItem.id}
+        style={styles.stockCard}
+        onPress={() => handleStockPress(stock)}
+      >
+        <View style={styles.stockHeader}>
+          <View style={styles.stockInfo}>
+            <Text style={styles.stockSymbol}>{stock.symbol}</Text>
+            <Text style={styles.companyName} numberOfLines={1}>
+              {stock.companyName}
+            </Text>
+          </View>
+        </View>
+        
+        {/* Notes */}
+        {watchlistItem.notes && (
+          <View style={styles.notesContainer}>
+            <Text style={styles.notesLabel}>Notes:</Text>
+            <Text style={styles.notesText} numberOfLines={2}>{watchlistItem.notes}</Text>
+          </View>
+        )}
+      </TouchableOpacity>
+    );
+  };
 
   // -------- Chatbot --------
   const quickPrompts = [
@@ -367,6 +243,8 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
     'Index fund vs ETF',
     'Diversification basics',
     'Dollar-cost averaging',
+    'How to analyze stocks?',
+    'What is market cap?',
   ];
 
   const openChat = () => {
@@ -377,7 +255,7 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
           id: String(Date.now()),
           role: 'assistant',
           content:
-            'Educational only — not financial advice.\nWhat do you need help with? Ask about ETFs, IRAs, fees, or budgeting.',
+            'Educational only — not financial advice.\nWhat do you need help with? Ask about ETFs, IRAs, fees, budgeting, or stock analysis.',
         },
       ]);
     }
@@ -426,17 +304,6 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
     }
   };
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    try {
-      await refetchPosts();
-    } catch (error) {
-      console.error('Failed to refresh:', error);
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
   const handleQuickPrompt = (prompt: string) => {
     // Don't set chatInput since we're auto-submitting
     // Create and send the message directly
@@ -467,267 +334,116 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
     }
   };
 
-  const handleToggleFollow = async (userId: string) => {
-    try {
-      await toggleFollow({ variables: { userId } });
-      // Clear cache and refetch to ensure fresh data
-      await client.resetStore();
-      await refetchPosts();
-      // Also refetch user data to get updated follow status
-      if (meData?.me?.id) {
-        await client.query({
-          query: GET_ME,
-          fetchPolicy: 'network-only'
-        });
-      }
-    } catch (error) {
-      console.error('Failed to toggle follow:', error);
-    }
-  };
-
-  // Render
-  if (postsLoading) {
+  if (watchlistLoading) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.loadingText}>Loading posts... 📱</Text>
-      </View>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Stock Tracker</Text>
+        </View>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Loading your watchlist...</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
+  if (meError || watchlistError) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Stock Tracker</Text>
+        </View>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>Error loading data. Please try again.</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={onRefresh}>
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const user = meData?.me;
+  const watchlistItems = watchlistData?.myWatchlist || [];
+  const totalStocks = watchlistItems.length;
+  
+  // Debug logging
+  console.log('🔍 HomeScreen Debug:', {
+    meData: meData?.me ? { id: meData.me.id, name: meData.me.name } : null,
+    watchlistData: watchlistData?.myWatchlist ? watchlistData.myWatchlist.length : 0,
+    watchlistError,
+    watchlistLoading,
+    totalStocks,
+    hasWatchlistItems: Boolean(watchlistItems && watchlistItems.length > 0)
+  });
+
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       {/* Header */}
-      <View style={styles.headerBar}>
-        <TouchableOpacity 
-          style={styles.profileButton}
-          onPress={() => {
-            if (!meLoading && meData?.me?.id) {
-              // @ts-ignore
-              navigateTo('Profile', { userId: meData.me.id });
-            }
-          }}
-        >
-          <View style={styles.profileAvatar}>
-            {!meLoading && meData?.me?.profilePic ? (
-              <Image 
-                source={{ uri: meData.me.profilePic }} 
-                style={styles.profilePic} 
-              />
-            ) : (
-              <Text style={styles.profileAvatarText}>
-                {!meLoading && meData?.me?.name ? meData.me.name.charAt(0).toUpperCase() : 'U'}
-              </Text>
-            )}
-          </View>
-        </TouchableOpacity>
-
-        <View style={styles.headerCenter}>
-          <Image source={require('../assets/whitelogo1.png')} style={styles.logo} />
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Stock Tracker</Text>
+        <View style={styles.headerButtons}>
+          <TouchableOpacity style={styles.testButton} onPress={testAddToWatchlist}>
+            <Text style={styles.testButtonText}>Test Add</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.addButton} onPress={handleAddStock}>
+            <Icon name="plus" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
         </View>
-
-              <View style={styles.headerRight}>
-        <TouchableOpacity onPress={() => setShowPostForm(true)}>
-          <Text style={styles.icon}>➕</Text>
-        </TouchableOpacity>
-      </View>
       </View>
 
-      {/* Post Creation Form */}
-      {showPostForm && (
-        <View style={styles.postForm}>
-          <TextInput
-            style={styles.postInput}
-            placeholder="What's on your mind? ��"
-            value={newPost}
-            onChangeText={setNewPost}
-            multiline
-            maxLength={500}
-          />
-          
-          {imageUri && (
-            <View style={styles.imagePreviewContainer}>
-              <Image source={{ uri: imageUri }} style={styles.imagePreview} />
-              <TouchableOpacity
-                style={styles.removeImageButton}
-                onPress={() => setImageUri(null)}
-              >
-                <Text style={styles.removeImageText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-          
-          <View style={styles.formActions}>
-            <TouchableOpacity style={styles.imageButton} onPress={pickImage}>
-              <Icon name="image" size={20} color="#00cc99" />
-              <Text style={styles.imageButtonText}>Add Image</Text>
-            </TouchableOpacity>
-            
-            <View style={styles.postButtons}>
-              <TouchableOpacity
-                style={styles.cancelButton}
-                onPress={resetComposer}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[styles.postButton, !canPost && styles.postButtonDisabled]}
-                onPress={handleCreatePost}
-                disabled={!canPost || isSubmitting}
-              >
-                <Text style={styles.postButtonText}>
-                  {isSubmitting ? 'Posting...' : 'Post'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+      {/* Summary Stats */}
+      <View style={styles.summaryContainer}>
+        <View style={styles.summaryItem}>
+          <Text style={styles.summaryValue}>{totalStocks}</Text>
+          <Text style={styles.summaryLabel}>Stocks</Text>
         </View>
-      )}
+        <View style={styles.summaryItem}>
+          <Text style={styles.summaryValue}>
+            {user?.name?.split(' ')[0] || 'User'}
+          </Text>
+          <Text style={styles.summaryLabel}>Welcome</Text>
+        </View>
+      </View>
 
-      {/* Posts Feed */}
+      {/* Content */}
       <ScrollView
-        style={styles.feed}
+        style={styles.content}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {posts.length === 0 ? (
+        {watchlistLoading ? (
+          <View style={styles.loadingContainer}>
+            <Icon name="loader" size={32} color="#00cc99" />
+            <Text style={styles.loadingText}>Loading your watchlist...</Text>
+          </View>
+        ) : !watchlistItems || watchlistItems.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No posts yet. Be the first to share! ��</Text>
-            <TouchableOpacity style={styles.createFirstPostButton} onPress={createTestPost}>
-              <Text style={styles.createFirstPostText}>Create Your First Post</Text>
-            </TouchableOpacity>
+            <Icon name="trending-up" size={64} color="#9CA3AF" />
+            <Text style={styles.emptyTitle}>Welcome to Your Watchlist! 📈</Text>
+            <Text style={styles.emptySubtitle}>
+              You haven't added any stocks yet. Start building your investment portfolio by adding stocks you want to track.
+            </Text>
+            <View style={styles.emptyActions}>
+              <TouchableOpacity style={styles.emptyButton} onPress={handleAddStock}>
+                <Text style={styles.emptyButtonText}>Add Your First Stock</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.emptySecondaryButton} onPress={testAddToWatchlist}>
+                <Text style={styles.emptySecondaryButtonText}>Try Demo Stock (AAPL)</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.emptyTips}>
+              <Text style={styles.emptyTipsTitle}>💡 Quick Tips:</Text>
+              <Text style={styles.emptyTipsText}>• Start with companies you know and use</Text>
+              <Text style={styles.emptyTipsText}>• Consider different sectors for diversity</Text>
+              <Text style={styles.emptyTipsText}>• Use notes to track why you're interested</Text>
+            </View>
           </View>
         ) : (
-          posts.map((post) => (
-            <View key={post.id} style={styles.postCard}>
-              <View style={styles.postHeader}>
-                <TouchableOpacity 
-                  style={styles.userInfo}
-                  onPress={() => {
-                    // @ts-ignore
-                    navigateTo('Profile', { userId: post.user.id });
-                  }}
-                >
-                  <View style={styles.avatar}>
-                    {post.user.profilePic ? (
-                      <Image 
-                        source={{ uri: post.user.profilePic }} 
-                        style={styles.postAvatarPic} 
-                      />
-                    ) : (
-                      <Text style={styles.avatarText}>{post.user.name.charAt(0).toUpperCase()}</Text>
-                    )}
-                  </View>
-                  <Text style={styles.author}>{post.user.name}</Text>
-                                     {!meLoading && meData?.me?.id && meData.me.id === post.user.id && (
-                    <View style={styles.youBadge}>
-                      <Text style={styles.youBadgeText}>You</Text>
-                    </View>
-                  )}
-                  <Icon name="chevron-right" size={12} color="#00cc99" style={{ marginLeft: 4 }} />
-                </TouchableOpacity>
-                <Text style={styles.timestamp}>
-                  {new Date(post.createdAt).toLocaleDateString()}
-                </Text>
-              </View>
-              <Text style={styles.content}>{post.content}</Text>
-              {!!post.image && <Image source={{ uri: post.image }} style={styles.postImage} />}
-              
-              <View style={styles.postActions}>
-                <TouchableOpacity 
-                  style={styles.likeButton} 
-                  onPress={() => handleToggleLike(post.id)}
-                >
-                  <Icon 
-                    name={post.isLikedByUser ? "heart" : "heart"} 
-                    size={20} 
-                    color={post.isLikedByUser ? "#ff4757" : "#666"} 
-                    style={{ opacity: post.isLikedByUser ? 1 : 0.6 }}
-                  />
-                  <Text style={[styles.likeCount, post.isLikedByUser && styles.likedText]}>
-                    {post.likesCount}
-                  </Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={styles.commentButton} 
-                  onPress={() => handleShowComments(post.id)}
-                >
-                  <Icon name="message-circle" size={20} color="#666" />
-                  <Text style={styles.commentCount}>{post.commentsCount}</Text>
-                </TouchableOpacity>
-                
-                {!meLoading && meData?.me?.id && meData.me.id !== post.user.id && (
-                  <TouchableOpacity 
-                    style={styles.followButton} 
-                    onPress={() => handleToggleFollow(post.user.id)}
-                  >
-                    <Icon 
-                      name={post.user.isFollowingUser ? "user-check" : "user-plus"} 
-                      size={20} 
-                      color={post.user.isFollowingUser ? "#00cc99" : "#666"} 
-                    />
-                    <Text style={[styles.followText, post.user.isFollowingUser && styles.followingText]}>
-                      {post.user.isFollowingUser ? "Following" : "Follow"}
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-              
-              {/* Comments Section */}
-              {showComments === post.id && (
-                <View style={styles.commentsSection}>
-                  {/* Display existing comments */}
-                  {comments.length > 0 && (
-                    <View style={styles.commentsList}>
-                      {comments.map((comment) => (
-                        <View key={comment.id} style={styles.commentItem}>
-                          <View style={styles.commentHeader}>
-                            <Text style={styles.commentAuthor}>{comment.user.name}</Text>
-                            <Text style={styles.commentDate}>
-                              {new Date(comment.createdAt).toLocaleDateString()}
-                            </Text>
-                          </View>
-                          <View style={styles.commentContentRow}>
-                            <Text style={styles.commentContent}>{comment.content}</Text>
-                            {/* Delete button for comments - only show for comment author */}
-                            {!meLoading && meData?.me?.id === comment.user.id && (
-                              <TouchableOpacity 
-                                onPress={() => handleDeleteComment(comment.id)}
-                                style={styles.deleteCommentButton}
-                              >
-                                <Icon name="trash-2" size={16} color="#ef4444" />
-                              </TouchableOpacity>
-                            )}
-                          </View>
-                        </View>
-                      ))}
-                    </View>
-                  )}
-                  
-                  {/* Add new comment */}
-                  <View style={styles.addCommentSection}>
-                    <TextInput
-                      style={styles.commentInput}
-                      placeholder="Add a comment... 💬"
-                      value={newComment}
-                      onChangeText={setNewComment}
-                      multiline
-                      maxLength={200}
-                    />
-                    <TouchableOpacity
-                      style={[styles.commentButton, !newComment.trim() && styles.commentButtonDisabled]}
-                      onPress={handleCreateComment}
-                      disabled={!newComment.trim()}
-                    >
-                      <Text style={styles.commentButtonText}>Comment</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              )}
-            </View>
-          ))
+          <View>
+            {watchlistItems.map(renderStockCard)}
+          </View>
         )}
       </ScrollView>
 
@@ -740,7 +456,10 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
       {chatOpen && (
         <View style={styles.chatModal}>
           <View style={styles.chatHeader}>
-            <Text style={styles.chatTitle}>Financial Education Assistant ��</Text>
+            <View style={styles.chatTitleContainer}>
+              <Icon name="lightbulb" size={20} color="#00cc99" style={styles.chatTitleIcon} />
+              <Text style={styles.chatTitle}>Financial Education Assistant</Text>
+            </View>
             <View style={styles.chatHeaderActions}>
               <TouchableOpacity onPress={clearChat} style={styles.chatActionButton}>
                 <Icon name="trash-2" size={16} color="#666" />
@@ -755,13 +474,13 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
           <View style={styles.quickPromptsContainer}>
             <View style={styles.quickPromptsGrid}>
               {quickPrompts.map((prompt, index) => (
-                              <TouchableOpacity
-                key={index}
-                style={styles.quickPromptButton}
-                onPress={() => handleQuickPrompt(prompt)}
-              >
-                <Text style={styles.quickPromptText}>{prompt}</Text>
-              </TouchableOpacity>
+                <TouchableOpacity
+                  key={index}
+                  style={styles.quickPromptButton}
+                  onPress={() => handleQuickPrompt(prompt)}
+                >
+                  <Text style={styles.quickPromptText}>{prompt}</Text>
+                </TouchableOpacity>
               ))}
             </View>
           </View>
@@ -812,248 +531,173 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
           </View>
         </View>
       )}
-
-      {/* Bottom Tab Navigation */}
-      <View style={styles.bottomTabBar}>
-        <TouchableOpacity 
-          style={[styles.tabItem, styles.activeTabItem]} 
-          onPress={() => navigateTo('Home')}
-        >
-          <Icon name="home" size={24} color="#00cc99" />
-          <Text style={styles.tabLabel}>Home</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={styles.tabItem} 
-          onPress={() => navigateTo('Stocks')}
-        >
-          <Icon name="trending-up" size={24} color="#999" />
-          <Text style={styles.tabLabel}>Stocks</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={styles.tabItem} 
-          onPress={() => navigateTo('DiscoverUsers')}
-        >
-          <Icon name="users" size={24} color="#999" />
-          <Text style={styles.tabLabel}>Discover</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={styles.tabItem} 
-          onPress={() => navigateTo('Profile')}
-        >
-          <Icon name="user" size={24} color="#999" />
-          <Text style={styles.tabLabel}>Profile</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
-const styles = {
+const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
   },
-  
+
   // Header
-  headerBar: {
+  header: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 15,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
-    paddingTop: 70,
+    paddingTop: 20,
   },
-  profileButton: {
-    padding: 4,
-    marginRight: 8,
-  },
-  profileAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#00cc99',
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  profilePic: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 20,
-  },
-  profileAvatarText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  logo: {
-    height: 60,
-    width: 240,
-    resizeMode: 'contain',
-  },
-  icon: {
+  headerTitle: {
     fontSize: 24,
-    color: '#00cc99',
+    fontWeight: 'bold',
+    color: '#333',
   },
-  stocksButton: {
-    padding: 4,
-    marginRight: 8,
+  addButton: {
+    backgroundColor: '#00cc99',
+    padding: 8,
+    borderRadius: 8,
   },
-  discoverButton: {
-    padding: 4,
-    marginRight: 8,
-  },
-  headerCenter: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  headerRight: {
+  headerButtons: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+  },
+  testButton: {
+    backgroundColor: '#4CAF50', // A different color for the test button
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginRight: 10,
+  },
+  testButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
 
-  // Loading
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f8f9fa',
-  },
-  loadingText: {
-    fontSize: 18,
-    color: '#666',
-  },
-
-  // Post Form
-  postForm: {
+  // Summary Stats
+  summaryContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
     backgroundColor: '#fff',
-    padding: 20,
+    paddingVertical: 15,
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
   },
-  postInput: {
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 12,
-    padding: 15,
-    fontSize: 16,
-    minHeight: 100,
-    textAlignVertical: 'top',
-    marginBottom: 15,
-  },
-  imagePreviewContainer: {
-    position: 'relative',
-    marginBottom: 15,
-  },
-  imagePreview: {
-    width: '100%',
-    height: 200,
-    borderRadius: 12,
-    resizeMode: 'cover',
-  },
-  removeImageButton: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    borderRadius: 15,
-    width: 30,
-    height: 30,
-    justifyContent: 'center',
+  summaryItem: {
     alignItems: 'center',
   },
-  removeImageText: {
-    color: '#fff',
-    fontSize: 16,
+  summaryValue: {
+    fontSize: 20,
     fontWeight: 'bold',
-  },
-  formActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  imageButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#00cc99',
-  },
-  imageButtonText: {
-    marginLeft: 8,
     color: '#00cc99',
-    fontWeight: '600',
   },
-  postButtons: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  cancelButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#666',
-  },
-  cancelButtonText: {
+  summaryLabel: {
+    fontSize: 14,
     color: '#666',
-    fontWeight: '600',
-  },
-  postButton: {
-    backgroundColor: '#00cc99',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  postButtonDisabled: {
-    backgroundColor: '#ccc',
-  },
-  postButtonText: {
-    color: '#fff',
-    fontWeight: '600',
+    marginTop: 5,
   },
 
-  // Feed
-  feed: {
+  // Content
+  content: {
     flex: 1,
   },
   emptyContainer: {
-    padding: 40,
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
+    padding: 40,
+    backgroundColor: '#fff',
   },
-  emptyText: {
-    fontSize: 18,
+  emptyTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 20,
+  },
+  emptySubtitle: {
+    fontSize: 16,
     color: '#666',
     textAlign: 'center',
-    marginBottom: 20,
+    marginTop: 10,
+    marginBottom: 30,
   },
-  createFirstPostButton: {
+  emptyButton: {
     backgroundColor: '#00cc99',
     paddingHorizontal: 30,
     paddingVertical: 15,
     borderRadius: 25,
   },
-  createFirstPostText: {
+  emptyButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
   },
+  emptyActions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 15,
+    marginBottom: 30,
+  },
+  emptySecondaryButton: {
+    backgroundColor: 'transparent',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#00cc99',
+  },
+  emptySecondaryButtonText: {
+    color: '#00cc99',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  emptyTips: {
+    backgroundColor: '#f8f9fa',
+    padding: 20,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    width: '100%',
+  },
+  emptyTipsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 10,
+  },
+  emptyTipsText: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 5,
+    lineHeight: 20,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+    backgroundColor: '#fff',
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#666',
+    marginTop: 15,
+  },
 
-  // Post Card
-  postCard: {
+  // Watchlist Section
+  watchlistSection: {
     backgroundColor: '#fff',
     marginHorizontal: 15,
-    marginVertical: 8,
-    borderRadius: 16,
-    padding: 20,
+    marginVertical: 10,
+    borderRadius: 12,
+    padding: 15,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
@@ -1063,302 +707,235 @@ const styles = {
     shadowRadius: 3.84,
     elevation: 5,
   },
-  postHeader: {
+  watchlistHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 15,
   },
-  userInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#00cc99',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  postAvatarPic: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 16,
-  },
-  avatarText: {
-    color: '#fff',
-    fontSize: 14,
+  watchlistTitle: {
+    fontSize: 20,
     fontWeight: 'bold',
-  },
-  author: {
-    fontSize: 16,
-    fontWeight: '600',
     color: '#333',
-    flex: 1,
   },
-  youBadge: {
-    backgroundColor: '#00cc99',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-    marginLeft: 8,
-  },
-  youBadgeText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  timestamp: {
-    fontSize: 12,
+  stockCount: {
+    fontSize: 14,
     color: '#666',
   },
-  content: {
-    fontSize: 16,
-    lineHeight: 24,
-    color: '#333',
+  watchlistDescription: {
+    fontSize: 14,
+    color: '#555',
     marginBottom: 15,
-  },
-  postImage: {
-    width: '100%',
-    height: 200,
-    borderRadius: 12,
-    marginBottom: 15,
-    resizeMode: 'cover',
   },
 
-  // Post Actions
-  postActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 20,
-    paddingTop: 15,
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-  },
-  likeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  likeCount: {
-    fontSize: 14,
-    color: '#666',
-  },
-  likedText: {
-    color: '#ff4757',
-    fontWeight: '600',
-  },
-  commentButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  commentCount: {
-    fontSize: 14,
-    color: '#666',
-  },
-  followButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  followText: {
-    fontSize: 14,
-    color: '#666',
-  },
-  followingText: {
-    color: '#00cc99',
-    fontWeight: '600',
-  },
-
-  // Comments Section
-  commentsSection: {
-    marginTop: 15,
-    paddingTop: 15,
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-  },
-  commentsList: {
-    marginBottom: 15,
-  },
-  commentItem: {
+  // Stock Card
+  stockCard: {
     backgroundColor: '#f8f9fa',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 8,
+    borderRadius: 12,
+    padding: 15,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
-  commentHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  commentAuthor: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-  },
-  commentDate: {
-    fontSize: 12,
-    color: '#666',
-  },
-  commentContentRow: {
+  stockHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    marginBottom: 10,
   },
-  commentContent: {
+  stockInfo: {
+    flex: 1,
+  },
+  stockSymbol: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#00cc99',
+  },
+  companyName: {
     fontSize: 14,
     color: '#333',
-    flex: 1,
-    marginRight: 10,
+    marginTop: 2,
   },
-  deleteCommentButton: {
-    padding: 4,
+  sector: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
   },
-  addCommentSection: {
+  stockMetrics: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 10,
+    justifyContent: 'space-around',
+    marginTop: 10,
+    marginBottom: 10,
   },
-  commentInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 8,
-    padding: 10,
+  metric: {
+    alignItems: 'center',
+  },
+  metricLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 4,
+  },
+  metricValue: {
     fontSize: 14,
-    minHeight: 40,
-    textAlignVertical: 'top',
+    fontWeight: 'bold',
+    color: '#333',
   },
-  commentButtonDisabled: {
-    backgroundColor: '#ccc',
+  notesContainer: {
+    marginTop: 10,
+    marginBottom: 10,
   },
-  commentButtonText: {
+  notesLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  notesText: {
+    fontSize: 13,
+    color: '#555',
+    lineHeight: 18,
+  },
+  targetContainer: {
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  targetLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#00cc99',
+  },
+
+
+
+  // Error
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+    backgroundColor: '#f8f9fa',
+  },
+  errorText: {
+    fontSize: 18,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: '#00cc99',
+    paddingHorizontal: 30,
+    paddingVertical: 15,
+    borderRadius: 25,
+  },
+  retryButtonText: {
     color: '#fff',
+    fontSize: 16,
     fontWeight: '600',
   },
 
-  // Chatbot
+  // Chatbot Styles
   chatButton: {
     position: 'absolute',
-    bottom: 100, // Moved up to be above the bottom tab navigation
-    right: 30,
+    bottom: 20,
+    right: 20,
     backgroundColor: '#00cc99',
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     justifyContent: 'center',
     alignItems: 'center',
+    elevation: 5,
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-    zIndex: 999, // Ensure it's above other elements
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
   },
   chatModal: {
     position: 'absolute',
-    top: 0,
+    bottom: 0,
     left: 0,
     right: 0,
-    bottom: 0,
     backgroundColor: '#fff',
-    zIndex: 1000,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    maxHeight: '70%', // Adjust as needed
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 10,
   },
   chatHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
-    paddingTop: 60,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-    backgroundColor: '#fff',
+    marginBottom: 8,
+  },
+  chatTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  chatTitleIcon: {
+    marginRight: 8,
   },
   chatTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: 'bold',
     color: '#333',
   },
   chatHeaderActions: {
     flexDirection: 'row',
-    gap: 15,
   },
   chatActionButton: {
-    padding: 8,
+    marginLeft: 10,
   },
   chatCloseButton: {
-    padding: 8,
+    marginLeft: 10,
   },
   quickPromptsContainer: {
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-    marginTop: 40,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    marginBottom: 8,
   },
   quickPromptsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'flex-start',
-    alignItems: 'flex-start',
+    gap: 6,
   },
   quickPromptButton: {
-    backgroundColor: '#f8f9fa',
-    paddingHorizontal: 10,
+    backgroundColor: '#e0e0e0',
     paddingVertical: 4,
-    borderRadius: 12,
-    marginRight: 8,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    minWidth: 70,
-    maxWidth: 100,
-    height: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
+    paddingHorizontal: 10,
+    borderRadius: 15,
+    marginBottom: 4,
   },
   quickPromptText: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#333',
-    textAlign: 'center',
-    fontWeight: '500',
-    lineHeight: 14,
   },
   chatMessages: {
     flex: 1,
-    padding: 20,
+    marginBottom: 10,
   },
   chatMessage: {
-    marginBottom: 15,
     maxWidth: '80%',
+    padding: 10,
+    borderRadius: 10,
+    marginBottom: 10,
   },
   userMessage: {
     alignSelf: 'flex-end',
     backgroundColor: '#00cc99',
-    padding: 12,
-    borderRadius: 18,
-    borderBottomRightRadius: 4,
+    borderBottomRightRadius: 0,
   },
   assistantMessage: {
     alignSelf: 'flex-start',
-    backgroundColor: '#f8f9fa',
-    padding: 12,
-    borderRadius: 18,
-    borderBottomLeftRadius: 4,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+    backgroundColor: '#f0f0f0',
+    borderBottomLeftRadius: 0,
   },
   chatMessageText: {
     fontSize: 14,
-    lineHeight: 20,
+    color: '#fff',
   },
   userMessageText: {
     color: '#fff',
@@ -1369,55 +946,27 @@ const styles = {
   chatInputContainer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    padding: 20,
-    paddingBottom: 30,
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',
-    backgroundColor: '#fff',
-    marginBottom: 20,
   },
   chatInput: {
     flex: 1,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+    paddingVertical: 10,
+    paddingHorizontal: 15,
     borderRadius: 20,
-    padding: 12,
+    backgroundColor: '#f0f0f0',
     fontSize: 14,
-    minHeight: 40,
-    textAlignVertical: 'top',
+    color: '#333',
     marginRight: 10,
+    minHeight: 40,
+    maxHeight: 100,
   },
   chatSendButton: {
     backgroundColor: '#00cc99',
-    width: 40,
-    height: 40,
+    padding: 10,
     borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   chatSendButtonDisabled: {
     backgroundColor: '#ccc',
   },
-  bottomTabBar: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#e9ecef',
-    paddingBottom: 20,
-    paddingTop: 10,
-  },
-  tabItem: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  activeTabItem: {
-    // Active tab styling is handled by icon color
-  },
-  tabLabel: {
-    fontSize: 12,
-    color: '#999',
-    marginTop: 4,
-    fontWeight: '500',
-  },
-};
+});

@@ -8,9 +8,10 @@ import { getMainDefinition } from '@apollo/client/utilities';
 // import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
 // import { createClient } from 'graphql-ws';
 
-const HTTP_URL = 'http://localhost:8000/graphql'; 
-// iOS Simulator → localhost works
-// Android Emulator → use http://10.0.2.2:8000/graphql
+const HTTP_URL = 'http://127.0.0.1:8000/graphql/'; 
+// Local development → use localhost
+// iOS Simulator → use actual network IP (e.g., http://10.0.0.64:8000/graphql/)
+// Android Emulator → use http://10.0.2.2:8000/graphql/
 
 const httpLink = createHttpLink({ uri: HTTP_URL });
 
@@ -46,6 +47,8 @@ const client = new ApolloClient({
   link: authLink.concat(httpLink), // swap for `link` if you enable ws
   cache: new InMemoryCache(),
 });
+
+export { client };
 
 export default function ApolloWrapper({ children }: { children: React.ReactNode }) {
   return <Provider client={client}>{children}</Provider>;

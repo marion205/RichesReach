@@ -24,9 +24,10 @@ const LOGIN = gql`
   }
 `;
 
-export default function LoginScreen({ navigateTo }) {
+export default function LoginScreen({ onLogin, onNavigateToSignUp }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
 
   const [signup, { loading: signupLoading, error: signupError }] = useMutation(SIGNUP);
   const [tokenAuth, { loading: loginLoading, error: loginError }] = useMutation(LOGIN);
@@ -98,7 +99,7 @@ export default function LoginScreen({ navigateTo }) {
       // Store the token for future requests
       await AsyncStorage.setItem('token', token);
       
-      navigateTo('Home');
+      onLogin();
     } catch (err) {
       console.error('Login failed:', err);
       console.error('Error details:', {
@@ -144,7 +145,7 @@ export default function LoginScreen({ navigateTo }) {
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => navigateTo('SignUp')}>
+        <TouchableOpacity onPress={onNavigateToSignUp}>
           <Text style={{ textAlign: 'center', marginTop: 10, color: '#007aff' }}>
             Don't have an account? Sign up here.
           </Text>
