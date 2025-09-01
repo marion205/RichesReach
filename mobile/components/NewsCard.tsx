@@ -8,26 +8,34 @@ import {
   Image,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
+import { NewsArticle } from '../services/newsService';
 
 interface NewsCardProps {
-  news: {
-    id: string;
-    title: string;
-    description: string;
-    url: string;
-    publishedAt: string;
-    source: string;
-    imageUrl?: string;
-    sentiment?: 'positive' | 'negative' | 'neutral';
-  };
+  news: NewsArticle;
+  onSave?: (article: NewsArticle) => void;
+  onUnsave?: (articleId: string) => void;
+  showSaveButton?: boolean;
 }
 
-const NewsCard: React.FC<NewsCardProps> = ({ news }) => {
+const NewsCard: React.FC<NewsCardProps> = ({ 
+  news, 
+  onSave, 
+  onUnsave, 
+  showSaveButton = true 
+}) => {
   const handleNewsPress = async () => {
     try {
       await Linking.openURL(news.url);
     } catch (error) {
       console.error('Failed to open news URL:', error);
+    }
+  };
+
+  const handleSavePress = () => {
+    if (news.isSaved && onUnsave) {
+      onUnsave(news.id);
+    } else if (!news.isSaved && onSave) {
+      onSave(news);
     }
   };
 
@@ -91,9 +99,38 @@ const NewsCard: React.FC<NewsCardProps> = ({ news }) => {
       )}
 
       <View style={styles.footer}>
-        <View style={styles.actionButton}>
-          <Icon name="external-link" size={16} color="#8E8E93" />
-          <Text style={styles.actionText}>Read Article</Text>
+        <View style={styles.footerLeft}>
+          {news.readTime && (
+            <View style={styles.readTimeContainer}>
+              <Icon name="clock" size={14} color="#8E8E93" />
+              <Text style={styles.readTimeText}>{news.readTime} min read</Text>
+            </View>
+          )}
+          {news.category && (
+            <View style={styles.categoryContainer}>
+              <Text style={styles.categoryText}>{news.category.replace('-', ' ')}</Text>
+            </View>
+          )}
+        </View>
+        
+        <View style={styles.footerRight}>
+          {showSaveButton && (
+            <TouchableOpacity 
+              style={styles.saveButton} 
+              onPress={handleSavePress}
+            >
+              <Icon 
+                name={news.isSaved ? "bookmark" : "bookmark"} 
+                size={16} 
+                color={news.isSaved ? "#34C759" : "#8E8E93"} 
+                style={news.isSaved ? {} : { opacity: 0.5 }}
+              />
+            </TouchableOpacity>
+          )}
+          <View style={styles.actionButton}>
+            <Icon name="external-link" size={16} color="#8E8E93" />
+            <Text style={styles.actionText}>Read Article</Text>
+          </View>
         </View>
       </View>
     </TouchableOpacity>
@@ -161,8 +198,45 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   footer: {
+    marginTop: 16,
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  footerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  footerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  readTimeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  readTimeText: {
+    fontSize: 12,
+    color: '#8E8E93',
+    fontWeight: '500',
+  },
+  categoryContainer: {
+    backgroundColor: '#F2F2F7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  categoryText: {
+    fontSize: 12,
+    color: '#8E8E93',
+    fontWeight: '600',
+    textTransform: 'capitalize',
+  },
+  saveButton: {
+    padding: 8,
   },
   actionButton: {
     flexDirection: 'row',

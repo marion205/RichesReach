@@ -54,11 +54,11 @@ const PortfolioScreen: React.FC<PortfolioScreenProps> = ({ navigateTo }) => {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <Icon name="calculator" size={24} color="#34C759" />
+          <Icon name="bar-chart-2" size={24} color="#34C759" />
           <Text style={styles.headerTitle}>Portfolio Calculator</Text>
         </View>
         <View style={styles.loadingContainer}>
-          <Icon name="loader" size={32} color="#34C759" />
+          <Icon name="refresh-cw" size={32} color="#34C759" />
           <Text style={styles.loadingText}>Loading your portfolio...</Text>
         </View>
       </SafeAreaView>
@@ -94,11 +94,11 @@ const PortfolioScreen: React.FC<PortfolioScreenProps> = ({ navigateTo }) => {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <Icon name="calculator" size={24} color="#34C759" />
+          <Icon name="bar-chart-2" size={24} color="#34C759" />
           <Text style={styles.headerTitle}>Portfolio Calculator</Text>
         </View>
         <View style={styles.emptyContainer}>
-          <Icon name="calculator" size={64} color="#9CA3AF" />
+          <Icon name="bar-chart-2" size={64} color="#9CA3AF" />
           <Text style={styles.emptyTitle}>No Stocks in Portfolio</Text>
           <Text style={styles.emptySubtitle}>
             Add stocks to your watchlist first to use the portfolio calculator.
@@ -148,7 +148,7 @@ const PortfolioScreen: React.FC<PortfolioScreenProps> = ({ navigateTo }) => {
 
           <View style={styles.featureCard}>
             <View style={styles.featureHeader}>
-              <Icon name="edit-3" size={20} color="#34C759" />
+              <Icon name="edit" size={20} color="#34C759" />
               <Text style={styles.featureTitle}>Interactive Input</Text>
             </View>
             <Text style={styles.featureDescription}>

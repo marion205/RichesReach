@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,67 +9,21 @@ import {
   SafeAreaView,
   FlatList,
   TextInput,
+  Alert,
 } from 'react-native';
 import { useApolloClient } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
 import NewsCard from '../components/NewsCard';
+import NewsCategories from '../components/NewsCategories';
+import NewsPreferences from '../components/NewsPreferences';
+import NewsAlerts from '../components/NewsAlerts';
+import SavedArticles from '../components/SavedArticles';
+import newsService, { NewsCategory, NewsArticle, NEWS_CATEGORIES } from '../services/newsService';
 
 
 
 
-// Mock Financial News Data
-const mockFinancialNews = [
-  {
-    id: '1',
-    title: 'Federal Reserve Signals Potential Rate Cuts in 2024',
-    description: 'The Federal Reserve indicated today that it may consider interest rate reductions in the coming year as inflation continues to moderate.',
-    url: 'https://www.reuters.com/markets/us/federal-reserve-signals-potential-rate-cuts-2024-2024-01-15/',
-    publishedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
-    source: 'Reuters',
-    sentiment: 'positive' as const,
-    imageUrl: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=400&h=200&fit=crop'
-  },
-  {
-    id: '2',
-    title: 'Tech Stocks Rally on Strong Earnings Reports',
-    description: 'Major technology companies exceeded quarterly expectations, driving a broad market rally and pushing indices to new highs.',
-    url: 'https://www.bloomberg.com/news/articles/2024-01-15/tech-stocks-rally-on-strong-earnings-reports',
-    publishedAt: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(), // 4 hours ago
-    source: 'Bloomberg',
-    sentiment: 'positive' as const,
-    imageUrl: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=400&h=200&fit=crop'
-  },
-  {
-    id: '3',
-    title: 'Oil Prices Decline Amid Global Economic Concerns',
-    description: 'Crude oil futures fell sharply as traders weighed concerns about global economic growth and demand prospects.',
-    url: 'https://www.marketwatch.com/story/oil-prices-decline-amid-global-economic-concerns-2024-01-15',
-    publishedAt: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(), // 6 hours ago
-    source: 'MarketWatch',
-    sentiment: 'negative' as const,
-    imageUrl: 'https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=400&h=200&fit=crop'
-  },
-  {
-    id: '4',
-    title: 'Cryptocurrency Market Shows Signs of Recovery',
-    description: 'Bitcoin and other major cryptocurrencies gained ground as institutional adoption continues to grow.',
-    url: 'https://www.coindesk.com/markets/cryptocurrency-market-shows-signs-of-recovery-2024-01-15/',
-    publishedAt: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(), // 8 hours ago
-    source: 'CoinDesk',
-    sentiment: 'positive' as const,
-    imageUrl: 'https://images.unsplash.com/photo-1621761191319-c6fb62004040?w=400&h=200&fit=crop'
-  },
-  {
-    id: '5',
-    title: 'Housing Market Data Shows Mixed Signals',
-    description: 'New home sales data revealed conflicting trends, with some regions showing strength while others face challenges.',
-    url: 'https://www.wsj.com/articles/housing-market-data-shows-mixed-signals-2024-01-15',
-    publishedAt: new Date(Date.now() - 10 * 60 * 60 * 1000).toISOString(), // 10 hours ago
-    source: 'Wall Street Journal',
-    sentiment: 'neutral' as const,
-    imageUrl: 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=400&h=200&fit=crop'
-  }
-];
+
 
 // Types
 interface ChatMsg {
@@ -84,6 +38,15 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
   // State
   const [refreshing, setRefreshing] = useState(false);
 
+  // News state
+  const [newsArticles, setNewsArticles] = useState<NewsArticle[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<NewsCategory>(NEWS_CATEGORIES.ALL);
+  const [newsCategories, setNewsCategories] = useState<Array<{ category: NewsCategory; count: number; label: string }>>([]);
+  const [showPreferences, setShowPreferences] = useState(false);
+  const [showAlerts, setShowAlerts] = useState(false);
+  const [showSavedArticles, setShowSavedArticles] = useState(false);
+  const [isPersonalized, setIsPersonalized] = useState(false);
+
   // Chatbot state
   const [chatOpen, setChatOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
@@ -91,12 +54,39 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
   const [chatSending, setChatSending] = useState(false);
   const listRef = useRef<FlatList<ChatMsg>>(null);
 
+  // Load news on component mount
+  useEffect(() => {
+    loadNews();
+    loadNewsCategories();
+  }, [selectedCategory, isPersonalized]);
+
+  const loadNews = async () => {
+    try {
+      let news;
+      if (isPersonalized) {
+        news = await newsService.getPersonalizedNews();
+      } else {
+        news = await newsService.getRealTimeNews(selectedCategory);
+      }
+      setNewsArticles(news);
+    } catch (error) {
+      console.error('Error loading news:', error);
+    }
+  };
+
+  const loadNewsCategories = async () => {
+    try {
+      const categories = await newsService.getNewsCategories();
+      setNewsCategories(categories);
+    } catch (error) {
+      console.error('Error loading news categories:', error);
+    }
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
-    // Simulate refresh for news feed
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 1000);
+    await loadNews();
+    setRefreshing(false);
   };
 
   // -------- Chatbot --------
@@ -231,18 +221,95 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
         {/* News Section */}
         <View style={styles.newsSection}>
           <View style={styles.newsHeader}>
-            <Icon name="rss" size={20} color="#34C759" />
-            <Text style={styles.newsTitle}>Financial News</Text>
+            <View style={styles.newsHeaderLeft}>
+              <Icon name="rss" size={20} color="#34C759" />
+              <Text style={styles.newsTitle}>Financial News</Text>
+            </View>
+            <View style={styles.newsHeaderRight}>
+              <TouchableOpacity 
+                style={styles.savedButton}
+                onPress={() => setShowSavedArticles(true)}
+              >
+                <Icon name="bookmark" size={16} color="#5856D6" />
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.alertsButton}
+                onPress={() => setShowAlerts(true)}
+              >
+                <Icon name="bell" size={16} color="#FF9500" />
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.personalizeButton}
+                onPress={() => setIsPersonalized(!isPersonalized)}
+              >
+                <Icon 
+                  name={isPersonalized ? "user-check" : "user"} 
+                  size={16} 
+                  color={isPersonalized ? "#34C759" : "#8E8E93"} 
+                />
+                <Text style={[
+                  styles.personalizeText,
+                  isPersonalized && styles.personalizeTextActive
+                ]}>
+                  {isPersonalized ? 'Personal' : 'All'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.preferencesButton}
+                onPress={() => setShowPreferences(true)}
+              >
+                <Icon name="settings" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+            </View>
           </View>
+
+          {/* News Categories */}
+          {newsCategories.length > 0 && (
+            <NewsCategories
+              selectedCategory={selectedCategory}
+              onCategorySelect={setSelectedCategory}
+              categories={newsCategories}
+            />
+          )}
+
           <FlatList
-            data={mockFinancialNews}
+            data={newsArticles}
             keyExtractor={(item) => item.id}
-            renderItem={({ item }) => <NewsCard news={item} />}
+            renderItem={({ item }) => (
+              <NewsCard 
+                news={item} 
+                onSave={newsService.saveArticle}
+                onUnsave={newsService.unsaveArticle}
+                showSaveButton={true}
+              />
+            )}
             horizontal={false}
             showsVerticalScrollIndicator={false}
             scrollEnabled={false}
           />
         </View>
+
+        {/* News Preferences Modal */}
+        <NewsPreferences
+          visible={showPreferences}
+          onClose={() => setShowPreferences(false)}
+          onPreferencesUpdated={() => {
+            loadNews();
+            loadNewsCategories();
+          }}
+        />
+
+        {/* News Alerts Modal */}
+        <NewsAlerts
+          visible={showAlerts}
+          onClose={() => setShowAlerts(false)}
+        />
+
+        {/* Saved Articles Modal */}
+        <SavedArticles
+          visible={showSavedArticles}
+          onClose={() => setShowSavedArticles(false)}
+        />
       </ScrollView>
 
       {/* Chatbot Floating Button */}
@@ -321,7 +388,7 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
               disabled={!chatInput.trim() || chatSending}
             >
               <Icon 
-                name={chatSending ? "loader" : "send"} 
+                name={chatSending ? "refresh-cw" : "send"} 
                 size={20} 
                 color={chatInput.trim() ? "#fff" : "#ccc"} 
               />
@@ -492,14 +559,56 @@ const styles = StyleSheet.create({
   newsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'space-between',
     marginBottom: 16,
     paddingHorizontal: 16,
+  },
+  newsHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  newsHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
   },
   newsTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#1C1C1E',
+  },
+  personalizeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#F2F2F7',
+  },
+  personalizeText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#8E8E93',
+  },
+  personalizeTextActive: {
+    color: '#34C759',
+  },
+  savedButton: {
+    padding: 8,
+    borderRadius: 16,
+    backgroundColor: '#F2F2F7',
+  },
+  alertsButton: {
+    padding: 8,
+    borderRadius: 16,
+    backgroundColor: '#F2F2F7',
+  },
+  preferencesButton: {
+    padding: 8,
+    borderRadius: 16,
+    backgroundColor: '#F2F2F7',
   },
   loadingContainer: {
     flex: 1,

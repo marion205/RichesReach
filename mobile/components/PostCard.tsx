@@ -58,7 +58,7 @@ export default function PostCard({
             <Text style={styles.avatarText}>{post.user.name.charAt(0).toUpperCase()}</Text>
           </View>
           <Text style={styles.author}>{post.user.name}</Text>
-          <Icon name="chevron-right" size={12} color="#00cc99" style={{ marginLeft: 4 }} />
+                          <Icon name="arrow-right" size={12} color="#00cc99" style={{ marginLeft: 4 }} />
         </TouchableOpacity>
         <Text style={styles.timestamp}>
           {new Date(post.createdAt).toLocaleDateString()}
@@ -96,7 +96,7 @@ export default function PostCard({
           onPress={() => onFollowPress(post.user.id)}
         >
           <Icon 
-            name={post.user.isFollowingUser ? "user-check" : "user-plus"} 
+                            name={post.user.isFollowingUser ? "user-check" : "user"} 
             size={20} 
             color={post.user.isFollowingUser ? "#00cc99" : "#666"} 
           />
