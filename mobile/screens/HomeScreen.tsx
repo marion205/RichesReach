@@ -638,7 +638,7 @@ Feel free to ask about any of these topics or try one of the quick prompts above
       setChatSending(false);
       setTimeout(() => listRef.current?.scrollToEnd?.({ animated: true }), 100);
     } catch (error) {
-      console.error('Failed to send message:', error);
+      // Failed to send message
       const errorResponse: ChatMsg = {
         id: String(Date.now() + 1),
         role: 'assistant',
@@ -673,7 +673,7 @@ Feel free to ask about any of these topics or try one of the quick prompts above
       setChatSending(false);
       setTimeout(() => listRef.current?.scrollToEnd?.({ animated: true }), 100);
     } catch (error) {
-      console.error('Failed to send message:', error);
+      // Failed to send message
       const errorResponse: ChatMsg = {
         id: String(Date.now() + 1),
         role: 'assistant',

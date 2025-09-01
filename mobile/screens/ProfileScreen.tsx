@@ -136,7 +136,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigateTo, onLogout }) =
       });
       await client.resetStore();
     } catch (error) {
-      console.error('Failed to toggle follow:', error);
+      // Failed to toggle follow
       Alert.alert('Error', 'Failed to follow/unfollow user. Please try again.');
     }
   };
@@ -151,7 +151,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigateTo, onLogout }) =
         })
       ]);
     } catch (error) {
-      console.error('Failed to refresh:', error);
+      // Failed to refresh
     } finally {
       setRefreshing(false);
     }
@@ -177,7 +177,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigateTo, onLogout }) =
         onLogout();
       }
     } catch (error) {
-      console.error('Logout error:', error);
+      // Logout error
       Alert.alert('Error', 'Failed to logout properly. Please try again.');
     }
   };

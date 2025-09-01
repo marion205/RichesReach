@@ -44,7 +44,7 @@ const PortfolioScreen: React.FC<PortfolioScreenProps> = ({ navigateTo }) => {
     try {
       await refetch();
     } catch (error) {
-      console.error('Error refreshing portfolio data:', error);
+      // Error refreshing portfolio data
     } finally {
       setRefreshing(false);
     }

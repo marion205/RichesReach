@@ -36,7 +36,7 @@ export default function LoginScreen({ onLogin, onNavigateToSignUp }) {
   const handleSignup = async () => {
     try {
       const res = await signup({ variables: { email, name, password } });
-      console.log('✅ User created:', res.data.createUser.user);
+      // User created successfully
     } catch (err) {
       console.error('Signup error:', err);
     }
@@ -52,17 +52,12 @@ export default function LoginScreen({ onLogin, onNavigateToSignUp }) {
     try {
       // Clear Apollo cache before login attempt
       await client.clearStore();
-      console.log('Apollo cache cleared');
+      // Apollo cache cleared
       
       const loginEmail = email.trim().toLowerCase();
       const loginPassword = password;
       
-      console.log('Attempting login with:', { 
-        email: loginEmail, 
-        password: loginPassword ? '***' : 'empty',
-        emailLength: loginEmail.length,
-        passwordLength: loginPassword.length
-      });
+      // Attempting login
       
       // Test the exact mutation that will be sent
       const testQuery = `
@@ -72,8 +67,7 @@ export default function LoginScreen({ onLogin, onNavigateToSignUp }) {
           }
         }
       `;
-      console.log('GraphQL Query:', testQuery);
-      console.log('Variables:', { email: loginEmail, password: loginPassword });
+              // Testing GraphQL query
       
       const response = await tokenAuth({ 
         variables: { 
@@ -94,7 +88,7 @@ export default function LoginScreen({ onLogin, onNavigateToSignUp }) {
         throw new Error('No token received');
       }
       
-      console.log('✅ Logged in! Token:', token);
+              // Login successful
       
       // Store the token for future requests
       await AsyncStorage.setItem('token', token);

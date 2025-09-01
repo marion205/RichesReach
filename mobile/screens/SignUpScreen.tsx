@@ -189,7 +189,7 @@ export default function SignUpScreen({ navigateTo, onSignUp, onNavigateToLogin }
           profilePic: profilePic || null
         } 
       });
-      console.log('✅ User created:', res.data.createUser.user);
+      // User created successfully
       Alert.alert(
         'Success! 🎉', 
         'Your account has been created successfully! Please log in.',

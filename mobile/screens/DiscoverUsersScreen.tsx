@@ -76,7 +76,7 @@ export default function DiscoverUsersScreen({ navigateTo }) {
     try {
       await toggleFollow({ variables: { userId } });
     } catch (error) {
-      console.error('Follow toggle error:', error);
+      // Follow toggle error
     }
   };
 
