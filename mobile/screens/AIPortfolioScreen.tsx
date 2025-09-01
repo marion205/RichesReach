@@ -145,10 +145,10 @@ interface AIPortfolioScreenProps {
 
 export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps) {
   // Debug logging
-  console.log('AIPortfolioScreen props:', { navigateTo, type: typeof navigateTo });
+  // AIPortfolioScreen props received
   
   // Provide default navigateTo function if not passed
-  const safeNavigateTo = navigateTo || (() => console.log('Navigation not available'));
+  const safeNavigateTo = navigateTo || (() => {});
   
   // State
   const [showProfileForm, setShowProfileForm] = useState(false);

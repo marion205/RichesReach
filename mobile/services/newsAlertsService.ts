@@ -194,10 +194,7 @@ class NewsAlertsService {
   private showNotification(alert: NewsAlert) {
     // For demo purposes, we'll just log the notification
     // In production, this would use React Native Push Notification or similar
-    console.log('🔔 NEWS ALERT:', alert.title);
-    console.log('📝 Message:', alert.message);
-    console.log('🚨 Priority:', alert.priority);
-    console.log('📊 Type:', alert.type);
+            // News alert triggered
     
     // You could also trigger a local notification here
     // or send to a push notification service

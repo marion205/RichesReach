@@ -167,13 +167,13 @@ const SocialScreen: React.FC = () => {
 
   const handleDiscussionLike = async (discussionId: string) => {
     try {
-      console.log('🔄 Attempting to like discussion:', discussionId);
+      // Attempting to like discussion
       const result = await likeDiscussion({ variables: { discussionId } });
-      console.log('✅ Like result:', result);
+      // Like operation completed successfully
       
       // Refetch discussions to update like count
       await client.refetchQueries({ include: ['GetTrendingDiscussions'] });
-      console.log('✅ Refetch completed');
+      // Refetch completed
     } catch (error) {
       console.error('❌ Failed to like discussion:', error);
       console.error('❌ Error details:', JSON.stringify(error, null, 2));
@@ -302,12 +302,7 @@ const SocialScreen: React.FC = () => {
     }
 
     try {
-      console.log('📝 Creating discussion with variables:', {
-        title: createTitle.trim(),
-        content: createContent.trim(),
-        stockSymbol: createStock.trim(),
-        discussionType: 'analysis'
-      });
+      // Creating discussion
       
       const result = await createStockDiscussion({
         variables: {
@@ -318,7 +313,7 @@ const SocialScreen: React.FC = () => {
         }
       });
       
-      console.log('📝 Discussion creation result:', result);
+      // Discussion created successfully
       
       if (result.data?.createStockDiscussion?.success) {
         Alert.alert('Success', 'Discussion created successfully!');

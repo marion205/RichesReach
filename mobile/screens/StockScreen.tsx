@@ -286,7 +286,7 @@ export default function StockScreen({ navigateTo }) {
         Alert.alert('Analysis Unavailable', 'Rust analysis is not available for this stock at the moment.');
       }
     } catch (error) {
-      console.error('Rust analysis error:', error);
+      // Rust analysis error
       Alert.alert('Analysis Error', 'Failed to get advanced analysis. Please try again.');
     }
   };

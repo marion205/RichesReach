@@ -17,18 +17,17 @@ const httpLink = createHttpLink({
 const authLink = setContext(async (_, { headers }) => {
   try {
     const token = await AsyncStorage.getItem('token');
-    console.log('Auth Link - Token from storage:', token ? 'exists' : 'none');
-    console.log('Auth Link - Headers:', headers);
+            // Token retrieved from storage
     
     const newHeaders = {
       ...headers,
       authorization: token ? `JWT ${token}` : '',
     };
     
-    console.log('Auth Link - New headers:', newHeaders);
+            // Headers updated with token
     return { headers: newHeaders };
   } catch (error) {
-    console.warn('Error getting token:', error);
+            // Error getting token from storage
     return {
       headers: {
         ...headers,
@@ -39,8 +38,7 @@ const authLink = setContext(async (_, { headers }) => {
 
 // Error handling link
 const errorLink = onError(({ graphQLErrors, networkError, operation, forward }) => {
-  console.log('Apollo Error Link - Operation:', operation.operationName);
-  console.log('Apollo Error Link - Variables:', operation.variables);
+          // GraphQL operation details
   
   if (graphQLErrors) {
     graphQLErrors.forEach(({ message, locations, path }) => {
