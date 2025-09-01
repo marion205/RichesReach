@@ -1,7 +1,7 @@
 import graphene
 from django.contrib.auth import get_user_model
 from .types import UserType, PostType, ChatSessionType, ChatMessageType, CommentType, StockType, StockDataType, WatchlistType, WatchlistItemType, RustStockAnalysisType, RustRecommendationType, RustHealthType, TechnicalIndicatorsType, FundamentalAnalysisType, StockDiscussionType, PortfolioType, PriceAlertType, SocialFeedType, UserAchievementType, StockSentimentType
-from .models import Post, ChatSession, ChatMessage, Comment, User, Stock, StockData, Watchlist
+from .models import Post, ChatSession, ChatMessage, Comment, User, Stock, StockData, Watchlist, StockDiscussion, Portfolio
 import django.db.models as models
 from django.utils import timezone
 from datetime import timedelta
@@ -13,6 +13,7 @@ class Query(graphene.ObjectType):
     search_users = graphene.List(UserType, query=graphene.String(required=False))
     me = graphene.Field(UserType)
     wall_posts = graphene.List(PostType)
+    all_posts = graphene.List(PostType)
     user = graphene.Field(UserType, id=graphene.ID(required=True))
     user_posts = graphene.List(PostType, user_id=graphene.ID(required=True))
     post_comments = graphene.List(CommentType, post_id=graphene.ID(required=True))

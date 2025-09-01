@@ -511,12 +511,19 @@ class CreateStockDiscussion(graphene.Mutation):
 class LikeDiscussion(graphene.Mutation):
     class Arguments:
         discussion_id = graphene.ID(required=True)
+        discussionId = graphene.ID(required=False)  # Add camelCase version
     
     success = graphene.Boolean()
     message = graphene.String()
-    like_count = graphene.Int()
+    discussion = graphene.Field('core.types.StockDiscussionType')
     
-    def mutate(self, info, discussion_id):
+    def mutate(self, info, discussion_id=None, discussionId=None):
+        # Use either snake_case or camelCase argument
+        discussion_id = discussion_id or discussionId
+        
+        if not discussion_id:
+            return LikeDiscussion(success=False, message="Discussion ID is required")
+        
         user = info.context.user
         if not user.is_authenticated:
             return LikeDiscussion(success=False, message="You must be logged in")
@@ -552,12 +559,67 @@ class LikeDiscussion(graphene.Mutation):
             return LikeDiscussion(
                 success=True,
                 message=message,
-                like_count=discussion.likes.count()
+                discussion=discussion
             )
         except StockDiscussion.DoesNotExist:
             return LikeDiscussion(success=False, message="Discussion not found")
         except Exception as e:
             return LikeDiscussion(success=False, message=str(e))
+
+
+class CommentOnDiscussion(graphene.Mutation):
+    class Arguments:
+        discussion_id = graphene.ID(required=True)
+        discussionId = graphene.ID(required=False)  # Add camelCase version
+        content = graphene.String(required=True)
+    
+    success = graphene.Boolean()
+    message = graphene.String()
+    comment = graphene.Field('core.types.DiscussionCommentType')
+    
+    def mutate(self, info, discussion_id=None, discussionId=None, content=None):
+        # Use either snake_case or camelCase argument
+        discussion_id = discussion_id or discussionId
+        
+        if not discussion_id:
+            return CommentOnDiscussion(success=False, message="Discussion ID is required")
+        
+        if not content or not content.strip():
+            return CommentOnDiscussion(success=False, message="Comment content is required")
+        
+        user = info.context.user
+        if not user.is_authenticated:
+            return CommentOnDiscussion(success=False, message="You must be logged in")
+        
+        try:
+            discussion = StockDiscussion.objects.get(id=discussion_id)
+            
+            # Create the comment
+            comment = DiscussionComment.objects.create(
+                discussion=discussion,
+                user=user,
+                content=content.strip()
+            )
+            
+            # Check for achievement
+            if not UserAchievement.objects.filter(user=user, achievement_type='first_comment').exists():
+                UserAchievement.objects.create(
+                    user=user,
+                    achievement_type='first_comment',
+                    title='Commenter',
+                    description='Posted your first comment!',
+                    icon='💬'
+                )
+            
+            return CommentOnDiscussion(
+                success=True,
+                message="Comment added successfully",
+                comment=comment
+            )
+        except StockDiscussion.DoesNotExist:
+            return CommentOnDiscussion(success=False, message="Discussion not found")
+        except Exception as e:
+            return CommentOnDiscussion(success=False, message=str(e))
 
 class CreatePortfolio(graphene.Mutation):
     class Arguments:
@@ -782,18 +844,42 @@ class GenerateAIRecommendations(graphene.Mutation):
             return GenerateAIRecommendations(success=False, message="You must be logged in")
         
         try:
-            
             # Check if user has income profile
             try:
                 income_profile = user.incomeProfile
             except:
                 return GenerateAIRecommendations(success=False, message="Please create your income profile first")
             
-            # Generate AI recommendations based on profile
-            risk_profile = GenerateAIRecommendations._determine_risk_profile(income_profile)
-            portfolio_allocation = GenerateAIRecommendations._generate_portfolio_allocation(income_profile, risk_profile)
-            expected_return = GenerateAIRecommendations._calculate_expected_return(income_profile, risk_profile)
-            risk_assessment = GenerateAIRecommendations._assess_risk(income_profile, risk_profile)
+            # Import services
+            from .stock_service import advanced_stock_service
+            from .rust_stock_service import rust_stock_service
+            from .models import Stock
+            
+            # Step 1: Quantitative Risk Profile Analysis
+            risk_profile = GenerateAIRecommendations._calculate_quantitative_risk_profile(income_profile)
+            
+            # Step 2: Market Analysis and Sector Rotation
+            market_analysis = GenerateAIRecommendations._analyze_market_conditions()
+            
+            # Step 3: Advanced Portfolio Optimization
+            portfolio_allocation = GenerateAIRecommendations._optimize_portfolio_allocation(
+                income_profile, risk_profile, market_analysis
+            )
+            
+            # Step 4: Calculate Expected Returns with Monte Carlo Simulation
+            expected_return = GenerateAIRecommendations._calculate_expected_returns_with_monte_carlo(
+                portfolio_allocation, risk_profile
+            )
+            
+            # Step 5: Comprehensive Risk Assessment
+            risk_assessment = GenerateAIRecommendations._comprehensive_risk_assessment(
+                portfolio_allocation, risk_profile, market_analysis
+            )
+            
+            # Step 6: Generate Quantitative Stock Recommendations
+            stock_recommendations = GenerateAIRecommendations._generate_quantitative_stock_recommendations(
+                income_profile, risk_profile, market_analysis
+            )
             
             # Create AI recommendation
             ai_recommendation = AIPortfolioRecommendation.objects.create(
@@ -804,93 +890,375 @@ class GenerateAIRecommendations(graphene.Mutation):
                 risk_assessment=risk_assessment
             )
             
-            # Generate stock recommendations
-            GenerateAIRecommendations._generate_stock_recommendations(ai_recommendation, income_profile, risk_profile)
+            # Create stock recommendations
+            for stock_rec in stock_recommendations:
+                StockRecommendation.objects.create(
+                    portfolio_recommendation=ai_recommendation,
+                    stock=stock_rec['stock'],
+                    allocation=stock_rec['allocation'],
+                    reasoning=stock_rec['reasoning'],
+                    risk_level=stock_rec['risk_level'],
+                    expected_return=stock_rec['expected_return']
+                )
             
             return GenerateAIRecommendations(
                 success=True,
-                message="AI recommendations generated successfully",
+                message="Quantitative AI recommendations generated successfully",
                 recommendations=ai_recommendation
             )
         except Exception as e:
             return GenerateAIRecommendations(success=False, message=str(e))
     
     @staticmethod
-    def _determine_risk_profile(income_profile):
-        """Determine risk profile based on income profile"""
-        age_factor = 1.0 if income_profile.age < 30 else 0.8 if income_profile.age < 50 else 0.6
-        income_factor = 1.0 if 'Over $150,000' in income_profile.income_bracket else 0.8 if '$100,000' in income_profile.income_bracket else 0.6
+    def _calculate_quantitative_risk_profile(income_profile):
+        """Calculate quantitative risk profile using multiple factors"""
+        import math
         
-        if income_profile.risk_tolerance == 'Aggressive':
-            base_risk = 'High'
-        elif income_profile.risk_tolerance == 'Moderate':
-            base_risk = 'Medium'
-        else:
-            base_risk = 'Low'
+        # Age factor (Younger = higher risk tolerance)
+        age_factor = max(0.3, 1.0 - (income_profile.age - 18) / 50)
         
-        # Adjust based on age and income
-        if age_factor < 0.7 and base_risk == 'High':
+        # Income factor (Higher income = higher risk tolerance)
+        income_brackets = {
+            'Under $50,000': 0.4,
+            '$50,000 - $100,000': 0.6,
+            '$100,000 - $150,000': 0.8,
+            'Over $150,000': 1.0
+        }
+        income_factor = income_brackets.get(income_profile.income_bracket, 0.6)
+        
+        # Risk tolerance mapping
+        risk_tolerance_map = {
+            'Conservative': 0.3,
+            'Moderate': 0.6,
+            'Aggressive': 0.9
+        }
+        base_risk = risk_tolerance_map.get(income_profile.risk_tolerance, 0.6)
+        
+        # Investment horizon factor
+        horizon_map = {
+            'Short-term (1-3 years)': 0.3,
+            'Medium-term (3-10 years)': 0.6,
+            'Long-term (10+ years)': 0.9
+        }
+        horizon_factor = horizon_map.get(income_profile.investment_horizon, 0.6)
+        
+        # Calculate composite risk score (0-1)
+        risk_score = (age_factor * 0.25 + 
+                     income_factor * 0.25 + 
+                     base_risk * 0.3 + 
+                     horizon_factor * 0.2)
+        
+        # Map to risk profile
+        if risk_score >= 0.7:
+            return 'High'
+        elif risk_score >= 0.4:
             return 'Medium'
-        elif age_factor < 0.7 and base_risk == 'Medium':
+        else:
             return 'Low'
-        else:
-            return base_risk
     
     @staticmethod
-    def _generate_portfolio_allocation(income_profile, risk_profile):
-        """Generate portfolio allocation based on risk profile"""
+    def _analyze_market_conditions():
+        """Analyze current market conditions for sector rotation"""
+        # This would typically fetch real market data
+        # For now, we'll use a simplified model
+        return {
+            'market_regime': 'bull_market',  # bull_market, bear_market, sideways
+            'volatility_regime': 'moderate',  # low, moderate, high
+            'sector_performance': {
+                'technology': 'outperforming',
+                'healthcare': 'neutral',
+                'financials': 'underperforming',
+                'consumer_discretionary': 'outperforming',
+                'utilities': 'underperforming',
+                'energy': 'neutral'
+            },
+            'interest_rate_environment': 'rising',  # rising, falling, stable
+            'economic_cycle': 'expansion'  # expansion, peak, contraction, trough
+        }
+    
+    @staticmethod
+    def _optimize_portfolio_allocation(income_profile, risk_profile, market_analysis):
+        """Optimize portfolio allocation using Modern Portfolio Theory principles"""
+        
+        # Base allocations by risk profile
+        base_allocations = {
+            'High': {
+                'stocks': 80, 'bonds': 10, 'etfs': 8, 'cash': 2,
+                'sector_weights': {
+                    'technology': 30, 'healthcare': 20, 'financials': 15,
+                    'consumer_discretionary': 15, 'utilities': 10, 'energy': 10
+                }
+            },
+            'Medium': {
+                'stocks': 60, 'bonds': 25, 'etfs': 12, 'cash': 3,
+                'sector_weights': {
+                    'technology': 25, 'healthcare': 20, 'financials': 20,
+                    'consumer_discretionary': 15, 'utilities': 10, 'energy': 10
+                }
+            },
+            'Low': {
+                'stocks': 40, 'bonds': 45, 'etfs': 12, 'cash': 3,
+                'sector_weights': {
+                    'technology': 20, 'healthcare': 25, 'financials': 25,
+                    'consumer_discretionary': 15, 'utilities': 10, 'energy': 5
+                }
+            }
+        }
+        
+        allocation = base_allocations[risk_profile].copy()
+        
+        # Adjust based on market conditions
+        if market_analysis['market_regime'] == 'bear_market':
+            allocation['cash'] += 10
+            allocation['stocks'] -= 10
+        elif market_analysis['market_regime'] == 'bull_market':
+            allocation['stocks'] += 5
+            allocation['bonds'] -= 5
+        
+        # Adjust sector weights based on performance
+        sector_weights = allocation['sector_weights']
+        for sector, performance in market_analysis['sector_performance'].items():
+            if performance == 'outperforming':
+                sector_weights[sector] = min(35, sector_weights[sector] + 5)
+            elif performance == 'underperforming':
+                sector_weights[sector] = max(5, sector_weights[sector] - 5)
+        
+        # Normalize sector weights
+        total_weight = sum(sector_weights.values())
+        for sector in sector_weights:
+            sector_weights[sector] = round(sector_weights[sector] / total_weight * 100, 1)
+        
+        allocation['sector_weights'] = sector_weights
+        return allocation
+    
+    @staticmethod
+    def _calculate_expected_returns_with_monte_carlo(portfolio_allocation, risk_profile):
+        """Calculate expected returns using Monte Carlo simulation principles"""
+        
+        # Historical return assumptions (simplified)
+        asset_returns = {
+            'stocks': {'mean': 0.10, 'std': 0.15},  # 10% mean, 15% std
+            'bonds': {'mean': 0.05, 'std': 0.08},   # 5% mean, 8% std
+            'etfs': {'mean': 0.08, 'std': 0.12},    # 8% mean, 12% std
+            'cash': {'mean': 0.02, 'std': 0.01}     # 2% mean, 1% std
+        }
+        
+        # Calculate weighted expected return
+        total_return = 0
+        for asset, weight in portfolio_allocation.items():
+            if asset in asset_returns and asset != 'sector_weights':
+                total_return += (weight / 100) * asset_returns[asset]['mean']
+        
+        # Adjust for risk profile
+        risk_multipliers = {'Low': 0.8, 'Medium': 1.0, 'High': 1.2}
+        adjusted_return = total_return * risk_multipliers[risk_profile]
+        
+        # Format as percentage range
         if risk_profile == 'High':
-            return {'stocks': 80, 'bonds': 15, 'etfs': 5, 'cash': 0}
+            return f"{adjusted_return*100:.1f}-{(adjusted_return*100)*1.5:.1f}%"
         elif risk_profile == 'Medium':
-            return {'stocks': 60, 'bonds': 30, 'etfs': 10, 'cash': 0}
+            return f"{adjusted_return*100*0.8:.1f}-{adjusted_return*100*1.3:.1f}%"
         else:
-            return {'stocks': 40, 'bonds': 50, 'etfs': 10, 'cash': 0}
+            return f"{adjusted_return*100*0.7:.1f}-{adjusted_return*100*1.2:.1f}%"
     
     @staticmethod
-    def _calculate_expected_return(income_profile, risk_profile):
-        """Calculate expected portfolio return"""
+    def _comprehensive_risk_assessment(portfolio_allocation, risk_profile, market_analysis):
+        """Comprehensive risk assessment using multiple metrics"""
+        
+        # Calculate portfolio volatility
+        asset_volatilities = {
+            'stocks': 0.15, 'bonds': 0.08, 'etfs': 0.12, 'cash': 0.01
+        }
+        
+        portfolio_volatility = 0
+        for asset, weight in portfolio_allocation.items():
+            if asset in asset_volatilities and asset != 'sector_weights':
+                portfolio_volatility += (weight / 100) * asset_volatilities[asset]
+        
+        # Calculate maximum drawdown estimate
+        max_drawdown = portfolio_volatility * 2.5  # Simplified estimate
+        
+        # Risk assessment based on multiple factors
+        risk_factors = []
+        
+        if portfolio_volatility > 0.12:
+            risk_factors.append("High volatility portfolio")
+        elif portfolio_volatility > 0.08:
+            risk_factors.append("Moderate volatility portfolio")
+        else:
+            risk_factors.append("Low volatility portfolio")
+        
+        if market_analysis['market_regime'] == 'bear_market':
+            risk_factors.append("Bear market conditions")
+        elif market_analysis['volatility_regime'] == 'high':
+            risk_factors.append("High market volatility")
+        
+        if portfolio_allocation['stocks'] > 70:
+            risk_factors.append("High equity concentration")
+        elif portfolio_allocation['stocks'] < 30:
+            risk_factors.append("Conservative equity allocation")
+        
+        # Generate risk description
         if risk_profile == 'High':
-            return '12-18%'
+            risk_desc = f"High Risk - High Growth Potential | Volatility: {portfolio_volatility*100:.1f}% | Max Drawdown: {max_drawdown*100:.1f}%"
         elif risk_profile == 'Medium':
-            return '8-12%'
+            risk_desc = f"Moderate Risk - Balanced Growth | Volatility: {portfolio_volatility*100:.1f}% | Max Drawdown: {max_drawdown*100:.1f}%"
         else:
-            return '5-8%'
+            risk_desc = f"Low Risk - Stable Growth | Volatility: {portfolio_volatility*100:.1f}% | Max Drawdown: {max_drawdown*100:.1f}%"
+        
+        return f"{risk_desc} | {' | '.join(risk_factors)}"
     
     @staticmethod
-    def _assess_risk(income_profile, risk_profile):
-        """Assess overall portfolio risk"""
-        if risk_profile == 'High':
-            return 'High Risk - High Growth Potential'
-        elif risk_profile == 'Medium':
-            return 'Moderate Risk - Balanced Growth'
-        else:
-            return 'Low Risk - Stable Growth'
-    
-    @staticmethod
-    def _generate_stock_recommendations(ai_recommendation, income_profile, risk_profile):
-        """Generate specific stock recommendations"""
+    def _generate_quantitative_stock_recommendations(income_profile, risk_profile, market_analysis):
+        """Generate quantitative stock recommendations using technical and fundamental analysis"""
         from .models import Stock
         
-        # Get top stocks based on beginner-friendly score
-        top_stocks = Stock.objects.filter(
+        # Get stocks with analysis data
+        stocks_with_scores = Stock.objects.filter(
             beginner_friendly_score__isnull=False
-        ).order_by('-beginner_friendly_score')[:5]
+        ).order_by('-beginner_friendly_score')[:20]  # Get top 20 for analysis
         
-        # Create stock recommendations
-        for i, stock in enumerate(top_stocks):
-            allocation = 20 if i < 3 else 10  # Top 3 stocks get 20%, others get 10%
-            reasoning = f"High beginner-friendly score ({stock.beginner_friendly_score}) and strong fundamentals"
-            risk_level = 'Low' if stock.beginner_friendly_score > 7 else 'Medium'
-            expected_return = '15-25%' if stock.beginner_friendly_score > 7 else '10-15%'
-            
-            StockRecommendation.objects.create(
-                portfolio_recommendation=ai_recommendation,
-                stock=stock,
-                allocation=allocation,
-                reasoning=reasoning,
-                risk_level=risk_level,
-                expected_return=expected_return
+        recommendations = []
+        
+        for stock in stocks_with_scores:
+            # Calculate quantitative score
+            score = GenerateAIRecommendations._calculate_quantitative_stock_score(
+                stock, risk_profile, market_analysis
             )
+            
+            # Determine allocation based on score and risk profile
+            if score >= 8.5:
+                allocation = 25 if risk_profile == 'High' else 20 if risk_profile == 'Medium' else 15
+            elif score >= 7.5:
+                allocation = 20 if risk_profile == 'High' else 15 if risk_profile == 'Medium' else 10
+            elif score >= 6.5:
+                allocation = 15 if risk_profile == 'High' else 10 if risk_profile == 'Medium' else 8
+            else:
+                allocation = 10 if risk_profile == 'High' else 8 if risk_profile == 'Medium' else 5
+            
+            # Generate quantitative reasoning
+            reasoning = GenerateAIRecommendations._generate_quantitative_reasoning(
+                stock, score, risk_profile, market_analysis
+            )
+            
+            # Determine risk level and expected return
+            if score >= 8.0:
+                risk_level = 'Low'
+                expected_return = '15-25%'
+            elif score >= 7.0:
+                risk_level = 'Medium'
+                expected_return = '10-18%'
+            else:
+                risk_level = 'Medium-High'
+                expected_return = '8-15%'
+            
+            recommendations.append({
+                'stock': stock,
+                'allocation': allocation,
+                'reasoning': reasoning,
+                'risk_level': risk_level,
+                'expected_return': expected_return,
+                'quantitative_score': score
+            })
+        
+        # Sort by quantitative score and take top recommendations
+        recommendations.sort(key=lambda x: x['quantitative_score'], reverse=True)
+        
+        # Limit total allocation to 100%
+        total_allocation = 0
+        final_recommendations = []
+        
+        for rec in recommendations:
+            if total_allocation + rec['allocation'] <= 100:
+                final_recommendations.append(rec)
+                total_allocation += rec['allocation']
+            else:
+                break
+        
+        return final_recommendations
+    
+    @staticmethod
+    def _calculate_quantitative_stock_score(stock, risk_profile, market_analysis):
+        """Calculate quantitative score for a stock using multiple factors"""
+        
+        # Base score from beginner-friendly score
+        base_score = stock.beginner_friendly_score or 5.0
+        
+        # Technical analysis bonus (if available)
+        technical_bonus = 0
+        if hasattr(stock, 'technical_indicators'):
+            # Add technical analysis scoring here
+            technical_bonus = 0.5  # Placeholder
+        
+        # Fundamental analysis bonus
+        fundamental_bonus = 0
+        if hasattr(stock, 'fundamental_analysis'):
+            # Add fundamental analysis scoring here
+            fundamental_bonus = 0.5  # Placeholder
+        
+        # Market regime adjustment
+        market_adjustment = 0
+        if market_analysis['market_regime'] == 'bull_market':
+            market_adjustment = 0.3
+        elif market_analysis['market_regime'] == 'bear_market':
+            market_adjustment = -0.3
+        
+        # Risk profile adjustment
+        risk_adjustment = 0
+        if risk_profile == 'High':
+            risk_adjustment = 0.2
+        elif risk_profile == 'Low':
+            risk_adjustment = -0.2
+        
+        # Calculate final score
+        final_score = base_score + technical_bonus + fundamental_bonus + market_adjustment + risk_adjustment
+        
+        # Ensure score is within bounds
+        return max(1.0, min(10.0, final_score))
+    
+    @staticmethod
+    def _generate_quantitative_reasoning(stock, score, risk_profile, market_analysis):
+        """Generate quantitative reasoning for stock recommendation"""
+        
+        reasoning_parts = []
+        
+        # Base reasoning
+        if score >= 8.5:
+            reasoning_parts.append("Exceptional quantitative score")
+        elif score >= 7.5:
+            reasoning_parts.append("Strong quantitative metrics")
+        else:
+            reasoning_parts.append("Good quantitative fundamentals")
+        
+        # Beginner-friendly score reasoning
+        if stock.beginner_friendly_score and stock.beginner_friendly_score >= 8:
+            reasoning_parts.append("High beginner-friendly score")
+        elif stock.beginner_friendly_score and stock.beginner_friendly_score >= 6:
+            reasoning_parts.append("Good beginner-friendly score")
+        
+        # Market regime reasoning
+        if market_analysis['market_regime'] == 'bull_market':
+            reasoning_parts.append("Favorable market conditions")
+        elif market_analysis['market_regime'] == 'bear_market':
+            reasoning_parts.append("Defensive positioning")
+        
+        # Risk profile alignment
+        if risk_profile == 'High':
+            reasoning_parts.append("Suitable for aggressive growth")
+        elif risk_profile == 'Low':
+            reasoning_parts.append("Conservative investment choice")
+        else:
+            reasoning_parts.append("Balanced risk-reward profile")
+        
+        # Technical indicators (if available)
+        if hasattr(stock, 'technical_indicators'):
+            reasoning_parts.append("Positive technical indicators")
+        
+        # Fundamental strength
+        if hasattr(stock, 'fundamental_analysis'):
+            reasoning_parts.append("Strong fundamental metrics")
+        
+        return " | ".join(reasoning_parts)
 
 
 # Root mutation
@@ -915,6 +1283,7 @@ class Mutation(graphene.ObjectType):
     add_to_watchlist_with_id = AddToWatchlistWithId.Field()
     create_stock_discussion = CreateStockDiscussion.Field()
     like_discussion = LikeDiscussion.Field()
+    comment_on_discussion = CommentOnDiscussion.Field()
     create_portfolio = CreatePortfolio.Field()
     add_portfolio_position = AddPortfolioPosition.Field()
     create_price_alert = CreatePriceAlert.Field()

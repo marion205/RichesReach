@@ -8,6 +8,8 @@ import {
   Alert,
   RefreshControl,
   Image,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { gql, useQuery, useMutation, useApolloClient } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
@@ -49,9 +51,12 @@ const GET_USER_POSTS = gql`
       id
       content
       createdAt
-      likesCount
-      commentsCount
-      isLikedByUser
+      likes {
+        id
+      }
+      comments {
+        id
+      }
       user {
         id
         name
@@ -75,6 +80,25 @@ const TOGGLE_FOLLOW = gql`
   }
 `;
 
+const CREATE_POST = gql`
+  mutation CreatePost($content: String!) {
+    createPost(content: $content) {
+      post {
+        id
+        content
+        createdAt
+        likesCount
+        commentsCount
+        isLikedByUser
+        user {
+          id
+          name
+        }
+      }
+    }
+  }
+`;
+
 type User = {
   id: string;
   name: string;
@@ -90,9 +114,8 @@ type Post = {
   id: string;
   content: string;
   createdAt: string;
-  likesCount: number;
-  commentsCount: number;
-  isLikedByUser: boolean;
+  likes: Array<{ id: string }>;
+  comments: Array<{ id: string }>;
   user: {
     id: string;
     name: string;
@@ -123,17 +146,29 @@ export default function ProfileScreen({ navigateTo, data, onLogout }) {
     is_followed_by_user: meData.me.isFollowedByUser || false
   } : null;
   
-  // Temporarily disable posts query until we fix the backend schema
-  // const { data: postsData, loading: postsLoading, refetch: refetchPosts } = useQuery(GET_USER_POSTS, {
-  //   variables: { userId },
-  //   skip: !userId,
-  // });
+  // Get user posts
+  const { data: postsData, loading: postsLoading, refetch: refetchPosts } = useQuery(GET_USER_POSTS, {
+    variables: { userId: user?.id },
+    skip: !user?.id,
+  });
   
   const [toggleFollow] = useMutation(TOGGLE_FOLLOW);
+  const [createPost] = useMutation(CREATE_POST);
   const [refreshing, setRefreshing] = useState(false);
+  const [showCreatePost, setShowCreatePost] = useState(false);
+  const [newPostContent, setNewPostContent] = useState('');
+  const [isCreatingPost, setIsCreatingPost] = useState(false);
   const client = useApolloClient();
 
-  const posts: Post[] = []; // Empty array for now
+  const posts: Post[] = postsData?.userPosts || [];
+  
+  // Debug logging
+  console.log('🔍 ProfileScreen Posts Debug:', {
+    postsData,
+    posts,
+    postsLoading,
+    postsError: postsData?.userPosts ? null : 'No posts data'
+  });
 
   const handleToggleFollow = async () => {
     if (!user) return;
@@ -154,11 +189,32 @@ export default function ProfileScreen({ navigateTo, data, onLogout }) {
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      // await Promise.all([refetchPosts()]); // Temporarily disabled
+      await Promise.all([refetchPosts()]);
     } catch (error) {
       console.error('Failed to refresh:', error);
     } finally {
       setRefreshing(false);
+    }
+  };
+
+  const handleCreatePost = async () => {
+    if (!newPostContent.trim()) return;
+    
+    setIsCreatingPost(true);
+    try {
+      await createPost({ 
+        variables: { content: newPostContent.trim() },
+        refetchQueries: [{ query: GET_USER_POSTS, variables: { userId: user?.id } }]
+      });
+      
+      setNewPostContent('');
+      setShowCreatePost(false);
+      Alert.alert('Success', 'Post created successfully!');
+    } catch (error) {
+      console.error('Failed to create post:', error);
+      Alert.alert('Error', 'Failed to create post. Please try again.');
+    } finally {
+      setIsCreatingPost(false);
     }
   };
 
@@ -296,9 +352,18 @@ export default function ProfileScreen({ navigateTo, data, onLogout }) {
           )}
         </View>
 
-        {/* Posts temporarily disabled until we fix the backend schema */}
-        {/* <View style={styles.postsSection}>
-          <Text style={styles.sectionTitle}>Posts</Text>
+        {/* Posts Section */}
+        <View style={styles.postsSection}>
+          <View style={styles.postsHeader}>
+            <Text style={styles.sectionTitle}>Posts</Text>
+            <TouchableOpacity 
+              style={styles.createPostButton}
+              onPress={() => setShowCreatePost(true)}
+            >
+              <Icon name="plus" size={16} color="#fff" />
+              <Text style={styles.createPostButtonText}>New Post</Text>
+            </TouchableOpacity>
+          </View>
           
           {postsLoading ? (
             <Text style={styles.loadingText}>Loading posts...</Text>
@@ -314,16 +379,62 @@ export default function ProfileScreen({ navigateTo, data, onLogout }) {
                   </Text>
                   <View style={styles.postStats}>
                     <Icon name="heart" size={14} color="#666" />
-                    <Text style={styles.postStat}>{post.likesCount}</Text>
+                    <Text style={styles.postStat}>{post.likes.length}</Text>
                     <Icon name="message-circle" size={14} color="#666" />
-                    <Text style={styles.postStat}>{post.commentsCount}</Text>
+                    <Text style={styles.postStat}>{post.comments.length}</Text>
                   </View>
                 </View>
               </View>
             ))
           )}
-        </View> */}
+        </View>
 
+        {/* Create Post Modal */}
+        <Modal
+          visible={showCreatePost}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setShowCreatePost(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Create New Post</Text>
+                <TouchableOpacity onPress={() => setShowCreatePost(false)}>
+                  <Icon name="x" size={24} color="#666" />
+                </TouchableOpacity>
+              </View>
+              
+              <TextInput
+                style={styles.postInput}
+                placeholder="What's on your mind?"
+                value={newPostContent}
+                onChangeText={setNewPostContent}
+                multiline
+                numberOfLines={4}
+              />
+              
+              <View style={styles.modalActions}>
+                <TouchableOpacity 
+                  style={styles.cancelButton}
+                  onPress={() => setShowCreatePost(false)}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={[styles.postButton, !newPostContent.trim() && styles.postButtonDisabled]}
+                  onPress={handleCreatePost}
+                  disabled={!newPostContent.trim() || isCreatingPost}
+                >
+                  <Text style={styles.postButtonText}>
+                    {isCreatingPost ? 'Posting...' : 'Post'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
         
       </ScrollView>
     </View>
@@ -458,6 +569,91 @@ const styles = StyleSheet.create({
   },
   postsSection: {
     padding: 15,
+  },
+  postsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  createPostButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#00cc99',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  createPostButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 20,
+    width: '90%',
+    maxWidth: 400,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  postInput: {
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    minHeight: 100,
+    textAlignVertical: 'top',
+    marginBottom: 20,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+  },
+  cancelButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  cancelButtonText: {
+    color: '#666',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  postButton: {
+    backgroundColor: '#00cc99',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  postButtonDisabled: {
+    backgroundColor: '#ccc',
+  },
+  postButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   sectionTitle: {
     fontSize: 20,

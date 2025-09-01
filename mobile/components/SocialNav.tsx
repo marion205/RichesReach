@@ -3,43 +3,24 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 
 interface SocialNavProps {
-  activeTab: string;
-  onTabPress: (tab: string) => void;
+  // No props needed for single tab
 }
 
-const SocialNav: React.FC<SocialNavProps> = ({ activeTab, onTabPress }) => {
-  const tabs = [
-    { id: 'discussions', label: 'Discussions', icon: 'message-circle' },
-    { id: 'watchlists', label: 'Watchlists', icon: 'list' },
-    { id: 'portfolios', label: 'Portfolios', icon: 'trending-up' },
-    { id: 'achievements', label: 'Achievements', icon: 'award' },
-  ];
+const SocialNav: React.FC<SocialNavProps> = () => {
 
   return (
     <View style={styles.container}>
-      {tabs.map((tab) => (
-        <TouchableOpacity
-          key={tab.id}
-          style={[
-            styles.tab,
-            activeTab === tab.id && styles.activeTab
-          ]}
-          onPress={() => onTabPress(tab.id)}
-        >
-          <Icon
-            name={tab.icon as any}
-            size={20}
-            color={activeTab === tab.id ? '#007AFF' : '#8E8E93'}
+        <View style={styles.singleTab}>
+          <Icon 
+            name="message-circle"
+            size={24} 
+            color="#34C759" 
           />
-          <Text style={[
-            styles.tabLabel,
-            activeTab === tab.id && styles.activeTabLabel
-          ]}>
-            {tab.label}
+          <Text style={styles.singleTabLabel}>
+            Discussions
           </Text>
-        </TouchableOpacity>
-      ))}
-    </View>
+        </View>
+      </View>
   );
 };
 
@@ -68,8 +49,23 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   activeTabLabel: {
-    color: '#007AFF',
+    color: '#34C759',
     fontWeight: '600',
+  },
+  singleTab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    gap: 8,
+  },
+  singleTabLabel: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#34C759',
   },
 });
 
