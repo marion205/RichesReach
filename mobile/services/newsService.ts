@@ -1,8 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { ENV } from '../config/environment';
+
 // News API Configuration
-const NEWS_API_KEY = '94a335c7316145f79840edd62f77e11e';
-const NEWS_API_BASE_URL = 'https://newsapi.org/v2';
+const NEWS_API_KEY = ENV.newsApi.key;
+const NEWS_API_BASE_URL = ENV.newsApi.baseUrl;
 
 // News Categories
 export const NEWS_CATEGORIES = {

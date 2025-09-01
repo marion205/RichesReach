@@ -5,12 +5,11 @@ import { setContext } from '@apollo/client/link/context';
 import { onError } from '@apollo/client/link/error';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import { getApiUrl } from './config/environment';
 
 // Create HTTP link
 const httpLink = createHttpLink({
-  uri: Platform.OS === 'android' 
-    ? 'http://10.0.2.2:8000/graphql/' // Android emulator
-    : 'http://localhost:8000/graphql/', // iOS simulator or web - use localhost
+  uri: getApiUrl(Platform.OS === 'android' ? 'android' : Platform.OS === 'ios' ? 'ios' : 'web')
 });
 
 // Auth link to add JWT token to headers
