@@ -175,8 +175,7 @@ const SocialScreen: React.FC = () => {
       await client.refetchQueries({ include: ['GetTrendingDiscussions'] });
       // Refetch completed
     } catch (error) {
-      console.error('❌ Failed to like discussion:', error);
-      console.error('❌ Error details:', JSON.stringify(error, null, 2));
+      console.error('Failed to like discussion:', error);
       Alert.alert('Error', 'Failed to like discussion. Please try again.');
     }
   };
@@ -331,20 +330,15 @@ const SocialScreen: React.FC = () => {
         Alert.alert('Error', result.data?.createStockDiscussion?.message || 'Failed to create discussion');
       }
     } catch (error) {
-      console.error('❌ Failed to create discussion:', error);
-      console.error('❌ Error details:', {
-        message: error.message,
-        graphQLErrors: error.graphQLErrors,
-        networkError: error.networkError
-      });
-      Alert.alert('Error', `Failed to create discussion: ${error.message}`);
+      console.error('Failed to create discussion:', error);
+      Alert.alert('Error', `Failed to create discussion: ${(error as any)?.message || 'Unknown error'}`);
     }
   };
 
   const renderContent = () => {
     return (
       <View>
-        {discussionsData?.trendingDiscussions?.map((discussion) => (
+        {discussionsData?.trendingDiscussions?.map((discussion: any) => (
           <DiscussionCard
             key={discussion.id}
             discussion={discussion}
@@ -407,7 +401,7 @@ const SocialScreen: React.FC = () => {
             </View>
 
             <View style={styles.modalBody}>
-
+              {(
                 <>
                   <Text style={styles.modalLabel}>Title</Text>
                   <TextInput
