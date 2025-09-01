@@ -457,7 +457,7 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
               </Text>
             </View>
             <View style={styles.riskMetricItem}>
-              <Icon name="alert-triangle" size={20} color="#F59E0B" />
+              <Icon name="alert-circle" size={20} color="#F59E0B" />
               <Text style={styles.riskMetricLabel}>Max Drawdown</Text>
               <Text style={styles.riskMetricValue}>
                 {latestRecommendation.riskAssessment.includes('Max Drawdown:') 
@@ -466,7 +466,7 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
               </Text>
             </View>
             <View style={styles.riskMetricItem}>
-              <Icon name="shield" size={20} color="#10B981" />
+              <Icon name="lock" size={20} color="#10B981" />
               <Text style={styles.riskMetricLabel}>Risk Level</Text>
               <Text style={styles.riskMetricValue}>
                 {latestRecommendation.riskAssessment.split('|')[0]?.split('-')[0]?.trim() || 'N/A'}
@@ -550,7 +550,7 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
               <Text style={styles.methodologyLabel}>Technical Analysis</Text>
             </View>
             <View style={styles.methodologyItem}>
-              <Icon name="pie-chart" size={16} color="#10B981" />
+              <Icon name="trending-up" size={16} color="#10B981" />
               <Text style={styles.methodologyLabel}>Fundamental Analysis</Text>
             </View>
             <View style={styles.methodologyItem}>
@@ -558,7 +558,7 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
               <Text style={styles.methodologyLabel}>Risk Metrics</Text>
             </View>
             <View style={styles.methodologyItem}>
-              <Icon name="target" size={16} color="#EF4444" />
+              <Icon name="crosshair" size={16} color="#EF4444" />
               <Text style={styles.methodologyLabel}>Portfolio Optimization</Text>
             </View>
           </View>
@@ -584,7 +584,7 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
-          <Icon name="loader" size={32} color="#00cc99" />
+          <Icon name="refresh-cw" size={32} color="#00cc99" />
           <Text style={styles.loadingText}>Loading your profile...</Text>
         </View>
       </SafeAreaView>
@@ -615,7 +615,7 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
         <View style={styles.profileStatus}>
           {hasIncomeProfile ? (
             <View style={styles.profileComplete}>
-              <Icon name="check-circle" size={24} color="#10B981" />
+              <Icon name="check" size={24} color="#10B981" />
               <Text style={styles.profileCompleteText}>Profile Complete</Text>
               <Text style={styles.profileDetails}>
                 {user.incomeProfile.incomeBracket} • {user.incomeProfile.age} years old • {user.incomeProfile.riskTolerance}

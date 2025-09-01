@@ -305,7 +305,7 @@ export default function ProfileScreen({ navigateTo, data, onLogout }) {
               onPress={handleToggleFollow}
             >
               <Icon 
-                name={user.is_following_user ? "user-check" : "user-plus"} 
+                name={user.is_following_user ? "user-check" : "user"} 
                 size={16} 
                 color={user.is_following_user ? "#fff" : "#00cc99"} 
               />
@@ -346,7 +346,7 @@ export default function ProfileScreen({ navigateTo, data, onLogout }) {
                 }
               }}
             >
-              <Icon name="log-out" size={16} color="#ff4757" />
+              <Icon name="power" size={16} color="#ff4757" />
               <Text style={styles.logoutButtonText}>Logout</Text>
             </TouchableOpacity>
           )}

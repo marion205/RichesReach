@@ -216,7 +216,7 @@ export default function SignUpScreen({ navigateTo, onSignUp, onNavigateToLogin }
       >
         {/* Header */}
         <View style={styles.header}>
-          <Icon name="user-plus" size={60} color="#00cc99" />
+          <Icon name="user" size={60} color="#00cc99" />
           <Text style={styles.title}>Join RichesReach</Text>
           <Text style={styles.subtitle}>Start your financial journey today</Text>
         </View>
@@ -446,7 +446,7 @@ export default function SignUpScreen({ navigateTo, onSignUp, onNavigateToLogin }
           >
             {loading ? (
               <View style={styles.loadingContainer}>
-                <Icon name="loader" size={20} color="#fff" style={styles.spinner} />
+                <Icon name="refresh-cw" size={20} color="#fff" style={styles.spinner} />
                 <Text style={styles.buttonText}>Creating Account...</Text>
               </View>
             ) : (

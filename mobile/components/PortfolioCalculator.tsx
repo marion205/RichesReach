@@ -139,7 +139,7 @@ const PortfolioCalculator: React.FC<PortfolioCalculatorProps> = ({ watchlistItem
             style={styles.editButton}
             onPress={() => setIsEditing(!isEditing)}
           >
-            <Icon name={isEditing ? "check" : "edit-3"} size={16} color="#34C759" />
+            <Icon name={isEditing ? "check" : "edit"} size={16} color="#34C759" />
             <Text style={styles.editButtonText}>
               {isEditing ? "Done" : "Edit"}
             </Text>
