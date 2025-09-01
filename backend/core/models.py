@@ -183,15 +183,269 @@ class StockData(models.Model):
         ordering = ['-date']
 
 class Watchlist(models.Model):
-    """User's stock watchlist"""
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='watchlists')
-    stock = models.ForeignKey(Stock, on_delete=models.CASCADE, related_name='watchlisted_by')
-    added_at = models.DateTimeField(auto_now_add=True)
-    notes = models.TextField(blank=True, null=True)  # User's personal notes about the stock
+    name = models.CharField(max_length=100, null=True, blank=True)  # Temporary nullable
+    description = models.TextField(blank=True)
+    is_public = models.BooleanField(default=False)
+    is_shared = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
-        unique_together = ['user', 'stock']
-        ordering = ['-added_at']
+        unique_together = ['user', 'name']
     
     def __str__(self):
-        return f"{self.user.name} - {self.stock.symbol}"
+        return f"{self.user.username}'s {self.name or 'Watchlist'}"
+    
+    def save(self, *args, **kwargs):
+        # Auto-generate name if not provided
+        if not self.name:
+            self.name = f"Watchlist {self.id or 'New'}"
+        super().save(*args, **kwargs)
+
+class WatchlistItem(models.Model):
+    watchlist = models.ForeignKey(Watchlist, on_delete=models.CASCADE, related_name='items')
+    stock = models.ForeignKey(Stock, on_delete=models.CASCADE)
+    notes = models.TextField(blank=True)
+    target_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    added_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ['watchlist', 'stock']
+    
+    def __str__(self):
+        return f"{self.stock.symbol} in {self.watchlist.name}"
+
+class StockDiscussion(models.Model):
+    DISCUSSION_TYPES = [
+        ('analysis', 'Stock Analysis'),
+        ('news', 'Market News'),
+        ('strategy', 'Trading Strategy'),
+        ('question', 'Question'),
+        ('meme', 'Meme/Entertainment'),
+    ]
+    
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='stock_discussions')
+    stock = models.ForeignKey(Stock, on_delete=models.CASCADE, related_name='discussions')
+    title = models.CharField(max_length=200)
+    content = models.TextField()
+    discussion_type = models.CharField(max_length=20, choices=DISCUSSION_TYPES, default='analysis')
+    is_analysis = models.BooleanField(default=False)
+    analysis_data = models.JSONField(null=True, blank=True)
+    likes = models.ManyToManyField(User, related_name='liked_discussions', blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.title} by {self.user.username}"
+
+class DiscussionComment(models.Model):
+    discussion = models.ForeignKey(StockDiscussion, on_delete=models.CASCADE, related_name='comments')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='discussion_comments')
+    content = models.TextField()
+    likes = models.ManyToManyField(User, related_name='liked_comments', blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['created_at']
+    
+    def __str__(self):
+        return f"Comment by {self.user.username} on {self.discussion.title}"
+
+class Portfolio(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='portfolios')
+    name = models.CharField(max_length=100, default='Main Portfolio')
+    description = models.TextField(blank=True)
+    is_public = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ['user', 'name']
+    
+    def __str__(self):
+        return f"{self.user.username}'s {self.name}"
+
+class PortfolioPosition(models.Model):
+    POSITION_TYPES = [
+        ('long', 'Long'),
+        ('short', 'Short'),
+        ('paper', 'Paper Trade'),
+    ]
+    
+    portfolio = models.ForeignKey(Portfolio, on_delete=models.CASCADE, related_name='positions')
+    stock = models.ForeignKey(Stock, on_delete=models.CASCADE)
+    position_type = models.CharField(max_length=10, choices=POSITION_TYPES, default='paper')
+    shares = models.DecimalField(max_digits=15, decimal_places=6)
+    entry_price = models.DecimalField(max_digits=10, decimal_places=2)
+    current_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    entry_date = models.DateTimeField(auto_now_add=True)
+    exit_date = models.DateTimeField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+    
+    class Meta:
+        unique_together = ['portfolio', 'stock']
+    
+    def __str__(self):
+        return f"{self.shares} shares of {self.stock.symbol} in {self.portfolio.name}"
+    
+    @property
+    def current_value(self):
+        if self.current_price:
+            return self.shares * self.current_price
+        return self.shares * self.entry_price
+    
+    @property
+    def total_return(self):
+        if self.current_price:
+            return ((self.current_price - self.entry_price) / self.entry_price) * 100
+        return 0
+    
+    @property
+    def total_return_dollars(self):
+        if self.current_price:
+            return (self.current_price - self.entry_price) * self.shares
+        return 0
+
+class PriceAlert(models.Model):
+    ALERT_TYPES = [
+        ('above', 'Price Above'),
+        ('below', 'Price Below'),
+        ('percent_change', 'Percent Change'),
+        ('volume_spike', 'Volume Spike'),
+    ]
+    
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='price_alerts')
+    stock = models.ForeignKey(Stock, on_delete=models.CASCADE)
+    alert_type = models.CharField(max_length=20, choices=ALERT_TYPES)
+    target_value = models.DecimalField(max_digits=15, decimal_places=4)
+    is_active = models.BooleanField(default=True)
+    is_triggered = models.BooleanField(default=False)
+    triggered_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.alert_type} alert for {self.stock.symbol} at {self.target_value}"
+
+class SocialFeed(models.Model):
+    """Aggregated social feed for users"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='social_feeds')
+    content_type = models.CharField(max_length=20)  # 'discussion', 'watchlist_update', 'portfolio_update'
+    content_id = models.IntegerField()  # ID of the related object
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        unique_together = ['user', 'content_type', 'content_id']
+    
+    def __str__(self):
+        return f"{self.content_type} feed item for {self.user.username}"
+
+class UserAchievement(models.Model):
+    """Gamification system for user engagement"""
+    ACHIEVEMENT_TYPES = [
+        ('first_post', 'First Discussion Post'),
+        ('first_watchlist', 'First Watchlist'),
+        ('first_portfolio', 'First Portfolio'),
+        ('popular_post', 'Popular Post (10+ likes)'),
+        ('viral_post', 'Viral Post (100+ likes)'),
+        ('consistent_poster', 'Consistent Poster (7 days)'),
+        ('stock_expert', 'Stock Expert (50+ posts)'),
+        ('watchlist_curator', 'Watchlist Curator (5+ public watchlists)'),
+    ]
+    
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='achievements')
+    achievement_type = models.CharField(max_length=30, choices=ACHIEVEMENT_TYPES)
+    title = models.CharField(max_length=100)
+    description = models.TextField()
+    icon = models.CharField(max_length=50, default='🏆')
+    earned_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ['user', 'achievement_type']
+        ordering = ['-earned_at']
+    
+    def __str__(self):
+        return f"{self.user.username} earned {self.title}"
+
+class StockSentiment(models.Model):
+    """Track community sentiment for stocks"""
+    stock = models.ForeignKey(Stock, on_delete=models.CASCADE, related_name='sentiments')
+    positive_votes = models.IntegerField(default=0)
+    negative_votes = models.IntegerField(default=0)
+    neutral_votes = models.IntegerField(default=0)
+    total_votes = models.IntegerField(default=0)
+    sentiment_score = models.DecimalField(max_digits=5, decimal_places=4, default=0)  # -1 to 1
+    last_updated = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ['stock']
+    
+    def __str__(self):
+        return f"Sentiment for {self.stock.symbol}: {self.sentiment_score}"
+    
+    def update_sentiment(self):
+        """Calculate sentiment score based on votes"""
+        if self.total_votes > 0:
+            self.sentiment_score = (self.positive_votes - self.negative_votes) / self.total_votes
+        else:
+            self.sentiment_score = 0
+        self.save()
+
+
+class IncomeProfile(models.Model):
+    """User's financial profile for AI recommendations"""
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='incomeProfile')
+    income_bracket = models.CharField(max_length=50)
+    age = models.IntegerField()
+    investment_goals = models.JSONField(default=list)  # List of goal strings
+    risk_tolerance = models.CharField(max_length=20)  # Conservative, Moderate, Aggressive
+    investment_horizon = models.CharField(max_length=20)  # 1-3 years, 3-5 years, etc.
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-updated_at']
+    
+    def __str__(self):
+        return f"Financial profile for {self.user.name}"
+
+
+class AIPortfolioRecommendation(models.Model):
+    """AI-generated portfolio recommendations"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='aiRecommendations')
+    risk_profile = models.CharField(max_length=50)  # Low, Medium, High
+    portfolio_allocation = models.JSONField()  # {stocks: 60, bonds: 30, etfs: 10, cash: 0}
+    expected_portfolio_return = models.CharField(max_length=20)  # e.g., "8-12%"
+    risk_assessment = models.CharField(max_length=50)  # e.g., "Moderate Risk"
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"AI recommendation for {self.user.name} - {self.risk_profile}"
+
+
+class StockRecommendation(models.Model):
+    """Individual stock recommendations within AI portfolio"""
+    portfolio_recommendation = models.ForeignKey(AIPortfolioRecommendation, on_delete=models.CASCADE, related_name='recommendedStocks')
+    stock = models.ForeignKey(Stock, on_delete=models.CASCADE)
+    allocation = models.DecimalField(max_digits=5, decimal_places=2)  # Percentage allocation
+    reasoning = models.TextField()  # AI explanation for recommendation
+    risk_level = models.CharField(max_length=20)  # Low, Medium, High
+    expected_return = models.CharField(max_length=20)  # e.g., "15-20%"
+    
+    class Meta:
+        unique_together = ['portfolio_recommendation', 'stock']
+    
+    def __str__(self):
+        return f"{self.stock.symbol} - {self.allocation}% allocation"

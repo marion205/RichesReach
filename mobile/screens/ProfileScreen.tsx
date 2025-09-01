@@ -19,11 +19,11 @@ const GET_USER = gql`
       id
       name
       email
-      profilePic
-      followersCount
-      followingCount
-      isFollowingUser
-      isFollowedByUser
+      profile_pic
+      followers_count
+      following_count
+      is_following_user
+      is_followed_by_user
     }
   }
 `;
@@ -35,6 +35,10 @@ const GET_ME = gql`
       name
       email
       profilePic
+      followersCount
+      followingCount
+      isFollowingUser
+      isFollowedByUser
     }
   }
 `;
@@ -61,10 +65,10 @@ const TOGGLE_FOLLOW = gql`
     toggleFollow(userId: $userId) {
       user {
         id
-        followersCount
-        followingCount
-        isFollowingUser
-        isFollowedByUser
+        followers_count
+        following_count
+        is_following_user
+        is_followed_by_user
       }
       following
     }
@@ -75,10 +79,11 @@ type User = {
   id: string;
   name: string;
   email: string;
-  followersCount: number;
-  followingCount: number;
-  isFollowingUser: boolean;
-  isFollowedByUser: boolean;
+  profile_pic: string | null;
+  followers_count: number;
+  following_count: number;
+  is_following_user: boolean;
+  is_followed_by_user: boolean;
 };
 
 type Post = {
@@ -94,31 +99,41 @@ type Post = {
   };
 };
 
-export default function ProfileScreen({ navigateTo, data }) {
+export default function ProfileScreen({ navigateTo, data, onLogout }) {
   // Remove the insets usage since we're not using safe area context anymore
   
-  // Get current user data first
-  const { data: meData, loading: meLoading } = useQuery(GET_ME);
+  // Get current user data from the me query
+  const { data: meData, loading: meLoading, error: meError } = useQuery(GET_ME);
   
-  // Use provided userId or default to current user's ID
-  const userId = data?.userId || meData?.me?.id;
-  
-  const { data: userData, loading: userLoading, refetch: refetchUser } = useQuery(GET_USER, {
-    variables: { id: userId },
-    skip: !userId,
+  console.log('🔍 ProfileScreen Debug:', {
+    meData,
+    meLoading,
+    meError
   });
   
-  const { data: postsData, loading: postsLoading, refetch: refetchPosts } = useQuery(GET_USER_POSTS, {
-    variables: { userId },
-    skip: !userId,
-  });
+  // Use me data to construct user object
+  const user: User | null = meData?.me ? {
+    id: meData.me.id,
+    name: meData.me.name,
+    email: meData.me.email,
+    profile_pic: meData.me.profilePic || null,
+    followers_count: meData.me.followersCount || 0,
+    following_count: meData.me.followingCount || 0,
+    is_following_user: meData.me.isFollowingUser || false,
+    is_followed_by_user: meData.me.isFollowedByUser || false
+  } : null;
+  
+  // Temporarily disable posts query until we fix the backend schema
+  // const { data: postsData, loading: postsLoading, refetch: refetchPosts } = useQuery(GET_USER_POSTS, {
+  //   variables: { userId },
+  //   skip: !userId,
+  // });
   
   const [toggleFollow] = useMutation(TOGGLE_FOLLOW);
   const [refreshing, setRefreshing] = useState(false);
   const client = useApolloClient();
 
-  const user: User | null = userData?.user;
-  const posts: Post[] = postsData?.userPosts || [];
+  const posts: Post[] = []; // Empty array for now
 
   const handleToggleFollow = async () => {
     if (!user) return;
@@ -129,7 +144,7 @@ export default function ProfileScreen({ navigateTo, data }) {
       });
       // Clear cache and refetch to ensure fresh data
       await client.resetStore();
-      await refetchUser();
+      // await refetchUser(); // Removed since we're not using user query anymore
     } catch (error) {
       console.error('Failed to toggle follow:', error);
       Alert.alert('Error', 'Failed to follow/unfollow user. Please try again.');
@@ -139,7 +154,7 @@ export default function ProfileScreen({ navigateTo, data }) {
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      await Promise.all([refetchUser(), refetchPosts()]);
+      // await Promise.all([refetchPosts()]); // Temporarily disabled
     } catch (error) {
       console.error('Failed to refresh:', error);
     } finally {
@@ -147,10 +162,18 @@ export default function ProfileScreen({ navigateTo, data }) {
     }
   };
 
-  if (userLoading) {
+  if (meLoading) {
     return (
       <View style={styles.container}>
         <Text style={styles.loadingText}>Loading profile...</Text>
+      </View>
+    );
+  }
+
+  if (meError) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.errorText}>Error loading user data: {meError.message}</Text>
       </View>
     );
   }
@@ -188,9 +211,9 @@ export default function ProfileScreen({ navigateTo, data }) {
         {/* User Info */}
         <View style={styles.userInfo}>
           <View style={styles.avatar}>
-            {!meLoading && meData?.me?.profilePic ? (
+            {user.profile_pic ? (
               <Image 
-                source={{ uri: meData.me.profilePic }} 
+                source={{ uri: user.profile_pic }} 
                 style={styles.avatarImage} 
               />
             ) : (
@@ -207,46 +230,64 @@ export default function ProfileScreen({ navigateTo, data }) {
               <Text style={styles.statLabel}>Posts</Text>
             </View>
             <View style={styles.stat}>
-              <Text style={styles.statNumber}>{user.followersCount}</Text>
+              <Text style={styles.statNumber}>{user.followers_count}</Text>
               <Text style={styles.statLabel}>Followers</Text>
             </View>
             <View style={styles.stat}>
-              <Text style={styles.statNumber}>{user.followingCount}</Text>
+              <Text style={styles.statNumber}>{user.following_count}</Text>
               <Text style={styles.statLabel}>Following</Text>
             </View>
           </View>
           
-                     {!meLoading && meData?.me?.id && meData.me.id !== user.id && (
+          {/* Follow button - only show for other users */}
+          {meData?.me?.id && meData.me.id !== user.id && (
             <TouchableOpacity
               style={[
                 styles.followButton,
-                user.isFollowingUser && styles.followingButton
+                user.is_following_user && styles.followingButton
               ]}
               onPress={handleToggleFollow}
             >
               <Icon 
-                name={user.isFollowingUser ? "user-check" : "user-plus"} 
+                name={user.is_following_user ? "user-check" : "user-plus"} 
                 size={16} 
-                color={user.isFollowingUser ? "#fff" : "#00cc99"} 
+                color={user.is_following_user ? "#fff" : "#00cc99"} 
               />
               <Text style={[
                 styles.followButtonText,
-                user.isFollowingUser && styles.followingButtonText
+                user.is_following_user && styles.followingButtonText
               ]}>
-                {user.isFollowingUser ? "Following" : "Follow"}
+                {user.is_following_user ? "Following" : "Follow"}
               </Text>
             </TouchableOpacity>
           )}
           
           {/* Logout button for own profile */}
-                     {!meLoading && meData?.me?.id && meData.me.id === user.id && (
+          {meData?.me?.id && meData.me.id === user.id && (
             <TouchableOpacity
               style={styles.logoutButton}
               onPress={async () => {
-                await AsyncStorage.removeItem('token');
-                Alert.alert('Logged out', 'You have been successfully logged out.');
-                // @ts-ignore
-                navigateTo('Login');
+                try {
+                  // Clear the Apollo cache first
+                  await client.clearStore();
+                  // Remove the token from AsyncStorage
+                  await AsyncStorage.removeItem('token');
+                  // Show success message
+                  Alert.alert('Logged out', 'You have been successfully logged out.', [
+                    {
+                      text: 'OK',
+                      onPress: () => {
+                        // Call the logout handler from App.tsx
+                        if (onLogout) {
+                          onLogout();
+                        }
+                      }
+                    }
+                  ]);
+                } catch (error) {
+                  console.error('Logout error:', error);
+                  Alert.alert('Error', 'Failed to logout properly. Please try again.');
+                }
               }}
             >
               <Icon name="log-out" size={16} color="#ff4757" />
@@ -255,8 +296,8 @@ export default function ProfileScreen({ navigateTo, data }) {
           )}
         </View>
 
-        {/* Posts */}
-        <View style={styles.postsSection}>
+        {/* Posts temporarily disabled until we fix the backend schema */}
+        {/* <View style={styles.postsSection}>
           <Text style={styles.sectionTitle}>Posts</Text>
           
           {postsLoading ? (
@@ -281,42 +322,9 @@ export default function ProfileScreen({ navigateTo, data }) {
               </View>
             ))
           )}
-        </View>
+        </View> */}
 
-        {/* Bottom Tab Navigation */}
-        <View style={styles.bottomTabBar}>
-          <TouchableOpacity 
-            style={styles.tabItem} 
-            onPress={() => navigateTo('Home')}
-          >
-            <Icon name="home" size={24} color="#999" />
-            <Text style={styles.tabLabel}>Home</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.tabItem} 
-            onPress={() => navigateTo('Stocks')}
-          >
-            <Icon name="trending-up" size={24} color="#999" />
-            <Text style={styles.tabLabel}>Stocks</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.tabItem} 
-            onPress={() => navigateTo('DiscoverUsers')}
-          >
-            <Icon name="users" size={24} color="#999" />
-            <Text style={styles.tabLabel}>Discover</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={[styles.tabItem, styles.activeTabItem]} 
-            onPress={() => navigateTo('Profile')}
-          >
-            <Icon name="user" size={24} color="#00cc99" />
-            <Text style={styles.tabLabel}>Profile</Text>
-          </TouchableOpacity>
-        </View>
+        
       </ScrollView>
     </View>
   );
@@ -508,26 +516,5 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 20,
   },
-  bottomTabBar: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#e9ecef',
-    paddingBottom: 20,
-    paddingTop: 10,
-  },
-  tabItem: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  activeTabItem: {
-    // Active tab styling is handled by icon color
-  },
-  tabLabel: {
-    fontSize: 12,
-    color: '#999',
-    marginTop: 4,
-    fontWeight: '500',
-  },
+
 });
