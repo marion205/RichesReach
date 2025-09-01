@@ -397,7 +397,7 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
           <Icon name="cpu" size={64} color="#9CA3AF" />
           <Text style={styles.emptyTitle}>No AI Recommendations Yet</Text>
           <Text style={styles.emptySubtitle}>
-            Generate personalized AI portfolio recommendations based on your financial profile
+            Generate personalized quantitative AI portfolio recommendations based on your financial profile
           </Text>
           <TouchableOpacity 
             style={styles.generateButton} 
@@ -405,7 +405,7 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
             disabled={isGeneratingRecommendations}
           >
             <Text style={styles.generateButtonText}>
-              {isGeneratingRecommendations ? 'Generating...' : 'Generate AI Recommendations'}
+              {isGeneratingRecommendations ? 'Generating...' : 'Generate Quantitative AI Recommendations'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -417,7 +417,7 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
     return (
       <View style={styles.recommendationsContainer}>
         <View style={styles.recommendationHeader}>
-          <Text style={styles.recommendationTitle}>AI Portfolio Recommendations</Text>
+          <Text style={styles.recommendationTitle}>Quantitative AI Portfolio Analysis</Text>
           <TouchableOpacity 
             style={styles.refreshButton} 
             onPress={handleGenerateRecommendations}
@@ -427,7 +427,7 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
           </TouchableOpacity>
         </View>
 
-        {/* Portfolio Summary */}
+        {/* Quantitative Portfolio Summary */}
         <View style={styles.portfolioSummary}>
           <View style={styles.summaryItem}>
             <Text style={styles.summaryLabel}>Risk Profile</Text>
@@ -438,14 +438,46 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
             <Text style={styles.summaryValue}>{latestRecommendation.expectedPortfolioReturn}</Text>
           </View>
           <View style={styles.summaryItem}>
-            <Text style={styles.summaryLabel}>Risk Level</Text>
-            <Text style={styles.summaryValue}>{latestRecommendation.riskAssessment}</Text>
+            <Text style={styles.summaryLabel}>Analysis Type</Text>
+            <Text style={styles.summaryValue}>Quantitative</Text>
+          </View>
+        </View>
+
+        {/* Advanced Risk Metrics */}
+        <View style={styles.riskMetricsSection}>
+          <Text style={styles.sectionTitle}>Risk Analysis</Text>
+          <View style={styles.riskMetricsGrid}>
+            <View style={styles.riskMetricItem}>
+              <Icon name="trending-up" size={20} color="#EF4444" />
+              <Text style={styles.riskMetricLabel}>Volatility</Text>
+              <Text style={styles.riskMetricValue}>
+                {latestRecommendation.riskAssessment.includes('Volatility:') 
+                  ? latestRecommendation.riskAssessment.split('Volatility:')[1]?.split('%')[0] + '%'
+                  : 'N/A'}
+              </Text>
+            </View>
+            <View style={styles.riskMetricItem}>
+              <Icon name="alert-triangle" size={20} color="#F59E0B" />
+              <Text style={styles.riskMetricLabel}>Max Drawdown</Text>
+              <Text style={styles.riskMetricValue}>
+                {latestRecommendation.riskAssessment.includes('Max Drawdown:') 
+                  ? latestRecommendation.riskAssessment.split('Max Drawdown:')[1]?.split('%')[0] + '%'
+                  : 'N/A'}
+              </Text>
+            </View>
+            <View style={styles.riskMetricItem}>
+              <Icon name="shield" size={20} color="#10B981" />
+              <Text style={styles.riskMetricLabel}>Risk Level</Text>
+              <Text style={styles.riskMetricValue}>
+                {latestRecommendation.riskAssessment.split('|')[0]?.split('-')[0]?.trim() || 'N/A'}
+              </Text>
+            </View>
           </View>
         </View>
 
         {/* Portfolio Allocation */}
         <View style={styles.allocationSection}>
-          <Text style={styles.sectionTitle}>Portfolio Allocation</Text>
+          <Text style={styles.sectionTitle}>Asset Allocation</Text>
           <View style={styles.allocationGrid}>
             <View style={styles.allocationItem}>
               <Text style={styles.allocationLabel}>Stocks</Text>
@@ -466,10 +498,25 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
           </View>
         </View>
 
-        {/* Stock Recommendations */}
+        {/* Sector Weights (if available) */}
+        {latestRecommendation.portfolioAllocation.sectorWeights && (
+          <View style={styles.sectorSection}>
+            <Text style={styles.sectionTitle}>Sector Allocation</Text>
+            <View style={styles.sectorGrid}>
+              {Object.entries(latestRecommendation.portfolioAllocation.sectorWeights).map(([sector, weight]) => (
+                <View key={sector} style={styles.sectorItem}>
+                  <Text style={styles.sectorLabel}>{sector.charAt(0).toUpperCase() + sector.slice(1)}</Text>
+                  <Text style={styles.sectorValue}>{String(weight)}%</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* Quantitative Stock Recommendations */}
         <View style={styles.stocksSection}>
-          <Text style={styles.sectionTitle}>Recommended Stocks</Text>
-          {latestRecommendation.recommendedStocks.map((stock, index) => (
+          <Text style={styles.sectionTitle}>Quantitative Stock Picks</Text>
+          {latestRecommendation.recommendedStocks.map((stock: any, index: number) => (
             <View key={index} style={styles.stockCard}>
               <View style={styles.stockHeader}>
                 <View style={styles.stockInfo}>
@@ -486,9 +533,35 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
                 <View style={[styles.tag, { backgroundColor: getRiskColor(stock.riskLevel) }]}>
                   <Text style={styles.tagText}>{stock.riskLevel}</Text>
                 </View>
+                <View style={[styles.tag, { backgroundColor: '#6366F1' }]}>
+                  <Text style={styles.tagText}>Quantitative</Text>
+                </View>
               </View>
             </View>
           ))}
+        </View>
+
+        {/* Analysis Methodology */}
+        <View style={styles.methodologySection}>
+          <Text style={styles.sectionTitle}>Analysis Methodology</Text>
+          <View style={styles.methodologyGrid}>
+            <View style={styles.methodologyItem}>
+              <Icon name="bar-chart-2" size={16} color="#6366F1" />
+              <Text style={styles.methodologyLabel}>Technical Analysis</Text>
+            </View>
+            <View style={styles.methodologyItem}>
+              <Icon name="pie-chart" size={16} color="#10B981" />
+              <Text style={styles.methodologyLabel}>Fundamental Analysis</Text>
+            </View>
+            <View style={styles.methodologyItem}>
+              <Icon name="trending-up" size={16} color="#F59E0B" />
+              <Text style={styles.methodologyLabel}>Risk Metrics</Text>
+            </View>
+            <View style={styles.methodologyItem}>
+              <Icon name="target" size={16} color="#EF4444" />
+              <Text style={styles.methodologyLabel}>Portfolio Optimization</Text>
+            </View>
+          </View>
         </View>
       </View>
     );
@@ -918,5 +991,78 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6B7280',
     marginTop: 16,
+  },
+  riskMetricsSection: {
+    marginBottom: 24,
+  },
+  riskMetricsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    gap: 10,
+  },
+  riskMetricItem: {
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    flex: 1,
+  },
+  riskMetricLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 8,
+  },
+  riskMetricValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#00cc99',
+    marginTop: 4,
+  },
+  sectorSection: {
+    marginBottom: 24,
+  },
+  sectorGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-around',
+    gap: 10,
+  },
+  sectorItem: {
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    flex: 1,
+  },
+  sectorLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginBottom: 4,
+  },
+  sectorValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#00cc99',
+  },
+  methodologySection: {
+    marginTop: 24,
+  },
+  methodologyGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-around',
+    gap: 10,
+  },
+  methodologyItem: {
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    flex: 1,
+  },
+  methodologyLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 8,
   },
 });

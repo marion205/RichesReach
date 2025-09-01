@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,93 +6,72 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
-  Alert,
-  Dimensions,
   SafeAreaView,
   FlatList,
   TextInput,
 } from 'react-native';
-import { useQuery, useApolloClient, useMutation } from '@apollo/client';
-import { gql } from '@apollo/client';
+import { useApolloClient } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
+import NewsCard from '../components/NewsCard';
 
-const { width: screenWidth } = Dimensions.get('window');
 
-// GraphQL Queries
-const GET_ME = gql`
-  query GetMe {
-    me {
-      id
-      email
-      name
-      profilePic
-    }
+
+
+// Mock Financial News Data
+const mockFinancialNews = [
+  {
+    id: '1',
+    title: 'Federal Reserve Signals Potential Rate Cuts in 2024',
+    description: 'The Federal Reserve indicated today that it may consider interest rate reductions in the coming year as inflation continues to moderate.',
+    url: 'https://www.reuters.com/markets/us/federal-reserve-signals-potential-rate-cuts-2024-2024-01-15/',
+    publishedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
+    source: 'Reuters',
+    sentiment: 'positive' as const,
+    imageUrl: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=400&h=200&fit=crop'
+  },
+  {
+    id: '2',
+    title: 'Tech Stocks Rally on Strong Earnings Reports',
+    description: 'Major technology companies exceeded quarterly expectations, driving a broad market rally and pushing indices to new highs.',
+    url: 'https://www.bloomberg.com/news/articles/2024-01-15/tech-stocks-rally-on-strong-earnings-reports',
+    publishedAt: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(), // 4 hours ago
+    source: 'Bloomberg',
+    sentiment: 'positive' as const,
+    imageUrl: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=400&h=200&fit=crop'
+  },
+  {
+    id: '3',
+    title: 'Oil Prices Decline Amid Global Economic Concerns',
+    description: 'Crude oil futures fell sharply as traders weighed concerns about global economic growth and demand prospects.',
+    url: 'https://www.marketwatch.com/story/oil-prices-decline-amid-global-economic-concerns-2024-01-15',
+    publishedAt: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(), // 6 hours ago
+    source: 'MarketWatch',
+    sentiment: 'negative' as const,
+    imageUrl: 'https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=400&h=200&fit=crop'
+  },
+  {
+    id: '4',
+    title: 'Cryptocurrency Market Shows Signs of Recovery',
+    description: 'Bitcoin and other major cryptocurrencies gained ground as institutional adoption continues to grow.',
+    url: 'https://www.coindesk.com/markets/cryptocurrency-market-shows-signs-of-recovery-2024-01-15/',
+    publishedAt: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(), // 8 hours ago
+    source: 'CoinDesk',
+    sentiment: 'positive' as const,
+    imageUrl: 'https://images.unsplash.com/photo-1621761191319-c6fb62004040?w=400&h=200&fit=crop'
+  },
+  {
+    id: '5',
+    title: 'Housing Market Data Shows Mixed Signals',
+    description: 'New home sales data revealed conflicting trends, with some regions showing strength while others face challenges.',
+    url: 'https://www.wsj.com/articles/housing-market-data-shows-mixed-signals-2024-01-15',
+    publishedAt: new Date(Date.now() - 10 * 60 * 60 * 1000).toISOString(), // 10 hours ago
+    source: 'Wall Street Journal',
+    sentiment: 'neutral' as const,
+    imageUrl: 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=400&h=200&fit=crop'
   }
-`;
-
-const GET_MY_WATCHLIST = gql`
-  query GetMyWatchlist {
-    myWatchlist {
-      id
-      stock {
-        id
-        symbol
-        companyName
-        sector
-        beginnerFriendlyScore
-      }
-      addedAt
-      notes
-    }
-  }
-`;
-
-const ADD_TO_WATCHLIST = gql`
-  mutation AddToWatchlist($stockSymbol: String!, $notes: String) {
-    addToWatchlist(stockSymbol: $stockSymbol, notes: $notes) {
-      success
-      message
-    }
-  }
-`;
+];
 
 // Types
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  profilePic?: string;
-}
-
-interface Stock {
-  id: string;
-  symbol: string;
-  companyName: string;
-  sector?: string;
-  marketCap?: number;
-  peRatio?: number;
-  dividendYield?: number;
-  debtRatio?: number;
-  volatility?: number;
-  beginnerFriendlyScore?: number;
-}
-
-interface WatchlistItem {
-  id: string;
-  stock: Stock;
-  addedAt: string;
-  notes?: string;
-}
-
-interface Watchlist {
-  id: string;
-  name: string;
-  description?: string;
-  is_public: boolean;
-  is_shared: boolean;
-  items: WatchlistItem[];
-}
-
 interface ChatMsg {
   id: string;
   role: 'user' | 'assistant';
@@ -104,7 +83,6 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
   
   // State
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedStock, setSelectedStock] = useState<Stock | null>(null);
 
   // Chatbot state
   const [chatOpen, setChatOpen] = useState(false);
@@ -113,125 +91,17 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
   const [chatSending, setChatSending] = useState(false);
   const listRef = useRef<FlatList<ChatMsg>>(null);
 
-  // Queries
-  const { data: meData, loading: meLoading, error: meError } = useQuery(GET_ME);
-  const { data: watchlistData, loading: watchlistLoading, error: watchlistError, refetch: refetchWatchlist } = useQuery(GET_MY_WATCHLIST);
-
-  // Mutations
-  const [addToWatchlist, { loading: addingToWatchlist }] = useMutation(ADD_TO_WATCHLIST);
-
-  // Test function to add a stock to watchlist
-  const testAddToWatchlist = async () => {
-    try {
-      console.log('🧪 Testing Add to Watchlist...');
-      console.log('📤 Mutation Variables:', { stockSymbol: 'AAPL', notes: 'Test stock from HomeScreen' });
-      
-      const result = await addToWatchlist({
-        variables: {
-          stockSymbol: 'AAPL',
-          notes: 'Test stock from HomeScreen'
-        }
-      });
-      
-      console.log('✅ Add to Watchlist Result:', result);
-      console.log('📊 Result Data:', result.data);
-      console.log('📊 Result Success:', result.data?.addToWatchlist?.success);
-      console.log('📊 Result Message:', result.data?.addToWatchlist?.message);
-      
-      // Refresh the watchlist after adding
-      console.log('🔄 Refreshing watchlist...');
-      await refetchWatchlist();
-      console.log('✅ Watchlist refreshed');
-    } catch (error) {
-      console.error('❌ Add to Watchlist Error:', error);
-    }
-  };
-
-  // Debug logging
-  useEffect(() => {
-    console.log('🔍 HomeScreen Debug:', {
-      meData,
-      meLoading,
-      meError,
-      watchlistData,
-      watchlistLoading,
-      watchlistError
-    });
-  }, [meData, meLoading, meError, watchlistData, watchlistLoading, watchlistError]);
-
   const onRefresh = async () => {
     setRefreshing(true);
-    try {
-      await refetchWatchlist();
-    } catch (error) {
-      console.error('Error refreshing watchlist:', error);
-    } finally {
+    // Simulate refresh for news feed
+    setTimeout(() => {
       setRefreshing(false);
-    }
+    }, 1000);
   };
 
-  const handleStockPress = (stock: Stock) => {
-    setSelectedStock(stock);
-    // Navigate to detailed stock view
-    navigateTo('Stock', { stock });
-  };
+  // -------- Chatbot --------
 
-  const handleAddStock = () => {
-    // Navigate to stock search/add screen
-    navigateTo('Stock');
-  };
 
-  const formatCurrency = (value?: number) => {
-    if (value === undefined || value === null) return 'N/A';
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(value);
-  };
-
-  const formatMarketCap = (value?: number) => {
-    if (value === undefined || value === null) return 'N/A';
-    if (value >= 1e12) return `$${(value / 1e12).toFixed(2)}T`;
-    if (value >= 1e9) return `$${(value / 1e9).toFixed(2)}B`;
-    if (value >= 1e6) return `$${(value / 1e6).toFixed(2)}M`;
-    return formatCurrency(value);
-  };
-
-  const formatPercentage = (value?: number) => {
-    if (value === undefined || value === null) return 'N/A';
-    return `${value.toFixed(2)}%`;
-  };
-
-  const renderStockCard = (watchlistItem: WatchlistItem) => {
-    const { stock } = watchlistItem;
-    
-    return (
-      <TouchableOpacity
-        key={watchlistItem.id}
-        style={styles.stockCard}
-        onPress={() => handleStockPress(stock)}
-      >
-        <View style={styles.stockHeader}>
-          <View style={styles.stockInfo}>
-            <Text style={styles.stockSymbol}>{stock.symbol}</Text>
-            <Text style={styles.companyName} numberOfLines={1}>
-              {stock.companyName}
-            </Text>
-          </View>
-        </View>
-        
-        {/* Notes */}
-        {watchlistItem.notes && (
-          <View style={styles.notesContainer}>
-            <Text style={styles.notesLabel}>Notes:</Text>
-            <Text style={styles.notesText} numberOfLines={2}>{watchlistItem.notes}</Text>
-          </View>
-        )}
-      </TouchableOpacity>
-    );
-  };
 
   // -------- Chatbot --------
   const quickPrompts = [
@@ -273,6 +143,36 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
     setChatInput('');
   };
 
+  const handleQuickPrompt = (prompt: string) => {
+    // Don't set chatInput since we're auto-submitting
+    // Create and send the message directly
+    const userMessage: ChatMsg = {
+      id: String(Date.now()),
+      role: 'user',
+      content: prompt,
+    };
+
+    setChatMessages(prev => [...prev, userMessage]);
+    setChatSending(true);
+
+    try {
+      // Simulate AI response
+      setTimeout(() => {
+        const aiResponse: ChatMsg = {
+          id: String(Date.now() + 1),
+          role: 'assistant',
+          content: `I understand you're asking about "${prompt}". This is a great question about personal finance! While I can provide general educational information, remember that this is not financial advice. For personalized guidance, consider consulting with a qualified financial advisor.`,
+        };
+        setChatMessages(prev => [...prev, aiResponse]);
+        setChatSending(false);
+        setTimeout(() => listRef.current?.scrollToEnd?.({ animated: true }), 100);
+      }, 1000);
+    } catch (error) {
+      console.error('Failed to send message:', error);
+      setChatSending(false);
+    }
+  };
+
   const sendMessage = async () => {
     if (!chatInput.trim() || chatSending) return;
 
@@ -304,106 +204,12 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
     }
   };
 
-  const handleQuickPrompt = (prompt: string) => {
-    // Don't set chatInput since we're auto-submitting
-    // Create and send the message directly
-    const userMessage: ChatMsg = {
-      id: String(Date.now()),
-      role: 'user',
-      content: prompt,
-    };
-
-    setChatMessages(prev => [...prev, userMessage]);
-    setChatSending(true);
-
-    try {
-      // Simulate AI response
-      setTimeout(() => {
-        const aiResponse: ChatMsg = {
-          id: String(Date.now() + 1),
-          role: 'assistant',
-          content: `I understand you're asking about "${prompt}". This is a great question about personal finance! While I can provide general educational information, remember that this is not financial advice. For personalized guidance, consider consulting with a qualified financial advisor.`,
-        };
-        setChatMessages(prev => [...prev, aiResponse]);
-        setChatSending(false);
-        setTimeout(() => listRef.current?.scrollToEnd?.({ animated: true }), 100);
-      }, 1000);
-    } catch (error) {
-      console.error('Failed to send message:', error);
-      setChatSending(false);
-    }
-  };
-
-  if (watchlistLoading) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Stock Tracker</Text>
-        </View>
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Loading your watchlist...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (meError || watchlistError) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Stock Tracker</Text>
-        </View>
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>Error loading data. Please try again.</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={onRefresh}>
-            <Text style={styles.retryButtonText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  const user = meData?.me;
-  const watchlistItems = watchlistData?.myWatchlist || [];
-  const totalStocks = watchlistItems.length;
-  
-  // Debug logging
-  console.log('🔍 HomeScreen Debug:', {
-    meData: meData?.me ? { id: meData.me.id, name: meData.me.name } : null,
-    watchlistData: watchlistData?.myWatchlist ? watchlistData.myWatchlist.length : 0,
-    watchlistError,
-    watchlistLoading,
-    totalStocks,
-    hasWatchlistItems: Boolean(watchlistItems && watchlistItems.length > 0)
-  });
-
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Stock Tracker</Text>
-        <View style={styles.headerButtons}>
-          <TouchableOpacity style={styles.testButton} onPress={testAddToWatchlist}>
-            <Text style={styles.testButtonText}>Test Add</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.addButton} onPress={handleAddStock}>
-            <Icon name="plus" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Summary Stats */}
-      <View style={styles.summaryContainer}>
-        <View style={styles.summaryItem}>
-          <Text style={styles.summaryValue}>{totalStocks}</Text>
-          <Text style={styles.summaryLabel}>Stocks</Text>
-        </View>
-        <View style={styles.summaryItem}>
-          <Text style={styles.summaryValue}>
-            {user?.name?.split(' ')[0] || 'User'}
-          </Text>
-          <Text style={styles.summaryLabel}>Welcome</Text>
-        </View>
+        <Icon name="home" size={24} color="#34C759" />
+        <Text style={styles.headerTitle}>Financial News</Text>
       </View>
 
       {/* Content */}
@@ -413,38 +219,30 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {watchlistLoading ? (
-          <View style={styles.loadingContainer}>
-            <Icon name="loader" size={32} color="#00cc99" />
-            <Text style={styles.loadingText}>Loading your watchlist...</Text>
+        {/* Welcome Message */}
+        <View style={styles.welcomeContainer}>
+          <Icon name="home" size={48} color="#34C759" />
+          <Text style={styles.welcomeTitle}>Welcome to RichesReach! 📰</Text>
+          <Text style={styles.welcomeSubtitle}>
+            Stay informed with the latest financial news and get personalized financial education.
+          </Text>
+        </View>
+
+        {/* News Section */}
+        <View style={styles.newsSection}>
+          <View style={styles.newsHeader}>
+            <Icon name="rss" size={20} color="#34C759" />
+            <Text style={styles.newsTitle}>Financial News</Text>
           </View>
-        ) : !watchlistItems || watchlistItems.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Icon name="trending-up" size={64} color="#9CA3AF" />
-            <Text style={styles.emptyTitle}>Welcome to Your Watchlist! 📈</Text>
-            <Text style={styles.emptySubtitle}>
-              You haven't added any stocks yet. Start building your investment portfolio by adding stocks you want to track.
-            </Text>
-            <View style={styles.emptyActions}>
-              <TouchableOpacity style={styles.emptyButton} onPress={handleAddStock}>
-                <Text style={styles.emptyButtonText}>Add Your First Stock</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.emptySecondaryButton} onPress={testAddToWatchlist}>
-                <Text style={styles.emptySecondaryButtonText}>Try Demo Stock (AAPL)</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.emptyTips}>
-              <Text style={styles.emptyTipsTitle}>💡 Quick Tips:</Text>
-              <Text style={styles.emptyTipsText}>• Start with companies you know and use</Text>
-              <Text style={styles.emptyTipsText}>• Consider different sectors for diversity</Text>
-              <Text style={styles.emptyTipsText}>• Use notes to track why you're interested</Text>
-            </View>
-          </View>
-        ) : (
-          <View>
-            {watchlistItems.map(renderStockCard)}
-          </View>
-        )}
+          <FlatList
+            data={mockFinancialNews}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => <NewsCard news={item} />}
+            horizontal={false}
+            showsVerticalScrollIndicator={false}
+            scrollEnabled={false}
+          />
+        </View>
       </ScrollView>
 
       {/* Chatbot Floating Button */}
@@ -544,40 +342,47 @@ const styles = StyleSheet.create({
   // Header
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 12,
     paddingHorizontal: 20,
-    paddingVertical: 15,
-    backgroundColor: '#fff',
+    paddingVertical: 16,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-    paddingTop: 20,
+    borderBottomColor: '#E5E5EA',
   },
   headerTitle: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
+    fontWeight: '700',
+    color: '#1C1C1E',
   },
-  addButton: {
-    backgroundColor: '#00cc99',
-    padding: 8,
-    borderRadius: 8,
-  },
-  headerButtons: {
-    flexDirection: 'row',
+
+  // Welcome Section
+  welcomeContainer: {
     alignItems: 'center',
+    padding: 40,
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 16,
+    marginVertical: 12,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
   },
-  testButton: {
-    backgroundColor: '#4CAF50', // A different color for the test button
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginRight: 10,
+  welcomeTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1C1C1E',
+    marginTop: 16,
+    marginBottom: 8,
+    textAlign: 'center',
   },
-  testButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
+  welcomeSubtitle: {
+    fontSize: 16,
+    color: '#8E8E93',
+    textAlign: 'center',
+    lineHeight: 22,
   },
 
   // Summary Stats
@@ -677,6 +482,24 @@ const styles = StyleSheet.create({
     color: '#666',
     marginBottom: 5,
     lineHeight: 20,
+  },
+
+  // News Section
+  newsSection: {
+    marginTop: 24,
+    marginBottom: 16,
+  },
+  newsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 16,
+    paddingHorizontal: 16,
+  },
+  newsTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1C1C1E',
   },
   loadingContainer: {
     flex: 1,

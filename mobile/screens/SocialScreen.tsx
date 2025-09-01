@@ -15,13 +15,11 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useApolloClient } from '@apollo/client';
-import { gql } from '@apollo/client';
+import { gql, useQuery, useMutation } from '@apollo/client';
 
 import SocialNav from '../components/SocialNav';
 import DiscussionCard from '../components/DiscussionCard';
-import WatchlistCard from '../components/WatchlistCard';
-import PortfolioCard from '../components/PortfolioCard';
-import AchievementCard from '../components/AchievementCard';
+
 
 // GraphQL Queries
 const GET_TRENDING_DISCUSSIONS = gql`
@@ -30,208 +28,130 @@ const GET_TRENDING_DISCUSSIONS = gql`
       id
       title
       content
-      discussion_type
-      created_at
-      like_count
-      comment_count
+      discussionType
+      createdAt
+      likeCount
+      commentCount
       user {
         name
-        profile_pic
+        profilePic
       }
       stock {
         symbol
-        company_name
+        companyName
+      }
+      comments {
+        id
+        content
+        createdAt
+        user {
+          name
+        }
       }
     }
   }
 `;
 
-const GET_PUBLIC_WATCHLISTS = gql`
-  query GetPublicWatchlists {
-    publicWatchlists {
-      id
-      name
-      description
-      is_public
-      is_shared
-      item_count
-      created_at
-      user {
-        name
-        profile_pic
+const LIKE_DISCUSSION = gql`
+  mutation LikeDiscussion($discussionId: ID!) {
+    likeDiscussion(discussionId: $discussionId) {
+      success
+      message
+      discussion {
+        id
+        likeCount
       }
     }
   }
 `;
 
-const GET_PUBLIC_PORTFOLIOS = gql`
-  query GetPublicPortfolios {
-    publicPortfolios {
-      id
-      name
-      description
-      is_public
-      position_count
-      total_value
-      total_return
-      total_return_percent
-      created_at
-      user {
-        name
-        profile_pic
+const COMMENT_ON_DISCUSSION = gql`
+  mutation CommentOnDiscussion($discussionId: ID!, $content: String!) {
+    commentOnDiscussion(discussionId: $discussionId, content: $content) {
+      success
+      message
+      comment {
+        id
+        content
+        user {
+          name
+        }
       }
     }
   }
 `;
 
-const GET_USER_ACHIEVEMENTS = gql`
-  query GetUserAchievements {
-    userAchievements {
-      id
-      title
-      description
-      icon
-      earned_at
-      user {
-        name
-        profile_pic
+const CREATE_DISCUSSION = gql`
+  mutation CreateStockDiscussion($title: String!, $content: String!, $stockSymbol: String!, $discussionType: String) {
+    createStockDiscussion(title: $title, content: $content, stockSymbol: $stockSymbol, discussionType: $discussionType) {
+      success
+      message
+      discussion {
+        id
+        title
+        content
+        discussionType
+        createdAt
+        likeCount
+        commentCount
+        user {
+          name
+          profilePic
+        }
+        stock {
+          symbol
+          companyName
+        }
       }
     }
   }
 `;
 
-// Mock data for development
-const mockDiscussions = [
-  {
-    id: '1',
-    title: 'AAPL Technical Analysis - Bullish Pattern Forming',
-    content: 'Looking at the daily chart, AAPL is forming a bullish flag pattern. The stock has been consolidating between $150-$160 for the past month, and I believe we\'re about to see a breakout to the upside. Key resistance at $165, support at $150.',
-    discussion_type: 'analysis',
-    created_at: new Date().toISOString(),
-    like_count: 24,
-    comment_count: 8,
-    user: { name: 'StockGuru', profile_pic: null },
-    stock: { symbol: 'AAPL', company_name: 'Apple Inc.' },
-  },
-  {
-    id: '2',
-    title: 'TSLA Earnings Preview - What to Expect',
-    content: 'Tesla reports earnings next week. Based on delivery numbers and market conditions, I\'m expecting strong Q3 results. However, guidance for Q4 will be crucial given the current economic environment.',
-    discussion_type: 'news',
-    created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    like_count: 18,
-    comment_count: 12,
-    user: { name: 'MarketWatcher', profile_pic: null },
-    stock: { symbol: 'TSLA', company_name: 'Tesla Inc.' },
-  },
-];
 
-const mockWatchlists = [
-  {
-    id: '1',
-    name: 'Tech Giants Portfolio',
-    description: 'A curated list of the most innovative technology companies with strong fundamentals and growth potential.',
-    is_public: true,
-    is_shared: true,
-    item_count: 15,
-    created_at: new Date().toISOString(),
-    user: { name: 'TechInvestor', profile_pic: null },
-  },
-  {
-    id: '2',
-    name: 'Dividend Aristocrats',
-    description: 'Companies that have increased dividends for 25+ consecutive years. Perfect for income-focused investors.',
-    is_public: true,
-    is_shared: false,
-    item_count: 12,
-    created_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-    user: { name: 'IncomeSeeker', profile_pic: null },
-  },
-];
 
-const mockPortfolios = [
-  {
-    id: '1',
-    name: 'Growth Portfolio',
-    description: 'High-growth stocks with potential for significant returns over the next 5-10 years.',
-    is_public: true,
-    position_count: 8,
-    total_value: 125000,
-    total_return: 18500,
-    total_return_percent: 17.4,
-    created_at: new Date().toISOString(),
-    user: { name: 'GrowthTrader', profile_pic: null },
-  },
-  {
-    id: '2',
-    name: 'Conservative Income',
-    description: 'Low-risk portfolio focused on dividend income and capital preservation.',
-    is_public: true,
-    position_count: 12,
-    total_value: 75000,
-    total_return: 3200,
-    total_return_percent: 4.3,
-    created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-    user: { name: 'ConservativeInvestor', profile_pic: null },
-  },
-];
 
-const mockAchievements = [
-  {
-    id: '1',
-    title: 'First Discussion Post',
-    description: 'Posted your first discussion! Welcome to the community.',
-    icon: '📝',
-    earned_at: new Date().toISOString(),
-    user: { name: 'NewUser', profile_pic: null },
-  },
-  {
-    id: '2',
-    title: 'Watchlist Creator',
-    description: 'Created your first watchlist! Start building your investment strategy.',
-    icon: '📋',
-    earned_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    user: { name: 'WatchlistMaster', profile_pic: null },
-  },
-];
+
+// Real data will be fetched from GraphQL queries
+
+// Real data will be fetched from GraphQL queries
+
+// Real data will be fetched from GraphQL queries
 
 const SocialScreen: React.FC = () => {
-  const [activeTab, setActiveTab] = useState('discussions');
+
   const [refreshing, setRefreshing] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [createType, setCreateType] = useState('');
+
   const [createTitle, setCreateTitle] = useState('');
   const [createContent, setCreateContent] = useState('');
   const [createStock, setCreateStock] = useState('');
+  
+  // Comment modal state
+  const [showCommentModal, setShowCommentModal] = useState(false);
+  const [commentContent, setCommentContent] = useState('');
+  const [selectedDiscussionId, setSelectedDiscussionId] = useState('');
+  const [isCommenting, setIsCommenting] = useState(false);
+  
+  // Discussion detail modal state
+  const [showDiscussionDetail, setShowDiscussionDetail] = useState(false);
+  const [discussionDetail, setDiscussionDetail] = useState<any>(null);
 
   const client = useApolloClient();
+  
+  // GraphQL queries and mutations
+  const { data: discussionsData, loading: discussionsLoading } = useQuery(GET_TRENDING_DISCUSSIONS);
+
+  const [likeDiscussion] = useMutation(LIKE_DISCUSSION);
+  const [commentOnDiscussion] = useMutation(COMMENT_ON_DISCUSSION);
+  const [createStockDiscussion] = useMutation(CREATE_DISCUSSION);
+
 
   const onRefresh = async () => {
     setRefreshing(true);
-    // Refresh data based on active tab
     try {
-      switch (activeTab) {
-        case 'discussions':
-          await client.refetchQueries({
-            include: ['GetTrendingDiscussions'],
-          });
-          break;
-        case 'watchlists':
-          await client.refetchQueries({
-            include: ['GetPublicWatchlists'],
-          });
-          break;
-        case 'portfolios':
-          await client.refetchQueries({
-            include: ['GetPublicPortfolios'],
-          });
-          break;
-        case 'achievements':
-          await client.refetchQueries({
-            include: ['GetUserAchievements'],
-          });
-          break;
-      }
+      await client.refetchQueries({
+        include: ['GetTrendingDiscussions'],
+      });
     } catch (error) {
       console.error('Error refreshing data:', error);
     } finally {
@@ -239,104 +159,226 @@ const SocialScreen: React.FC = () => {
     }
   };
 
-  const handleTabPress = (tab: string) => {
-    setActiveTab(tab);
-  };
+
 
   const handleCreatePress = () => {
     setShowCreateModal(true);
   };
 
-  const handleCreateSubmit = () => {
-    if (!createTitle.trim() || !createContent.trim()) {
+  const handleDiscussionLike = async (discussionId: string) => {
+    try {
+      console.log('🔄 Attempting to like discussion:', discussionId);
+      const result = await likeDiscussion({ variables: { discussionId } });
+      console.log('✅ Like result:', result);
+      
+      // Refetch discussions to update like count
+      await client.refetchQueries({ include: ['GetTrendingDiscussions'] });
+      console.log('✅ Refetch completed');
+    } catch (error) {
+      console.error('❌ Failed to like discussion:', error);
+      console.error('❌ Error details:', JSON.stringify(error, null, 2));
+      Alert.alert('Error', 'Failed to like discussion. Please try again.');
+    }
+  };
+
+  const handleDiscussionComment = (discussionId: string) => {
+    // Open discussion detail instead of comment modal (X-style)
+    const discussion = discussionsData?.trendingDiscussions?.find((d: any) => d.id === discussionId);
+    if (discussion) {
+      setDiscussionDetail(discussion);
+      setSelectedDiscussionId(discussionId);
+      setCommentContent(''); // Reset comment input
+      setShowCommentModal(false); // Close comment modal if open
+      setShowDiscussionDetail(true); // Open discussion detail modal
+    }
+  };
+
+  const handleCommentSubmit = async () => {
+    if (!commentContent.trim()) {
+      Alert.alert('Error', 'Please enter a comment');
+      return;
+    }
+
+    setIsCommenting(true);
+    try {
+      await commentOnDiscussion({ 
+        variables: { 
+          discussionId: selectedDiscussionId, 
+          content: commentContent.trim() 
+        } 
+      });
+      
+      // Refetch discussions to update comment count
+      await client.refetchQueries({ include: ['GetTrendingDiscussions'] });
+      
+      // Close modal and reset
+      setShowCommentModal(false);
+      setCommentContent('');
+      setSelectedDiscussionId('');
+      
+      Alert.alert('Success', 'Comment added successfully!');
+    } catch (error) {
+      console.error('Failed to add comment:', error);
+      Alert.alert('Error', 'Failed to add comment. Please try again.');
+    } finally {
+      setIsCommenting(false);
+    }
+  };
+
+  const handleInlineCommentSubmit = async () => {
+    if (!commentContent.trim()) {
+      Alert.alert('Error', 'Please enter a comment');
+      return;
+    }
+
+    setIsCommenting(true);
+    try {
+      await commentOnDiscussion({ 
+        variables: { 
+          discussionId: selectedDiscussionId, 
+          content: commentContent.trim() 
+        } 
+      });
+      
+      // Refetch discussions to update comment count and comments
+      await client.refetchQueries({ include: ['GetTrendingDiscussions'] });
+      
+      // Clear comment input but keep modal open
+      setCommentContent('');
+      
+      // Update local discussion detail with new comment immediately
+      if (discussionDetail) {
+        const newComment = {
+          id: Date.now().toString(), // Temporary ID
+          content: commentContent.trim(),
+          createdAt: new Date().toISOString(),
+          user: { name: 'Test User' } // Use current user name
+        };
+        
+        setDiscussionDetail({
+          ...discussionDetail,
+          comments: [...(discussionDetail.comments || []), newComment],
+          commentCount: (discussionDetail.commentCount || 0) + 1
+        });
+      }
+      
+      // Refetch data in background to get real comment data
+      setTimeout(async () => {
+        try {
+          await client.refetchQueries({ include: ['GetTrendingDiscussions'] });
+          // Update discussion detail with fresh data from server
+          const freshDiscussion = discussionsData?.trendingDiscussions?.find((d: any) => d.id === selectedDiscussionId);
+          if (freshDiscussion) {
+            setDiscussionDetail(freshDiscussion);
+          }
+        } catch (error) {
+          console.error('Failed to refresh discussion:', error);
+        }
+      }, 1000);
+    } catch (error) {
+      console.error('Failed to add comment:', error);
+      Alert.alert('Error', 'Failed to add comment. Please try again.');
+    } finally {
+      setIsCommenting(false);
+    }
+  };
+
+  const handleDiscussionPress = (discussionId: string) => {
+    // Find the discussion from the current data
+    const discussion = discussionsData?.trendingDiscussions?.find((d: any) => d.id === discussionId);
+    if (discussion) {
+      setDiscussionDetail(discussion);
+      setSelectedDiscussionId(discussionId);
+      setCommentContent(''); // Reset comment input for new discussion
+      setShowCommentModal(false); // Close comment modal if open
+      setShowDiscussionDetail(true); // Open discussion detail modal
+    }
+  };
+
+  const handleCreateSubmit = async () => {
+    if (!createTitle.trim() || !createContent.trim() || !createStock.trim()) {
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
 
-    // Here you would submit the creation via GraphQL mutation
-    Alert.alert('Success', `${createType} created successfully!`);
-    setShowCreateModal(false);
-    setCreateTitle('');
-    setCreateContent('');
-    setCreateStock('');
-    setCreateType('');
+    try {
+      console.log('📝 Creating discussion with variables:', {
+        title: createTitle.trim(),
+        content: createContent.trim(),
+        stockSymbol: createStock.trim(),
+        discussionType: 'analysis'
+      });
+      
+      const result = await createStockDiscussion({
+        variables: {
+          title: createTitle.trim(),
+          content: createContent.trim(),
+          stockSymbol: createStock.trim(),
+          discussionType: 'analysis' // Default to analysis
+        }
+      });
+      
+      console.log('📝 Discussion creation result:', result);
+      
+      if (result.data?.createStockDiscussion?.success) {
+        Alert.alert('Success', 'Discussion created successfully!');
+        
+        // Refetch discussions to show the new item
+        await client.refetchQueries({
+          include: ['GetTrendingDiscussions']
+        });
+        
+        setShowCreateModal(false);
+        setCreateTitle('');
+        setCreateContent('');
+        setCreateStock('');
+      } else {
+        Alert.alert('Error', result.data?.createStockDiscussion?.message || 'Failed to create discussion');
+      }
+    } catch (error) {
+      console.error('❌ Failed to create discussion:', error);
+      console.error('❌ Error details:', {
+        message: error.message,
+        graphQLErrors: error.graphQLErrors,
+        networkError: error.networkError
+      });
+      Alert.alert('Error', `Failed to create discussion: ${error.message}`);
+    }
   };
 
   const renderContent = () => {
-    switch (activeTab) {
-      case 'discussions':
-        return (
-          <View>
-            {mockDiscussions.map((discussion) => (
-              <DiscussionCard
-                key={discussion.id}
-                discussion={discussion}
-                onLike={() => Alert.alert('Like', 'Discussion liked!')}
-                onComment={() => Alert.alert('Comment', 'Comment feature coming soon!')}
-                onPress={() => Alert.alert('Discussion', 'Discussion detail coming soon!')}
-              />
-            ))}
+    return (
+      <View>
+        {discussionsData?.trendingDiscussions?.map((discussion) => (
+          <DiscussionCard
+            key={discussion.id}
+            discussion={discussion}
+            onLike={() => handleDiscussionLike(discussion.id)}
+            onComment={() => handleDiscussionComment(discussion.id)}
+            onPress={() => handleDiscussionPress(discussion.id)}
+          />
+        )) || (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateText}>No discussions yet</Text>
+            <Text style={styles.emptyStateSubtext}>Be the first to start a discussion!</Text>
           </View>
-        );
-      
-      case 'watchlists':
-        return (
-          <View>
-            {mockWatchlists.map((watchlist) => (
-              <WatchlistCard
-                key={watchlist.id}
-                watchlist={watchlist}
-                onPress={() => Alert.alert('Watchlist', 'Watchlist detail coming soon!')}
-                onShare={() => Alert.alert('Share', 'Share feature coming soon!')}
-              />
-            ))}
-          </View>
-        );
-      
-      case 'portfolios':
-        return (
-          <View>
-            {mockPortfolios.map((portfolio) => (
-              <PortfolioCard
-                key={portfolio.id}
-                portfolio={portfolio}
-                onPress={() => Alert.alert('Portfolio', 'Portfolio detail coming soon!')}
-                onShare={() => Alert.alert('Share', 'Share feature coming soon!')}
-              />
-            ))}
-          </View>
-        );
-      
-      case 'achievements':
-        return (
-          <View>
-            {mockAchievements.map((achievement) => (
-              <AchievementCard
-                key={achievement.id}
-                achievement={achievement}
-                onPress={() => Alert.alert('Achievement', 'Achievement detail coming soon!')}
-              />
-            ))}
-          </View>
-        );
-      
-      default:
-        return null;
-    }
+        )}
+      </View>
+    );
   };
 
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Social Hub</Text>
+        <Text style={styles.headerTitle}>Discussion Hub</Text>
         <TouchableOpacity style={styles.createButton} onPress={handleCreatePress}>
           <Icon name="plus" size={24} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
 
       {/* Navigation */}
-      <SocialNav activeTab={activeTab} onTabPress={handleTabPress} />
+              <SocialNav />
 
       {/* Content */}
       <ScrollView
@@ -360,7 +402,7 @@ const SocialScreen: React.FC = () => {
         >
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Create New {createType}</Text>
+              <Text style={styles.modalTitle}>Create New Discussion</Text>
               <TouchableOpacity
                 onPress={() => setShowCreateModal(false)}
                 style={styles.closeButton}
@@ -370,56 +412,31 @@ const SocialScreen: React.FC = () => {
             </View>
 
             <View style={styles.modalBody}>
-              <Text style={styles.modalLabel}>Type</Text>
-              <View style={styles.typeButtons}>
-                {['Discussion', 'Watchlist', 'Portfolio'].map((type) => (
-                  <TouchableOpacity
-                    key={type}
-                    style={[
-                      styles.typeButton,
-                      createType === type && styles.typeButtonActive
-                    ]}
-                    onPress={() => setCreateType(type)}
-                  >
-                    <Text style={[
-                      styles.typeButtonText,
-                      createType === type && styles.typeButtonTextActive
-                    ]}>
-                      {type}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
 
-              {createType && (
                 <>
                   <Text style={styles.modalLabel}>Title</Text>
                   <TextInput
                     style={styles.textInput}
                     value={createTitle}
                     onChangeText={setCreateTitle}
-                    placeholder={`Enter ${createType.toLowerCase()} title`}
+                    placeholder="Enter discussion title"
                   />
 
-                  {createType === 'Discussion' && (
-                    <>
-                      <Text style={styles.modalLabel}>Stock Symbol</Text>
-                      <TextInput
-                        style={styles.textInput}
-                        value={createStock}
-                        onChangeText={setCreateStock}
-                        placeholder="e.g., AAPL"
-                        autoCapitalize="characters"
-                      />
-                    </>
-                  )}
+                  <Text style={styles.modalLabel}>Stock Symbol</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    value={createStock}
+                    onChangeText={setCreateStock}
+                    placeholder="e.g., AAPL"
+                    autoCapitalize="characters"
+                  />
 
                   <Text style={styles.modalLabel}>Description</Text>
                   <TextInput
                     style={[styles.textInput, styles.textArea]}
                     value={createContent}
                     onChangeText={setCreateContent}
-                    placeholder={`Enter ${createType.toLowerCase()} description`}
+                    placeholder="Enter discussion description"
                     multiline
                     numberOfLines={4}
                   />
@@ -437,12 +454,175 @@ const SocialScreen: React.FC = () => {
               <TouchableOpacity
                 style={[
                   styles.submitButton,
-                  (!createType || !createTitle.trim() || !createContent.trim()) && styles.submitButtonDisabled
+                  (!createTitle.trim() || !createContent.trim() || !createStock.trim()) && styles.submitButtonDisabled
                 ]}
                 onPress={handleCreateSubmit}
-                disabled={!createType || !createTitle.trim() || !createContent.trim()}
+                disabled={!createTitle.trim() || !createContent.trim() || !createStock.trim()}
               >
                 <Text style={styles.submitButtonText}>Create</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Comment Modal */}
+      <Modal
+        visible={showCommentModal}
+        animationType="slide"
+        transparent={true}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalContainer}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Add Comment</Text>
+              <TouchableOpacity
+                onPress={() => setShowCommentModal(false)}
+                style={styles.closeButton}
+              >
+                <Icon name="x" size={24} color="#8E8E93" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalBody}>
+              <Text style={styles.modalLabel}>Comment</Text>
+              <TextInput
+                style={[styles.textInput, styles.textArea]}
+                value={commentContent}
+                onChangeText={setCommentContent}
+                placeholder="Enter your comment..."
+                multiline
+                numberOfLines={4}
+              />
+            </View>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setShowCommentModal(false)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.submitButton,
+                  !commentContent.trim() && styles.submitButtonDisabled
+                ]}
+                onPress={handleCommentSubmit}
+                disabled={!commentContent.trim() || isCommenting}
+              >
+                <Text style={styles.submitButtonText}>
+                  {isCommenting ? 'Adding...' : 'Add Comment'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Discussion Detail Modal */}
+      <Modal
+        visible={showDiscussionDetail}
+        animationType="slide"
+        transparent={true}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalContainer}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{discussionDetail?.title}</Text>
+              <TouchableOpacity
+                onPress={() => setShowDiscussionDetail(false)}
+                style={styles.closeButton}
+              >
+                <Icon name="x" size={24} color="#8E8E93" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              <Text style={styles.modalLabel}>Content</Text>
+              <Text style={styles.discussionContent}>{discussionDetail?.content}</Text>
+              
+              <Text style={styles.modalLabel}>Stock</Text>
+              <Text style={styles.discussionStock}>
+                {discussionDetail?.stock?.companyName} ({discussionDetail?.stock?.symbol})
+              </Text>
+              
+              <Text style={styles.modalLabel}>Created By</Text>
+              <Text style={styles.discussionUser}>{discussionDetail?.user?.name}</Text>
+              
+              <Text style={styles.modalLabel}>Created At</Text>
+              <Text style={styles.discussionDate}>
+                {discussionDetail?.createdAt ? new Date(discussionDetail.createdAt).toLocaleDateString() : ''}
+              </Text>
+              
+              <Text style={styles.modalLabel}>Comments ({discussionDetail?.commentCount || 0})</Text>
+              <View style={styles.commentsSection}>
+                {discussionDetail?.comments?.length > 0 ? (
+                  discussionDetail.comments.map((comment: any, index: number) => (
+                    <View key={index} style={styles.commentItem}>
+                      <Text style={styles.commentUser}>{comment.user?.name}</Text>
+                      <Text style={styles.commentContent}>{comment.content}</Text>
+                      <Text style={styles.commentDate}>
+                        {comment.createdAt ? new Date(comment.createdAt).toLocaleDateString() : ''}
+                      </Text>
+                    </View>
+                  ))
+                ) : (
+                  <Text style={styles.noComments}>No comments yet. Be the first to comment!</Text>
+                )}
+              </View>
+              
+              <View style={styles.inlineCommentSection}>
+                <Text style={styles.modalLabel}>Add Comment</Text>
+                <View style={styles.commentInputContainer}>
+                  <TextInput
+                    style={styles.commentInput}
+                    value={commentContent}
+                    onChangeText={setCommentContent}
+                    placeholder="💬 Write your comment here..."
+                    placeholderTextColor="#8E8E93"
+                    multiline
+                    numberOfLines={3}
+                  />
+                  <TouchableOpacity
+                    style={[
+                      styles.commentSubmitButton,
+                      !commentContent.trim() && styles.commentSubmitButtonDisabled
+                    ]}
+                    onPress={handleInlineCommentSubmit}
+                    disabled={!commentContent.trim() || isCommenting}
+                  >
+                    <Text style={styles.commentSubmitText}>
+                      {isCommenting ? 'Posting...' : 'Post'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              
+              {/* Add bottom padding for better scrolling */}
+              <View style={styles.bottomPadding} />
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setShowDiscussionDetail(false)}
+              >
+                <Text style={styles.cancelButtonText}>Close</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.submitButton}
+                onPress={() => handleDiscussionLike(discussionDetail?.id)}
+              >
+                <Text style={styles.submitButtonText}>
+                  ❤️ {discussionDetail?.likeCount || 0} Likes
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -477,7 +657,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#007AFF',
+    backgroundColor: '#34C759',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -494,7 +674,8 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingBottom: 34,
-    maxHeight: '80%',
+    maxHeight: '90%',
+    flex: 1,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -516,6 +697,7 @@ const styles = StyleSheet.create({
   modalBody: {
     paddingHorizontal: 20,
     paddingVertical: 16,
+    flex: 1,
   },
   modalLabel: {
     fontSize: 16,
@@ -524,29 +706,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     marginTop: 16,
   },
-  typeButtons: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  typeButton: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    backgroundColor: '#F2F2F7',
-    alignItems: 'center',
-  },
-  typeButtonActive: {
-    backgroundColor: '#007AFF',
-  },
-  typeButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#8E8E93',
-  },
-  typeButtonTextActive: {
-    color: '#FFFFFF',
-  },
+
   textInput: {
     borderWidth: 1,
     borderColor: '#E5E5EA',
@@ -584,7 +744,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 16,
     borderRadius: 12,
-    backgroundColor: '#007AFF',
+    backgroundColor: '#34C759',
     alignItems: 'center',
   },
   submitButtonDisabled: {
@@ -592,6 +752,137 @@ const styles = StyleSheet.create({
   },
   submitButtonText: {
     fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  emptyState: {
+    alignItems: 'center',
+    padding: 40,
+  },
+  emptyStateText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#666',
+    marginBottom: 8,
+  },
+  emptyStateSubtext: {
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
+  },
+  discussionContent: {
+    fontSize: 16,
+    color: '#1C1C1E',
+    marginBottom: 12,
+    lineHeight: 22,
+  },
+  discussionStock: {
+    fontSize: 14,
+    color: '#007AFF',
+    marginBottom: 12,
+  },
+  discussionUser: {
+    fontSize: 14,
+    color: '#8E8E93',
+    marginBottom: 8,
+  },
+  discussionDate: {
+    fontSize: 12,
+    color: '#999',
+    marginBottom: 16,
+  },
+  commentsSection: {
+    marginBottom: 16,
+  },
+  commentItem: {
+    backgroundColor: '#F2F2F7',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  commentUser: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1C1C1E',
+    marginBottom: 4,
+  },
+  commentContent: {
+    fontSize: 14,
+    color: '#1C1C1E',
+    marginBottom: 4,
+  },
+  commentDate: {
+    fontSize: 12,
+    color: '#8E8E93',
+  },
+  noComments: {
+    fontSize: 14,
+    color: '#8E8E93',
+    fontStyle: 'italic',
+    textAlign: 'center',
+    padding: 20,
+  },
+  addCommentButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F2F2F7',
+    padding: 12,
+    borderRadius: 8,
+    gap: 8,
+  },
+  addCommentText: {
+    fontSize: 14,
+    color: '#007AFF',
+    fontWeight: '600',
+  },
+  bottomPadding: {
+    height: 100,
+  },
+  inlineCommentSection: {
+    marginTop: 20,
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E5EA',
+  },
+  commentInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 12,
+    marginTop: 12,
+  },
+  commentInput: {
+    flex: 1,
+    borderWidth: 2,
+    borderColor: '#34C759',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    backgroundColor: '#FFFFFF',
+    minHeight: 44,
+    maxHeight: 100,
+    textAlignVertical: 'top',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  commentSubmitButton: {
+    backgroundColor: '#34C759',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 20,
+    minWidth: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  commentSubmitButtonDisabled: {
+    backgroundColor: '#C7C7CC',
+  },
+  commentSubmitText: {
+    fontSize: 14,
     fontWeight: '600',
     color: '#FFFFFF',
   },

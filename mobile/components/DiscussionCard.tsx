@@ -7,17 +7,17 @@ interface DiscussionCardProps {
     id: string;
     title: string;
     content: string;
-    discussion_type: string;
-    created_at: string;
-    like_count: number;
-    comment_count: number;
+    discussionType: string;  // Changed from discussion_type
+    createdAt: string;       // Changed from created_at
+    likeCount: number;       // Changed from like_count
+    commentCount: number;    // Changed from comment_count
     user: {
       name: string;
-      profile_pic?: string;
+      profilePic?: string;   // Changed from profile_pic
     };
     stock: {
       symbol: string;
-      company_name: string;
+      companyName: string;   // Changed from company_name
     };
   };
   onLike: () => void;
@@ -44,7 +44,7 @@ const DiscussionCard: React.FC<DiscussionCardProps> = ({
 
   const getDiscussionColor = (type: string) => {
     switch (type) {
-      case 'analysis': return '#007AFF';
+      case 'analysis': return '#34C759';
       case 'news': return '#34C759';
       case 'strategy': return '#FF9500';
       case 'question': return '#AF52DE';
@@ -68,9 +68,9 @@ const DiscussionCard: React.FC<DiscussionCardProps> = ({
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.userInfo}>
-          {discussion.user.profile_pic ? (
+          {discussion.user.profilePic ? (
             <Image
-              source={{ uri: discussion.user.profile_pic }}
+              source={{ uri: discussion.user.profilePic }}
               style={styles.avatar}
             />
           ) : (
@@ -82,27 +82,27 @@ const DiscussionCard: React.FC<DiscussionCardProps> = ({
           )}
           <View style={styles.userDetails}>
             <Text style={styles.userName}>{discussion.user.name}</Text>
-            <Text style={styles.timestamp}>{formatDate(discussion.created_at)}</Text>
+            <Text style={styles.timestamp}>{formatDate(discussion.createdAt)}</Text>
           </View>
         </View>
         <View style={styles.stockInfo}>
           <Text style={styles.stockSymbol}>{discussion.stock.symbol}</Text>
-          <Text style={styles.stockName}>{discussion.stock.company_name}</Text>
+          <Text style={styles.stockName}>{discussion.stock.companyName}</Text>
         </View>
       </View>
 
       {/* Discussion Type Badge */}
       <View style={styles.typeContainer}>
         <Icon
-          name={getDiscussionIcon(discussion.discussion_type) as any}
+          name={getDiscussionIcon(discussion.discussionType) as any}
           size={16}
-          color={getDiscussionColor(discussion.discussion_type)}
+          color={getDiscussionColor(discussion.discussionType)}
         />
         <Text style={[
           styles.typeLabel,
-          { color: getDiscussionColor(discussion.discussion_type) }
+          { color: getDiscussionColor(discussion.discussionType) }
         ]}>
-          {discussion.discussion_type.charAt(0).toUpperCase() + discussion.discussion_type.slice(1)}
+          {discussion.discussionType.charAt(0).toUpperCase() + discussion.discussionType.slice(1)}
         </Text>
       </View>
 
@@ -118,12 +118,12 @@ const DiscussionCard: React.FC<DiscussionCardProps> = ({
       <View style={styles.actions}>
         <TouchableOpacity style={styles.actionButton} onPress={onLike}>
           <Icon name="heart" size={20} color="#FF3B30" />
-          <Text style={styles.actionText}>{discussion.like_count}</Text>
+          <Text style={styles.actionText}>{discussion.likeCount}</Text>
         </TouchableOpacity>
         
         <TouchableOpacity style={styles.actionButton} onPress={onComment}>
-          <Icon name="message-circle" size={20} color="#007AFF" />
-          <Text style={styles.actionText}>{discussion.comment_count}</Text>
+          <Icon name="message-circle" size={20} color="#34C759" />
+          <Text style={styles.actionText}>{discussion.commentCount}</Text>
         </TouchableOpacity>
         
         <TouchableOpacity style={styles.actionButton}>
@@ -251,7 +251,7 @@ const styles = StyleSheet.create({
   },
   actionText: {
     fontSize: 14,
-    color: '#8E8E93',
+    color: '#34C759',
     marginLeft: 6,
     fontWeight: '500',
   },

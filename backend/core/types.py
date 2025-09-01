@@ -8,6 +8,9 @@ class UserType(DjangoObjectType):
         model = User
         fields = ("id", "email", "name", "profile_pic")
     
+    # Add camelCase fields for frontend compatibility
+    profilePic = graphene.String()  # camelCase field
+    
     # Add income profile field
     incomeProfile = graphene.Field('core.types.IncomeProfileType')
     
@@ -16,6 +19,10 @@ class UserType(DjangoObjectType):
             return self.incomeProfile
         except:
             return None
+    
+    # Resolver for camelCase field
+    def resolve_profilePic(self, info):
+        return self.profile_pic
     
     # Add computed fields that the frontend expects
     followers_count = graphene.Int()
@@ -80,6 +87,13 @@ class StockType(DjangoObjectType):
     class Meta:
         model = Stock
         fields = ("id", "symbol", "company_name", "sector", "market_cap", "pe_ratio", "dividend_yield", "debt_ratio", "volatility", "beginner_friendly_score")
+    
+    # Add camelCase fields for frontend compatibility
+    companyName = graphene.String()  # camelCase field
+    
+    # Resolver for camelCase field
+    def resolve_companyName(self, info):
+        return self.company_name
 
 class StockDataType(DjangoObjectType):
     class Meta:
@@ -123,16 +137,21 @@ class StockDiscussionType(graphene.ObjectType):
     title = graphene.String()
     content = graphene.String()
     discussion_type = graphene.String()
+    discussionType = graphene.String()  # camelCase field
     is_analysis = graphene.Boolean()
     analysis_data = graphene.JSONString()
     created_at = graphene.DateTime()
+    createdAt = graphene.DateTime()  # camelCase field
     updated_at = graphene.DateTime()
+    updatedAt = graphene.DateTime()  # camelCase field
     user = graphene.Field('core.types.UserType')
     stock = graphene.Field(StockType)
     likes = graphene.List('core.types.UserType')
     like_count = graphene.Int()
+    likeCount = graphene.Int()  # camelCase field
     comments = graphene.List(lambda: DiscussionCommentType)
     comment_count = graphene.Int()
+    commentCount = graphene.Int()  # camelCase field
     
     def resolve_likes(self, info):
         return self.likes.all()
@@ -144,6 +163,22 @@ class StockDiscussionType(graphene.ObjectType):
         return self.comments.all()
     
     def resolve_comment_count(self, info):
+        return self.comments.count()
+    
+    # Resolvers for camelCase fields
+    def resolve_discussionType(self, info):
+        return self.discussion_type
+    
+    def resolve_createdAt(self, info):
+        return self.created_at
+    
+    def resolve_updatedAt(self, info):
+        return self.updated_at
+    
+    def resolve_likeCount(self, info):
+        return self.likes.count()
+    
+    def resolve_commentCount(self, info):
         return self.comments.count()
 
 class DiscussionCommentType(graphene.ObjectType):
