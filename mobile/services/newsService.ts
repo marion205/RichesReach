@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // News API Configuration
-const NEWS_API_KEY = 'demo_key'; // Replace with your actual API key
+const NEWS_API_KEY = '94a335c7316145f79840edd62f77e11e';
 const NEWS_API_BASE_URL = 'https://newsapi.org/v2';
 
 // News Categories
@@ -96,17 +96,66 @@ class NewsService {
   // Get real-time news from API
   async getRealTimeNews(category: NewsCategory = NEWS_CATEGORIES.ALL): Promise<NewsArticle[]> {
     try {
-      // For demo purposes, we'll use mock data but structure it for real API
-      // In production, replace this with actual API calls
-      const mockNews = this.generateMockNews(category);
+      // Build query parameters
+      let query = 'finance OR investing OR stocks OR markets OR economy';
+      let categoryParam = '';
       
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Add category-specific keywords
+      switch (category) {
+        case NEWS_CATEGORIES.MARKETS:
+          query += ' OR "stock market" OR "wall street" OR "S&P 500" OR "NASDAQ"';
+          break;
+        case NEWS_CATEGORIES.TECHNOLOGY:
+          query += ' OR "tech stocks" OR "artificial intelligence" OR "AI" OR "technology sector"';
+          break;
+        case NEWS_CATEGORIES.CRYPTO:
+          query += ' OR "bitcoin" OR "cryptocurrency" OR "blockchain" OR "crypto"';
+          break;
+        case NEWS_CATEGORIES.ECONOMY:
+          query += ' OR "federal reserve" OR "inflation" OR "GDP" OR "economic growth"';
+          break;
+        case NEWS_CATEGORIES.PERSONAL_FINANCE:
+          query += ' OR "personal finance" OR "budgeting" OR "saving" OR "retirement"';
+          break;
+        case NEWS_CATEGORIES.INVESTING:
+          query += ' OR "investment" OR "portfolio" OR "mutual funds" OR "ETFs"';
+          break;
+        case NEWS_CATEGORIES.REAL_ESTATE:
+          query += ' OR "real estate" OR "housing market" OR "mortgage rates"';
+          break;
+      }
       
-      return mockNews;
+      // Make real API call to NewsAPI
+      const response = await fetch(
+        `${NEWS_API_BASE_URL}/everything?q=${encodeURIComponent(query)}&language=en&sortBy=publishedAt&pageSize=20&apiKey=${NEWS_API_KEY}`
+      );
+      
+      if (!response.ok) {
+        throw new Error(`NewsAPI error: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      // Transform API response to our format
+      const articles: NewsArticle[] = data.articles.map((article: any, index: number) => ({
+        id: `real-${index}`,
+        title: article.title || 'No Title',
+        description: article.description || 'No description available',
+        url: article.url || '#',
+        publishedAt: article.publishedAt || new Date().toISOString(),
+        source: article.source?.name || 'Unknown Source',
+        sentiment: this.analyzeSentiment(article.title + ' ' + article.description),
+        imageUrl: article.urlToImage || this.getDefaultImage(category),
+        category: category,
+        readTime: this.calculateReadTime(article.title + ' ' + article.description),
+        isSaved: false,
+      }));
+      
+      return articles;
     } catch (error) {
-      console.error('Error fetching news:', error);
-      return this.getFallbackNews();
+      console.error('Error fetching real news:', error);
+      // Fallback to mock data if API fails
+      return this.generateMockNews(category);
     }
   }
 
@@ -324,6 +373,50 @@ class NewsService {
     );
 
     return categoriesWithCounts;
+  }
+
+  // Analyze sentiment of text
+  private analyzeSentiment(text: string): 'positive' | 'negative' | 'neutral' {
+    const positiveWords = ['gain', 'rise', 'up', 'positive', 'growth', 'profit', 'bullish', 'surge', 'rally', 'increase', 'strong', 'recovery'];
+    const negativeWords = ['fall', 'decline', 'down', 'negative', 'loss', 'bearish', 'crash', 'drop', 'decrease', 'weak', 'recession', 'crisis'];
+    
+    const lowerText = text.toLowerCase();
+    let positiveCount = 0;
+    let negativeCount = 0;
+    
+    positiveWords.forEach(word => {
+      if (lowerText.includes(word)) positiveCount++;
+    });
+    
+    negativeWords.forEach(word => {
+      if (lowerText.includes(word)) negativeCount++;
+    });
+    
+    if (positiveCount > negativeCount) return 'positive';
+    if (negativeCount > positiveCount) return 'negative';
+    return 'neutral';
+  }
+
+  // Calculate read time based on text length
+  private calculateReadTime(text: string): number {
+    const wordsPerMinute = 200;
+    const wordCount = text.split(' ').length;
+    return Math.ceil(wordCount / wordsPerMinute);
+  }
+
+  // Get default image for category
+  private getDefaultImage(category: NewsCategory): string {
+    const defaultImages = {
+      [NEWS_CATEGORIES.MARKETS]: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=400&h=200&fit=crop',
+      [NEWS_CATEGORIES.TECHNOLOGY]: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=400&h=200&fit=crop',
+      [NEWS_CATEGORIES.CRYPTO]: 'https://images.unsplash.com/photo-1621761191319-c6fb62004040?w=400&h=200&fit=crop',
+      [NEWS_CATEGORIES.ECONOMY]: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=400&h=200&fit=crop',
+      [NEWS_CATEGORIES.PERSONAL_FINANCE]: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=400&h=200&fit=crop',
+      [NEWS_CATEGORIES.INVESTING]: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=400&h=200&fit=crop',
+      [NEWS_CATEGORIES.REAL_ESTATE]: 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=400&h=200&fit=crop',
+    };
+    
+    return defaultImages[category] || defaultImages[NEWS_CATEGORIES.MARKETS];
   }
 }
 

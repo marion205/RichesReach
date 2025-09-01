@@ -8,27 +8,12 @@ import {
   Alert,
   RefreshControl,
   Image,
-  Modal,
-  TextInput,
+  SafeAreaView,
+  Dimensions,
 } from 'react-native';
 import { gql, useQuery, useMutation, useApolloClient } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-const GET_USER = gql`
-  query GetUser($id: ID!) {
-    user(id: $id) {
-      id
-      name
-      email
-      profile_pic
-      followers_count
-      following_count
-      is_following_user
-      is_followed_by_user
-    }
-  }
-`;
 
 const GET_ME = gql`
   query GetMe {
@@ -45,22 +30,42 @@ const GET_ME = gql`
   }
 `;
 
-const GET_USER_POSTS = gql`
-  query GetUserPosts($userId: ID!) {
-    userPosts(userId: $userId) {
+const GET_USER_PORTFOLIO = gql`
+  query GetUserPortfolio($userId: ID!) {
+    portfolios(userId: $userId) {
       id
-      content
+      name
+      description
+      isPublic
       createdAt
-      likes {
+      positions {
         id
+        stock {
+          symbol
+          companyName
+        }
+        shares
+        entryPrice
+        currentPrice
+        positionType
+        currentValue
       }
-      comments {
-        id
+    }
+  }
+`;
+
+const GET_MY_WATCHLIST = gql`
+  query GetMyWatchlist {
+    myWatchlist {
+      id
+      stock {
+        symbol
+        companyName
+        currentPrice
       }
-      user {
-        id
-        name
-      }
+      notes
+      targetPrice
+      addedAt
     }
   }
 `;
@@ -80,95 +85,47 @@ const TOGGLE_FOLLOW = gql`
   }
 `;
 
-const CREATE_POST = gql`
-  mutation CreatePost($content: String!) {
-    createPost(content: $content) {
-      post {
-        id
-        content
-        createdAt
-        likesCount
-        commentsCount
-        isLikedByUser
-        user {
-          id
-          name
-        }
-      }
-    }
-  }
-`;
-
 type User = {
   id: string;
   name: string;
   email: string;
-  profile_pic: string | null;
-  followers_count: number;
-  following_count: number;
-  is_following_user: boolean;
-  is_followed_by_user: boolean;
+  profilePic?: string;
+  followersCount: number;
+  followingCount: number;
+  isFollowingUser: boolean;
+  isFollowedByUser: boolean;
 };
 
-type Post = {
-  id: string;
-  content: string;
-  createdAt: string;
-  likes: Array<{ id: string }>;
-  comments: Array<{ id: string }>;
-  user: {
-    id: string;
-    name: string;
-  };
-};
+interface ProfileScreenProps {
+  navigateTo?: (screen: string) => void;
+  onLogout?: () => void;
+}
 
-export default function ProfileScreen({ navigateTo, data, onLogout }) {
-  // Remove the insets usage since we're not using safe area context anymore
-  
-  // Get current user data from the me query
+const { width } = Dimensions.get('window');
+
+const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigateTo, onLogout }) => {
   const { data: meData, loading: meLoading, error: meError } = useQuery(GET_ME);
-  
-  console.log('🔍 ProfileScreen Debug:', {
-    meData,
-    meLoading,
-    meError
+  const { data: portfolioData, loading: portfolioLoading } = useQuery(GET_USER_PORTFOLIO, {
+    variables: { userId: meData?.me?.id },
+    skip: !meData?.me?.id,
   });
-  
-  // Use me data to construct user object
+  const { data: watchlistData, loading: watchlistLoading } = useQuery(GET_MY_WATCHLIST, {
+    skip: !meData?.me?.id,
+  });
+  const [toggleFollow] = useMutation(TOGGLE_FOLLOW);
+  const [refreshing, setRefreshing] = useState(false);
+  const client = useApolloClient();
+
   const user: User | null = meData?.me ? {
     id: meData.me.id,
     name: meData.me.name,
     email: meData.me.email,
-    profile_pic: meData.me.profilePic || null,
-    followers_count: meData.me.followersCount || 0,
-    following_count: meData.me.followingCount || 0,
-    is_following_user: meData.me.isFollowingUser || false,
-    is_followed_by_user: meData.me.isFollowedByUser || false
+    profilePic: meData.me.profilePic,
+    followersCount: meData.me.followersCount || 0,
+    followingCount: meData.me.followingCount || 0,
+    isFollowingUser: meData.me.isFollowingUser || false,
+    isFollowedByUser: meData.me.isFollowedByUser || false
   } : null;
-  
-  // Get user posts
-  const { data: postsData, loading: postsLoading, refetch: refetchPosts } = useQuery(GET_USER_POSTS, {
-    variables: { userId: user?.id },
-    skip: !user?.id,
-  });
-  
-  const [toggleFollow] = useMutation(TOGGLE_FOLLOW);
-  const [createPost] = useMutation(CREATE_POST);
-  const [refreshing, setRefreshing] = useState(false);
-  const [showCreatePost, setShowCreatePost] = useState(false);
-  const [newPostContent, setNewPostContent] = useState('');
-  const [isCreatingPost, setIsCreatingPost] = useState(false);
-  const client = useApolloClient();
-
-  const posts: Post[] = postsData?.userPosts || [];
-  
-  // Debug logging
-  console.log('🔍 ProfileScreen Posts Debug:', {
-    postsData,
-    posts,
-    postsLoading,
-    postsError: postsData?.userPosts ? null : 'No posts data'
-  });
 
   const handleToggleFollow = async () => {
     if (!user) return;
@@ -177,9 +134,7 @@ export default function ProfileScreen({ navigateTo, data, onLogout }) {
       await toggleFollow({
         variables: { userId: user.id },
       });
-      // Clear cache and refetch to ensure fresh data
       await client.resetStore();
-      // await refetchUser(); // Removed since we're not using user query anymore
     } catch (error) {
       console.error('Failed to toggle follow:', error);
       Alert.alert('Error', 'Failed to follow/unfollow user. Please try again.');
@@ -189,7 +144,12 @@ export default function ProfileScreen({ navigateTo, data, onLogout }) {
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      await Promise.all([refetchPosts()]);
+      // Refetch user, portfolio, and watchlist data
+      await Promise.all([
+        client.refetchQueries({
+          include: [GET_ME, GET_USER_PORTFOLIO, GET_MY_WATCHLIST]
+        })
+      ]);
     } catch (error) {
       console.error('Failed to refresh:', error);
     } finally {
@@ -197,520 +157,703 @@ export default function ProfileScreen({ navigateTo, data, onLogout }) {
     }
   };
 
-  const handleCreatePost = async () => {
-    if (!newPostContent.trim()) return;
-    
-    setIsCreatingPost(true);
+  // Calculate portfolio value from watchlist stocks (simulating portfolio value)
+  const portfolioValue = watchlistData?.myWatchlist?.reduce((total: number, watchlistItem: any) => {
+    // Simulate portfolio value based on watchlist stocks
+    // In a real app, this would use actual shares and current prices
+    const stockValue = watchlistItem.stock.currentPrice || 0;
+    // Simulate shares based on stock price (higher priced stocks get fewer shares)
+    const simulatedShares = stockValue > 100 ? 10 : stockValue > 50 ? 25 : 50;
+    return total + (stockValue * simulatedShares);
+  }, 0) || 0;
+
+  const investmentGoals = portfolioData?.portfolios?.length || 0;
+
+  const handleLogout = async () => {
     try {
-      await createPost({ 
-        variables: { content: newPostContent.trim() },
-        refetchQueries: [{ query: GET_USER_POSTS, variables: { userId: user?.id } }]
-      });
-      
-      setNewPostContent('');
-      setShowCreatePost(false);
-      Alert.alert('Success', 'Post created successfully!');
+      await client.clearStore();
+      await AsyncStorage.removeItem('token');
+      if (onLogout) {
+        onLogout();
+      }
     } catch (error) {
-      console.error('Failed to create post:', error);
-      Alert.alert('Error', 'Failed to create post. Please try again.');
-    } finally {
-      setIsCreatingPost(false);
+      console.error('Logout error:', error);
+      Alert.alert('Error', 'Failed to logout properly. Please try again.');
     }
   };
 
   if (meLoading) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.loadingText}>Loading profile...</Text>
-      </View>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Icon name="refresh-cw" size={32} color="#34C759" />
+          <Text style={styles.loadingText}>Loading profile...</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   if (meError) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.errorText}>Error loading user data: {meError.message}</Text>
-      </View>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Icon name="alert-circle" size={48} color="#FF3B30" />
+          <Text style={styles.errorTitle}>Error Loading Profile</Text>
+          <Text style={styles.errorText}>
+            Unable to load your profile data. Please try again.
+          </Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   if (!user) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.errorText}>User not found</Text>
-      </View>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Icon name="user-x" size={48} color="#FF3B30" />
+          <Text style={styles.errorTitle}>Profile Not Found</Text>
+          <Text style={styles.errorText}>
+            Unable to find your profile information.
+          </Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       {/* Header */}
-      <View style={[styles.header, { paddingTop: 50 }]}>
-        <TouchableOpacity onPress={() => navigateTo('Back')}>
-          <Icon name="arrow-left" size={24} color="#333" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Profile</Text>
-        <View style={{ width: 24 }} />
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity onPress={() => navigateTo?.('home')}>
+            <Icon name="arrow-left" size={24} color="#333" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Profile</Text>
+        </View>
+        <View style={styles.headerRight}>
+          <TouchableOpacity 
+            style={styles.refreshButton}
+            onPress={handleRefresh}
+            disabled={refreshing}
+          >
+            <Icon 
+              name="refresh-cw" 
+              size={16} 
+              color={refreshing ? "#C7C7CC" : "#34C759"} 
+              style={refreshing ? styles.spinningIcon : {}} 
+            />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+            <Icon name="power" size={16} color="#ff4757" />
+            <Text style={styles.logoutButtonText}>Logout</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
-      <ScrollView
+      <ScrollView 
         style={styles.content}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            colors={['#00cc99']}
-            tintColor="#00cc99"
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
         }
+        showsVerticalScrollIndicator={false}
       >
-        {/* User Info */}
-        <View style={styles.userInfo}>
-          <View style={styles.avatar}>
-            {user.profile_pic ? (
-              <Image 
-                source={{ uri: user.profile_pic }} 
-                style={styles.avatarImage} 
-              />
+        {/* Profile Header */}
+        <View style={styles.profileHeader}>
+          <TouchableOpacity 
+            style={styles.profileImageContainer}
+            onPress={() => navigateTo?.('stock')}
+            activeOpacity={0.8}
+          >
+            {user.profilePic ? (
+              <Image source={{ uri: user.profilePic }} style={styles.profileImage} />
             ) : (
-              <Text style={styles.avatarText}>{user.name.charAt(0).toUpperCase()}</Text>
+              <View style={styles.profileImagePlaceholder}>
+                <Text style={styles.profileImageText}>{user.name.charAt(0).toUpperCase()}</Text>
+              </View>
             )}
+            <View style={styles.editProfileButton}>
+              <Icon name="edit" size={16} color="#fff" />
+            </View>
+          </TouchableOpacity>
+          
+          <View style={styles.profileInfo}>
+            <Text style={styles.profileName}>{user.name}</Text>
+            <Text style={styles.profileEmail}>{user.email}</Text>
+            <Text style={styles.profileJoinDate}>Member since {new Date().getFullYear()}</Text>
+            
+            <View style={styles.statsContainer}>
+              <View style={styles.statItem}>
+                <Text style={styles.statNumber}>{user.followersCount}</Text>
+                <Text style={styles.statLabel}>Followers</Text>
+              </View>
+              <View style={styles.statItem}>
+                <Text style={styles.statNumber}>{user.followingCount}</Text>
+                <Text style={styles.statLabel}>Following</Text>
+              </View>
+            </View>
           </View>
-          
-          <Text style={styles.userName}>{user.name}</Text>
-          <Text style={styles.userEmail}>{user.email}</Text>
-          
-          <View style={styles.stats}>
-            <View style={styles.stat}>
-              <Text style={styles.statNumber}>{posts.length}</Text>
-              <Text style={styles.statLabel}>Posts</Text>
-            </View>
-            <View style={styles.stat}>
-              <Text style={styles.statNumber}>{user.followers_count}</Text>
-              <Text style={styles.statLabel}>Followers</Text>
-            </View>
-            <View style={styles.stat}>
-              <Text style={styles.statNumber}>{user.following_count}</Text>
-              <Text style={styles.statLabel}>Following</Text>
-            </View>
-          </View>
-          
-          {/* Follow button - only show for other users */}
-          {meData?.me?.id && meData.me.id !== user.id && (
-            <TouchableOpacity
-              style={[
-                styles.followButton,
-                user.is_following_user && styles.followingButton
-              ]}
-              onPress={handleToggleFollow}
-            >
-              <Icon 
-                name={user.is_following_user ? "user-check" : "user"} 
-                size={16} 
-                color={user.is_following_user ? "#fff" : "#00cc99"} 
-              />
-              <Text style={[
-                styles.followButtonText,
-                user.is_following_user && styles.followingButtonText
-              ]}>
-                {user.is_following_user ? "Following" : "Follow"}
-              </Text>
-            </TouchableOpacity>
-          )}
-          
-          {/* Logout button for own profile */}
-          {meData?.me?.id && meData.me.id === user.id && (
-            <TouchableOpacity
-              style={styles.logoutButton}
-              onPress={async () => {
-                try {
-                  // Clear the Apollo cache first
-                  await client.clearStore();
-                  // Remove the token from AsyncStorage
-                  await AsyncStorage.removeItem('token');
-                  // Show success message
-                  Alert.alert('Logged out', 'You have been successfully logged out.', [
-                    {
-                      text: 'OK',
-                      onPress: () => {
-                        // Call the logout handler from App.tsx
-                        if (onLogout) {
-                          onLogout();
-                        }
-                      }
-                    }
-                  ]);
-                } catch (error) {
-                  console.error('Logout error:', error);
-                  Alert.alert('Error', 'Failed to logout properly. Please try again.');
-                }
-              }}
-            >
-              <Icon name="power" size={16} color="#ff4757" />
-              <Text style={styles.logoutButtonText}>Logout</Text>
-            </TouchableOpacity>
-          )}
         </View>
 
-        {/* Posts Section */}
-        <View style={styles.postsSection}>
-          <View style={styles.postsHeader}>
-            <Text style={styles.sectionTitle}>Posts</Text>
-            <TouchableOpacity 
-              style={styles.createPostButton}
-              onPress={() => setShowCreatePost(true)}
-            >
-              <Icon name="plus" size={16} color="#fff" />
-              <Text style={styles.createPostButtonText}>New Post</Text>
-            </TouchableOpacity>
-          </View>
+        {/* Profile Actions */}
+        <View style={styles.profileActions}>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => navigateTo?.('stock')}
+          >
+            <Icon name="edit" size={20} color="#34C759" />
+            <Text style={styles.actionButtonText}>Manage Stocks</Text>
+            <Icon name="chevron-right" size={16} color="#C7C7CC" style={styles.actionArrow} />
+          </TouchableOpacity>
           
-          {postsLoading ? (
-            <Text style={styles.loadingText}>Loading posts...</Text>
-          ) : posts.length === 0 ? (
-            <Text style={styles.emptyText}>No posts yet</Text>
-          ) : (
-            posts.map((post) => (
-              <View key={post.id} style={styles.postCard}>
-                <Text style={styles.postContent}>{post.content}</Text>
-                <View style={styles.postMeta}>
-                  <Text style={styles.postDate}>
-                    {new Date(post.createdAt).toLocaleDateString()}
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => navigateTo?.('home')}
+          >
+            <Icon name="settings" size={20} color="#007AFF" />
+            <Text style={styles.actionButtonText}>News Preferences</Text>
+            <Icon name="chevron-right" size={16} color="#C7C7CC" style={styles.actionArrow} />
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => navigateTo?.('social')}
+          >
+            <Icon name="help-circle" size={20} color="#FF9500" />
+            <Text style={styles.actionButtonText}>Discussion Hub</Text>
+            <Icon name="chevron-right" size={16} color="#C7C7CC" style={styles.actionArrow} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Profile Stats */}
+        <View style={styles.profileStats}>
+          <TouchableOpacity 
+            style={styles.statCard}
+            onPress={() => navigateTo?.('portfolio')}
+            disabled={portfolioLoading}
+          >
+            <Icon name="trending-up" size={24} color="#34C759" />
+            <Text style={styles.statCardTitle}>Portfolio Value</Text>
+            {portfolioLoading || watchlistLoading ? (
+              <View style={styles.loadingValue}>
+                <Icon name="refresh-cw" size={16} color="#C7C7CC" style={styles.spinningIcon} />
+                <Text style={styles.loadingValueText}>Loading...</Text>
+              </View>
+            ) : (
+              <Text style={styles.statCardValue}>
+                ${portfolioValue > 0 ? portfolioValue.toLocaleString() : '0.00'}
+              </Text>
+            )}
+            <Text style={styles.statCardSubtitle}>
+              {portfolioValue > 0 ? 'Based on your watchlist stocks' : 'Add stocks to watchlist to see value'}
+            </Text>
+            <View style={styles.statCardArrow}>
+              <Icon name="chevron-right" size={16} color="#C7C7CC" />
+            </View>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.statCard}
+            onPress={() => navigateTo?.('aiPortfolio')}
+            disabled={portfolioLoading}
+          >
+            <Icon name="crosshair" size={24} color="#007AFF" />
+            <Text style={styles.statCardTitle}>Portfolios</Text>
+            {portfolioLoading ? (
+              <View style={styles.loadingValue}>
+                <Icon name="refresh-cw" size={16} color="#C7C7CC" style={styles.spinningIcon} />
+                <Text style={styles.loadingValueText}>Loading...</Text>
+              </View>
+            ) : (
+              <Text style={styles.statCardValue}>{investmentGoals}</Text>
+            )}
+            <Text style={styles.statCardSubtitle}>
+              {investmentGoals > 0 ? 'Active portfolios' : 'Create your first portfolio'}
+            </Text>
+            <View style={styles.statCardArrow}>
+              <Icon name="chevron-right" size={16} color="#C7C7CC" />
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* Watchlist Stocks */}
+        <View style={styles.portfolioHoldings}>
+          <Text style={styles.sectionTitle}>Watchlist Stocks</Text>
+          {watchlistLoading ? (
+            <View style={styles.loadingContainer}>
+              <Icon name="refresh-cw" size={24} color="#C7C7CC" style={styles.spinningIcon} />
+              <Text style={styles.loadingText}>Loading watchlist...</Text>
+            </View>
+          ) : watchlistData?.myWatchlist && watchlistData.myWatchlist.length > 0 ? (
+            watchlistData.myWatchlist.map((watchlistItem: any) => (
+              <View key={watchlistItem.id} style={styles.portfolioCard}>
+                <View style={styles.portfolioHeader}>
+                  <Text style={styles.stockSymbol}>{watchlistItem.stock.symbol}</Text>
+                  <Text style={styles.portfolioDate}>
+                    Added {new Date(watchlistItem.addedAt).toLocaleDateString()}
                   </Text>
-                  <View style={styles.postStats}>
-                    <Icon name="heart" size={14} color="#666" />
-                    <Text style={styles.postStat}>{post.likes.length}</Text>
-                    <Icon name="message-circle" size={14} color="#666" />
-                    <Text style={styles.postStat}>{post.comments.length}</Text>
+                </View>
+                <View style={styles.holdingItem}>
+                  <View style={styles.holdingInfo}>
+                    <Text style={styles.stockName}>{watchlistItem.stock.companyName}</Text>
+                    <Text style={styles.stockNotes}>
+                      {watchlistItem.notes || 'No notes added'}
+                    </Text>
+                  </View>
+                  <View style={styles.holdingDetails}>
+                    <Text style={styles.priceText}>${watchlistItem.stock.currentPrice}</Text>
+                    {watchlistItem.targetPrice && (
+                      <Text style={styles.targetPriceText}>
+                        Target: ${watchlistItem.targetPrice}
+                      </Text>
+                    )}
                   </View>
                 </View>
               </View>
             ))
+          ) : (
+            <View style={styles.emptyPortfolioContainer}>
+              <Icon name="eye" size={48} color="#C7C7CC" />
+              <Text style={styles.emptyPortfolioTitle}>No Watchlist Stocks</Text>
+              <Text style={styles.emptyPortfolioSubtitle}>
+                Add stocks to your watchlist to start tracking their performance
+              </Text>
+              <TouchableOpacity 
+                style={styles.createPortfolioButton}
+                onPress={() => navigateTo?.('stock')}
+              >
+                <Icon name="plus" size={16} color="#fff" />
+                <Text style={styles.createPortfolioButtonText}>Add Stocks</Text>
+              </TouchableOpacity>
+            </View>
           )}
         </View>
 
-        {/* Create Post Modal */}
-        <Modal
-          visible={showCreatePost}
-          animationType="slide"
-          transparent={true}
-          onRequestClose={() => setShowCreatePost(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Create New Post</Text>
-                <TouchableOpacity onPress={() => setShowCreatePost(false)}>
-                  <Icon name="x" size={24} color="#666" />
-                </TouchableOpacity>
-              </View>
-              
-              <TextInput
-                style={styles.postInput}
-                placeholder="What's on your mind?"
-                value={newPostContent}
-                onChangeText={setNewPostContent}
-                multiline
-                numberOfLines={4}
-              />
-              
-              <View style={styles.modalActions}>
-                <TouchableOpacity 
-                  style={styles.cancelButton}
-                  onPress={() => setShowCreatePost(false)}
-                >
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={[styles.postButton, !newPostContent.trim() && styles.postButtonDisabled]}
-                  onPress={handleCreatePost}
-                  disabled={!newPostContent.trim() || isCreatingPost}
-                >
-                  <Text style={styles.postButtonText}>
-                    {isCreatingPost ? 'Posting...' : 'Post'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
+        {/* Quick Actions */}
+        <View style={styles.quickActions}>
+          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          
+          <View style={styles.quickActionsGrid}>
+            <TouchableOpacity 
+              style={styles.quickActionButton}
+              onPress={() => navigateTo?.('stock')}
+            >
+              <Icon name="plus" size={24} color="#34C759" />
+              <Text style={styles.quickActionText}>Add Stock</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.quickActionButton}
+              onPress={() => navigateTo?.('portfolio')}
+            >
+              <Icon name="bar-chart-2" size={24} color="#007AFF" />
+              <Text style={styles.quickActionText}>View Portfolio</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.quickActionButton}
+              onPress={() => navigateTo?.('ai-portfolio')}
+            >
+              <Icon name="cpu" size={24} color="#FF9500" />
+              <Text style={styles.quickActionText}>AI Analysis</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.quickActionButton}
+              onPress={() => navigateTo?.('home')}
+            >
+              <Icon name="bookmark" size={24} color="#5856D6" />
+              <Text style={styles.quickActionText}>News Feed</Text>
+            </TouchableOpacity>
           </View>
-        </Modal>
-        
+        </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#F2F2F7',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingBottom: 15,
-    backgroundColor: '#fff',
+    paddingVertical: 16,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#e9ecef',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderBottomColor: '#E5E5EA',
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  content: {
-    flex: 1,
-  },
-  userInfo: {
-    alignItems: 'center',
-    padding: 30,
-    backgroundColor: '#fff',
-    margin: 15,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#00cc99',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 15,
-  },
-  avatarImage: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 40,
-  },
-  avatarText: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  userName: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 5,
-  },
-  userEmail: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 20,
-  },
-  stats: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    width: '100%',
-    marginBottom: 20,
-  },
-  stat: {
-    alignItems: 'center',
-  },
-  statNumber: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
+    fontWeight: '700',
+    color: '#1C1C1E',
   },
-  statLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 2,
-  },
-  followButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+  refreshButton: {
+    padding: 8,
     borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#00cc99',
-    backgroundColor: 'transparent',
+    backgroundColor: '#F2F2F7',
   },
-  followingButton: {
-    backgroundColor: '#00cc99',
-  },
-  followButtonText: {
-    marginLeft: 8,
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#00cc99',
-  },
-  followingButtonText: {
-    color: '#fff',
+  spinningIcon: {
+    transform: [{ rotate: '360deg' }],
   },
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#ff4757',
-    backgroundColor: 'transparent',
-    marginTop: 10,
-  },
-  logoutButtonText: {
-    marginLeft: 8,
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#ff4757',
-  },
-  postsSection: {
-    padding: 15,
-  },
-  postsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  createPostButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#00cc99',
+    gap: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 20,
+    borderRadius: 16,
+    backgroundColor: '#FFF5F5',
   },
-  createPostButtonText: {
-    color: '#fff',
+  logoutButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    marginLeft: 6,
+    color: '#ff4757',
   },
-  modalOverlay: {
+  content: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  profileHeader: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5EA',
+  },
+  profileImageContainer: {
+    position: 'relative',
+    marginBottom: 16,
+  },
+  profileImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+  },
+  profileImagePlaceholder: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#34C759',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 20,
-    width: '90%',
-    maxWidth: 400,
+  profileImageText: {
+    fontSize: 36,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  editProfileButton: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: '#34C759',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
   },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
+  profileInfo: {
+    alignItems: 'center',
   },
-  postInput: {
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 8,
-    padding: 12,
+  profileName: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1C1C1E',
+    marginBottom: 4,
+  },
+  profileEmail: {
     fontSize: 16,
-    minHeight: 100,
-    textAlignVertical: 'top',
+    color: '#8E8E93',
+    marginBottom: 8,
+  },
+  profileJoinDate: {
+    fontSize: 14,
+    color: '#C7C7CC',
     marginBottom: 20,
   },
-  modalActions: {
+  statsContainer: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 12,
+    gap: 32,
+    marginBottom: 20,
   },
-  cancelButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
+  statItem: {
+    alignItems: 'center',
   },
-  cancelButtonText: {
-    color: '#666',
+  statNumber: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1C1C1E',
+  },
+  statLabel: {
     fontSize: 14,
+    color: '#8E8E93',
+    marginTop: 4,
+  },
+  profileActions: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5EA',
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F2F2F7',
+  },
+  actionButtonText: {
+    fontSize: 16,
+    color: '#1C1C1E',
+    fontWeight: '500',
+    flex: 1,
+  },
+  actionArrow: {
+    marginLeft: 'auto',
+  },
+  profileStats: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5EA',
+  },
+  statCard: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  statCardTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1C1C1E',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  statCardValue: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#34C759',
+    marginBottom: 4,
+  },
+  statCardSubtitle: {
+    fontSize: 14,
+    color: '#8E8E93',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  statCardArrow: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+  },
+  loadingValue: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  loadingValueText: {
+    fontSize: 16,
+    color: '#C7C7CC',
     fontWeight: '500',
   },
-  postButton: {
-    backgroundColor: '#00cc99',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
-  postButtonDisabled: {
-    backgroundColor: '#ccc',
-  },
-  postButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
+  quickActions: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 15,
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1C1C1E',
+    marginBottom: 16,
   },
-  postCard: {
-    backgroundColor: '#fff',
-    padding: 20,
+  quickActionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  quickActionButton: {
+    width: (width - 64) / 2,
+    backgroundColor: '#F8F9FA',
     borderRadius: 12,
-    marginBottom: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
   },
-  postContent: {
+  quickActionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1C1C1E',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  loadingText: {
     fontSize: 16,
-    marginBottom: 10,
+    color: '#8E8E93',
+    marginTop: 16,
   },
-  postMeta: {
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1C1C1E',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#8E8E93',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  portfolioHoldings: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5EA',
+  },
+  portfolioCard: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+  },
+  portfolioHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 12,
   },
-  postDate: {
+  portfolioName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1C1C1E',
+  },
+  portfolioDate: {
     fontSize: 12,
-    color: '#666',
+    color: '#8E8E93',
   },
-  postStats: {
+  holdingItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F2F2F7',
+  },
+  holdingInfo: {
+    flex: 1,
+  },
+  stockSymbol: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1C1C1E',
+  },
+  stockName: {
+    fontSize: 12,
+    color: '#8E8E93',
+    marginTop: 2,
+  },
+  holdingDetails: {
+    alignItems: 'flex-end',
+  },
+  sharesText: {
+    fontSize: 12,
+    color: '#8E8E93',
+  },
+  priceText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#34C759',
+    marginTop: 2,
+  },
+  noHoldingsText: {
+    fontSize: 14,
+    color: '#8E8E93',
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  emptyPortfolioContainer: {
+    alignItems: 'center',
+    paddingVertical: 24,
+  },
+  emptyPortfolioTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1C1C1E',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyPortfolioSubtitle: {
+    fontSize: 14,
+    color: '#8E8E93',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  createPortfolioButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#34C759',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 20,
   },
-  postStat: {
+  createPortfolioButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  stockNotes: {
     fontSize: 12,
-    color: '#666',
-    marginLeft: 4,
-    marginRight: 10,
+    color: '#8E8E93',
+    marginTop: 2,
+    fontStyle: 'italic',
   },
-  loadingText: {
-    textAlign: 'center',
-    fontSize: 16,
-    color: '#666',
-    marginTop: 50,
+  targetPriceText: {
+    fontSize: 12,
+    color: '#007AFF',
+    marginTop: 2,
+    fontWeight: '500',
   },
-  errorText: {
-    textAlign: 'center',
-    fontSize: 16,
-    color: '#ff4757',
-    marginTop: 50,
-  },
-  emptyText: {
-    textAlign: 'center',
-    fontSize: 16,
-    color: '#666',
-    marginTop: 20,
-  },
-
 });
+
+export default ProfileScreen;

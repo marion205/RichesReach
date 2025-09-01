@@ -100,12 +100,496 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
     'Explain 50/30/20 budgeting',
     'How do index funds work?',
     'What is an expense ratio?',
-    'Index fund vs ETF',
     'Diversification basics',
     'Dollar-cost averaging',
     'How to analyze stocks?',
     'What is market cap?',
+    'Emergency fund basics',
+    'Credit score importance',
+    'Compound interest explained',
+    'Options trading basics',
+    'How to trade options',
+    'Trading fundamentals',
   ];
+
+  // AI Response Generator with Real Financial Data
+  const generateAIResponse = async (userInput: string): Promise<string> => {
+    const input = userInput.toLowerCase();
+    
+    // Financial Education Database
+    const financialKnowledge: { [key: string]: { title: string; content: string } } = {
+      'etf': {
+        title: 'Exchange-Traded Fund (ETF)',
+        content: `An ETF is a type of investment fund that trades on stock exchanges, similar to stocks. ETFs hold assets such as stocks, commodities, or bonds and generally operate with an arbitrage mechanism designed to keep it trading close to its net asset value.
+
+Key Benefits:
+• Diversification across many assets
+• Lower expense ratios than mutual funds
+• Tax efficiency
+• Intraday trading like stocks
+• Transparency of holdings
+
+Popular ETF Examples:
+• SPY (S&P 500 ETF)
+• QQQ (Nasdaq-100 ETF)
+• VTI (Total Stock Market ETF)
+
+ETFs are excellent for both beginners and experienced investors looking for cost-effective diversification.`
+      },
+      'roth vs traditional ira': {
+        title: 'Roth IRA vs Traditional IRA',
+        content: `Both IRAs offer tax advantages, but they work differently:
+
+Traditional IRA:
+• Tax-deductible contributions (reduce current year taxes)
+• Tax-deferred growth
+• Required minimum distributions (RMDs) starting at age 72
+• Early withdrawal penalties before age 59½
+
+Roth IRA:
+• After-tax contributions (no current year tax deduction)
+• Tax-free growth and withdrawals
+• No RMDs during your lifetime
+• Contributions can be withdrawn penalty-free anytime
+
+Choose Traditional IRA if:
+• You expect to be in a lower tax bracket in retirement
+• You want immediate tax savings
+
+Choose Roth IRA if:
+• You expect to be in a higher tax bracket in retirement
+• You want tax-free income in retirement
+• You want flexibility with withdrawals`
+      },
+      'budgeting': {
+        title: '50/30/20 Budgeting Rule',
+        content: `The 50/30/20 rule is a simple budgeting framework:
+
+50% - Needs (Essential Expenses):
+• Housing (rent/mortgage)
+• Utilities
+• Food
+• Transportation
+• Insurance
+• Minimum debt payments
+
+30% - Wants (Discretionary Spending):
+• Entertainment
+• Dining out
+• Shopping
+• Hobbies
+• Travel
+• Subscriptions
+
+20% - Savings & Debt:
+• Emergency fund
+• Retirement savings
+• Investment contributions
+• Extra debt payments
+• Financial goals
+
+Benefits:
+• Simple to follow
+• Ensures savings
+• Balances needs vs wants
+• Flexible framework
+
+Remember: Adjust percentages based on your specific situation and goals.`
+      },
+      'index fund': {
+        title: 'Index Funds Explained',
+        content: `An index fund is a type of mutual fund or ETF designed to track the performance of a specific market index.
+
+How They Work:
+• Automatically track a market index (e.g., S&P 500)
+• Buy all stocks in the index proportionally
+• Rebalance automatically when index changes
+• Low management fees (passive management)
+
+Popular Indexes:
+• S&P 500: 500 largest US companies
+• Russell 2000: 2000 small-cap companies
+• MSCI World: Global developed markets
+• Bloomberg Barclays US Aggregate Bond Index
+
+Advantages:
+• Diversification
+• Low costs
+• Consistent performance
+• Tax efficiency
+• No manager risk
+
+Index funds are excellent for long-term investing and are often recommended for retirement accounts.`
+      },
+      'expense ratio': {
+        title: 'Expense Ratio Explained',
+        content: `An expense ratio is the annual fee charged by investment funds to cover operating costs.
+
+What It Covers:
+• Management fees
+• Administrative costs
+• Marketing expenses
+• Legal and accounting fees
+• Custodian fees
+
+How It's Calculated:
+• Expressed as a percentage of assets
+• Example: 0.50% = $5 per $1,000 invested annually
+• Deducted automatically from fund returns
+
+Typical Expense Ratios:
+• Index funds: 0.03% - 0.20%
+• Actively managed funds: 0.50% - 1.50%
+• ETFs: 0.03% - 0.50%
+
+Impact on Returns:
+• Higher fees reduce long-term returns
+• 1% fee over 30 years can reduce returns by 25%
+• Always compare expense ratios when choosing funds
+
+Lower is generally better, especially for long-term investments.`
+      },
+      'diversification': {
+        title: 'Diversification Basics',
+        content: `Diversification is spreading investments across different asset classes to reduce risk.
+
+Asset Classes:
+• Stocks (domestic, international, emerging markets)
+• Bonds (government, corporate, municipal)
+• Real estate (REITs, direct ownership)
+• Commodities (gold, oil, agricultural)
+• Cash and cash equivalents
+
+Diversification Benefits:
+• Reduces portfolio volatility
+• Protects against single-asset risk
+• Improves risk-adjusted returns
+• Provides stability during market downturns
+
+How to Diversify:
+• Across asset classes
+• Within asset classes (different sectors)
+• Geographically (domestic vs international)
+• By company size (large, mid, small cap)
+
+Remember: "Don't put all your eggs in one basket." Diversification is key to long-term investment success.`
+      },
+      'dollar cost averaging': {
+        title: 'Dollar-Cost Averaging (DCA)',
+        content: `Dollar-cost averaging is investing a fixed amount regularly regardless of market conditions.
+
+How It Works:
+• Invest the same amount monthly/quarterly
+• Buy more shares when prices are low
+• Buy fewer shares when prices are high
+• Automatically reduces average cost per share
+
+Example:
+• Month 1: $100 buys 10 shares at $10
+• Month 2: $100 buys 8 shares at $12.50
+• Month 3: $100 buys 20 shares at $5
+• Average cost: $8.33 per share
+
+Benefits:
+• Reduces timing risk
+• Emotional discipline
+• Automates investing
+• Smooths out market volatility
+
+DCA is excellent for beginners and helps build wealth consistently over time.`
+      },
+      'stock analysis': {
+        title: 'How to Analyze Stocks',
+        content: `Stock analysis involves evaluating a company's fundamentals and market position.
+
+Fundamental Analysis:
+• Revenue and earnings growth
+• Profit margins and profitability
+• Debt levels and financial health
+• Competitive advantages
+• Management quality
+
+Key Metrics:
+• P/E Ratio (Price-to-Earnings)
+• P/B Ratio (Price-to-Book)
+• Debt-to-Equity Ratio
+• Return on Equity (ROE)
+• Free Cash Flow
+
+Technical Analysis:
+• Price trends and patterns
+• Volume analysis
+• Moving averages
+• Support and resistance levels
+• Momentum indicators
+
+Remember: Combine both approaches and always do your own research before investing.`
+      },
+             'market cap': {
+         title: 'Market Capitalization',
+         content: `Market cap is the total value of a company's outstanding shares.
+
+Calculation:
+• Market Cap = Share Price × Number of Outstanding Shares
+
+Market Cap Categories:
+• Large Cap: $10+ billion (Apple, Microsoft, Amazon)
+• Mid Cap: $2-10 billion (established growth companies)
+• Small Cap: $300 million - $2 billion (growth potential)
+• Micro Cap: $50-300 million (higher risk/reward)
+
+Why It Matters:
+• Indicates company size and stability
+• Helps with portfolio diversification
+• Influences investment strategy
+• Risk assessment
+
+Large caps are generally more stable, while small caps offer higher growth potential but with increased risk.`
+       },
+       'emergency fund': {
+         title: 'Emergency Fund Basics',
+         content: `An emergency fund is money set aside for unexpected expenses or financial emergencies.
+
+How Much to Save:
+• 3-6 months of essential expenses
+• Consider job stability and family situation
+• High-risk jobs: 6-12 months
+• Dual-income households: 3-6 months
+
+What It Covers:
+• Job loss
+• Medical emergencies
+• Car repairs
+• Home repairs
+• Unexpected travel
+
+Where to Keep It:
+• High-yield savings account
+• Money market account
+• Easily accessible
+• Separate from regular spending
+
+Benefits:
+• Financial security
+• Prevents debt
+• Reduces stress
+• Provides options during crises
+
+Start small and build gradually - even $1,000 can make a big difference!`
+       },
+       'credit score': {
+         title: 'Credit Score Importance',
+         content: `Your credit score is a three-digit number that lenders use to assess your creditworthiness.
+
+Score Ranges:
+• Excellent: 800-850
+• Very Good: 740-799
+• Good: 670-739
+• Fair: 580-669
+• Poor: 300-579
+
+What Affects Your Score:
+• Payment history (35%)
+• Credit utilization (30%)
+• Length of credit history (15%)
+• Credit mix (10%)
+• New credit inquiries (10%)
+
+Why It Matters:
+• Loan approval and interest rates
+• Credit card applications
+• Insurance premiums
+• Rental applications
+• Job opportunities (some employers check)
+
+How to Improve:
+• Pay bills on time
+• Keep credit utilization below 30%
+• Don't close old accounts
+• Limit new credit applications
+• Monitor your credit report
+
+A good credit score can save you thousands in interest over your lifetime.`
+       },
+       'compound interest': {
+         title: 'Compound Interest Explained',
+         content: `Compound interest is when you earn interest on both your principal and accumulated interest.
+
+How It Works:
+• Year 1: $1,000 × 10% = $100 interest
+• Year 2: $1,100 × 10% = $110 interest
+• Year 3: $1,210 × 10% = $121 interest
+
+The Power of Compounding:
+• Time is your greatest ally
+• Small amounts grow significantly over decades
+• Early investing has massive advantages
+• Consistent contributions amplify growth
+
+Example: $100/month at 8% for 30 years
+• Total invested: $36,000
+• Final value: $150,000+
+• Interest earned: $114,000+
+
+Key Factors:
+• Principal amount
+• Interest rate
+• Time period
+• Frequency of compounding
+• Regular contributions
+
+Start early, invest consistently, and let compound interest work its magic!`
+       },
+       'options': {
+         title: 'Options Trading Basics',
+         content: `Options are financial contracts that give you the right (but not obligation) to buy or sell an asset at a specific price.
+
+Two Main Types:
+• Call Options: Right to BUY at strike price
+• Put Options: Right to SELL at strike price
+
+Key Terms:
+• Strike Price: Price at which you can exercise the option
+• Expiration Date: When the option expires
+• Premium: Cost to buy the option
+• In-the-Money: Option has intrinsic value
+• Out-of-the-Money: Option has no intrinsic value
+
+Basic Strategies:
+• Covered Call: Sell calls against stock you own
+• Protective Put: Buy puts to protect stock positions
+• Long Call: Bet on stock price increase
+• Long Put: Bet on stock price decrease
+
+Risk Considerations:
+• Options can expire worthless
+• Unlimited loss potential on some strategies
+• Time decay works against you
+• Requires understanding of Greeks (delta, gamma, theta, vega)
+
+Important: Options are complex and risky. Start with paper trading and education before using real money.`
+       },
+       'trade options': {
+         title: 'How to Trade Options',
+         content: `Options trading requires education, practice, and risk management. Here's a step-by-step approach:
+
+Step 1: Education
+• Learn options terminology and mechanics
+• Understand risk/reward profiles
+• Study different strategies
+• Practice with paper trading
+
+Step 2: Account Setup
+• Open a brokerage account that supports options
+• Get options trading approval (Level 1-4)
+• Start with Level 1 (buying calls/puts)
+
+Step 3: Strategy Selection
+• Covered Calls: Lower risk, income generation
+• Protective Puts: Insurance for stock positions
+• Long Calls/Puts: Directional bets
+• Spreads: Limited risk, defined profit/loss
+
+Step 4: Risk Management
+• Never risk more than you can afford to lose
+• Use stop-loss orders
+• Diversify across different strategies
+• Avoid complex strategies initially
+
+Step 5: Execution
+• Start with liquid options (high volume)
+• Check bid/ask spreads
+• Consider time decay impact
+• Monitor positions regularly
+
+Remember: Options are advanced instruments. Master the basics before complex strategies.`
+       },
+       'trading': {
+         title: 'Trading Fundamentals',
+         content: `Trading involves buying and selling financial instruments to profit from price movements.
+
+Types of Trading:
+• Day Trading: Buy/sell within same day
+• Swing Trading: Hold positions for days/weeks
+• Position Trading: Hold for weeks/months
+• Scalping: Very short-term trades
+
+Essential Skills:
+• Technical Analysis: Charts, patterns, indicators
+• Fundamental Analysis: Company financials, news
+• Risk Management: Position sizing, stop-losses
+• Psychology: Emotional control, discipline
+
+Risk Management Rules:
+• Never risk more than 1-2% per trade
+• Use stop-loss orders
+• Don't chase losses
+• Keep position sizes reasonable
+
+Trading vs Investing:
+• Trading: Short-term, active management
+• Investing: Long-term, buy-and-hold
+• Trading requires more time and attention
+• Both require education and practice
+
+Start with paper trading to practice strategies without risking real money.`
+       }
+    };
+
+    // Check for exact matches first
+    for (const [key, data] of Object.entries(financialKnowledge)) {
+      if (input.includes(key)) {
+        return `${data.title}\n\n${data.content}\n\n💡 This is educational information only. For personalized financial advice, consult a qualified financial advisor.`;
+      }
+    }
+
+    // Check for partial matches and synonyms
+    const synonyms: { [key: string]: string[] } = {
+      'options': ['option', 'trading options', 'trade options', 'options trading', 'how to trade options'],
+      'etf': ['etfs', 'exchange traded fund', 'exchange traded funds'],
+      'ira': ['individual retirement account', 'roth ira', 'traditional ira'],
+      'budgeting': ['budget', '50/30/20', 'fifty thirty twenty'],
+      'index fund': ['index funds', 'index investing'],
+      'expense ratio': ['expense ratios', 'fund fees', 'management fees'],
+      'diversification': ['diversify', 'diversified'],
+      'dollar cost averaging': ['dca', 'dollar cost average'],
+      'stock analysis': ['analyze stocks', 'stock research', 'how to analyze stocks'],
+      'market cap': ['market capitalization', 'market value'],
+      'emergency fund': ['emergency savings', 'rainy day fund'],
+      'credit score': ['credit scores', 'credit rating'],
+      'compound interest': ['compounding', 'compound growth'],
+      'trading': ['trade', 'day trading', 'swing trading']
+    };
+
+    // Check for synonyms and related terms
+    for (const [key, synonymList] of Object.entries(synonyms)) {
+      if (synonymList.some(synonym => input.includes(synonym)) && financialKnowledge[key]) {
+        const data = financialKnowledge[key];
+        return `${data.title}\n\n${data.content}\n\n💡 This is educational information only. For personalized financial advice, consult a qualified financial advisor.`;
+      }
+    }
+
+    // Check for partial matches
+    for (const [key, data] of Object.entries(financialKnowledge)) {
+      if (key.includes(input) || input.includes(key)) {
+        return `${data.title}\n\n${data.content}\n\n💡 This is educational information only. For personalized financial advice, consult a qualified financial advisor.`;
+      }
+    }
+
+    // General financial guidance for other questions
+    return `I understand you're asking about "${userInput}". This is a great question about personal finance!
+
+While I can provide general educational information, remember that this is not financial advice. For personalized guidance, consider consulting with a qualified financial advisor.
+
+Some topics I can help with:
+• Investment basics (ETFs, index funds, stocks)
+• Retirement planning (IRAs, 401(k)s)
+• Budgeting and saving strategies
+• Risk management and diversification
+• Financial terminology and concepts
+
+Feel free to ask about any of these topics or try one of the quick prompts above!`;
+  };
 
   const openChat = () => {
     setChatOpen(true);
@@ -115,7 +599,7 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
           id: String(Date.now()),
           role: 'assistant',
           content:
-            'Educational only — not financial advice.\nWhat do you need help with? Ask about ETFs, IRAs, fees, budgeting, or stock analysis.',
+            '👋 Welcome to your Financial AI Assistant!\n\nI can help you with:\n• Investment basics (ETFs, index funds, stocks)\n• Retirement planning (IRAs, 401(k)s)\n• Budgeting strategies (50/30/20 rule)\n• Risk management and diversification\n• Financial terminology and concepts\n\n💡 This is educational information only. For personalized financial advice, consult a qualified financial advisor.\n\nTry a quick prompt below or ask me anything about personal finance!',
         },
       ]);
     }
@@ -133,9 +617,7 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
     setChatInput('');
   };
 
-  const handleQuickPrompt = (prompt: string) => {
-    // Don't set chatInput since we're auto-submitting
-    // Create and send the message directly
+  const handleQuickPrompt = async (prompt: string) => {
     const userMessage: ChatMsg = {
       id: String(Date.now()),
       role: 'user',
@@ -146,19 +628,23 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
     setChatSending(true);
 
     try {
-      // Simulate AI response
-      setTimeout(() => {
-        const aiResponse: ChatMsg = {
-          id: String(Date.now() + 1),
-          role: 'assistant',
-          content: `I understand you're asking about "${prompt}". This is a great question about personal finance! While I can provide general educational information, remember that this is not financial advice. For personalized guidance, consider consulting with a qualified financial advisor.`,
-        };
-        setChatMessages(prev => [...prev, aiResponse]);
-        setChatSending(false);
-        setTimeout(() => listRef.current?.scrollToEnd?.({ animated: true }), 100);
-      }, 1000);
+      const response = await generateAIResponse(prompt);
+      const aiResponse: ChatMsg = {
+        id: String(Date.now() + 1),
+        role: 'assistant',
+        content: response,
+      };
+      setChatMessages(prev => [...prev, aiResponse]);
+      setChatSending(false);
+      setTimeout(() => listRef.current?.scrollToEnd?.({ animated: true }), 100);
     } catch (error) {
       console.error('Failed to send message:', error);
+      const errorResponse: ChatMsg = {
+        id: String(Date.now() + 1),
+        role: 'assistant',
+        content: 'I apologize, but I encountered an error while processing your request. Please try again or ask a different question.',
+      };
+      setChatMessages(prev => [...prev, errorResponse]);
       setChatSending(false);
     }
   };
@@ -177,19 +663,23 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
     setChatSending(true);
 
     try {
-      // Simulate AI response
-      setTimeout(() => {
-        const aiResponse: ChatMsg = {
-          id: String(Date.now() + 1),
-          role: 'assistant',
-          content: `I understand you're asking about "${userMessage.content}". This is a great question about personal finance! While I can provide general educational information, remember that this is not financial advice. For personalized guidance, consider consulting with a qualified financial advisor.`,
-        };
-        setChatMessages(prev => [...prev, aiResponse]);
-        setChatSending(false);
-        setTimeout(() => listRef.current?.scrollToEnd?.({ animated: true }), 100);
-      }, 1000);
+      const response = await generateAIResponse(userMessage.content);
+      const aiResponse: ChatMsg = {
+        id: String(Date.now() + 1),
+        role: 'assistant',
+        content: response,
+      };
+      setChatMessages(prev => [...prev, aiResponse]);
+      setChatSending(false);
+      setTimeout(() => listRef.current?.scrollToEnd?.({ animated: true }), 100);
     } catch (error) {
       console.error('Failed to send message:', error);
+      const errorResponse: ChatMsg = {
+        id: String(Date.now() + 1),
+        role: 'assistant',
+        content: 'I apologize, but I encountered an error while processing your request. Please try again or ask a different question.',
+      };
+      setChatMessages(prev => [...prev, errorResponse]);
       setChatSending(false);
     }
   };
@@ -322,7 +812,7 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
         <View style={styles.chatModal}>
           <View style={styles.chatHeader}>
             <View style={styles.chatTitleContainer}>
-              <Icon name="lightbulb" size={20} color="#00cc99" style={styles.chatTitleIcon} />
+              <Icon name="zap" size={20} color="#00cc99" style={styles.chatTitleIcon} />
               <Text style={styles.chatTitle}>Financial Education Assistant</Text>
             </View>
             <View style={styles.chatHeaderActions}>
@@ -337,17 +827,21 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
 
           {/* Quick Prompts */}
           <View style={styles.quickPromptsContainer}>
-            <View style={styles.quickPromptsGrid}>
-              {quickPrompts.map((prompt, index) => (
+            <FlatList
+              data={quickPrompts}
+              keyExtractor={(item, index) => `prompt-${index}`}
+              renderItem={({ item }) => (
                 <TouchableOpacity
-                  key={index}
                   style={styles.quickPromptButton}
-                  onPress={() => handleQuickPrompt(prompt)}
+                  onPress={() => handleQuickPrompt(item)}
                 >
-                  <Text style={styles.quickPromptText}>{prompt}</Text>
+                  <Text style={styles.quickPromptText}>{item}</Text>
                 </TouchableOpacity>
-              ))}
-            </View>
+              )}
+              horizontal={true}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.quickPromptsContent}
+            />
           </View>
 
           {/* Chat Messages */}
@@ -370,6 +864,9 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
             )}
             style={styles.chatMessages}
             showsVerticalScrollIndicator={false}
+            showsHorizontalScrollIndicator={false}
+            horizontal={false}
+            nestedScrollEnabled={true}
           />
 
           {/* Chat Input */}
@@ -784,14 +1281,13 @@ const styles = StyleSheet.create({
   },
   chatModal: {
     position: 'absolute',
-    bottom: 0,
+    top: 0,
     left: 0,
     right: 0,
+    bottom: 0,
     backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
     padding: 20,
-    maxHeight: '70%', // Adjust as needed
+    paddingTop: 60, // Account for status bar
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.2,
@@ -802,7 +1298,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   chatTitleContainer: {
     flexDirection: 'row',
@@ -826,34 +1322,42 @@ const styles = StyleSheet.create({
     marginLeft: 10,
   },
   quickPromptsContainer: {
-    marginBottom: 8,
+    marginBottom: 10,
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5EA',
   },
-  quickPromptsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'flex-start',
-    gap: 6,
+  quickPromptsContent: {
+    paddingHorizontal: 4,
+    gap: 8,
   },
   quickPromptButton: {
-    backgroundColor: '#e0e0e0',
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 15,
-    marginBottom: 4,
+    backgroundColor: '#F0F8FF',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 18,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    minWidth: 120,
   },
   quickPromptText: {
     fontSize: 12,
-    color: '#333',
+    color: '#007AFF',
+    fontWeight: '500',
   },
   chatMessages: {
     flex: 1,
-    marginBottom: 10,
+    marginBottom: 8,
+    paddingHorizontal: 0,
   },
   chatMessage: {
-    maxWidth: '80%',
+    minWidth: '90%',
+    maxWidth: '120%',
     padding: 10,
     borderRadius: 10,
-    marginBottom: 10,
+    marginBottom: 8,
+    marginHorizontal: 4,
   },
   userMessage: {
     alignSelf: 'flex-end',
@@ -862,41 +1366,52 @@ const styles = StyleSheet.create({
   },
   assistantMessage: {
     alignSelf: 'flex-start',
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#f8f9fa',
     borderBottomLeftRadius: 0,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
   },
   chatMessageText: {
-    fontSize: 14,
+    fontSize: 15,
+    lineHeight: 20,
     color: '#fff',
   },
   userMessageText: {
     color: '#fff',
+    fontSize: 15,
+    lineHeight: 20,
   },
   assistantMessageText: {
     color: '#333',
+    fontSize: 15,
+    lineHeight: 20,
   },
   chatInputContainer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
+    borderTopColor: '#E5E5EA',
+    paddingTop: 8,
+    backgroundColor: '#fff',
   },
   chatInput: {
     flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 15,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     borderRadius: 20,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#F8F9FA',
     fontSize: 14,
     color: '#333',
-    marginRight: 10,
-    minHeight: 40,
+    marginRight: 8,
+    minHeight: 36,
     maxHeight: 100,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
   },
   chatSendButton: {
     backgroundColor: '#00cc99',
-    padding: 10,
-    borderRadius: 20,
+    padding: 8,
+    borderRadius: 18,
   },
   chatSendButtonDisabled: {
     backgroundColor: '#ccc',
