@@ -406,7 +406,7 @@ class NewsService {
 
   // Get default image for category
   private getDefaultImage(category: NewsCategory): string {
-    const defaultImages = {
+    const defaultImages: Record<string, string> = {
       [NEWS_CATEGORIES.MARKETS]: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=400&h=200&fit=crop',
       [NEWS_CATEGORIES.TECHNOLOGY]: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=400&h=200&fit=crop',
       [NEWS_CATEGORIES.CRYPTO]: 'https://images.unsplash.com/photo-1621761191319-c6fb62004040?w=400&h=200&fit=crop',

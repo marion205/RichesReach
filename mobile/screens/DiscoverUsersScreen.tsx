@@ -52,7 +52,7 @@ type User = {
   isFollowedByUser: boolean;
 };
 
-export default function DiscoverUsersScreen({ navigateTo }) {
+export default function DiscoverUsersScreen({ navigateTo }: { navigateTo: (screen: string, data?: any) => void }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
 

@@ -184,7 +184,7 @@ interface RustRecommendation {
   beginnerScore: number;
 }
 
-export default function StockScreen({ navigateTo }) {
+export default function StockScreen({ navigateTo }: { navigateTo: (screen: string, data?: any) => void }) {
   const [activeTab, setActiveTab] = useState<'browse' | 'beginner' | 'watchlist'>('browse');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStock, setSelectedStock] = useState<Stock | null>(null);

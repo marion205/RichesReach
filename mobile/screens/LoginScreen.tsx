@@ -24,7 +24,7 @@ const LOGIN = gql`
   }
 `;
 
-export default function LoginScreen({ onLogin, onNavigateToSignUp }) {
+export default function LoginScreen({ onLogin, onNavigateToSignUp }: { onLogin: (token: string) => void; onNavigateToSignUp: () => void }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -93,19 +93,19 @@ export default function LoginScreen({ onLogin, onNavigateToSignUp }) {
       // Store the token for future requests
       await AsyncStorage.setItem('token', token);
       
-      onLogin();
+              onLogin(token);
     } catch (err) {
       console.error('Login failed:', err);
       console.error('Error details:', {
-        message: err?.message,
-        graphQLErrors: err?.graphQLErrors,
-        networkError: err?.networkError,
+        message: (err as any)?.message,
+        graphQLErrors: (err as any)?.graphQLErrors,
+        networkError: (err as any)?.networkError,
         fullError: err
       });
       
       // Log the exact error message
-      if (err?.graphQLErrors) {
-        err.graphQLErrors.forEach((error, index) => {
+      if ((err as any)?.graphQLErrors) {
+        (err as any).graphQLErrors.forEach((error: any, index: number) => {
           console.error(`GraphQL Error ${index}:`, error);
         });
       }
