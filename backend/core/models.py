@@ -155,6 +155,7 @@ class Stock(models.Model):
     company_name = models.CharField(max_length=255)
     sector = models.CharField(max_length=100, blank=True, null=True)
     market_cap = models.BigIntegerField(blank=True, null=True)  # Market capitalization
+    current_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)  # Current stock price
     pe_ratio = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
     dividend_yield = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)
     debt_ratio = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)
@@ -257,18 +258,33 @@ class DiscussionComment(models.Model):
         return f"Comment by {self.user.username} on {self.discussion.title}"
 
 class Portfolio(models.Model):
+    """User portfolio with stock positions and share quantities"""
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='portfolios')
-    name = models.CharField(max_length=100, default='Main Portfolio')
-    description = models.TextField(blank=True)
-    is_public = models.BooleanField(default=False)
+    stock = models.ForeignKey(Stock, on_delete=models.CASCADE, null=True, blank=True)
+    shares = models.IntegerField(default=0)
+    average_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
-        unique_together = ['user', 'name']
-    
+        unique_together = ['user', 'stock']
+        ordering = ['-updated_at']
+
     def __str__(self):
-        return f"{self.user.username}'s {self.name}"
+        return f"{self.user.email} - {self.stock.symbol}: {self.shares} shares"
+
+    @property
+    def total_value(self):
+        """Calculate total value based on current stock price"""
+        if hasattr(self.stock, 'current_price') and self.stock.current_price:
+            return self.shares * float(self.stock.current_price)
+        return 0
+
+    @property
+    def market_value(self):
+        """Get current market value"""
+        return self.total_value
 
 class PortfolioPosition(models.Model):
     POSITION_TYPES = [

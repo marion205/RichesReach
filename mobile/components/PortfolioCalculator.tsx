@@ -8,7 +8,27 @@ import {
   ScrollView,
   Alert,
 } from 'react-native';
+import { useMutation, useApolloClient } from '@apollo/client';
+import { gql } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
+
+const SAVE_PORTFOLIO = gql`
+  mutation SavePortfolio($stockIds: [ID!]!, $sharesList: [Int!]!, $notesList: [String!], $currentPrices: [Float!]) {
+    savePortfolio(stockIds: $stockIds, sharesList: $sharesList, notesList: $notesList, currentPrices: $currentPrices) {
+      success
+      message
+      portfolio {
+        id
+        stock {
+          symbol
+          companyName
+        }
+        shares
+        totalValue
+      }
+    }
+  }
+`;
 
 interface Stock {
   id: string;
@@ -24,6 +44,7 @@ interface PortfolioCalculatorProps {
     addedAt: string;
     notes?: string;
   }>;
+  onPortfolioUpdate?: (newValue: number) => void;
 }
 
 interface PortfolioItem {
@@ -39,6 +60,9 @@ const PortfolioCalculator: React.FC<PortfolioCalculatorProps> = ({ watchlistItem
   const [portfolioItems, setPortfolioItems] = useState<PortfolioItem[]>([]);
   const [totalPortfolioValue, setTotalPortfolioValue] = useState(0);
   const [isEditing, setIsEditing] = useState(false);
+
+  const [savePortfolio, { loading: savingPortfolio }] = useMutation(SAVE_PORTFOLIO);
+  const client = useApolloClient();
 
   // Mock current prices (in real app, these would come from API)
   const mockPrices: { [key: string]: number } = {
@@ -96,6 +120,92 @@ const PortfolioCalculator: React.FC<PortfolioCalculatorProps> = ({ watchlistItem
     }
   };
 
+  const handleDoneClick = async () => {
+    try {
+      // Prepare portfolio data for saving in new format - only items with shares > 0
+      const validItems = portfolioItems.filter(item => item.shares > 0);
+      const stockIds = validItems.map(item => item.stockId);
+      const sharesList = validItems.map(item => item.shares);
+      const notesList = validItems.map(item => '');
+      
+      // Also save current prices to update Stock model
+      const currentPrices = validItems.map(item => item.currentPrice);
+
+      // Debug logging
+      console.log('🔍 Saving portfolio with data:');
+      console.log('  stockIds:', stockIds);
+      console.log('  sharesList:', sharesList);
+      console.log('  currentPrices:', currentPrices);
+      console.log('  portfolioItems:', portfolioItems);
+
+      // Validate data before sending
+      if (stockIds.length === 0) {
+        Alert.alert('Error', 'No stocks to save');
+        return;
+      }
+
+      // Filter out items with 0 shares
+      if (validItems.length === 0) {
+        Alert.alert('Error', 'Please add shares to at least one stock');
+        return;
+      }
+
+      console.log('✅ Valid items to save:', validItems.length);
+
+      const result = await savePortfolio({
+        variables: { 
+          stockIds,
+          sharesList,
+          notesList,
+          currentPrices
+        }
+      });
+
+      if (result.data?.savePortfolio?.success) {
+        // Update portfolio value in cache immediately
+        try {
+          // Calculate new portfolio value
+          const newPortfolioValue = validItems.reduce((total, item) => {
+            return total + (item.shares * item.currentPrice);
+          }, 0);
+          
+          // Use cache.modify to update the portfolio value directly
+          client.cache.modify({
+            fields: {
+              portfolioValue: () => newPortfolioValue
+            }
+          });
+          
+          console.log('✅ Portfolio value updated in cache:', newPortfolioValue);
+          
+          // Debug: Check cache state
+          const cacheData = client.readQuery({
+            query: gql`
+              query GetPortfolioValue {
+                portfolioValue
+              }
+            `
+          });
+          console.log('🔍 Cache data after update:', cacheData);
+          
+          // Notify parent component of portfolio update
+          if (onPortfolioUpdate) {
+            onPortfolioUpdate(newPortfolioValue);
+          }
+        } catch (error) {
+          console.log('⚠️ Could not update portfolio value in cache:', error);
+        }
+        
+        setIsEditing(false);
+      } else {
+        console.log('❌ Portfolio save failed:', result.data?.savePortfolio?.message);
+      }
+    } catch (error) {
+      console.error('❌ Portfolio save error:', error);
+      console.error('❌ Error details:', JSON.stringify(error, null, 2));
+    }
+  };
+
   const resetPortfolio = () => {
     Alert.alert(
       'Reset Portfolio',
@@ -137,11 +247,18 @@ const PortfolioCalculator: React.FC<PortfolioCalculatorProps> = ({ watchlistItem
         <View style={styles.headerRight}>
           <TouchableOpacity
             style={styles.editButton}
-            onPress={() => setIsEditing(!isEditing)}
+            onPress={() => {
+              if (isEditing) {
+                handleDoneClick();
+              } else {
+                setIsEditing(true);
+              }
+            }}
+            disabled={savingPortfolio}
           >
             <Icon name={isEditing ? "check" : "edit"} size={16} color="#34C759" />
             <Text style={styles.editButtonText}>
-              {isEditing ? "Done" : "Edit"}
+              {isEditing ? (savingPortfolio ? "Saving..." : "Done") : "Edit"}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.resetButton} onPress={resetPortfolio}>
@@ -231,7 +348,7 @@ const PortfolioCalculator: React.FC<PortfolioCalculatorProps> = ({ watchlistItem
 
       <View style={styles.footer}>
         <Text style={styles.footerText}>
-          💡 Tap "Edit" to input share quantities and see real-time portfolio values
+          💡 Tap "Edit" to input share quantities and see real-time portfolio values. Click "Done" to save your portfolio.
         </Text>
       </View>
     </View>

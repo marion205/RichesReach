@@ -128,15 +128,15 @@ class DiscussionCommentAdmin(admin.ModelAdmin):
 
 @admin.register(Portfolio)
 class PortfolioAdmin(admin.ModelAdmin):
-    list_display = ('name', 'user', 'is_public', 'position_count', 'created_at')
-    list_filter = ('is_public', 'created_at', 'user')
-    search_fields = ('name', 'user__username', 'description')
+    list_display = ('user', 'stock', 'shares', 'total_value', 'created_at')
+    list_filter = ('created_at', 'user')
+    search_fields = ('user__email', 'stock__symbol', 'stock__company_name')
     ordering = ('-created_at',)
     readonly_fields = ('created_at', 'updated_at')
     
-    def position_count(self, obj):
-        return obj.positions.count()
-    position_count.short_description = 'Positions'
+    def total_value(self, obj):
+        return f"${obj.total_value:.2f}"
+    total_value.short_description = 'Total Value'
 
 @admin.register(PortfolioPosition)
 class PortfolioPositionAdmin(admin.ModelAdmin):

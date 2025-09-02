@@ -1260,6 +1260,61 @@ class GenerateAIRecommendations(graphene.Mutation):
         
         return " | ".join(reasoning_parts)
 
+class SavePortfolio(graphene.Mutation):
+    """Save or update portfolio positions"""
+    class Arguments:
+        stock_ids = graphene.List(graphene.ID, required=True)
+        shares_list = graphene.List(graphene.Int, required=True)
+        notes_list = graphene.List(graphene.String, required=False)
+        current_prices = graphene.List(graphene.Float, required=False)
+    
+    success = graphene.Boolean()
+    message = graphene.String()
+    portfolio = graphene.List('core.types.PortfolioType')
+
+    def mutate(self, info, stock_ids, shares_list, notes_list=None, current_prices=None):
+        user = info.context.user
+        if user.is_anonymous:
+            return SavePortfolio(success=False, message="User not authenticated")
+        
+        try:
+            # Clear existing portfolio for this user
+            Portfolio.objects.filter(user=user).delete()
+            
+            # Create new portfolio positions and update stock prices
+            portfolio_items = []
+            for i, stock_id in enumerate(stock_ids):
+                shares = shares_list[i] if i < len(shares_list) else 0
+                notes = notes_list[i] if notes_list and i < len(notes_list) else ""
+                current_price = current_prices[i] if current_prices and i < len(current_prices) else None
+                
+                if shares > 0:  # Only save positions with shares
+                    # Update stock current price if provided
+                    if current_price:
+                        try:
+                            stock = Stock.objects.get(id=stock_id)
+                            stock.current_price = current_price
+                            stock.save()
+                        except Stock.DoesNotExist:
+                            pass
+                    
+                    portfolio_item = Portfolio.objects.create(
+                        user=user,
+                        stock_id=stock_id,
+                        shares=shares,
+                        notes=notes
+                    )
+                    portfolio_items.append(portfolio_item)
+            
+            return SavePortfolio(
+                success=True,
+                message=f"Portfolio saved with {len(portfolio_items)} positions",
+                portfolio=portfolio_items
+            )
+            
+        except Exception as e:
+            return SavePortfolio(success=False, message=f"Error saving portfolio: {str(e)}")
+
 
 # Root mutation
 class Mutation(graphene.ObjectType):
@@ -1292,6 +1347,7 @@ class Mutation(graphene.ObjectType):
     # AI Portfolio mutations
     create_income_profile = CreateIncomeProfile.Field()
     generate_ai_recommendations = GenerateAIRecommendations.Field()
+    save_portfolio = SavePortfolio.Field()
     
     # JWT Authentication
     tokenAuth = graphql_jwt.ObtainJSONWebToken.Field()
