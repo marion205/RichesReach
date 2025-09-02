@@ -40,6 +40,9 @@ class Query(graphene.ObjectType):
     # Portfolio queries
     my_portfolio = graphene.List('core.types.PortfolioType')
     portfolio_value = graphene.Float()
+    
+    # Stock price queries
+    current_stock_prices = graphene.List('core.types.StockPriceType', symbols=graphene.List(graphene.String))
 
     # Phase 3 Social Features
     watchlists = graphene.List(WatchlistType, user_id=graphene.ID())
@@ -458,3 +461,79 @@ class Query(graphene.ObjectType):
         portfolio_items = Portfolio.objects.filter(user=user)
         total_value = sum(item.total_value for item in portfolio_items)
         return total_value
+    
+    def resolve_current_stock_prices(self, info, symbols=None):
+        """Get current stock prices with enhanced real-time data"""
+        import asyncio
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        
+        if not symbols:
+            return []
+        
+        try:
+            # Use enhanced stock service for real-time prices
+            from .enhanced_stock_service import enhanced_stock_service
+            
+            # Get real-time prices asynchronously
+            async def get_prices():
+                return await enhanced_stock_service.get_multiple_prices(symbols)
+            
+            # Run async function
+            prices_data = asyncio.run(get_prices())
+            
+            prices = []
+            for symbol in symbols:
+                price_data = prices_data.get(symbol)
+                if price_data and price_data.get('price', 0) > 0:
+                    prices.append({
+                        'symbol': symbol,
+                        'current_price': price_data['price'],
+                        'change': price_data.get('change', 0.0),
+                        'change_percent': price_data.get('change_percent', '0%'),
+                        'last_updated': price_data.get('last_updated', timezone.now().isoformat()),
+                        'source': price_data.get('source', 'unknown'),
+                        'verified': price_data.get('verified', False),
+                        'api_response': price_data
+                    })
+                    
+                    # Log price source
+                    if price_data.get('verified'):
+                        logger.info(f"✅ Real-time price for {symbol}: ${price_data['price']} from {price_data.get('source')}")
+                    else:
+                        logger.info(f"💾 Using fallback price for {symbol}: ${price_data['price']}")
+                    
+                    # Update database with new price
+                    enhanced_stock_service.update_stock_price_in_database(symbol, price_data)
+                else:
+                    logger.warning(f"No price data available for {symbol}")
+            
+            return prices
+            
+        except Exception as e:
+            logger.error(f"Error getting current stock prices: {e}")
+            
+            # Fallback to database prices
+            prices = []
+            for symbol in symbols:
+                try:
+                    stock = Stock.objects.get(symbol=symbol.upper())
+                    if stock.current_price:
+                        prices.append({
+                            'symbol': symbol,
+                            'current_price': float(stock.current_price),
+                            'change': 0.0,
+                            'change_percent': '0%',
+                            'last_updated': stock.last_updated.isoformat() if stock.last_updated else timezone.now().isoformat(),
+                            'source': 'database',
+                            'verified': False,
+                            'api_response': None
+                        })
+                        logger.info(f"💾 Database fallback for {symbol}: ${stock.current_price}")
+                except Stock.DoesNotExist:
+                    logger.warning(f"Stock {symbol} not found in database")
+                except Exception as e:
+                    logger.error(f"Error getting database price for {symbol}: {e}")
+            
+            return prices

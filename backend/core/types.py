@@ -408,3 +408,15 @@ class StockRecommendationType(DjangoObjectType):
     
     def resolve_reasoning(self, info):
         return self.reasoning
+
+
+class StockPriceType(graphene.ObjectType):
+    """Type for current stock price data"""
+    symbol = graphene.String()
+    current_price = graphene.Float()
+    change = graphene.Float()
+    change_percent = graphene.String()
+    last_updated = graphene.String()
+    source = graphene.String()
+    verified = graphene.Boolean()
+    api_response = graphene.JSONString()
