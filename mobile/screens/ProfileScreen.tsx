@@ -70,6 +70,12 @@ const GET_MY_WATCHLIST = gql`
   }
 `;
 
+const GET_PORTFOLIO_VALUE = gql`
+  query GetPortfolioValue {
+    portfolioValue
+  }
+`;
+
 const TOGGLE_FOLLOW = gql`
   mutation ToggleFollow($userId: ID!) {
     toggleFollow(userId: $userId) {
@@ -112,6 +118,10 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigateTo, onLogout }) =
   const { data: watchlistData, loading: watchlistLoading } = useQuery(GET_MY_WATCHLIST, {
     skip: !meData?.me?.id,
   });
+  const { data: portfolioValueData, loading: portfolioValueLoading, refetch: refetchPortfolioValue } = useQuery(GET_PORTFOLIO_VALUE, {
+    notifyOnNetworkStatusChange: true,
+    fetchPolicy: 'cache-and-network'
+  });
   const [toggleFollow] = useMutation(TOGGLE_FOLLOW);
   const [refreshing, setRefreshing] = useState(false);
   const client = useApolloClient();
@@ -147,7 +157,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigateTo, onLogout }) =
       // Refetch user, portfolio, and watchlist data
       await Promise.all([
         client.refetchQueries({
-          include: [GET_ME, GET_USER_PORTFOLIO, GET_MY_WATCHLIST]
+          include: [GET_ME, GET_USER_PORTFOLIO, GET_MY_WATCHLIST, GET_PORTFOLIO_VALUE]
         })
       ]);
     } catch (error) {
@@ -157,15 +167,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigateTo, onLogout }) =
     }
   };
 
-  // Calculate portfolio value from watchlist stocks (simulating portfolio value)
-  const portfolioValue = watchlistData?.myWatchlist?.reduce((total: number, watchlistItem: any) => {
-    // Simulate portfolio value based on watchlist stocks
-    // In a real app, this would use actual shares and current prices
-    const stockValue = watchlistItem.stock.currentPrice || 0;
-    // Simulate shares based on stock price (higher priced stocks get fewer shares)
-    const simulatedShares = stockValue > 100 ? 10 : stockValue > 50 ? 25 : 50;
-    return total + (stockValue * simulatedShares);
-  }, 0) || 0;
+  // Get real portfolio value from saved portfolio data
+  const portfolioValue = portfolioValueData?.portfolioValue || 0;
 
   const investmentGoals = portfolioData?.portfolios?.length || 0;
 
@@ -345,7 +348,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigateTo, onLogout }) =
               </Text>
             )}
             <Text style={styles.statCardSubtitle}>
-              {portfolioValue > 0 ? 'Based on your watchlist stocks' : 'Add stocks to watchlist to see value'}
+              {portfolioValue > 0 ? 'Based on your saved portfolio' : 'Use Portfolio Calculator to add shares'}
             </Text>
             <View style={styles.statCardArrow}>
               <Icon name="chevron-right" size={16} color="#C7C7CC" />

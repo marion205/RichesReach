@@ -139,6 +139,8 @@ GRAPHENE = {
     "MIDDLEWARE": [
         "graphql_jwt.middleware.JSONWebTokenMiddleware"
     ],
+    "SCHEMA_INDEPTH_LIMIT": 20,
+    "SCHEMA_OUTPUT": "schema.json",
 }
 
 AUTH_USER_MODEL = "core.User"

@@ -45,6 +45,18 @@ class NewsService {
     sources: [],
     keywords: [],
   };
+  
+  // Cache for news articles to reduce API calls
+  private newsCache: {
+    [category: string]: {
+      articles: NewsArticle[];
+      timestamp: number;
+      expiresAt: number;
+    };
+  } = {};
+  
+  // Cache duration: 30 minutes (1800000 ms)
+  private readonly CACHE_DURATION = 30 * 60 * 1000;
 
   constructor() {
     this.loadSavedArticles();
@@ -93,9 +105,92 @@ class NewsService {
     }
   }
 
-  // Get real-time news from API
+  // Check if cache is valid for a category
+  private isCacheValid(category: NewsCategory): boolean {
+    const cached = this.newsCache[category];
+    if (!cached) return false;
+    
+    const now = Date.now();
+    return now < cached.expiresAt;
+  }
+  
+  // Get cached news for a category
+  private getCachedNews(category: NewsCategory): NewsArticle[] | null {
+    if (this.isCacheValid(category)) {
+      console.log(`📰 Using cached news for ${category} (${this.newsCache[category].articles.length} articles)`);
+      return this.newsCache[category].articles;
+    }
+    return null;
+  }
+  
+  // Cache news articles for a category
+  private cacheNews(category: NewsCategory, articles: NewsArticle[]): void {
+    const now = Date.now();
+    this.newsCache[category] = {
+      articles,
+      timestamp: now,
+      expiresAt: now + this.CACHE_DURATION
+    };
+    console.log(`💾 Cached ${articles.length} articles for ${category} (expires in ${this.CACHE_DURATION / 60000} minutes)`);
+  }
+  
+  // Clear cache for a specific category or all categories
+  clearCache(category?: NewsCategory): void {
+    if (category) {
+      delete this.newsCache[category];
+      console.log(`🗑️ Cleared cache for ${category}`);
+    } else {
+      this.newsCache = {};
+      console.log(`🗑️ Cleared all news cache`);
+    }
+  }
+  
+  // Force refresh by clearing cache and fetching fresh data
+  async forceRefresh(category: NewsCategory = NEWS_CATEGORIES.ALL): Promise<NewsArticle[]> {
+    this.clearCache(category);
+    return this.getRealTimeNews(category);
+  }
+  
+  // Get cache status for debugging
+  getCacheStatus(): { [category: string]: { timestamp: number; expiresAt: number; articleCount: number; isValid: boolean } } {
+    const status: { [category: string]: { timestamp: number; expiresAt: number; articleCount: number; isValid: boolean } } = {};
+    
+    Object.keys(this.newsCache).forEach(category => {
+      const cached = this.newsCache[category];
+      const now = Date.now();
+      status[category] = {
+        timestamp: cached.timestamp,
+        expiresAt: cached.expiresAt,
+        articleCount: cached.articles.length,
+        isValid: now < cached.expiresAt
+      };
+    });
+    
+    return status;
+  }
+  
+  // Check if we're approaching rate limit (for user feedback)
+  isApproachingRateLimit(): boolean {
+    // This is a simple heuristic - in a real app you'd track actual API calls
+    const now = Date.now();
+    const recentCalls = Object.values(this.newsCache).filter(cached => 
+      now - cached.timestamp < 5 * 60 * 1000 // Last 5 minutes
+    ).length;
+    
+    return recentCalls >= 3; // If we've made 3+ calls in 5 minutes, we might be approaching limit
+  }
+
+  // Get real-time news from API with caching
   async getRealTimeNews(category: NewsCategory = NEWS_CATEGORIES.ALL): Promise<NewsArticle[]> {
+    // Check cache first
+    const cachedNews = this.getCachedNews(category);
+    if (cachedNews) {
+      return cachedNews;
+    }
+    
     try {
+      console.log(`🌐 Fetching fresh news for ${category} from NewsAPI...`);
+      
       // Build query parameters
       let query = 'finance OR investing OR stocks OR markets OR economy';
       let categoryParam = '';
@@ -131,6 +226,21 @@ class NewsService {
       );
       
       if (!response.ok) {
+        if (response.status === 429) {
+          console.warn('⚠️ NewsAPI rate limit reached (429), using cached data if available');
+          // Try to return any cached data, even if expired
+          const expiredCache = this.newsCache[category];
+          if (expiredCache && expiredCache.articles.length > 0) {
+            console.log(`📰 Returning expired cache for ${category} due to rate limit`);
+            return expiredCache.articles;
+          }
+          
+          // If no cache available, return mock data instead of throwing error
+          console.log(`📰 No cache available, returning mock data for ${category}`);
+          return this.generateMockNews(category);
+        }
+        
+        // For other errors, throw as usual
         throw new Error(`NewsAPI error: ${response.status}`);
       }
       
@@ -151,10 +261,21 @@ class NewsService {
         isSaved: false,
       }));
       
+      // Cache the fresh articles
+      this.cacheNews(category, articles);
+      
       return articles;
     } catch (error) {
       console.error('Error fetching real news:', error);
-      // Fallback to mock data if API fails
+      
+      // Try to return expired cache as last resort
+      const expiredCache = this.newsCache[category];
+      if (expiredCache && expiredCache.articles.length > 0) {
+        console.log(`📰 Returning expired cache for ${category} as fallback`);
+        return expiredCache.articles;
+      }
+      
+      // Fallback to mock data if no cache available
       return this.generateMockNews(category);
     }
   }

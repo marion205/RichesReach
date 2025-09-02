@@ -36,6 +36,10 @@ class Query(graphene.ObjectType):
     
     # AI Portfolio queries
     ai_portfolio_recommendations = graphene.List('core.types.AIPortfolioRecommendationType', userId=graphene.ID(required=True))
+    
+    # Portfolio queries
+    my_portfolio = graphene.List('core.types.PortfolioType')
+    portfolio_value = graphene.Float()
 
     # Phase 3 Social Features
     watchlists = graphene.List(WatchlistType, user_id=graphene.ID())
@@ -437,3 +441,20 @@ class Query(graphene.ObjectType):
         
         from .models import AIPortfolioRecommendation
         return AIPortfolioRecommendation.objects.filter(user=user).order_by('-created_at')
+
+    def resolve_my_portfolio(self, info):
+        """Get current user's portfolio"""
+        user = info.context.user
+        if user.is_anonymous:
+            return []
+        return Portfolio.objects.filter(user=user)
+
+    def resolve_portfolio_value(self, info):
+        """Get current user's total portfolio value"""
+        user = info.context.user
+        if user.is_anonymous:
+            return 0
+        
+        portfolio_items = Portfolio.objects.filter(user=user)
+        total_value = sum(item.total_value for item in portfolio_items)
+        return total_value

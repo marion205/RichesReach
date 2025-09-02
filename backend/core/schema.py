@@ -3,5 +3,11 @@ import graphene
 import graphql_jwt
 from .queries import Query
 from .mutations import Mutation
+from .types import *  # Ensure all types are imported
 
-schema = graphene.Schema(query=Query, mutation=Mutation)
+# Create schema with explicit introspection
+schema = graphene.Schema(
+    query=Query, 
+    mutation=Mutation,
+    types=[]  # Let Graphene auto-discover types
+)

@@ -197,38 +197,19 @@ class DiscussionCommentType(graphene.ObjectType):
     def resolve_like_count(self, info):
         return self.likes.count()
 
-class PortfolioType(graphene.ObjectType):
-    id = graphene.ID()
-    name = graphene.String()
-    description = graphene.String()
-    is_public = graphene.Boolean()
-    created_at = graphene.DateTime()
-    updated_at = graphene.DateTime()
-    user = graphene.Field('core.types.UserType')
-    positions = graphene.List(lambda: PortfolioPositionType)
-    position_count = graphene.Int()
-    total_value = graphene.Decimal()
-    total_return = graphene.Decimal()
-    total_return_percent = graphene.Decimal()
-    
-    def resolve_positions(self, info):
-        return self.positions.all()
-    
-    def resolve_position_count(self, info):
-        return self.positions.count()
-    
+class PortfolioType(DjangoObjectType):
+    class Meta:
+        model = Portfolio
+        fields = '__all__'
+
+    total_value = graphene.Float()
+    market_value = graphene.Float()
+
     def resolve_total_value(self, info):
-        return sum(position.current_value for position in self.positions.all())
-    
-    def resolve_total_return(self, info):
-        return sum(position.total_return_dollars for position in self.positions.all())
-    
-    def resolve_total_return_percent(self, info):
-        total_value = sum(position.current_value for position in self.positions.all())
-        if total_value > 0:
-            total_return = sum(position.total_return_dollars for position in self.positions.all())
-            return (total_return / total_value) * 100
-        return 0
+        return self.total_value
+
+    def resolve_market_value(self, info):
+        return self.market_value
 
 class PortfolioPositionType(graphene.ObjectType):
     id = graphene.ID()
