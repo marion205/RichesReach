@@ -14,6 +14,7 @@ import asyncio
 import aiohttp
 from dataclasses import dataclass
 from enum import Enum
+from .models import Stock
 
 logger = logging.getLogger(__name__)
 
@@ -464,3 +465,493 @@ def refresh_stock_cache(symbols: List[str] = None) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Cache refresh failed: {e}")
         return {'success': False, 'error': str(e)}
+
+# Initialize services
+advanced_stock_service = AdvancedStockService()
+stock_cache = StockDataCache()
+
+class AlphaVantageService:
+    """Service for fetching stock data from Alpha Vantage API"""
+    
+    def __init__(self):
+        self.api_key = settings.ALPHA_VANTAGE_API_KEY
+        self.base_url = "https://www.alphavantage.co/query"
+        self.session = requests.Session()
+        self.session.headers.update({
+            'User-Agent': 'RichesReach-Django/2.0'
+        })
+    
+    def search_and_sync_stocks(self, search_query: str) -> List[Stock]:
+        """Search for stocks and sync them to the database"""
+        if not self.api_key:
+            logger.warning("Alpha Vantage API key not configured")
+            return []
+        
+        try:
+            # Search for stocks
+            params = {
+                'function': 'SYMBOL_SEARCH',
+                'keywords': search_query,
+                'apikey': self.api_key
+            }
+            
+            response = self.session.get(self.base_url, params=params, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            
+            if 'Error Message' in data:
+                logger.error(f"Alpha Vantage API error: {data['Error Message']}")
+                return []
+            
+            if 'bestMatches' not in data:
+                logger.warning("No matches found in Alpha Vantage response")
+                return []
+            
+            stocks = []
+            for match in data['bestMatches'][:10]:  # Limit to 10 results
+                try:
+                    # Create or update stock in database
+                    stock, created = Stock.objects.get_or_create(
+                        symbol=match['1. symbol'],
+                        defaults={
+                            'company_name': match['2. name'],
+                            'sector': match['4. region'],
+                            'market_cap': None,  # Will be updated with overview
+                            'pe_ratio': None,
+                            'dividend_yield': None,
+                            'beginner_friendly_score': 50  # Default score
+                        }
+                    )
+                    
+                    if created:
+                        logger.info(f"Created new stock: {stock.symbol}")
+                    
+                    # Get additional data for the stock
+                    self._update_stock_overview(stock)
+                    stocks.append(stock)
+                    
+                except Exception as e:
+                    logger.error(f"Error processing stock {match.get('1. symbol', 'Unknown')}: {e}")
+                    continue
+            
+            return stocks
+            
+        except Exception as e:
+            logger.error(f"Error searching Alpha Vantage: {e}")
+            return []
+    
+    def _update_stock_overview(self, stock: Stock) -> bool:
+        """Update stock with company overview data"""
+        if not self.api_key:
+            return False
+        
+        try:
+            params = {
+                'function': 'OVERVIEW',
+                'symbol': stock.symbol,
+                'apikey': self.api_key
+            }
+            
+            response = self.session.get(self.base_url, params=params, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            
+            if 'Error Message' in data:
+                logger.error(f"Alpha Vantage overview error for {stock.symbol}: {data['Error Message']}")
+                return False
+            
+            # Update stock with overview data
+            if 'MarketCapitalization' in data and data['MarketCapitalization'] != 'None':
+                try:
+                    stock.market_cap = int(data['MarketCapitalization'])
+                except (ValueError, TypeError):
+                    pass
+            
+            if 'PERatio' in data and data['PERatio'] != 'None':
+                try:
+                    stock.pe_ratio = float(data['PERatio'])
+                except (ValueError, TypeError):
+                    pass
+            
+            if 'DividendYield' in data and data['DividendYield'] != 'None':
+                try:
+                    stock.dividend_yield = float(data['DividendYield'])
+                except (ValueError, TypeError):
+                    pass
+            
+            # Calculate beginner-friendly score
+            stock.beginner_friendly_score = self._calculate_beginner_score(data)
+            
+            stock.save()
+            logger.info(f"Updated stock overview for {stock.symbol}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error updating stock overview for {stock.symbol}: {e}")
+            return False
+    
+    def _calculate_beginner_score(self, overview_data: dict) -> int:
+        """Calculate beginner-friendly score based on company data"""
+        score = 60  # Higher base score for more stocks to qualify
+        
+        try:
+            # Market cap scoring (more generous)
+            if 'MarketCapitalization' in overview_data and overview_data['MarketCapitalization'] != 'None':
+                market_cap = int(overview_data['MarketCapitalization'])
+                if market_cap > 100000000000:  # >$100B
+                    score += 25
+                elif market_cap > 10000000000:  # >$10B
+                    score += 20
+                elif market_cap > 1000000000:  # >$1B
+                    score += 15
+            
+            # PE ratio scoring (more generous)
+            if 'PERatio' in overview_data and overview_data['PERatio'] != 'None':
+                pe_ratio = float(overview_data['PERatio'])
+                if 10 <= pe_ratio <= 25:
+                    score += 20
+                elif 5 <= pe_ratio <= 30:
+                    score += 15
+                elif pe_ratio < 50:  # Accept higher PE ratios
+                    score += 10
+            
+            # Dividend yield scoring (more generous)
+            if 'DividendYield' in overview_data and overview_data['DividendYield'] != 'None':
+                dividend_yield = float(overview_data['DividendYield'])
+                if 2 <= dividend_yield <= 6:
+                    score += 15
+                elif dividend_yield > 0:
+                    score += 10
+            
+            # Sector scoring (more sectors considered stable)
+            if 'Sector' in overview_data:
+                stable_sectors = ['Technology', 'Healthcare', 'Consumer Defensive', 'Utilities', 'Financial Services', 'Consumer Cyclical']
+                if overview_data['Sector'] in stable_sectors:
+                    score += 10
+            
+            # Company name recognition bonus (well-known companies are better for beginners)
+            if 'Name' in overview_data:
+                well_known = ['Apple', 'Microsoft', 'Amazon', 'Google', 'Tesla', 'Johnson & Johnson', 'Procter & Gamble']
+                if any(name in overview_data['Name'] for name in well_known):
+                    score += 10
+            
+        except Exception as e:
+            logger.error(f"Error calculating beginner score: {e}")
+        
+        return min(100, max(0, score))  # Ensure score is between 0-100
+    
+    def get_stock_quote(self, symbol: str) -> Optional[dict]:
+        """Get real-time stock quote"""
+        if not self.api_key:
+            return None
+        
+        try:
+            params = {
+                'function': 'GLOBAL_QUOTE',
+                'symbol': symbol,
+                'apikey': self.api_key
+            }
+            
+            response = self.session.get(self.base_url, params=params, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            
+            if 'Error Message' in data:
+                logger.error(f"Alpha Vantage quote error for {symbol}: {data['Error Message']}")
+                return None
+            
+            if 'Global Quote' not in data:
+                return None
+            
+            quote = data['Global Quote']
+            return {
+                'symbol': quote.get('01. symbol'),
+                'price': float(quote.get('05. price', 0)),
+                'change': float(quote.get('09. change', 0)),
+                'change_percent': quote.get('10. change percent', '0%'),
+                'volume': int(quote.get('06. volume', 0)),
+                'high': float(quote.get('03. high', 0)),
+                'low': float(quote.get('04. low', 0)),
+                'open': float(quote.get('02. open', 0)),
+                'previous_close': float(quote.get('08. previous close', 0))
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting stock quote for {symbol}: {e}")
+            return None
+    
+    def get_historical_data(self, symbol: str, interval: str = 'daily') -> Optional[dict]:
+        """Get historical stock data"""
+        if not self.api_key:
+            return None
+        
+        try:
+            params = {
+                'function': 'TIME_SERIES_DAILY',
+                'symbol': symbol,
+                'apikey': self.api_key,
+                'outputsize': 'compact'  # Last 100 data points
+            }
+            
+            response = self.session.get(self.base_url, params=params, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            
+            if 'Error Message' in data:
+                logger.error(f"Alpha Vantage historical error for {symbol}: {data['Error Message']}")
+                return None
+            
+            if 'Time Series (Daily)' not in data:
+                return None
+            
+            time_series = data['Time Series (Daily)']
+            historical_data = []
+            
+            for date, values in list(time_series.items())[:30]:  # Last 30 days
+                historical_data.append({
+                    'date': date,
+                    'open': float(values['1. open']),
+                    'high': float(values['2. high']),
+                    'low': float(values['3. low']),
+                    'close': float(values['4. close']),
+                    'volume': int(values['5. volume'])
+                })
+            
+            return {
+                'symbol': symbol,
+                'data': historical_data
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting historical data for {symbol}: {e}")
+            return None
+    
+    def analyze_stock_with_rust(self, symbol: str, include_technical: bool = True, include_fundamental: bool = True) -> Optional[dict]:
+        """Analyze stock using Rust-based algorithms (placeholder for now)"""
+        try:
+            # Get current stock data
+            quote = self.get_stock_quote(symbol)
+            if not quote:
+                return None
+            
+            # Get company overview
+            stock = Stock.objects.filter(symbol=symbol).first()
+            if not stock:
+                return None
+            
+            # Basic analysis based on available data
+            analysis = {
+                'symbol': symbol,
+                'current_price': quote['price'],
+                'price_change': quote['change'],
+                'price_change_percent': quote['change_percent'],
+                'volume': quote['volume'],
+                'market_cap': stock.market_cap,
+                'pe_ratio': stock.pe_ratio,
+                'dividend_yield': stock.dividend_yield,
+                'beginner_friendly_score': stock.beginner_friendly_score,
+                'analysis_date': timezone.now().isoformat(),
+                'recommendation': self._generate_recommendation(stock, quote),
+                'risk_level': self._calculate_risk_level(stock, quote),
+                'growth_potential': self._calculate_growth_potential(stock, quote)
+            }
+            
+            # Add technical indicators if requested
+            if include_technical:
+                analysis['technicalIndicators'] = self._get_technical_indicators(symbol, quote)
+            
+            # Add fundamental analysis if requested
+            if include_fundamental:
+                analysis['fundamentalAnalysis'] = self._get_fundamental_analysis(stock, quote)
+            
+            return analysis
+            
+        except Exception as e:
+            logger.error(f"Error analyzing stock {symbol}: {e}")
+            return None
+    
+    def _generate_recommendation(self, stock: Stock, quote: dict) -> str:
+        """Generate investment recommendation based on stock data"""
+        try:
+            score = stock.beginner_friendly_score
+            
+            if score >= 80:
+                return "Strong Buy - Excellent for beginners"
+            elif score >= 70:
+                return "Buy - Good for beginners"
+            elif score >= 60:
+                return "Hold - Moderate risk"
+            elif score >= 50:
+                return "Hold - Higher risk"
+            else:
+                return "Research Required - High risk"
+                
+        except Exception as e:
+            logger.error(f"Error generating recommendation: {e}")
+            return "Research Required"
+    
+    def _calculate_risk_level(self, stock: Stock, quote: dict) -> str:
+        """Calculate risk level based on stock metrics"""
+        try:
+            risk_score = 0
+            
+            # Market cap risk
+            if stock.market_cap and stock.market_cap < 1000000000:  # <$1B
+                risk_score += 3
+            elif stock.market_cap and stock.market_cap < 10000000000:  # <$10B
+                risk_score += 2
+            else:
+                risk_score += 1
+            
+            # PE ratio risk
+            if stock.pe_ratio and stock.pe_ratio > 30:
+                risk_score += 2
+            elif stock.pe_ratio and stock.pe_ratio < 5:
+                risk_score += 1
+            
+            # Volatility risk (price change)
+            if quote['change_percent'] and abs(float(quote['change_percent'].replace('%', ''))) > 5:
+                risk_score += 2
+            
+            if risk_score <= 2:
+                return "Low"
+            elif risk_score <= 4:
+                return "Medium"
+            else:
+                return "High"
+                
+        except Exception as e:
+            logger.error(f"Error calculating risk level: {e}")
+            return "Medium"
+    
+    def _calculate_growth_potential(self, stock: Stock, quote: dict) -> str:
+        """Calculate growth potential based on stock metrics"""
+        try:
+            if stock.pe_ratio and stock.pe_ratio < 15:
+                return "High - Undervalued"
+            elif stock.pe_ratio and stock.pe_ratio < 25:
+                return "Medium - Fairly valued"
+            elif stock.market_cap and stock.market_cap < 10000000000:  # <$10B
+                return "High - Small cap growth potential"
+            else:
+                return "Medium - Stable growth"
+                
+        except Exception as e:
+            logger.error(f"Error calculating growth potential: {e}")
+            return "Medium"
+    
+    def _get_technical_indicators(self, symbol: str, quote: dict) -> dict:
+        """Get basic technical indicators for a stock"""
+        try:
+            # For now, return placeholder technical indicators
+            # In a real implementation, these would be calculated from historical data
+            return {
+                'rsi': 50.0,  # Relative Strength Index
+                'macd': 0.0,  # MACD
+                'macdSignal': 0.0,  # MACD Signal
+                'macdHistogram': 0.0,  # MACD Histogram
+                'sma20': quote.get('price', 0),  # 20-day Simple Moving Average
+                'sma50': quote.get('price', 0),  # 50-day Simple Moving Average
+                'ema12': quote.get('price', 0),  # 12-day Exponential Moving Average
+                'ema26': quote.get('price', 0),  # 26-day Exponential Moving Average
+                'bollingerUpper': quote.get('price', 0) * 1.02,  # Bollinger Upper Band
+                'bollingerLower': quote.get('price', 0) * 0.98,  # Bollinger Lower Band
+                'bollingerMiddle': quote.get('price', 0)  # Bollinger Middle Band
+            }
+        except Exception as e:
+            logger.error(f"Error getting technical indicators for {symbol}: {e}")
+            return {}
+    
+    def _get_fundamental_analysis(self, stock: Stock, quote: dict) -> dict:
+        """Get fundamental analysis for a stock"""
+        try:
+            # Calculate scores based on available data
+            valuation_score = 50
+            growth_score = 50
+            stability_score = 50
+            dividend_score = 50
+            debt_score = 50
+            
+            # Valuation scoring
+            if stock.pe_ratio:
+                if 10 <= stock.pe_ratio <= 25:
+                    valuation_score = 80
+                elif 5 <= stock.pe_ratio <= 30:
+                    valuation_score = 70
+                elif stock.pe_ratio < 5:
+                    valuation_score = 60
+                else:
+                    valuation_score = 40
+            
+            # Growth scoring (market cap based)
+            if stock.market_cap:
+                if stock.market_cap > 100000000000:  # >$100B
+                    growth_score = 60  # Large caps are more stable
+                elif stock.market_cap > 10000000000:  # >$10B
+                    growth_score = 70  # Mid caps have good growth potential
+                else:
+                    growth_score = 80  # Small caps have highest growth potential
+            
+            # Stability scoring (sector based)
+            if stock.sector:
+                stable_sectors = ['Utilities', 'Consumer Defensive', 'Healthcare']
+                if stock.sector in stable_sectors:
+                    stability_score = 80
+                else:
+                    stability_score = 60
+            
+            # Dividend scoring
+            if stock.dividend_yield:
+                if 2 <= stock.dividend_yield <= 6:
+                    dividend_score = 80
+                elif stock.dividend_yield > 0:
+                    dividend_score = 70
+                else:
+                    dividend_score = 50
+            
+            return {
+                'valuationScore': valuation_score,
+                'growthScore': growth_score,
+                'stabilityScore': stability_score,
+                'dividendScore': dividend_score,
+                'debtScore': debt_score
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting fundamental analysis: {e}")
+            return {
+                'valuationScore': 50,
+                'growthScore': 50,
+                'stabilityScore': 50,
+                'dividendScore': 50,
+                'debtScore': 50
+            }
+    
+    def get_rust_recommendations(self) -> List[dict]:
+        """Get beginner-friendly stock recommendations"""
+        try:
+            # Get stocks with moderate beginner-friendly scores
+            beginner_stocks = Stock.objects.filter(
+                beginner_friendly_score__gte=65
+            ).order_by('-beginner_friendly_score')[:10]
+            
+            recommendations = []
+            for stock in beginner_stocks:
+                try:
+                    quote = self.get_stock_quote(stock.symbol)
+                    if quote:
+                        recommendations.append({
+                            'symbol': stock.symbol,
+                            'reason': f"High beginner score ({stock.beginner_friendly_score}) with stable fundamentals",
+                            'riskLevel': self._calculate_risk_level(stock, quote),
+                            'beginnerScore': stock.beginner_friendly_score
+                        })
+                except Exception as e:
+                    logger.error(f"Error processing recommendation for {stock.symbol}: {e}")
+                    continue
+            
+            return recommendations
+            
+        except Exception as e:
+            logger.error(f"Error getting rust recommendations: {e}")
+            return []

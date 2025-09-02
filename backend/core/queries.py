@@ -198,8 +198,8 @@ class Query(graphene.ObjectType):
     def resolve_beginner_friendly_stocks(self, info):
         """Get stocks suitable for beginner investors (under $30k/year)"""
         return Stock.objects.filter(
-            beginner_friendly_score__gte=80,  # High beginner-friendly score
-            market_cap__gte=100000000000,    # Large cap companies (>$100B)
+            beginner_friendly_score__gte=65,  # Moderate beginner-friendly score
+            market_cap__gte=10000000000,     # Mid to large cap companies (>$10B)
         ).order_by('-beginner_friendly_score')[:20]
     
     def resolve_rust_stock_analysis(self, info, symbol):
