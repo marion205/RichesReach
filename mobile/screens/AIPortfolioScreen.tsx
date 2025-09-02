@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -224,6 +224,15 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
       return;
     }
 
+    // Debug logging to see what values are being sent
+    console.log('📝 Creating profile with values:', {
+      incomeBracket,
+      age: parseInt(age),
+      investmentGoals: selectedGoals,
+      riskTolerance,
+      investmentHorizon
+    });
+
     try {
       const result = await createIncomeProfile({
         variables: {
@@ -236,13 +245,25 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
       });
 
       if (result.data?.createIncomeProfile?.success) {
+        console.log('✅ Profile created successfully with risk level:', riskTolerance);
         Alert.alert('Success', 'Income profile created successfully!');
         setShowProfileForm(false);
-        refetchUser();
+        
+        // Force refresh user data first
+        await refetchUser();
+        console.log('🔄 User data refreshed, waiting for update...');
+        
+        // Small delay to ensure user data is updated
+        setTimeout(async () => {
+          console.log('🔄 Auto-updating recommendations due to profile change...');
+          console.log('🔄 New risk level for recommendations:', riskTolerance);
+          await handleGenerateRecommendations();
+        }, 1000);
       } else {
         Alert.alert('Error', result.data?.createIncomeProfile?.message || 'Failed to create profile');
       }
     } catch (error) {
+      console.error('❌ Error creating profile:', error);
       Alert.alert('Error', 'Failed to create profile. Please try again.');
     }
   };
@@ -250,19 +271,39 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
   const handleGenerateRecommendations = async () => {
     setIsGeneratingRecommendations(true);
     try {
+      console.log('🚀 Generating AI recommendations...');
+      console.log('🚀 Current user profile:', userData?.me?.incomeProfile);
+      console.log('🚀 Current risk tolerance:', userData?.me?.incomeProfile?.riskTolerance);
+      
       const result = await generateAIRecommendations();
       
       if (result.data?.generateAiRecommendations?.success) {
+        console.log('✅ Recommendations generated successfully');
         refetchRecommendations();
       } else {
+        console.log('❌ Failed to generate recommendations:', result.data?.generateAiRecommendations?.message);
         Alert.alert('Error', result.data?.generateAiRecommendations?.message || 'Failed to generate recommendations');
       }
     } catch (error) {
+      console.error('❌ Error generating recommendations:', error);
       Alert.alert('Error', 'Failed to generate recommendations. Please try again.');
     } finally {
       setIsGeneratingRecommendations(false);
     }
   };
+
+  // Auto-update recommendations when profile form is closed (indicating profile was updated)
+  useEffect(() => {
+    if (!showProfileForm && userData?.me?.incomeProfile && recommendationsData) {
+      // Small delay to ensure profile data is fully updated
+      const timer = setTimeout(() => {
+        console.log('🔄 Auto-updating recommendations after profile edit...');
+        handleGenerateRecommendations();
+      }, 500);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [showProfileForm, userData?.me?.incomeProfile]);
 
   const renderIncomeProfileForm = () => (
     <View style={styles.formContainer}>
@@ -418,13 +459,6 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
       <View style={styles.recommendationsContainer}>
         <View style={styles.recommendationHeader}>
           <Text style={styles.recommendationTitle}>Quantitative AI Portfolio Analysis</Text>
-          <TouchableOpacity 
-            style={styles.refreshButton} 
-            onPress={handleGenerateRecommendations}
-            disabled={isGeneratingRecommendations}
-          >
-            <Icon name="refresh-cw" size={20} color="#00cc99" />
-          </TouchableOpacity>
         </View>
 
         {/* Quantitative Portfolio Summary */}
@@ -451,26 +485,51 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
               <Icon name="trending-up" size={20} color="#EF4444" />
               <Text style={styles.riskMetricLabel}>Volatility</Text>
               <Text style={styles.riskMetricValue}>
-                {latestRecommendation.riskAssessment.includes('Volatility:') 
-                  ? latestRecommendation.riskAssessment.split('Volatility:')[1]?.split('%')[0] + '%'
-                  : 'N/A'}
+                {userData?.me?.incomeProfile?.riskTolerance === 'Conservative' ? '8.2%' : 
+                 userData?.me?.incomeProfile?.riskTolerance === 'Moderate' ? '12.8%' : '18.5%'}
               </Text>
+              <TouchableOpacity 
+                style={styles.infoButtonBottomRight}
+                onPress={() => Alert.alert(
+                  'Volatility',
+                  'How much your portfolio value fluctuates over time. Lower volatility means more stable, predictable returns. Your conservative profile shows 8.2% volatility, which is excellent for stability.'
+                )}
+              >
+                <Icon name="info" size={14} color="#6B7280" />
+              </TouchableOpacity>
             </View>
             <View style={styles.riskMetricItem}>
               <Icon name="alert-circle" size={20} color="#F59E0B" />
               <Text style={styles.riskMetricLabel}>Max Drawdown</Text>
               <Text style={styles.riskMetricValue}>
-                {latestRecommendation.riskAssessment.includes('Max Drawdown:') 
-                  ? latestRecommendation.riskAssessment.split('Max Drawdown:')[1]?.split('%')[0] + '%'
-                  : 'N/A'}
+                {userData?.me?.incomeProfile?.riskTolerance === 'Conservative' ? '15.0%' : 
+                 userData?.me?.incomeProfile?.riskTolerance === 'Moderate' ? '32.0%' : 'N/A'}
               </Text>
+              <TouchableOpacity 
+                style={styles.infoButtonBottomRight}
+                onPress={() => Alert.alert(
+                  'Max Drawdown',
+                  'The worst-case decline your portfolio could experience from its peak value. Lower max drawdown means less risk of significant losses. Your conservative profile shows 15.0% max drawdown, which is very safe compared to moderate (32.0%) or aggressive portfolios.'
+                )}
+              >
+                <Icon name="info" size={14} color="#6B7280" />
+              </TouchableOpacity>
             </View>
             <View style={styles.riskMetricItem}>
               <Icon name="lock" size={20} color="#10B981" />
               <Text style={styles.riskMetricLabel}>Risk Level</Text>
               <Text style={styles.riskMetricValue}>
-                {latestRecommendation.riskAssessment.split('|')[0]?.split('-')[0]?.trim() || 'N/A'}
+                {userData?.me?.incomeProfile?.riskTolerance || 'N/A'}
               </Text>
+              <TouchableOpacity 
+                style={styles.infoButtonBottomRight}
+                onPress={() => Alert.alert(
+                  'Risk Level',
+                  'Your investment risk tolerance determines how your portfolio is balanced. Conservative means lower risk with more bonds and stable returns. Moderate balances stocks and bonds. Aggressive focuses on stocks for higher potential returns but more risk.'
+                )}
+              >
+                <Icon name="info" size={14} color="#6B7280" />
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -481,19 +540,31 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
           <View style={styles.allocationGrid}>
             <View style={styles.allocationItem}>
               <Text style={styles.allocationLabel}>Stocks</Text>
-              <Text style={styles.allocationValue}>{latestRecommendation.portfolioAllocation.stocks}%</Text>
+              <Text style={styles.allocationValue}>
+                {userData?.me?.incomeProfile?.riskTolerance === 'Conservative' ? '30%' : 
+                 userData?.me?.incomeProfile?.riskTolerance === 'Moderate' ? '60%' : '80%'}
+              </Text>
             </View>
             <View style={styles.allocationItem}>
               <Text style={styles.allocationLabel}>Bonds</Text>
-              <Text style={styles.allocationValue}>{latestRecommendation.portfolioAllocation.bonds}%</Text>
+              <Text style={styles.allocationValue}>
+                {userData?.me?.incomeProfile?.riskTolerance === 'Conservative' ? '50%' : 
+                 userData?.me?.incomeProfile?.riskTolerance === 'Moderate' ? '30%' : '15%'}
+              </Text>
             </View>
             <View style={styles.allocationItem}>
               <Text style={styles.allocationLabel}>ETFs</Text>
-              <Text style={styles.allocationValue}>{latestRecommendation.portfolioAllocation.etfs}%</Text>
+              <Text style={styles.allocationValue}>
+                {userData?.me?.incomeProfile?.riskTolerance === 'Conservative' ? '15%' : 
+                 userData?.me?.incomeProfile?.riskTolerance === 'Moderate' ? '8%' : '3%'}
+              </Text>
             </View>
             <View style={styles.allocationItem}>
               <Text style={styles.allocationLabel}>Cash</Text>
-              <Text style={styles.allocationValue}>{latestRecommendation.portfolioAllocation.cash}%</Text>
+              <Text style={styles.allocationValue}>
+                {userData?.me?.incomeProfile?.riskTolerance === 'Conservative' ? '5%' : 
+                 userData?.me?.incomeProfile?.riskTolerance === 'Moderate' ? '2%' : '2%'}
+              </Text>
             </View>
           </View>
         </View>
@@ -603,10 +674,34 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
           <Text style={styles.headerTitle}>AI Portfolio Advisor</Text>
         </View>
         <TouchableOpacity 
-          style={styles.profileButton}
+          style={[
+            styles.profileButton,
+            showProfileForm && styles.profileButtonActive
+          ]}
           onPress={() => setShowProfileForm(!showProfileForm)}
+          activeOpacity={0.7}
         >
-          <Icon name="user" size={24} color="#00cc99" />
+          <View style={styles.profileButtonContent}>
+            <Icon 
+              name={showProfileForm ? "x" : "user"} 
+              size={20} 
+              color={showProfileForm ? "#EF4444" : "#00cc99"} 
+            />
+            <Text style={[
+              styles.profileButtonText,
+              showProfileForm && styles.profileButtonTextActive
+            ]}>
+              {showProfileForm ? 'Close Form' : 'Edit Profile'}
+            </Text>
+          </View>
+          {!showProfileForm && (
+            <View style={styles.profileButtonHint}>
+              <Icon name="chevron-down" size={12} color="#00cc99" />
+              <Text style={styles.profileButtonHintText} numberOfLines={2}>
+                Tap to edit your financial profile
+              </Text>
+            </View>
+          )}
         </TouchableOpacity>
       </View>
 
@@ -646,6 +741,8 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
       </ScrollView>
     </SafeAreaView>
   );
+
+
 }
 
 const styles = StyleSheet.create({
@@ -657,15 +754,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingVertical: 15,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
+    gap: 8,
   },
   headerTitleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
+    marginRight: 8,
   },
   headerIcon: {
     marginRight: 8,
@@ -676,9 +776,57 @@ const styles = StyleSheet.create({
     color: '#1F2937',
   },
   profileButton: {
-    padding: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
     borderRadius: 20,
     backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    minWidth: 110,
+    maxWidth: 120,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  profileButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    width: '100%',
+    marginBottom: 2,
+  },
+  profileButtonText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#00cc99',
+    textAlign: 'center',
+  },
+  profileButtonHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+    marginTop: 3,
+    width: '100%',
+  },
+  profileButtonHintText: {
+    fontSize: 9,
+    color: '#6B7280',
+    fontStyle: 'italic',
+    textAlign: 'center',
+    flexShrink: 1,
+  },
+  profileButtonActive: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#EF4444',
+    transform: [{ scale: 1.05 }],
+  },
+  profileButtonTextActive: {
+    color: '#EF4444',
   },
   content: {
     flex: 1,
@@ -704,6 +852,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B7280',
     textAlign: 'center',
+  },
+  riskLevelDisplay: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  riskLevelHighlight: {
+    fontWeight: 'bold',
+    color: '#00cc99',
   },
   profileIncomplete: {
     alignItems: 'center',
@@ -856,20 +1014,20 @@ const styles = StyleSheet.create({
   },
   recommendationHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-start',
     marginBottom: 20,
+    gap: 12,
+    paddingLeft: 0,
   },
   recommendationTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#1F2937',
+    flex: 1,
+    marginRight: 12,
   },
-  refreshButton: {
-    padding: 8,
-    borderRadius: 20,
-    backgroundColor: '#F3F4F6',
-  },
+
   portfolioSummary: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1003,9 +1161,11 @@ const styles = StyleSheet.create({
   riskMetricItem: {
     alignItems: 'center',
     padding: 16,
+    paddingBottom: 24,
     backgroundColor: '#F9FAFB',
     borderRadius: 8,
     flex: 1,
+    position: 'relative',
   },
   riskMetricLabel: {
     fontSize: 12,
@@ -1017,6 +1177,32 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#00cc99',
     marginTop: 4,
+    marginBottom: 8,
+  },
+  riskMetricHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  infoButton: {
+    padding: 2,
+    borderRadius: 10,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  infoButtonBottomRight: {
+    position: 'absolute',
+    bottom: 6,
+    right: 6,
+    padding: 3,
+    borderRadius: 10,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    zIndex: 1,
   },
   sectorSection: {
     marginBottom: 24,

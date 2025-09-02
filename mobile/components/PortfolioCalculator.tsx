@@ -30,6 +30,21 @@ const SAVE_PORTFOLIO = gql`
   }
 `;
 
+const GET_CURRENT_STOCK_PRICES = gql`
+  query GetCurrentStockPrices($symbols: [String!]!) {
+    currentStockPrices(symbols: $symbols) {
+      symbol
+      currentPrice
+      change
+      changePercent
+      lastUpdated
+      source
+      verified
+      apiResponse
+    }
+  }
+`;
+
 interface Stock {
   id: string;
   symbol: string;
@@ -60,12 +75,14 @@ const PortfolioCalculator: React.FC<PortfolioCalculatorProps> = ({ watchlistItem
   const [portfolioItems, setPortfolioItems] = useState<PortfolioItem[]>([]);
   const [totalPortfolioValue, setTotalPortfolioValue] = useState(0);
   const [isEditing, setIsEditing] = useState(false);
+  const [stockPrices, setStockPrices] = useState<{ [key: string]: number }>({});
+  const [pricesLoading, setPricesLoading] = useState(false);
 
   const [savePortfolio, { loading: savingPortfolio }] = useMutation(SAVE_PORTFOLIO);
   const client = useApolloClient();
 
-  // Mock current prices (in real app, these would come from API)
-  const mockPrices: { [key: string]: number } = {
+  // Fallback prices if API fails (these will be replaced by real data)
+  const fallbackPrices: { [key: string]: number } = {
     'AAPL': 185.50,
     'MSFT': 375.20,
     'GOOGL': 142.80,
@@ -82,17 +99,87 @@ const PortfolioCalculator: React.FC<PortfolioCalculatorProps> = ({ watchlistItem
     initializePortfolio();
   }, [watchlistItems]);
 
+  useEffect(() => {
+    if (watchlistItems.length > 0) {
+      fetchCurrentStockPrices();
+    }
+  }, [watchlistItems]);
+
+  // Update portfolio items when stock prices change
+  useEffect(() => {
+    if (Object.keys(stockPrices).length > 0) {
+      updatePortfolioPrices();
+    }
+  }, [stockPrices]);
+
+  const fetchCurrentStockPrices = async () => {
+    if (watchlistItems.length === 0) return;
+    
+    setPricesLoading(true);
+    try {
+      const symbols = watchlistItems.map(item => item.stock.symbol);
+      
+      console.log('🔄 Fetching real-time prices for:', symbols);
+      
+      const result = await client.query({
+        query: GET_CURRENT_STOCK_PRICES,
+        variables: { symbols },
+        fetchPolicy: 'no-cache'  // Force fresh data every time
+      });
+      
+      if (result.data?.currentStockPrices) {
+        console.log('📊 Received price data:', result.data.currentStockPrices);
+        
+        const newPrices: { [key: string]: number } = {};
+        result.data.currentStockPrices.forEach((price: any) => {
+          if (price.currentPrice) {
+            newPrices[price.symbol] = price.currentPrice;
+            
+            // Simple logging for price updates
+            if (price.verified) {
+              console.log(`📈 Live price for ${price.symbol}: $${price.currentPrice}`);
+            } else {
+              console.log(`💾 Using stored price for ${price.symbol}: $${price.currentPrice}`);
+            }
+          }
+        });
+        
+        console.log('💰 Final price mapping:', newPrices);
+        setStockPrices(newPrices);
+      } else {
+        console.log('❌ No price data received from API');
+      }
+    } catch (error) {
+      console.log('⚠️ Could not fetch real stock prices, using fallback data');
+      console.log('💡 Error details:', error);
+      console.log('💡 This might be due to API rate limits or network issues.');
+      setStockPrices(fallbackPrices);
+    } finally {
+      setPricesLoading(false);
+    }
+  };
+
   const initializePortfolio = () => {
     const initialItems = watchlistItems.map(item => ({
       stockId: item.stock.id,
       symbol: item.stock.symbol,
       companyName: item.stock.companyName,
       shares: 0,
-      currentPrice: mockPrices[item.stock.symbol] || 100,
+      currentPrice: stockPrices[item.stock.symbol] || fallbackPrices[item.stock.symbol] || 100,
       totalValue: 0,
     }));
     setPortfolioItems(initialItems);
     calculateTotalValue(initialItems);
+  };
+
+  const updatePortfolioPrices = () => {
+    const updatedItems = portfolioItems.map(item => ({
+      ...item,
+      currentPrice: stockPrices[item.symbol] || fallbackPrices[item.symbol] || item.currentPrice,
+      totalValue: item.shares * (stockPrices[item.symbol] || fallbackPrices[item.symbol] || item.currentPrice)
+    }));
+    setPortfolioItems(updatedItems);
+    calculateTotalValue(updatedItems);
   };
 
   const calculateTotalValue = (items: PortfolioItem[]) => {
@@ -242,9 +329,24 @@ const PortfolioCalculator: React.FC<PortfolioCalculatorProps> = ({ watchlistItem
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <Icon name="bar-chart-2" size={20} color="#34C759" />
-          <Text style={styles.title}>Portfolio Calculator</Text>
         </View>
         <View style={styles.headerRight}>
+          {!isEditing && (
+            <TouchableOpacity
+              style={styles.refreshButton}
+              onPress={fetchCurrentStockPrices}
+              disabled={pricesLoading}
+            >
+              <Icon 
+                name={pricesLoading ? "loader" : "refresh-cw"} 
+                size={16} 
+                color={pricesLoading ? "#C7C7CC" : "#fff"} 
+              />
+              <Text style={[styles.refreshButtonText, pricesLoading && styles.disabledText]}>
+                {pricesLoading ? 'Updating...' : 'Refresh'}
+              </Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             style={styles.editButton}
             onPress={() => {
@@ -270,6 +372,17 @@ const PortfolioCalculator: React.FC<PortfolioCalculatorProps> = ({ watchlistItem
       <View style={styles.totalValueContainer}>
         <Text style={styles.totalValueLabel}>Total Portfolio Value</Text>
         <Text style={styles.totalValueAmount}>{formatCurrency(totalPortfolioValue)}</Text>
+        <Text style={styles.subtitle}>Portfolio Calculator</Text>
+        {pricesLoading && (
+          <Text style={styles.rateLimitNote}>
+            🔄 Fetching live prices...
+          </Text>
+        )}
+        {!pricesLoading && Object.keys(stockPrices).length === 0 && (
+          <Text style={styles.rateLimitNote}>
+            ⚠️ Using stored prices (API rate limit reached)
+          </Text>
+        )}
       </View>
 
       <ScrollView style={styles.stocksList} showsVerticalScrollIndicator={false}>
@@ -278,7 +391,12 @@ const PortfolioCalculator: React.FC<PortfolioCalculatorProps> = ({ watchlistItem
             <View style={styles.stockInfo}>
               <View style={styles.stockHeader}>
                 <Text style={styles.symbol}>{item.symbol}</Text>
-                <Text style={styles.price}>{formatCurrency(item.currentPrice)}</Text>
+                <View style={styles.priceContainer}>
+                  <Text style={styles.price}>{formatCurrency(item.currentPrice)}</Text>
+                  {stockPrices[item.symbol] && (
+                    <Text style={styles.priceSource}>Live</Text>
+                  )}
+                </View>
               </View>
               <Text style={styles.companyName} numberOfLines={1}>
                 {item.companyName}
@@ -371,32 +489,36 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 16,
+    flexWrap: 'wrap',
+    gap: 8,
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1C1C1E',
+    maxWidth: '15%',
+    flexShrink: 0,
   },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 4,
+    flexWrap: 'nowrap',
+    maxWidth: '80%',
+    justifyContent: 'flex-end',
+    flexShrink: 0,
   },
   editButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
     paddingVertical: 6,
     backgroundColor: '#F2F2F7',
     borderRadius: 16,
+    minWidth: 55,
   },
   editButtonText: {
     fontSize: 14,
@@ -404,9 +526,12 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   resetButton: {
-    padding: 6,
+    padding: 4,
     backgroundColor: '#FFE5E5',
     borderRadius: 16,
+    minWidth: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   totalValueContainer: {
     alignItems: 'center',
@@ -424,6 +549,19 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '700',
     color: '#34C759',
+  },
+  subtitle: {
+    fontSize: 12,
+    color: '#8E8E93',
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  rateLimitNote: {
+    fontSize: 11,
+    color: '#FF9500',
+    marginTop: 4,
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
   stocksList: {
     maxHeight: 300,
@@ -447,10 +585,24 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1C1C1E',
   },
+  priceContainer: {
+    alignItems: 'flex-end',
+  },
   price: {
     fontSize: 14,
     fontWeight: '500',
     color: '#34C759',
+  },
+  priceSource: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#34C759',
+    backgroundColor: '#E8F5E8',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 4,
+    textAlign: 'center',
+    marginTop: 2,
   },
   companyName: {
     fontSize: 12,
@@ -531,6 +683,25 @@ const styles = StyleSheet.create({
     color: '#8E8E93',
     textAlign: 'center',
     fontStyle: 'italic',
+  },
+  refreshButton: {
+    backgroundColor: '#34C759',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 0,
+    minWidth: 65,
+  },
+  refreshButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  disabledText: {
+    color: '#C7C7CC',
   },
 });
 

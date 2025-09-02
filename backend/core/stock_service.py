@@ -474,7 +474,7 @@ class AlphaVantageService:
     """Service for fetching stock data from Alpha Vantage API"""
     
     def __init__(self):
-        self.api_key = settings.ALPHA_VANTAGE_API_KEY
+        self.api_key = 'K0A7XYLDNXHNQ1WI'  # Hardcoded API key for now
         self.base_url = "https://www.alphavantage.co/query"
         self.session = requests.Session()
         self.session.headers.update({
@@ -643,6 +643,7 @@ class AlphaVantageService:
     def get_stock_quote(self, symbol: str) -> Optional[dict]:
         """Get real-time stock quote"""
         if not self.api_key:
+            logger.warning(f"No API key set for {symbol}")
             return None
         
         try:
@@ -660,11 +661,16 @@ class AlphaVantageService:
                 logger.error(f"Alpha Vantage quote error for {symbol}: {data['Error Message']}")
                 return None
             
+            if 'Note' in data:
+                logger.warning(f"Alpha Vantage note for {symbol}: {data['Note']}")
+                return None
+            
             if 'Global Quote' not in data:
+                logger.warning(f"No Global Quote in response for {symbol}: {data}")
                 return None
             
             quote = data['Global Quote']
-            return {
+            result = {
                 'symbol': quote.get('01. symbol'),
                 'price': float(quote.get('05. price', 0)),
                 'change': float(quote.get('09. change', 0)),
@@ -676,8 +682,12 @@ class AlphaVantageService:
                 'previous_close': float(quote.get('08. previous close', 0))
             }
             
+            return result
+            
         except Exception as e:
             logger.error(f"Error getting stock quote for {symbol}: {e}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
             return None
     
     def get_historical_data(self, symbol: str, interval: str = 'daily') -> Optional[dict]:
