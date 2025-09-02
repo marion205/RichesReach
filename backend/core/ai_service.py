@@ -16,7 +16,7 @@ except ImportError:
 
 # Import ML service
 try:
-    from .ml_service import MLService
+    from .optimized_ml_service import OptimizedMLService
     from .market_data_service import MarketDataService
     ML_AVAILABLE = True
 except ImportError as e:
@@ -36,9 +36,9 @@ class AIService:
         
         # Initialize ML services
         if ML_AVAILABLE:
-            self.ml_service = MLService()
+            self.ml_service = OptimizedMLService()
             self.market_data_service = MarketDataService()
-            logger.info("ML services initialized successfully")
+            logger.info("Optimized ML services initialized successfully")
         else:
             self.ml_service = None
             self.market_data_service = None
