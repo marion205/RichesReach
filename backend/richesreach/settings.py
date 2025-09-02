@@ -154,6 +154,11 @@ OPENAI_API_KEY = None  # Set this in environment variable OPENAI_API_KEY
 OPENAI_MODEL = "gpt-3.5-turbo"  # Default model to use
 OPENAI_MAX_TOKENS = 1000  # Maximum tokens for responses
 
+# AlphaVantage API Configuration
+ALPHA_VANTAGE_API_KEY = os.getenv('ALPHA_VANTAGE_API_KEY')
+if not ALPHA_VANTAGE_API_KEY:
+    print("⚠️  WARNING: ALPHA_VANTAGE_API_KEY not set. Stock price data will not be available.")
+
 # Redis Configuration for Caching
 REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
 REDIS_PORT = int(os.getenv('REDIS_PORT', 6379))
