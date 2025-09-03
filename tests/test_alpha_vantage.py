@@ -25,66 +25,66 @@ async def test_alpha_vantage():
     # Initialize service
     service = AdvancedMarketDataService()
     
-    print("🚀 Advanced Market Data Service initialized")
+    print(" Advanced Market Data Service initialized")
     print(f"🔑 API Key: {os.environ.get('ALPHA_VANTAGE_API_KEY', 'Not set')[:8]}...")
     
     try:
         # Test VIX data (most important)
-        print("\n🧪 Testing VIX (Volatility Index)...")
+        print("\n Testing VIX (Volatility Index)...")
         vix_data = await service.get_real_time_vix()
         
         if vix_data and vix_data.source != 'synthetic':
-            print(f"   ✅ VIX Data: SUCCESS!")
+            print(f"   SUCCESS: VIX Data: SUCCESS!")
             print(f"      Value: {vix_data.value:.2f}")
             print(f"      Change: {vix_data.change:+.2f} ({vix_data.change_percent:+.2f}%)")
             print(f"      Trend: {vix_data.trend}")
             print(f"      Source: {vix_data.source}")
             print(f"      Confidence: {vix_data.confidence:.2f}")
         else:
-            print(f"   ⚠️  VIX Data: Using synthetic data")
+            print(f"   WARNING:  VIX Data: Using synthetic data")
             print(f"      Value: {vix_data.value:.2f}")
             print(f"      Source: {vix_data.source}")
         
         # Test bond yields
-        print(f"\n🧪 Testing Bond Yields...")
+        print(f"\n Testing Bond Yields...")
         bond_data = await service.get_real_time_bond_yields()
         
         if bond_data and len(bond_data) > 0:
-            print(f"   ✅ Bond Yields: SUCCESS!")
+            print(f"   SUCCESS: Bond Yields: SUCCESS!")
             for bond in bond_data:
                 print(f"      {bond.name}: {bond.value:.2f}% ({bond.change:+.2f}%)")
                 print(f"         Source: {bond.source}, Trend: {bond.trend}")
         else:
-            print(f"   ⚠️  Bond Yields: No data available")
+            print(f"   WARNING:  Bond Yields: No data available")
         
         # Test sector performance
-        print(f"\n🧪 Testing Sector Performance...")
+        print(f"\n Testing Sector Performance...")
         sector_data = await service.get_sector_performance()
         
         if sector_data and len(sector_data) > 0:
-            print(f"   ✅ Sector Performance: SUCCESS!")
+            print(f"   SUCCESS: Sector Performance: SUCCESS!")
             for sector, data in list(sector_data.items())[:3]:  # Show first 3
                 print(f"      {sector}: ${data.value:.2f} ({data.change:+.2f})")
                 print(f"         Source: {data.source}, Trend: {data.trend}")
         else:
-            print(f"   ⚠️  Sector Performance: No data available")
+            print(f"   WARNING:  Sector Performance: No data available")
         
         # Test economic indicators
-        print(f"\n🧪 Testing Economic Indicators...")
+        print(f"\n Testing Economic Indicators...")
         econ_data = await service.get_economic_indicators()
         
         if econ_data and len(econ_data) > 0:
-            print(f"   ✅ Economic Indicators: SUCCESS!")
+            print(f"   SUCCESS: Economic Indicators: SUCCESS!")
             for indicator in econ_data:
                 print(f"      {indicator.name}: {indicator.value:.2f}")
                 print(f"         Change: {indicator.change:+.2f} ({indicator.change_percent:+.2f}%)")
                 print(f"         Source: {indicator.source}, Impact: {indicator.impact}")
         else:
-            print(f"   ⚠️  Economic Indicators: No data available")
+            print(f"   WARNING:  Economic Indicators: No data available")
         
         # Summary
         print(f"\n" + "=" * 50)
-        print("📊 Alpha Vantage Test Summary")
+        print(" Alpha Vantage Test Summary")
         print("=" * 50)
         
         # Count successful vs synthetic data
@@ -111,15 +111,15 @@ async def test_alpha_vantage():
         else:
             synthetic_tests += 1
         
-        print(f"✅ Live Data Tests: {successful_tests}")
-        print(f"⚠️  Synthetic Data Tests: {synthetic_tests}")
+        print(f"SUCCESS: Live Data Tests: {successful_tests}")
+        print(f"WARNING:  Synthetic Data Tests: {synthetic_tests}")
         
         if successful_tests > 0:
-            print(f"\n🚀 SUCCESS! Alpha Vantage is working!")
+            print(f"\n SUCCESS! Alpha Vantage is working!")
             print(f"   You now have live market data!")
             print(f"   Next: Get Finnhub and News API keys for complete coverage")
         else:
-            print(f"\n⚠️  Alpha Vantage connection may need troubleshooting")
+            print(f"\nWARNING:  Alpha Vantage connection may need troubleshooting")
             print(f"   Check API key and rate limits")
         
         # Close service
@@ -128,22 +128,22 @@ async def test_alpha_vantage():
         return successful_tests > 0
         
     except Exception as e:
-        print(f"❌ Error testing Alpha Vantage: {e}")
+        print(f"ERROR: Error testing Alpha Vantage: {e}")
         await service.close()
         return False
 
 if __name__ == "__main__":
-    print("🚀 Testing Alpha Vantage API with Your Key!")
+    print(" Testing Alpha Vantage API with Your Key!")
     print("=" * 50)
     
     success = asyncio.run(test_alpha_vantage())
     
     if success:
-        print(f"\n🎉 Alpha Vantage test completed successfully!")
+        print(f"\n Alpha Vantage test completed successfully!")
         print(f"📋 Next Steps:")
         print(f"1. 🔑 Get Finnhub API key: https://finnhub.io/register")
         print(f"2. 📰 Get News API key: https://newsapi.org/register")
-        print(f"3. 🧪 Test all connections: python3 test_api_connections.py")
-        print(f"4. 🚀 Enable production mode in .env")
+        print(f"3.  Test all connections: python3 test_api_connections.py")
+        print(f"4.  Enable production mode in .env")
     else:
-        print(f"\n❌ Alpha Vantage test failed. Check API key and try again.")
+        print(f"\nERROR: Alpha Vantage test failed. Check API key and try again.")
