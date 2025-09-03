@@ -245,7 +245,7 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
       });
 
       if (result.data?.createIncomeProfile?.success) {
-        console.log('✅ Profile created successfully with risk level:', riskTolerance);
+        console.log('SUCCESS: Profile created successfully with risk level:', riskTolerance);
         Alert.alert('Success', 'Income profile created successfully!');
         setShowProfileForm(false);
         
@@ -263,7 +263,7 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
         Alert.alert('Error', result.data?.createIncomeProfile?.message || 'Failed to create profile');
       }
     } catch (error) {
-      console.error('❌ Error creating profile:', error);
+      console.error('ERROR: Error creating profile:', error);
       Alert.alert('Error', 'Failed to create profile. Please try again.');
     }
   };
@@ -271,21 +271,21 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
   const handleGenerateRecommendations = async () => {
     setIsGeneratingRecommendations(true);
     try {
-      console.log('🚀 Generating AI recommendations...');
-      console.log('🚀 Current user profile:', userData?.me?.incomeProfile);
-      console.log('🚀 Current risk tolerance:', userData?.me?.incomeProfile?.riskTolerance);
+      console.log(' Generating AI recommendations...');
+      console.log(' Current user profile:', userData?.me?.incomeProfile);
+      console.log(' Current risk tolerance:', userData?.me?.incomeProfile?.riskTolerance);
       
       const result = await generateAIRecommendations();
       
       if (result.data?.generateAiRecommendations?.success) {
-        console.log('✅ Recommendations generated successfully');
+        console.log('SUCCESS: Recommendations generated successfully');
         refetchRecommendations();
       } else {
-        console.log('❌ Failed to generate recommendations:', result.data?.generateAiRecommendations?.message);
+        console.log('ERROR: Failed to generate recommendations:', result.data?.generateAiRecommendations?.message);
         Alert.alert('Error', result.data?.generateAiRecommendations?.message || 'Failed to generate recommendations');
       }
     } catch (error) {
-      console.error('❌ Error generating recommendations:', error);
+      console.error('ERROR: Error generating recommendations:', error);
       Alert.alert('Error', 'Failed to generate recommendations. Please try again.');
     } finally {
       setIsGeneratingRecommendations(false);
