@@ -123,7 +123,7 @@ Resources:
       DBName: richesreach
       MasterUsername: admin
       MasterUserPassword:
-        Fn::Sub: '{{resolve:secretsmanager:${self.project_name}-db-password:SecretString:password}}'
+        Fn::Sub: '{{resolve:secretsmanager:riches-reach-ai-db-password:SecretString:password}}'
       DBSubnetGroupName:
         Ref: DBSubnetGroup
       VPCSecurityGroups:
@@ -192,6 +192,7 @@ Resources:
             NoncurrentDays: 30
   ECSCluster:
     Type: AWS::ECS::Cluster
+    DependsOn: ECSTaskExecutionRole
     Properties:
       ClusterName: riches-reach-ai-cluster
       CapacityProviders:
@@ -328,7 +329,7 @@ Resources:
             - s3:PutObject
             - s3:DeleteObject
             Resource:
-            - Fn::Sub: ${ModelBucket}/*
+            - !Sub "${ModelBucket}/*"
           - Effect: Allow
             Action:
             - cloudwatch:PutMetricData
@@ -338,20 +339,11 @@ Resources:
     Properties:
       LogGroupName: /ecs/riches-reach-ai
       RetentionInDays: 30
-  Dashboard:
-    Type: AWS::CloudWatch::Dashboard
-    Properties:
-      DashboardName: riches-reach-ai-dashboard
-      DashboardBody: '{"widgets": [{"type": "metric", "x": 0, "y": 0, "width": 12,
-        "height": 6, "properties": {"metrics": [["AWS/ECS", "CPUUtilization", "ServiceName",
-        "riches-reach-ai-service"], ["AWS/ECS", "MemoryUtilization", "ServiceName",
-        "riches-reach-ai-service"]], "period": 300, "stat": "Average", "region": "us-east-1",
-        "title": "ECS Service Metrics"}}, {"type": "metric", "x": 12, "y": 0, "width":
-        12, "height": 6, "properties": {"metrics": [["AWS/ApplicationELB", "RequestCount",
-        "LoadBalancer", {"Fn::GetAtt": ["ALB", "LoadBalancerFullName"]}], ["AWS/ApplicationELB",
-        "TargetResponseTime", "LoadBalancer", {"Fn::GetAtt": ["ALB", "LoadBalancerFullName"]}]],
-        "period": 300, "stat": "Average", "region": "us-east-1", "title": "Load Balancer
-        Metrics"}}]}'
+  # Dashboard:
+  #   Type: AWS::CloudWatch::Dashboard
+  #   Properties:
+  #     DashboardName: riches-reach-ai-dashboard
+  #     DashboardBody: '{"widgets": [{"type": "metric", "x": 0, "y": 0, "width": 12, "height": 6, "properties": {"metrics": [["AWS/ECS", "CPUUtilization", "ServiceName", "riches-reach-ai-service"]], "period": 300, "stat": "Average", "region": "us-east-1", "title": "ECS Service Metrics"}}]}'
 Outputs:
   LoadBalancerDNS:
     Description: DNS name of the load balancer
@@ -369,12 +361,9 @@ Outputs:
       Fn::GetAtt:
       - Database
       - Endpoint
-  RedisEndpoint:
-    Description: Redis cluster endpoint
-    Value:
-      Fn::GetAtt:
-      - RedisCluster
-      - PrimaryEndPoint
+  # RedisEndpoint:
+  #   Description: Redis cluster endpoint
+  #   Value: !Sub "${RedisCluster.PrimaryEndPoint}"
   ModelBucketName:
     Description: S3 bucket for ML models
     Value:
