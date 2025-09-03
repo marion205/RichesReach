@@ -59,9 +59,9 @@ jobs:
         try:
             from core.optimized_ml_service import OptimizedMLService
             from core.market_data_service import MarketDataService
-            print('✅ ML services import successfully')
+            print('SUCCESS: ML services import successfully')
         except ImportError as e:
-            print(f'❌ ML service import failed: {e}')
+            print(f'ERROR: ML service import failed: {e}')
             exit(1)
         "
 
@@ -215,14 +215,14 @@ jobs:
         # Test main endpoint
         curl -f "http://$ALB_DNS/" || exit 1
         
-        echo "✅ Production deployment verified"
+        echo "SUCCESS: Production deployment verified"
     
     - name: Notify deployment success
       if: success()
       run: |
-        echo "🎉 Production deployment completed successfully!"
+        echo "SUCCESS: Production deployment completed successfully!"
         echo "🌐 Service URL: http://$ALB_DNS"
-        echo "📊 Monitor at: https://console.aws.amazon.com/ecs/home?region=${{ env.AWS_REGION }}#/clusters/${{ env.ECS_CLUSTER }}/services"
+        echo "Monitor at: https://console.aws.amazon.com/ecs/home?region=${{ env.AWS_REGION }}#/clusters/${{ env.ECS_CLUSTER }}/services"
 
   # Rollback on failure
   rollback:
@@ -260,5 +260,5 @@ jobs:
     
     - name: Notify rollback
       run: |
-        echo "🚨 Production deployment failed - service rolled back"
+        echo "ERROR: Production deployment failed - service rolled back"
         echo "📧 Check logs and fix issues before next deployment"
