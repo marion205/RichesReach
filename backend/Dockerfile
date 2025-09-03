@@ -1,21 +1,28 @@
-# Production Dockerfile for RichesReach AI Service
-FROM python:3.10-slim
+# Production Dockerfile for RichesReach AI Service - OPTIMIZED FOR SPEED
+FROM python:3.10-slim as base
 
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies in one layer
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
-    && rm -rf /var/lib/apt/lists/*
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
-# Copy requirements and install Python dependencies
+# Copy only requirements first for better caching
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY . .
+# Install Python dependencies with optimizations
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Copy only necessary application files (exclude unnecessary files)
+COPY core/ ./core/
+COPY main.py .
+COPY .env.production .
 
 # Create non-root user
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
