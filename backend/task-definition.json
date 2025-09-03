@@ -1,0 +1,38 @@
+{
+  "family": "riches-reach-ai-task",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::498606688292:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::498606688292:role/ecsTaskRole",
+  "containerDefinitions": [
+    {
+      "name": "ai-service",
+      "image": "python:3.10-slim",
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "protocol": "tcp"
+        }
+      ],
+      "essential": true,
+      "workingDirectory": "/app",
+      "command": [
+        "/bin/bash",
+        "-c",
+        "pip install fastapi uvicorn && mkdir -p /app && cd /app && python -c \"import urllib.request; urllib.request.urlretrieve('https://riches-reach-ai-models-498606688292.s3.amazonaws.com/deployments/riches-reach-ai-latest.zip', '/tmp/code.zip'); import zipfile; zipfile.ZipFile('/tmp/code.zip').extractall('.'); import subprocess; subprocess.run(['uvicorn', 'main:app', '--host', '0.0.0.0', '--port', '8000'])\""
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/riches-reach-ai",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ]
+}

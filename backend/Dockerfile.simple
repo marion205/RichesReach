@@ -1,0 +1,16 @@
+# ULTRA-SIMPLE Dockerfile - Should work 100%
+FROM python:3.10-slim
+
+WORKDIR /app
+
+# Install only the absolute minimum
+RUN pip install fastapi uvicorn
+
+# Copy just the main app
+COPY main.py .
+
+# Expose port
+EXPOSE 8000
+
+# Start the app
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
