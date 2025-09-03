@@ -49,7 +49,7 @@ async def test_alpha_vantage_direct():
     results = []
     
     for i, test in enumerate(tests):
-        print(f"\n🧪 Test {i+1}: {test['name']}")
+        print(f"\n Test {i+1}: {test['name']}")
         print(f"   Description: {test['description']}")
         
         try:
@@ -78,7 +78,7 @@ async def test_alpha_vantage_direct():
                             change = quote.get('09. change', 'N/A')
                             change_percent = quote.get('10. change percent', 'N/A')
                             
-                            print(f"   ✅ SUCCESS!")
+                            print(f"   SUCCESS: SUCCESS!")
                             print(f"      Price: {price}")
                             print(f"      Change: {change}")
                             print(f"      Change %: {change_percent}")
@@ -89,7 +89,7 @@ async def test_alpha_vantage_direct():
                                 'data': quote
                             })
                         else:
-                            print(f"   ⚠️  No data returned")
+                            print(f"   WARNING:  No data returned")
                             print(f"      Response: {data}")
                             results.append({
                                 'test': test['name'],
@@ -97,7 +97,7 @@ async def test_alpha_vantage_direct():
                                 'data': data
                             })
                     else:
-                        print(f"   ❌ API call failed: {response.status}")
+                        print(f"   ERROR: API call failed: {response.status}")
                         print(f"      Response: {await response.text()}")
                         results.append({
                             'test': test['name'],
@@ -111,7 +111,7 @@ async def test_alpha_vantage_direct():
                 await asyncio.sleep(15)
                 
         except Exception as e:
-            print(f"   ❌ Error: {e}")
+            print(f"   ERROR: Error: {e}")
             results.append({
                 'test': test['name'],
                 'status': 'ERROR',
@@ -120,31 +120,31 @@ async def test_alpha_vantage_direct():
     
     # Summary
     print(f"\n" + "=" * 50)
-    print("📊 Direct Alpha Vantage Test Summary")
+    print(" Direct Alpha Vantage Test Summary")
     print("=" * 50)
     
     success_count = sum(1 for r in results if r['status'] == 'SUCCESS')
     total_count = len(results)
     
     for result in results:
-        status_emoji = "✅" if result['status'] == 'SUCCESS' else "⚠️" if result['status'] == 'NO_DATA' else "❌"
+        status_emoji = "SUCCESS:" if result['status'] == 'SUCCESS' else "WARNING:" if result['status'] == 'NO_DATA' else "ERROR:"
         print(f"{status_emoji} {result['test']}: {result['status']}")
     
-    print(f"\n🎯 Overall: {success_count}/{total_count} tests successful")
+    print(f"\n Overall: {success_count}/{total_count} tests successful")
     
     if success_count > 0:
-        print(f"\n🚀 SUCCESS! Alpha Vantage API is working!")
+        print(f"\n SUCCESS! Alpha Vantage API is working!")
         print(f"   You have live market data access!")
         print(f"   Rate limit: 5 calls/minute (free tier)")
         
         # Show sample live data
-        print(f"\n📊 Sample Live Data:")
+        print(f"\n Sample Live Data:")
         for result in results:
             if result['status'] == 'SUCCESS' and 'data' in result:
                 data = result['data']
                 print(f"   {result['test']}: ${data.get('05. price', 'N/A')}")
     else:
-        print(f"\n⚠️  Alpha Vantage test failed. Check:")
+        print(f"\nWARNING:  Alpha Vantage test failed. Check:")
         print(f"   1. API key validity")
         print(f"   2. Rate limits (5 calls/minute)")
         print(f"   3. Network connectivity")
@@ -153,7 +153,7 @@ async def test_alpha_vantage_direct():
 
 async def main():
     """Main test function"""
-    print("🚀 Direct Alpha Vantage API Test")
+    print(" Direct Alpha Vantage API Test")
     print("=" * 50)
     print("Testing live market data with your API key...")
     print("Note: Free tier allows 5 calls/minute")
@@ -161,14 +161,14 @@ async def main():
     success = await test_alpha_vantage_direct()
     
     if success:
-        print(f"\n🎉 Live market data test successful!")
+        print(f"\n Live market data test successful!")
         print(f"📋 Next Steps:")
         print(f"1. 🔑 Get Finnhub API key: https://finnhub.io/register")
         print(f"2. 📰 Get News API key: https://newsapi.org/register")
-        print(f"3. 🚀 Update .env file with all keys")
-        print(f"4. 🧪 Test complete system: python3 test_api_connections.py")
+        print(f"3.  Update .env file with all keys")
+        print(f"4.  Test complete system: python3 test_api_connections.py")
     else:
-        print(f"\n❌ Live market data test failed.")
+        print(f"\nERROR: Live market data test failed.")
         print(f"   Check API key and try again.")
     
     return success
