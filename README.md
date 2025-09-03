@@ -215,9 +215,8 @@ python deploy_direct.py
 ## Contact & Support
 
 - **Founder:** Marion Collins
-- **Email:** [Your email]
-- **LinkedIn:** [Your LinkedIn]
-- **GitHub:** [Your GitHub]
+- **Email:** Mcollins205@gmail.com
+- **LinkedIn:** www.linkedin.com/in/marion-collins-7ab29669
 
 ## Investment Opportunity
 
