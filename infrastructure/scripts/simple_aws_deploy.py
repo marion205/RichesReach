@@ -8,6 +8,7 @@ import subprocess
 import json
 import time
 import os
+import boto3
 
 class SimpleAWSDeployer:
     def __init__(self):
@@ -21,13 +22,13 @@ class SimpleAWSDeployer:
         try:
             result = subprocess.run(command, shell=True, capture_output=True, text=True)
             if result.returncode == 0:
-                print(f"✅ {description} completed")
+                print(f"SUCCESS: {description} completed")
                 return result.stdout.strip()
             else:
-                print(f"❌ {description} failed: {result.stderr}")
+                print(f"ERROR: {description} failed: {result.stderr}")
                 return None
         except Exception as e:
-            print(f"❌ {description} error: {e}")
+            print(f"ERROR: {description} error: {e}")
             return None
     
     def create_s3_bucket(self):
@@ -117,6 +118,94 @@ class SimpleAWSDeployer:
         print("4. 📊 Set up monitoring and scaling")
         
         return True
+
+def test_aws_services():
+    """Test basic AWS service connectivity"""
+    print("\nTesting AWS Services...")
+    
+    # Test S3
+    try:
+        s3 = boto3.client('s3')
+        response = s3.list_buckets()
+        print(f"SUCCESS: S3 access - {len(response['Buckets'])} buckets found")
+    except Exception as e:
+        print(f"ERROR: S3 access failed - {e}")
+    
+    # Test ECS
+    try:
+        ecs = boto3.client('ecs')
+        response = ecs.list_clusters()
+        print(f"SUCCESS: ECS access - {len(response['clusterArns'])} clusters found")
+    except Exception as e:
+        print(f"ERROR: ECS access failed - {e}")
+    
+    # Test CloudWatch
+    try:
+        cloudwatch = boto3.client('cloudwatch')
+        response = cloudwatch.list_metrics(Namespace='AWS/ECS')
+        print(f"SUCCESS: CloudWatch access - {len(response['Metrics'])} ECS metrics found")
+    except Exception as e:
+        print(f"ERROR: CloudWatch access failed - {e}")
+
+def main():
+    """Main deployment function"""
+    print("Simple AWS Deployment for RichesReach AI")
+    print("=" * 50)
+    
+    # Check AWS credentials
+    try:
+        sts = boto3.client('sts')
+        identity = sts.get_caller_identity()
+        print(f"SUCCESS: AWS credentials valid - Account: {identity['Account']}")
+    except Exception as e:
+        print(f"ERROR: AWS credentials not valid - {e}")
+        print("Please run 'aws configure' first")
+        return
+    
+    # Test AWS services
+    test_aws_services()
+    
+    # Check current ECS status
+    print("\nCurrent ECS Status:")
+    try:
+        ecs = boto3.client('ecs')
+        clusters = ecs.list_clusters()
+        
+        for cluster_arn in clusters['clusterArns']:
+            cluster_name = cluster_arn.split('/')[-1]
+            print(f"  Cluster: {cluster_name}")
+            
+            services = ecs.list_services(cluster=cluster_arn)
+            for service_arn in services['serviceArns']:
+                service_name = service_arn.split('/')[-1]
+                print(f"    Service: {service_name}")
+    except Exception as e:
+        print(f"ERROR: Could not check ECS status - {e}")
+    
+    # Check current tasks
+    print("\nCurrent Tasks:")
+    try:
+        for cluster_arn in clusters['clusterArns']:
+            tasks = ecs.list_tasks(cluster=cluster_arn)
+            for task_arn in tasks['taskArns']:
+                task_name = task_arn.split('/')[-1]
+                print(f"  Task: {task_name}")
+    except Exception as e:
+        print(f"ERROR: Could not check tasks - {e}")
+    
+    # Deployment options
+    print("\nDeployment Options:")
+    print("1. Deploy to existing ECS cluster")
+    print("2. Create new ECS cluster")
+    print("3. Update existing service")
+    print("4. Check service logs")
+    
+    print("\nSimple deployment check completed!")
+    print("\nNext Steps:")
+    print("1. Choose deployment option")
+    print("2. Configure deployment parameters")
+    print("3. Deploy to AWS")
+    print("4. Monitor deployment status")
 
 if __name__ == "__main__":
     deployer = SimpleAWSDeployer()

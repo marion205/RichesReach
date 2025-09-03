@@ -203,7 +203,7 @@ class NewsAlertsService {
   // Create breaking news alert
   async createBreakingNewsAlert(article: NewsArticle): Promise<NewsAlert> {
     return this.createAlert({
-      title: '🚨 Breaking News',
+      title: 'Breaking News',
       message: article.title,
       type: 'breaking',
       priority: 'urgent',
