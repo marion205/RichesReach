@@ -23,13 +23,13 @@ class FullProductionDeployer:
         try:
             result = subprocess.run(command, shell=True, capture_output=capture_output, text=True)
             if result.returncode == 0:
-                print(f"✅ {description} completed")
+                print(f"SUCCESS: {description} completed")
                 return result.stdout.strip() if capture_output else True
             else:
-                print(f"❌ {description} failed: {result.stderr}")
+                print(f"ERROR: {description} failed: {result.stderr}")
                 return None
         except Exception as e:
-            print(f"❌ {description} error: {e}")
+                            print(f"ERROR: {description} error: {e}")
             return None
     
     def check_permissions(self):
@@ -48,16 +48,16 @@ class FullProductionDeployer:
         for perm_name, test_command in permissions:
             result = self.run_command(test_command, f"Testing {perm_name}")
             if result is None:
-                print(f"❌ Missing permission: {perm_name}")
+                print(f"ERROR: Missing permission: {perm_name}")
                 all_good = False
             else:
-                print(f"✅ {perm_name} - OK")
+                print(f"SUCCESS: {perm_name} - OK")
         
         return all_good
     
     def deploy_cloudformation(self):
         """Deploy the main infrastructure using CloudFormation"""
-        print(f"\n☁️ Deploying CloudFormation Stack: {self.stack_name}")
+        print(f"\nDeploying CloudFormation Stack: {self.stack_name}")
         
         # Deploy the stack
         deploy_command = f"aws cloudformation deploy --template-file simple-cloudformation.yaml --stack-name {self.stack_name} --capabilities CAPABILITY_NAMED_IAM --region {self.region}"
@@ -78,17 +78,17 @@ class FullProductionDeployer:
         if outputs:
             try:
                 outputs_data = json.loads(outputs)
-                print("\n📊 Stack Outputs:")
+                print("\nStack Outputs:")
                 for output in outputs_data:
                     print(f"   {output['OutputKey']}: {output['OutputValue']}")
             except:
-                print("⚠️ Could not parse stack outputs")
+                print("WARNING: Could not parse stack outputs")
         
         return True
     
     def setup_monitoring(self):
         """Set up CloudWatch monitoring and alerts"""
-        print("\n📊 Setting up Monitoring...")
+        print("\nSetting up Monitoring...")
         
         # Create CloudWatch dashboard
         dashboard_body = {
@@ -142,7 +142,7 @@ class FullProductionDeployer:
     
     def run_smoke_tests(self):
         """Run basic health checks"""
-        print("\n🧪 Running Smoke Tests...")
+        print("\nRunning Smoke Tests...")
         
         # Get load balancer DNS
         lb_command = f"aws cloudformation describe-stacks --stack-name {self.stack_name} --region {self.region} --query 'Stacks[0].Outputs[?OutputKey==`LoadBalancerDNS`].OutputValue' --output text"
@@ -158,31 +158,31 @@ class FullProductionDeployer:
             result = self.run_command(test_command, "Health check test")
             
             if result is not None:
-                print("✅ Health check passed!")
+                print("SUCCESS: Health check passed!")
                 return True
             else:
-                print("❌ Health check failed")
+                print("ERROR: Health check failed")
                 return False
         else:
-            print("⚠️ Could not get load balancer DNS")
+                            print("WARNING: Could not get load balancer DNS")
             return False
     
     def deploy(self):
         """Main deployment method"""
-        print("🚀 FULL PRODUCTION DEPLOYMENT FOR RICHESREACH AI")
+        print("FULL PRODUCTION DEPLOYMENT FOR RICHESREACH AI")
         print("=" * 60)
         
         # Check permissions first
         if not self.check_permissions():
-            print("\n❌ Missing required AWS permissions!")
+            print("\nERROR: Missing required AWS permissions!")
             print("Please add the missing IAM policies and try again.")
             return False
         
-        print("\n✅ All permissions verified! Starting deployment...")
+                    print("\nSUCCESS: All permissions verified! Starting deployment...")
         
         # Deploy infrastructure
         if not self.deploy_cloudformation():
-            print("❌ CloudFormation deployment failed!")
+            print("ERROR: CloudFormation deployment failed!")
             return False
         
         # Set up monitoring
@@ -193,15 +193,15 @@ class FullProductionDeployer:
         
         # Run smoke tests
         if self.run_smoke_tests():
-            print("\n🎉 PRODUCTION DEPLOYMENT COMPLETED SUCCESSFULLY!")
+            print("\nSUCCESS: PRODUCTION DEPLOYMENT COMPLETED SUCCESSFULLY!")
             print("=" * 60)
-            print("📋 Your RichesReach AI is now running in production!")
-            print("🌐 Access your application through the load balancer")
-            print("📊 Monitor performance in CloudWatch")
-            print("🔄 Auto-scaling is configured and active")
+            print("Your RichesReach AI is now running in production!")
+            print("Access your application through the load balancer")
+            print("Monitor performance in CloudWatch")
+            print("Auto-scaling is configured and active")
             return True
         else:
-            print("\n⚠️ Deployment completed but smoke tests failed")
+            print("\nWARNING: Deployment completed but smoke tests failed")
             print("Check the application logs and configuration")
             return False
 

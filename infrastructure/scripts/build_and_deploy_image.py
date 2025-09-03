@@ -22,13 +22,13 @@ class DockerImageDeployer:
         try:
             result = subprocess.run(command, shell=True, capture_output=True, text=True)
             if result.returncode == 0:
-                print(f"✅ {description} completed")
+                print(f"SUCCESS: {description} completed")
                 return result.stdout.strip()
             else:
-                print(f"❌ {description} failed: {result.stderr}")
+                print(f"ERROR: {description} failed: {result.stderr}")
                 return None
         except Exception as e:
-            print(f"❌ {description} error: {e}")
+            print(f"ERROR: {description} error: {e}")
             return None
     
     def get_ecr_login_token(self):
@@ -103,7 +103,7 @@ class DockerImageDeployer:
                 return self.run_command(update_cmd, "Updating ECS service")
             
         except Exception as e:
-            print(f"❌ Error updating ECS service: {e}")
+            print(f"ERROR: Error updating ECS service: {e}")
             return False
         
         return False
@@ -116,47 +116,47 @@ class DockerImageDeployer:
         result = self.run_command(wait_cmd, "Waiting for service stability")
         
         if result:
-            print("✅ ECS service updated successfully!")
+            print("SUCCESS: ECS service updated successfully!")
             return True
         else:
-            print("❌ ECS service update failed or timed out")
+            print("ERROR: ECS service update failed or timed out")
             return False
     
     def deploy(self):
         """Main deployment method"""
-        print("🚀 Building and Deploying RichesReach AI Docker Image")
+        print("Building and Deploying RichesReach AI Docker Image")
         print("=" * 60)
         
         # Step 1: Login to ECR
         if not self.get_ecr_login_token():
-            print("❌ Failed to login to ECR")
+            print("ERROR: Failed to login to ECR")
             return False
         
         # Step 2: Build Docker image
         image_name = self.build_docker_image()
         if not image_name:
-            print("❌ Failed to build Docker image")
+            print("ERROR: Failed to build Docker image")
             return False
         
         # Step 3: Push to ECR
         if not self.push_to_ecr(image_name):
-            print("❌ Failed to push image to ECR")
+            print("ERROR: Failed to push image to ECR")
             return False
         
         # Step 4: Update ECS service
         if not self.update_ecs_service(image_name):
-            print("❌ Failed to update ECS service")
+            print("ERROR: Failed to update ECS service")
             return False
         
         # Step 5: Wait for service to stabilize
         if not self.wait_for_service_update():
-            print("❌ Service failed to stabilize")
+            print("ERROR: Service failed to stabilize")
             return False
         
-        print("\n🎉 Docker Image Deployed Successfully!")
+        print("\nSUCCESS: Docker Image Deployed Successfully!")
         print(f"🐳 Image: {image_name}")
         print(f"🌐 Service: {self.project_name}-ai")
-        print(f"📊 Cluster: {self.project_name}-production-cluster")
+        print(f"Cluster: {self.project_name}-production-cluster")
         
         return True
 

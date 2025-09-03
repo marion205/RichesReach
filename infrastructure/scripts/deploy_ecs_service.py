@@ -19,13 +19,13 @@ class ECSDeployer:
         try:
             result = subprocess.run(command, shell=True, capture_output=True, text=True)
             if result.returncode == 0:
-                print(f"✅ {description} completed")
+                print(f"SUCCESS: {description} completed")
                 return result.stdout.strip()
             else:
-                print(f"❌ {description} failed: {result.stderr}")
+                print(f"ERROR: {description} failed: {result.stderr}")
                 return None
         except Exception as e:
-            print(f"❌ {description} error: {e}")
+            print(f"ERROR: {description} error: {e}")
             return None
     
     def create_task_definition(self):
@@ -104,27 +104,27 @@ class ECSDeployer:
     
     def deploy(self):
         """Main deployment method"""
-        print("🚀 Deploying RichesReach AI to ECS")
+        print("Deploying RichesReach AI to ECS")
         print("=" * 40)
         
         # Create task definition
         if not self.create_task_definition():
-            print("❌ Failed to create task definition")
+            print("ERROR: Failed to create task definition")
             return False
         
         # Create service
         if not self.create_service():
-            print("❌ Failed to create ECS service")
+            print("ERROR: Failed to create ECS service")
             return False
         
-        print("\n✅ ECS Service Deployed Successfully!")
+        print("\nSUCCESS: ECS Service Deployed Successfully!")
         print(f"🌐 Cluster: {self.cluster_name}")
         print(f"🔗 Service: {self.project_name}-ai")
-        print("\n📋 Next Steps:")
+        print("\nNext Steps:")
         print("1. 🐳 Build and push Docker image to ECR")
         print("2. 🔄 Update service with production image")
-        print("3. 📊 Monitor service health")
-        print("4. 🚀 Scale as needed")
+        print("3. Monitor service health")
+        print("4. Scale as needed")
         
         return True
 

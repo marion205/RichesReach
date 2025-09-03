@@ -27,33 +27,33 @@ def check_tensorflow_installation():
     
     try:
         import tensorflow as tf
-        print(f"✅ TensorFlow {tf.__version__} installed successfully")
+        print(f"SUCCESS: TensorFlow {tf.__version__} installed successfully")
         
         # Check GPU availability
         gpus = tf.config.list_physical_devices('GPU')
         if gpus:
-            print(f"🚀 GPU detected: {len(gpus)} device(s)")
+            print(f"GPU detected: {len(gpus)} device(s)")
             for gpu in gpus:
                 print(f"   - {gpu.name}")
         else:
             print("💻 Running on CPU")
         
         # Test basic functionality
-        print("\n🧪 Testing TensorFlow functionality...")
+        print("\nTesting TensorFlow functionality...")
         x = tf.constant([[1, 2], [3, 4]])
         y = tf.constant([[5, 6], [7, 8]])
         result = tf.matmul(x, y)
-        print(f"   Matrix multiplication test: ✅ {result.numpy()}")
+        print(f"   Matrix multiplication test: SUCCESS {result.numpy()}")
         
         return True
         
     except ImportError as e:
-        print(f"❌ TensorFlow not installed: {e}")
+        print(f"ERROR: TensorFlow not installed: {e}")
         print("\n📦 To install TensorFlow, run:")
         print("   pip install tensorflow")
         return False
     except Exception as e:
-        print(f"❌ TensorFlow error: {e}")
+        print(f"ERROR: TensorFlow error: {e}")
         return False
 
 def check_api_integration():
@@ -67,7 +67,7 @@ def check_api_integration():
         # Initialize service
         api_service = MarketDataAPIService()
         
-        print("✅ Market Data API Service initialized")
+        print("SUCCESS: Market Data API Service initialized")
         
         # Check available providers
         available_providers = api_service.get_available_providers()
@@ -76,7 +76,7 @@ def check_api_integration():
             for provider in available_providers:
                 print(f"   - {provider.value}")
         else:
-            print("⚠️  No API keys configured")
+            print("WARNING: No API keys configured")
             print("\n🔑 To configure API keys, set environment variables:")
             print("   export ALPHA_VANTAGE_API_KEY='your_key_here'")
             print("   export FINNHUB_API_KEY='your_key_here'")
@@ -84,19 +84,19 @@ def check_api_integration():
         
         # Check provider status
         provider_status = api_service.get_provider_status()
-        print(f"\n📊 Provider Status:")
+        print(f"\nProvider Status:")
         for provider, status in provider_status.items():
             print(f"   {provider}: {status['rate_limit']} req/min")
         
         return True
         
     except Exception as e:
-        print(f"❌ API integration error: {e}")
+        print(f"ERROR: API integration error: {e}")
         return False
 
 def check_performance_monitoring():
     """Check performance monitoring capabilities"""
-    print("\n📊 Checking Performance Monitoring...")
+            print("\nChecking Performance Monitoring...")
     print("=" * 50)
     
     try:
@@ -105,10 +105,10 @@ def check_performance_monitoring():
         # Initialize monitoring service
         monitoring = PerformanceMonitoringService()
         
-        print("✅ Performance Monitoring Service initialized")
+        print("SUCCESS: Performance Monitoring Service initialized")
         
         # Test metric recording
-        print("\n🧪 Testing metric recording...")
+        print("\nTesting metric recording...")
         monitoring.record_metric(
             name="test_accuracy",
             value=0.85,
@@ -122,10 +122,10 @@ def check_performance_monitoring():
             metric_type=MetricType.API_PERFORMANCE
         )
         
-        print("   ✅ Test metrics recorded")
+        print("   SUCCESS: Test metrics recorded")
         
         # Test model performance recording
-        print("\n🧪 Testing model performance recording...")
+        print("\nTesting model performance recording...")
         monitoring.record_model_performance(
             model_name="test_model",
             accuracy=0.85,
@@ -138,7 +138,7 @@ def check_performance_monitoring():
             validation_samples=200
         )
         
-        print("   ✅ Model performance recorded")
+        print("   SUCCESS: Model performance recorded")
         
         # Wait for metrics to be processed
         time.sleep(2)
@@ -157,7 +157,7 @@ def check_performance_monitoring():
         return True
         
     except Exception as e:
-        print(f"❌ Performance monitoring error: {e}")
+        print(f"ERROR: Performance monitoring error: {e}")
         return False
 
 def check_user_feedback():
@@ -171,13 +171,13 @@ def check_user_feedback():
         # Initialize feedback service
         feedback_service = UserFeedbackService()
         
-        print("✅ User Feedback Service initialized")
+        print("SUCCESS: User Feedback Service initialized")
         
         # Test user ID
         test_user_id = "test_user_001"
         
         # Test feedback submission
-        print("\n🧪 Testing feedback submission...")
+        print("\nTesting feedback submission...")
         feedback_success = feedback_service.submit_feedback(
             user_id=test_user_id,
             feedback_type=FeedbackType.ALGORITHM_FEEDBACK,
@@ -187,12 +187,12 @@ def check_user_feedback():
         )
         
         if feedback_success:
-            print("   ✅ Feedback submitted successfully")
+            print("   SUCCESS: Feedback submitted successfully")
         else:
-            print("   ❌ Feedback submission failed")
+            print("   ERROR: Feedback submission failed")
         
         # Test preference update
-        print("\n🧪 Testing preference update...")
+        print("\nTesting preference update...")
         preference_success = feedback_service.update_preference(
             user_id=test_user_id,
             preference_type=UserPreference.ESG_FOCUS,
@@ -205,12 +205,12 @@ def check_user_feedback():
         )
         
         if preference_success:
-            print("   ✅ Preference updated successfully")
+            print("   SUCCESS: Preference updated successfully")
         else:
-            print("   ❌ Preference update failed")
+            print("   ERROR: Preference update failed")
         
         # Test learning pattern recording
-        print("\n🧪 Testing learning pattern recording...")
+        print("\nTesting learning pattern recording...")
         pattern_success = feedback_service.record_learning_pattern(
             user_id=test_user_id,
             pattern_type=LearningPattern.PORTFOLIO_CHANGES,
@@ -223,12 +223,12 @@ def check_user_feedback():
         )
         
         if pattern_success:
-            print("   ✅ Learning pattern recorded successfully")
+            print("   SUCCESS: Learning pattern recorded successfully")
         else:
-            print("   ❌ Learning pattern recording failed")
+            print("   ERROR: Learning pattern recording failed")
         
         # Test data retrieval
-        print("\n🧪 Testing data retrieval...")
+        print("\nTesting data retrieval...")
         preferences = feedback_service.get_user_preferences(test_user_id)
         patterns = feedback_service.get_learning_patterns(test_user_id)
         feedback = feedback_service.get_user_feedback(test_user_id)
@@ -246,20 +246,20 @@ def check_user_feedback():
         print(f"   Adaptive preferences: {'portfolio_behavior' in adaptive}")
         
         # Test data export
-        print("\n🧪 Testing data export...")
+        print("\nTesting data export...")
         export_success = feedback_service.export_user_data(test_user_id, "test_user_data.json")
         if export_success:
-            print("   ✅ User data exported successfully")
+            print("   SUCCESS: User data exported successfully")
             # Clean up export file
             if os.path.exists("test_user_data.json"):
                 os.remove("test_user_data.json")
         else:
-            print("   ❌ User data export failed")
+            print("   ERROR: User data export failed")
         
         return True
         
     except Exception as e:
-        print(f"❌ User feedback error: {e}")
+        print(f"ERROR: User feedback error: {e}")
         return False
 
 def check_deep_learning():
@@ -273,14 +273,14 @@ def check_deep_learning():
         # Initialize deep learning service
         dl_service = DeepLearningService()
         
-        print(f"✅ Deep Learning Service initialized: {dl_service.is_available()}")
+        print(f"SUCCESS: Deep Learning Service initialized: {dl_service.is_available()}")
         
         if not dl_service.is_available():
-            print("⚠️  Deep learning not available. Install TensorFlow for full functionality.")
+            print("WARNING: Deep learning not available. Install TensorFlow for full functionality.")
             return False
         
         # Test LSTM model creation
-        print("\n🧪 Testing LSTM model creation...")
+        print("\nTesting LSTM model creation...")
         lstm_created = dl_service.create_lstm_model('production_test', {
             'sequence_length': 30,
             'features': 15,
@@ -289,16 +289,16 @@ def check_deep_learning():
         })
         
         if lstm_created:
-            print("   ✅ LSTM model created successfully")
+            print("   SUCCESS: LSTM model created successfully")
             
             # Test ensemble model
-            print("\n🧪 Testing ensemble model creation...")
+            print("\nTesting ensemble model creation...")
             ensemble_created = dl_service.create_ensemble_model('production_ensemble', ['production_test'], 'voting')
             
             if ensemble_created:
-                print("   ✅ Ensemble model created successfully")
+                print("   SUCCESS: Ensemble model created successfully")
             else:
-                print("   ❌ Ensemble model creation failed")
+                print("   ERROR: Ensemble model creation failed")
             
             # Test online model
             print("\n🧪 Testing online model creation...")
