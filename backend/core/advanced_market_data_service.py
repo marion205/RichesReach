@@ -88,7 +88,7 @@ class AdvancedMarketDataService:
             DataSource.IEX_CLOUD: {'calls_per_minute': 100, 'last_call': 0}
         }
         
-        logger.info("🚀 Advanced Market Data Service initialized")
+        logger.info("Advanced Market Data Service initialized")
     
     def _load_api_keys(self) -> Dict[str, str]:
         """Load API keys from environment variables"""
@@ -478,7 +478,7 @@ class AdvancedMarketDataService:
             'opportunity_analysis': self._analyze_market_opportunities(results)
         }
         
-        logger.info("✅ Comprehensive market overview generated")
+        logger.info("Comprehensive market overview generated")
         return market_overview
     
     def _analyze_vix_trend(self, vix_value: float) -> str:

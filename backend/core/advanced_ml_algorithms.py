@@ -60,43 +60,29 @@ class AdvancedMLAlgorithms:
     """
     
     def __init__(self, models_dir: str = "advanced_ml_models"):
-        self.models_dir = models_dir
+        # Initialize models directory
+        self.models_dir = os.path.join(os.getcwd(), 'advanced_ml_models')
         self._ensure_models_directory()
         
-        # Model storage
+        # Initialize model storage
         self.models = {}
-        self.performance_metrics = {}
+        self.is_trained = False
         
-        # Configuration
-        self.lstm_config = {
-            'units': [50, 100, 200],
-            'layers': [2, 3, 4],
-            'dropout': [0.1, 0.2, 0.3],
-            'learning_rate': [0.001, 0.01, 0.1],
-            'batch_size': [16, 32, 64]
-        }
+        # Check TensorFlow availability
+        self.tensorflow_available = TENSORFLOW_AVAILABLE
         
-        self.ensemble_config = {
-            'voting_methods': ['hard', 'soft'],
-            'stacking_methods': ['linear', 'non_linear'],
-            'base_models': ['linear', 'svm', 'tree', 'neural_network']
-        }
+        logger.info("Advanced ML Algorithms Service initialized")
+        logger.info(f"   TensorFlow: {'Available' if TENSORFLOW_AVAILABLE else 'Not Available'}")
+        logger.info(f"   Scikit-learn: {'Available' if SKLEARN_AVAILABLE else 'Not Available'}")
         
-        self.online_config = {
-            'learning_rates': [0.01, 0.1, 0.5],
-            'regularization': [0.001, 0.01, 0.1],
-            'max_iterations': [1000, 5000, 10000]
-        }
-        
-        logger.info("🚀 Advanced ML Algorithms Service initialized")
-        logger.info(f"   TensorFlow: {'✅ Available' if TENSORFLOW_AVAILABLE else '❌ Not Available'}")
-        logger.info(f"   Scikit-learn: {'✅ Available' if SKLEARN_AVAILABLE else '❌ Not Available'}")
+        # Load existing models if available
+        self._load_existing_models()
     
     def _ensure_models_directory(self):
-        """Ensure the models directory exists"""
+        """Ensure the advanced models directory exists"""
         if not os.path.exists(self.models_dir):
             os.makedirs(self.models_dir)
-            logger.info(f"📁 Created advanced models directory: {self.models_dir}")
+            logger.info(f"Created advanced models directory: {self.models_dir}")
     
     # ============================================================================
     # DEEP LEARNING (LSTM) METHODS
@@ -161,7 +147,7 @@ class AdvancedMLAlgorithms:
         if not TENSORFLOW_AVAILABLE:
             raise ImportError("TensorFlow is required for LSTM training")
         
-        logger.info(f"🚀 Training LSTM model: {model_name}")
+        logger.info(f"Training LSTM model: {model_name}")
         
         # Prepare validation data
         if X_val is None or y_val is None:
@@ -251,7 +237,7 @@ class AdvancedMLAlgorithms:
             
             self.performance_metrics[model_name] = performance
             
-            logger.info(f"✅ LSTM model trained successfully!")
+            logger.info(f"LSTM model trained successfully!")
             logger.info(f"   Best validation loss: {best_val_loss:.6f}")
             logger.info(f"   Best parameters: {best_params}")
             logger.info(f"   Model saved: {model_path}")
@@ -292,7 +278,7 @@ class AdvancedMLAlgorithms:
         if not SKLEARN_AVAILABLE:
             raise ImportError("Scikit-learn is required for ensemble methods")
         
-        logger.info(f"🚀 Creating voting ensemble: {model_name}")
+        logger.info(f"Creating voting ensemble: {model_name}")
         
         # Base models
         base_models = [
@@ -336,7 +322,7 @@ class AdvancedMLAlgorithms:
         
         self.performance_metrics[model_name] = performance
         
-        logger.info(f"✅ Voting ensemble created successfully!")
+        logger.info(f"Voting ensemble created successfully!")
         logger.info(f"   Training MSE: {train_mse:.6f}")
         logger.info(f"   R² Score: {performance.r2_score:.6f}")
         
@@ -352,7 +338,7 @@ class AdvancedMLAlgorithms:
         if not SKLEARN_AVAILABLE:
             raise ImportError("Scikit-learn is required for ensemble methods")
         
-        logger.info(f"🚀 Creating stacking ensemble: {model_name}")
+        logger.info(f"Creating stacking ensemble: {model_name}")
         
         # Base models
         base_models = [
@@ -402,7 +388,7 @@ class AdvancedMLAlgorithms:
         
         self.performance_metrics[model_name] = performance
         
-        logger.info(f"✅ Stacking ensemble created successfully!")
+        logger.info(f"Stacking ensemble created successfully!")
         logger.info(f"   Training MSE: {train_mse:.6f}")
         logger.info(f"   R² Score: {performance.r2_score:.6f}")
         
@@ -423,7 +409,7 @@ class AdvancedMLAlgorithms:
         if not SKLEARN_AVAILABLE:
             raise ImportError("Scikit-learn is required for online learning")
         
-        logger.info(f"🚀 Creating online learner: {model_name} ({model_type})")
+        logger.info(f"Creating online learner: {model_name} ({model_type})")
         
         # Create online model
         if model_type == "sgd":
@@ -453,7 +439,7 @@ class AdvancedMLAlgorithms:
         with open(model_path, 'wb') as f:
             pickle.dump(model, f)
         
-        logger.info(f"✅ Online learner created successfully!")
+        logger.info(f"Online learner created successfully!")
         logger.info(f"   Model type: {model_type}")
         logger.info(f"   Model saved: {model_path}")
         
@@ -499,7 +485,7 @@ class AdvancedMLAlgorithms:
         with open(model_path, 'wb') as f:
             pickle.dump(model, f)
         
-        logger.info(f"✅ Online learner updated successfully!")
+        logger.info(f"Online learner updated successfully!")
         logger.info(f"   Update time: {update_time:.4f}s")
         
         return {
@@ -520,11 +506,11 @@ class AdvancedMLAlgorithms:
         if os.path.exists(model_path):
             with open(model_path, 'rb') as f:
                 model = pickle.load(f)
-            logger.info(f"📥 Loaded model: {model_name} (.pkl)")
+            logger.info(f"Loaded model: {model_name} (.pkl)")
         elif os.path.exists(h5_path) and TENSORFLOW_AVAILABLE:
             from tensorflow import keras
             model = keras.models.load_model(h5_path)
-            logger.info(f"📥 Loaded model: {model_name} (.h5)")
+            logger.info(f"Loaded model: {model_name} (.h5)")
         else:
             raise FileNotFoundError(f"Model {model_name} not found")
         
@@ -582,7 +568,7 @@ class AdvancedMLAlgorithms:
             return True
             
         except Exception as e:
-            logger.error(f"❌ Error deleting model {model_name}: {e}")
+            logger.error(f"Error deleting model {model_name}: {e}")
             return False
     
     def get_service_status(self) -> Dict[str, Any]:

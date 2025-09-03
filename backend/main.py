@@ -51,9 +51,9 @@ if ML_SERVICES_AVAILABLE:
         market_data_service = AdvancedMarketDataService()
         advanced_ml = AdvancedMLAlgorithms()
         monitoring_service = ProductionMonitoringService()
-        logger.info("✅ All ML services initialized successfully")
+        logger.info("All ML services initialized successfully")
     except Exception as e:
-        logger.error(f"❌ Failed to initialize ML services: {e}")
+        logger.error(f"Failed to initialize ML services: {e}")
         ML_SERVICES_AVAILABLE = False
 
 @app.get("/")
