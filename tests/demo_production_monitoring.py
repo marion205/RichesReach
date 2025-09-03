@@ -53,7 +53,7 @@ class ProductionMonitoringDemo:
     
     async def simulate_api_traffic(self):
         """Simulate realistic API traffic patterns"""
-        logger.info("🚀 Simulating API traffic...")
+        logger.info("Simulating API traffic...")
         
         while self.is_running:
             try:
@@ -80,12 +80,12 @@ class ProductionMonitoringDemo:
                         user_id=f"user_{random.randint(1000, 9999)}"
                     )
                     
-                    logger.info(f"📊 API: {endpoint} - {response_time:.1f}ms - {status_code}")
+                    logger.info(f"API: {endpoint} - {response_time:.1f}ms - {status_code}")
                 
                 await asyncio.sleep(random.uniform(1, 3))
                 
             except Exception as e:
-                logger.error(f"❌ API simulation error: {e}")
+                logger.error(f"ERROR: API simulation error: {e}")
     
     async def simulate_ml_model_performance(self):
         """Simulate ML model performance metrics"""
@@ -129,7 +129,7 @@ class ProductionMonitoringDemo:
                 await asyncio.sleep(random.uniform(5, 10))
                 
             except Exception as e:
-                logger.error(f"❌ ML simulation error: {e}")
+                logger.error(f"ERROR: ML simulation error: {e}")
     
     async def simulate_market_data_quality(self):
         """Simulate market data quality metrics"""
@@ -168,7 +168,7 @@ class ProductionMonitoringDemo:
                 await asyncio.sleep(random.uniform(8, 15))
                 
             except Exception as e:
-                logger.error(f"❌ Data quality simulation error: {e}")
+                logger.error(f"ERROR: Data quality simulation error: {e}")
     
     async def simulate_system_health(self):
         """Simulate system health metrics"""
@@ -195,11 +195,11 @@ class ProductionMonitoringDemo:
                 await asyncio.sleep(random.uniform(15, 25))
                 
             except Exception as e:
-                logger.error(f"❌ System health simulation error: {e}")
+                logger.error(f"ERROR: System health simulation error: {e}")
     
     async def simulate_anomalies(self):
         """Simulate occasional anomalies to test alerting"""
-        logger.info("🚨 Simulating anomalies...")
+        logger.info("Simulating anomalies...")
         
         while self.is_running:
             try:
@@ -210,7 +210,7 @@ class ProductionMonitoringDemo:
                     break
                 
                 # Simulate high latency anomaly
-                logger.warning("🚨 Simulating high latency anomaly...")
+                logger.warning("Simulating high latency anomaly...")
                 for _ in range(5):
                     monitoring_service.record_api_performance(
                         endpoint="/api/portfolio/optimize",
@@ -220,7 +220,7 @@ class ProductionMonitoringDemo:
                     await asyncio.sleep(2)
                 
                 # Simulate low accuracy anomaly
-                logger.warning("🚨 Simulating low accuracy anomaly...")
+                logger.warning("Simulating low accuracy anomaly...")
                 for _ in range(3):
                     monitoring_service.record_model_performance(
                         model_name="market_regime_predictor",
@@ -231,7 +231,7 @@ class ProductionMonitoringDemo:
                     await asyncio.sleep(3)
                 
                 # Simulate data quality degradation
-                logger.warning("🚨 Simulating data quality degradation...")
+                logger.warning("Simulating data quality degradation...")
                 for _ in range(4):
                     monitoring_service.record_market_data_quality(
                         data_source="alpha_vantage",
@@ -241,14 +241,14 @@ class ProductionMonitoringDemo:
                     )
                     await asyncio.sleep(2)
                 
-                logger.info("✅ Anomalies simulated, returning to normal operation...")
+                logger.info("SUCCESS: Anomalies simulated, returning to normal operation...")
                 
             except Exception as e:
-                logger.error(f"❌ Anomaly simulation error: {e}")
+                logger.error(f"ERROR: Anomaly simulation error: {e}")
     
     async def display_metrics_dashboard(self):
         """Display real-time metrics dashboard"""
-        logger.info("📊 Starting metrics dashboard...")
+        logger.info("Starting metrics dashboard...")
         
         while self.is_running:
             try:
@@ -256,7 +256,7 @@ class ProductionMonitoringDemo:
                 print("\033[2J\033[H")
                 
                 # Display header
-                print("🚀 RICHESREACH AI - PRODUCTION MONITORING DASHBOARD")
+                print("RICHESREACH AI - PRODUCTION MONITORING DASHBOARD")
                 print("=" * 80)
                 print(f"🕐 Last Updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
                 print(f"⏱️  Demo Duration: {self.demo_duration}s | Interval: {self.metrics_interval}s")
@@ -269,7 +269,7 @@ class ProductionMonitoringDemo:
                 system_summary = monitoring_service.get_performance_summary("CPUUsage", hours=1)
                 
                 # Display API Performance
-                print("\n📊 API PERFORMANCE (Last Hour)")
+                print("\nAPI PERFORMANCE (Last Hour)")
                 print("-" * 40)
                 if "error" not in api_summary:
                     stats = api_summary["statistics"]
@@ -310,7 +310,7 @@ class ProductionMonitoringDemo:
                 
                 # Display Active Alerts
                 active_alerts = monitoring_service.get_active_alerts()
-                print(f"\n🚨 ACTIVE ALERTS: {len(active_alerts)}")
+                print(f"\nACTIVE ALERTS: {len(active_alerts)}")
                 print("-" * 40)
                 if active_alerts:
                     for alert in active_alerts[-3:]:  # Show last 3 alerts
@@ -322,18 +322,18 @@ class ProductionMonitoringDemo:
                 
                 # Display footer
                 print("=" * 80)
-                print("💡 Press Ctrl+C to stop the demo")
-                print("📋 Check CloudWatch for detailed metrics (if AWS configured)")
+                print("Press Ctrl+C to stop the demo")
+                print("Check CloudWatch for detailed metrics (if AWS configured)")
                 
                 await asyncio.sleep(self.metrics_interval)
                 
             except Exception as e:
-                logger.error(f"❌ Dashboard error: {e}")
+                logger.error(f"ERROR: Dashboard error: {e}")
                 await asyncio.sleep(self.metrics_interval)
     
     async def run_demo(self):
         """Run the complete production monitoring demo"""
-        logger.info("🎯 Starting Production Monitoring Demo...")
+        logger.info("Starting Production Monitoring Demo...")
         logger.info("=" * 60)
         
         try:
@@ -358,12 +358,12 @@ class ProductionMonitoringDemo:
         except KeyboardInterrupt:
             logger.info("\n🛑 Demo stopped by user")
         except Exception as e:
-            logger.error(f"❌ Demo error: {e}")
+            logger.error(f"ERROR: Demo error: {e}")
         finally:
             # Cleanup
             self.is_running = False
             monitoring_service.stop_monitoring()
-            logger.info("✅ Demo completed, monitoring service stopped")
+            logger.info("SUCCESS: Demo completed, monitoring service stopped")
     
     def run_sync(self):
         """Run the demo synchronously"""
@@ -371,15 +371,15 @@ class ProductionMonitoringDemo:
 
 def main():
     """Main demo function"""
-    print("🎯 PRODUCTION MONITORING DEMO FOR LIVE MARKET INTELLIGENCE")
+    print("PRODUCTION MONITORING DEMO FOR LIVE MARKET INTELLIGENCE")
     print("=" * 80)
-    print("🚀 This demo showcases:")
-    print("   📊 Real-time performance monitoring")
-    print("   🚨 Intelligent alerting system")
-    print("   🤖 ML model performance tracking")
-    print("   📈 Data quality monitoring")
-    print("   💻 System health tracking")
-    print("   ☁️  CloudWatch integration")
+    print("This demo showcases:")
+    print("   Real-time performance monitoring")
+    print("   Intelligent alerting system")
+    print("   ML model performance tracking")
+    print("   Data quality monitoring")
+    print("   System health tracking")
+    print("   CloudWatch integration")
     print("=" * 80)
     
     # Create and run demo
@@ -390,7 +390,7 @@ def main():
     except KeyboardInterrupt:
         print("\n🛑 Demo stopped by user")
     except Exception as e:
-        print(f"\n❌ Demo failed: {e}")
+        print(f"\nERROR: Demo failed: {e}")
 
 if __name__ == "__main__":
     main()
