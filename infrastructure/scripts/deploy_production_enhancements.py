@@ -25,18 +25,18 @@ class ProductionEnhancementDeployer:
         try:
             result = subprocess.run(command, shell=True, capture_output=capture_output, text=True)
             if result.returncode == 0:
-                print(f"✅ {description} completed")
+                print(f"SUCCESS: {description} completed")
                 return result.stdout.strip() if capture_output else True
             else:
-                print(f"❌ {description} failed: {result.stderr}")
+                print(f"ERROR: {description} failed: {result.stderr}")
                 return None
         except Exception as e:
-            print(f"❌ {description} error: {e}")
+                            print(f"ERROR: {description} error: {e}")
             return None
     
     def deploy_enhanced_infrastructure(self):
         """Deploy enhanced infrastructure with load balancer and databases"""
-        print("\n☁️ Deploying Enhanced Infrastructure with Load Balancer & Databases...")
+        print("\nDeploying Enhanced Infrastructure with Load Balancer & Databases...")
         
         # Deploy enhanced CloudFormation stack
         deploy_cmd = f"aws cloudformation deploy --template-file enhanced-cloudformation.yaml --stack-name {self.project_name}-enhanced --capabilities CAPABILITY_NAMED_IAM --region {self.region}"
@@ -77,7 +77,7 @@ class ProductionEnhancementDeployer:
         # Check if Docker is available
         docker_check = self.run_command("docker --version", "Checking Docker availability")
         if not docker_check:
-            print("❌ Docker not available. Please install Docker first.")
+            print("ERROR: Docker not available. Please install Docker first.")
             return False
         
         # Build and deploy using our script
@@ -93,7 +93,7 @@ class ProductionEnhancementDeployer:
         # Check if we're in a git repository
         git_check = self.run_command("git status", "Checking git repository", capture_output=False)
         if not git_check:
-            print("❌ Not in a git repository. Please run this from the project root.")
+            print("ERROR: Not in a git repository. Please run this from the project root.")
             return False
         
         # Create .github directory if it doesn't exist
@@ -101,10 +101,10 @@ class ProductionEnhancementDeployer:
         
         # Check if CI/CD workflow already exists
         if os.path.exists(".github/workflows/riches-reach-ai-cicd.yml"):
-            print("✅ CI/CD workflow already exists")
+            print("SUCCESS: CI/CD workflow already exists")
             return True
         
-        print("📋 CI/CD workflow created. You'll need to:")
+                    print("CI/CD workflow created. You'll need to:")
         print("1. Add AWS credentials to GitHub Secrets:")
         print("   - AWS_ACCESS_KEY_ID")
         print("   - AWS_SECRET_ACCESS_KEY")
@@ -147,19 +147,19 @@ CORS_ORIGINS=*
         with open(".env.production", "w") as f:
             f.write(env_content)
         
-        print("✅ Production configuration created")
+                    print("SUCCESS: Production configuration created")
         return True
     
     def run_smoke_tests(self):
         """Run comprehensive smoke tests"""
-        print("\n🧪 Running Production Smoke Tests...")
+        print("\nRunning Production Smoke Tests...")
         
         # Get load balancer DNS
         lb_cmd = f"aws cloudformation describe-stacks --stack-name {self.project_name}-enhanced --region {self.region} --query 'Stacks[0].Outputs[?OutputKey==`LoadBalancerDNS`].OutputValue' --output text"
         lb_dns = self.run_command(lb_cmd, "Getting load balancer DNS for testing")
         
         if not lb_dns:
-            print("❌ Could not get load balancer DNS")
+            print("ERROR: Could not get load balancer DNS")
             return False
         
         # Test endpoints
@@ -180,67 +180,67 @@ CORS_ORIGINS=*
     
     def deploy(self):
         """Main deployment method"""
-        print("🚀 DEPLOYING ALL PRODUCTION ENHANCEMENTS")
+        print("DEPLOYING ALL PRODUCTION ENHANCEMENTS")
         print("=" * 60)
         
         success = True
         
         # Step 1: Deploy enhanced infrastructure (includes databases)
         if not self.deploy_enhanced_infrastructure():
-            print("❌ Enhanced infrastructure deployment failed")
+            print("ERROR: Enhanced infrastructure deployment failed")
             success = False
         
         # Step 2: Build and deploy AI service
         if not self.build_and_deploy_ai_service():
-            print("❌ AI service deployment failed")
+            print("ERROR: AI service deployment failed")
             success = False
         
         # Step 3: Set up CI/CD pipeline
         if not self.setup_cicd_pipeline():
-            print("❌ CI/CD setup failed")
+            print("ERROR: CI/CD setup failed")
             success = False
         
         # Step 4: Create production configuration
         if not self.create_production_config():
-            print("❌ Production configuration failed")
+            print("ERROR: Production configuration failed")
             success = False
         
         # Step 5: Run smoke tests
         if success:
             if not self.run_smoke_tests():
-                print("❌ Smoke tests failed")
+                print("ERROR: Smoke tests failed")
                 success = False
         
         # Final status
         if success:
-            print("\n🎉 ALL PRODUCTION ENHANCEMENTS DEPLOYED SUCCESSFULLY!")
+            print("\nSUCCESS: ALL PRODUCTION ENHANCEMENTS DEPLOYED SUCCESSFULLY!")
             print("=" * 60)
-            print("📋 What's Now Available:")
-            print("✅ Enhanced infrastructure with load balancer")
-            print("✅ Production RDS PostgreSQL database")
-            print("✅ Production ElastiCache Redis cluster")
-            print("✅ Real AI service with Docker")
-            print("✅ CI/CD pipeline with GitHub Actions")
-            print("✅ Production monitoring and alerts")
-            print("✅ Auto-scaling capabilities")
+            print("What's Now Available:")
+            print("SUCCESS: Enhanced infrastructure with load balancer")
+            print("SUCCESS: Production RDS PostgreSQL database")
+            print("SUCCESS: Production ElastiCache Redis cluster")
+            print("SUCCESS: Real AI service with Docker")
+            print("SUCCESS: CI/CD pipeline with GitHub Actions")
+            print("SUCCESS: Production monitoring and alerts")
+            print("SUCCESS: Auto-scaling capabilities")
             
             # Get final URLs
             lb_cmd = f"aws cloudformation describe-stacks --stack-name {self.project_name}-enhanced --region {self.region} --query 'Stacks[0].Outputs[?OutputKey==`LoadBalancerDNS`].OutputValue' --output text"
             lb_dns = self.run_command(lb_cmd, "Getting final load balancer DNS")
             
             if lb_dns:
-                print(f"\n🌐 Production Service URL: http://{lb_dns}")
-                print(f"🏥 Health Check: http://{lb_dns}/health")
-                print(f"📊 Status: http://{lb_dns}/api/status")
+                print(f"\nProduction Service URL: http://{lb_dns}")
+                print(f"Health Check: http://{lb_dns}/health")
+                print(f"Status: http://{lb_dns}/api/status")
             
-            print("\n🚀 Next Steps:")
+            print("\nNext Steps:")
             print("1. Configure GitHub Secrets for CI/CD")
             print("2. Push to main branch to trigger production deployment")
             print("3. Monitor service health in CloudWatch")
             print("4. Scale resources as needed")
             
         else:
-            print("\n❌ Some production enhancements failed to deploy")
+            print("\nERROR: Some production enhancements failed to deploy")
             print("Check the logs above and fix issues before retrying")
         
         return success

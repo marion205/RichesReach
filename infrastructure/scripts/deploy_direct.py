@@ -18,13 +18,13 @@ def run_command(command, description):
     try:
         result = subprocess.run(command, shell=True, capture_output=True, text=True)
         if result.returncode == 0:
-            print(f"✅ {description} completed")
+            print(f"SUCCESS: {description} completed")
             return result.stdout.strip()
         else:
-            print(f"❌ {description} failed: {result.stderr}")
+            print(f"ERROR: {description} failed: {result.stderr}")
             return None
     except Exception as e:
-        print(f"❌ {description} failed: {e}")
+                    print(f"ERROR: {description} failed: {e}")
         return None
 
 def create_deployment_package():
@@ -54,12 +54,12 @@ def create_deployment_package():
                             arc_name = os.path.relpath(file_path, '.')
                             zipf.write(file_path, arc_name)
         
-        print(f"✅ Deployment package created: {package_path}")
+                    print(f"SUCCESS: Deployment package created: {package_path}")
         return package_path
 
 def deploy_to_s3(package_path):
     """Upload deployment package to S3"""
-    print("☁️ Uploading to S3...")
+            print("Uploading to S3...")
     
     bucket_name = "riches-reach-ai-models-498606688292"
     s3_key = "deployments/riches-reach-ai-latest.zip"
@@ -68,7 +68,7 @@ def deploy_to_s3(package_path):
     result = run_command(upload_cmd, "Uploading deployment package to S3")
     
     if result:
-        print(f"✅ Package uploaded to s3://{bucket_name}/{s3_key}")
+                    print(f"SUCCESS: Package uploaded to s3://{bucket_name}/{s3_key}")
         return f"s3://{bucket_name}/{s3_key}"
     return None
 
@@ -112,7 +112,7 @@ def create_ecs_task_definition():
     with open(task_def_file, 'w') as f:
         json.dump(task_def, f, indent=2)
     
-    print(f"✅ Task definition saved to {task_def_file}")
+                print(f"SUCCESS: Task definition saved to {task_def_file}")
     return task_def_file
 
 def register_task_definition(task_def_file):
@@ -127,17 +127,17 @@ def register_task_definition(task_def_file):
         try:
             task_def_data = json.loads(result)
             new_task_def_arn = task_def_data['taskDefinition']['taskDefinitionArn']
-            print(f"✅ New task definition registered: {new_task_def_arn}")
+            print(f"SUCCESS: New task definition registered: {new_task_def_arn}")
             return new_task_def_arn
         except:
-            print("⚠️ Could not extract task definition ARN")
+            print("WARNING: Could not extract task definition ARN")
             return None
     return None
 
 def update_ecs_service(new_task_def_arn):
     """Update the ECS service to use the new task definition"""
     if not new_task_def_arn:
-        print("❌ Cannot update service without task definition ARN")
+                    print("ERROR: Cannot update service without task definition ARN")
         return False
     
     print("🔄 Updating ECS service...")
@@ -146,25 +146,25 @@ def update_ecs_service(new_task_def_arn):
     result = run_command(update_cmd, "Updating ECS service")
     
     if result:
-        print("✅ ECS service update initiated")
+                    print("SUCCESS: ECS service update initiated")
         return True
     return False
 
 def deploy_direct():
     """Main deployment function"""
-    print("🚀 DIRECT DEPLOYMENT - No Docker Required!")
+            print("DIRECT DEPLOYMENT - No Docker Required!")
     print("=" * 50)
     
     # Step 1: Create deployment package
     package_path = create_deployment_package()
     if not package_path:
-        print("❌ Failed to create deployment package")
+                    print("ERROR: Failed to create deployment package")
         return
     
     # Step 2: Upload to S3
     s3_location = deploy_to_s3(package_path)
     if not s3_location:
-        print("❌ Failed to upload to S3")
+                    print("ERROR: Failed to upload to S3")
         return
     
     # Step 3: Create task definition
@@ -175,13 +175,13 @@ def deploy_direct():
     
     # Step 5: Update ECS service
     if update_ecs_service(new_task_def_arn):
-        print("\n🎉 DIRECT DEPLOYMENT COMPLETED!")
+        print("\nSUCCESS: DIRECT DEPLOYMENT COMPLETED!")
         print("Your RichesReach AI code is now being deployed to AWS!")
-        print("\n📋 Next steps:")
+        print("\nNext steps:")
         print("1. Monitor deployment: aws ecs describe-services --cluster riches-reach-ai-production-cluster --services riches-reach-ai-ai")
         print("2. Check logs: aws logs describe-log-groups --log-group-name-prefix /ecs/riches-reach-ai")
     else:
-        print("\n❌ Deployment failed at service update step")
+        print("\nERROR: Deployment failed at service update step")
 
 if __name__ == "__main__":
     deploy_direct()

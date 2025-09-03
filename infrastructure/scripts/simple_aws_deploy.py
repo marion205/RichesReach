@@ -75,7 +75,7 @@ class SimpleAWSDeployer:
     
     def test_services(self):
         """Test various AWS services"""
-        print("\n🧪 Testing AWS Services...")
+        print("\nTesting AWS Services...")
         
         # Test S3
         s3_test = self.run_command("aws s3 ls --region us-east-1", "Testing S3 access")
@@ -90,12 +90,12 @@ class SimpleAWSDeployer:
     
     def deploy(self):
         """Main deployment method"""
-        print("🚀 Simple AWS Deployment for RichesReach AI")
+        print("Simple AWS Deployment for RichesReach AI")
         print("=" * 50)
         
         # Test services first
         if not self.test_services():
-            print("❌ AWS service tests failed. Please check your permissions.")
+            print("ERROR: AWS service tests failed. Please check your permissions.")
             return False
         
         print("\n📦 Creating AWS Resources...")
@@ -110,12 +110,12 @@ class SimpleAWSDeployer:
         print("\n🐳 Note: EC2 instance creation requires additional permissions.")
         print("   You can create it manually in the AWS Console if needed.")
         
-        print("\n✅ Simple deployment completed!")
-        print("\n📋 Next Steps:")
+        print("\nSUCCESS: Simple deployment completed!")
+        print("\nNext Steps:")
         print("1. 🐳 Install Docker locally for containerization")
         print("2. 📦 Build and push Docker image to ECR")
-        print("3. 🚀 Deploy to EC2 or ECS")
-        print("4. 📊 Set up monitoring and scaling")
+        print("3. Deploy to EC2 or ECS")
+        print("4. Set up monitoring and scaling")
         
         return True
 

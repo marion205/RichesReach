@@ -14,22 +14,22 @@ def run_command(command, description):
     try:
         result = subprocess.run(command, shell=True, capture_output=True, text=True)
         if result.returncode == 0:
-            print(f"✅ {description} completed")
+            print(f"SUCCESS: {description} completed")
             return result.stdout.strip()
         else:
-            print(f"❌ {description} failed: {result.stderr}")
+            print(f"ERROR: {description} failed: {result.stderr}")
             return None
     except Exception as e:
-        print(f"❌ {description} failed: {e}")
+                    print(f"ERROR: {description} failed: {e}")
         return None
 
 def deploy_simple():
     """Deploy using a simple pre-built image approach"""
-    print("🚀 Simple Deployment - No Docker Build Required!")
+    print("Simple Deployment - No Docker Build Required!")
     print("=" * 50)
     
     # Check if we can use the existing ECS service
-    print("\n📋 Current ECS Status:")
+    print("\nCurrent ECS Status:")
     status = run_command(
         "aws ecs describe-services --cluster riches-reach-ai-production-cluster --services riches-reach-ai-ai --region us-east-1 --query 'services[0].{Status:status,RunningCount:runningCount,DesiredCount:desiredCount}' --output table",
         "Checking ECS service status"
@@ -39,7 +39,7 @@ def deploy_simple():
         print(status)
     
     # Check current tasks
-    print("\n📋 Current Tasks:")
+    print("\nCurrent Tasks:")
     tasks = run_command(
         "aws ecs list-tasks --cluster riches-reach-ai-production-cluster --service-name riches-reach-ai-ai --region us-east-1",
         "Listing current tasks"
@@ -48,7 +48,7 @@ def deploy_simple():
     if tasks:
         print(tasks)
     
-    print("\n🎯 Deployment Options:")
+    print("\nDeployment Options:")
     print("1. Use existing basic Python image (current)")
     print("2. Try to update with a different pre-built image")
     print("3. Check if we can deploy without changing the image")
@@ -63,8 +63,8 @@ def deploy_simple():
     if health:
         print(health)
     
-    print("\n✅ Simple deployment check completed!")
-    print("\n💡 Next Steps:")
+    print("\nSUCCESS: Simple deployment check completed!")
+    print("\nNext Steps:")
     print("- Your ECS service is already running")
     print("- The basic infrastructure is working")
     print("- We can enhance it later when Docker builds work")
