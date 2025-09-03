@@ -191,7 +191,7 @@ export default function SignUpScreen({ navigateTo, onSignUp, onNavigateToLogin }
       });
       // User created successfully
       Alert.alert(
-        'Success! 🎉', 
+        'Success!', 
         'Your account has been created successfully! Please log in.',
         [{ text: 'OK', onPress: onSignUp }]
       );

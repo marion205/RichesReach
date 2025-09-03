@@ -227,7 +227,7 @@ class NewsService {
       
       if (!response.ok) {
         if (response.status === 429) {
-          console.warn('⚠️ NewsAPI rate limit reached (429), using cached data if available');
+          console.warn('NewsAPI rate limit reached (429), using cached data if available');
           // Try to return any cached data, even if expired
           const expiredCache = this.newsCache[category];
           if (expiredCache && expiredCache.articles.length > 0) {
