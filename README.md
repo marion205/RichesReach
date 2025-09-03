@@ -1,17 +1,17 @@
-# 🚀 RichesReach AI - AI-Powered Investment Platform
+# RichesReach AI - AI-Powered Investment Platform
 
-## 📁 **Clean File Structure**
+## Clean File Structure
 
 ```
 RichesReach/
-├── 📱 mobile/                    # React Native mobile application
+├── mobile/                    # React Native mobile application
 │   ├── components/               # Reusable UI components
 │   ├── screens/                  # App screens and navigation
 │   ├── services/                 # API and business logic
 │   ├── types/                    # TypeScript type definitions
 │   └── App.tsx                   # Main application entry point
 │
-├── 🖥️ backend/                   # Django + ML backend application
+├── backend/                   # Django + ML backend application
 │   ├── core/                     # Core application modules
 │   │   ├── ai_service.py        # Main AI service integration
 │   │   ├── ml_service.py        # Machine learning algorithms
@@ -28,7 +28,7 @@ RichesReach/
 │   ├── Dockerfile               # Production container
 │   └── docker-compose.yml       # Local development setup
 │
-├── ☁️ infrastructure/            # AWS and deployment resources
+├── infrastructure/            # AWS and deployment resources
 │   ├── cloudformation/          # AWS CloudFormation templates
 │   │   ├── enhanced-cloudformation.yaml  # Complete infrastructure
 │   │   ├── simple-cloudformation.yaml    # Basic setup
@@ -41,7 +41,7 @@ RichesReach/
 │       ├── monitoring-config.json        # Monitoring configuration
 │       └── health_check.py              # Health check endpoint
 │
-├── 📚 docs/                      # Documentation and guides
+├── docs/                      # Documentation and guides
 │   ├── AWS_PRODUCTION_GUIDE.md  # AWS deployment guide
 │   ├── API_KEYS_SETUP_GUIDE.md  # Third-party API setup
 │   ├── ML_ENHANCEMENT_README.md # Machine learning details
@@ -51,25 +51,25 @@ RichesReach/
 │   ├── FRONTEND_INTEGRATION_SUMMARY.md # Frontend integration
 │   └── RUST_INTEGRATION.md      # Rust engine integration
 │
-├── 🧪 tests/                     # Test files and demos
+├── tests/                     # Test files and demos
 │   ├── test_*.py                # Backend test files
 │   ├── demo_*.py                # Demonstration scripts
 │   ├── test_*.js                # Frontend test files
 │   ├── train_with_real_data.py  # ML training scripts
 │   └── api_keys_setup.py        # API configuration tests
 │
-├── 🛠️ scripts/                   # Utility and automation scripts
+├── scripts/                   # Utility and automation scripts
 │   ├── install_production_deps.sh       # Dependency installation
 │   ├── redis_config.py                  # Redis configuration
 │   └── aws_production_deployment.py    # AWS deployment orchestration
 │
-└── 📋 .github/                   # GitHub Actions CI/CD
+└── .github/                   # GitHub Actions CI/CD
     └── workflows/                # Automated deployment pipelines
 ```
 
-## 🚀 **Quick Start**
+## Quick Start
 
-### **1. Backend Development**
+### 1. Backend Development
 ```bash
 cd backend
 python -m venv venv
@@ -78,147 +78,148 @@ pip install -r requirements.txt
 python manage.py runserver
 ```
 
-### **2. Mobile Development**
+### 2. Mobile Development
 ```bash
 cd mobile
 npm install
 npm start
 ```
 
-### **3. Production Deployment**
+### 3. Production Deployment
 ```bash
 cd infrastructure/scripts
 python deploy_direct.py
 ```
 
-## 🧠 **Core ML Features**
+## Core ML Features
 
-### **Market Regime Detection**
+### Market Regime Detection
 - **8 market regimes** from early bull to bubble formation
 - **20+ market indicators** including VIX, bond yields, sector performance
 - **Random Forest classification** with confidence scoring
 
-### **Portfolio Optimization**
+### Portfolio Optimization
 - **7 asset classes** including stocks, bonds, ETFs, REITs, commodities
 - **25+ personal factors** including age, income, risk tolerance, goals
 - **Gradient Boosting optimization** with real-time adaptation
 
-### **Stock Scoring**
+### Stock Scoring
 - **ESG factors** - Environmental, Social, Governance
 - **Value factors** - P/E ratios, P/B ratios, debt levels
 - **Momentum factors** - Price trends, volume analysis
 - **20+ features per stock** for comprehensive scoring
 
-## 🏗️ **Architecture**
+## Architecture
 
-### **Backend Stack**
+### Backend Stack
 - **Django 4.2** + GraphQL (Graphene)
 - **Scikit-learn** + TensorFlow for ML
 - **PostgreSQL** + Redis for data
 - **AWS ECS** for production deployment
 
-### **Frontend Stack**
+### Frontend Stack
 - **React Native** with Expo
 - **TypeScript** for type safety
 - **Apollo Client** for GraphQL
 - **Real-time updates** and responsive UI
 
-### **Infrastructure**
+### Infrastructure
 - **AWS CloudFormation** for infrastructure as code
 - **ECS Fargate** for containerized deployment
 - **RDS PostgreSQL** for production database
 - **ElastiCache Redis** for caching
 - **CloudWatch** for monitoring
 
-## 📊 **Key Benefits**
+## Key Benefits
 
-### **For Users**
+### For Users
 - **AI-powered portfolio optimization** - not just tracking
 - **Personalized investment strategies** based on your profile
 - **Real-time market adaptation** to changing conditions
 - **Educational insights** to understand investing
 
-### **For Investors**
+### For Investors
 - **Production-ready platform** deployed on AWS
 - **Technical founder** who can build and scale
 - **$1.2T fintech market** with perfect timing
 - **Scalable architecture** ready for growth
 
-## 🔧 **Development Workflow**
+## Development Workflow
 
-### **Local Development**
+### Local Development
 1. **Backend:** Django development server with hot reload
 2. **Frontend:** Expo development server with live updates
 3. **Database:** SQLite for development, PostgreSQL for production
 4. **ML Models:** Local training and testing
 
-### **Testing**
+### Testing
 1. **Unit Tests:** Python pytest for backend
 2. **Integration Tests:** End-to-end API testing
 3. **Frontend Tests:** Component and screen testing
 4. **ML Tests:** Model accuracy and performance validation
 
-### **Deployment**
+### Deployment
 1. **Staging:** Automated testing and validation
 2. **Production:** AWS ECS with auto-scaling
 3. **Monitoring:** Real-time performance tracking
 4. **Rollback:** Quick rollback capabilities
 
-## 📈 **Performance Metrics**
+## Performance Metrics
 
-### **Current Performance**
+### Current Performance
 - **API Response Time:** < 200ms average
 - **ML Model Accuracy:** 85%+ for portfolio optimization
 - **System Uptime:** 99.9% availability
 - **Scalability:** Handles 1000+ concurrent users
 
-### **Target Performance (18 months)**
+### Target Performance (18 months)
 - **API Response Time:** < 100ms average
 - **ML Model Accuracy:** 90%+ for portfolio optimization
 - **System Uptime:** 99.99% availability
 - **Scalability:** Handles 100,000+ concurrent users
 
-## 🚨 **Security & Compliance**
+## Security & Compliance
 
-### **Security Features**
+### Security Features
 - **JWT authentication** with role-based access
 - **Data encryption** at rest and in transit
 - **AWS security best practices** implementation
 - **Regular security audits** and penetration testing
 
-### **Compliance**
+### Compliance
 - **SEC registration** in progress
 - **GDPR and CCPA** compliant data handling
 - **Audit trails** for all financial decisions
 - **Risk management** controls and limits
 
-## 🌟 **Why RichesReach AI?**
+## Why RichesReach AI?
 
-### **Technical Excellence**
+### Technical Excellence
 - **Real ML algorithms** - not just buzzwords
 - **Production infrastructure** - enterprise-grade AWS deployment
 - **Scalable architecture** - built for massive growth
 - **Technical founder** - can build AND scale
 
-### **Market Opportunity**
+### Market Opportunity
 - **$1.2T fintech market** with 25% annual growth
 - **40M+ new retail investors** since 2020
 - **AI + fintech convergence** at perfect timing
 - **Democratization** of sophisticated investing
 
-### **Competitive Advantages**
+### Competitive Advantages
 - **AI-first approach** - actual machine learning
 - **Personalization** - adapts to individual profiles
 - **Real-time adaptation** - responds to market changes
 - **Educational focus** - helps users understand investing
 
-## 📞 **Contact & Support**
+## Contact & Support
 
 - **Founder:** Marion Collins
-- **Email:** mcollins205@gmail.com
-- **LinkedIn:** www.linkedin.com/in/marion-collins-7ab29669
+- **Email:** [Your email]
+- **LinkedIn:** [Your LinkedIn]
+- **GitHub:** [Your GitHub]
 
-## 🎯 **Investment Opportunity**
+## Investment Opportunity
 
 **RichesReach AI is raising $1.5M Series A to scale our AI-powered investment platform.**
 
