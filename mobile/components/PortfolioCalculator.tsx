@@ -128,7 +128,7 @@ const PortfolioCalculator: React.FC<PortfolioCalculatorProps> = ({ watchlistItem
       });
       
       if (result.data?.currentStockPrices) {
-        console.log('📊 Received price data:', result.data.currentStockPrices);
+        console.log(' Received price data:', result.data.currentStockPrices);
         
         const newPrices: { [key: string]: number } = {};
         result.data.currentStockPrices.forEach((price: any) => {
@@ -147,12 +147,12 @@ const PortfolioCalculator: React.FC<PortfolioCalculatorProps> = ({ watchlistItem
         console.log('💰 Final price mapping:', newPrices);
         setStockPrices(newPrices);
       } else {
-        console.log('❌ No price data received from API');
+        console.log('ERROR: No price data received from API');
       }
     } catch (error) {
-      console.log('⚠️ Could not fetch real stock prices, using fallback data');
-      console.log('💡 Error details:', error);
-      console.log('💡 This might be due to API rate limits or network issues.');
+      console.log('WARNING: Could not fetch real stock prices, using fallback data');
+      console.log(' Error details:', error);
+      console.log(' This might be due to API rate limits or network issues.');
       setStockPrices(fallbackPrices);
     } finally {
       setPricesLoading(false);
@@ -237,7 +237,7 @@ const PortfolioCalculator: React.FC<PortfolioCalculatorProps> = ({ watchlistItem
         return;
       }
 
-      console.log('✅ Valid items to save:', validItems.length);
+      console.log('SUCCESS: Valid items to save:', validItems.length);
 
       const result = await savePortfolio({
         variables: { 
@@ -263,7 +263,7 @@ const PortfolioCalculator: React.FC<PortfolioCalculatorProps> = ({ watchlistItem
             }
           });
           
-          console.log('✅ Portfolio value updated in cache:', newPortfolioValue);
+          console.log('SUCCESS: Portfolio value updated in cache:', newPortfolioValue);
           
           // Debug: Check cache state
           const cacheData = client.readQuery({
@@ -280,16 +280,16 @@ const PortfolioCalculator: React.FC<PortfolioCalculatorProps> = ({ watchlistItem
             onPortfolioUpdate(newPortfolioValue);
           }
         } catch (error) {
-          console.log('⚠️ Could not update portfolio value in cache:', error);
+          console.log('WARNING: Could not update portfolio value in cache:', error);
         }
         
         setIsEditing(false);
       } else {
-        console.log('❌ Portfolio save failed:', result.data?.savePortfolio?.message);
+        console.log('ERROR: Portfolio save failed:', result.data?.savePortfolio?.message);
       }
     } catch (error) {
-      console.error('❌ Portfolio save error:', error);
-      console.error('❌ Error details:', JSON.stringify(error, null, 2));
+      console.error('ERROR: Portfolio save error:', error);
+      console.error('ERROR: Error details:', JSON.stringify(error, null, 2));
     }
   };
 
@@ -380,7 +380,7 @@ const PortfolioCalculator: React.FC<PortfolioCalculatorProps> = ({ watchlistItem
         )}
         {!pricesLoading && Object.keys(stockPrices).length === 0 && (
           <Text style={styles.rateLimitNote}>
-            ⚠️ Using stored prices (API rate limit reached)
+            WARNING: Using stored prices (API rate limit reached)
           </Text>
         )}
       </View>
@@ -466,7 +466,7 @@ const PortfolioCalculator: React.FC<PortfolioCalculatorProps> = ({ watchlistItem
 
       <View style={styles.footer}>
         <Text style={styles.footerText}>
-          💡 Tap "Edit" to input share quantities and see real-time portfolio values. Click "Done" to save your portfolio.
+           Tap "Edit" to input share quantities and see real-time portfolio values. Click "Done" to save your portfolio.
         </Text>
       </View>
     </View>
