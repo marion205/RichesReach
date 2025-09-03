@@ -2,16 +2,16 @@
 # Production Dependencies Installation Script
 # Installs TensorFlow and other production-ready ML libraries
 
-echo "🚀 Installing Production ML Dependencies..."
+echo "Installing Production ML Dependencies..."
 echo "=========================================="
 
 # Check Python version
 python_version=$(python3 --version 2>&1 | grep -oP '\d+\.\d+')
-echo "✅ Python version: $python_version"
+echo "SUCCESS: Python version: $python_version"
 
 # Check if pip is available
 if ! command -v pip3 &> /dev/null; then
-    echo "❌ pip3 not found. Installing pip..."
+    echo "ERROR: pip3 not found. Installing pip..."
     curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
     python3 get-pip.py --user
     rm get-pip.py
@@ -34,7 +34,7 @@ echo "   Installing XGBoost and LightGBM..."
 pip3 install xgboost>=1.7.0 lightgbm>=4.0.0
 
 echo ""
-echo "📊 Installing Data Science Libraries..."
+echo "Installing Data Science Libraries..."
 
 # Data manipulation and analysis
 pip3 install pandas>=2.0.0 numpy>=1.24.0 scipy>=1.10.0
@@ -84,31 +84,31 @@ pip3 install cryptography>=41.0.0 bcrypt>=4.0.0
 pip3 install uvicorn>=0.23.0 gunicorn>=21.2.0
 
 echo ""
-echo "🧪 Testing Installations..."
+echo "Testing Installations..."
 
 # Test TensorFlow
 echo "   Testing TensorFlow..."
-python3 -c "import tensorflow as tf; print(f'✅ TensorFlow {tf.__version__} installed successfully')"
+python3 -c "import tensorflow as tf; print(f'SUCCESS: TensorFlow {tf.__version__} installed successfully')"
 
 # Test PyTorch
 echo "   Testing PyTorch..."
-python3 -c "import torch; print(f'✅ PyTorch {torch.__version__} installed successfully')"
+python3 -c "import torch; print(f'SUCCESS: PyTorch {torch.__version__} installed successfully')"
 
 # Test Scikit-learn
 echo "   Testing Scikit-learn..."
-python3 -c "import sklearn; print(f'✅ Scikit-learn {sklearn.__version__} installed successfully')"
+python3 -c "import sklearn; print(f'SUCCESS: Scikit-learn {sklearn.__version__} installed successfully')"
 
 echo ""
-echo "📋 Installation Summary:"
+echo "Installation Summary:"
 echo "========================="
 pip3 list | grep -E "(tensorflow|torch|sklearn|pandas|numpy|yfinance|ta)" | head -10
 
 echo ""
-echo "🎯 Next Steps:"
+echo "Next Steps:"
 echo "1. Test the ML services: python3 test_ml_services.py"
 echo "2. Run advanced demo: python3 demo_advanced_ml.py"
 echo "3. Configure API keys for market data"
 echo "4. Set up monitoring and logging"
 
 echo ""
-echo "✅ Production ML Dependencies Installation Complete!"
+echo "SUCCESS: Production ML Dependencies Installation Complete!"

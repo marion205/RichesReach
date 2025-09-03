@@ -301,25 +301,25 @@ def check_deep_learning():
                 print("   ERROR: Ensemble model creation failed")
             
             # Test online model
-            print("\n🧪 Testing online model creation...")
+            print("\nTesting online model creation...")
             online_created = dl_service.create_online_model('production_online', 'sgd')
             
             if online_created:
-                print("   ✅ Online model created successfully")
+                print("   SUCCESS: Online model created successfully")
             else:
-                print("   ❌ Online model creation failed")
+                print("   ERROR: Online model creation failed")
             
             # Get model summary
             all_models = dl_service.get_all_models()
-            print(f"\n📊 Models created: {all_models['total_models']}")
+            print(f"\nModels created: {all_models['total_models']}")
             
         else:
-            print("   ❌ LSTM model creation failed")
+            print("   ERROR: LSTM model creation failed")
         
         return True
         
     except Exception as e:
-        print(f"❌ Deep learning error: {e}")
+        print(f"ERROR: Deep learning error: {e}")
         return False
 
 def check_technical_analysis():
@@ -333,10 +333,10 @@ def check_technical_analysis():
         # Initialize technical analysis service
         ta_service = TechnicalAnalysisService()
         
-        print("✅ Technical Analysis Service initialized")
+        print("SUCCESS: Technical Analysis Service initialized")
         
         # Create sample data
-        print("\n🧪 Testing technical indicators...")
+        print("\nTesting technical indicators...")
         np.random.seed(42)
         sample_data = pd.DataFrame({
             'open': np.random.randn(100) * 10 + 100,
@@ -350,7 +350,7 @@ def check_technical_analysis():
         indicators = ta_service.calculate_all_indicators(sample_data)
         
         if indicators:
-            print(f"   ✅ {len(indicators)} technical indicators calculated")
+            print(f"   SUCCESS: {len(indicators)} technical indicators calculated")
             
             # Show some key indicators
             if 'rsi_14' in indicators:
@@ -360,12 +360,12 @@ def check_technical_analysis():
             if 'trend_direction' in indicators:
                 print(f"   Trend Direction: {indicators['trend_direction']}")
         else:
-            print("   ❌ Technical indicators calculation failed")
+            print("   ERROR: Technical indicators calculation failed")
         
         return True
         
     except Exception as e:
-        print(f"❌ Technical analysis error: {e}")
+        print(f"ERROR: Technical analysis error: {e}")
         return False
 
 def check_ml_config():
@@ -379,11 +379,11 @@ def check_ml_config():
         # Initialize ML configuration
         config = MLConfig()
         
-        print("✅ ML Configuration Service initialized")
+        print("SUCCESS: ML Configuration Service initialized")
         
         # Show configuration summary
         summary = config.get_config_summary()
-        print(f"\n📋 Configuration Summary:")
+        print(f"\nConfiguration Summary:")
         for key, value in summary.items():
             if isinstance(value, list):
                 print(f"   {key.replace('_', ' ').title()}: {len(value)} items")
@@ -391,7 +391,7 @@ def check_ml_config():
                 print(f"   {key.replace('_', ' ').title()}: {value}")
         
         # Test configuration updates
-        print("\n🧪 Testing configuration updates...")
+        print("\nTesting configuration updates...")
         
         # Update risk tolerance
         old_risk = config.risk_tolerance_config['Conservative']['risk_score']
@@ -407,17 +407,17 @@ def check_ml_config():
         
         # Save configuration
         config.save_config('production_ml_config.json')
-        print("   ✅ Configuration saved to 'production_ml_config.json'")
+        print("   SUCCESS: Configuration saved to 'production_ml_config.json'")
         
         return True
         
     except Exception as e:
-        print(f"❌ ML configuration error: {e}")
+        print(f"ERROR: ML configuration error: {e}")
         return False
 
 def run_production_tests():
     """Run all production tests"""
-    print("🚀 Production Deployment Tests")
+            print("Production Deployment Tests")
     print("=" * 80)
     
     tests = [
@@ -436,14 +436,14 @@ def run_production_tests():
         print(f"\n{'='*20} {test_name} {'='*20}")
         try:
             success = test_func()
-            results[test_name] = "✅ PASS" if success else "❌ FAIL"
+            results[test_name] = "SUCCESS: PASS" if success else "ERROR: FAIL"
         except Exception as e:
-            print(f"❌ Test failed with exception: {e}")
+            print(f"ERROR: Test failed with exception: {e}")
             results[test_name] = "💥 ERROR"
     
     # Summary
     print("\n" + "=" * 80)
-    print("📊 PRODUCTION TEST SUMMARY")
+            print("PRODUCTION TEST SUMMARY")
     print("=" * 80)
     
     for test_name, result in results.items():
@@ -452,14 +452,14 @@ def run_production_tests():
     passed = sum(1 for result in results.values() if "PASS" in result)
     total = len(results)
     
-    print(f"\n🎯 Overall: {passed}/{total} tests passed")
+            print(f"\nOverall: {passed}/{total} tests passed")
     
     if passed == total:
-        print("🎉 All production tests passed! Your ML system is ready for production.")
+        print("SUCCESS: All production tests passed! Your ML system is ready for production.")
     elif passed >= total * 0.7:
-        print("⚠️  Most tests passed. Review failed tests before production deployment.")
+        print("WARNING: Most tests passed. Review failed tests before production deployment.")
     else:
-        print("❌ Multiple tests failed. Fix issues before production deployment.")
+        print("ERROR: Multiple tests failed. Fix issues before production deployment.")
     
     return results
 
@@ -507,7 +507,7 @@ def main():
         
         if choice in ['1', '2', '3', '4', '5', '6', '7', '8']:
             print("\n" + "=" * 80)
-            print("🎯 Ready for next test or deployment!")
+            print("Ready for next test or deployment!")
 
 if __name__ == "__main__":
     main()
