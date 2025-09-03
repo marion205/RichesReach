@@ -1,0 +1,26 @@
+# Minimal production requirements for RichesReach AI Service
+# Optimized for fast Docker builds
+
+# Core web framework
+fastapi==0.95.2
+uvicorn[standard]==0.22.0
+
+# Essential ML packages (core only)
+scikit-learn==1.3.0
+pandas==2.0.3
+numpy==1.23.5
+
+# Database and caching
+psycopg2-binary==2.9.7
+redis==4.6.0
+
+# AWS SDK
+boto3==1.28.44
+
+# Utilities
+python-dotenv==1.0.0
+pydantic==1.10.8
+httpx==0.24.1
+
+# Monitoring
+structlog==23.1.0

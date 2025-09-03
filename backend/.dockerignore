@@ -1,0 +1,94 @@
+# Exclude unnecessary files from Docker build context
+# This makes builds MUCH faster
+
+# Git and version control
+.git
+.gitignore
+.gitattributes
+
+# Python cache and virtual environments
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+ENV/
+
+# Development and IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Documentation and guides
+*.md
+docs/
+README*
+
+# Test files
+tests/
+test_*.py
+*_test.py
+pytest.ini
+.coverage
+.pytest_cache/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+logs/
+temp/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Database files
+*.db
+*.sqlite3
+*.sqlite
+
+# Environment files (except production)
+.env
+.env.local
+.env.development
+
+# Node modules (if any)
+node_modules/
+
+# Docker files (except this one)
+Dockerfile*
+docker-compose*
+
+# Deployment scripts
+deploy_*.py
+*_deploy.py
+aws_*.py
+simple_*.py
+full_*.py
+
+# CloudFormation templates
+*.yaml
+*.yml
+
+# CI/CD files
+.github/
+
+# Backup files
+*.bak
+*.backup
