@@ -382,7 +382,7 @@ class UserAchievement(models.Model):
     achievement_type = models.CharField(max_length=30, choices=ACHIEVEMENT_TYPES)
     title = models.CharField(max_length=100)
     description = models.TextField()
-    icon = models.CharField(max_length=50, default='🏆')
+    icon = models.CharField(max_length=50, default='trophy')
     earned_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:

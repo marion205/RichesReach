@@ -500,9 +500,9 @@ class Query(graphene.ObjectType):
                     
                     # Log price source
                     if price_data.get('verified'):
-                        logger.info(f"✅ Real-time price for {symbol}: ${price_data['price']} from {price_data.get('source')}")
+                        logger.info(f"Real-time price for {symbol}: ${price_data['price']} from {price_data.get('source')}")
                     else:
-                        logger.info(f"💾 Using fallback price for {symbol}: ${price_data['price']}")
+                        logger.info(f"Using fallback price for {symbol}: ${price_data['price']}")
                     
                     # Update database with new price
                     enhanced_stock_service.update_stock_price_in_database(symbol, price_data)

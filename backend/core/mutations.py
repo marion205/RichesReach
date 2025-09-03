@@ -400,7 +400,7 @@ class CreateWatchlist(graphene.Mutation):
                     achievement_type='first_watchlist',
                     title='Watchlist Creator',
                     description='Created your first watchlist!',
-                    icon='📋'
+                    icon='document'
                 )
             
             return CreateWatchlist(
@@ -545,7 +545,7 @@ class LikeDiscussion(graphene.Mutation):
                         achievement_type='viral_post',
                         title='Viral Post',
                         description='Your post got 100+ likes!',
-                        icon='🔥'
+                        icon='fire'
                     )
                 elif discussion.likes.count() >= 10 and not UserAchievement.objects.filter(user=discussion.user, achievement_type='popular_post').exists():
                     UserAchievement.objects.create(
@@ -553,7 +553,7 @@ class LikeDiscussion(graphene.Mutation):
                         achievement_type='popular_post',
                         title='Popular Post',
                         description='Your post got 10+ likes!',
-                        icon='⭐'
+                        icon='star'
                     )
             
             return LikeDiscussion(

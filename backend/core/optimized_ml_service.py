@@ -25,126 +25,98 @@ class OptimizedMLService:
     """
     
     def __init__(self, models_dir: str = "ml_models"):
-        self.models_dir = models_dir
+        # Initialize models directory
+        self.models_dir = os.path.join(os.getcwd(), 'ml_models')
         self._ensure_models_directory()
         
-        # Model file paths
-        self.model_paths = {
-            'market_regime': os.path.join(models_dir, 'market_regime_model.pkl'),
-            'portfolio_optimizer': os.path.join(models_dir, 'portfolio_optimizer_model.pkl'),
-            'stock_scorer': os.path.join(models_dir, 'stock_scorer_model.pkl'),
-            'scalers': os.path.join(models_dir, 'scalers.pkl'),
-            'encoders': os.path.join(models_dir, 'encoders.pkl')
-        }
-        
-        # Initialize models and components
+        # Initialize model storage
         self.models = {}
         self.scalers = {}
         self.encoders = {}
         self.is_trained = False
         
         # Load existing models if available
-        self._load_models()
-        
-        # Hyperparameter grids for optimization
-        self.hyperparameter_grids = {
-            'market_regime': {
-                'n_estimators': [50, 100, 200],
-                'max_depth': [10, 20, None],
-                'min_samples_split': [2, 5, 10],
-                'min_samples_leaf': [1, 2, 4],
-                'max_features': ['sqrt', 'log2', None]
-            },
-            'portfolio_optimizer': {
-                'n_estimators': [100, 200, 300],
-                'max_depth': [5, 10, 15],
-                'learning_rate': [0.01, 0.1, 0.2],
-                'subsample': [0.8, 0.9, 1.0],
-                'min_samples_split': [2, 5, 10]
-            },
-            'stock_scorer': {
-                'n_estimators': [100, 200, 300],
-                'max_depth': [5, 10, 15],
-                'learning_rate': [0.01, 0.1, 0.2],
-                'subsample': [0.8, 0.9, 1.0],
-                'min_samples_split': [2, 5, 10]
-            }
-        }
-        
-        # Cross-validation settings
-        self.cv_folds = 5
-        self.cv_strategy = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-        
-        logger.info("🚀 Optimized ML Service initialized with model persistence")
+        try:
+            self._load_existing_models()
+            logger.info("Optimized ML Service initialized with model persistence")
+        except Exception as e:
+            logger.warning(f"Could not load existing models: {e}")
+            logger.info("Will train new models on first use")
     
     def _ensure_models_directory(self):
         """Ensure the models directory exists"""
         if not os.path.exists(self.models_dir):
             os.makedirs(self.models_dir)
-            logger.info(f"📁 Created models directory: {self.models_dir}")
+            logger.info(f"Created models directory: {self.models_dir}")
     
-    def _load_models(self):
+    def _load_existing_models(self):
         """Load existing trained models from disk"""
         try:
             # Load market regime model
-            if os.path.exists(self.model_paths['market_regime']):
-                with open(self.model_paths['market_regime'], 'rb') as f:
+            regime_model_path = os.path.join(self.models_dir, 'market_regime_model.pkl')
+            if os.path.exists(regime_model_path):
+                with open(regime_model_path, 'rb') as f:
                     self.models['market_regime'] = pickle.load(f)
-                logger.info("📥 Loaded existing market regime model")
+                logger.info("Loaded existing market regime model")
             
             # Load portfolio optimizer model
-            if os.path.exists(self.model_paths['portfolio_optimizer']):
-                with open(self.model_paths['portfolio_optimizer'], 'rb') as f:
+            portfolio_model_path = os.path.join(self.models_dir, 'portfolio_optimizer_model.pkl')
+            if os.path.exists(portfolio_model_path):
+                with open(portfolio_model_path, 'rb') as f:
                     self.models['portfolio_optimizer'] = pickle.load(f)
-                logger.info("📥 Loaded existing portfolio optimizer model")
+                logger.info("Loaded existing portfolio optimizer model")
             
             # Load stock scorer model
-            if os.path.exists(self.model_paths['stock_scorer']):
-                with open(self.model_paths['stock_scorer'], 'rb') as f:
+            stock_scorer_path = os.path.join(self.models_dir, 'stock_scorer_model.pkl')
+            if os.path.exists(stock_scorer_path):
+                with open(stock_scorer_path, 'rb') as f:
                     self.models['stock_scorer'] = pickle.load(f)
-                logger.info("📥 Loaded existing stock scorer model")
+                logger.info("Loaded existing stock scorer model")
             
-            # Load scalers and encoders
-            if os.path.exists(self.model_paths['scalers']):
-                with open(self.model_paths['scalers'], 'rb') as f:
+            # Load scalers
+            scalers_path = os.path.join(self.models_dir, 'scalers.pkl')
+            if os.path.exists(scalers_path):
+                with open(scalers_path, 'rb') as f:
                     self.scalers = pickle.load(f)
-                logger.info("📥 Loaded existing scalers")
+                logger.info("Loaded existing scalers")
             
-            if os.path.exists(self.model_paths['encoders']):
-                with open(self.model_paths['encoders'], 'rb') as f:
+            # Load encoders
+            encoders_path = os.path.join(self.models_dir, 'encoders.pkl')
+            if os.path.exists(encoders_path):
+                with open(encoders_path, 'rb') as f:
                     self.encoders = pickle.load(f)
-                logger.info("📥 Loaded existing encoders")
+                logger.info("Loaded existing encoders")
             
-            # Check if all models are loaded
+            # Check if we have all required models
             if len(self.models) >= 3:
                 self.is_trained = True
-                logger.info("✅ All models loaded successfully")
+                logger.info("All models loaded successfully")
             
         except Exception as e:
-            logger.warning(f"⚠️ Could not load existing models: {e}")
-            logger.info("🔄 Will train new models")
+            logger.warning(f"Could not load existing models: {e}")
+            self.is_trained = False
     
     def _save_models(self):
-        """Save trained models to disk"""
+        """Save all trained models to disk"""
         try:
             # Save individual models
             for model_name, model in self.models.items():
-                with open(self.model_paths[model_name], 'wb') as f:
+                model_path = os.path.join(self.models_dir, f'{model_name}_model.pkl')
+                with open(model_path, 'wb') as f:
                     pickle.dump(model, f)
-                logger.info(f"💾 Saved {model_name} model")
             
             # Save scalers
-            with open(self.model_paths['scalers'], 'wb') as f:
+            scalers_path = os.path.join(self.models_dir, 'scalers.pkl')
+            with open(scalers_path, 'wb') as f:
                 pickle.dump(self.scalers, f)
-            logger.info("💾 Saved scalers")
             
             # Save encoders
-            with open(self.model_paths['encoders'], 'wb') as f:
+            encoders_path = os.path.join(self.models_dir, 'encoders.pkl')
+            with open(encoders_path, 'wb') as f:
                 pickle.dump(self.encoders, f)
-            logger.info("💾 Saved encoders")
-            
+                
         except Exception as e:
-            logger.error(f"❌ Error saving models: {e}")
+            logger.error(f"Error saving models: {e}")
     
     def _extract_market_features(self, market_data: Dict[str, Any]) -> np.ndarray:
         """Extract and normalize market features"""
@@ -287,7 +259,7 @@ class OptimizedMLService:
     
     def train_market_regime_model(self, training_data: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Train market regime model with hyperparameter tuning and cross-validation"""
-        logger.info("🚀 Training market regime model with optimization...")
+        logger.info("Training market regime model with optimization...")
         
         # Prepare training data
         X = []
@@ -342,7 +314,7 @@ class OptimizedMLService:
             'model_type': 'RandomForestClassifier'
         }
         
-        logger.info(f"✅ Market regime model trained successfully!")
+        logger.info(f"Market regime model trained successfully!")
         logger.info(f"   Best CV Score: {grid_search.best_score_:.4f}")
         logger.info(f"   CV Mean: {cv_scores.mean():.4f} ± {cv_scores.std():.4f}")
         logger.info(f"   Training Accuracy: {train_accuracy:.4f}")
@@ -351,7 +323,7 @@ class OptimizedMLService:
     
     def train_portfolio_optimizer(self, training_data: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Train portfolio optimizer with hyperparameter tuning and cross-validation"""
-        logger.info("🚀 Training portfolio optimizer with optimization...")
+        logger.info("Training portfolio optimizer with optimization...")
         
         # Prepare training data
         X = []
@@ -420,7 +392,7 @@ class OptimizedMLService:
             'individual_results': results
         }
         
-        logger.info(f"✅ Portfolio optimizer trained successfully!")
+        logger.info(f"Portfolio optimizer trained successfully!")
         logger.info(f"   Average CV RMSE: {avg_cv_mean:.4f} ± {avg_cv_std:.4f}")
         logger.info(f"   Average Training RMSE: {avg_train_rmse:.4f}")
         
@@ -472,7 +444,7 @@ class OptimizedMLService:
     
     def train_stock_scorer(self, training_data: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Train stock scorer with hyperparameter tuning and cross-validation"""
-        logger.info("🚀 Training stock scorer with optimization...")
+        logger.info("Training stock scorer with optimization...")
         
         # Prepare training data
         X = []
@@ -529,7 +501,7 @@ class OptimizedMLService:
             'model_type': 'GradientBoostingRegressor'
         }
         
-        logger.info(f"✅ Stock scorer trained successfully!")
+        logger.info(f"Stock scorer trained successfully!")
         logger.info(f"   Best CV Score: {grid_search.best_score_:.4f}")
         logger.info(f"   CV RMSE: {cv_rmse.mean():.4f} ± {cv_rmse.std():.4f}")
         logger.info(f"   Training RMSE: {train_rmse:.4f}")
@@ -538,7 +510,7 @@ class OptimizedMLService:
     
     def train_all_models(self, training_data: Dict[str, List[Dict[str, Any]]]) -> Dict[str, Any]:
         """Train all models with optimization and save them"""
-        logger.info("🚀 Training all models with optimization...")
+        logger.info("Training all models with optimization...")
         
         results = {}
         
@@ -560,7 +532,7 @@ class OptimizedMLService:
         # Save models
         self._save_models()
         
-        logger.info("🎉 All models trained and saved successfully!")
+        logger.info("All models trained and saved successfully!")
         return results
     
     def predict_market_regime(self, market_data: Dict[str, Any]) -> Tuple[str, float]:
@@ -578,7 +550,7 @@ class OptimizedMLService:
             return prediction, confidence
             
         except Exception as e:
-            logger.error(f"❌ Error predicting market regime: {e}")
+            logger.error(f"Error predicting market regime: {e}")
             return "Moderate", 0.5
     
     def optimize_portfolio(self, user_profile: Dict[str, Any]) -> Dict[str, float]:
@@ -616,7 +588,7 @@ class OptimizedMLService:
             }
             
         except Exception as e:
-            logger.error(f"❌ Error optimizing portfolio: {e}")
+            logger.error(f"Error optimizing portfolio: {e}")
             return self._fallback_portfolio_optimization(user_profile)
     
     def score_stock(self, stock_data: Dict[str, Any]) -> Tuple[float, Dict[str, float]]:
@@ -642,7 +614,7 @@ class OptimizedMLService:
             return score, factor_scores
             
         except Exception as e:
-            logger.error(f"❌ Error scoring stock: {e}")
+            logger.error(f"Error scoring stock: {e}")
             return self._fallback_stock_scoring(stock_data)
     
     def _fallback_portfolio_optimization(self, user_profile: Dict[str, Any]) -> Dict[str, float]:
@@ -768,5 +740,5 @@ class OptimizedMLService:
         # Train new models
         results = self.train_all_models(training_data)
         
-        logger.info("✅ Models retrained successfully!")
+        logger.info("Models retrained successfully!")
         return results

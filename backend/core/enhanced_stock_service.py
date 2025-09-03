@@ -45,18 +45,18 @@ class EnhancedStockService:
             # Try cache first
             cached_price = self._get_cached_price(symbol)
             if cached_price and not self._is_cache_expired(cached_price):
-                logger.info(f"✅ Using cached price for {symbol}: ${cached_price['price']}")
+                logger.info(f"Using cached price for {symbol}: ${cached_price['price']}")
                 return cached_price
             
             # Try to get real-time price from market data APIs
-            logger.info(f"🔄 Fetching real-time price for {symbol}")
+            logger.info(f"Fetching real-time price for {symbol}")
             
             # Try Yahoo Finance first (most reliable)
             try:
                 price_data = await self._fetch_yahoo_price(symbol)
                 if price_data and price_data.get('price', 0) > 0:
                     self._cache_price(symbol, price_data)
-                    logger.info(f"✅ Yahoo Finance price for {symbol}: ${price_data['price']}")
+                    logger.info(f"Yahoo Finance price for {symbol}: ${price_data['price']}")
                     return price_data
             except Exception as e:
                 logger.warning(f"Yahoo Finance failed for {symbol}: {e}")
@@ -66,7 +66,7 @@ class EnhancedStockService:
                 price_data = await self._fetch_alpha_vantage_price(symbol)
                 if price_data and price_data.get('price', 0) > 0:
                     self._cache_price(symbol, price_data)
-                    logger.info(f"✅ Alpha Vantage price for {symbol}: ${price_data['price']}")
+                    logger.info(f"Alpha Vantage price for {symbol}: ${price_data['price']}")
                     return price_data
             except Exception as e:
                 logger.warning(f"Alpha Vantage failed for {symbol}: {e}")
@@ -76,7 +76,7 @@ class EnhancedStockService:
                 price_data = await self._fetch_finnhub_price(symbol)
                 if price_data and price_data.get('price', 0) > 0:
                     self._cache_price(symbol, price_data)
-                    logger.info(f"✅ Finnhub price for {symbol}: ${price_data['price']}")
+                    logger.info(f"Finnhub price for {symbol}: ${price_data['price']}")
                     return price_data
             except Exception as e:
                 logger.warning(f"Finnhub failed for {symbol}: {e}")
@@ -84,7 +84,7 @@ class EnhancedStockService:
             # Try database fallback
             db_price = self._get_database_price(symbol)
             if db_price and db_price.get('price', 0) > 0:
-                logger.info(f"💾 Using database price for {symbol}: ${db_price['price']}")
+                logger.info(f"Using database price for {symbol}: ${db_price['price']}")
                 return db_price
             
             # Use fallback price if available
@@ -99,10 +99,10 @@ class EnhancedStockService:
                     'verified': False,
                     'last_updated': timezone.now().isoformat()
                 }
-                logger.warning(f"⚠️ Using fallback price for {symbol}: ${fallback_price['price']}")
+                logger.warning(f"Using fallback price for {symbol}: ${fallback_price['price']}")
                 return fallback_price
             
-            logger.error(f"❌ No price data available for {symbol}")
+            logger.error(f"No price data available for {symbol}")
             return None
             
         except Exception as e:
@@ -370,7 +370,7 @@ class EnhancedStockService:
                 stock.last_updated = timezone.now()
                 stock.save()
                 
-                logger.info(f"✅ Updated database price for {symbol}: ${price_data['price']}")
+                logger.info(f"Updated database price for {symbol}: ${price_data['price']}")
                 return True
             else:
                 logger.warning(f"Stock {symbol} not found in database")
@@ -452,7 +452,7 @@ class EnhancedStockService:
             # Run async refresh
             asyncio.run(refresh_stock_prices())
             
-            logger.info(f"✅ Refreshed prices for {len(results)} stocks")
+            logger.info(f"Refreshed prices for {len(results)} stocks")
             return results
             
         except Exception as e:

@@ -50,23 +50,21 @@ class ProductionMonitoringService:
         try:
             self.cloudwatch = boto3.client('cloudwatch', region_name=self.aws_region)
             self.sns = boto3.client('sns', region_name=self.aws_region)
-            logger.info("✅ AWS monitoring clients initialized")
+            logger.info("AWS monitoring clients initialized")
         except Exception as e:
-            logger.warning(f"⚠️  AWS monitoring clients not available: {e}")
+            logger.warning(f"AWS monitoring clients not available: {e}")
             self.cloudwatch = None
             self.sns = None
         
-        # Local monitoring
+        # Initialize metrics storage
         self.metrics_buffer = []
-        self.alerts_buffer = []
-        self.performance_history = {}
+        self.alerts = []
+        self.alert_history = []
         
-        # Configuration
-        self.metrics_interval = 60  # seconds
-        self.buffer_size = 100
-        self.alert_thresholds = self._load_alert_thresholds()
+        # Load configuration
+        self.load_config()
         
-        logger.info("🚀 Production Monitoring Service initialized")
+        logger.info("Production Monitoring Service initialized")
     
     def _load_alert_thresholds(self) -> Dict[str, Dict[str, Any]]:
         """Load alert thresholds from configuration"""
@@ -149,7 +147,7 @@ class ProductionMonitoringService:
                 )
                 
                 self.alerts_buffer.append(alert)
-                logger.warning(f"🚨 ALERT: {alert.message}")
+                logger.warning(f"ALERT: {alert.message}")
                 
                 # Send alert if AWS is available
                 if self.sns:
@@ -175,7 +173,7 @@ class ProductionMonitoringService:
         try:
             topic_arn = os.getenv('SNS_TOPIC_ARN')
             if not topic_arn:
-                logger.warning("⚠️  SNS_TOPIC_ARN not configured")
+                logger.warning("SNS_TOPIC_ARN not configured")
                 return
             
             message = {
@@ -191,13 +189,13 @@ class ProductionMonitoringService:
             self.sns.publish(
                 TopicArn=topic_arn,
                 Message=json.dumps(message),
-                Subject=f"🚨 {alert.severity.upper()} Alert: {alert.name}"
+                Subject=f"Alert: {alert.severity.upper()} Alert: {alert.name}"
             )
             
-            logger.info(f"📤 SNS alert sent: {alert.name}")
+            logger.info(f"SNS alert sent: {alert.name}")
             
         except Exception as e:
-            logger.error(f"❌ Failed to send SNS alert: {e}")
+            logger.error(f"Failed to send SNS alert: {e}")
     
     def _flush_metrics(self):
         """Flush metrics buffer to CloudWatch"""
@@ -235,13 +233,13 @@ class ProductionMonitoringService:
                 MetricData=cloudwatch_metrics
             )
             
-            logger.info(f"📊 Flushed {len(cloudwatch_metrics)} metrics to CloudWatch")
+            logger.info(f"Flushed {len(cloudwatch_metrics)} metrics to CloudWatch")
             
             # Clear buffer
             self.metrics_buffer.clear()
             
         except Exception as e:
-            logger.error(f"❌ Failed to flush metrics to CloudWatch: {e}")
+            logger.error(f"Failed to flush metrics to CloudWatch: {e}")
     
     def record_api_performance(self, endpoint: str, response_time: float, 
                              status_code: int, user_id: str = None):
@@ -468,13 +466,13 @@ class ProductionMonitoringService:
             if alert.name == alert_name:
                 alert.status = 'resolved'
                 alert.timestamp = datetime.now()
-                logger.info(f"✅ Alert resolved: {alert_name}")
+                logger.info(f"Alert resolved: {alert_name}")
                 break
     
     def create_cloudwatch_dashboard(self):
         """Create CloudWatch dashboard for monitoring"""
         if not self.cloudwatch:
-            logger.warning("⚠️  CloudWatch not available")
+            logger.warning("CloudWatch not available")
             return None
         
         try:
@@ -558,16 +556,16 @@ class ProductionMonitoringService:
                 DashboardBody=json.dumps(dashboard_body)
             )
             
-            logger.info(f"✅ CloudWatch dashboard created: {dashboard_name}")
+            logger.info(f"CloudWatch dashboard created: {dashboard_name}")
             return dashboard_name
             
         except Exception as e:
-            logger.error(f"❌ Failed to create CloudWatch dashboard: {e}")
+            logger.error(f"Failed to create CloudWatch dashboard: {e}")
             return None
     
     def start_monitoring(self):
         """Start continuous monitoring"""
-        logger.info("🚀 Starting continuous monitoring...")
+        logger.info("Starting continuous monitoring...")
         
         # Create CloudWatch dashboard
         self.create_cloudwatch_dashboard()
@@ -584,16 +582,16 @@ class ProductionMonitoringService:
         flush_thread = threading.Thread(target=flush_loop, daemon=True)
         flush_thread.start()
         
-        logger.info(f"✅ Continuous monitoring started (flush interval: {self.metrics_interval}s)")
+        logger.info(f"Continuous monitoring started (flush interval: {self.metrics_interval}s)")
     
     def stop_monitoring(self):
         """Stop monitoring and flush remaining metrics"""
-        logger.info("🛑 Stopping monitoring service...")
+        logger.info("Stopping monitoring service...")
         
         # Flush remaining metrics
         self._flush_metrics()
         
-        logger.info("✅ Monitoring service stopped")
+        logger.info("Monitoring service stopped")
 
 # Global monitoring instance
 monitoring_service = ProductionMonitoringService()
