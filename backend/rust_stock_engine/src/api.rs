@@ -123,6 +123,9 @@ pub async fn get_recommendations(
         _ => "Any", // No preference
     };
     
+    // Store the length before the loop
+    let total_stocks = stocks_to_analyze.len();
+    
     // Analyze each stock and collect recommendations
     for symbol in stocks_to_analyze {
         match analyzer.analyze_stock(symbol, true, true).await {
@@ -205,7 +208,7 @@ pub async fn get_recommendations(
             "investment_goals": request.investment_goals
         },
         "analysis_summary": {
-            "total_analyzed": stocks_to_analyze.len(),
+            "total_analyzed": total_stocks,
             "recommendations_count": top_recommendations.len(),
             "min_score_threshold": min_score,
             "risk_preference": preferred_risk

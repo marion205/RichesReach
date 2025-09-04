@@ -1,94 +1,88 @@
-# Exclude unnecessary files from Docker build context
-# This makes builds MUCH faster
+# Docker ignore file for faster builds
+# Exclude unnecessary files from Docker context
 
-# Git and version control
-.git
-.gitignore
-.gitattributes
-
-# Python cache and virtual environments
+# Python cache and compiled files
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
+*.so
 .Python
-env/
-venv/
-.venv/
-ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# Development and IDE files
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# IDE files
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# Documentation and guides
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Documentation
 *.md
 docs/
 README*
 
 # Test files
 tests/
-test_*.py
+test_*
 *_test.py
-pytest.ini
-.coverage
-.pytest_cache/
 
-# Logs and temporary files
-*.log
-*.tmp
-*.temp
-logs/
-temp/
-
-# OS generated files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
-# Build artifacts
-build/
-dist/
-*.egg-info/
-
-# Database files
-*.db
-*.sqlite3
-*.sqlite
-
-# Environment files (except production)
+# Development files
 .env
 .env.local
 .env.development
+*.log
 
 # Node modules (if any)
 node_modules/
 
-# Docker files (except this one)
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+
+# Jupyter notebooks
+*.ipynb
+
+# Large data files
+*.csv
+*.json
+*.pkl
+*.joblib
+
+# Docker files
 Dockerfile*
 docker-compose*
-
-# Deployment scripts
-deploy_*.py
-*_deploy.py
-aws_*.py
-simple_*.py
-full_*.py
-
-# CloudFormation templates
-*.yaml
-*.yml
-
-# CI/CD files
-.github/
-
-# Backup files
-*.bak
-*.backup
+.dockerignore
