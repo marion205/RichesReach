@@ -1,6 +1,6 @@
 # 🔑 API Keys Setup Guide for Live Market Data
 
-## 🚀 Quick Start
+##  Quick Start
 
 1. **Copy the .env file** to your project root
 2. **Get API keys** from the services below
@@ -8,7 +8,7 @@
 4. **Set ENVIRONMENT=production** to enable live data
 5. **Run the training script** to build models with real data
 
-## 📊 Financial Data APIs
+##  Financial Data APIs
 
 ### Alpha Vantage
 - **Website**: https://www.alphavantage.co/
@@ -151,7 +151,7 @@ python3 train_with_real_data.py
 4. **Monitor API usage** for anomalies
 5. **Implement rate limiting** in your code
 
-## 📊 Expected Data Quality
+##  Expected Data Quality
 
 ### Real-time Data
 - **Stock Prices**: 15-minute delay (free) to real-time (paid)
@@ -165,7 +165,7 @@ python3 train_with_real_data.py
 - **News**: Multiple sources for verification
 - **Sentiment**: AI-powered analysis
 
-## 🎯 Next Steps After Setup
+##  Next Steps After Setup
 
 1. **Test all API connections**
 2. **Train models with historical data**
@@ -191,4 +191,4 @@ python3 train_with_real_data.py
 
 ---
 
-**Ready to enable live market intelligence! 🚀**
+**Ready to enable live market intelligence! **
