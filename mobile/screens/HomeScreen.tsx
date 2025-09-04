@@ -539,7 +539,7 @@ Start with paper trading to practice strategies without risking real money.`
     // Check for exact matches first
     for (const [key, data] of Object.entries(financialKnowledge)) {
       if (input.includes(key)) {
-        return `${data.title}\n\n${data.content}\n\n💡 This is educational information only. For personalized financial advice, consult a qualified financial advisor.`;
+        return `${data.title}\n\n${data.content}\n\n This is educational information only. For personalized financial advice, consult a qualified financial advisor.`;
       }
     }
 
@@ -565,14 +565,14 @@ Start with paper trading to practice strategies without risking real money.`
     for (const [key, synonymList] of Object.entries(synonyms)) {
       if (synonymList.some(synonym => input.includes(synonym)) && financialKnowledge[key]) {
         const data = financialKnowledge[key];
-        return `${data.title}\n\n${data.content}\n\n💡 This is educational information only. For personalized financial advice, consult a qualified financial advisor.`;
+        return `${data.title}\n\n${data.content}\n\n This is educational information only. For personalized financial advice, consult a qualified financial advisor.`;
       }
     }
 
     // Check for partial matches
     for (const [key, data] of Object.entries(financialKnowledge)) {
       if (key.includes(input) || input.includes(key)) {
-        return `${data.title}\n\n${data.content}\n\n💡 This is educational information only. For personalized financial advice, consult a qualified financial advisor.`;
+        return `${data.title}\n\n${data.content}\n\n This is educational information only. For personalized financial advice, consult a qualified financial advisor.`;
       }
     }
 
@@ -599,7 +599,7 @@ Feel free to ask about any of these topics or try one of the quick prompts above
           id: String(Date.now()),
           role: 'assistant',
           content:
-            '👋 Welcome to your Financial AI Assistant!\n\nI can help you with:\n• Investment basics (ETFs, index funds, stocks)\n• Retirement planning (IRAs, 401(k)s)\n• Budgeting strategies (50/30/20 rule)\n• Risk management and diversification\n• Financial terminology and concepts\n\n💡 This is educational information only. For personalized financial advice, consult a qualified financial advisor.\n\nTry a quick prompt below or ask me anything about personal finance!',
+            ' Welcome to your Financial AI Assistant!\n\nI can help you with:\n• Investment basics (ETFs, index funds, stocks)\n• Retirement planning (IRAs, 401(k)s)\n• Budgeting strategies (50/30/20 rule)\n• Risk management and diversification\n• Financial terminology and concepts\n\n This is educational information only. For personalized financial advice, consult a qualified financial advisor.\n\nTry a quick prompt below or ask me anything about personal finance!',
         },
       ]);
     }
