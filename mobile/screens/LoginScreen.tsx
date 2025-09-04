@@ -145,8 +145,8 @@ export default function LoginScreen({ onLogin, onNavigateToSignUp }: { onLogin: 
           </Text>
         </TouchableOpacity>
 
-        {loginError && <Text style={styles.error}>❌ {loginError.message}</Text>}
-        {signupError && <Text style={styles.error}>❌ {signupError.message}</Text>}
+        {loginError && <Text style={styles.error}>ERROR: {loginError.message}</Text>}
+        {signupError && <Text style={styles.error}>ERROR: {signupError.message}</Text>}
       </View>
     </ScrollView>
   );
