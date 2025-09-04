@@ -15,20 +15,20 @@
   },
   "dependencies": {
     "@apollo/client": "3.7.0",
-    "@react-native-async-storage/async-storage": "1.21.0",
+    "@react-native-async-storage/async-storage": "1.23.1",
     "expo": "~52.0.0",
     "expo-image-picker": "~16.0.6",
     "expo-status-bar": "~2.0.1",
     "graphql": "^16.11.0",
-    "react": "18.2.0",
-    "react-native": "0.73.6",
-    "react-native-gesture-handler": "~2.14.0",
-    "react-native-reanimated": "~3.6.0",
+    "react": "18.3.1",
+    "react-native": "0.76.9",
+    "react-native-gesture-handler": "~2.20.2",
+    "react-native-reanimated": "~3.16.1",
     "react-native-vector-icons": "^10.3.0"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
-    "@types/react": "~18.2.14",
+    "@types/react": "~18.3.12",
     "typescript": "~5.8.3",
     "@expo/cli": "latest",
     "eas-cli": "latest"
