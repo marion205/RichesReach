@@ -14,6 +14,13 @@ pub struct IndicatorsRequest {
     pub symbol: String,
 }
 
+#[derive(serde::Deserialize)]
+pub struct RecommendationsRequest {
+    pub user_income: Option<f64>,
+    pub risk_tolerance: Option<String>,
+    pub investment_goals: Option<Vec<String>>,
+}
+
 pub async fn health_check() -> Json<serde_json::Value> {
     Json(serde_json::json!({
         "status": "healthy",
@@ -56,31 +63,83 @@ pub async fn analyze_stock(
 
 pub async fn get_recommendations(
     State(config): State<Config>,
+    Json(request): Json<RecommendationsRequest>,
 ) -> Json<serde_json::Value> {
-    info!("Received recommendations request");
+    info!("Received recommendations request with user profile: income={:?}, risk={:?}", 
+          request.user_income, request.risk_tolerance);
     
     let analyzer = StockAnalyzer::new(config);
     
-    // List of popular stocks to analyze for recommendations
-    let stocks_to_analyze = vec![
-        "AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "META", "NVDA", "JPM", 
-        "JNJ", "V", "PG", "UNH", "HD", "MA", "DIS", "PYPL", "ADBE", "CRM"
-    ];
+    // Determine stock universe based on user income
+    let stocks_to_analyze = match request.user_income {
+        Some(income) if income < 30000.0 => {
+            // Low income: Focus on stable, dividend-paying stocks
+            vec![
+                "JNJ", "PG", "KO", "PEP", "WMT", "MCD", "T", "VZ", "XOM", "CVX",
+                "JPM", "BAC", "WFC", "C", "GS", "MS", "HD", "LOW", "COST", "TGT"
+            ]
+        },
+        Some(income) if income < 75000.0 => {
+            // Medium income: Mix of stable and growth stocks
+            vec![
+                "AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "JPM", "JNJ", 
+                "V", "PG", "UNH", "HD", "MA", "DIS", "PYPL", "ADBE", "CRM", "NFLX"
+            ]
+        },
+        Some(income) if income < 150000.0 => {
+            // Higher income: Include more growth and tech stocks
+            vec![
+                "AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "META", "NVDA", "JPM", 
+                "JNJ", "V", "PG", "UNH", "HD", "MA", "DIS", "PYPL", "ADBE", "CRM",
+                "NFLX", "AMD", "INTC", "ORCL", "IBM", "CSCO", "QCOM", "AVGO"
+            ]
+        },
+        _ => {
+            // High income or no profile: Best the market has to offer
+            vec![
+                "AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "META", "NVDA", "JPM", 
+                "JNJ", "V", "PG", "UNH", "HD", "MA", "DIS", "PYPL", "ADBE", "CRM",
+                "NFLX", "AMD", "INTC", "ORCL", "IBM", "CSCO", "QCOM", "AVGO",
+                "BRK.B", "LLY", "ABBV", "PFE", "MRK", "KO", "PEP", "WMT"
+            ]
+        }
+    };
     
     let mut recommendations = Vec::new();
+    
+    // Determine minimum score based on user profile
+    let min_score = match request.user_income {
+        Some(income) if income < 30000.0 => 75, // Higher standards for low income
+        Some(income) if income < 75000.0 => 70, // Standard beginner score
+        Some(income) if income < 150000.0 => 65, // Slightly lower for higher income
+        _ => 60, // Lower threshold for high income or no profile
+    };
+    
+    // Determine risk preference based on user profile
+    let preferred_risk = match request.risk_tolerance.as_deref() {
+        Some("conservative") => "Low",
+        Some("moderate") => "Medium", 
+        Some("aggressive") => "High",
+        _ => "Any", // No preference
+    };
     
     // Analyze each stock and collect recommendations
     for symbol in stocks_to_analyze {
         match analyzer.analyze_stock(symbol, true, true).await {
             Ok(analysis) => {
-                // Only include stocks with good beginner scores (70+)
-                if analysis.beginner_friendly_score >= 70 {
-                    let risk_level_str = match analysis.risk_level {
-                        crate::models::RiskLevel::Low => "Low",
-                        crate::models::RiskLevel::Medium => "Medium", 
-                        crate::models::RiskLevel::High => "High",
-                        crate::models::RiskLevel::Unknown => "Unknown",
-                    };
+                // Filter based on user profile
+                let risk_level_str = match analysis.risk_level {
+                    crate::models::RiskLevel::Low => "Low",
+                    crate::models::RiskLevel::Medium => "Medium", 
+                    crate::models::RiskLevel::High => "High",
+                    crate::models::RiskLevel::Unknown => "Unknown",
+                };
+                
+                // Check if stock meets criteria
+                let meets_score = analysis.beginner_friendly_score >= min_score;
+                let meets_risk = preferred_risk == "Any" || risk_level_str == preferred_risk;
+                
+                if meets_score && meets_risk {
                     
                     let recommendation_str = match analysis.recommendation {
                         crate::models::Recommendation::StrongBuy => "Strong Buy",
@@ -140,14 +199,25 @@ pub async fn get_recommendations(
     
     Json(serde_json::json!({
         "success": true,
-        "total_analyzed": stocks_to_analyze.len(),
-        "recommendations_count": top_recommendations.len(),
+        "user_profile": {
+            "income": request.user_income,
+            "risk_tolerance": request.risk_tolerance,
+            "investment_goals": request.investment_goals
+        },
+        "analysis_summary": {
+            "total_analyzed": stocks_to_analyze.len(),
+            "recommendations_count": top_recommendations.len(),
+            "min_score_threshold": min_score,
+            "risk_preference": preferred_risk
+        },
         "recommendations": top_recommendations,
         "analysis_timestamp": chrono::Utc::now().to_rfc3339(),
         "criteria": {
-            "min_beginner_score": 70,
+            "min_beginner_score": min_score,
+            "risk_tolerance": preferred_risk,
             "includes_technical_analysis": true,
-            "includes_fundamental_analysis": true
+            "includes_fundamental_analysis": true,
+            "personalized_for_income": request.user_income.is_some()
         }
     }))
 }

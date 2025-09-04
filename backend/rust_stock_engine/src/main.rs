@@ -29,7 +29,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Router::new()
         .route("/health", get(api::health_check))
         .route("/analyze", post(api::analyze_stock))
-        .route("/recommendations", get(api::get_recommendations))
+        .route("/recommendations", post(api::get_recommendations))
         .route("/indicators", post(api::calculate_indicators))
         .with_state(config);
 

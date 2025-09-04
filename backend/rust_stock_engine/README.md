@@ -62,22 +62,44 @@ Content-Type: application/json
 }
 ```
 
-### Recommendations
+### Personalized Recommendations
 ```bash
-GET http://localhost:3001/recommendations
+POST http://localhost:3001/recommendations
+Content-Type: application/json
+
+{
+  "user_income": 45000,
+  "risk_tolerance": "moderate",
+  "investment_goals": ["retirement", "growth"]
+}
 ```
 
-**Returns real-time analysis of 18 popular stocks, filtered for beginner-friendly options (score 70+).**
+**Returns personalized stock recommendations based on user income and risk tolerance:**
+- **Low Income (<$30k)**: Focus on stable, dividend-paying stocks (JNJ, PG, KO, etc.)
+- **Medium Income ($30k-$75k)**: Mix of stable and growth stocks (AAPL, MSFT, GOOGL, etc.)
+- **Higher Income ($75k-$150k)**: Include more growth and tech stocks
+- **High Income (>$150k) or No Profile**: Best the market has to offer
 
-## 📊 Beginner-Friendly Criteria
+## 📊 Personalized Investment Criteria
 
-The algorithm prioritizes stocks suitable for investors making under $30k/year:
+The algorithm adapts recommendations based on user income and risk tolerance:
 
-- **Market Cap**: >$100B (large, stable companies)
-- **P/E Ratio**: <25 (reasonable valuation)
-- **Dividend Yield**: >2% (income generation)
-- **Debt Ratio**: <30% (financial health)
-- **Volume**: High liquidity for easy trading
+### Income-Based Stock Universe:
+- **Low Income (<$30k)**: Conservative, dividend-focused stocks (JNJ, PG, KO, WMT, etc.)
+- **Medium Income ($30k-$75k)**: Balanced mix of stable and growth stocks
+- **Higher Income ($75k-$150k)**: More growth and technology stocks included
+- **High Income (>$150k)**: Premium market opportunities and diverse sectors
+
+### Dynamic Scoring Thresholds:
+- **Low Income**: Minimum score 75 (highest standards for safety)
+- **Medium Income**: Minimum score 70 (standard beginner criteria)
+- **Higher Income**: Minimum score 65 (slightly more flexible)
+- **High Income**: Minimum score 60 (access to more opportunities)
+
+### Risk Tolerance Filtering:
+- **Conservative**: Only Low-risk stocks
+- **Moderate**: Low and Medium-risk stocks
+- **Aggressive**: All risk levels considered
 
 ## 🔧 Integration with Django
 
