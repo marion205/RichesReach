@@ -2,8 +2,26 @@ import React, { useState, useEffect } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { ApolloProvider } from '@apollo/client';
 import { client } from './src/ApolloProvider';
-import pushNotificationService from './services/PushNotificationService';
-import priceAlertService from './services/PriceAlertService';
+// Use Expo Go compatible services to avoid "Exception in HostFunction" errors
+import expoGoCompatibleNotificationService from './services/ExpoGoCompatibleNotificationService';
+import expoGoCompatiblePriceAlertService from './services/ExpoGoCompatiblePriceAlertService';
+
+// Try to use full services, fallback to Expo Go compatible versions
+let pushNotificationService: any = expoGoCompatibleNotificationService;
+let priceAlertService: any = expoGoCompatiblePriceAlertService;
+
+try {
+  // Try to load the full services
+  const fullNotificationService = require('./services/PushNotificationService').default;
+  const fullPriceAlertService = require('./services/PriceAlertService').default;
+  
+  // Only use full services if they load without errors
+  pushNotificationService = fullNotificationService;
+  priceAlertService = fullPriceAlertService;
+  console.log('📱 Using full notification and price alert services');
+} catch (error) {
+  console.log('📱 Using Expo Go compatible services:', error.message);
+}
 
 // Screens
 import HomeScreen from './screens/HomeScreen';
@@ -22,34 +40,42 @@ export default function App() {
   const [currentScreen, setCurrentScreen] = useState('home');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
-  // Initialize push notifications and price alerts
+  // Initialize services only if available
   useEffect(() => {
     const initializeServices = async () => {
       try {
         // Initialize push notifications with error handling
-        try {
-          const notificationsEnabled = await pushNotificationService.initialize();
-          if (notificationsEnabled) {
-            console.log('📱 Push notifications initialized successfully');
-            
-            // Set up notification listeners
-            const { notificationListener, responseListener } = pushNotificationService.setupNotificationListeners();
+        if (pushNotificationService) {
+          try {
+            const notificationsEnabled = await pushNotificationService.initialize();
+            if (notificationsEnabled) {
+              console.log('📱 Push notifications initialized successfully');
+              
+              // Set up notification listeners
+              const { notificationListener, responseListener } = pushNotificationService.setupNotificationListeners();
 
-            // Cleanup listeners on unmount
-            return () => {
-              pushNotificationService.removeNotificationListeners(notificationListener, responseListener);
-            };
+              // Cleanup listeners on unmount
+              return () => {
+                pushNotificationService.removeNotificationListeners(notificationListener, responseListener);
+              };
+            }
+          } catch (notificationError) {
+            console.warn('⚠️ Push notifications not available (likely Expo Go):', notificationError.message);
           }
-        } catch (notificationError) {
-          console.warn('⚠️ Push notifications not available (likely Expo Go):', notificationError.message);
+        } else {
+          console.log('📱 Push notification service not available in Expo Go');
         }
 
         // Initialize price alert service
-        try {
-          await priceAlertService.initialize();
-          console.log('📊 Price alert service initialized successfully');
-        } catch (priceAlertError) {
-          console.warn('⚠️ Price alert service initialization failed:', priceAlertError.message);
+        if (priceAlertService) {
+          try {
+            await priceAlertService.initialize();
+            console.log('📊 Price alert service initialized successfully');
+          } catch (priceAlertError) {
+            console.warn('⚠️ Price alert service initialization failed:', priceAlertError.message);
+          }
+        } else {
+          console.log('📊 Price alert service not available in Expo Go');
         }
       } catch (error) {
         console.error('Error initializing services:', error);
