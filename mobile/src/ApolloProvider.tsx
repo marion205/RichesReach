@@ -8,22 +8,30 @@ import { getMainDefinition } from '@apollo/client/utilities';
 // import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
 // import { createClient } from 'graphql-ws';
 
-const HTTP_URL = 'http://192.168.1.151:8000/graphql/'; 
+const HTTP_URL = 'http://localhost:8001/graphql/'; 
 // Local development → use localhost
-// iOS Simulator → use actual network IP (e.g., http://192.168.1.151:8000/graphql/)
+// iOS Simulator → use localhost (should work with Expo Go)
 // Android Emulator → use http://10.0.2.2:8000/graphql/
 
 const httpLink = createHttpLink({ uri: HTTP_URL });
 
 const authLink = setContext(async (_, { headers }) => {
-  const token = await AsyncStorage.getItem('token');
-  console.log('🔐 Auth Debug - Token from storage:', token ? `${token.substring(0, 20)}...` : 'No token');
-  return {
-    headers: {
-      ...headers,
-      ...(token ? { Authorization: `JWT ${token}` } : {}),
-    },
-  };
+  try {
+    const token = await AsyncStorage.getItem('token');
+    // Only log in development mode to reduce overhead
+    if (__DEV__) {
+      console.log('🔐 Auth Debug - Token from storage:', token ? `${token.substring(0, 20)}...` : 'No token');
+    }
+    return {
+      headers: {
+        ...headers,
+        ...(token ? { Authorization: `JWT ${token}` } : {}),
+      },
+    };
+  } catch (error) {
+    console.error('Error getting token from storage:', error);
+    return { headers };
+  }
 });
 
 // (optional) subscriptions—leave commented out if not using yet
@@ -46,7 +54,33 @@ const authLink = setContext(async (_, { headers }) => {
 
 const client = new ApolloClient({
   link: authLink.concat(httpLink), // swap for `link` if you enable ws
-  cache: new InMemoryCache(),
+  cache: new InMemoryCache({
+    // Optimize cache for better performance
+    typePolicies: {
+      Query: {
+        fields: {
+          // Cache user queries for better performance
+          me: {
+            merge: true,
+          },
+        },
+      },
+    },
+  }),
+  // Add default options for better performance
+  defaultOptions: {
+    watchQuery: {
+      errorPolicy: 'all',
+      fetchPolicy: 'cache-and-network',
+    },
+    query: {
+      errorPolicy: 'all',
+      fetchPolicy: 'cache-first',
+    },
+    mutate: {
+      errorPolicy: 'all',
+    },
+  },
 });
 
 export { client };

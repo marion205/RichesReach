@@ -1,11 +1,12 @@
 import json
 import asyncio
 import logging
+import time
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.contrib.auth.models import AnonymousUser
 from .models import Stock, Watchlist
-from .services import MarketDataService
+from .market_data_service import MarketDataService
 import jwt
 from django.conf import settings
 
@@ -133,17 +134,20 @@ class StockPriceConsumer(AsyncWebsocketConsumer):
             
             for symbol in symbols:
                 try:
-                    # Get current price from Alpha Vantage
-                    price_data = market_service.get_stock_quote(symbol)
-                    if price_data:
+                    # Get current price from database (MarketDataService doesn't have get_stock_quote)
+                    # For now, we'll get the price from the database
+                    try:
+                        stock = Stock.objects.get(symbol=symbol)
                         prices.append({
                             'symbol': symbol,
-                            'price': price_data.get('price', 0),
-                            'change': price_data.get('change', 0),
-                            'change_percent': price_data.get('change_percent', 0),
-                            'volume': price_data.get('volume', 0),
-                            'timestamp': asyncio.get_event_loop().time()
+                            'price': float(stock.current_price) if stock.current_price else 0,
+                            'change': 0,  # We'll calculate this later
+                            'change_percent': 0,  # We'll calculate this later
+                            'volume': 0,  # Not available in current model
+                            'timestamp': time.time()
                         })
+                    except Stock.DoesNotExist:
+                        logger.warning(f"Stock {symbol} not found in database")
                 except Exception as e:
                     logger.error(f"Error getting price for {symbol}: {e}")
                     # Fallback to database price
@@ -155,7 +159,7 @@ class StockPriceConsumer(AsyncWebsocketConsumer):
                             'change': 0,
                             'change_percent': 0,
                             'volume': 0,
-                            'timestamp': asyncio.get_event_loop().time()
+                            'timestamp': time.time()
                         })
                     except Stock.DoesNotExist:
                         continue
