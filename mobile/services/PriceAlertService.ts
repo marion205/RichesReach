@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import pushNotificationService from './PushNotificationService';
+// Use Expo Go compatible notification service to avoid crashes
+import expoGoCompatibleNotificationService from './ExpoGoCompatibleNotificationService';
 
 export interface PriceAlert {
   id: string;
@@ -185,7 +186,7 @@ class PriceAlertService {
   private async triggerAlert(alert: PriceAlert, currentPrice: StockPrice): Promise<void> {
     try {
       // Send push notification
-      await pushNotificationService.sendPriceAlert({
+      await expoGoCompatibleNotificationService.sendPriceAlert({
         symbol: alert.symbol,
         currentPrice: currentPrice.price,
         targetPrice: alert.targetPrice,
