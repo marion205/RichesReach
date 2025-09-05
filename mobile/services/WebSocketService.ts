@@ -103,7 +103,7 @@ class WebSocketService {
       return;
     }
 
-    const baseUrl = 'ws://192.168.1.151:8000/ws';
+            const baseUrl = 'ws://localhost:8001/ws';
     
     // Connect to stock prices WebSocket
     this.connectStockPrices(baseUrl);
@@ -299,9 +299,9 @@ class WebSocketService {
     
     setTimeout(() => {
       if (type === 'stock-prices') {
-        this.connectStockPrices('ws://192.168.1.151:8000/ws');
+        this.connectStockPrices('ws://localhost:8001/ws');
       } else {
-        this.connectDiscussions('ws://192.168.1.151:8000/ws');
+        this.connectDiscussions('ws://localhost:8001/ws');
       }
     }, this.reconnectDelay);
     

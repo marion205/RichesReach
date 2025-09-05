@@ -64,7 +64,7 @@ class Query(graphene.ObjectType):
     # portfolio = graphene.Field(PortfolioType, id=graphene.ID(required=True))
     # public_portfolios = graphene.List(PortfolioType)
     # price_alerts = graphene.List(PriceAlertType, user_id=graphene.ID())
-    # social_feed = graphene.List(SocialFeedType)
+    social_feed = graphene.List('core.types.StockDiscussionType')
     # user_achievements = graphene.List(UserAchievementType, user_id=graphene.ID())
     # stock_sentiment = graphene.Field(StockSentimentType, stock_symbol=graphene.String())
     top_performers = graphene.List(StockType)
@@ -488,6 +488,28 @@ class Query(graphene.ObjectType):
             return StockDiscussion.objects.get(id=id)
         except StockDiscussion.DoesNotExist:
             return None
+
+    def resolve_social_feed(self, info):
+        """Get social feed - posts from users the current user follows"""
+        user = info.context.user
+        
+        if user.is_anonymous:
+            # Anonymous users see no social feed
+            return []
+        
+        # Get users that the current user follows
+        followed_users = user.following.values_list('following', flat=True)
+        
+        if not followed_users:
+            # If user isn't following anyone, return empty list
+            return []
+        
+        # Return posts from followed users only
+        discussions = StockDiscussion.objects.filter(
+            user__in=followed_users
+        ).select_related('user', 'stock').prefetch_related('comments').order_by('-created_at')
+        
+        return discussions
 
     def resolve_my_portfolio(self, info):
         """Get current user's portfolio"""

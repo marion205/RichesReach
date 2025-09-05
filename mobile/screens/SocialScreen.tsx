@@ -944,16 +944,6 @@ const SocialScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Connection Status */}
-      <View style={styles.connectionStatus}>
-        <View style={[
-          styles.connectionIndicator,
-          { backgroundColor: isWebSocketConnected ? '#4CAF50' : '#F44336' }
-        ]} />
-        <Text style={styles.connectionText}>
-          {isWebSocketConnected ? 'Live Updates' : 'Offline'}
-        </Text>
-      </View>
 
       {/* Navigation */}
               <SocialNav 
@@ -1427,27 +1417,6 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
     color: '#1C1C1E',
-  },
-  connectionStatus: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    backgroundColor: '#F8F9FA',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
-  },
-  connectionIndicator: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 8,
-  },
-  connectionText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#6C757D',
   },
   createButton: {
     width: 40,
