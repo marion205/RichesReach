@@ -21,6 +21,9 @@ import * as ImagePicker from 'expo-image-picker';
 
 import SocialNav from '../components/SocialNav';
 import RedditDiscussionCard from '../components/RedditDiscussionCard';
+import LoadingErrorState from '../components/LoadingErrorState';
+import webSocketService, { DiscussionUpdate } from '../services/WebSocketService';
+import errorService, { ErrorType } from '../services/ErrorService';
 
 
 // GraphQL Queries
@@ -247,6 +250,9 @@ const SocialScreen: React.FC = () => {
   // Feed type state
   const [feedType, setFeedType] = useState<'trending' | 'following'>('trending');
   
+  // WebSocket connection state
+  const [isWebSocketConnected, setIsWebSocketConnected] = useState(false);
+  
   // User following state
   const [showUserModal, setShowUserModal] = useState(false);
   const [userModalType, setUserModalType] = useState<'suggested' | 'following'>('suggested');
@@ -254,19 +260,114 @@ const SocialScreen: React.FC = () => {
   const client = useApolloClient();
   
   // GraphQL queries and mutations
-  const { data: discussionsData, loading: discussionsLoading, refetch: refetchDiscussions } = useQuery(
-    feedType === 'trending' ? GET_TRENDING_DISCUSSIONS : GET_SOCIAL_FEED
+  const { 
+    data: discussionsData, 
+    loading: discussionsLoading, 
+    error: discussionsError,
+    refetch: refetchDiscussions 
+  } = useQuery(
+    feedType === 'trending' ? GET_TRENDING_DISCUSSIONS : GET_SOCIAL_FEED,
+    {
+      errorPolicy: 'all',
+      onError: (error) => {
+        errorService.handleGraphQLError(error, 'SocialScreen', 'fetch_discussions');
+      }
+    }
   );
   
   const { data: suggestedUsersData, refetch: refetchSuggestedUsers } = useQuery(GET_SUGGESTED_USERS);
   const { data: followingUsersData, refetch: refetchFollowingUsers } = useQuery(GET_FOLLOWING_USERS);
 
-  const [commentOnDiscussion] = useMutation(COMMENT_ON_DISCUSSION);
-  const [createStockDiscussion] = useMutation(CREATE_DISCUSSION);
-  const [upvoteDiscussion] = useMutation(UPVOTE_DISCUSSION);
-  const [downvoteDiscussion] = useMutation(DOWNVOTE_DISCUSSION);
-  const [toggleFollow] = useMutation(TOGGLE_FOLLOW);
+  const [commentOnDiscussion] = useMutation(COMMENT_ON_DISCUSSION, {
+    onError: (error) => {
+      errorService.handleGraphQLError(error, 'SocialScreen', 'comment_discussion');
+    }
+  });
+  const [createStockDiscussion] = useMutation(CREATE_DISCUSSION, {
+    onError: (error) => {
+      errorService.handleGraphQLError(error, 'SocialScreen', 'create_discussion');
+    }
+  });
+  const [upvoteDiscussion] = useMutation(UPVOTE_DISCUSSION, {
+    onError: (error) => {
+      errorService.handleGraphQLError(error, 'SocialScreen', 'upvote_discussion');
+    }
+  });
+  const [downvoteDiscussion] = useMutation(DOWNVOTE_DISCUSSION, {
+    onError: (error) => {
+      errorService.handleGraphQLError(error, 'SocialScreen', 'downvote_discussion');
+    }
+  });
+  const [toggleFollow] = useMutation(TOGGLE_FOLLOW, {
+    onError: (error) => {
+      errorService.handleGraphQLError(error, 'SocialScreen', 'toggle_follow');
+    }
+  });
 
+  // WebSocket setup
+  useEffect(() => {
+    const setupWebSocket = async () => {
+      try {
+        // Get auth token
+        const token = await AsyncStorage.getItem('authToken');
+        if (token) {
+          webSocketService.setToken(token);
+        }
+
+        // Set up WebSocket callbacks
+        webSocketService.setCallbacks({
+          onConnectionStatusChange: (connected) => {
+            console.log('🔌 WebSocket connection status:', connected);
+            setIsWebSocketConnected(connected);
+            
+            if (!connected) {
+              errorService.handleWebSocketError(
+                new Error('WebSocket disconnected'),
+                'SocialScreen',
+                'websocket_connection'
+              );
+            }
+          },
+          onNewDiscussion: (discussion: DiscussionUpdate) => {
+            console.log('💬 New discussion received via WebSocket:', discussion.title);
+            // Refetch discussions to get the latest data
+            refetchDiscussions();
+          },
+          onNewComment: (comment) => {
+            console.log('💬 New comment received via WebSocket:', comment.content);
+            // Refetch discussions to get the latest comments
+            refetchDiscussions();
+          },
+          onDiscussionUpdate: (discussionId, updates) => {
+            console.log('💬 Discussion update received via WebSocket:', discussionId, updates);
+            // Refetch discussions to get the latest updates
+            refetchDiscussions();
+          }
+        });
+
+        // Connect to WebSocket
+        webSocketService.connect();
+
+        // Set up ping interval to keep connection alive
+        const pingInterval = setInterval(() => {
+          webSocketService.ping();
+        }, 30000); // Ping every 30 seconds
+
+        return () => {
+          clearInterval(pingInterval);
+          webSocketService.disconnect();
+        };
+      } catch (error) {
+        console.error('Error setting up WebSocket:', error);
+      }
+    };
+
+    const cleanup = setupWebSocket();
+    
+    return () => {
+      cleanup.then(cleanupFn => cleanupFn?.());
+    };
+  }, []);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -275,7 +376,15 @@ const SocialScreen: React.FC = () => {
         include: ['GetTrendingDiscussions'],
       });
     } catch (error) {
-      console.error('Error refreshing data:', error);
+      errorService.handleError(error, {
+        type: ErrorType.API,
+        severity: 'MEDIUM',
+        customMessage: 'Failed to refresh data. Please try again.',
+        screen: 'SocialScreen',
+        action: 'refresh_data',
+        showAlert: false,
+        showToast: true,
+      });
     } finally {
       setRefreshing(false);
     }
@@ -835,6 +944,17 @@ const SocialScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
+      {/* Connection Status */}
+      <View style={styles.connectionStatus}>
+        <View style={[
+          styles.connectionIndicator,
+          { backgroundColor: isWebSocketConnected ? '#4CAF50' : '#F44336' }
+        ]} />
+        <Text style={styles.connectionText}>
+          {isWebSocketConnected ? 'Live Updates' : 'Offline'}
+        </Text>
+      </View>
+
       {/* Navigation */}
               <SocialNav 
                 feedType={feedType}
@@ -848,7 +968,14 @@ const SocialScreen: React.FC = () => {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {renderContent()}
+        <LoadingErrorState
+          loading={discussionsLoading}
+          error={discussionsError?.message}
+          onRetry={onRefresh}
+          showEmpty={!discussionsLoading && (!discussionsData?.stockDiscussions || discussionsData.stockDiscussions.length === 0)}
+          emptyMessage="No discussions yet. Be the first to start a conversation!"
+        />
+        {!discussionsLoading && !discussionsError && discussionsData?.stockDiscussions && discussionsData.stockDiscussions.length > 0 && renderContent()}
       </ScrollView>
 
       {/* Create Modal */}
@@ -1300,6 +1427,27 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
     color: '#1C1C1E',
+  },
+  connectionStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: '#F8F9FA',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5EA',
+  },
+  connectionIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 8,
+  },
+  connectionText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#6C757D',
   },
   createButton: {
     width: 40,

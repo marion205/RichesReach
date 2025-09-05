@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { ApolloProvider } from '@apollo/client';
 import { client } from './src/ApolloProvider';
+import pushNotificationService from './services/PushNotificationService';
+import priceAlertService from './services/PriceAlertService';
 
 // Screens
 import HomeScreen from './screens/HomeScreen';
@@ -19,6 +21,35 @@ import BottomTabBar from './components/BottomTabBar';
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('home');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  // Initialize push notifications and price alerts
+  useEffect(() => {
+    const initializeServices = async () => {
+      try {
+        // Initialize push notifications
+        const notificationsEnabled = await pushNotificationService.initialize();
+        if (notificationsEnabled) {
+          console.log('📱 Push notifications initialized successfully');
+        }
+
+        // Initialize price alert service
+        await priceAlertService.initialize();
+        console.log('📊 Price alert service initialized successfully');
+
+        // Set up notification listeners
+        const { notificationListener, responseListener } = pushNotificationService.setupNotificationListeners();
+
+        // Cleanup listeners on unmount
+        return () => {
+          pushNotificationService.removeNotificationListeners(notificationListener, responseListener);
+        };
+      } catch (error) {
+        console.error('Error initializing services:', error);
+      }
+    };
+
+    initializeServices();
+  }, []);
 
   const navigateTo = (screen: string) => {
     setCurrentScreen(screen);

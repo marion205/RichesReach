@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'channels',
     'core',
     'graphene_django',
     'corsheaders',
@@ -81,6 +82,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'richesreach.wsgi.application'
+ASGI_APPLICATION = 'richesreach.asgi.application'
 
 
 # Database
@@ -250,5 +252,16 @@ CELERY_BEAT_SCHEDULE = {
     'cleanup-old-cache': {
         'task': 'core.stock_service.cleanup_old_cache',
         'schedule': 86400.0,  # Every day
+    },
+}
+
+# Channels Configuration
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            "hosts": [f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}'],
+            "password": REDIS_PASSWORD,
+        },
     },
 }
