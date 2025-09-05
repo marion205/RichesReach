@@ -16,6 +16,7 @@ import hashlib
 from .models import User, Post, Comment, ChatSession, ChatMessage, IncomeProfile, AIPortfolioRecommendation, Stock, Watchlist, Portfolio, StockDiscussion, DiscussionComment
 from .types import UserType, PostType, CommentType, ChatSessionType, ChatMessageType
 from .auth_utils import RateLimiter, PasswordValidator, SecurityUtils, AccountLockout
+from .websocket_service import websocket_service
 
 class CreateUser(graphene.Mutation):
     """Enhanced user creation with security features"""
@@ -754,6 +755,32 @@ class CreateStockDiscussion(graphene.Mutation):
                 discussion_type=discussion_type or 'general',
                 visibility=visibility
             )
+            
+            # Broadcast new discussion via WebSocket
+            try:
+                discussion_data = {
+                    'id': discussion.id,
+                    'title': discussion.title,
+                    'content': discussion.content,
+                    'user': {
+                        'id': discussion.user.id,
+                        'name': discussion.user.name,
+                        'profilePic': discussion.user.profile_pic
+                    },
+                    'stock': {
+                        'symbol': discussion.stock.symbol if discussion.stock else None,
+                        'company_name': discussion.stock.company_name if discussion.stock else None
+                    } if discussion.stock else None,
+                    'discussion_type': discussion.discussion_type,
+                    'visibility': discussion.visibility,
+                    'score': discussion.score,
+                    'comment_count': discussion.comment_count,
+                    'created_at': discussion.created_at.isoformat()
+                }
+                websocket_service.broadcast_new_discussion(discussion_data)
+            except Exception as e:
+                # Don't fail the mutation if WebSocket broadcast fails
+                print(f"WebSocket broadcast error: {e}")
             
             return CreateStockDiscussion(
                 success=True,
