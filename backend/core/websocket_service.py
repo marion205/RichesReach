@@ -12,11 +12,19 @@ class WebSocketService:
     """Service for managing WebSocket communications"""
     
     def __init__(self):
-        self.channel_layer = get_channel_layer()
+        try:
+            self.channel_layer = get_channel_layer()
+        except Exception as e:
+            logger.warning(f"Could not initialize channel layer: {e}")
+            self.channel_layer = None
         self.market_service = MarketDataService()
     
     def broadcast_stock_price_update(self, symbol, price_data):
         """Broadcast stock price update to all connected clients"""
+        if not self.channel_layer:
+            logger.warning("Channel layer not available, skipping broadcast")
+            return
+            
         try:
             # Send to all users who might be watching this stock
             async_to_sync(self.channel_layer.group_send)(
@@ -73,6 +81,10 @@ class WebSocketService:
     
     def broadcast_new_discussion(self, discussion_data):
         """Broadcast new discussion to all connected clients"""
+        if not self.channel_layer:
+            logger.warning("Channel layer not available, skipping broadcast")
+            return
+            
         try:
             async_to_sync(self.channel_layer.group_send)(
                 "discussions",
@@ -87,6 +99,10 @@ class WebSocketService:
     
     def broadcast_new_comment(self, comment_data, discussion_id):
         """Broadcast new comment to all connected clients"""
+        if not self.channel_layer:
+            logger.warning("Channel layer not available, skipping broadcast")
+            return
+            
         try:
             async_to_sync(self.channel_layer.group_send)(
                 "discussions",

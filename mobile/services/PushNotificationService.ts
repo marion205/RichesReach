@@ -46,6 +46,14 @@ class PushNotificationService {
         return false;
       }
 
+      // Check if running in Expo Go (which has limited notification support)
+      if (__DEV__ && !Constants.expoConfig?.extra?.eas) {
+        console.log('Running in Expo Go - notifications may not work properly');
+        // Return true but with limited functionality
+        this.isInitialized = true;
+        return true;
+      }
+
       // Request permissions
       const { status: existingStatus } = await Notifications.getPermissionsAsync();
       let finalStatus = existingStatus;

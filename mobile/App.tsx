@@ -26,23 +26,31 @@ export default function App() {
   useEffect(() => {
     const initializeServices = async () => {
       try {
-        // Initialize push notifications
-        const notificationsEnabled = await pushNotificationService.initialize();
-        if (notificationsEnabled) {
-          console.log('📱 Push notifications initialized successfully');
+        // Initialize push notifications with error handling
+        try {
+          const notificationsEnabled = await pushNotificationService.initialize();
+          if (notificationsEnabled) {
+            console.log('📱 Push notifications initialized successfully');
+            
+            // Set up notification listeners
+            const { notificationListener, responseListener } = pushNotificationService.setupNotificationListeners();
+
+            // Cleanup listeners on unmount
+            return () => {
+              pushNotificationService.removeNotificationListeners(notificationListener, responseListener);
+            };
+          }
+        } catch (notificationError) {
+          console.warn('⚠️ Push notifications not available (likely Expo Go):', notificationError.message);
         }
 
         // Initialize price alert service
-        await priceAlertService.initialize();
-        console.log('📊 Price alert service initialized successfully');
-
-        // Set up notification listeners
-        const { notificationListener, responseListener } = pushNotificationService.setupNotificationListeners();
-
-        // Cleanup listeners on unmount
-        return () => {
-          pushNotificationService.removeNotificationListeners(notificationListener, responseListener);
-        };
+        try {
+          await priceAlertService.initialize();
+          console.log('📊 Price alert service initialized successfully');
+        } catch (priceAlertError) {
+          console.warn('⚠️ Price alert service initialization failed:', priceAlertError.message);
+        }
       } catch (error) {
         console.error('Error initializing services:', error);
       }
