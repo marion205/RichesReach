@@ -1,6 +1,8 @@
 import { Alert } from 'react-native';
 // Use Expo Go compatible price alert service to avoid crashes
 import expoGoCompatiblePriceAlertService from './ExpoGoCompatiblePriceAlertService';
+// Import intelligent price alert service for "big day" detection
+import intelligentPriceAlertService from './IntelligentPriceAlertService';
 
 export interface StockPrice {
   symbol: string;
@@ -79,6 +81,33 @@ class WebSocketService {
 
   public setToken(token: string) {
     this.token = token;
+  }
+
+  /**
+   * Set up intelligent price alerts with user profile
+   */
+  public async setupIntelligentAlerts(userProfile?: {
+    riskTolerance: 'conservative' | 'moderate' | 'aggressive';
+    investmentHorizon: 'short' | 'medium' | 'long';
+    portfolioSize: number;
+    preferredSectors: string[];
+    tradingFrequency: 'daily' | 'weekly' | 'monthly';
+  }) {
+    try {
+      // Set default profile if none provided
+      const profile = userProfile || {
+        riskTolerance: 'moderate',
+        investmentHorizon: 'medium',
+        portfolioSize: 10000,
+        preferredSectors: ['Technology', 'Healthcare', 'Finance'],
+        tradingFrequency: 'weekly'
+      };
+
+      await intelligentPriceAlertService.setUserProfile(profile);
+      console.log('🧠 Intelligent price alerts configured with user profile');
+    } catch (error) {
+      console.error('Error setting up intelligent alerts:', error);
+    }
   }
 
   public setCallbacks(callbacks: {
@@ -229,8 +258,11 @@ class WebSocketService {
         
         this.onStockPriceUpdate?.(priceUpdate);
         
-        // Check price alerts
+        // Check basic price alerts
         expoGoCompatiblePriceAlertService.checkAlerts([priceUpdate]);
+        
+        // Check for "big day" movements and trigger intelligent analysis
+        this.checkForBigDayMovement(priceUpdate);
         break;
         
       case 'price_alert':
@@ -361,6 +393,149 @@ class WebSocketService {
 
   public getConnectionStatus(): boolean {
     return this.isConnected;
+  }
+
+  /**
+   * Check for significant price movements that might indicate a "big day"
+   * and trigger intelligent analysis
+   */
+  private async checkForBigDayMovement(priceUpdate: StockPrice) {
+    try {
+      // Define thresholds for "big day" detection
+      const BIG_DAY_THRESHOLDS = {
+        priceChangePercent: 3.0, // 3% price change
+        volumeSpike: 2.0, // 2x normal volume
+        highVolume: 1000000, // 1M+ volume
+      };
+
+      const isSignificantPriceMove = Math.abs(priceUpdate.change_percent) >= BIG_DAY_THRESHOLDS.priceChangePercent;
+      const isHighVolume = priceUpdate.volume >= BIG_DAY_THRESHOLDS.highVolume;
+      
+      // Check if this is a "big day" movement
+      if (isSignificantPriceMove || isHighVolume) {
+        console.log('🚀 BIG DAY DETECTED!', {
+          symbol: priceUpdate.symbol,
+          priceChange: priceUpdate.change_percent,
+          volume: priceUpdate.volume,
+          reason: isSignificantPriceMove ? 'Significant price movement' : 'High volume'
+        });
+
+        // Generate mock historical data for analysis (in real app, fetch from API)
+        const historicalData = this.generateMockHistoricalData(priceUpdate);
+        
+        // Generate mock market conditions
+        const marketConditions = {
+          marketTrend: this.determineMarketTrend(priceUpdate.change_percent),
+          volatility: isSignificantPriceMove ? 'high' : 'medium',
+          volume: isHighVolume ? 'high' : 'normal',
+          sectorPerformance: priceUpdate.change_percent * 0.8, // Mock sector performance
+        };
+
+        // Trigger intelligent analysis
+        const alerts = await intelligentPriceAlertService.analyzeStock(
+          priceUpdate.symbol,
+          priceUpdate,
+          historicalData,
+          marketConditions
+        );
+
+        // Process any generated alerts
+        if (alerts.length > 0) {
+          console.log('🧠 Intelligent alerts generated:', alerts.length);
+          
+          for (const alert of alerts) {
+            // Show intelligent alert to user
+            this.showIntelligentAlert(alert);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error in big day movement analysis:', error);
+    }
+  }
+
+  /**
+   * Generate mock historical data for technical analysis
+   * In a real app, this would fetch from your API
+   */
+  private generateMockHistoricalData(currentPrice: StockPrice): StockPrice[] {
+    const historicalData: StockPrice[] = [];
+    const basePrice = currentPrice.price;
+    const baseVolume = currentPrice.volume || 1000000;
+    
+    // Generate 50 days of mock data
+    for (let i = 50; i >= 0; i--) {
+      const daysAgo = i;
+      const priceVariation = (Math.random() - 0.5) * 0.1; // ±5% variation
+      const volumeVariation = (Math.random() - 0.5) * 0.5; // ±25% volume variation
+      
+      historicalData.push({
+        symbol: currentPrice.symbol,
+        price: basePrice * (1 + priceVariation),
+        change: 0,
+        change_percent: 0,
+        volume: Math.max(100000, baseVolume * (1 + volumeVariation)),
+        timestamp: currentPrice.timestamp - (daysAgo * 24 * 60 * 60 * 1000)
+      });
+    }
+    
+    return historicalData;
+  }
+
+  /**
+   * Determine market trend based on price movement
+   */
+  private determineMarketTrend(changePercent: number): 'bullish' | 'bearish' | 'sideways' {
+    if (changePercent > 2) return 'bullish';
+    if (changePercent < -2) return 'bearish';
+    return 'sideways';
+  }
+
+  /**
+   * Show intelligent alert to user
+   */
+  private showIntelligentAlert(alert: any) {
+    const alertTypeEmoji = {
+      'buy_opportunity': '🟢',
+      'sell_signal': '🔴',
+      'technical_breakout': '🚀',
+      'price_target': '🎯'
+    };
+
+    const emoji = alertTypeEmoji[alert.alertType] || '📊';
+    const title = `${emoji} ${alert.symbol} ${alert.alertType.replace('_', ' ').toUpperCase()}`;
+    
+    let message = `Confidence: ${Math.round(alert.confidence)}%\n\n`;
+    message += `Reason: ${alert.reason}\n\n`;
+    message += `Technical Score: ${Math.round(alert.technicalScore)}/100\n`;
+    message += `Market Score: ${Math.round(alert.marketScore)}/100\n`;
+    message += `User Match: ${Math.round(alert.userScore)}/100`;
+    
+    if (alert.targetPrice) {
+      message += `\n\nTarget Price: $${alert.targetPrice.toFixed(2)}`;
+    }
+    if (alert.stopLoss) {
+      message += `\nStop Loss: $${alert.stopLoss.toFixed(2)}`;
+    }
+
+    // Show alert to user
+    Alert.alert(
+      title,
+      message,
+      [
+        { text: 'Dismiss', style: 'cancel' },
+        { text: 'View Details', onPress: () => console.log('Alert details:', alert) }
+      ]
+    );
+
+    // Also trigger the price alert callback
+    this.onPriceAlert?.({
+      symbol: alert.symbol,
+      price: 0, // Current price not available in alert
+      alert_type: 'intelligent_' + alert.alertType,
+      message: `${alert.alertType.replace('_', ' ')} - ${alert.reason}`,
+      timestamp: Date.now()
+    });
   }
 }
 
