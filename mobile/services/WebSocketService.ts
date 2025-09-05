@@ -1,5 +1,6 @@
 import { Alert } from 'react-native';
-import priceAlertService from './PriceAlertService';
+// Use Expo Go compatible price alert service to avoid crashes
+import expoGoCompatiblePriceAlertService from './ExpoGoCompatiblePriceAlertService';
 
 export interface StockPrice {
   symbol: string;
@@ -229,7 +230,7 @@ class WebSocketService {
         this.onStockPriceUpdate?.(priceUpdate);
         
         // Check price alerts
-        priceAlertService.checkAlerts([priceUpdate]);
+        expoGoCompatiblePriceAlertService.checkAlerts([priceUpdate]);
         break;
         
       case 'price_alert':

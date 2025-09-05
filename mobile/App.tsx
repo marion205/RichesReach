@@ -2,26 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { ApolloProvider } from '@apollo/client';
 import { client } from './src/ApolloProvider';
-// Use Expo Go compatible services to avoid "Exception in HostFunction" errors
+// Use only Expo Go compatible services to avoid "Exception in HostFunction" errors
 import expoGoCompatibleNotificationService from './services/ExpoGoCompatibleNotificationService';
 import expoGoCompatiblePriceAlertService from './services/ExpoGoCompatiblePriceAlertService';
 
-// Try to use full services, fallback to Expo Go compatible versions
-let pushNotificationService: any = expoGoCompatibleNotificationService;
-let priceAlertService: any = expoGoCompatiblePriceAlertService;
+// Always use Expo Go compatible services to prevent crashes
+const pushNotificationService = expoGoCompatibleNotificationService;
+const priceAlertService = expoGoCompatiblePriceAlertService;
 
-try {
-  // Try to load the full services
-  const fullNotificationService = require('./services/PushNotificationService').default;
-  const fullPriceAlertService = require('./services/PriceAlertService').default;
-  
-  // Only use full services if they load without errors
-  pushNotificationService = fullNotificationService;
-  priceAlertService = fullPriceAlertService;
-  console.log('📱 Using full notification and price alert services');
-} catch (error) {
-  console.log('📱 Using Expo Go compatible services:', error.message);
-}
+console.log('📱 Using Expo Go compatible services to prevent crashes');
 
 // Screens
 import HomeScreen from './screens/HomeScreen';
