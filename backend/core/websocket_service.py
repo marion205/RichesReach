@@ -3,7 +3,7 @@ import logging
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from .models import Stock, Watchlist
-from .services import MarketDataService
+from .market_data_service import MarketDataService
 import time
 
 logger = logging.getLogger(__name__)
