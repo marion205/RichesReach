@@ -23,7 +23,7 @@ import SocialNav from '../components/SocialNav';
 import RedditDiscussionCard from '../components/RedditDiscussionCard';
 import LoadingErrorState from '../components/LoadingErrorState';
 import webSocketService, { DiscussionUpdate } from '../services/WebSocketService';
-import errorService, { ErrorType } from '../services/ErrorService';
+import errorService, { ErrorType, ErrorSeverity } from '../services/ErrorService';
 
 
 // GraphQL Queries
@@ -378,7 +378,7 @@ const SocialScreen: React.FC = () => {
     } catch (error) {
       errorService.handleError(error, {
         type: ErrorType.API,
-        severity: 'MEDIUM',
+        severity: ErrorSeverity.MEDIUM,
         customMessage: 'Failed to refresh data. Please try again.',
         screen: 'SocialScreen',
         action: 'refresh_data',
@@ -1562,16 +1562,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 40,
   },
+  emptyStateIcon: {
+    marginBottom: 16,
+  },
   emptyStateText: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#666',
     marginBottom: 8,
+    textAlign: 'center',
   },
   emptyStateSubtext: {
     fontSize: 14,
     color: '#999',
     textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  emptyStateButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  emptyStateButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
   discussionContent: {
     fontSize: 16,
