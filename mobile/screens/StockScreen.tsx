@@ -54,9 +54,11 @@ const GET_MY_WATCHLIST = gql`
         companyName
         sector
         beginnerFriendlyScore
+        currentPrice
       }
       addedAt
       notes
+      targetPrice
     }
   }
 `;
@@ -207,8 +209,14 @@ export default function StockScreen({ navigateTo }: { navigateTo: (screen: strin
     fetchPolicy: 'cache-and-network',
   });
 
-  const { data: watchlistData, loading: watchlistLoading, refetch: refetchWatchlist } = useQuery(GET_MY_WATCHLIST, {
+  const { data: watchlistData, loading: watchlistLoading, refetch: refetchWatchlist, error: watchlistError } = useQuery(GET_MY_WATCHLIST, {
     fetchPolicy: 'cache-and-network',
+    onCompleted: (data) => {
+      console.log('📊 Watchlist query completed:', data);
+    },
+    onError: (error) => {
+      console.error('❌ Watchlist query error:', error);
+    },
   });
 
 

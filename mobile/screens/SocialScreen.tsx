@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -16,21 +16,23 @@ import {
 import Icon from 'react-native-vector-icons/Feather';
 import { useApolloClient } from '@apollo/client';
 import { gql, useQuery, useMutation } from '@apollo/client';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ImagePicker from 'expo-image-picker';
 
 import SocialNav from '../components/SocialNav';
-import DiscussionCard from '../components/DiscussionCard';
+import RedditDiscussionCard from '../components/RedditDiscussionCard';
 
 
 // GraphQL Queries
 const GET_TRENDING_DISCUSSIONS = gql`
   query GetTrendingDiscussions {
-    trendingDiscussions {
+    stockDiscussions {
       id
       title
       content
       discussionType
       createdAt
-      likeCount
+      score
       commentCount
       user {
         name
@@ -52,22 +54,10 @@ const GET_TRENDING_DISCUSSIONS = gql`
   }
 `;
 
-const LIKE_DISCUSSION = gql`
-  mutation LikeDiscussion($discussionId: ID!) {
-    likeDiscussion(discussionId: $discussionId) {
-      success
-      message
-      discussion {
-        id
-        likeCount
-      }
-    }
-  }
-`;
 
 const COMMENT_ON_DISCUSSION = gql`
-  mutation CommentOnDiscussion($discussionId: ID!, $content: String!) {
-    commentOnDiscussion(discussionId: $discussionId, content: $content) {
+  mutation CreateDiscussionComment($discussionId: ID!, $content: String!) {
+    createDiscussionComment(discussionId: $discussionId, content: $content) {
       success
       message
       comment {
@@ -82,7 +72,7 @@ const COMMENT_ON_DISCUSSION = gql`
 `;
 
 const CREATE_DISCUSSION = gql`
-  mutation CreateStockDiscussion($title: String!, $content: String!, $stockSymbol: String!, $discussionType: String) {
+  mutation CreateStockDiscussion($title: String!, $content: String!, $stockSymbol: String, $discussionType: String) {
     createStockDiscussion(title: $title, content: $content, stockSymbol: $stockSymbol, discussionType: $discussionType) {
       success
       message
@@ -92,7 +82,7 @@ const CREATE_DISCUSSION = gql`
         content
         discussionType
         createdAt
-        likeCount
+        score
         commentCount
         user {
           name
@@ -102,6 +92,32 @@ const CREATE_DISCUSSION = gql`
           symbol
           companyName
         }
+      }
+    }
+  }
+`;
+
+const UPVOTE_DISCUSSION = gql`
+  mutation UpvoteDiscussion($discussionId: ID!) {
+    voteDiscussion(discussionId: $discussionId, voteType: "upvote") {
+      success
+      message
+      discussion {
+        id
+        score
+      }
+    }
+  }
+`;
+
+const DOWNVOTE_DISCUSSION = gql`
+  mutation DownvoteDiscussion($discussionId: ID!) {
+    voteDiscussion(discussionId: $discussionId, voteType: "downvote") {
+      success
+      message
+      discussion {
+        id
+        score
       }
     }
   }
@@ -126,6 +142,14 @@ const SocialScreen: React.FC = () => {
   const [createContent, setCreateContent] = useState('');
   const [createStock, setCreateStock] = useState('');
   
+  // Media state
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [selectedVideo, setSelectedVideo] = useState<string | null>(null);
+  const [mediaType, setMediaType] = useState<'image' | 'video' | null>(null);
+  
+  // TextInput refs
+  const contentInputRef = useRef<TextInput>(null);
+  
   // Comment modal state
   const [showCommentModal, setShowCommentModal] = useState(false);
   const [commentContent, setCommentContent] = useState('');
@@ -139,11 +163,12 @@ const SocialScreen: React.FC = () => {
   const client = useApolloClient();
   
   // GraphQL queries and mutations
-  const { data: discussionsData, loading: discussionsLoading } = useQuery(GET_TRENDING_DISCUSSIONS);
+  const { data: discussionsData, loading: discussionsLoading, refetch: refetchDiscussions } = useQuery(GET_TRENDING_DISCUSSIONS);
 
-  const [likeDiscussion] = useMutation(LIKE_DISCUSSION);
   const [commentOnDiscussion] = useMutation(COMMENT_ON_DISCUSSION);
   const [createStockDiscussion] = useMutation(CREATE_DISCUSSION);
+  const [upvoteDiscussion] = useMutation(UPVOTE_DISCUSSION);
+  const [downvoteDiscussion] = useMutation(DOWNVOTE_DISCUSSION);
 
 
   const onRefresh = async () => {
@@ -165,63 +190,255 @@ const SocialScreen: React.FC = () => {
     setShowCreateModal(true);
   };
 
-  const handleDiscussionLike = async (discussionId: string) => {
+
+  const handleUpvote = async (discussionId: string) => {
     try {
-      // Attempting to like discussion
-      const result = await likeDiscussion({ variables: { discussionId } });
-      // Like operation completed successfully
+      console.log('🔼 Upvoting discussion:', discussionId);
+      const result = await upvoteDiscussion({ variables: { discussionId } });
+      console.log('✅ Upvote result:', result);
       
-      // Refetch discussions to update like count
-      await client.refetchQueries({ include: ['GetTrendingDiscussions'] });
-      // Refetch completed
+      // Refetch discussions to update score
+      await refetchDiscussions();
+      console.log('🔄 Discussions refetched after upvote');
     } catch (error) {
-      console.error('Failed to like discussion:', error);
-      Alert.alert('Error', 'Failed to like discussion. Please try again.');
+      console.error('❌ Failed to upvote discussion:', error);
+      Alert.alert('Error', 'Failed to upvote discussion. Please try again.');
+    }
+  };
+
+  const handleDownvote = async (discussionId: string) => {
+    try {
+      console.log('🔽 Downvoting discussion:', discussionId);
+      const result = await downvoteDiscussion({ variables: { discussionId } });
+      console.log('✅ Downvote result:', result);
+      
+      // Refetch discussions to update score
+      await refetchDiscussions();
+      console.log('🔄 Discussions refetched after downvote');
+    } catch (error) {
+      console.error('❌ Failed to downvote discussion:', error);
+      Alert.alert('Error', 'Failed to downvote discussion. Please try again.');
     }
   };
 
   const handleDiscussionComment = (discussionId: string) => {
+    console.log('💬 COMMENT BUTTON CLICKED');
+    console.log('📊 Comment button data:', {
+      discussionId: discussionId,
+      discussionsData: discussionsData,
+      stockDiscussions: discussionsData?.stockDiscussions
+    });
+    
     // Open discussion detail instead of comment modal (X-style)
-    const discussion = discussionsData?.trendingDiscussions?.find((d: any) => d.id === discussionId);
+    const discussion = discussionsData?.stockDiscussions?.find((d: any) => d.id === discussionId);
+    console.log('🔍 Found discussion:', discussion);
+    
     if (discussion) {
+      console.log('✅ Discussion found, opening detail modal');
+      console.log('📋 Discussion details:', {
+        id: discussion.id,
+        title: discussion.title,
+        score: discussion.score,
+        commentCount: discussion.commentCount
+      });
+      
       setDiscussionDetail(discussion);
       setSelectedDiscussionId(discussionId);
       setCommentContent(''); // Reset comment input
       setShowCommentModal(false); // Close comment modal if open
       setShowDiscussionDetail(true); // Open discussion detail modal
+      
+      console.log('🔄 Modal state updated:', {
+        discussionDetail: discussion,
+        selectedDiscussionId: discussionId,
+        showCommentModal: false,
+        showDiscussionDetail: true
+      });
+    } else {
+      console.log('❌ Discussion not found for ID:', discussionId);
     }
   };
 
   const handleCommentSubmit = async () => {
+    console.log('🚀 COMMENT SUBMISSION STARTED');
+    console.log('📊 Current state:', {
+      commentContent: commentContent,
+      commentContentLength: commentContent?.length || 0,
+      selectedDiscussionId: selectedDiscussionId,
+      isCommenting: isCommenting,
+      showCommentModal: showCommentModal
+    });
+
     if (!commentContent.trim()) {
+      console.log('❌ No comment content provided');
       Alert.alert('Error', 'Please enter a comment');
       return;
     }
 
-    setIsCommenting(true);
+    console.log('💬 Starting comment submission...');
+    console.log('📝 Comment data:', {
+      discussionId: selectedDiscussionId,
+      content: commentContent.trim(),
+      contentLength: commentContent.trim().length
+    });
+
+    console.log('🔍 Testing backend connection before comment...');
     try {
-      await commentOnDiscussion({ 
+      const testResponse = await fetch('http://192.168.1.151:8000/graphql/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: '{ __typename }'
+        })
+      });
+      console.log('🌐 Backend connection test status:', testResponse.status);
+      if (testResponse.ok) {
+        console.log('✅ Backend is reachable for comment');
+      } else {
+        console.log('❌ Backend connection failed for comment');
+      }
+    } catch (testError) {
+      console.log('❌ Backend connection test failed:', testError);
+    }
+
+    setIsCommenting(true);
+    console.log('🔄 Set isCommenting to true');
+    
+    try {
+      console.log('📤 Sending comment GraphQL mutation...');
+      console.log('🔗 Comment mutation variables:', { 
+        discussionId: selectedDiscussionId, 
+        content: commentContent.trim() 
+      });
+      
+      const result = await commentOnDiscussion({ 
         variables: { 
           discussionId: selectedDiscussionId, 
           content: commentContent.trim() 
         } 
       });
       
+      console.log('✅ Comment mutation completed successfully!');
+      console.log('📊 Comment result:', result);
+      console.log('📊 Comment result data:', result.data);
+      console.log('📊 Comment result data.createDiscussionComment:', result.data?.createDiscussionComment);
+      
+      if (result.data?.createDiscussionComment?.success) {
+        console.log('🎉 Comment creation was successful!');
+        console.log('📋 Created comment:', result.data.createDiscussionComment.comment);
+      } else {
+        console.log('⚠️ Comment creation returned success: false');
+        console.log('📋 Error message:', result.data?.createDiscussionComment?.message);
+      }
+      
       // Refetch discussions to update comment count
-      await client.refetchQueries({ include: ['GetTrendingDiscussions'] });
+      console.log('🔄 Refetching discussions to update comment count...');
+      console.log('📊 Before refetch - discussionsData:', discussionsData?.stockDiscussions?.map(d => ({
+        id: d.id,
+        title: d.title,
+        commentCount: d.commentCount
+      })));
+      
+      // Add a small delay to ensure backend has processed the comment
+      console.log('⏳ Waiting 500ms for backend to process comment...');
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      const refetchResult = await refetchDiscussions();
+      console.log('📊 Refetch result:', refetchResult);
+      
+      console.log('📊 After refetch - discussionsData:', discussionsData?.stockDiscussions?.map(d => ({
+        id: d.id,
+        title: d.title,
+        commentCount: d.commentCount
+      })));
+      console.log('✅ Discussions refetched after comment');
       
       // Close modal and reset
+      console.log('🧹 Closing modal and resetting form...');
       setShowCommentModal(false);
       setCommentContent('');
       setSelectedDiscussionId('');
+      console.log('✅ Modal closed and form reset');
       
       Alert.alert('Success', 'Comment added successfully!');
+      console.log('🎉 Comment submission completed successfully!');
     } catch (error) {
-      console.error('Failed to add comment:', error);
+      console.error('💥 COMMENT SUBMISSION FAILED');
+      console.error('❌ Failed to add comment:', error);
+      console.error('❌ Error message:', (error as any)?.message);
+      console.error('❌ Error stack:', (error as any)?.stack);
+      console.error('❌ Error details:', JSON.stringify(error, null, 2));
+      
+      if ((error as any)?.networkError) {
+        console.error('🌐 Network error details:', (error as any).networkError);
+      }
+      if ((error as any)?.graphQLErrors) {
+        console.error('📊 GraphQL errors:', (error as any).graphQLErrors);
+      }
+      
       Alert.alert('Error', 'Failed to add comment. Please try again.');
     } finally {
+      console.log('🏁 Comment submission process finished');
       setIsCommenting(false);
+      console.log('🔄 Set isCommenting to false');
     }
+  };
+
+  // Media picker functions
+  const pickImage = async () => {
+    console.log('📸 Picking image...');
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [16, 9],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        console.log('✅ Image selected:', result.assets[0].uri);
+        setSelectedImage(result.assets[0].uri);
+        setSelectedVideo(null);
+        setMediaType('image');
+      } else {
+        console.log('❌ Image selection cancelled');
+      }
+    } catch (error) {
+      console.error('❌ Error picking image:', error);
+      Alert.alert('Error', 'Failed to pick image');
+    }
+  };
+
+  const pickVideo = async () => {
+    console.log('🎥 Picking video...');
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        console.log('✅ Video selected:', result.assets[0].uri);
+        setSelectedVideo(result.assets[0].uri);
+        setSelectedImage(null);
+        setMediaType('video');
+      } else {
+        console.log('❌ Video selection cancelled');
+      }
+    } catch (error) {
+      console.error('❌ Error picking video:', error);
+      Alert.alert('Error', 'Failed to pick video');
+    }
+  };
+
+  const removeMedia = () => {
+    console.log('🗑️ Removing media...');
+    setSelectedImage(null);
+    setSelectedVideo(null);
+    setMediaType(null);
   };
 
   const handleInlineCommentSubmit = async () => {
@@ -266,7 +483,7 @@ const SocialScreen: React.FC = () => {
         try {
           await client.refetchQueries({ include: ['GetTrendingDiscussions'] });
           // Update discussion detail with fresh data from server
-          const freshDiscussion = discussionsData?.trendingDiscussions?.find((d: any) => d.id === selectedDiscussionId);
+          const freshDiscussion = discussionsData?.stockDiscussions?.find((d: any) => d.id === selectedDiscussionId);
           if (freshDiscussion) {
             setDiscussionDetail(freshDiscussion);
           }
@@ -284,7 +501,7 @@ const SocialScreen: React.FC = () => {
 
   const handleDiscussionPress = (discussionId: string) => {
     // Find the discussion from the current data
-    const discussion = discussionsData?.trendingDiscussions?.find((d: any) => d.id === discussionId);
+    const discussion = discussionsData?.stockDiscussions?.find((d: any) => d.id === discussionId);
     if (discussion) {
       setDiscussionDetail(discussion);
       setSelectedDiscussionId(discussionId);
@@ -295,58 +512,171 @@ const SocialScreen: React.FC = () => {
   };
 
   const handleCreateSubmit = async () => {
-    if (!createTitle.trim() || !createContent.trim() || !createStock.trim()) {
-      Alert.alert('Error', 'Please fill in all fields');
+    console.log('🚀 Starting discussion creation process...');
+    console.log('📝 Form data:', {
+      title: createTitle,
+      titleLength: createTitle.trim().length,
+      content: createContent,
+      contentLength: createContent.trim().length,
+      stock: createStock,
+      stockLength: createStock.trim().length
+    });
+
+    // Test backend connection first
+    try {
+      console.log('🔍 Testing backend connection...');
+      const response = await fetch('http://192.168.1.151:8000/graphql/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: '{ __schema { types { name } } }'
+        })
+      });
+      console.log('🌐 Backend connection test status:', response.status);
+      if (response.ok) {
+        console.log('✅ Backend is reachable');
+      } else {
+        console.log('❌ Backend connection failed:', response.status);
+      }
+    } catch (error) {
+      console.log('❌ Backend connection error:', error);
+    }
+
+    if (!createTitle.trim() || !createContent.trim()) {
+      console.log('❌ Validation failed: Missing title or content');
+      Alert.alert('Error', 'Please fill in title and content');
       return;
     }
 
+    // Validate minimum length requirements
+    if (createTitle.trim().length < 5) {
+      console.log('❌ Validation failed: Title too short');
+      Alert.alert('Error', 'Title must be at least 5 characters long');
+      return;
+    }
+
+    if (createContent.trim().length < 10) {
+      console.log('❌ Validation failed: Content too short');
+      Alert.alert('Error', 'Content must be at least 10 characters long');
+      return;
+    }
+
+    console.log('✅ Validation passed, proceeding with GraphQL mutation...');
+
     try {
+      // Prepare content with media information
+      let finalContent = createContent.trim();
+      
+      // Add media information to content if media is selected
+      if (selectedImage) {
+        finalContent += `\n\n[IMAGE: ${selectedImage}]`;
+        console.log('📸 Adding image to content:', selectedImage);
+      }
+      
+      if (selectedVideo) {
+        finalContent += `\n\n[VIDEO: ${selectedVideo}]`;
+        console.log('🎥 Adding video to content:', selectedVideo);
+      }
+      
       // Creating discussion
+      const variables = {
+        title: createTitle.trim(),
+        content: finalContent,
+        stockSymbol: createStock.trim() || null, // Optional - like Reddit posts
+        discussionType: 'general' // Default to general discussion
+      };
+      
+      console.log('📤 Sending GraphQL mutation with variables:', variables);
+      console.log('🔗 GraphQL mutation query:', CREATE_DISCUSSION.loc?.source?.body);
+      console.log('🌐 Apollo Client URI:', 'http://192.168.1.151:8000/graphql/');
+      console.log('🔐 Auth token available:', !!await AsyncStorage.getItem('token'));
       
       const result = await createStockDiscussion({
-        variables: {
-          title: createTitle.trim(),
-          content: createContent.trim(),
-          stockSymbol: createStock.trim(),
-          discussionType: 'analysis' // Default to analysis
-        }
+        variables: variables
       });
+      
+      console.log('📥 Received GraphQL response:', result);
+      console.log('📊 Response data:', result.data);
+      console.log('📊 CreateStockDiscussion result:', result.data?.createStockDiscussion);
       
       // Discussion created successfully
       
       if (result.data?.createStockDiscussion?.success) {
+        console.log('✅ Discussion created successfully!');
+        console.log('📋 Created discussion:', result.data.createStockDiscussion.discussion);
         Alert.alert('Success', 'Discussion created successfully!');
         
         // Refetch discussions to show the new item
-        await client.refetchQueries({
-          include: ['GetTrendingDiscussions']
-        });
+        console.log('🔄 Refetching discussions...');
+        await refetchDiscussions();
+        console.log('✅ Discussions refetched');
         
         setShowCreateModal(false);
         setCreateTitle('');
         setCreateContent('');
         setCreateStock('');
+        // Clear media
+        setSelectedImage(null);
+        setSelectedVideo(null);
+        setMediaType(null);
+        console.log('🧹 Form cleared and modal closed');
       } else {
+        console.log('❌ Discussion creation failed:', result.data?.createStockDiscussion?.message);
         Alert.alert('Error', result.data?.createStockDiscussion?.message || 'Failed to create discussion');
       }
     } catch (error) {
-      console.error('Failed to create discussion:', error);
+      console.error('💥 Failed to create discussion - Full error:', error);
+      console.error('💥 Error message:', (error as any)?.message);
+      console.error('💥 Error stack:', (error as any)?.stack);
+      console.error('💥 Error details:', JSON.stringify(error, null, 2));
       Alert.alert('Error', `Failed to create discussion: ${(error as any)?.message || 'Unknown error'}`);
     }
   };
 
   const renderContent = () => {
+    console.log('🎨 RENDERING CONTENT');
+    console.log('📊 Render data:', {
+      discussionsData: discussionsData,
+      stockDiscussions: discussionsData?.stockDiscussions,
+      discussionsCount: discussionsData?.stockDiscussions?.length || 0,
+      loading: discussionsLoading
+    });
+    
     return (
       <View>
-        {discussionsData?.trendingDiscussions?.map((discussion: any) => (
-          <DiscussionCard
-            key={discussion.id}
-            discussion={discussion}
-            onLike={() => handleDiscussionLike(discussion.id)}
-            onComment={() => handleDiscussionComment(discussion.id)}
-            onPress={() => handleDiscussionPress(discussion.id)}
-          />
-        )) || (
+        {discussionsData?.stockDiscussions?.map((discussion: any) => {
+          console.log('🔄 Rendering RedditDiscussionCard for discussion:', {
+            id: discussion.id,
+            title: discussion.title,
+            score: discussion.score,
+            commentCount: discussion.commentCount
+          });
+          
+          return (
+            <RedditDiscussionCard
+              key={discussion.id}
+              discussion={discussion}
+              onUpvote={() => {
+                console.log('🔼 Upvote button clicked for discussion:', discussion.id);
+                handleUpvote(discussion.id);
+              }}
+              onDownvote={() => {
+                console.log('🔽 Downvote button clicked for discussion:', discussion.id);
+                handleDownvote(discussion.id);
+              }}
+              onComment={() => {
+                console.log('💬 Comment button clicked for discussion:', discussion.id);
+                handleDiscussionComment(discussion.id);
+              }}
+              onPress={() => {
+                console.log('👆 Discussion card pressed for discussion:', discussion.id);
+                handleDiscussionPress(discussion.id);
+              }}
+            />
+          );
+        }) || (
           <View style={styles.emptyState}>
             <Text style={styles.emptyStateText}>No discussions yet</Text>
             <Text style={styles.emptyStateSubtext}>Be the first to start a discussion!</Text>
@@ -384,6 +714,14 @@ const SocialScreen: React.FC = () => {
         visible={showCreateModal}
         animationType="slide"
         transparent={true}
+        onShow={() => {
+          console.log('📱 Create discussion modal opened');
+          console.log('📊 Initial form state:', {
+            title: createTitle,
+            content: createContent,
+            stock: createStock
+          });
+        }}
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -400,38 +738,121 @@ const SocialScreen: React.FC = () => {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.modalBody}>
+            <ScrollView style={styles.modalBody} keyboardShouldPersistTaps="handled">
               {(
                 <>
                   <Text style={styles.modalLabel}>Title</Text>
                   <TextInput
                     style={styles.textInput}
                     value={createTitle}
-                    onChangeText={setCreateTitle}
+                    onChangeText={(text) => {
+                      console.log('📝 Title changed:', text, 'Length:', text.length);
+                      setCreateTitle(text);
+                    }}
                     placeholder="Enter discussion title"
                   />
 
-                  <Text style={styles.modalLabel}>Stock Symbol</Text>
+                  <Text style={styles.modalLabel}>Stock Symbol (Optional)</Text>
                   <TextInput
                     style={styles.textInput}
                     value={createStock}
-                    onChangeText={setCreateStock}
-                    placeholder="e.g., AAPL"
+                    onChangeText={(text) => {
+                      console.log('📈 Stock symbol changed:', text, 'Length:', text.length);
+                      setCreateStock(text);
+                    }}
+                    placeholder="e.g., AAPL (leave blank for general discussion)"
                     autoCapitalize="characters"
                   />
 
                   <Text style={styles.modalLabel}>Description</Text>
                   <TextInput
+                    ref={contentInputRef}
                     style={[styles.textInput, styles.textArea]}
                     value={createContent}
-                    onChangeText={setCreateContent}
-                    placeholder="Enter discussion description"
+                    onChangeText={(text) => {
+                      console.log('📄 Content changed:', text, 'Length:', text.length);
+                      setCreateContent(text);
+                    }}
+                    placeholder="Share your thoughts, analysis, or questions. You can include links to images, videos, or articles!"
                     multiline
                     numberOfLines={4}
+                    autoCapitalize="sentences"
+                    autoCorrect={true}
+                    spellCheck={true}
+                    keyboardType="default"
+                    returnKeyType="default"
+                    blurOnSubmit={false}
+                    textContentType="none"
+                    autoComplete="off"
+                    dataDetectorTypes="all"
+                    selectTextOnFocus={false}
+                    clearButtonMode="never"
+                    onContentSizeChange={(event) => {
+                      // Allow dynamic height for multiline
+                      console.log('📏 Content size changed:', event.nativeEvent.contentSize);
+                    }}
+                    onSelectionChange={(event) => {
+                      console.log('📍 Selection changed:', event.nativeEvent.selection);
+                    }}
+                    onFocus={() => {
+                      console.log('🎯 Content TextInput focused');
+                    }}
+                    onBlur={() => {
+                      console.log('👁️ Content TextInput blurred');
+                    }}
+                    contextMenuHidden={false}
+                    allowFontScaling={true}
+                    maxLength={2000}
+                    editable={true}
+                    selectTextOnFocus={false}
+                    caretHidden={false}
+                    importantForAutofill="no"
                   />
+
+                  {/* Media Upload Section */}
+                  <Text style={styles.modalLabel}>Add Media (Optional)</Text>
+                  <View style={styles.mediaUploadContainer}>
+                    <TouchableOpacity style={styles.mediaButton} onPress={pickImage}>
+                      <Icon name="image" size={20} color="#007AFF" />
+                      <Text style={styles.mediaButtonText}>Photo</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.mediaButton} onPress={pickVideo}>
+                      <Icon name="video" size={20} color="#007AFF" />
+                      <Text style={styles.mediaButtonText}>Video</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Media Preview */}
+                  {selectedImage && (
+                    <View style={styles.mediaPreview}>
+                      <Text style={styles.mediaPreviewLabel}>Selected Image:</Text>
+                      <View style={styles.mediaPreviewItem}>
+                        <Text style={styles.mediaPreviewText} numberOfLines={1}>
+                          {selectedImage.split('/').pop()}
+                        </Text>
+                        <TouchableOpacity onPress={removeMedia} style={styles.removeMediaButton}>
+                          <Icon name="x" size={16} color="#FF3B30" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
+
+                  {selectedVideo && (
+                    <View style={styles.mediaPreview}>
+                      <Text style={styles.mediaPreviewLabel}>Selected Video:</Text>
+                      <View style={styles.mediaPreviewItem}>
+                        <Text style={styles.mediaPreviewText} numberOfLines={1}>
+                          {selectedVideo.split('/').pop()}
+                        </Text>
+                        <TouchableOpacity onPress={removeMedia} style={styles.removeMediaButton}>
+                          <Icon name="x" size={16} color="#FF3B30" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
                 </>
               )}
-            </View>
+            </ScrollView>
 
             <View style={styles.modalFooter}>
               <TouchableOpacity
@@ -443,10 +864,25 @@ const SocialScreen: React.FC = () => {
               <TouchableOpacity
                 style={[
                   styles.submitButton,
-                  (!createTitle.trim() || !createContent.trim() || !createStock.trim()) && styles.submitButtonDisabled
+                  (!createTitle.trim() || !createContent.trim() || 
+                   createTitle.trim().length < 5 || createContent.trim().length < 10) && styles.submitButtonDisabled
                 ]}
-                onPress={handleCreateSubmit}
-                disabled={!createTitle.trim() || !createContent.trim() || !createStock.trim()}
+                onPress={() => {
+                  console.log('🔘 Create button pressed');
+                  console.log('📊 Button state check:', {
+                    hasTitle: !!createTitle.trim(),
+                    hasContent: !!createContent.trim(),
+                    titleLength: createTitle.trim().length,
+                    contentLength: createContent.trim().length,
+                    titleValid: createTitle.trim().length >= 5,
+                    contentValid: createContent.trim().length >= 10,
+                    buttonDisabled: (!createTitle.trim() || !createContent.trim() || 
+                                   createTitle.trim().length < 5 || createContent.trim().length < 10)
+                  });
+                  handleCreateSubmit();
+                }}
+                disabled={!createTitle.trim() || !createContent.trim() || 
+                         createTitle.trim().length < 5 || createContent.trim().length < 10}
               >
                 <Text style={styles.submitButtonText}>Create</Text>
               </TouchableOpacity>
@@ -607,10 +1043,10 @@ const SocialScreen: React.FC = () => {
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.submitButton}
-                onPress={() => handleDiscussionLike(discussionDetail?.id)}
+                onPress={() => handleUpvote(discussionDetail?.id)}
               >
                 <Text style={styles.submitButtonText}>
-                  ❤️ {discussionDetail?.likeCount || 0} Likes
+                  🔼 {discussionDetail?.score || 0} Score
                 </Text>
               </TouchableOpacity>
             </View>
@@ -692,6 +1128,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#1C1C1E',
+    marginBottom: 8,
+    marginTop: 16,
+  },
+  descriptionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 8,
     marginTop: 16,
   },
@@ -874,6 +1317,56 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+  // Media upload styles
+  mediaUploadContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  mediaButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F2F2F7',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    gap: 8,
+  },
+  mediaButtonText: {
+    fontSize: 14,
+    color: '#007AFF',
+    fontWeight: '500',
+  },
+  mediaPreview: {
+    marginBottom: 16,
+  },
+  mediaPreviewLabel: {
+    fontSize: 14,
+    color: '#1C1C1E',
+    marginBottom: 8,
+    fontWeight: '500',
+  },
+  mediaPreviewItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F2F2F7',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+  },
+  mediaPreviewText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#1C1C1E',
+  },
+  removeMediaButton: {
+    padding: 4,
+    marginLeft: 8,
   },
 });
 

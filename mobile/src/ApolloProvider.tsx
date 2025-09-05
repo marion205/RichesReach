@@ -8,19 +8,20 @@ import { getMainDefinition } from '@apollo/client/utilities';
 // import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
 // import { createClient } from 'graphql-ws';
 
-const HTTP_URL = 'http://127.0.0.1:8000/graphql/'; 
+const HTTP_URL = 'http://192.168.1.151:8000/graphql/'; 
 // Local development → use localhost
-// iOS Simulator → use actual network IP (e.g., http://10.0.0.64:8000/graphql/)
+// iOS Simulator → use actual network IP (e.g., http://192.168.1.151:8000/graphql/)
 // Android Emulator → use http://10.0.2.2:8000/graphql/
 
 const httpLink = createHttpLink({ uri: HTTP_URL });
 
 const authLink = setContext(async (_, { headers }) => {
   const token = await AsyncStorage.getItem('token');
+  console.log('🔐 Auth Debug - Token from storage:', token ? `${token.substring(0, 20)}...` : 'No token');
   return {
     headers: {
       ...headers,
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(token ? { Authorization: `JWT ${token}` } : {}),
     },
   };
 });

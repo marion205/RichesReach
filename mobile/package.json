@@ -24,14 +24,15 @@
     "react-native": "0.76.9",
     "react-native-gesture-handler": "~2.20.2",
     "react-native-reanimated": "~3.16.1",
-    "react-native-vector-icons": "^10.3.0"
+    "react-native-vector-icons": "^10.3.0",
+    "expo-clipboard": "~7.0.1"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
-    "@types/react": "~18.3.12",
-    "typescript": "~5.8.3",
     "@expo/cli": "latest",
-    "eas-cli": "latest"
+    "@types/react": "~18.3.12",
+    "eas-cli": "latest",
+    "typescript": "~5.8.3"
   },
   "private": true
 }
