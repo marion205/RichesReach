@@ -339,13 +339,15 @@ class Query(graphene.ObjectType):
         return []
     
     def resolve_social_feed(root, info):
+        """Get personalized feed - only posts from followed users + user's own posts"""
         user = info.context.user
         if not user.is_authenticated:
             return []
         
-        # Get feed items from followed users and public content
-        followed_users = user.following.all()
-        return SocialFeed.objects.filter(
+        # Get posts from followed users + user's own posts
+        # This shows only follower-only posts (not public posts)
+        followed_users = user.following.values_list('following', flat=True)
+        return StockDiscussion.objects.filter(
             models.Q(user__in=followed_users) | models.Q(user=user)
         ).order_by('-created_at')[:50]
     
@@ -453,8 +455,23 @@ class Query(graphene.ObjectType):
         )
     
     def resolve_stock_discussions(self, info, stock_symbol=None, limit=20):
-        """Get stock discussions (Reddit-style)"""
-        discussions = StockDiscussion.objects.all()
+        """Get stock discussions (Reddit-style) - shows public posts and posts from followed users"""
+        user = info.context.user
+        
+        if user.is_anonymous:
+            # Anonymous users only see public posts
+            discussions = StockDiscussion.objects.filter(visibility='public')
+        else:
+            # Authenticated users see:
+            # 1. All public posts
+            # 2. Posts from users they follow (regardless of visibility)
+            # 3. Their own posts (regardless of visibility)
+            followed_users = user.following.values_list('following', flat=True)
+            discussions = StockDiscussion.objects.filter(
+                models.Q(visibility='public') |  # Public posts
+                models.Q(user__in=followed_users) |  # Posts from followed users
+                models.Q(user=user)  # User's own posts
+            ).distinct()
         
         if stock_symbol:
             try:

@@ -406,12 +406,13 @@ class DiscussionCommentType(DjangoObjectType):
 class StockDiscussionType(DjangoObjectType):
     class Meta:
         model = StockDiscussion
-        fields = ("id", "user", "stock", "title", "content", "discussion_type", "upvotes", "downvotes", "is_pinned", "is_locked", "created_at", "updated_at")
+        fields = ("id", "user", "stock", "title", "content", "discussion_type", "visibility", "upvotes", "downvotes", "is_pinned", "is_locked", "created_at", "updated_at")
     
     # Add camelCase fields for frontend compatibility
     user = graphene.Field('core.types.UserType')
     stock = graphene.Field('core.types.StockType')
     discussionType = graphene.String()
+    visibility = graphene.String()
     isPinned = graphene.Boolean()
     isLocked = graphene.Boolean()
     createdAt = graphene.DateTime()

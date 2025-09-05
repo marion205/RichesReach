@@ -3,24 +3,48 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 
 interface SocialNavProps {
-  // No props needed for single tab
+  feedType: 'trending' | 'following';
+  onFeedTypeChange: (type: 'trending' | 'following') => void;
 }
 
-const SocialNav: React.FC<SocialNavProps> = () => {
+const SocialNav: React.FC<SocialNavProps> = ({ feedType, onFeedTypeChange }) => {
 
   return (
     <View style={styles.container}>
-        <View style={styles.singleTab}>
-          <Icon 
-            name="message-circle"
-            size={24} 
-            color="#34C759" 
-          />
-          <Text style={styles.singleTabLabel}>
-            Discussions
-          </Text>
-        </View>
-      </View>
+      <TouchableOpacity
+        style={[styles.tab, feedType === 'trending' && styles.activeTab]}
+        onPress={() => onFeedTypeChange('trending')}
+      >
+        <Icon 
+          name="trending-up"
+          size={20} 
+          color={feedType === 'trending' ? '#34C759' : '#8E8E93'} 
+        />
+        <Text style={[
+          styles.tabLabel,
+          feedType === 'trending' && styles.activeTabLabel
+        ]}>
+          Trending
+        </Text>
+      </TouchableOpacity>
+      
+      <TouchableOpacity
+        style={[styles.tab, feedType === 'following' && styles.activeTab]}
+        onPress={() => onFeedTypeChange('following')}
+      >
+        <Icon 
+          name="users"
+          size={20} 
+          color={feedType === 'following' ? '#34C759' : '#8E8E93'} 
+        />
+        <Text style={[
+          styles.tabLabel,
+          feedType === 'following' && styles.activeTabLabel
+        ]}>
+          Following
+        </Text>
+      </TouchableOpacity>
+    </View>
   );
 };
 
