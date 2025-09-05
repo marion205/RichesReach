@@ -28,9 +28,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-wk_qy339*l)1xg=(f6_e@9+d7sgi7%#0t!e17a3nkeu&p#@zq9'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
 
-ALLOWED_HOSTS = ["127.0.0.1", "localhost", "10.0.0.64"]
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '127.0.0.1,localhost,10.0.0.64,192.168.1.151,0.0.0.0').split(',')
+
+# Frontend URL for email links
+FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
 
 
 # Application definition
@@ -87,6 +90,27 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
+    }
+}
+
+# Email Configuration
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
+EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True').lower() == 'true'
+EMAIL_USE_SSL = False  # Disable SSL for local development
+EMAIL_SSL_CERTFILE = ''  # No SSL certificate file
+EMAIL_SSL_KEYFILE = ''   # No SSL key file
+EMAIL_SSL_CHECK_HOSTNAME = False  # Disable hostname verification
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@richesreach.com')
+
+# Cache Configuration (for rate limiting and tokens)
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-snowflake',
     }
 }
 
@@ -152,7 +176,7 @@ AUTHENTICATION_BACKENDS = [
 ]
 
 # OpenAI Configuration
-OPENAI_API_KEY = None  # Set this in environment variable OPENAI_API_KEY
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')  # Set this in environment variable OPENAI_API_KEY
 OPENAI_MODEL = "gpt-3.5-turbo"  # Default model to use
 OPENAI_MAX_TOKENS = 1000  # Maximum tokens for responses
 

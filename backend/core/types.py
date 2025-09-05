@@ -1,7 +1,8 @@
 # core/types.py
 import graphene
 from graphene_django import DjangoObjectType
-from .models import User, Post, ChatSession, ChatMessage, Source, Like, Comment, Follow, Stock, StockData, Watchlist, WatchlistItem, StockDiscussion, DiscussionComment, Portfolio, PortfolioPosition, PriceAlert, SocialFeed, UserAchievement, StockSentiment, IncomeProfile, AIPortfolioRecommendation, StockRecommendation
+from .models import User, Post, ChatSession, ChatMessage, Source, Like, Comment, Follow, Stock, StockData, Watchlist, IncomeProfile, AIPortfolioRecommendation, Portfolio, StockDiscussion, DiscussionComment
+# TODO: Add missing models: WatchlistItem, StockDiscussion, DiscussionComment, Portfolio, PortfolioPosition, PriceAlert, SocialFeed, UserAchievement, StockSentiment, IncomeProfile, AIPortfolioRecommendation, StockRecommendation
 
 class UserType(DjangoObjectType):
     class Meta:
@@ -48,6 +49,130 @@ class UserType(DjangoObjectType):
             return False
         return user.is_followed_by(self)
 
+class IncomeProfileType(DjangoObjectType):
+    class Meta:
+        model = IncomeProfile
+        fields = ("id", "income_bracket", "age", "investment_goals", "risk_tolerance", "investment_horizon", "created_at", "updated_at")
+    
+    # Add camelCase fields for frontend compatibility
+    incomeBracket = graphene.String()
+    investmentGoals = graphene.List(graphene.String)
+    riskTolerance = graphene.String()
+    investmentHorizon = graphene.String()
+    createdAt = graphene.DateTime()
+    updatedAt = graphene.DateTime()
+    
+    def resolve_incomeBracket(self, info):
+        return self.income_bracket
+    
+    def resolve_investmentGoals(self, info):
+        return self.investment_goals
+    
+    def resolve_riskTolerance(self, info):
+        return self.risk_tolerance
+    
+    def resolve_investmentHorizon(self, info):
+        return self.investment_horizon
+    
+    def resolve_createdAt(self, info):
+        return self.created_at
+    
+    def resolve_updatedAt(self, info):
+        return self.updated_at
+
+class StockRecommendationType(graphene.ObjectType):
+    """Individual stock recommendation within a portfolio"""
+    symbol = graphene.String()
+    companyName = graphene.String()
+    allocation = graphene.Float()
+    reasoning = graphene.String()
+    riskLevel = graphene.String()
+    expectedReturn = graphene.Float()
+
+class AIPortfolioRecommendationType(DjangoObjectType):
+    class Meta:
+        model = AIPortfolioRecommendation
+        fields = ("id", "risk_profile", "portfolio_allocation", "recommended_stocks", "expected_portfolio_return", "risk_assessment", "created_at", "updated_at")
+    
+    # Add camelCase fields for frontend compatibility
+    riskProfile = graphene.String()
+    portfolioAllocation = graphene.JSONString()
+    recommendedStocks = graphene.List(StockRecommendationType)
+    expectedPortfolioReturn = graphene.Float()
+    riskAssessment = graphene.String()
+    createdAt = graphene.DateTime()
+    updatedAt = graphene.DateTime()
+    
+    def resolve_riskProfile(self, info):
+        return self.risk_profile
+    
+    def resolve_portfolioAllocation(self, info):
+        return self.portfolio_allocation
+    
+    def resolve_recommendedStocks(self, info):
+        # Convert JSON data to StockRecommendationType objects
+        stocks_data = self.recommended_stocks or []
+        return [
+            StockRecommendationType(
+                symbol=stock.get('symbol', ''),
+                companyName=stock.get('companyName', ''),
+                allocation=stock.get('allocation', 0.0),
+                reasoning=stock.get('reasoning', ''),
+                riskLevel=stock.get('riskLevel', ''),
+                expectedReturn=stock.get('expectedReturn', 0.0)
+            )
+            for stock in stocks_data
+        ]
+    
+    def resolve_expectedPortfolioReturn(self, info):
+        if not self.expected_portfolio_return:
+            return None
+        try:
+            return float(self.expected_portfolio_return)
+        except (ValueError, TypeError):
+            return None
+    
+    def resolve_riskAssessment(self, info):
+        return self.risk_assessment
+    
+    def resolve_createdAt(self, info):
+        return self.created_at
+    
+    def resolve_updatedAt(self, info):
+        return self.updated_at
+
+class TechnicalIndicatorsType(graphene.ObjectType):
+    """Technical indicators for stock analysis"""
+    rsi = graphene.Float()
+    macd = graphene.Float()
+    macdSignal = graphene.Float()
+    macdHistogram = graphene.Float()
+    sma20 = graphene.Float()
+    sma50 = graphene.Float()
+    ema12 = graphene.Float()
+    ema26 = graphene.Float()
+    bollingerUpper = graphene.Float()
+    bollingerLower = graphene.Float()
+    bollingerMiddle = graphene.Float()
+
+class FundamentalAnalysisType(graphene.ObjectType):
+    """Fundamental analysis scores"""
+    valuationScore = graphene.Float()
+    growthScore = graphene.Float()
+    stabilityScore = graphene.Float()
+    dividendScore = graphene.Float()
+    debtScore = graphene.Float()
+
+class RustStockAnalysisType(graphene.ObjectType):
+    """Rust engine stock analysis"""
+    symbol = graphene.String()
+    beginnerFriendlyScore = graphene.Float()
+    riskLevel = graphene.String()
+    recommendation = graphene.String()
+    technicalIndicators = graphene.Field(TechnicalIndicatorsType)
+    fundamentalAnalysis = graphene.Field(FundamentalAnalysisType)
+    reasoning = graphene.List(graphene.String)
+
 class PostType(DjangoObjectType):
     class Meta:
         model = Post
@@ -86,14 +211,20 @@ class FollowType(DjangoObjectType):
 class StockType(DjangoObjectType):
     class Meta:
         model = Stock
-        fields = ("id", "symbol", "company_name", "sector", "market_cap", "pe_ratio", "dividend_yield", "debt_ratio", "volatility", "beginner_friendly_score")
+        fields = ("id", "symbol", "company_name", "sector", "market_cap", "pe_ratio", "dividend_yield", "debt_ratio", "volatility", "beginner_friendly_score", "current_price")
     
     # Add camelCase fields for frontend compatibility
     companyName = graphene.String()  # camelCase field
+    currentPrice = graphene.Float()  # camelCase field
     
     # Resolver for camelCase field
     def resolve_companyName(self, info):
         return self.company_name
+    
+    def resolve_currentPrice(self, info):
+        if self.current_price:
+            return float(self.current_price)
+        return None
 
 class StockDataType(DjangoObjectType):
     class Meta:
@@ -102,21 +233,32 @@ class StockDataType(DjangoObjectType):
 
 class WatchlistType(graphene.ObjectType):
     id = graphene.ID()
-    name = graphene.String()
-    description = graphene.String()
-    is_public = graphene.Boolean()
-    is_shared = graphene.Boolean()
-    created_at = graphene.DateTime()
-    updated_at = graphene.DateTime()
-    user = graphene.Field('core.types.UserType')
-    items = graphene.List(lambda: WatchlistItemType)
-    item_count = graphene.Int()
+    stock = graphene.Field('core.types.StockType')
+    notes = graphene.String()
+    targetPrice = graphene.Float()
+    addedAt = graphene.DateTime()
+    createdAt = graphene.DateTime()
+    updatedAt = graphene.DateTime()
     
-    def resolve_items(self, info):
-        return self.items.all()
+    def resolve_stock(self, info):
+        return self.stock
     
-    def resolve_item_count(self, info):
-        return self.items.count()
+    def resolve_notes(self, info):
+        return self.notes
+    
+    def resolve_targetPrice(self, info):
+        if self.target_price:
+            return float(self.target_price)
+        return None
+    
+    def resolve_addedAt(self, info):
+        return self.added_at
+    
+    def resolve_createdAt(self, info):
+        return self.created_at
+    
+    def resolve_updatedAt(self, info):
+        return self.updated_at
 
 class WatchlistItemType(graphene.ObjectType):
     id = graphene.ID()
@@ -132,42 +274,121 @@ class WatchlistItemType(graphene.ObjectType):
     def resolve_addedAt(self, info):
         return self.added_at
 
-class StockDiscussionType(graphene.ObjectType):
-    id = graphene.ID()
-    title = graphene.String()
-    content = graphene.String()
-    discussion_type = graphene.String()
-    discussionType = graphene.String()  # camelCase field
-    is_analysis = graphene.Boolean()
-    analysis_data = graphene.JSONString()
-    created_at = graphene.DateTime()
-    createdAt = graphene.DateTime()  # camelCase field
-    updated_at = graphene.DateTime()
-    updatedAt = graphene.DateTime()  # camelCase field
+# class StockDiscussionType(graphene.ObjectType):
+#     id = graphene.ID()
+#     title = graphene.String()
+#     content = graphene.String()
+#     discussion_type = graphene.String()
+#     discussionType = graphene.String()  # camelCase field
+#     is_analysis = graphene.Boolean()
+#     analysis_data = graphene.JSONString()
+#     created_at = graphene.DateTime()
+#     createdAt = graphene.DateTime()  # camelCase field
+#     updated_at = graphene.DateTime()
+#     updatedAt = graphene.DateTime()  # camelCase field
+#     user = graphene.Field('core.types.UserType')
+#     stock = graphene.Field(StockType)
+#     likes = graphene.List('core.types.UserType')
+#     like_count = graphene.Int()
+#     likeCount = graphene.Int()  # camelCase field
+#     comments = graphene.List(lambda: DiscussionCommentType)
+#     comment_count = graphene.Int()
+#     commentCount = graphene.Int()  # camelCase field
+#     
+#     def resolve_likes(self, info):
+#         return self.likes.all()
+#     
+#     def resolve_like_count(self, info):
+#         return self.likes.count()
+#     
+#     def resolve_comments(self, info):
+#         return self.comments.all()
+#     
+#     def resolve_comment_count(self, info):
+#         return self.comments.count()
+#     
+#     # Resolvers for camelCase fields
+#     def resolve_discussionType(self, info):
+#         return self.discussion_type
+#     
+#     def resolve_createdAt(self, info):
+#         return self.created_at
+#     
+#     def resolve_updatedAt(self, info):
+#         return self.updated_at
+#     
+#     def resolve_likeCount(self, info):
+#         return self.likes.count()
+#     
+#     def resolve_commentCount(self, info):
+#         return self.comments.count()
+
+# class DiscussionCommentType(graphene.ObjectType):
+#     id = graphene.ID()
+#     content = graphene.String()
+#     created_at = graphene.DateTime()
+#     updated_at = graphene.DateTime()
+#     user = graphene.Field('core.types.UserType')
+#     discussion = graphene.Field(StockDiscussionType)
+#     likes = graphene.List('core.types.UserType')
+#     like_count = graphene.Int()
+#     
+#     def resolve_likes(self, info):
+#         return self.likes.all()
+#     
+#     def resolve_like_count(self, info):
+#         return self.likes.count()
+
+class PortfolioType(DjangoObjectType):
+    class Meta:
+        model = Portfolio
+        fields = ("id", "stock", "shares", "notes", "current_price", "total_value", "created_at", "updated_at")
+    
+    # Add camelCase fields for frontend compatibility
+    stock = graphene.Field('core.types.StockType')
+    currentPrice = graphene.Float()
+    totalValue = graphene.Float()
+    createdAt = graphene.DateTime()
+    updatedAt = graphene.DateTime()
+    
+    def resolve_stock(self, info):
+        return self.stock
+    
+    def resolve_currentPrice(self, info):
+        if self.current_price:
+            return float(self.current_price)
+        return None
+    
+    def resolve_totalValue(self, info):
+        if self.total_value:
+            return float(self.total_value)
+        return None
+    
+    def resolve_createdAt(self, info):
+        return self.created_at
+    
+    def resolve_updatedAt(self, info):
+        return self.updated_at
+
+
+class DiscussionCommentType(DjangoObjectType):
+    class Meta:
+        model = DiscussionComment
+        fields = ("id", "user", "discussion", "parent_comment", "content", "upvotes", "downvotes", "is_deleted", "created_at", "updated_at")
+    
+    # Add camelCase fields for frontend compatibility
     user = graphene.Field('core.types.UserType')
-    stock = graphene.Field(StockType)
-    likes = graphene.List('core.types.UserType')
-    like_count = graphene.Int()
-    likeCount = graphene.Int()  # camelCase field
-    comments = graphene.List(lambda: DiscussionCommentType)
-    comment_count = graphene.Int()
-    commentCount = graphene.Int()  # camelCase field
+    parentComment = graphene.Field('core.types.DiscussionCommentType')
+    createdAt = graphene.DateTime()
+    updatedAt = graphene.DateTime()
+    score = graphene.Int()
+    replyCount = graphene.Int()
     
-    def resolve_likes(self, info):
-        return self.likes.all()
+    def resolve_user(self, info):
+        return self.user
     
-    def resolve_like_count(self, info):
-        return self.likes.count()
-    
-    def resolve_comments(self, info):
-        return self.comments.all()
-    
-    def resolve_comment_count(self, info):
-        return self.comments.count()
-    
-    # Resolvers for camelCase fields
-    def resolve_discussionType(self, info):
-        return self.discussion_type
+    def resolve_parentComment(self, info):
+        return self.parent_comment
     
     def resolve_createdAt(self, info):
         return self.created_at
@@ -175,56 +396,74 @@ class StockDiscussionType(graphene.ObjectType):
     def resolve_updatedAt(self, info):
         return self.updated_at
     
-    def resolve_likeCount(self, info):
-        return self.likes.count()
+    def resolve_score(self, info):
+        return self.score
+    
+    def resolve_replyCount(self, info):
+        return self.reply_count
+
+
+class StockDiscussionType(DjangoObjectType):
+    class Meta:
+        model = StockDiscussion
+        fields = ("id", "user", "stock", "title", "content", "discussion_type", "upvotes", "downvotes", "is_pinned", "is_locked", "created_at", "updated_at")
+    
+    # Add camelCase fields for frontend compatibility
+    user = graphene.Field('core.types.UserType')
+    stock = graphene.Field('core.types.StockType')
+    discussionType = graphene.String()
+    isPinned = graphene.Boolean()
+    isLocked = graphene.Boolean()
+    createdAt = graphene.DateTime()
+    updatedAt = graphene.DateTime()
+    score = graphene.Int()
+    commentCount = graphene.Int()
+    comments = graphene.List(DiscussionCommentType)
+    
+    def resolve_user(self, info):
+        return self.user
+    
+    def resolve_stock(self, info):
+        return self.stock
+    
+    def resolve_discussionType(self, info):
+        return self.discussion_type
+    
+    def resolve_isPinned(self, info):
+        return self.is_pinned
+    
+    def resolve_isLocked(self, info):
+        return self.is_locked
+    
+    def resolve_createdAt(self, info):
+        return self.created_at
+    
+    def resolve_updatedAt(self, info):
+        return self.updated_at
+    
+    def resolve_score(self, info):
+        return self.score
     
     def resolve_commentCount(self, info):
-        return self.comments.count()
-
-class DiscussionCommentType(graphene.ObjectType):
-    id = graphene.ID()
-    content = graphene.String()
-    created_at = graphene.DateTime()
-    updated_at = graphene.DateTime()
-    user = graphene.Field('core.types.UserType')
-    discussion = graphene.Field(StockDiscussionType)
-    likes = graphene.List('core.types.UserType')
-    like_count = graphene.Int()
+        return self.comment_count
     
-    def resolve_likes(self, info):
-        return self.likes.all()
-    
-    def resolve_like_count(self, info):
-        return self.likes.count()
+    def resolve_comments(self, info):
+        return self.comments.filter(parent_comment__isnull=True).order_by('-created_at')
 
-class PortfolioType(DjangoObjectType):
-    class Meta:
-        model = Portfolio
-        fields = '__all__'
-
-    total_value = graphene.Float()
-    market_value = graphene.Float()
-
-    def resolve_total_value(self, info):
-        return self.total_value
-
-    def resolve_market_value(self, info):
-        return self.market_value
-
-class PortfolioPositionType(graphene.ObjectType):
-    id = graphene.ID()
-    position_type = graphene.String()
-    shares = graphene.Decimal()
-    entry_price = graphene.Decimal()
-    current_price = graphene.Decimal()
-    entry_date = graphene.DateTime()
-    exit_date = graphene.DateTime()
-    notes = graphene.String()
-    portfolio = graphene.Field(PortfolioType)
-    stock = graphene.Field(StockType)
-    current_value = graphene.Decimal()
-    total_return = graphene.Decimal()
-    total_return_percent = graphene.Decimal()
+# class PortfolioPositionType(graphene.ObjectType):
+#     id = graphene.ID()
+#     position_type = graphene.String()
+#     shares = graphene.Decimal()
+#     entry_price = graphene.Decimal()
+#     current_price = graphene.Decimal()
+#     entry_date = graphene.DateTime()
+#     exit_date = graphene.DateTime()
+#     notes = graphene.String()
+#     portfolio = graphene.Field(PortfolioType)
+#     stock = graphene.Field(StockType)
+#     current_value = graphene.Decimal()
+#     total_return = graphene.Decimal()
+#     total_return_percent = graphene.Decimal()
 
 class PriceAlertType(graphene.ObjectType):
     id = graphene.ID()
@@ -289,17 +528,17 @@ class StockSentimentType(graphene.ObjectType):
     last_updated = graphene.DateTime()
     stock = graphene.Field(StockType)
 
-class DiscussionContent(graphene.ObjectType):
-    """Union type for discussion content"""
-    discussion = graphene.Field(StockDiscussionType)
+# class DiscussionContent(graphene.ObjectType):
+#     """Union type for discussion content"""
+#     discussion = graphene.Field(StockDiscussionType)
 
 class WatchlistContent(graphene.ObjectType):
     """Union type for watchlist content"""
     watchlist = graphene.Field(WatchlistType)
 
-class PortfolioContent(graphene.ObjectType):
-    """Union type for portfolio content"""
-    portfolio = graphene.Field(PortfolioType)
+# class PortfolioContent(graphene.ObjectType):
+#     """Union type for portfolio content"""
+#     portfolio = graphene.Field(PortfolioType)
 
 # Rust Analysis Types
 class TechnicalIndicatorsType(graphene.ObjectType):
@@ -322,14 +561,6 @@ class FundamentalAnalysisType(graphene.ObjectType):
     dividendScore = graphene.Int()
     debtScore = graphene.Int()
 
-class RustStockAnalysisType(graphene.ObjectType):
-    symbol = graphene.String()
-    beginnerFriendlyScore = graphene.Int()
-    riskLevel = graphene.String()
-    recommendation = graphene.String()
-    technicalIndicators = graphene.Field(TechnicalIndicatorsType)
-    fundamentalAnalysis = graphene.Field(FundamentalAnalysisType)
-    reasoning = graphene.List(graphene.String)
 
 class RustRecommendationType(graphene.ObjectType):
     symbol = graphene.String()
@@ -343,71 +574,71 @@ class RustHealthType(graphene.ObjectType):
     timestamp = graphene.String()
 
 
-class IncomeProfileType(DjangoObjectType):
-    class Meta:
-        model = IncomeProfile
-        fields = ("id", "income_bracket", "age", "investment_goals", "risk_tolerance", "investment_horizon", "created_at", "updated_at")
+# class IncomeProfileType(DjangoObjectType):
+#     class Meta:
+#         model = IncomeProfile
+#         fields = ("id", "income_bracket", "age", "investment_goals", "risk_tolerance", "investment_horizon", "created_at", "updated_at")
 
 
-class AIPortfolioRecommendationType(DjangoObjectType):
-    class Meta:
-        model = AIPortfolioRecommendation
-        fields = ("id", "user", "risk_profile", "portfolio_allocation", "expected_portfolio_return", "risk_assessment", "created_at")
-    
-    # Add computed field for stock recommendations
-    recommendedStocks = graphene.List('core.types.StockRecommendationType')
-    
-    # Add camelCase aliases for frontend compatibility
-    riskProfile = graphene.String()
-    expectedPortfolioReturn = graphene.String()
-    riskAssessment = graphene.String()
-    portfolioAllocation = graphene.JSONString()
-    
-    def resolve_recommendedStocks(self, info):
-        return self.recommendedStocks.all()
-    
-    def resolve_riskProfile(self, info):
-        return self.risk_profile
-    
-    def resolve_expectedPortfolioReturn(self, info):
-        return self.expected_portfolio_return
-    
-    def resolve_riskAssessment(self, info):
-        return self.risk_assessment
-    
-    def resolve_portfolioAllocation(self, info):
-        return self.portfolio_allocation
+# class AIPortfolioRecommendationType(DjangoObjectType):
+#     class Meta:
+#         model = AIPortfolioRecommendation
+#         fields = ("id", "user", "risk_profile", "portfolio_allocation", "expected_portfolio_return", "risk_assessment", "created_at")
+#     
+#     # Add computed field for stock recommendations
+#     recommendedStocks = graphene.List('core.types.StockRecommendationType')
+#     
+#     # Add camelCase aliases for frontend compatibility
+#     riskProfile = graphene.String()
+#     expectedPortfolioReturn = graphene.String()
+#     riskAssessment = graphene.String()
+#     portfolioAllocation = graphene.JSONString()
+#     
+#     def resolve_recommendedStocks(self, info):
+#         return self.recommendedStocks.all()
+#     
+#     def resolve_riskProfile(self, info):
+#         return self.risk_profile
+#     
+#     def resolve_expectedPortfolioReturn(self, info):
+#         return self.expected_portfolio_return
+#     
+#     def resolve_riskAssessment(self, info):
+#         return self.risk_assessment
+#     
+#     def resolve_portfolioAllocation(self, info):
+#         return self.portfolio_allocation
 
 
-class StockRecommendationType(DjangoObjectType):
-    class Meta:
-        model = StockRecommendation
-        fields = ("id", "portfolio_recommendation", "stock", "allocation", "reasoning", "risk_level", "expected_return")
+# class StockRecommendationType(DjangoObjectType):
+#     class Meta:
+#         model = StockRecommendation
+#         fields = ("id", "portfolio_recommendation", "stock", "allocation", "reasoning", "risk_level", "expected_return")
+#     
+#     # Add computed fields for frontend compatibility
+#     companyName = graphene.String()
+#     symbol = graphene.String()
+#     riskLevel = graphene.String()
+#     expectedReturn = graphene.String()
+#     allocation = graphene.Float()
+#     
+#     def resolve_companyName(self, info):
+#         return self.stock.company_name if self.stock else None
+#     
+#     def resolve_symbol(self, info):
+#         return self.stock.symbol if self.stock else None
+#     
+#     def resolve_riskLevel(self, info):
+#         return self.risk_level
+#     
+#     def resolve_expectedReturn(self, info):
+#         return self.expected_return
+#     
+#     def resolve_allocation(self, info):
+#         return self.allocation
     
-    # Add computed fields for frontend compatibility
-    companyName = graphene.String()
-    symbol = graphene.String()
-    riskLevel = graphene.String()
-    expectedReturn = graphene.String()
-    allocation = graphene.Float()
-    
-    def resolve_companyName(self, info):
-        return self.stock.company_name if self.stock else None
-    
-    def resolve_symbol(self, info):
-        return self.stock.symbol if self.stock else None
-    
-    def resolve_riskLevel(self, info):
-        return self.risk_level
-    
-    def resolve_expectedReturn(self, info):
-        return self.expected_return
-    
-    def resolve_allocation(self, info):
-        return self.allocation
-    
-    def resolve_reasoning(self, info):
-        return self.reasoning
+#     def resolve_reasoning(self, info):
+#         return self.reasoning
 
 
 class StockPriceType(graphene.ObjectType):

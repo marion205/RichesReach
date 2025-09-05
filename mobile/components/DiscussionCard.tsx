@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Image, Linking } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 
 interface DiscussionCardProps {
@@ -9,28 +9,61 @@ interface DiscussionCardProps {
     content: string;
     discussionType: string;  // Changed from discussion_type
     createdAt: string;       // Changed from created_at
-    likeCount: number;       // Changed from like_count
+    score: number;           // Changed from likeCount to score
     commentCount: number;    // Changed from comment_count
     user: {
       name: string;
       profilePic?: string;   // Changed from profile_pic
     };
-    stock: {
+    stock?: {
       symbol: string;
       companyName: string;   // Changed from company_name
-    };
+    } | null;
+    upvotes?: number;
+    downvotes?: number;
   };
-  onLike: () => void;
+  onUpvote: () => void;
+  onDownvote: () => void;
   onComment: () => void;
   onPress: () => void;
 }
 
 const DiscussionCard: React.FC<DiscussionCardProps> = ({
   discussion,
-  onLike,
+  onUpvote,
+  onDownvote,
   onComment,
   onPress,
 }) => {
+  const [userVote, setUserVote] = useState<'upvote' | 'downvote' | null>(null);
+
+  // Helper functions for media detection
+  const isImageUrl = (url: string) => {
+    return /\.(jpg|jpeg|png|gif|webp)$/i.test(url);
+  };
+
+  const isVideoUrl = (url: string) => {
+    return /\.(mp4|mov|avi|webm|youtube\.com|youtu\.be|vimeo\.com)$/i.test(url);
+  };
+
+  const extractLinks = (text: string) => {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    return text.match(urlRegex) || [];
+  };
+
+  const handleVote = (voteType: 'upvote' | 'downvote') => {
+    if (userVote === voteType) {
+      setUserVote(null); // Remove vote if clicking same button
+    } else {
+      setUserVote(voteType);
+      if (voteType === 'upvote') {
+        onUpvote();
+      } else {
+        onDownvote();
+      }
+    }
+  };
+
   const getDiscussionIcon = (type: string) => {
     switch (type) {
       case 'analysis': return 'bar-chart-2';
@@ -85,10 +118,12 @@ const DiscussionCard: React.FC<DiscussionCardProps> = ({
             <Text style={styles.timestamp}>{formatDate(discussion.createdAt)}</Text>
           </View>
         </View>
-        <View style={styles.stockInfo}>
-          <Text style={styles.stockSymbol}>{discussion.stock.symbol}</Text>
-          <Text style={styles.stockName}>{discussion.stock.companyName}</Text>
-        </View>
+        {discussion.stock && (
+          <View style={styles.stockInfo}>
+            <Text style={styles.stockSymbol}>{discussion.stock.symbol}</Text>
+            <Text style={styles.stockName}>{discussion.stock.companyName}</Text>
+          </View>
+        )}
       </View>
 
       {/* Discussion Type Badge */}
@@ -118,7 +153,7 @@ const DiscussionCard: React.FC<DiscussionCardProps> = ({
       <View style={styles.actions}>
         <TouchableOpacity style={styles.actionButton} onPress={onLike}>
           <Icon name="heart" size={20} color="#FF3B30" />
-          <Text style={styles.actionText}>{discussion.likeCount}</Text>
+          <Text style={styles.actionText}>{discussion.score}</Text>
         </TouchableOpacity>
         
         <TouchableOpacity style={styles.actionButton} onPress={onComment}>
