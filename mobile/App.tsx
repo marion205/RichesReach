@@ -10,8 +10,6 @@ import expoGoCompatiblePriceAlertService from './services/ExpoGoCompatiblePriceA
 const pushNotificationService = expoGoCompatibleNotificationService;
 const priceAlertService = expoGoCompatiblePriceAlertService;
 
-console.log('📱 Using Expo Go compatible services to prevent crashes');
-
 // Screens
 import HomeScreen from './screens/HomeScreen';
 import LoginScreen from './screens/LoginScreen';

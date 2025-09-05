@@ -251,12 +251,9 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
         
         // Force refresh user data first
         await refetchUser();
-        console.log('🔄 User data refreshed, waiting for update...');
         
         // Small delay to ensure user data is updated
         setTimeout(async () => {
-          console.log('🔄 Auto-updating recommendations due to profile change...');
-          console.log('🔄 New risk level for recommendations:', riskTolerance);
           await handleGenerateRecommendations();
         }, 1000);
       } else {
@@ -297,7 +294,6 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
     if (!showProfileForm && userData?.me?.incomeProfile && recommendationsData) {
       // Small delay to ensure profile data is fully updated
       const timer = setTimeout(() => {
-        console.log('🔄 Auto-updating recommendations after profile edit...');
         handleGenerateRecommendations();
       }, 500);
       

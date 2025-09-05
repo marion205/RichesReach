@@ -50,13 +50,9 @@ export default function LoginScreen({ onLogin, onNavigateToSignUp }: { onLogin: 
     }
     
     try {
-      console.log('🚀 Starting login process...');
-      const startTime = Date.now();
-      
       const loginEmail = email.trim().toLowerCase();
       const loginPassword = password;
       
-      console.log('📡 Sending login request...');
       const response = await tokenAuth({ 
         variables: { 
           email: loginEmail, 
@@ -65,44 +61,21 @@ export default function LoginScreen({ onLogin, onNavigateToSignUp }: { onLogin: 
         errorPolicy: 'all'
       });
       
-      const requestTime = Date.now();
-      console.log(`⏱️ Request completed in ${requestTime - startTime}ms`);
-      
       if (response.errors) {
-        console.error('Response errors:', response.errors);
         throw new Error('GraphQL errors in response');
       }
       
       const token = response.data?.tokenAuth?.token;
       if (!token) {
-        console.error('No token in response:', response);
         throw new Error('No token received');
       }
-      
-      console.log('✅ Login successful, storing token...');
       
       // Store the token for future requests
       await AsyncStorage.setItem('token', token);
       
-      const totalTime = Date.now();
-      console.log(`🎉 Login completed in ${totalTime - startTime}ms total`);
-      
       onLogin(token);
     } catch (err) {
-      console.error('❌ Login failed:', err);
-      console.error('Error details:', {
-        message: (err as any)?.message,
-        graphQLErrors: (err as any)?.graphQLErrors,
-        networkError: (err as any)?.networkError,
-        fullError: err
-      });
-      
-      // Log the exact error message
-      if ((err as any)?.graphQLErrors) {
-        (err as any).graphQLErrors.forEach((error: any, index: number) => {
-          console.error(`GraphQL Error ${index}:`, error);
-        });
-      }
+      console.error('Login failed:', err);
     }
   };
 

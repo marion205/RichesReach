@@ -562,7 +562,6 @@ class IntelligentPriceAlertService {
     this.alerts = this.alerts.filter(alert => alert.id !== alertId);
     await this.saveAlerts();
     
-    console.log('📊 Intelligent alert removed:', alertId);
   }
 
   /**

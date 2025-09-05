@@ -44,12 +44,8 @@ class ExpoGoCompatibleNotificationService {
    */
   public async sendLocalNotification(notification: NotificationData): Promise<void> {
     try {
-      console.log('📱 NOTIFICATION:', notification.title);
-      console.log('📱 MESSAGE:', notification.body);
-      console.log('📱 TYPE:', notification.type);
-      if (notification.data) {
-        console.log('📱 DATA:', notification.data);
-      }
+      // In production, this would send actual notifications
+      // For Expo Go, we silently handle the notification
     } catch (error) {
       console.error('Error sending local notification:', error);
     }

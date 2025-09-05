@@ -119,8 +119,6 @@ const PortfolioCalculator: React.FC<PortfolioCalculatorProps> = ({ watchlistItem
     try {
       const symbols = watchlistItems.map(item => item.stock.symbol);
       
-      console.log('🔄 Fetching real-time prices for:', symbols);
-      
       const result = await client.query({
         query: GET_CURRENT_STOCK_PRICES,
         variables: { symbols },
@@ -128,31 +126,17 @@ const PortfolioCalculator: React.FC<PortfolioCalculatorProps> = ({ watchlistItem
       });
       
       if (result.data?.currentStockPrices) {
-        console.log(' Received price data:', result.data.currentStockPrices);
-        
         const newPrices: { [key: string]: number } = {};
         result.data.currentStockPrices.forEach((price: any) => {
           if (price.currentPrice) {
             newPrices[price.symbol] = price.currentPrice;
-            
-            // Simple logging for price updates
-            if (price.verified) {
-              console.log(`📈 Live price for ${price.symbol}: $${price.currentPrice}`);
-            } else {
-              console.log(`💾 Using stored price for ${price.symbol}: $${price.currentPrice}`);
-            }
           }
         });
         
-        console.log('💰 Final price mapping:', newPrices);
         setStockPrices(newPrices);
-      } else {
-        console.log('ERROR: No price data received from API');
       }
     } catch (error) {
-      console.log('WARNING: Could not fetch real stock prices, using fallback data');
-      console.log(' Error details:', error);
-      console.log(' This might be due to API rate limits or network issues.');
+      console.error('Could not fetch real stock prices, using fallback data:', error);
       setStockPrices(fallbackPrices);
     } finally {
       setPricesLoading(false);

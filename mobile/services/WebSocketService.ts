@@ -104,7 +104,6 @@ class WebSocketService {
       };
 
       await intelligentPriceAlertService.setUserProfile(profile);
-      console.log('🧠 Intelligent price alerts configured with user profile');
     } catch (error) {
       console.error('Error setting up intelligent alerts:', error);
     }
@@ -128,7 +127,6 @@ class WebSocketService {
 
   public connect() {
     if (this.isConnected) {
-      console.log('WebSocket already connected');
       return;
     }
 
@@ -144,12 +142,10 @@ class WebSocketService {
   private connectStockPrices(baseUrl: string) {
     try {
       const url = `${baseUrl}/stock-prices/`;
-      console.log('🔌 Connecting to stock prices WebSocket:', url);
       
       this.stockPriceSocket = new WebSocket(url);
       
       this.stockPriceSocket.onopen = () => {
-        console.log('✅ Stock prices WebSocket connected');
         this.reconnectAttempts = 0;
         this.reconnectDelay = 1000;
         this.isConnected = true;
@@ -174,7 +170,6 @@ class WebSocketService {
       };
 
       this.stockPriceSocket.onclose = (event) => {
-        console.log('❌ Stock prices WebSocket disconnected:', event.code, event.reason);
         this.isConnected = false;
         this.onConnectionStatusChange?.(false);
         this.handleReconnect('stock-prices');
@@ -192,12 +187,10 @@ class WebSocketService {
   private connectDiscussions(baseUrl: string) {
     try {
       const url = `${baseUrl}/discussions/`;
-      console.log('🔌 Connecting to discussions WebSocket:', url);
       
       this.discussionSocket = new WebSocket(url);
       
       this.discussionSocket.onopen = () => {
-        console.log('✅ Discussions WebSocket connected');
         
         // Send authentication token if available
         if (this.token) {
@@ -218,7 +211,6 @@ class WebSocketService {
       };
 
       this.discussionSocket.onclose = (event) => {
-        console.log('❌ Discussions WebSocket disconnected:', event.code, event.reason);
         this.handleReconnect('discussions');
       };
 
@@ -232,21 +224,16 @@ class WebSocketService {
   }
 
   private handleStockPriceMessage(data: any) {
-    console.log('📊 Stock price message received:', data.type);
-    
     switch (data.type) {
       case 'initial_prices':
-        console.log('📈 Initial prices received:', data.prices);
         // Handle initial prices
         break;
         
       case 'stock_prices':
-        console.log('📈 Stock prices received:', data.prices);
         // Handle stock prices
         break;
         
       case 'price_update':
-        console.log('📈 Price update received:', data.symbol, data.price);
         const priceUpdate = {
           symbol: data.symbol,
           price: data.price,
@@ -266,7 +253,6 @@ class WebSocketService {
         break;
         
       case 'price_alert':
-        console.log('🚨 Price alert received:', data.symbol, data.message);
         this.onPriceAlert?.({
           symbol: data.symbol,
           price: data.price,
@@ -284,50 +270,41 @@ class WebSocketService {
         break;
         
       case 'pong':
-        console.log('🏓 Pong received');
         break;
         
       default:
-        console.log('Unknown stock price message type:', data.type);
+        // Unknown message type
     }
   }
 
   private handleDiscussionMessage(data: any) {
-    console.log('💬 Discussion message received:', data.type);
-    
     switch (data.type) {
       case 'new_discussion':
-        console.log('💬 New discussion received:', data.discussion.title);
         this.onNewDiscussion?.(data.discussion);
         break;
         
       case 'new_comment':
-        console.log('💬 New comment received:', data.comment.content);
         this.onNewComment?.(data.comment);
         break;
         
       case 'discussion_update':
-        console.log('💬 Discussion update received:', data.discussion_id);
         this.onDiscussionUpdate?.(data.discussion_id, data.updates);
         break;
         
       case 'pong':
-        console.log('🏓 Pong received');
         break;
         
       default:
-        console.log('Unknown discussion message type:', data.type);
+        // Unknown message type
     }
   }
 
   private handleReconnect(type: 'stock-prices' | 'discussions') {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.log(`❌ Max reconnection attempts reached for ${type}`);
       return;
     }
 
     this.reconnectAttempts++;
-    console.log(`🔄 Attempting to reconnect ${type} (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
     
     setTimeout(() => {
       if (type === 'stock-prices') {
@@ -347,7 +324,6 @@ class WebSocketService {
         type: 'subscribe_stocks',
         symbols: symbols
       }));
-      console.log('📊 Subscribed to stocks:', symbols);
     }
   }
 
@@ -356,7 +332,6 @@ class WebSocketService {
       this.stockPriceSocket.send(JSON.stringify({
         type: 'get_watchlist_prices'
       }));
-      console.log('📊 Requested watchlist prices');
     }
   }
 
@@ -375,8 +350,6 @@ class WebSocketService {
   }
 
   public disconnect() {
-    console.log('🔌 Disconnecting WebSockets');
-    
     if (this.stockPriceSocket) {
       this.stockPriceSocket.close();
       this.stockPriceSocket = null;
@@ -413,12 +386,6 @@ class WebSocketService {
       
       // Check if this is a "big day" movement
       if (isSignificantPriceMove || isHighVolume) {
-        console.log('🚀 BIG DAY DETECTED!', {
-          symbol: priceUpdate.symbol,
-          priceChange: priceUpdate.change_percent,
-          volume: priceUpdate.volume,
-          reason: isSignificantPriceMove ? 'Significant price movement' : 'High volume'
-        });
 
         // Generate mock historical data for analysis (in real app, fetch from API)
         const historicalData = this.generateMockHistoricalData(priceUpdate);
@@ -441,8 +408,6 @@ class WebSocketService {
 
         // Process any generated alerts
         if (alerts.length > 0) {
-          console.log('🧠 Intelligent alerts generated:', alerts.length);
-          
           for (const alert of alerts) {
             // Show intelligent alert to user
             this.showIntelligentAlert(alert);
@@ -524,7 +489,7 @@ class WebSocketService {
       message,
       [
         { text: 'Dismiss', style: 'cancel' },
-        { text: 'View Details', onPress: () => console.log('Alert details:', alert) }
+        { text: 'View Details', onPress: () => {} }
       ]
     );
 
