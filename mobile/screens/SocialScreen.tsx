@@ -31,12 +31,17 @@ const GET_TRENDING_DISCUSSIONS = gql`
       title
       content
       discussionType
+      visibility
       createdAt
       score
       commentCount
       user {
+        id
         name
         profilePic
+        followersCount
+        followingCount
+        isFollowingUser
       }
       stock {
         symbol
@@ -50,6 +55,67 @@ const GET_TRENDING_DISCUSSIONS = gql`
           name
         }
       }
+    }
+  }
+`;
+
+const GET_SOCIAL_FEED = gql`
+  query GetSocialFeed {
+    socialFeed {
+      id
+      title
+      content
+      discussionType
+      visibility
+      createdAt
+      score
+      commentCount
+      user {
+        id
+        name
+        profilePic
+        followersCount
+        followingCount
+        isFollowingUser
+      }
+      stock {
+        symbol
+        companyName
+      }
+      comments {
+        id
+        content
+        createdAt
+        user {
+          name
+        }
+      }
+    }
+  }
+`;
+
+const GET_SUGGESTED_USERS = gql`
+  query GetSuggestedUsers {
+    suggestedUsers {
+      id
+      name
+      profilePic
+      followersCount
+      followingCount
+      isFollowingUser
+    }
+  }
+`;
+
+const GET_FOLLOWING_USERS = gql`
+  query GetFollowingUsers {
+    followingUsers {
+      id
+      name
+      profilePic
+      followersCount
+      followingCount
+      isFollowingUser
     }
   }
 `;
@@ -72,8 +138,8 @@ const COMMENT_ON_DISCUSSION = gql`
 `;
 
 const CREATE_DISCUSSION = gql`
-  mutation CreateStockDiscussion($title: String!, $content: String!, $stockSymbol: String, $discussionType: String) {
-    createStockDiscussion(title: $title, content: $content, stockSymbol: $stockSymbol, discussionType: $discussionType) {
+  mutation CreateStockDiscussion($title: String!, $content: String!, $stockSymbol: String, $discussionType: String, $visibility: String) {
+    createStockDiscussion(title: $title, content: $content, stockSymbol: $stockSymbol, discussionType: $discussionType, visibility: $visibility) {
       success
       message
       discussion {
@@ -81,6 +147,7 @@ const CREATE_DISCUSSION = gql`
         title
         content
         discussionType
+        visibility
         createdAt
         score
         commentCount
@@ -123,6 +190,22 @@ const DOWNVOTE_DISCUSSION = gql`
   }
 `;
 
+const TOGGLE_FOLLOW = gql`
+  mutation ToggleFollow($userId: ID!) {
+    toggleFollow(userId: $userId) {
+      success
+      following
+      user {
+        id
+        name
+        followersCount
+        followingCount
+        isFollowingUser
+      }
+    }
+  }
+`;
+
 
 
 
@@ -141,6 +224,7 @@ const SocialScreen: React.FC = () => {
   const [createTitle, setCreateTitle] = useState('');
   const [createContent, setCreateContent] = useState('');
   const [createStock, setCreateStock] = useState('');
+  const [createVisibility, setCreateVisibility] = useState<'public' | 'followers'>('followers');
   
   // Media state
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -159,16 +243,29 @@ const SocialScreen: React.FC = () => {
   // Discussion detail modal state
   const [showDiscussionDetail, setShowDiscussionDetail] = useState(false);
   const [discussionDetail, setDiscussionDetail] = useState<any>(null);
+  
+  // Feed type state
+  const [feedType, setFeedType] = useState<'trending' | 'following'>('trending');
+  
+  // User following state
+  const [showUserModal, setShowUserModal] = useState(false);
+  const [userModalType, setUserModalType] = useState<'suggested' | 'following'>('suggested');
 
   const client = useApolloClient();
   
   // GraphQL queries and mutations
-  const { data: discussionsData, loading: discussionsLoading, refetch: refetchDiscussions } = useQuery(GET_TRENDING_DISCUSSIONS);
+  const { data: discussionsData, loading: discussionsLoading, refetch: refetchDiscussions } = useQuery(
+    feedType === 'trending' ? GET_TRENDING_DISCUSSIONS : GET_SOCIAL_FEED
+  );
+  
+  const { data: suggestedUsersData, refetch: refetchSuggestedUsers } = useQuery(GET_SUGGESTED_USERS);
+  const { data: followingUsersData, refetch: refetchFollowingUsers } = useQuery(GET_FOLLOWING_USERS);
 
   const [commentOnDiscussion] = useMutation(COMMENT_ON_DISCUSSION);
   const [createStockDiscussion] = useMutation(CREATE_DISCUSSION);
   const [upvoteDiscussion] = useMutation(UPVOTE_DISCUSSION);
   const [downvoteDiscussion] = useMutation(DOWNVOTE_DISCUSSION);
+  const [toggleFollow] = useMutation(TOGGLE_FOLLOW);
 
 
   const onRefresh = async () => {
@@ -219,6 +316,47 @@ const SocialScreen: React.FC = () => {
       console.error('❌ Failed to downvote discussion:', error);
       Alert.alert('Error', 'Failed to downvote discussion. Please try again.');
     }
+  };
+
+  const handleToggleFollow = async (userId: string) => {
+    try {
+      console.log('👥 Toggling follow for user:', userId);
+      const result = await toggleFollow({
+        variables: { userId }
+      });
+      console.log('👥 Follow result:', result);
+      
+      if (result.data?.toggleFollow?.success) {
+        console.log('✅ Follow toggle successful');
+        // Refetch all relevant data
+        await Promise.all([
+          refetchDiscussions(),
+          refetchSuggestedUsers(),
+          refetchFollowingUsers()
+        ]);
+        console.log('🔄 All data refetched after follow toggle');
+      } else {
+        console.log('❌ Follow toggle failed');
+      }
+    } catch (error) {
+      console.error('❌ Follow toggle error:', error);
+    }
+  };
+
+  // Helper function to determine if submit button should be disabled
+  const isSubmitDisabled = () => {
+    const hasMedia = selectedImage || selectedVideo;
+    const hasContent = createContent.trim().length > 0;
+    const hasValidTitle = createTitle.trim().length >= 5;
+    
+    // Must have a valid title
+    if (!hasValidTitle) return true;
+    
+    // Must have either content (with min length) or media
+    if (!hasMedia && !hasContent) return true;
+    if (hasContent && createContent.trim().length < 10) return true;
+    
+    return false;
   };
 
   const handleDiscussionComment = (discussionId: string) => {
@@ -335,7 +473,7 @@ const SocialScreen: React.FC = () => {
       
       // Refetch discussions to update comment count
       console.log('🔄 Refetching discussions to update comment count...');
-      console.log('📊 Before refetch - discussionsData:', discussionsData?.stockDiscussions?.map(d => ({
+      console.log('📊 Before refetch - discussionsData:', discussionsData?.stockDiscussions?.map((d: any) => ({
         id: d.id,
         title: d.title,
         commentCount: d.commentCount
@@ -348,7 +486,7 @@ const SocialScreen: React.FC = () => {
       const refetchResult = await refetchDiscussions();
       console.log('📊 Refetch result:', refetchResult);
       
-      console.log('📊 After refetch - discussionsData:', discussionsData?.stockDiscussions?.map(d => ({
+      console.log('📊 After refetch - discussionsData:', discussionsData?.stockDiscussions?.map((d: any) => ({
         id: d.id,
         title: d.title,
         commentCount: d.commentCount
@@ -544,9 +682,10 @@ const SocialScreen: React.FC = () => {
       console.log('❌ Backend connection error:', error);
     }
 
-    if (!createTitle.trim() || !createContent.trim()) {
-      console.log('❌ Validation failed: Missing title or content');
-      Alert.alert('Error', 'Please fill in title and content');
+    // Use the helper function for validation
+    if (isSubmitDisabled()) {
+      console.log('❌ Validation failed: Form validation failed');
+      Alert.alert('Error', 'Please check your input and try again');
       return;
     }
 
@@ -554,12 +693,6 @@ const SocialScreen: React.FC = () => {
     if (createTitle.trim().length < 5) {
       console.log('❌ Validation failed: Title too short');
       Alert.alert('Error', 'Title must be at least 5 characters long');
-      return;
-    }
-
-    if (createContent.trim().length < 10) {
-      console.log('❌ Validation failed: Content too short');
-      Alert.alert('Error', 'Content must be at least 10 characters long');
       return;
     }
 
@@ -585,7 +718,8 @@ const SocialScreen: React.FC = () => {
         title: createTitle.trim(),
         content: finalContent,
         stockSymbol: createStock.trim() || null, // Optional - like Reddit posts
-        discussionType: 'general' // Default to general discussion
+        discussionType: 'general', // Default to general discussion
+        visibility: createVisibility // Public or followers only
       };
       
       console.log('📤 Sending GraphQL mutation with variables:', variables);
@@ -617,6 +751,7 @@ const SocialScreen: React.FC = () => {
         setCreateTitle('');
         setCreateContent('');
         setCreateStock('');
+        setCreateVisibility('followers'); // Reset to default
         // Clear media
         setSelectedImage(null);
         setSelectedVideo(null);
@@ -674,6 +809,10 @@ const SocialScreen: React.FC = () => {
                 console.log('👆 Discussion card pressed for discussion:', discussion.id);
                 handleDiscussionPress(discussion.id);
               }}
+              onFollow={(userId) => {
+                console.log('👥 Follow button clicked for user:', userId);
+                handleToggleFollow(userId);
+              }}
             />
           );
         }) || (
@@ -697,7 +836,10 @@ const SocialScreen: React.FC = () => {
       </View>
 
       {/* Navigation */}
-              <SocialNav />
+              <SocialNav 
+                feedType={feedType}
+                onFeedTypeChange={setFeedType}
+              />
 
       {/* Content */}
       <ScrollView
@@ -764,6 +906,67 @@ const SocialScreen: React.FC = () => {
                     autoCapitalize="characters"
                   />
 
+                  <Text style={styles.modalLabel}>Post Visibility</Text>
+                  <View style={styles.visibilityContainer}>
+                    <TouchableOpacity
+                      style={[
+                        styles.visibilityOption,
+                        createVisibility === 'public' && styles.visibilityOptionSelected
+                      ]}
+                      onPress={() => {
+                        console.log('🌍 Public visibility selected');
+                        setCreateVisibility('public');
+                      }}
+                    >
+                      <Icon 
+                        name="globe" 
+                        size={16} 
+                        color={createVisibility === 'public' ? '#FFFFFF' : '#007AFF'} 
+                      />
+                      <Text style={[
+                        styles.visibilityOptionText,
+                        createVisibility === 'public' && styles.visibilityOptionTextSelected
+                      ]}>
+                        Public
+                      </Text>
+                      <Text style={[
+                        styles.visibilityOptionSubtext,
+                        createVisibility === 'public' && styles.visibilityOptionSubtextSelected
+                      ]}>
+                        Everyone can see
+                      </Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity
+                      style={[
+                        styles.visibilityOption,
+                        createVisibility === 'followers' && styles.visibilityOptionSelected
+                      ]}
+                      onPress={() => {
+                        console.log('👥 Followers visibility selected');
+                        setCreateVisibility('followers');
+                      }}
+                    >
+                      <Icon 
+                        name="users" 
+                        size={16} 
+                        color={createVisibility === 'followers' ? '#FFFFFF' : '#007AFF'} 
+                      />
+                      <Text style={[
+                        styles.visibilityOptionText,
+                        createVisibility === 'followers' && styles.visibilityOptionTextSelected
+                      ]}>
+                        Followers Only
+                      </Text>
+                      <Text style={[
+                        styles.visibilityOptionSubtext,
+                        createVisibility === 'followers' && styles.visibilityOptionSubtextSelected
+                      ]}>
+                        Only followers can see
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
                   <Text style={styles.modalLabel}>Description</Text>
                   <TextInput
                     ref={contentInputRef}
@@ -773,7 +976,7 @@ const SocialScreen: React.FC = () => {
                       console.log('📄 Content changed:', text, 'Length:', text.length);
                       setCreateContent(text);
                     }}
-                    placeholder="Share your thoughts, analysis, or questions. You can include links to images, videos, or articles!"
+                    placeholder="Share your thoughts, analysis, or questions (optional if you upload media). You can include links to images, videos, or articles!"
                     multiline
                     numberOfLines={4}
                     autoCapitalize="sentences"
@@ -804,7 +1007,6 @@ const SocialScreen: React.FC = () => {
                     allowFontScaling={true}
                     maxLength={2000}
                     editable={true}
-                    selectTextOnFocus={false}
                     caretHidden={false}
                     importantForAutofill="no"
                   />
@@ -812,40 +1014,63 @@ const SocialScreen: React.FC = () => {
                   {/* Media Upload Section */}
                   <Text style={styles.modalLabel}>Add Media (Optional)</Text>
                   <View style={styles.mediaUploadContainer}>
-                    <TouchableOpacity style={styles.mediaButton} onPress={pickImage}>
-                      <Icon name="image" size={20} color="#007AFF" />
-                      <Text style={styles.mediaButtonText}>Photo</Text>
+                    <TouchableOpacity 
+                      style={[
+                        styles.mediaButton,
+                        selectedImage && styles.mediaButtonSelected
+                      ]} 
+                      onPress={pickImage}
+                    >
+                      <Icon 
+                        name="image" 
+                        size={20} 
+                        color={selectedImage ? "#FFFFFF" : "#007AFF"} 
+                      />
+                      <Text style={[
+                        styles.mediaButtonText,
+                        selectedImage && styles.mediaButtonTextSelected
+                      ]}>
+                        Photo
+                      </Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.mediaButton} onPress={pickVideo}>
-                      <Icon name="video" size={20} color="#007AFF" />
-                      <Text style={styles.mediaButtonText}>Video</Text>
+                    <TouchableOpacity 
+                      style={[
+                        styles.mediaButton,
+                        selectedVideo && styles.mediaButtonSelected
+                      ]} 
+                      onPress={pickVideo}
+                    >
+                      <Icon 
+                        name="video" 
+                        size={20} 
+                        color={selectedVideo ? "#FFFFFF" : "#007AFF"} 
+                      />
+                      <Text style={[
+                        styles.mediaButtonText,
+                        selectedVideo && styles.mediaButtonTextSelected
+                      ]}>
+                        Video
+                      </Text>
                     </TouchableOpacity>
                   </View>
 
-                  {/* Media Preview */}
-                  {selectedImage && (
-                    <View style={styles.mediaPreview}>
-                      <Text style={styles.mediaPreviewLabel}>Selected Image:</Text>
-                      <View style={styles.mediaPreviewItem}>
-                        <Text style={styles.mediaPreviewText} numberOfLines={1}>
-                          {selectedImage.split('/').pop()}
+                  {/* Media Attachment Indicator */}
+                  {(selectedImage || selectedVideo) && (
+                    <View style={styles.mediaAttachmentIndicator}>
+                      <View style={styles.mediaAttachmentContent}>
+                        <Icon 
+                          name={selectedImage ? "image" : "video"} 
+                          size={16} 
+                          color="#007AFF" 
+                        />
+                        <Text style={styles.mediaAttachmentText}>
+                          {selectedImage ? "Image attached" : "Video attached"}
                         </Text>
-                        <TouchableOpacity onPress={removeMedia} style={styles.removeMediaButton}>
-                          <Icon name="x" size={16} color="#FF3B30" />
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  )}
-
-                  {selectedVideo && (
-                    <View style={styles.mediaPreview}>
-                      <Text style={styles.mediaPreviewLabel}>Selected Video:</Text>
-                      <View style={styles.mediaPreviewItem}>
-                        <Text style={styles.mediaPreviewText} numberOfLines={1}>
-                          {selectedVideo.split('/').pop()}
-                        </Text>
-                        <TouchableOpacity onPress={removeMedia} style={styles.removeMediaButton}>
-                          <Icon name="x" size={16} color="#FF3B30" />
+                        <TouchableOpacity 
+                          onPress={removeMedia} 
+                          style={styles.removeAttachmentButton}
+                        >
+                          <Icon name="x" size={14} color="#8E8E93" />
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -864,25 +1089,23 @@ const SocialScreen: React.FC = () => {
               <TouchableOpacity
                 style={[
                   styles.submitButton,
-                  (!createTitle.trim() || !createContent.trim() || 
-                   createTitle.trim().length < 5 || createContent.trim().length < 10) && styles.submitButtonDisabled
+                  isSubmitDisabled() && styles.submitButtonDisabled
                 ]}
                 onPress={() => {
                   console.log('🔘 Create button pressed');
                   console.log('📊 Button state check:', {
                     hasTitle: !!createTitle.trim(),
                     hasContent: !!createContent.trim(),
+                    hasMedia: selectedImage || selectedVideo,
                     titleLength: createTitle.trim().length,
                     contentLength: createContent.trim().length,
                     titleValid: createTitle.trim().length >= 5,
                     contentValid: createContent.trim().length >= 10,
-                    buttonDisabled: (!createTitle.trim() || !createContent.trim() || 
-                                   createTitle.trim().length < 5 || createContent.trim().length < 10)
+                    buttonDisabled: isSubmitDisabled()
                   });
                   handleCreateSubmit();
                 }}
-                disabled={!createTitle.trim() || !createContent.trim() || 
-                         createTitle.trim().length < 5 || createContent.trim().length < 10}
+                disabled={isSubmitDisabled()}
               >
                 <Text style={styles.submitButtonText}>Create</Text>
               </TouchableOpacity>
@@ -1341,6 +1564,13 @@ const styles = StyleSheet.create({
     color: '#007AFF',
     fontWeight: '500',
   },
+  mediaButtonSelected: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+  },
+  mediaButtonTextSelected: {
+    color: '#FFFFFF',
+  },
   mediaPreview: {
     marginBottom: 16,
   },
@@ -1367,6 +1597,65 @@ const styles = StyleSheet.create({
   removeMediaButton: {
     padding: 4,
     marginLeft: 8,
+  },
+  mediaAttachmentIndicator: {
+    marginBottom: 16,
+    backgroundColor: '#F0F8FF',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#007AFF',
+  },
+  mediaAttachmentContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+  },
+  mediaAttachmentText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#007AFF',
+    fontWeight: '500',
+    marginLeft: 8,
+  },
+  removeAttachmentButton: {
+    padding: 4,
+    marginLeft: 8,
+  },
+  visibilityContainer: {
+    flexDirection: 'row',
+    marginBottom: 16,
+    gap: 12,
+  },
+  visibilityOption: {
+    flex: 1,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#E5E5EA',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+  },
+  visibilityOptionSelected: {
+    borderColor: '#007AFF',
+    backgroundColor: '#007AFF',
+  },
+  visibilityOptionText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#007AFF',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  visibilityOptionTextSelected: {
+    color: '#FFFFFF',
+  },
+  visibilityOptionSubtext: {
+    fontSize: 12,
+    color: '#8E8E93',
+    textAlign: 'center',
+  },
+  visibilityOptionSubtextSelected: {
+    color: '#FFFFFF',
   },
 });
 

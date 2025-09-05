@@ -704,8 +704,9 @@ class CreateStockDiscussion(graphene.Mutation):
         content = graphene.String(required=True)
         stock_symbol = graphene.String(required=False)  # Optional - like Reddit posts
         discussion_type = graphene.String(required=False)
+        visibility = graphene.String(required=False)  # public or followers
 
-    def mutate(self, info, title, content, stock_symbol=None, discussion_type='general'):
+    def mutate(self, info, title, content, stock_symbol=None, discussion_type='general', visibility='followers'):
         user = info.context.user
         if not user.is_authenticated:
             raise GraphQLError("You must be logged in to create a discussion.")
@@ -716,10 +717,14 @@ class CreateStockDiscussion(graphene.Mutation):
                 message="Title must be at least 5 characters long."
             )
         
-        if len(content.strip()) < 10:
+        # Check if content has media tags (images/videos)
+        has_media = '[IMAGE:' in content or '[VIDEO:' in content
+        content_without_media = content.replace('[IMAGE:', '').replace('[VIDEO:', '').strip()
+        
+        if not has_media and len(content.strip()) < 10:
             return CreateStockDiscussion(
                 success=False,
-                message="Content must be at least 10 characters long."
+                message="Content must be at least 10 characters long or include an image/video."
             )
         
         try:
@@ -736,12 +741,18 @@ class CreateStockDiscussion(graphene.Mutation):
                     }
                 )
             
+            # Validate visibility choice
+            valid_visibility = ['public', 'followers']
+            if visibility not in valid_visibility:
+                visibility = 'followers'  # Default to followers
+            
             discussion = StockDiscussion.objects.create(
                 user=user,
                 stock=stock,
                 title=title.strip(),
                 content=content.strip(),
-                discussion_type=discussion_type or 'general'
+                discussion_type=discussion_type or 'general',
+                visibility=visibility
             )
             
             return CreateStockDiscussion(

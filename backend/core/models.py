@@ -327,11 +327,17 @@ class Portfolio(models.Model):
 
 class StockDiscussion(models.Model):
     """Reddit-like stock discussion posts"""
+    VISIBILITY_CHOICES = [
+        ('public', 'Public - Everyone can see'),
+        ('followers', 'Followers Only - Only followers can see'),
+    ]
+    
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='discussions')
     stock = models.ForeignKey(Stock, on_delete=models.CASCADE, related_name='discussions', null=True, blank=True)
     title = models.CharField(max_length=200)
     content = models.TextField()
     discussion_type = models.CharField(max_length=20, default='general')  # general, analysis, news, etc.
+    visibility = models.CharField(max_length=10, choices=VISIBILITY_CHOICES, default='followers')  # public or followers
     is_analysis = models.BooleanField(default=False)  # Required by existing table
     analysis_data = models.TextField(blank=True, null=True)  # Required by existing table
     upvotes = models.IntegerField(default=0)

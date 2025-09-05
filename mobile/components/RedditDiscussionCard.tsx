@@ -8,12 +8,17 @@ interface RedditDiscussionCardProps {
     title: string;
     content: string;
     discussionType: string;
+    visibility?: string;
     createdAt: string;
     score: number;
     commentCount: number;
     user: {
+      id: string;
       name: string;
       profilePic?: string;
+      followersCount?: number;
+      followingCount?: number;
+      isFollowingUser?: boolean;
     };
     stock?: {
       symbol: string;
@@ -26,6 +31,7 @@ interface RedditDiscussionCardProps {
   onDownvote: () => void;
   onComment: () => void;
   onPress: () => void;
+  onFollow?: (userId: string) => void;
 }
 
 const RedditDiscussionCard: React.FC<RedditDiscussionCardProps> = ({
@@ -34,6 +40,7 @@ const RedditDiscussionCard: React.FC<RedditDiscussionCardProps> = ({
   onDownvote,
   onComment,
   onPress,
+  onFollow,
 }) => {
   console.log('🎨 RedditDiscussionCard rendered for discussion:', {
     id: discussion.id,
@@ -166,22 +173,61 @@ const RedditDiscussionCard: React.FC<RedditDiscussionCardProps> = ({
                 </Text>
               </View>
             )}
-            <Text style={styles.userName}>u/{discussion.user.name}</Text>
-            <Text style={styles.timestamp}>{formatDate(discussion.createdAt)}</Text>
+            <View style={styles.userDetails}>
+              <Text style={styles.userName}>u/{discussion.user.name}</Text>
+              <Text style={styles.timestamp}>{formatDate(discussion.createdAt)}</Text>
+            </View>
+            {onFollow && discussion.user.id && (
+              <TouchableOpacity
+                style={[
+                  styles.followButton,
+                  discussion.user.isFollowingUser ? styles.followingButton : styles.notFollowingButton
+                ]}
+                onPress={() => onFollow(discussion.user.id)}
+              >
+                <Text style={[
+                  styles.followButtonText,
+                  discussion.user.isFollowingUser ? styles.followingButtonText : styles.notFollowingButtonText
+                ]}>
+                  {discussion.user.isFollowingUser ? 'Following' : 'Follow'}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
           
-          <View style={styles.typeBadge}>
-            <Icon
-              name={getDiscussionIcon(discussion.discussionType) as any}
-              size={12}
-              color={getDiscussionColor(discussion.discussionType)}
-            />
-            <Text style={[
-              styles.typeLabel,
-              { color: getDiscussionColor(discussion.discussionType) }
-            ]}>
-              {discussion.discussionType}
-            </Text>
+          <View style={styles.badgeContainer}>
+            <View style={styles.typeBadge}>
+              <Icon
+                name={getDiscussionIcon(discussion.discussionType) as any}
+                size={12}
+                color={getDiscussionColor(discussion.discussionType)}
+              />
+              <Text style={[
+                styles.typeLabel,
+                { color: getDiscussionColor(discussion.discussionType) }
+              ]}>
+                {discussion.discussionType}
+              </Text>
+            </View>
+            
+            {discussion.visibility && (
+              <View style={[
+                styles.visibilityBadge,
+                discussion.visibility === 'public' ? styles.publicBadge : styles.followersBadge
+              ]}>
+                <Icon
+                  name={discussion.visibility === 'public' ? 'globe' : 'users'}
+                  size={10}
+                  color={discussion.visibility === 'public' ? '#FFFFFF' : '#007AFF'}
+                />
+                <Text style={[
+                  styles.visibilityLabel,
+                  discussion.visibility === 'public' ? styles.publicLabel : styles.followersLabel
+                ]}>
+                  {discussion.visibility === 'public' ? 'Public' : 'Followers'}
+                </Text>
+              </View>
+            )}
           </View>
         </View>
 
@@ -381,6 +427,9 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: 'bold',
   },
+  userDetails: {
+    flex: 1,
+  },
   userName: {
     fontSize: 12,
     color: '#1A1A1B',
@@ -391,6 +440,35 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#878A8C',
   },
+  followButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 16,
+    marginLeft: 8,
+  },
+  followingButton: {
+    backgroundColor: '#007AFF',
+  },
+  notFollowingButton: {
+    backgroundColor: '#F6F7F8',
+    borderWidth: 1,
+    borderColor: '#007AFF',
+  },
+  followButtonText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  followingButtonText: {
+    color: 'white',
+  },
+  notFollowingButtonText: {
+    color: '#007AFF',
+  },
+  badgeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   typeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -398,6 +476,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
+  },
+  visibilityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  publicBadge: {
+    backgroundColor: '#34C759',
+  },
+  followersBadge: {
+    backgroundColor: '#F6F7F8',
+    borderWidth: 1,
+    borderColor: '#007AFF',
+  },
+  visibilityLabel: {
+    fontSize: 9,
+    fontWeight: '600',
+    marginLeft: 3,
+    textTransform: 'uppercase',
+  },
+  publicLabel: {
+    color: '#FFFFFF',
+  },
+  followersLabel: {
+    color: '#007AFF',
   },
   typeLabel: {
     fontSize: 10,
