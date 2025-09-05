@@ -261,7 +261,6 @@ CHANNEL_LAYERS = {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
         'CONFIG': {
             "hosts": [f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}'],
-            "password": REDIS_PASSWORD,
         },
     },
 }
