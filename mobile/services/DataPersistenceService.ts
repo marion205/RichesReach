@@ -70,7 +70,6 @@ class DataPersistenceService {
       if (now > cachedData.expiresAt) {
         // Data expired, remove it
         await AsyncStorage.removeItem(key);
-        console.log(`🗑️ Cached data expired for key: ${key}`);
         return null;
       }
 
@@ -171,7 +170,6 @@ class DataPersistenceService {
         JSON.stringify(offlineData)
       );
       
-      console.log('💾 Saved data for offline use');
     } catch (error) {
       console.error('Error saving offline data:', error);
     }
@@ -237,7 +235,6 @@ class DataPersistenceService {
     try {
       const keys = Object.values(this.CACHE_KEYS);
       await AsyncStorage.multiRemove(keys);
-      console.log('🗑️ Cleared all cached data');
     } catch (error) {
       console.error('Error clearing cache:', error);
     }
@@ -249,7 +246,6 @@ class DataPersistenceService {
   public async clearCache(key: string): Promise<void> {
     try {
       await AsyncStorage.removeItem(key);
-      console.log(`🗑️ Cleared cache for key: ${key}`);
     } catch (error) {
       console.error(`Error clearing cache for key ${key}:`, error);
     }
@@ -311,7 +307,6 @@ class DataPersistenceService {
       };
 
       await AsyncStorage.setItem('user_backup', JSON.stringify(backupData));
-      console.log('💾 User data backed up successfully');
     } catch (error) {
       console.error('Error backing up user data:', error);
     }
@@ -344,7 +339,6 @@ class DataPersistenceService {
         await this.cachePortfolios(backupData.portfolios);
       }
 
-      console.log('🔄 User data restored from backup');
       return true;
     } catch (error) {
       console.error('Error restoring user data:', error);

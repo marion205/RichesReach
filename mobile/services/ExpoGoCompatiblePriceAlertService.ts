@@ -36,7 +36,6 @@ class ExpoGoCompatiblePriceAlertService {
 
     await this.loadAlerts();
     this.isInitialized = true;
-    console.log('📊 Expo Go Compatible Price Alert Service initialized');
   }
 
   /**
@@ -47,7 +46,6 @@ class ExpoGoCompatiblePriceAlertService {
       // In Expo Go, we'll use a simple in-memory storage
       // In production, this would use AsyncStorage
       this.alerts = [];
-      console.log('📊 Price alerts loaded (Expo Go compatible mode)');
     } catch (error) {
       console.error('Error loading price alerts:', error);
       this.alerts = [];
@@ -60,7 +58,6 @@ class ExpoGoCompatiblePriceAlertService {
   private async saveAlerts(): Promise<void> {
     try {
       // In Expo Go, we'll just log the alerts
-      console.log('📊 Price alerts saved (Expo Go compatible mode):', this.alerts.length);
     } catch (error) {
       console.error('Error saving price alerts:', error);
     }
@@ -96,7 +93,6 @@ class ExpoGoCompatiblePriceAlertService {
     this.alerts.push(alert);
     await this.saveAlerts();
 
-    console.log('📊 Price alert added (Expo Go compatible):', alert);
     return alert;
   }
 
@@ -109,7 +105,6 @@ class ExpoGoCompatiblePriceAlertService {
     this.alerts = this.alerts.filter(alert => alert.id !== alertId);
     await this.saveAlerts();
 
-    console.log('📊 Price alert removed (Expo Go compatible):', alertId);
   }
 
   /**
@@ -122,7 +117,6 @@ class ExpoGoCompatiblePriceAlertService {
     if (alertIndex !== -1) {
       this.alerts[alertIndex] = { ...this.alerts[alertIndex], ...updates };
       await this.saveAlerts();
-      console.log('📊 Price alert updated (Expo Go compatible):', alertId);
     }
   }
 
@@ -214,7 +208,6 @@ class ExpoGoCompatiblePriceAlertService {
   public async clearAllAlerts(): Promise<void> {
     this.alerts = [];
     await this.saveAlerts();
-    console.log('📊 All price alerts cleared (Expo Go compatible)');
   }
 
   /**
@@ -223,7 +216,6 @@ class ExpoGoCompatiblePriceAlertService {
   public async clearTriggeredAlerts(): Promise<void> {
     this.alerts = this.alerts.filter(alert => !alert.triggeredAt);
     await this.saveAlerts();
-    console.log('📊 Triggered price alerts cleared (Expo Go compatible)');
   }
 
   /**
@@ -285,7 +277,6 @@ class ExpoGoCompatiblePriceAlertService {
       this.alerts = importedAlerts;
       await this.saveAlerts();
       
-      console.log('📊 Price alerts imported successfully (Expo Go compatible)');
     } catch (error) {
       console.error('Error importing price alerts:', error);
       throw error;
