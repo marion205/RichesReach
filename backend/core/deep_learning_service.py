@@ -1,27 +1,35 @@
 """
-Deep Learning Service for Advanced ML Techniques
-Includes LSTM for time series, ensemble methods, and online learning
+Deep Learning Service
+Implements LSTM and Transformer models for stock prediction
 """
 
+import os
+import sys
+import django
+import logging
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Any, Optional, Tuple
-import logging
+from typing import Dict, List, Tuple, Optional, Any
 from datetime import datetime, timedelta
 import warnings
 warnings.filterwarnings('ignore')
 
+# Setup Django
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'richesreach.settings')
+django.setup()
+
 # Deep Learning imports
 try:
     import tensorflow as tf
-    from tensorflow import keras
     from tensorflow.keras.models import Sequential, Model
-    from tensorflow.keras.layers import LSTM, Dense, Dropout, Bidirectional, Conv1D, MaxPooling1D, Flatten
+    from tensorflow.keras.layers import LSTM, Dense, Dropout, Input, MultiHeadAttention, LayerNormalization, GlobalAveragePooling1D
     from tensorflow.keras.optimizers import Adam
     from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
-    from sklearn.ensemble import VotingRegressor, StackingRegressor, BaggingRegressor
+    from tensorflow.keras.regularizers import l1_l2
+    from sklearn.preprocessing import MinMaxScaler, RobustScaler
     from sklearn.model_selection import TimeSeriesSplit
-    from sklearn.metrics import mean_squared_error, mean_absolute_error
+    from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
     DEEP_LEARNING_AVAILABLE = True
 except ImportError as e:
     logging.warning(f"Deep learning libraries not available: {e}")
@@ -31,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 class DeepLearningService:
     """
-    Service for deep learning models and advanced ML techniques
+    Deep learning service for stock prediction using LSTM and Transformer models
     """
     
     def __init__(self):
@@ -39,533 +47,355 @@ class DeepLearningService:
         if not self.deep_learning_available:
             logger.warning("Deep Learning Service initialized in fallback mode")
         
-        # Initialize models
-        self.lstm_models = {}
-        self.ensemble_models = {}
-        self.online_models = {}
+        # Model parameters
+        self.sequence_length = 60  # 60 days of historical data
+        self.prediction_horizon = 20  # 20 days ahead
+        self.feature_dim = 50  # Number of features
         
-        # Model configurations
-        self.model_configs = {
-            'lstm': {
-                'sequence_length': 60,
-                'features': 20,
-                'lstm_units': [128, 64],
-                'dropout_rate': 0.2,
-                'learning_rate': 0.001,
-                'epochs': 100,
-                'batch_size': 32
-            },
-            'ensemble': {
-                'n_estimators': 10,
-                'max_depth': 15,
-                'learning_rate': 0.1,
-                'random_state': 42
-            },
-            'online': {
-                'learning_rate': 0.01,
-                'regularization': 0.001,
-                'update_frequency': 100
-            }
+        # Models
+        self.lstm_model = None
+        self.transformer_model = None
+        self.scaler = RobustScaler()
+        
+        # Training parameters
+        self.lstm_params = {
+            'lstm_units': [128, 64, 32],
+            'dropout_rate': 0.2,
+            'recurrent_dropout': 0.2,
+            'dense_units': [64, 32],
+            'learning_rate': 0.001,
+            'batch_size': 32,
+            'epochs': 100,
+            'patience': 15
         }
         
-        # Performance tracking
-        self.model_performance = {}
-        self.training_history = {}
+        self.transformer_params = {
+            'd_model': 128,
+            'num_heads': 8,
+            'num_layers': 4,
+            'dff': 512,
+            'dropout_rate': 0.1,
+            'learning_rate': 0.001,
+            'batch_size': 32,
+            'epochs': 100,
+            'patience': 15
+        }
     
-    def is_available(self) -> bool:
-        """Check if deep learning capabilities are available"""
-        return self.deep_learning_available
-    
-    def create_lstm_model(self, model_name: str, config: Optional[Dict] = None) -> bool:
-        """
-        Create and train an LSTM model for time series forecasting
+    def create_lstm_model(self, input_shape: Tuple[int, int]) -> Model:
+        """Create LSTM model for time series prediction"""
+        model = Sequential()
         
-        Args:
-            model_name: Name for the model
-            config: Optional configuration overrides
-            
-        Returns:
-            True if model created successfully
-        """
-        if not self.deep_learning_available:
-            logger.warning("Deep learning not available for LSTM model creation")
-            return False
+        # First LSTM layer
+        model.add(LSTM(
+            units=self.lstm_params['lstm_units'][0],
+            return_sequences=True,
+            input_shape=input_shape,
+            dropout=self.lstm_params['dropout_rate'],
+            recurrent_dropout=self.lstm_params['recurrent_dropout'],
+            kernel_regularizer=l1_l2(l1=0.01, l2=0.01)
+        ))
         
-        try:
-            # Use default config or override
-            model_config = self.model_configs['lstm'].copy()
-            if config:
-                model_config.update(config)
-            
-            # Create LSTM model architecture
-            model = Sequential()
-            
-            # First LSTM layer
+        # Additional LSTM layers
+        for units in self.lstm_params['lstm_units'][1:]:
             model.add(LSTM(
-                units=model_config['lstm_units'][0],
+                units=units,
                 return_sequences=True,
-                input_shape=(model_config['sequence_length'], model_config['features'])
+                dropout=self.lstm_params['dropout_rate'],
+                recurrent_dropout=self.lstm_params['recurrent_dropout'],
+                kernel_regularizer=l1_l2(l1=0.01, l2=0.01)
             ))
-            model.add(Dropout(model_config['dropout_rate']))
-            
-            # Additional LSTM layers
-            for units in model_config['lstm_units'][1:]:
-                model.add(LSTM(units=units, return_sequences=True))
-                model.add(Dropout(model_config['dropout_rate']))
-            
-            # Final LSTM layer
-            model.add(LSTM(units=32))
-            model.add(Dropout(model_config['dropout_rate']))
-            
-            # Output layer
-            model.add(Dense(1, activation='linear'))
-            
-            # Compile model
-            model.compile(
-                optimizer=Adam(learning_rate=model_config['learning_rate']),
-                loss='mse',
-                metrics=['mae']
-            )
-            
-            # Store model
-            self.lstm_models[model_name] = {
-                'model': model,
-                'config': model_config,
-                'trained': False,
-                'created_at': datetime.now()
-            }
-            
-            logger.info(f"LSTM model '{model_name}' created successfully")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Error creating LSTM model: {e}")
-            return False
+        
+        # Final LSTM layer (no return sequences)
+        model.add(LSTM(
+            units=self.lstm_params['lstm_units'][-1],
+            return_sequences=False,
+            dropout=self.lstm_params['dropout_rate'],
+            recurrent_dropout=self.lstm_params['recurrent_dropout'],
+            kernel_regularizer=l1_l2(l1=0.01, l2=0.01)
+        ))
+        
+        # Dense layers
+        for units in self.lstm_params['dense_units']:
+            model.add(Dense(
+                units=units,
+                activation='relu',
+                kernel_regularizer=l1_l2(l1=0.01, l2=0.01)
+            ))
+            model.add(Dropout(self.lstm_params['dropout_rate']))
+        
+        # Output layer
+        model.add(Dense(1, activation='linear'))
+        
+        # Compile model
+        model.compile(
+            optimizer=Adam(learning_rate=self.lstm_params['learning_rate']),
+            loss='mse',
+            metrics=['mae', 'mape']
+        )
+        
+        return model
     
-    def train_lstm_model(self, model_name: str, training_data: np.ndarray, 
-                        target_data: np.ndarray, validation_split: float = 0.2) -> bool:
-        """
-        Train an LSTM model with time series data
+    def create_transformer_model(self, input_shape: Tuple[int, int]) -> Model:
+        """Create Transformer model for time series prediction"""
+        inputs = Input(shape=input_shape)
         
-        Args:
-            model_name: Name of the model to train
-            training_data: 3D array (samples, sequence_length, features)
-            target_data: 1D array of target values
-            validation_split: Fraction of data to use for validation
+        # Input projection
+        x = Dense(self.transformer_params['d_model'])(inputs)
+        
+        # Transformer layers
+        for _ in range(self.transformer_params['num_layers']):
+            # Multi-head attention
+            attn_output = MultiHeadAttention(
+                num_heads=self.transformer_params['num_heads'],
+                key_dim=self.transformer_params['d_model'] // self.transformer_params['num_heads'],
+                dropout=self.transformer_params['dropout_rate']
+            )(x, x)
             
-        Returns:
-            True if training successful
-        """
-        if not self.deep_learning_available:
-            return False
-        
-        if model_name not in self.lstm_models:
-            logger.error(f"LSTM model '{model_name}' not found")
-            return False
-        
-        try:
-            model_info = self.lstm_models[model_name]
-            model = model_info['model']
-            config = model_info['config']
+            # Add & Norm
+            x = LayerNormalization(epsilon=1e-6)(x + attn_output)
             
-            # Prepare callbacks
-            callbacks = [
-                EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True),
-                ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=5, min_lr=1e-7)
-            ]
+            # Feed forward
+            ffn = Dense(self.transformer_params['dff'], activation='relu')(x)
+            ffn = Dropout(self.transformer_params['dropout_rate'])(ffn)
+            ffn = Dense(self.transformer_params['d_model'])(ffn)
+            
+            # Add & Norm
+            x = LayerNormalization(epsilon=1e-6)(x + ffn)
+        
+        # Global average pooling
+        x = GlobalAveragePooling1D()(x)
+        
+        # Dense layers
+        x = Dense(128, activation='relu')(x)
+        x = Dropout(self.transformer_params['dropout_rate'])(x)
+        x = Dense(64, activation='relu')(x)
+        x = Dropout(self.transformer_params['dropout_rate'])(x)
+        
+        # Output layer
+        outputs = Dense(1, activation='linear')(x)
+        
+        model = Model(inputs=inputs, outputs=outputs)
+        
+        # Compile model
+        model.compile(
+            optimizer=Adam(learning_rate=self.transformer_params['learning_rate']),
+            loss='mse',
+            metrics=['mae', 'mape']
+        )
+        
+        return model
+    
+    def prepare_sequences(self, data: np.ndarray, target: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """Prepare sequences for LSTM/Transformer training"""
+        X, y = [], []
+        
+        for i in range(self.sequence_length, len(data) - self.prediction_horizon + 1):
+            # Input sequence
+            X.append(data[i-self.sequence_length:i])
+            # Target (future value)
+            y.append(target[i + self.prediction_horizon - 1])
+        
+        return np.array(X), np.array(y)
+    
+    def train_lstm_model(self, X: np.ndarray, y: np.ndarray) -> Dict[str, Any]:
+        """Train LSTM model"""
+        logger.info("Training LSTM model...")
+        
+        # Prepare sequences
+        X_seq, y_seq = self.prepare_sequences(X, y)
+        
+        # Scale features
+        X_scaled = self.scaler.fit_transform(X_seq.reshape(-1, X_seq.shape[-1])).reshape(X_seq.shape)
+        
+        # Time series split for validation
+        tscv = TimeSeriesSplit(n_splits=5)
+        
+        # Create model
+        input_shape = (X_scaled.shape[1], X_scaled.shape[2])
+        self.lstm_model = self.create_lstm_model(input_shape)
+        
+        # Callbacks
+        callbacks = [
+            EarlyStopping(
+                monitor='val_loss',
+                patience=self.lstm_params['patience'],
+                restore_best_weights=True
+            ),
+            ReduceLROnPlateau(
+                monitor='val_loss',
+                factor=0.5,
+                patience=10,
+                min_lr=1e-7
+            )
+        ]
+        
+        # Cross-validation
+        cv_scores = []
+        for train_idx, val_idx in tscv.split(X_scaled):
+            X_train, X_val = X_scaled[train_idx], X_scaled[val_idx]
+            y_train, y_val = y_seq[train_idx], y_seq[val_idx]
             
             # Train model
-            history = model.fit(
-                training_data,
-                target_data,
-                epochs=config['epochs'],
-                batch_size=config['batch_size'],
-                validation_split=validation_split,
+            history = self.lstm_model.fit(
+                X_train, y_train,
+                validation_data=(X_val, y_val),
+                epochs=self.lstm_params['epochs'],
+                batch_size=self.lstm_params['batch_size'],
                 callbacks=callbacks,
-                verbose=1
+                verbose=0
             )
             
-            # Update model info
-            model_info['trained'] = True
-            model_info['trained_at'] = datetime.now()
-            model_info['training_history'] = history.history
-            
-            # Store performance metrics
-            val_loss = min(history.history['val_loss'])
-            val_mae = min(history.history['val_mae'])
-            
-            self.model_performance[model_name] = {
-                'val_loss': val_loss,
-                'val_mae': val_mae,
-                'training_samples': len(training_data),
-                'trained_at': datetime.now()
-            }
-            
-            logger.info(f"LSTM model '{model_name}' trained successfully. Val Loss: {val_loss:.4f}, Val MAE: {val_mae:.4f}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Error training LSTM model '{model_name}': {e}")
-            return False
-    
-    def predict_with_lstm(self, model_name: str, input_data: np.ndarray) -> Optional[np.ndarray]:
-        """
-        Make predictions using a trained LSTM model
+            # Evaluate
+            val_pred = self.lstm_model.predict(X_val, verbose=0)
+            val_r2 = r2_score(y_val, val_pred)
+            cv_scores.append(val_r2)
         
-        Args:
-            model_name: Name of the model to use
-            input_data: 3D array (samples, sequence_length, features)
-            
-        Returns:
-            Predictions array or None if error
-        """
-        if not self.deep_learning_available:
-            return None
+        # Train on full data
+        self.lstm_model.fit(
+            X_scaled, y_seq,
+            epochs=self.lstm_params['epochs'],
+            batch_size=self.lstm_params['batch_size'],
+            callbacks=callbacks,
+            verbose=0
+        )
         
-        if model_name not in self.lstm_models:
-            logger.error(f"LSTM model '{model_name}' not found")
-            return None
+        # Final evaluation
+        train_pred = self.lstm_model.predict(X_scaled, verbose=0)
+        train_r2 = r2_score(y_seq, train_pred)
+        train_mse = mean_squared_error(y_seq, train_pred)
+        train_mae = mean_absolute_error(y_seq, train_pred)
         
-        model_info = self.lstm_models[model_name]
-        if not model_info['trained']:
-            logger.error(f"LSTM model '{model_name}' not trained yet")
-            return None
-        
-        try:
-            model = model_info['model']
-            predictions = model.predict(input_data)
-            return predictions.flatten()
-            
-        except Exception as e:
-            logger.error(f"Error making LSTM predictions: {e}")
-            return None
-    
-    def create_ensemble_model(self, model_name: str, base_models: List, 
-                             ensemble_type: str = 'voting') -> bool:
-        """
-        Create an ensemble model for better predictions
-        
-        Args:
-            model_name: Name for the ensemble model
-            base_models: List of base model names
-            ensemble_type: Type of ensemble ('voting', 'stacking', 'bagging')
-            
-        Returns:
-            True if ensemble created successfully
-        """
-        try:
-            if ensemble_type == 'voting':
-                ensemble = VotingRegressor(
-                    estimators=[(name, self._get_model(name)) for name in base_models],
-                    n_jobs=-1
-                )
-            elif ensemble_type == 'stacking':
-                ensemble = StackingRegressor(
-                    estimators=[(name, self._get_model(name)) for name in base_models],
-                    final_estimator=self._get_model('default'),
-                    n_jobs=-1
-                )
-            elif ensemble_type == 'bagging':
-                base_model = self._get_model(base_models[0])
-                ensemble = BaggingRegressor(
-                    base_estimator=base_model,
-                    n_estimators=self.model_configs['ensemble']['n_estimators'],
-                    random_state=self.model_configs['ensemble']['random_state']
-                )
-            else:
-                logger.error(f"Unknown ensemble type: {ensemble_type}")
-                return False
-            
-            self.ensemble_models[model_name] = {
-                'model': ensemble,
-                'type': ensemble_type,
-                'base_models': base_models,
-                'created_at': datetime.now()
-            }
-            
-            logger.info(f"Ensemble model '{model_name}' created successfully")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Error creating ensemble model: {e}")
-            return False
-    
-    def train_ensemble_model(self, model_name: str, X: np.ndarray, y: np.ndarray) -> bool:
-        """
-        Train an ensemble model
-        
-        Args:
-            model_name: Name of the ensemble model
-            X: Training features
-            y: Training targets
-            
-        Returns:
-            True if training successful
-        """
-        if model_name not in self.ensemble_models:
-            logger.error(f"Ensemble model '{model_name}' not found")
-            return False
-        
-        try:
-            ensemble_info = self.ensemble_models[model_name]
-            ensemble = ensemble_info['model']
-            
-            # Train ensemble
-            ensemble.fit(X, y)
-            
-            # Update info
-            ensemble_info['trained'] = True
-            ensemble_info['trained_at'] = datetime.now()
-            
-            logger.info(f"Ensemble model '{model_name}' trained successfully")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Error training ensemble model: {e}")
-            return False
-    
-    def predict_with_ensemble(self, model_name: str, X: np.ndarray) -> Optional[np.ndarray]:
-        """
-        Make predictions using an ensemble model
-        
-        Args:
-            model_name: Name of the ensemble model
-            X: Input features
-            
-        Returns:
-            Predictions array or None if error
-        """
-        if model_name not in self.ensemble_models:
-            logger.error(f"Ensemble model '{model_name}' not found")
-            return None
-        
-        ensemble_info = self.ensemble_models[model_name]
-        if not ensemble_info.get('trained', False):
-            logger.error(f"Ensemble model '{model_name}' not trained yet")
-            return None
-        
-        try:
-            ensemble = ensemble_info['model']
-            predictions = ensemble.predict(X)
-            return predictions
-            
-        except Exception as e:
-            logger.error(f"Error making ensemble predictions: {e}")
-            return None
-    
-    def create_online_model(self, model_name: str, model_type: str = 'sgd') -> bool:
-        """
-        Create an online learning model for continuous updates
-        
-        Args:
-            model_name: Name for the online model
-            model_type: Type of online model ('sgd', 'perceptron', 'passive_aggressive')
-            
-        Returns:
-            True if model created successfully
-        """
-        try:
-            from sklearn.linear_model import SGDRegressor, PassiveAggressiveRegressor
-            from sklearn.neural_network import MLPRegressor
-            
-            if model_type == 'sgd':
-                model = SGDRegressor(
-                    learning_rate='constant',
-                    eta0=self.model_configs['online']['learning_rate'],
-                    alpha=self.model_configs['online']['regularization'],
-                    random_state=42
-                )
-            elif model_type == 'passive_aggressive':
-                model = PassiveAggressiveRegressor(
-                    C=1.0 / self.model_configs['online']['regularization'],
-                    random_state=42
-                )
-            elif model_type == 'mlp':
-                model = MLPRegressor(
-                    hidden_layer_sizes=(100, 50),
-                    learning_rate_init=self.model_configs['online']['learning_rate'],
-                    alpha=self.model_configs['online']['regularization'],
-                    max_iter=1,  # Online learning
-                    random_state=42
-                )
-            else:
-                logger.error(f"Unknown online model type: {model_type}")
-                return False
-            
-            self.online_models[model_name] = {
-                'model': model,
-                'type': model_type,
-                'update_count': 0,
-                'last_update': datetime.now(),
-                'created_at': datetime.now()
-            }
-            
-            logger.info(f"Online model '{model_name}' created successfully")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Error creating online model: {e}")
-            return False
-    
-    def update_online_model(self, model_name: str, X: np.ndarray, y: np.ndarray) -> bool:
-        """
-        Update an online learning model with new data
-        
-        Args:
-            model_name: Name of the online model
-            X: New features
-            y: New targets
-            
-        Returns:
-            True if update successful
-        """
-        if model_name not in self.online_models:
-            logger.error(f"Online model '{model_name}' not found")
-            return False
-        
-        try:
-            online_info = self.online_models[model_name]
-            model = online_info['model']
-            
-            # Update model
-            if online_info['type'] == 'mlp':
-                # For MLP, we need to fit with all data
-                model.fit(X, y)
-            else:
-                # For SGD and Passive Aggressive, partial_fit works
-                model.partial_fit(X, y)
-            
-            # Update info
-            online_info['update_count'] += 1
-            online_info['last_update'] = datetime.now()
-            
-            logger.info(f"Online model '{model_name}' updated successfully (update #{online_info['update_count']})")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Error updating online model: {e}")
-            return False
-    
-    def predict_with_online_model(self, model_name: str, X: np.ndarray) -> Optional[np.ndarray]:
-        """
-        Make predictions using an online model
-        
-        Args:
-            model_name: Name of the online model
-            X: Input features
-            
-        Returns:
-            Predictions array or None if error
-        """
-        if model_name not in self.online_models:
-            logger.error(f"Online model '{model_name}' not found")
-            return None
-        
-        try:
-            online_info = self.online_models[model_name]
-            model = online_info['model']
-            
-            predictions = model.predict(X)
-            return predictions
-            
-        except Exception as e:
-            logger.error(f"Error making online model predictions: {e}")
-            return None
-    
-    def get_model_performance(self, model_name: str) -> Optional[Dict[str, Any]]:
-        """Get performance metrics for a model"""
-        return self.model_performance.get(model_name)
-    
-    def get_all_models(self) -> Dict[str, Any]:
-        """Get information about all models"""
         return {
-            'lstm_models': list(self.lstm_models.keys()),
-            'ensemble_models': list(self.ensemble_models.keys()),
-            'online_models': list(self.online_models.keys()),
-            'total_models': len(self.lstm_models) + len(self.ensemble_models) + len(self.online_models)
+            'model': self.lstm_model,
+            'cv_mean': np.mean(cv_scores),
+            'cv_std': np.std(cv_scores),
+            'cv_scores': cv_scores,
+            'train_r2': train_r2,
+            'train_mse': train_mse,
+            'train_mae': train_mae,
+            'predictions': train_pred
         }
     
-    def _get_model(self, model_name: str):
-        """Helper to get a model by name"""
-        if model_name in self.lstm_models:
-            return self.lstm_models[model_name]['model']
-        elif model_name in self.ensemble_models:
-            return self.ensemble_models[model_name]['model']
-        elif model_name in self.online_models:
-            return self.online_models[model_name]['model']
-        else:
-            # Return a default model
-            from sklearn.ensemble import RandomForestRegressor
-            return RandomForestRegressor(n_estimators=100, random_state=42)
-    
-    def prepare_time_series_data(self, data: np.ndarray, sequence_length: int) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Prepare time series data for LSTM models
+    def train_transformer_model(self, X: np.ndarray, y: np.ndarray) -> Dict[str, Any]:
+        """Train Transformer model"""
+        logger.info("Training Transformer model...")
         
-        Args:
-            data: 2D array (samples, features)
-            sequence_length: Number of time steps to look back
-            
-        Returns:
-            Tuple of (X, y) for LSTM training
-        """
-        try:
-            X, y = [], []
-            
-            for i in range(sequence_length, len(data)):
-                X.append(data[i-sequence_length:i])
-                y.append(data[i, 0])  # Assume first column is target
-            
-            return np.array(X), np.array(y)
-            
-        except Exception as e:
-            logger.error(f"Error preparing time series data: {e}")
-            return np.array([]), np.array([])
-    
-    def evaluate_model(self, model_name: str, X_test: np.ndarray, y_test: np.ndarray) -> Optional[Dict[str, float]]:
-        """
-        Evaluate a model's performance
+        # Prepare sequences
+        X_seq, y_seq = self.prepare_sequences(X, y)
         
-        Args:
-            model_name: Name of the model to evaluate
-            X_test: Test features
-            y_test: Test targets
+        # Scale features
+        X_scaled = self.scaler.fit_transform(X_seq.reshape(-1, X_seq.shape[-1])).reshape(X_seq.shape)
+        
+        # Time series split for validation
+        tscv = TimeSeriesSplit(n_splits=5)
+        
+        # Create model
+        input_shape = (X_scaled.shape[1], X_scaled.shape[2])
+        self.transformer_model = self.create_transformer_model(input_shape)
+        
+        # Callbacks
+        callbacks = [
+            EarlyStopping(
+                monitor='val_loss',
+                patience=self.transformer_params['patience'],
+                restore_best_weights=True
+            ),
+            ReduceLROnPlateau(
+                monitor='val_loss',
+                factor=0.5,
+                patience=10,
+                min_lr=1e-7
+            )
+        ]
+        
+        # Cross-validation
+        cv_scores = []
+        for train_idx, val_idx in tscv.split(X_scaled):
+            X_train, X_val = X_scaled[train_idx], X_scaled[val_idx]
+            y_train, y_val = y_seq[train_idx], y_seq[val_idx]
             
-        Returns:
-            Dictionary of performance metrics
-        """
-        try:
-            if model_name in self.lstm_models:
-                predictions = self.predict_with_lstm(model_name, X_test)
-            elif model_name in self.ensemble_models:
-                predictions = self.predict_with_ensemble(model_name, X_test)
-            elif model_name in self.online_models:
-                predictions = self.predict_with_online_model(model_name, X_test)
-            else:
-                logger.error(f"Model '{model_name}' not found")
-                return None
+            # Train model
+            history = self.transformer_model.fit(
+                X_train, y_train,
+                validation_data=(X_val, y_val),
+                epochs=self.transformer_params['epochs'],
+                batch_size=self.transformer_params['batch_size'],
+                callbacks=callbacks,
+                verbose=0
+            )
             
-            if predictions is None:
-                return None
-            
-            # Calculate metrics
-            mse = mean_squared_error(y_test, predictions)
-            mae = mean_absolute_error(y_test, predictions)
-            rmse = np.sqrt(mse)
-            
-            metrics = {
-                'mse': mse,
-                'mae': mae,
-                'rmse': rmse,
-                'evaluated_at': datetime.now()
-            }
-            
-            # Update performance tracking
-            if model_name in self.model_performance:
-                self.model_performance[model_name].update(metrics)
-            
-            return metrics
-            
-        except Exception as e:
-            logger.error(f"Error evaluating model '{model_name}': {e}")
-            return None
+            # Evaluate
+            val_pred = self.transformer_model.predict(X_val, verbose=0)
+            val_r2 = r2_score(y_val, val_pred)
+            cv_scores.append(val_r2)
+        
+        # Train on full data
+        self.transformer_model.fit(
+            X_scaled, y_seq,
+            epochs=self.transformer_params['epochs'],
+            batch_size=self.transformer_params['batch_size'],
+            callbacks=callbacks,
+            verbose=0
+        )
+        
+        # Final evaluation
+        train_pred = self.transformer_model.predict(X_scaled, verbose=0)
+        train_r2 = r2_score(y_seq, train_pred)
+        train_mse = mean_squared_error(y_seq, train_pred)
+        train_mae = mean_absolute_error(y_seq, train_pred)
+        
+        return {
+            'model': self.transformer_model,
+            'cv_mean': np.mean(cv_scores),
+            'cv_std': np.std(cv_scores),
+            'cv_scores': cv_scores,
+            'train_r2': train_r2,
+            'train_mse': train_mse,
+            'train_mae': train_mae,
+            'predictions': train_pred
+        }
+    
+    def predict_lstm(self, X: np.ndarray) -> np.ndarray:
+        """Make predictions using LSTM model"""
+        if self.lstm_model is None:
+            raise ValueError("LSTM model not trained yet")
+        
+        # Prepare sequences
+        X_seq, _ = self.prepare_sequences(X, np.zeros(len(X)))
+        
+        # Scale features
+        X_scaled = self.scaler.transform(X_seq.reshape(-1, X_seq.shape[-1])).reshape(X_seq.shape)
+        
+        # Make predictions
+        predictions = self.lstm_model.predict(X_scaled, verbose=0)
+        
+        return predictions.flatten()
+    
+    def predict_transformer(self, X: np.ndarray) -> np.ndarray:
+        """Make predictions using Transformer model"""
+        if self.transformer_model is None:
+            raise ValueError("Transformer model not trained yet")
+        
+        # Prepare sequences
+        X_seq, _ = self.prepare_sequences(X, np.zeros(len(X)))
+        
+        # Scale features
+        X_scaled = self.scaler.transform(X_seq.reshape(-1, X_seq.shape[-1])).reshape(X_seq.shape)
+        
+        # Make predictions
+        predictions = self.transformer_model.predict(X_scaled, verbose=0)
+        
+        return predictions.flatten()
+    
+    def ensemble_predict(self, X: np.ndarray) -> np.ndarray:
+        """Make ensemble predictions using both models"""
+        if self.lstm_model is None or self.transformer_model is None:
+            raise ValueError("Both models must be trained for ensemble prediction")
+        
+        lstm_pred = self.predict_lstm(X)
+        transformer_pred = self.predict_transformer(X)
+        
+        # Weighted ensemble (can be optimized)
+        ensemble_pred = 0.6 * lstm_pred + 0.4 * transformer_pred
+        
+        return ensemble_pred
