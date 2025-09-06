@@ -2,7 +2,7 @@ import graphene
 from django.contrib.auth import get_user_model
 from .types import UserType, PostType, ChatSessionType, ChatMessageType, CommentType, StockType, StockDataType, WatchlistType, AIPortfolioRecommendationType
 # TODO: Add missing types: WatchlistItemType, RustStockAnalysisType, RustRecommendationType, RustHealthType, TechnicalIndicatorsType, FundamentalAnalysisType, StockDiscussionType, PortfolioType, PriceAlertType, SocialFeedType, UserAchievementType, StockSentimentType
-from .models import Post, ChatSession, ChatMessage, Comment, User, Stock, StockData, Watchlist, AIPortfolioRecommendation, StockDiscussion, DiscussionComment
+from .models import Post, ChatSession, ChatMessage, Comment, User, Stock, StockData, Watchlist, AIPortfolioRecommendation, StockDiscussion, DiscussionComment, Portfolio
 # TODO: Add missing models: StockDiscussion, Portfolio
 import django.db.models as models
 from django.utils import timezone
@@ -39,8 +39,9 @@ class Query(graphene.ObjectType):
     # AI Portfolio queries
     ai_portfolio_recommendations = graphene.List(AIPortfolioRecommendationType, userId=graphene.ID(required=True))
     
-    # Portfolio queries - TODO: Uncomment when types are available
-    # my_portfolio = graphene.List('core.types.PortfolioType')
+    # Portfolio queries
+    my_portfolios = graphene.Field('core.portfolio_types.PortfolioSummaryType')
+    portfolio_names = graphene.List(graphene.String)
     portfolio_value = graphene.Float()
     
     # Stock price queries
@@ -603,3 +604,21 @@ class Query(graphene.ObjectType):
                     logger.error(f"Error getting database price for {symbol}: {e}")
             
             return prices
+    
+    def resolve_my_portfolios(self, info):
+        """Get all portfolios for the current user"""
+        user = info.context.user
+        if not user or user.is_anonymous:
+            return None
+        
+        from .portfolio_service import PortfolioService
+        return PortfolioService.get_user_portfolios(user)
+    
+    def resolve_portfolio_names(self, info):
+        """Get list of portfolio names for the current user"""
+        user = info.context.user
+        if not user or user.is_anonymous:
+            return []
+        
+        from .portfolio_service import PortfolioService
+        return PortfolioService.get_portfolio_names(user)

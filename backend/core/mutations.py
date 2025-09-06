@@ -17,6 +17,7 @@ from .models import User, Post, Comment, ChatSession, ChatMessage, IncomeProfile
 from .types import UserType, PostType, CommentType, ChatSessionType, ChatMessageType
 from .auth_utils import RateLimiter, PasswordValidator, SecurityUtils, AccountLockout
 from .websocket_service import websocket_service
+from .portfolio_types import CreatePortfolioHolding, UpdatePortfolioHolding, RemovePortfolioHolding, UpdateHoldingShares
 
 class CreateUser(graphene.Mutation):
     """Enhanced user creation with security features"""
@@ -918,6 +919,10 @@ class Mutation(graphene.ObjectType):
     
     # Portfolio management
     save_portfolio = SavePortfolio.Field()
+    create_portfolio_holding = CreatePortfolioHolding.Field()
+    update_portfolio_holding = UpdatePortfolioHolding.Field()
+    update_holding_shares = UpdateHoldingShares.Field()
+    remove_portfolio_holding = RemovePortfolioHolding.Field()
     
     # Discussion management (Reddit-style)
     create_stock_discussion = CreateStockDiscussion.Field()

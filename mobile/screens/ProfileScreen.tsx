@@ -14,6 +14,7 @@ import {
 import { gql, useQuery, useMutation, useApolloClient } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { GET_MY_PORTFOLIOS } from '../graphql/portfolioQueries';
 
 const GET_ME = gql`
   query GetMe {
@@ -111,16 +112,12 @@ const { width } = Dimensions.get('window');
 
 const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigateTo, onLogout }) => {
   const { data: meData, loading: meLoading, error: meError } = useQuery(GET_ME);
-  const { data: portfolioData, loading: portfolioLoading } = useQuery(GET_USER_PORTFOLIO, {
-    variables: { userId: meData?.me?.id },
-    skip: !meData?.me?.id,
+  const { data: portfoliosData, loading: portfoliosLoading, refetch: refetchPortfolios } = useQuery(GET_MY_PORTFOLIOS, {
+    notifyOnNetworkStatusChange: true,
+    fetchPolicy: 'cache-and-network'
   });
   const { data: watchlistData, loading: watchlistLoading } = useQuery(GET_MY_WATCHLIST, {
     skip: !meData?.me?.id,
-  });
-  const { data: portfolioValueData, loading: portfolioValueLoading, refetch: refetchPortfolioValue } = useQuery(GET_PORTFOLIO_VALUE, {
-    notifyOnNetworkStatusChange: true,
-    fetchPolicy: 'cache-and-network'
   });
   const [toggleFollow] = useMutation(TOGGLE_FOLLOW);
   const [refreshing, setRefreshing] = useState(false);
@@ -157,7 +154,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigateTo, onLogout }) =
       // Refetch user, portfolio, and watchlist data
       await Promise.all([
         client.refetchQueries({
-          include: [GET_ME, GET_USER_PORTFOLIO, GET_MY_WATCHLIST, GET_PORTFOLIO_VALUE]
+          include: [GET_ME, GET_MY_PORTFOLIOS, GET_MY_WATCHLIST]
         })
       ]);
     } catch (error) {
@@ -168,9 +165,9 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigateTo, onLogout }) =
   };
 
   // Get real portfolio value from saved portfolio data
-  const portfolioValue = portfolioValueData?.portfolioValue || 0;
+  const portfolioValue = portfoliosData?.myPortfolios?.totalValue || 0;
 
-  const investmentGoals = portfolioData?.portfolios?.length || 0;
+  const investmentGoals = portfoliosData?.myPortfolios?.totalPortfolios || 0;
 
   const handleLogout = async () => {
     try {
@@ -332,12 +329,12 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigateTo, onLogout }) =
         <View style={styles.profileStats}>
           <TouchableOpacity 
             style={styles.statCard}
-            onPress={() => navigateTo?.('portfolio')}
-            disabled={portfolioLoading}
+            onPress={() => navigateTo?.('portfolio-management')}
+            disabled={portfoliosLoading}
           >
             <Icon name="trending-up" size={24} color="#34C759" />
             <Text style={styles.statCardTitle}>Portfolio Value</Text>
-            {portfolioLoading || watchlistLoading ? (
+            {portfoliosLoading || watchlistLoading ? (
               <View style={styles.loadingValue}>
                 <Icon name="refresh-cw" size={16} color="#C7C7CC" style={styles.spinningIcon} />
                 <Text style={styles.loadingValueText}>Loading...</Text>
@@ -357,12 +354,12 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigateTo, onLogout }) =
           
           <TouchableOpacity 
             style={styles.statCard}
-            onPress={() => navigateTo?.('aiPortfolio')}
-            disabled={portfolioLoading}
+            onPress={() => navigateTo?.('portfolio-management')}
+            disabled={portfoliosLoading}
           >
             <Icon name="crosshair" size={24} color="#007AFF" />
             <Text style={styles.statCardTitle}>Portfolios</Text>
-            {portfolioLoading ? (
+            {portfoliosLoading ? (
               <View style={styles.loadingValue}>
                 <Icon name="refresh-cw" size={16} color="#C7C7CC" style={styles.spinningIcon} />
                 <Text style={styles.loadingValueText}>Loading...</Text>
@@ -377,6 +374,71 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigateTo, onLogout }) =
               <Icon name="chevron-right" size={16} color="#C7C7CC" />
             </View>
           </TouchableOpacity>
+        </View>
+
+        {/* My Portfolios */}
+        <View style={styles.portfolioHoldings}>
+          <Text style={styles.sectionTitle}>My Portfolios</Text>
+          {portfoliosLoading ? (
+            <View style={styles.loadingContainer}>
+              <Icon name="refresh-cw" size={24} color="#C7C7CC" style={styles.spinningIcon} />
+              <Text style={styles.loadingText}>Loading portfolios...</Text>
+            </View>
+          ) : portfoliosData?.myPortfolios?.portfolios && portfoliosData.myPortfolios.portfolios.length > 0 ? (
+            portfoliosData.myPortfolios.portfolios.map((portfolio: any) => (
+              <View key={portfolio.name} style={styles.portfolioCard}>
+                <View style={styles.portfolioHeader}>
+                  <Text style={styles.portfolioName}>{portfolio.name}</Text>
+                  <Text style={styles.portfolioValue}>
+                    ${portfolio.totalValue.toLocaleString()}
+                  </Text>
+                </View>
+                <View style={styles.portfolioStats}>
+                  <Text style={styles.portfolioStatsText}>
+                    {portfolio.holdingsCount} holdings
+                  </Text>
+                </View>
+                {portfolio.holdings && portfolio.holdings.length > 0 && (
+                  <View style={styles.holdingsList}>
+                    {portfolio.holdings.slice(0, 3).map((holding: any) => (
+                      <View key={holding.id} style={styles.holdingItem}>
+                        <View style={styles.holdingInfo}>
+                          <Text style={styles.stockSymbol}>{holding.stock.symbol}</Text>
+                          <Text style={styles.stockName}>{holding.stock.companyName}</Text>
+                        </View>
+                        <View style={styles.holdingDetails}>
+                          <Text style={styles.sharesText}>{holding.shares} shares</Text>
+                          <Text style={styles.priceText}>
+                            ${holding.totalValue ? holding.totalValue.toLocaleString() : '0.00'}
+                          </Text>
+                        </View>
+                      </View>
+                    ))}
+                    {portfolio.holdings.length > 3 && (
+                      <Text style={styles.moreHoldingsText}>
+                        +{portfolio.holdings.length - 3} more holdings
+                      </Text>
+                    )}
+                  </View>
+                )}
+              </View>
+            ))
+          ) : (
+            <View style={styles.emptyPortfolioContainer}>
+              <Icon name="briefcase" size={48} color="#C7C7CC" />
+              <Text style={styles.emptyPortfolioTitle}>No Portfolios Yet</Text>
+              <Text style={styles.emptyPortfolioSubtitle}>
+                Create your first portfolio to start tracking your investments
+              </Text>
+              <TouchableOpacity 
+                style={styles.createPortfolioButton}
+                onPress={() => navigateTo?.('ai-portfolio')}
+              >
+                <Icon name="plus" size={16} color="#fff" />
+                <Text style={styles.createPortfolioButtonText}>Create Portfolio</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         {/* Watchlist Stocks */}
@@ -856,6 +918,28 @@ const styles = StyleSheet.create({
     color: '#007AFF',
     marginTop: 2,
     fontWeight: '500',
+  },
+  portfolioValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#34C759',
+  },
+  portfolioStats: {
+    marginTop: 8,
+  },
+  portfolioStatsText: {
+    fontSize: 12,
+    color: '#8E8E93',
+  },
+  holdingsList: {
+    marginTop: 12,
+  },
+  moreHoldingsText: {
+    fontSize: 12,
+    color: '#8E8E93',
+    textAlign: 'center',
+    marginTop: 8,
+    fontStyle: 'italic',
   },
 });
 

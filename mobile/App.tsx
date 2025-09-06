@@ -19,6 +19,7 @@ import StockScreen from './screens/StockScreen';
 import SocialScreen from './screens/SocialScreen';
 import AIPortfolioScreen from './screens/AIPortfolioScreen';
 import PortfolioScreen from './screens/PortfolioScreen';
+import PortfolioManagementScreen from './screens/PortfolioManagementScreen';
 
 // Components
 import BottomTabBar from './components/BottomTabBar';
@@ -109,6 +110,8 @@ export default function App() {
         return <AIPortfolioScreen navigateTo={navigateTo} />;
       case 'portfolio':
         return <PortfolioScreen navigateTo={navigateTo} />;
+      case 'portfolio-management':
+        return <PortfolioManagementScreen navigateTo={navigateTo} />;
       case 'social':
         return <SocialScreen />;
       default:

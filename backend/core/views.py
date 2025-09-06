@@ -27,7 +27,6 @@ class AuthenticatedGraphQLView(GraphQLView):
                     user = get_user_from_token(token)
                     if user:
                         request.user = user
-                else:
                 
             except (json.JSONDecodeError, Exception):
                 pass
