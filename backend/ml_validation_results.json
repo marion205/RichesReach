@@ -1,0 +1,68 @@
+{
+  "validation_timestamp": "2025-09-06T02:10:37.150234",
+  "data_sources": [
+    "AAPL",
+    "MSFT",
+    "GOOGL",
+    "AMZN",
+    "TSLA",
+    "META",
+    "NVDA",
+    "NFLX",
+    "KO",
+    "JPM"
+  ],
+  "total_data_points": 3650,
+  "models": {
+    "market_regime": {
+      "model_type": "Market Regime Detection",
+      "accuracy": 0.9012738853503185,
+      "test_samples": 628,
+      "training_samples": 2512,
+      "feature_importance": [
+        0.1073046892612188,
+        0.4911052542713891,
+        0.12660722945642033,
+        0.11575075471717501,
+        0.15923207229379682
+      ],
+      "regime_distribution": [
+        141,
+        142,
+        202,
+        2655
+      ]
+    },
+    "portfolio_optimization": {
+      "model_type": "Portfolio Optimization",
+      "mse": 0.00939074565100235,
+      "mae": 0.08905130782106824,
+      "r2_score": 0.0065728298632913296,
+      "test_samples": 570,
+      "training_samples": 2280,
+      "feature_importance": [
+        0.1193552316915853,
+        0.1544538258109059,
+        0.10047295473291469,
+        0.12609494295630702,
+        0.277991179120119,
+        0.22163186568816803
+      ]
+    },
+    "stock_scoring": {
+      "model_type": "Stock Scoring",
+      "mse": 0.1170708870967742,
+      "mae": 0.29167741935483865,
+      "r2_score": 0.06866620447019867,
+      "test_samples": 620,
+      "training_samples": 2480,
+      "feature_importance": [
+        0.1821364855323443,
+        0.23536013983189208,
+        0.1805179170754395,
+        0.21636930603245824,
+        0.18561615152786584
+      ]
+    }
+  }
+}
