@@ -1,9 +1,7 @@
 import graphene
 from django.contrib.auth import get_user_model
 from .types import UserType, PostType, ChatSessionType, ChatMessageType, CommentType, StockType, StockDataType, WatchlistType, AIPortfolioRecommendationType
-# TODO: Add missing types: WatchlistItemType, RustStockAnalysisType, RustRecommendationType, RustHealthType, TechnicalIndicatorsType, FundamentalAnalysisType, StockDiscussionType, PortfolioType, PriceAlertType, SocialFeedType, UserAchievementType, StockSentimentType
 from .models import Post, ChatSession, ChatMessage, Comment, User, Stock, StockData, Watchlist, AIPortfolioRecommendation, StockDiscussion, DiscussionComment, Portfolio
-# TODO: Add missing models: StockDiscussion, Portfolio
 import django.db.models as models
 from django.utils import timezone
 from datetime import timedelta

@@ -87,7 +87,6 @@ class CreateUser(graphene.Mutation):
         except Exception as e:
             return CreateUser(success=False, message=str(e))
 
-# Removed broken ForgotPassword class - will be reimplemented later
 
 class CreateIncomeProfile(graphene.Mutation):
     """Create or update user's income profile"""

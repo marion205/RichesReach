@@ -1,6 +1,5 @@
 from django.contrib import admin
 from .models import User, Post, ChatSession, ChatMessage, Source, Like, Comment, Follow, Stock, StockData, Watchlist
-# TODO: Add missing models: WatchlistItem, StockDiscussion, DiscussionComment, Portfolio, PortfolioPosition, PriceAlert, SocialFeed, UserAchievement, StockSentiment
 
 @admin.register(User)
 class UserAdmin(admin.ModelAdmin):
@@ -95,90 +94,3 @@ class WatchlistAdmin(admin.ModelAdmin):
     ordering = ('-added_at',)
     readonly_fields = ('added_at',)
 
-# @admin.register(WatchlistItem)
-class WatchlistItemAdmin(admin.ModelAdmin):
-    list_display = ('watchlist', 'stock', 'target_price', 'added_at')
-    list_filter = ('watchlist__user', 'stock__sector', 'added_at')
-    search_fields = ('watchlist__name', 'stock__symbol', 'notes')
-    ordering = ('-added_at',)
-    readonly_fields = ('added_at',)
-
-# @admin.register(StockDiscussion)
-class StockDiscussionAdmin(admin.ModelAdmin):
-    list_display = ('title', 'user', 'stock', 'discussion_type', 'like_count', 'created_at')
-    list_filter = ('discussion_type', 'is_analysis', 'created_at', 'stock__sector')
-    search_fields = ('title', 'content', 'user__username', 'stock__symbol')
-    ordering = ('-created_at',)
-    readonly_fields = ('created_at', 'updated_at')
-    
-    def like_count(self, obj):
-        return obj.likes.count()
-    like_count.short_description = 'Likes'
-
-# @admin.register(DiscussionComment)
-class DiscussionCommentAdmin(admin.ModelAdmin):
-    list_display = ('user', 'discussion', 'like_count', 'created_at')
-    list_filter = ('created_at', 'user')
-    search_fields = ('content', 'user__username', 'discussion__title')
-    ordering = ('-created_at',)
-    readonly_fields = ('created_at', 'updated_at')
-    
-    def like_count(self, obj):
-        return obj.likes.count()
-    like_count.short_description = 'Likes'
-
-# @admin.register(Portfolio)
-class PortfolioAdmin(admin.ModelAdmin):
-    list_display = ('user', 'stock', 'shares', 'total_value', 'created_at')
-    list_filter = ('created_at', 'user')
-    search_fields = ('user__email', 'stock__symbol', 'stock__company_name')
-    ordering = ('-created_at',)
-    readonly_fields = ('created_at', 'updated_at')
-    
-    def total_value(self, obj):
-        return f"${obj.total_value:.2f}"
-    total_value.short_description = 'Total Value'
-
-# @admin.register(PortfolioPosition)
-class PortfolioPositionAdmin(admin.ModelAdmin):
-    list_display = ('portfolio', 'stock', 'position_type', 'shares', 'entry_price', 'current_price', 'total_return')
-    list_filter = ('position_type', 'entry_date', 'portfolio__user')
-    search_fields = ('portfolio__name', 'stock__symbol', 'notes')
-    ordering = ('-entry_date',)
-    readonly_fields = ('entry_date', 'exit_date')
-    
-    def total_return(self, obj):
-        return f"${obj.total_return_dollars:.2f}"
-    total_return.short_description = 'Total Return'
-
-# @admin.register(PriceAlert)
-class PriceAlertAdmin(admin.ModelAdmin):
-    list_display = ('user', 'stock', 'alert_type', 'target_value', 'is_active', 'is_triggered')
-    list_filter = ('alert_type', 'is_active', 'is_triggered', 'created_at')
-    search_fields = ('user__username', 'stock__symbol')
-    ordering = ('-created_at',)
-    readonly_fields = ('created_at', 'triggered_at')
-
-# @admin.register(SocialFeed)
-class SocialFeedAdmin(admin.ModelAdmin):
-    list_display = ('user', 'content_type', 'content_id', 'is_read', 'created_at')
-    list_filter = ('content_type', 'is_read', 'created_at')
-    search_fields = ('user__username',)
-    ordering = ('-created_at',)
-    readonly_fields = ('created_at',)
-
-# @admin.register(UserAchievement)
-class UserAchievementAdmin(admin.ModelAdmin):
-    list_display = ('user', 'title', 'achievement_type', 'icon', 'earned_at')
-    list_filter = ('achievement_type', 'earned_at')
-    search_fields = ('user__username', 'title', 'description')
-    ordering = ('-earned_at',)
-    readonly_fields = ('earned_at',)
-
-# @admin.register(StockSentiment)
-# class StockSentimentAdmin(admin.ModelAdmin):
-#     list_display = ('stock', 'sentiment_score', 'total_votes', 'positive_votes', 'negative_votes', 'neutral_votes')
-#     list_filter = ('last_updated',)
-#     search_fields = ('stock__symbol',)
-#     ordering = ('-total_votes',)
-#     readonly_fields = ('last_updated',)
