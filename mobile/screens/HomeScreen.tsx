@@ -10,6 +10,7 @@ import {
   FlatList,
   TextInput,
   Alert,
+  Image,
 } from 'react-native';
 import { useApolloClient } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
@@ -699,10 +700,13 @@ Feel free to ask about any of these topics or try one of the quick prompts above
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {/* Welcome Message */}
+        {/* Logo */}
         <View style={styles.welcomeContainer}>
-          <Icon name="home" size={48} color="#34C759" />
-          <Text style={styles.welcomeTitle}>Welcome to RichesReach! 📰</Text>
+          <Image 
+            source={require('../assets/whitelogo1.png')} 
+            style={styles.logo}
+            resizeMode="contain"
+          />
           <Text style={styles.welcomeSubtitle}>
             Stay informed with the latest financial news and get personalized financial education.
           </Text>
@@ -933,6 +937,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 5,
+  },
+  logo: {
+    width: 280,
+    height: 112,
+    marginBottom: 16,
   },
   welcomeTitle: {
     fontSize: 24,
