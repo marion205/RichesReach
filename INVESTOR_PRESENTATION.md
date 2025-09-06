@@ -40,7 +40,7 @@
 |-------|----------------|-----------------|
 | **Market Regime Detection** | **90.1%** | 3,140 samples (AAPL, MSFT, GOOGL, AMZN, TSLA, META, NVDA, NFLX, KO, JPM) |
 | **Portfolio Optimization** | **R² Score: 0.069** | 2,850 samples with 6 user profile features |
-| **Stock Scoring** | **R² Score: 0.069** | 3,100 samples with 5 technical indicators |
+| **Stock Scoring** | **R² Score: 0.069** | 3,100 samples with 5 technical indicators - *Realistic for finance* |
 
 ### **Real Technical Analysis**
 - **RSI (Relative Strength Index)**: Identifies oversold/overbought conditions

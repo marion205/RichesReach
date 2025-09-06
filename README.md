@@ -306,7 +306,7 @@ python deploy_direct.py
 - **WebSocket Latency:** < 50ms for real-time updates
 - **Market Regime Detection:** 90.1% accuracy (validated on 3,650 data points)
 - **Portfolio Optimization:** R² Score 0.007, MAE 0.089 (validated on 2,850 samples)
-- **Stock Scoring:** R² Score 0.069, MAE 0.292 (validated on 3,100 samples)
+- **Stock Scoring:** R² Score 0.069, MAE 0.292 (validated on 3,100 samples) - *Realistic for financial prediction*
 - **News API Integration:** 8 categories with 30-minute smart caching
 - **Portfolio Management:** Real-time calculations with live market data
 - **System Uptime:** 99.9% availability
