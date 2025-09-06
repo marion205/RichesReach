@@ -2,7 +2,15 @@
 
 > **Professional-grade trading platform with intelligent algorithms, real-time data, and social features**
 
-## 🚀 Latest Features (v2.0)
+## 🚀 Latest Features (v2.1)
+
+### 💼 Advanced Portfolio Management
+- **Multi-Portfolio System**: Create and manage unlimited virtual portfolios
+- **Real-Time Portfolio Tracking**: Live updates with current market prices
+- **Portfolio Analytics**: Dynamic value calculations and performance metrics
+- **Edit Holdings**: Modify share quantities for existing positions
+- **Portfolio Organization**: Group holdings by strategy, sector, or goal
+- **Virtual Portfolio System**: No database migrations required - uses existing schema
 
 ### 🧠 Intelligent Price Alerts
 - **Advanced Technical Analysis**: RSI, MACD, Bollinger Bands, Moving Averages
@@ -16,6 +24,14 @@
 - **Push Notifications**: Price alerts, discussion mentions, portfolio updates
 - **Error Handling**: Comprehensive error boundaries and user feedback
 - **Data Persistence**: Automated backups and data validation
+- **JWT WebSocket Authentication**: Secure real-time connections
+
+### 📰 Intelligent News System
+- **Categorized News Feed**: 8 specialized categories (Markets, Tech, Crypto, etc.)
+- **Real-Time News API**: Fresh financial news with 30-minute caching
+- **Smart Caching**: Optimized API usage to prevent rate limits
+- **Personalized Content**: AI-curated news based on user preferences
+- **News Categories**: All News, Markets, Technology, Crypto, Economy, Personal Finance, Investing, Real Estate
 
 ### 👥 Social Trading Platform
 - **Reddit-Style Discussions**: Upvote/downvote, nested comments, media support
@@ -23,11 +39,18 @@
 - **Post Visibility**: Public posts for everyone vs. followers-only content
 - **Media Upload**: Images, videos, and links in discussions
 
+### 🎨 Enhanced User Experience
+- **Company Logo Integration**: Professional branding on home screen
+- **Responsive Design**: Optimized for all mobile screen sizes
+- **Intuitive Navigation**: Seamless flow between portfolio management and social features
+- **Real-Time Updates**: Live data refresh without app restart
+
 ### 🔐 Enhanced Security
 - **JWT Authentication**: Secure token-based authentication
 - **Rate Limiting**: Protection against abuse and spam
 - **Account Lockout**: Security against brute force attacks
 - **Password Strength**: Validation and secure storage
+- **WebSocket Security**: Custom JWT middleware for real-time connections
 
 ## Clean File Structure
 
@@ -39,8 +62,15 @@ RichesReach/
 │   │   ├── UserTradingProfile.tsx      # AI profile setup
 │   │   ├── IntelligentAlertDemo.tsx    # AI algorithm demo
 │   │   ├── ErrorBoundary.tsx           # Error handling
-│   │   └── LoadingErrorState.tsx       # Loading states
+│   │   ├── LoadingErrorState.tsx       # Loading states
+│   │   ├── NewsCard.tsx                # News article display
+│   │   ├── NewsCategories.tsx          # News category navigation
+│   │   ├── PortfolioCard.tsx           # Portfolio display components
+│   │   └── WatchlistCard.tsx           # Stock watchlist components
 │   ├── screens/                  # App screens and navigation
+│   │   ├── HomeScreen.tsx              # Main dashboard with logo and news
+│   │   ├── ProfileScreen.tsx           # User profile and portfolio overview
+│   │   ├── PortfolioManagementScreen.tsx # Portfolio creation and editing
 │   │   ├── SocialScreen.tsx            # Social trading features
 │   │   ├── LoginScreen.tsx             # Enhanced authentication
 │   │   └── SignupScreen.tsx            # User registration
@@ -50,7 +80,10 @@ RichesReach/
 │   │   ├── PushNotificationService.ts  # Push notifications
 │   │   ├── PriceAlertService.ts        # Price monitoring
 │   │   ├── ErrorService.ts             # Error management
-│   │   └── DataPersistenceService.ts   # Data backup
+│   │   ├── DataPersistenceService.ts   # Data backup
+│   │   └── newsService.ts              # News API integration
+│   ├── graphql/                  # GraphQL queries and mutations
+│   │   └── portfolioQueries.ts         # Portfolio management queries
 │   ├── types/                    # TypeScript type definitions
 │   └── App.tsx                   # Main application entry point
 │
@@ -62,10 +95,13 @@ RichesReach/
 │   │   ├── market_data_service.py   # Real-time market data
 │   │   ├── technical_analysis_service.py  # Technical indicators
 │   │   ├── deep_learning_service.py  # Advanced ML techniques
-│   │   ├── models.py            # Django data models (User, Follow, StockDiscussion)
-│   │   ├── mutations.py         # GraphQL mutations (CreateDiscussion, ToggleFollow)
-│   │   ├── queries.py           # GraphQL queries (socialFeed, stockDiscussions)
-│   │   ├── types.py             # GraphQL types (StockDiscussionType, UserType)
+│   │   ├── portfolio_service.py # Virtual portfolio management system
+│   │   ├── portfolio_types.py   # Portfolio GraphQL types and mutations
+│   │   ├── websocket_auth.py    # JWT WebSocket authentication middleware
+│   │   ├── models.py            # Django data models (User, Follow, StockDiscussion, Portfolio)
+│   │   ├── mutations.py         # GraphQL mutations (CreateDiscussion, ToggleFollow, Portfolio)
+│   │   ├── queries.py           # GraphQL queries (socialFeed, stockDiscussions, portfolios)
+│   │   ├── types.py             # GraphQL types (StockDiscussionType, UserType, PortfolioType)
 │   │   ├── consumers.py         # WebSocket consumers for real-time updates
 │   │   ├── routing.py           # WebSocket URL routing
 │   │   ├── websocket_service.py # WebSocket broadcasting service
@@ -144,6 +180,15 @@ python deploy_direct.py
 
 ## Core Features
 
+### 💼 Advanced Portfolio Management
+- **Multi-Portfolio System**: Create unlimited virtual portfolios for different strategies
+- **Real-Time Tracking**: Live portfolio values with current market prices
+- **Dynamic Calculations**: Automatic total value and performance metrics
+- **Edit Holdings**: Modify share quantities for existing positions
+- **Portfolio Organization**: Group holdings by strategy, sector, or investment goal
+- **Virtual System**: No database migrations - uses existing schema efficiently
+- **GraphQL API**: Full CRUD operations for portfolio management
+
 ### 🧠 Intelligent Trading Algorithms
 - **Technical Analysis**: RSI, MACD, Bollinger Bands, Moving Averages
 - **Multi-Factor Scoring**: Combines technical, market, and personal factors
@@ -167,6 +212,14 @@ python deploy_direct.py
 - **Momentum factors** - Price trends, volume analysis
 - **20+ features per stock** for comprehensive scoring
 
+### 📰 Intelligent News System
+- **Categorized News Feed**: 8 specialized categories with targeted content
+- **Real-Time News API**: Fresh financial news with smart caching
+- **Category-Specific Content**: Markets, Technology, Crypto, Economy, Personal Finance, Investing, Real Estate
+- **Smart Caching**: 30-minute cache to optimize API usage and prevent rate limits
+- **Personalized Content**: AI-curated news based on user preferences and portfolio holdings
+- **News Analytics**: Track reading patterns and engagement metrics
+
 ### 👥 Social Trading Features
 - **Reddit-Style Discussions**: Upvote/downvote, nested comments, media support
 - **User Following System**: Personalized feeds and social connections
@@ -179,6 +232,7 @@ python deploy_direct.py
 - **Discussion Mentions**: Notifications when mentioned in discussions
 - **Portfolio Updates**: Real-time portfolio performance alerts
 - **Market News**: Breaking news and market updates
+- **WebSocket Security**: JWT-authenticated real-time connections
 
 ## Architecture
 
@@ -207,13 +261,17 @@ python deploy_direct.py
 ## Key Benefits
 
 ### For Users
+- **Advanced portfolio management** - create and manage unlimited portfolios
+- **Real-time portfolio tracking** with live market prices and dynamic calculations
 - **AI-powered portfolio optimization** - not just tracking
 - **Intelligent price alerts** with technical analysis and confidence scoring
+- **Categorized news feed** with 8 specialized financial news categories
 - **Social trading community** with Reddit-style discussions
 - **Real-time market adaptation** to changing conditions
 - **Personalized investment strategies** based on your profile
 - **Push notifications** for important market events
 - **Educational insights** to understand investing
+- **Professional UI** with company branding and intuitive navigation
 
 ### For Investors
 - **Production-ready platform** deployed on AWS
@@ -248,8 +306,11 @@ python deploy_direct.py
 - **WebSocket Latency:** < 50ms for real-time updates
 - **ML Model Accuracy:** 85%+ for portfolio optimization
 - **Intelligent Alert Accuracy:** 78%+ for buy/sell recommendations
+- **News API Integration:** 8 categories with 30-minute smart caching
+- **Portfolio Management:** Real-time calculations with live market data
 - **System Uptime:** 99.9% availability
 - **Scalability:** Handles 1000+ concurrent users
+- **JWT WebSocket Auth:** Secure real-time connections
 
 ### Target Performance (18 months)
 - **API Response Time:** < 100ms average
@@ -288,13 +349,17 @@ python deploy_direct.py
 - **Democratization** of sophisticated investing
 
 ### Competitive Advantages
+- **Advanced portfolio management** - unlimited virtual portfolios with real-time tracking
 - **AI-first approach** - actual machine learning with technical analysis
+- **Intelligent news system** - 8 categorized feeds with smart caching
 - **Social trading platform** - Reddit-style discussions and community
 - **Intelligent algorithms** - multi-factor scoring with confidence levels
 - **Real-time features** - WebSocket connections and push notifications
+- **Professional UI** - company branding and intuitive user experience
 - **Personalization** - adapts to individual profiles and risk tolerance
 - **Real-time adaptation** - responds to market changes instantly
 - **Educational focus** - helps users understand investing
+- **Secure architecture** - JWT authentication for all real-time connections
 
 ## Contact & Support
 
