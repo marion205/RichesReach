@@ -19,22 +19,31 @@ class PortfolioHoldingType(graphene.ObjectType):
     updated_at = graphene.DateTime()
     
     def resolve_stock(self, info):
-        return self['stock']
+        # Handle both dict and model object
+        if hasattr(self, 'stock'):
+            return self.stock
+        return self.get('stock')
     
     def resolve_average_price(self, info):
-        if self['average_price']:
-            return float(self['average_price'])
-        return None
+        # Handle both dict and model object
+        if hasattr(self, 'average_price'):
+            return float(self.average_price) if self.average_price else None
+        return float(self['average_price']) if self.get('average_price') else None
     
     def resolve_current_price(self, info):
-        if self['current_price']:
-            return float(self['current_price'])
-        return None
+        # Handle both dict and model object
+        if hasattr(self, 'current_price'):
+            return float(self.current_price) if self.current_price else None
+        return float(self['current_price']) if self.get('current_price') else None
     
     def resolve_total_value(self, info):
-        if self['total_value']:
-            return float(self['total_value'])
-        return None
+        # Handle both dict and model object
+        if hasattr(self, 'current_price') and hasattr(self, 'shares'):
+            # Calculate total value for model object
+            if self.current_price and self.shares:
+                return float(self.current_price * self.shares)
+            return 0.0
+        return float(self['total_value']) if self.get('total_value') else None
 
 class PortfolioType(graphene.ObjectType):
     """Virtual portfolio containing multiple holdings"""
