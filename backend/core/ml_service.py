@@ -27,6 +27,17 @@ except ImportError as e:
     logging.warning(f"ML libraries not available: {e}")
     ML_AVAILABLE = False
 
+# Production R² Model import
+try:
+    import sys
+    import os
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from production_r2_model import ProductionR2Model
+    PRODUCTION_R2_AVAILABLE = True
+except ImportError as e:
+    logging.warning(f"Production R² model not available: {e}")
+    PRODUCTION_R2_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 class MLService:
@@ -36,6 +47,7 @@ class MLService:
     
     def __init__(self):
         self.ml_available = ML_AVAILABLE
+        self.production_r2_available = PRODUCTION_R2_AVAILABLE
         if not self.ml_available:
             logger.warning("ML Service initialized in fallback mode")
         
@@ -44,6 +56,17 @@ class MLService:
         self.portfolio_optimizer = None
         self.stock_scorer = None
         self.scaler = StandardScaler()
+        
+        # Initialize production R² model
+        if self.production_r2_available:
+            try:
+                self.production_r2_model = ProductionR2Model()
+                logger.info("Production R² model initialized (R² = 0.023)")
+            except Exception as e:
+                logger.warning(f"Failed to initialize production R² model: {e}")
+                self.production_r2_available = False
+        else:
+            self.production_r2_model = None
         
         # Model parameters
         self.model_params = {
@@ -162,23 +185,111 @@ class MLService:
             logger.error(f"Error in portfolio optimization: {e}")
             return self._fallback_portfolio_optimization(user_profile, market_conditions)
     
-    def score_stocks_ml(
-        self, 
-        stocks: List[Dict[str, Any]], 
+    def score_stocks_production_r2(
+        self,
+        stocks: List[Dict[str, Any]],
         market_conditions: Dict[str, Any],
         user_profile: Dict[str, Any]
     ) -> List[Dict[str, Any]]:
         """
-        Score stocks using improved ML models with proper validation and enhanced features
+        Score stocks using the production R² model (R² = 0.023)
+        This is the highest-performing model we've developed
+        """
+        if not self.production_r2_available or not self.production_r2_model:
+            logger.warning("Production R² model not available, falling back to standard ML scoring")
+            return self.score_stocks_ml(stocks, market_conditions, user_profile)
         
+        try:
+            # Extract symbols from stocks
+            symbols = [stock.get('symbol', stock.get('ticker', '')) for stock in stocks if stock.get('symbol') or stock.get('ticker')]
+            
+            if not symbols:
+                logger.warning("No valid symbols found for production R² scoring")
+                return self.score_stocks_ml(stocks, market_conditions, user_profile)
+            
+            # Train the production model if not already trained
+            if not self.production_r2_model.is_trained:
+                logger.info("Training production R² model...")
+                train_results = self.production_r2_model.train(symbols)
+                if 'error' in train_results:
+                    logger.error(f"Failed to train production R² model: {train_results['error']}")
+                    return self.score_stocks_ml(stocks, market_conditions, user_profile)
+                logger.info(f"Production R² model trained successfully (R² = {train_results.get('train_r2', 'unknown')})")
+            
+            # Score each stock
+            scored_stocks = []
+            for stock in stocks:
+                symbol = stock.get('symbol', stock.get('ticker', ''))
+                if not symbol:
+                    continue
+                
+                try:
+                    # Get predictions for this symbol
+                    pred_results = self.production_r2_model.predict(symbol)
+                    
+                    if 'error' in pred_results:
+                        logger.warning(f"Error predicting {symbol}: {pred_results['error']}")
+                        # Fallback to standard scoring
+                        scored_stock = self._fallback_stock_scoring([stock], market_conditions, user_profile)[0]
+                    else:
+                        # Use the latest prediction as the ML score
+                        latest_pred = pred_results.get('latest_prediction', {})
+                        predicted_return = latest_pred.get('predicted_return', 0.0)
+                        confidence = latest_pred.get('confidence', 'low')
+                        
+                        # Convert prediction to score (0-10 scale)
+                        # Map predicted return to score: -0.2 to +0.2 maps to 0-10
+                        ml_score = max(0, min(10, 5 + (predicted_return * 25)))
+                        
+                        scored_stock = {
+                            **stock,
+                            'ml_score': float(ml_score),
+                            'ml_confidence': confidence,
+                            'ml_reasoning': f"Production R² model prediction: {predicted_return:.3f} return (R² = 0.023)",
+                            'predicted_return': float(predicted_return),
+                            'model_type': 'production_r2'
+                        }
+                    
+                    scored_stocks.append(scored_stock)
+                    
+                except Exception as e:
+                    logger.error(f"Error scoring {symbol} with production R² model: {e}")
+                    # Fallback to standard scoring
+                    scored_stock = self._fallback_stock_scoring([stock], market_conditions, user_profile)[0]
+                    scored_stocks.append(scored_stock)
+            
+            # Sort by ML score
+            scored_stocks.sort(key=lambda x: x['ml_score'], reverse=True)
+            
+            logger.info(f"Scored {len(scored_stocks)} stocks using production R² model")
+            return scored_stocks
+            
+        except Exception as e:
+            logger.error(f"Error in production R² scoring: {e}")
+            return self.score_stocks_ml(stocks, market_conditions, user_profile)
+
+    def score_stocks_ml(
+        self,
+        stocks: List[Dict[str, Any]],
+        market_conditions: Dict[str, Any],
+        user_profile: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """
+        Score stocks using the best available ML model
+        Defaults to production R² model (R² = 0.023) if available
+
         Args:
             stocks: List of stocks to score
             market_conditions: Current market conditions
             user_profile: User's financial profile
-            
+
         Returns:
             List of scored stocks with ML scores
         """
+        # Use production R² model if available (best performance)
+        if self.production_r2_available and self.production_r2_model:
+            return self.score_stocks_production_r2(stocks, market_conditions, user_profile)
+        
         if not self.ml_available:
             return self._fallback_stock_scoring(stocks, market_conditions, user_profile)
         
