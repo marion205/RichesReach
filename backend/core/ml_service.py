@@ -169,7 +169,7 @@ class MLService:
         user_profile: Dict[str, Any]
     ) -> List[Dict[str, Any]]:
         """
-        Score stocks using ML models
+        Score stocks using improved ML models with proper validation and enhanced features
         
         Args:
             stocks: List of stocks to score
@@ -183,6 +183,18 @@ class MLService:
             return self._fallback_stock_scoring(stocks, market_conditions, user_profile)
         
         try:
+            # Try to use improved ML service first
+            from .improved_ml_service import ImprovedMLService
+            
+            improved_ml = ImprovedMLService()
+            if improved_ml.is_available():
+                # Use improved ML service with real data and proper validation
+                scored_stocks = improved_ml.score_stocks_improved(stocks, market_conditions, user_profile)
+                if scored_stocks:
+                    logger.info("Used improved ML service for stock scoring")
+                    return scored_stocks
+            
+            # Fallback to original method
             # Create feature matrix for stocks
             stock_features = self._create_stock_features(stocks, market_conditions, user_profile)
             
@@ -497,9 +509,34 @@ class MLService:
             self.portfolio_optimizer = None
     
     def _train_stock_scorer(self):
-        """Train the enhanced stock scoring model with ESG, momentum, and value factors"""
+        """Train the enhanced stock scoring model with proper validation and regularization"""
         try:
-            # Generate synthetic training data
+            # Import improved ML service
+            from .improved_ml_service import ImprovedMLService
+            
+            # Use improved ML service for training
+            improved_ml = ImprovedMLService()
+            if improved_ml.is_available():
+                # Get real market data
+                symbols = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'NFLX', 'KO', 'JPM']
+                market_data = improved_ml.get_enhanced_stock_data(symbols, days=365)
+                
+                if market_data:
+                    # Create enhanced features
+                    X, y = improved_ml.create_enhanced_features(market_data)
+                    
+                    if len(X) > 0:
+                        # Train with proper validation and regularization
+                        results = improved_ml.train_improved_models(X, y)
+                        
+                        # Use the best model
+                        best_model_name = max(results.keys(), key=lambda k: results[k]['cv_mean'] if 'cv_mean' in results[k] else -999)
+                        self.stock_scorer = results[best_model_name]['model']
+                        
+                        logger.info(f"Enhanced stock scorer trained with {best_model_name} (CV R²: {results[best_model_name]['cv_mean']:.3f})")
+                        return
+            
+            # Fallback to synthetic data if improved ML fails
             n_samples = 2000
             np.random.seed(42)
             
@@ -507,13 +544,12 @@ class MLService:
             X = np.random.randn(n_samples, 20)  # 20 features (ESG + Value + Momentum + Market + User)
             y = np.random.uniform(1, 10, n_samples)  # Scores 1-10
             
-            # Train Gradient Boosting Regressor
-            self.stock_scorer = GradientBoostingRegressor(
-                **self.model_params['portfolio_optimization']
-            )
+            # Train with regularization
+            from sklearn.linear_model import Ridge
+            self.stock_scorer = Ridge(alpha=10.0)  # Strong regularization
             self.stock_scorer.fit(X, y)
             
-            logger.info("Enhanced stock scorer trained successfully with ESG, momentum, and value factors")
+            logger.info("Enhanced stock scorer trained with Ridge regularization (fallback)")
             
         except Exception as e:
             logger.error(f"Error training enhanced stock scorer: {e}")
