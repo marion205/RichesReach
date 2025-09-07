@@ -3,8 +3,8 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 
 interface SocialNavProps {
-  feedType: 'trending' | 'following';
-  onFeedTypeChange: (type: 'trending' | 'following') => void;
+  feedType: 'trending' | 'following' | 'social-feed' | 'discover';
+  onFeedTypeChange: (type: 'trending' | 'following' | 'social-feed' | 'discover') => void;
 }
 
 const SocialNav: React.FC<SocialNavProps> = ({ feedType, onFeedTypeChange }) => {
@@ -42,6 +42,40 @@ const SocialNav: React.FC<SocialNavProps> = ({ feedType, onFeedTypeChange }) => 
           feedType === 'following' && styles.activeTabLabel
         ]}>
           Following
+        </Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[styles.tab, feedType === 'social-feed' && styles.activeTab]}
+        onPress={() => onFeedTypeChange('social-feed')}
+      >
+        <Icon 
+          name="activity"
+          size={20} 
+          color={feedType === 'social-feed' ? '#34C759' : '#8E8E93'} 
+        />
+        <Text style={[
+          styles.tabLabel,
+          feedType === 'social-feed' && styles.activeTabLabel
+        ]}>
+          Activity
+        </Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[styles.tab, feedType === 'discover' && styles.activeTab]}
+        onPress={() => onFeedTypeChange('discover')}
+      >
+        <Icon 
+          name="search"
+          size={20} 
+          color={feedType === 'discover' ? '#34C759' : '#8E8E93'} 
+        />
+        <Text style={[
+          styles.tabLabel,
+          feedType === 'discover' && styles.activeTabLabel
+        ]}>
+          Discover
         </Text>
       </TouchableOpacity>
     </View>

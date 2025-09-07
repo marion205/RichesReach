@@ -9,11 +9,11 @@ import {
   Image,
   RefreshControl,
   Alert,
-  SafeAreaView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { gql, useQuery, useMutation } from '@apollo/client';
-import UserProfileCard from '../components/UserProfileCard';
+import UserProfileCard from './UserProfileCard';
+import MockUserService, { MockUser } from '../services/MockUserService';
 
 // GraphQL Queries
 const GET_DISCOVER_USERS = gql`
@@ -67,35 +67,50 @@ const UNFOLLOW_USER = gql`
   }
 `;
 
-interface DiscoverUsersScreenProps {
+interface DiscoverUsersProps {
   onNavigate: (screen: string, params?: any) => void;
 }
 
-const DiscoverUsersScreen: React.FC<DiscoverUsersScreenProps> = ({ onNavigate }) => {
+const DiscoverUsers: React.FC<DiscoverUsersProps> = ({ onNavigate }) => {
+  console.log('🔍 DiscoverUsers component rendered!');
+  
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedExperience, setSelectedExperience] = useState<string>('');
   const [sortBy, setSortBy] = useState('followers');
   const [refreshing, setRefreshing] = useState(false);
+  const [users, setUsers] = useState<MockUser[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const { data, loading, error, refetch, fetchMore } = useQuery(GET_DISCOVER_USERS, {
-    variables: {
-      limit: 20,
-      offset: 0,
-      searchTerm: searchTerm.trim() || null,
-      experienceLevel: selectedExperience || null,
-      sortBy,
-    },
-    fetchPolicy: 'cache-and-network',
-    errorPolicy: 'ignore',
-  });
+  const mockUserService = MockUserService.getInstance();
 
-  const [followUser] = useMutation(FOLLOW_USER);
-  const [unfollowUser] = useMutation(UNFOLLOW_USER);
+  // Load users from mock service
+  const loadUsers = () => {
+    console.log('🔍 loadUsers called with searchTerm:', searchTerm);
+    setLoading(true);
+    setError(null);
+    try {
+      const mockUsers = mockUserService.getDiscoverUsers(
+        20, 
+        0, 
+        searchTerm.trim() || undefined, 
+        selectedExperience || undefined, 
+        sortBy
+      );
+      console.log('🔍 Mock users loaded:', mockUsers.length, 'users');
+      setUsers(mockUsers);
+    } catch (err) {
+      setError('Failed to load users');
+      console.error('Error loading users:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      await refetch();
+      loadUsers();
     } catch (error) {
       console.error('Error refreshing users:', error);
     } finally {
@@ -105,33 +120,23 @@ const DiscoverUsersScreen: React.FC<DiscoverUsersScreenProps> = ({ onNavigate })
 
   const handleFollowToggle = async (userId: string, isFollowing: boolean) => {
     try {
-      if (isFollowing) {
-        await unfollowUser({
-          variables: { userId },
-          optimisticResponse: {
-            unfollowUser: {
-              success: true,
-              message: 'Unfollowed successfully',
-            },
-          },
-        });
+      const result = mockUserService.toggleFollow(userId);
+      if (result.success) {
+        // Reload users to reflect the change
+        loadUsers();
       } else {
-        await followUser({
-          variables: { userId },
-          optimisticResponse: {
-            followUser: {
-              success: true,
-              message: 'Followed successfully',
-            },
-          },
-        });
+        Alert.alert('Error', result.message);
       }
-      refetch();
     } catch (error) {
       console.error('Error toggling follow:', error);
       Alert.alert('Error', 'Failed to update follow status. Please try again.');
     }
   };
+
+  // Load users when component mounts or filters change
+  useEffect(() => {
+    loadUsers();
+  }, [searchTerm, selectedExperience, sortBy]);
 
   const experienceLevels = [
     { id: '', label: 'All Levels', icon: 'users' },
@@ -273,19 +278,7 @@ const DiscoverUsersScreen: React.FC<DiscoverUsersScreenProps> = ({ onNavigate })
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => onNavigate('home')}
-        >
-          <Icon name="arrow-left" size={24} color="#007AFF" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Discover Investors</Text>
-        <View style={styles.headerRight} />
-      </View>
-
+    <View style={styles.container}>
       {/* Search and Filters */}
       <View style={styles.searchSection}>
         <View style={styles.searchContainer}>
@@ -373,7 +366,7 @@ const DiscoverUsersScreen: React.FC<DiscoverUsersScreenProps> = ({ onNavigate })
         }
         showsVerticalScrollIndicator={false}
       >
-        {loading && !data ? (
+        {loading ? (
           <View style={styles.loadingContainer}>
             <Text style={styles.loadingText}>Finding investors...</Text>
           </View>
@@ -385,7 +378,7 @@ const DiscoverUsersScreen: React.FC<DiscoverUsersScreenProps> = ({ onNavigate })
               <Text style={styles.retryButtonText}>Retry</Text>
             </TouchableOpacity>
           </View>
-        ) : data?.discoverUsers?.length === 0 ? (
+        ) : users.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Icon name="users" size={48} color="#8E8E93" />
             <Text style={styles.emptyTitle}>No Investors Found</Text>
@@ -394,10 +387,10 @@ const DiscoverUsersScreen: React.FC<DiscoverUsersScreenProps> = ({ onNavigate })
             </Text>
           </View>
         ) : (
-          data?.discoverUsers?.map(renderUserCard)
+          users.map(renderUserCard)
         )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -405,27 +398,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F2F2F7',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
-  },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1C1C1E',
-  },
-  headerRight: {
-    width: 40,
   },
   
   // Search Section
@@ -736,4 +708,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default DiscoverUsersScreen;
+export default DiscoverUsers;

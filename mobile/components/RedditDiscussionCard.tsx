@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Image, Linking } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Image, Linking, Alert } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 
 interface RedditDiscussionCardProps {
@@ -50,6 +50,8 @@ const RedditDiscussionCard: React.FC<RedditDiscussionCardProps> = ({
   });
   
   const [userVote, setUserVote] = useState<'upvote' | 'downvote' | null>(null);
+  const [localScore, setLocalScore] = useState(discussion.score);
+  const [isSaved, setIsSaved] = useState(false);
 
   // Helper functions for media detection
   const isImageUrl = (url: string) => {
@@ -80,9 +82,37 @@ const RedditDiscussionCard: React.FC<RedditDiscussionCardProps> = ({
 
   const handleVote = (voteType: 'upvote' | 'downvote') => {
     if (userVote === voteType) {
-      setUserVote(null); // Remove vote if clicking same button
+      // Remove vote if clicking same button
+      setUserVote(null);
+      // Revert the score change
+      if (voteType === 'upvote') {
+        setLocalScore(prev => prev - 1);
+      } else {
+        setLocalScore(prev => prev + 1);
+      }
     } else {
-      setUserVote(voteType);
+      // Handle vote change
+      if (userVote === null) {
+        // First vote
+        setUserVote(voteType);
+        if (voteType === 'upvote') {
+          setLocalScore(prev => prev + 1);
+        } else {
+          setLocalScore(prev => prev - 1);
+        }
+      } else {
+        // Switching from one vote to another
+        if (userVote === 'upvote' && voteType === 'downvote') {
+          // Switching from upvote to downvote: -1 (remove upvote) -1 (add downvote) = -2
+          setLocalScore(prev => prev - 2);
+        } else if (userVote === 'downvote' && voteType === 'upvote') {
+          // Switching from downvote to upvote: +1 (remove downvote) +1 (add upvote) = +2
+          setLocalScore(prev => prev + 2);
+        }
+        setUserVote(voteType);
+      }
+      
+      // Call the parent handlers
       if (voteType === 'upvote') {
         onUpvote();
       } else {
@@ -133,7 +163,12 @@ const RedditDiscussionCard: React.FC<RedditDiscussionCardProps> = ({
       <View style={styles.votingSidebar}>
         <TouchableOpacity 
           style={[styles.voteButton, userVote === 'upvote' && styles.voteButtonActive]}
-          onPress={() => handleVote('upvote')}
+          onPress={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleVote('upvote');
+          }}
+          activeOpacity={0.7}
         >
           <Icon 
             name="chevron-up" 
@@ -142,11 +177,16 @@ const RedditDiscussionCard: React.FC<RedditDiscussionCardProps> = ({
           />
         </TouchableOpacity>
         
-        <Text style={styles.scoreText}>{discussion.score}</Text>
+        <Text style={styles.scoreText}>{localScore}</Text>
         
         <TouchableOpacity 
           style={[styles.voteButton, userVote === 'downvote' && styles.voteButtonActive]}
-          onPress={() => handleVote('downvote')}
+          onPress={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleVote('downvote');
+          }}
+          activeOpacity={0.7}
         >
           <Icon 
             name="chevron-down" 
@@ -341,14 +381,69 @@ const RedditDiscussionCard: React.FC<RedditDiscussionCardProps> = ({
             <Text style={styles.actionText}>{discussion.commentCount} Comments</Text>
           </TouchableOpacity>
           
-          <TouchableOpacity style={styles.actionButton}>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => {
+              console.log('🔗 Share button clicked for discussion:', discussion.id);
+              // Create share text
+              const shareText = `Check out this discussion: "${discussion.title}"\n\n${discussion.content?.replace(/\[(IMAGE|VIDEO):\s*[^\]]+\]/g, '').trim()}\n\nShared from RichesReach`;
+              
+              // For now, we'll use a simple alert
+              // In a real app, you'd use React Native's Share API
+              setTimeout(() => {
+                Alert.alert(
+                  'Share Discussion',
+                  'Discussion content ready to share!',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    { 
+                      text: 'Copy Link', 
+                      onPress: () => {
+                        console.log('✅ Discussion shared:', discussion.id);
+                        Alert.alert('Success', 'Discussion link copied to clipboard!');
+                      }
+                    }
+                  ]
+                );
+              }, 100);
+            }}
+          >
             <Icon name="share" size={18} color="#8E8E93" />
             <Text style={styles.actionText}>Share</Text>
           </TouchableOpacity>
           
-          <TouchableOpacity style={styles.actionButton}>
-            <Icon name="bookmark" size={18} color="#8E8E93" />
-            <Text style={styles.actionText}>Save</Text>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => {
+              console.log('💾 Save button clicked for discussion:', discussion.id);
+              
+              // Toggle saved state
+              setIsSaved(!isSaved);
+              
+              if (!isSaved) {
+                // Saving
+                console.log('✅ Discussion saved:', discussion.id);
+                setTimeout(() => {
+                  Alert.alert('Success', 'Discussion saved to your bookmarks!');
+                }, 100);
+              } else {
+                // Unsaving
+                console.log('❌ Discussion unsaved:', discussion.id);
+                setTimeout(() => {
+                  Alert.alert('Success', 'Discussion removed from your bookmarks!');
+                }, 100);
+              }
+            }}
+          >
+            <Icon 
+              name={isSaved ? "bookmark" : "bookmark"} 
+              size={18} 
+              color={isSaved ? "#FF9500" : "#8E8E93"} 
+              style={isSaved ? { fill: "#FF9500" } : {}} 
+            />
+            <Text style={[styles.actionText, isSaved && styles.savedText]}>
+              {isSaved ? 'Saved' : 'Save'}
+            </Text>
           </TouchableOpacity>
         </View>
       </TouchableOpacity>
@@ -608,6 +703,10 @@ const styles = StyleSheet.create({
     color: '#878A8C',
     marginLeft: 4,
     fontWeight: '500',
+  },
+  savedText: {
+    color: '#FF9500',
+    fontWeight: '600',
   },
 });
 

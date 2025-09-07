@@ -25,6 +25,8 @@ import SubscriptionScreen from './screens/SubscriptionScreen';
 import LearningPathsScreen from './screens/LearningPathsScreen';
 import NewsScreen from './screens/NewsScreen';
 import OnboardingScreen, { UserProfile } from './screens/OnboardingScreen';
+import DiscoverUsersScreen from './screens/DiscoverUsersScreen';
+import UserProfileScreen from './screens/UserProfileScreen';
 
 // Components
 import BottomTabBar from './components/BottomTabBar';
@@ -35,6 +37,11 @@ import UserProfileService from './services/UserProfileService';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('home');
+  
+  // Debug currentScreen changes
+  useEffect(() => {
+    console.log('🔄 currentScreen state changed to:', currentScreen);
+  }, [currentScreen]);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -90,8 +97,22 @@ export default function App() {
     initializeServices();
   }, []);
 
-  const navigateTo = (screen: string) => {
-    setCurrentScreen(screen);
+  const navigateTo = (screen: string, params?: any) => {
+    console.log('🧭 navigateTo called:', { screen, params });
+    console.log('🧭 Current currentScreen before change:', currentScreen);
+    
+    if (screen === 'user-profile' && params?.userId) {
+      const newScreen = `user-profile-${params.userId}`;
+      console.log('🧭 Setting currentScreen to:', newScreen);
+      setCurrentScreen(newScreen);
+    } else if (screen === 'user-portfolios' && params?.userId) {
+      const newScreen = `user-profile-${params.userId}`;
+      console.log('🧭 Setting currentScreen to:', newScreen);
+      setCurrentScreen(newScreen);
+    } else {
+      console.log('🧭 Setting currentScreen to:', screen);
+      setCurrentScreen(screen);
+    }
   };
 
   const handleLogin = () => {
@@ -167,6 +188,8 @@ export default function App() {
       return <OnboardingScreen onComplete={handleOnboardingComplete} />;
     }
 
+    console.log('🖥️ renderScreen switch - currentScreen:', currentScreen);
+    
     switch (currentScreen) {
       case 'home':
         return <HomeScreen navigateTo={navigateTo} />;
@@ -193,12 +216,31 @@ export default function App() {
       case 'ai-recommendations':
         return <AIPortfolioScreen navigateTo={navigateTo} />;
       case 'social':
-        return <SocialScreen />;
+        return <SocialScreen onNavigate={navigateTo} />;
       case 'learning-paths':
         return <LearningPathsScreen />;
       case 'news':
         return <NewsScreen />;
+      case 'discover-users':
+        return <DiscoverUsersScreen onNavigate={navigateTo} />;
+      case 'user-profile':
+        // Extract userId from currentScreen if it's in format 'user-profile-{userId}'
+        const userId = currentScreen.startsWith('user-profile-') 
+          ? currentScreen.replace('user-profile-', '') 
+          : 'default-user';
+        console.log('🖥️ user-profile case - userId:', userId);
+        return <UserProfileScreen userId={userId} onNavigate={navigateTo} />;
+      case 'social-feed':
+        return <SocialScreen onNavigate={navigateTo} />;
       default:
+        // Handle user-profile with userId pattern
+        console.log('🖥️ default case - currentScreen:', currentScreen);
+        if (currentScreen.startsWith('user-profile-')) {
+          const userId = currentScreen.replace('user-profile-', '');
+          console.log('🖥️ default case - userId:', userId);
+          return <UserProfileScreen userId={userId} onNavigate={navigateTo} />;
+        }
+        console.log('🖥️ default case - returning HomeScreen');
         return <HomeScreen navigateTo={navigateTo} />;
     }
   };

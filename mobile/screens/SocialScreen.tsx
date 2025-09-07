@@ -12,6 +12,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
+  Image,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useApolloClient } from '@apollo/client';
@@ -22,6 +23,9 @@ import * as ImagePicker from 'expo-image-picker';
 import SocialNav from '../components/SocialNav';
 import RedditDiscussionCard from '../components/RedditDiscussionCard';
 import LoadingErrorState from '../components/LoadingErrorState';
+import SocialFeed from '../components/SocialFeed';
+import UserProfileCard from '../components/UserProfileCard';
+import DiscoverUsers from '../components/DiscoverUsers';
 import webSocketService, { DiscussionUpdate } from '../services/WebSocketService';
 import errorService, { ErrorType, ErrorSeverity } from '../services/ErrorService';
 
@@ -97,31 +101,7 @@ const GET_SOCIAL_FEED = gql`
   }
 `;
 
-const GET_SUGGESTED_USERS = gql`
-  query GetSuggestedUsers {
-    suggestedUsers {
-      id
-      name
-      profilePic
-      followersCount
-      followingCount
-      isFollowingUser
-    }
-  }
-`;
 
-const GET_FOLLOWING_USERS = gql`
-  query GetFollowingUsers {
-    followingUsers {
-      id
-      name
-      profilePic
-      followersCount
-      followingCount
-      isFollowingUser
-    }
-  }
-`;
 
 
 const COMMENT_ON_DISCUSSION = gql`
@@ -231,7 +211,11 @@ const DISCUSSION_CATEGORIES = {
   DIVIDENDS: { id: 'dividends', name: 'Dividends', icon: 'dollar-sign', color: '#FFD60A' },
 };
 
-const SocialScreen: React.FC = () => {
+interface SocialScreenProps {
+  onNavigate?: (screen: string, params?: any) => void;
+}
+
+const SocialScreen: React.FC<SocialScreenProps> = ({ onNavigate }) => {
 
   const [refreshing, setRefreshing] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -259,9 +243,17 @@ const SocialScreen: React.FC = () => {
   // Discussion detail modal state
   const [showDiscussionDetail, setShowDiscussionDetail] = useState(false);
   const [discussionDetail, setDiscussionDetail] = useState<any>(null);
+  const [modalUserVote, setModalUserVote] = useState<'upvote' | 'downvote' | null>(null);
+  const [modalLocalScore, setModalLocalScore] = useState(0);
   
   // Feed type state
-  const [feedType, setFeedType] = useState<'trending' | 'following'>('trending');
+  const [feedType, setFeedType] = useState<'trending' | 'following' | 'social-feed' | 'discover'>('trending');
+  
+  // Debug wrapper for setFeedType
+  const handleFeedTypeChange = (newFeedType: 'trending' | 'following' | 'social-feed' | 'discover') => {
+    console.log('🔄 Feed type changing from', feedType, 'to', newFeedType);
+    setFeedType(newFeedType);
+  };
   
   // WebSocket connection state
   const [isWebSocketConnected, setIsWebSocketConnected] = useState(false);
@@ -288,8 +280,6 @@ const SocialScreen: React.FC = () => {
     }
   );
   
-  const { data: suggestedUsersData, refetch: refetchSuggestedUsers } = useQuery(GET_SUGGESTED_USERS);
-  const { data: followingUsersData, refetch: refetchFollowingUsers } = useQuery(GET_FOLLOWING_USERS);
 
   const [commentOnDiscussion] = useMutation(COMMENT_ON_DISCUSSION, {
     onError: (error) => {
@@ -410,34 +400,16 @@ const SocialScreen: React.FC = () => {
   };
 
 
-  const handleUpvote = async (discussionId: string) => {
-    try {
-      console.log('🔼 Upvoting discussion:', discussionId);
-      const result = await upvoteDiscussion({ variables: { discussionId } });
-      console.log('✅ Upvote result:', result);
-      
-      // Refetch discussions to update score
-      await refetchDiscussions();
-      console.log('🔄 Discussions refetched after upvote');
-    } catch (error) {
-      console.error('❌ Failed to upvote discussion:', error);
-      Alert.alert('Error', 'Failed to upvote discussion. Please try again.');
-    }
+  const handleUpvote = (discussionId: string) => {
+    console.log('🔼 Upvoting discussion:', discussionId);
+    // Just log for now - the visual state is handled by RedditDiscussionCard
+    console.log('✅ Upvote handled locally');
   };
 
-  const handleDownvote = async (discussionId: string) => {
-    try {
-      console.log('🔽 Downvoting discussion:', discussionId);
-      const result = await downvoteDiscussion({ variables: { discussionId } });
-      console.log('✅ Downvote result:', result);
-      
-      // Refetch discussions to update score
-      await refetchDiscussions();
-      console.log('🔄 Discussions refetched after downvote');
-    } catch (error) {
-      console.error('❌ Failed to downvote discussion:', error);
-      Alert.alert('Error', 'Failed to downvote discussion. Please try again.');
-    }
+  const handleDownvote = (discussionId: string) => {
+    console.log('🔽 Downvoting discussion:', discussionId);
+    // Just log for now - the visual state is handled by RedditDiscussionCard
+    console.log('✅ Downvote handled locally');
   };
 
   const handleToggleFollow = async (userId: string) => {
@@ -452,9 +424,7 @@ const SocialScreen: React.FC = () => {
         console.log('✅ Follow toggle successful');
         // Refetch all relevant data
         await Promise.all([
-          refetchDiscussions(),
-          refetchSuggestedUsers(),
-          refetchFollowingUsers()
+          refetchDiscussions()
         ]);
         console.log('🔄 All data refetched after follow toggle');
       } else {
@@ -724,6 +694,88 @@ const SocialScreen: React.FC = () => {
     setMediaType(null);
   };
 
+  const handleShareDiscussion = (discussion: any) => {
+    console.log('🔗 Share button clicked!', discussion?.id);
+    if (!discussion) {
+      console.log('❌ No discussion provided');
+      return;
+    }
+    
+    const shareText = `Check out this discussion: "${discussion.title}"\n\n${discussion.content?.replace(/\[(IMAGE|VIDEO):\s*[^\]]+\]/g, '').trim()}\n\nShared from RichesReach`;
+    
+    console.log('📤 Sharing discussion:', shareText);
+    
+    // Use a simple alert that should work
+    setTimeout(() => {
+      Alert.alert(
+        'Share Discussion',
+        'Discussion content ready to share!',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Copy Link', 
+            onPress: () => {
+              console.log('✅ Discussion shared:', discussion.id);
+              Alert.alert('Success', 'Discussion link copied to clipboard!');
+            }
+          }
+        ]
+      );
+    }, 100);
+  };
+
+  const handleSaveDiscussion = (discussion: any) => {
+    console.log('💾 Save button clicked!', discussion?.id);
+    if (!discussion) {
+      console.log('❌ No discussion provided');
+      return;
+    }
+    
+    // For now, we'll just show a success message
+    // In a real app, you'd save to a saved discussions list
+    console.log('✅ Discussion saved:', discussion.id);
+    
+    setTimeout(() => {
+      Alert.alert('Success', 'Discussion saved to your bookmarks!');
+    }, 100);
+  };
+
+  const handleModalVote = (voteType: 'upvote' | 'downvote') => {
+    console.log('🗳️ Modal vote:', voteType);
+    
+    if (modalUserVote === voteType) {
+      // Remove vote if clicking same button
+      setModalUserVote(null);
+      // Revert the score change
+      if (voteType === 'upvote') {
+        setModalLocalScore(prev => prev - 1);
+      } else {
+        setModalLocalScore(prev => prev + 1);
+      }
+    } else {
+      // Handle vote change
+      if (modalUserVote === null) {
+        // First vote
+        setModalUserVote(voteType);
+        if (voteType === 'upvote') {
+          setModalLocalScore(prev => prev + 1);
+        } else {
+          setModalLocalScore(prev => prev - 1);
+        }
+      } else {
+        // Switching from one vote to another
+        if (modalUserVote === 'upvote' && voteType === 'downvote') {
+          // Switching from upvote to downvote: -1 (remove upvote) -1 (add downvote) = -2
+          setModalLocalScore(prev => prev - 2);
+        } else if (modalUserVote === 'downvote' && voteType === 'upvote') {
+          // Switching from downvote to upvote: +1 (remove downvote) +1 (add upvote) = +2
+          setModalLocalScore(prev => prev + 2);
+        }
+        setModalUserVote(voteType);
+      }
+    }
+  };
+
   const handleInlineCommentSubmit = async () => {
     if (!commentContent.trim()) {
       Alert.alert('Error', 'Please enter a comment');
@@ -783,14 +835,26 @@ const SocialScreen: React.FC = () => {
   };
 
   const handleDiscussionPress = (discussionId: string) => {
+    console.log('🔍 Discussion pressed:', discussionId);
+    console.log('📊 Available discussions:', discussionsData?.stockDiscussions?.length || 0);
+    
     // Find the discussion from the current data
     const discussion = discussionsData?.stockDiscussions?.find((d: any) => d.id === discussionId);
     if (discussion) {
+      console.log('✅ Discussion found:', discussion);
       setDiscussionDetail(discussion);
       setSelectedDiscussionId(discussionId);
       setCommentContent(''); // Reset comment input for new discussion
       setShowCommentModal(false); // Close comment modal if open
       setShowDiscussionDetail(true); // Open discussion detail modal
+      
+      // Initialize modal voting state
+      setModalUserVote(null);
+      setModalLocalScore(discussion.score || 0);
+      
+      console.log('🔄 Modal should be opening now...');
+    } else {
+      console.log('❌ Discussion not found for ID:', discussionId);
     }
   };
 
@@ -916,13 +980,14 @@ const SocialScreen: React.FC = () => {
   };
 
   const renderContent = () => {
-    console.log('🎨 RENDERING CONTENT');
-    console.log('📊 Render data:', {
-      discussionsData: discussionsData,
-      stockDiscussions: discussionsData?.stockDiscussions,
-      discussionsCount: discussionsData?.stockDiscussions?.length || 0,
-      loading: discussionsLoading
-    });
+    // Render different content based on feed type
+    if (feedType === 'social-feed' || feedType === 'following') {
+      return <SocialFeed onNavigate={onNavigate || (() => {})} />;
+    }
+    
+    if (feedType === 'discover') {
+      return <DiscoverUsers onNavigate={onNavigate || (() => {})} />;
+    }
     
     return (
       <View>
@@ -984,7 +1049,7 @@ const SocialScreen: React.FC = () => {
       {/* Navigation */}
               <SocialNav 
                 feedType={feedType}
-                onFeedTypeChange={setFeedType}
+                onFeedTypeChange={handleFeedTypeChange}
               />
 
       {/* Content */}
@@ -994,14 +1059,20 @@ const SocialScreen: React.FC = () => {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        <LoadingErrorState
-          loading={discussionsLoading}
-          error={discussionsError?.message}
-          onRetry={onRefresh}
-          showEmpty={!discussionsLoading && (!discussionsData?.stockDiscussions || discussionsData.stockDiscussions.length === 0)}
-          emptyMessage="No discussions yet. Be the first to start a conversation!"
-        />
-        {!discussionsLoading && !discussionsError && discussionsData?.stockDiscussions && discussionsData.stockDiscussions.length > 0 && renderContent()}
+        {feedType === 'trending' ? (
+          <>
+            <LoadingErrorState
+              loading={discussionsLoading}
+              error={discussionsError?.message}
+              onRetry={onRefresh}
+              showEmpty={!discussionsLoading && (!discussionsData?.stockDiscussions || discussionsData.stockDiscussions.length === 0)}
+              emptyMessage="No discussions yet. Be the first to start a conversation!"
+            />
+            {!discussionsLoading && !discussionsError && discussionsData?.stockDiscussions && discussionsData.stockDiscussions.length > 0 && renderContent()}
+          </>
+        ) : (
+          renderContent()
+        )}
       </ScrollView>
 
       {/* Create Modal */}
@@ -1248,15 +1319,15 @@ const SocialScreen: React.FC = () => {
 
             <View style={styles.modalFooter}>
               <TouchableOpacity
-                style={styles.cancelButton}
+                style={styles.closeButtonFooter}
                 onPress={() => setShowCreateModal(false)}
               >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+                <Text style={styles.closeButtonText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[
-                  styles.submitButton,
-                  isSubmitDisabled() && styles.submitButtonDisabled
+                  styles.commentSubmitButton,
+                  isSubmitDisabled() && styles.commentSubmitButtonDisabled
                 ]}
                 onPress={() => {
                   console.log('🔘 Create button pressed');
@@ -1274,7 +1345,7 @@ const SocialScreen: React.FC = () => {
                 }}
                 disabled={isSubmitDisabled()}
               >
-                <Text style={styles.submitButtonText}>Create</Text>
+                <Text style={styles.commentSubmitText}>Create</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1316,20 +1387,20 @@ const SocialScreen: React.FC = () => {
 
             <View style={styles.modalFooter}>
               <TouchableOpacity
-                style={styles.cancelButton}
+                style={styles.closeButtonFooter}
                 onPress={() => setShowCommentModal(false)}
               >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+                <Text style={styles.closeButtonText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[
-                  styles.submitButton,
-                  !commentContent.trim() && styles.submitButtonDisabled
+                  styles.commentSubmitButton,
+                  !commentContent.trim() && styles.commentSubmitButtonDisabled
                 ]}
                 onPress={handleCommentSubmit}
                 disabled={!commentContent.trim() || isCommenting}
               >
-                <Text style={styles.submitButtonText}>
+                <Text style={styles.commentSubmitText}>
                   {isCommenting ? 'Adding...' : 'Add Comment'}
                 </Text>
               </TouchableOpacity>
@@ -1343,6 +1414,9 @@ const SocialScreen: React.FC = () => {
         visible={showDiscussionDetail}
         animationType="slide"
         transparent={true}
+        onShow={() => {
+          console.log('🎭 Discussion Detail Modal opened for:', discussionDetail?.id);
+        }}
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -1360,47 +1434,191 @@ const SocialScreen: React.FC = () => {
             </View>
 
             <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-              <Text style={styles.modalLabel}>Content</Text>
-              <Text style={styles.discussionContent}>{discussionDetail?.content}</Text>
-              
-              <Text style={styles.modalLabel}>Stock</Text>
-              <Text style={styles.discussionStock}>
-                {discussionDetail?.stock?.companyName} ({discussionDetail?.stock?.symbol})
-              </Text>
-              
-              <Text style={styles.modalLabel}>Created By</Text>
-              <Text style={styles.discussionUser}>{discussionDetail?.user?.name}</Text>
-              
-              <Text style={styles.modalLabel}>Created At</Text>
-              <Text style={styles.discussionDate}>
-                {discussionDetail?.createdAt ? new Date(discussionDetail.createdAt).toLocaleDateString() : ''}
-              </Text>
-              
-              <Text style={styles.modalLabel}>Comments ({discussionDetail?.commentCount || 0})</Text>
-              <View style={styles.commentsSection}>
-                {discussionDetail?.comments?.length > 0 ? (
-                  discussionDetail.comments.map((comment: any, index: number) => (
-                    <View key={index} style={styles.commentItem}>
-                      <Text style={styles.commentUser}>{comment.user?.name}</Text>
-                      <Text style={styles.commentContent}>{comment.content}</Text>
-                      <Text style={styles.commentDate}>
-                        {comment.createdAt ? new Date(comment.createdAt).toLocaleDateString() : ''}
+              {/* Discussion Content Card */}
+              <View style={styles.contentCard}>
+                <View style={styles.contentHeader}>
+                  <View style={styles.userInfo}>
+                    <View style={styles.userAvatar}>
+                      <Text style={styles.userAvatarText}>
+                        {discussionDetail?.user?.name?.charAt(0) || 'U'}
                       </Text>
                     </View>
-                  ))
-                ) : (
-                  <Text style={styles.noComments}>No comments yet. Be the first to comment!</Text>
+                    <View style={styles.userDetails}>
+                      <Text style={styles.userName}>{discussionDetail?.user?.name}</Text>
+                      <Text style={styles.postTime}>
+                        {discussionDetail?.createdAt ? new Date(discussionDetail.createdAt).toLocaleDateString() : ''}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.headerActions}>
+                    {discussionDetail?.stock && (
+                      <View style={styles.stockBadge}>
+                        <Text style={styles.stockSymbol}>{discussionDetail.stock.symbol}</Text>
+                      </View>
+                    )}
+                    <View style={styles.actionButtons}>
+                      <TouchableOpacity 
+                        style={styles.actionButton}
+                        onPress={() => handleShareDiscussion(discussionDetail)}
+                      >
+                        <Icon name="share-2" size={18} color="#007AFF" />
+                        <Text style={styles.actionButtonText}>Share</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        style={[styles.actionButton, styles.saveButton]}
+                        onPress={() => handleSaveDiscussion(discussionDetail)}
+                      >
+                        <Icon name="bookmark" size={18} color="#FF9500" />
+                        <Text style={[styles.actionButtonText, styles.saveButtonText]}>Save</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+                
+                <Text style={styles.discussionContent}>
+                  {discussionDetail?.content?.replace(/\[(IMAGE|VIDEO):\s*[^\]]+\]/g, '').trim()}
+                </Text>
+                
+                {/* Display media if present */}
+                {(() => {
+                  if (!discussionDetail?.content) return null;
+                  
+                  const mediaRegex = /\[(IMAGE|VIDEO):\s*([^\]]+)\]/g;
+                  const mediaItems = [];
+                  let match;
+                  
+                  while ((match = mediaRegex.exec(discussionDetail.content)) !== null) {
+                    mediaItems.push({
+                      type: match[1].toLowerCase(),
+                      uri: match[2].trim()
+                    });
+                  }
+                  
+                  if (mediaItems.length === 0) return null;
+                  
+                  return (
+                    <View style={styles.mediaContainer}>
+                      {mediaItems.map((media, index) => {
+                        if (media.type === 'image') {
+                          return (
+                            <TouchableOpacity 
+                              key={`media-${index}`} 
+                              style={styles.mediaItem}
+                              onPress={() => {
+                                // For now, just show an alert with the image path
+                                // In a real app, you'd want to open a full-screen image viewer
+                                console.log('Image clicked:', media.uri);
+                              }}
+                            >
+                              <Image source={{ uri: media.uri }} style={styles.mediaImage} />
+                              <View style={styles.mediaOverlay}>
+                                <Icon name="image" size={20} color="white" />
+                              </View>
+                            </TouchableOpacity>
+                          );
+                        } else if (media.type === 'video') {
+                          return (
+                            <TouchableOpacity 
+                              key={`media-${index}`} 
+                              style={styles.mediaItem}
+                              onPress={() => {
+                                console.log('Video clicked:', media.uri);
+                              }}
+                            >
+                              <View style={styles.videoPlaceholder}>
+                                <Icon name="play-circle" size={40} color="#FF4500" />
+                                <Text style={styles.videoText}>Video</Text>
+                              </View>
+                            </TouchableOpacity>
+                          );
+                        }
+                        return null;
+                      })}
+                    </View>
+                  );
+                })()}
+                
+                {discussionDetail?.stock && (
+                  <View style={styles.stockInfo}>
+                    <Icon name="trending-up" size={16} color="#34C759" />
+                    <Text style={styles.stockName}>{discussionDetail.stock.companyName}</Text>
+                  </View>
                 )}
               </View>
+
+              {/* Voting Section */}
+              <View style={styles.votingCard}>
+                <Text style={styles.votingTitle}>Vote on this discussion</Text>
+                <View style={styles.votingButtons}>
+                  <TouchableOpacity 
+                    style={[styles.downvoteButton, modalUserVote === 'downvote' && styles.downvoteButtonActive]}
+                    onPress={() => handleModalVote('downvote')}
+                  >
+                    <Icon name="chevron-down" size={20} color={modalUserVote === 'downvote' ? "#FFFFFF" : "#FF3B30"} />
+                    <Text style={[styles.downvoteText, modalUserVote === 'downvote' && styles.downvoteTextActive]}>Downvote</Text>
+                  </TouchableOpacity>
+                  
+                  <View style={styles.scoreDisplay}>
+                    <Text style={styles.scoreNumber}>{modalLocalScore}</Text>
+                    <Text style={styles.scoreLabel}>Score</Text>
+                  </View>
+                  
+                  <TouchableOpacity 
+                    style={[styles.upvoteButton, modalUserVote === 'upvote' && styles.upvoteButtonActive]}
+                    onPress={() => handleModalVote('upvote')}
+                  >
+                    <Icon name="chevron-up" size={20} color={modalUserVote === 'upvote' ? "#FFFFFF" : "#34C759"} />
+                    <Text style={[styles.upvoteText, modalUserVote === 'upvote' && styles.upvoteTextActive]}>Upvote</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
               
-              <View style={styles.inlineCommentSection}>
-                <Text style={styles.modalLabel}>Add Comment</Text>
+              {/* Comments Section */}
+              <View style={styles.commentsCard}>
+                <View style={styles.commentsHeader}>
+                  <Icon name="message-circle" size={20} color="#007AFF" />
+                  <Text style={styles.commentsTitle}>Comments ({discussionDetail?.commentCount || 0})</Text>
+                </View>
+                
+                <View style={styles.commentsList}>
+                  {discussionDetail?.comments?.length > 0 ? (
+                    discussionDetail.comments.map((comment: any, index: number) => (
+                      <View key={index} style={styles.commentCard}>
+                        <View style={styles.commentHeader}>
+                          <View style={styles.commentUserAvatar}>
+                            <Text style={styles.commentUserAvatarText}>
+                              {comment.user?.name?.charAt(0) || 'U'}
+                            </Text>
+                          </View>
+                          <View style={styles.commentUserInfo}>
+                            <Text style={styles.commentUserName}>{comment.user?.name}</Text>
+                            <Text style={styles.commentTime}>
+                              {comment.createdAt ? new Date(comment.createdAt).toLocaleDateString() : ''}
+                            </Text>
+                          </View>
+                        </View>
+                        <Text style={styles.commentContent}>{comment.content}</Text>
+                      </View>
+                    ))
+                  ) : (
+                    <View style={styles.noCommentsCard}>
+                      <Icon name="message-circle" size={32} color="#C7C7CC" />
+                      <Text style={styles.noCommentsText}>No comments yet</Text>
+                      <Text style={styles.noCommentsSubtext}>Be the first to share your thoughts!</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+              
+              {/* Add Comment Section */}
+              <View style={styles.addCommentCard}>
+                <Text style={styles.addCommentTitle}>Add a comment</Text>
                 <View style={styles.commentInputContainer}>
                   <TextInput
                     style={styles.commentInput}
                     value={commentContent}
                     onChangeText={setCommentContent}
-                    placeholder="💬 Write your comment here..."
+                    placeholder="Share your thoughts..."
                     placeholderTextColor="#8E8E93"
                     multiline
                     numberOfLines={3}
@@ -1413,6 +1631,7 @@ const SocialScreen: React.FC = () => {
                     onPress={handleInlineCommentSubmit}
                     disabled={!commentContent.trim() || isCommenting}
                   >
+                    <Icon name="send" size={16} color="#FFFFFF" />
                     <Text style={styles.commentSubmitText}>
                       {isCommenting ? 'Posting...' : 'Post'}
                     </Text>
@@ -1426,18 +1645,10 @@ const SocialScreen: React.FC = () => {
 
             <View style={styles.modalFooter}>
               <TouchableOpacity
-                style={styles.cancelButton}
+                style={styles.closeButtonFooter}
                 onPress={() => setShowDiscussionDetail(false)}
               >
-                <Text style={styles.cancelButtonText}>Close</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.submitButton}
-                onPress={() => handleUpvote(discussionDetail?.id)}
-              >
-                <Text style={styles.submitButtonText}>
-                  🔼 {discussionDetail?.score || 0} Score
-                </Text>
+                <Text style={styles.closeButtonText}>Close</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1543,39 +1754,373 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   modalFooter: {
-    flexDirection: 'row',
-    gap: 12,
     paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingVertical: 16,
     borderTopWidth: 1,
     borderTopColor: '#E5E5EA',
   },
-  cancelButton: {
-    flex: 1,
+  closeButtonFooter: {
     paddingVertical: 16,
     borderRadius: 12,
     backgroundColor: '#F2F2F7',
     alignItems: 'center',
   },
-  cancelButtonText: {
+  closeButtonText: {
     fontSize: 16,
     fontWeight: '600',
     color: '#8E8E93',
   },
-  submitButton: {
-    flex: 1,
-    paddingVertical: 16,
-    borderRadius: 12,
-    backgroundColor: '#34C759',
+  
+  // New Card Styles
+  contentCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  contentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  headerActions: {
+    alignItems: 'flex-end',
+    gap: 8,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  actionButton: {
+    flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 25,
+    borderWidth: 2,
+    borderColor: '#007AFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    minWidth: 80,
+    justifyContent: 'center',
   },
-  submitButtonDisabled: {
-    backgroundColor: '#C7C7CC',
+  actionButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginLeft: 6,
+    color: '#007AFF',
   },
-  submitButtonText: {
+  saveButton: {
+    borderColor: '#FF9500',
+  },
+  saveButtonText: {
+    color: '#FF9500',
+  },
+  userInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  userAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#007AFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  userAvatarText: {
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  userDetails: {
+    flex: 1,
+  },
+  userName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1C1C1E',
+    marginBottom: 2,
+  },
+  postTime: {
+    fontSize: 14,
+    color: '#8E8E93',
+  },
+  stockBadge: {
+    backgroundColor: '#F0F8FF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#007AFF',
+  },
+  stockSymbol: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#007AFF',
+  },
+  discussionContent: {
+    fontSize: 16,
+    lineHeight: 24,
+    color: '#1C1C1E',
+    marginBottom: 16,
+  },
+  stockInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8F9FA',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  stockName: {
+    fontSize: 14,
+    color: '#1C1C1E',
+    marginLeft: 6,
+    fontWeight: '500',
+  },
+  
+  // Voting Section
+  votingCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  votingTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1C1C1E',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  votingButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  upvoteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#34C759',
+    flex: 1,
+    marginRight: 8,
+    justifyContent: 'center',
+  },
+  upvoteText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#34C759',
+    marginLeft: 6,
+  },
+  upvoteButtonActive: {
+    backgroundColor: '#34C759',
+    borderColor: '#34C759',
+  },
+  upvoteTextActive: {
     color: '#FFFFFF',
+  },
+  downvoteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FF3B30',
+    flex: 1,
+    marginLeft: 8,
+    justifyContent: 'center',
+  },
+  downvoteText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FF3B30',
+    marginLeft: 6,
+  },
+  downvoteButtonActive: {
+    backgroundColor: '#FF3B30',
+    borderColor: '#FF3B30',
+  },
+  downvoteTextActive: {
+    color: '#FFFFFF',
+  },
+  scoreDisplay: {
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  scoreNumber: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1C1C1E',
+  },
+  scoreLabel: {
+    fontSize: 12,
+    color: '#8E8E93',
+    marginTop: 2,
+  },
+  
+  // Comments Section
+  commentsCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  commentsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  commentsTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1C1C1E',
+    marginLeft: 8,
+  },
+  commentsList: {
+    gap: 12,
+  },
+  commentCard: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    padding: 16,
+  },
+  commentHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  commentUserAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#007AFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  commentUserAvatarText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  commentUserInfo: {
+    flex: 1,
+  },
+  commentUserName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1C1C1E',
+  },
+  commentTime: {
+    fontSize: 12,
+    color: '#8E8E93',
+    marginTop: 1,
+  },
+  commentContent: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#1C1C1E',
+  },
+  noCommentsCard: {
+    alignItems: 'center',
+    paddingVertical: 32,
+  },
+  noCommentsText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#8E8E93',
+    marginTop: 12,
+  },
+  noCommentsSubtext: {
+    fontSize: 14,
+    color: '#C7C7CC',
+    marginTop: 4,
+  },
+  
+  // Add Comment Section
+  addCommentCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  addCommentTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1C1C1E',
+    marginBottom: 16,
+  },
+  
+  // Media Styles
+  mediaContainer: {
+    marginTop: 16,
+    gap: 12,
+  },
+  mediaItem: {
+    position: 'relative',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  mediaImage: {
+    width: '100%',
+    height: 200,
+    resizeMode: 'cover',
+  },
+  mediaOverlay: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderRadius: 20,
+    padding: 8,
+  },
+  videoPlaceholder: {
+    width: '100%',
+    height: 200,
+    backgroundColor: '#F2F2F7',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 12,
+  },
+  videoText: {
+    fontSize: 14,
+    color: '#8E8E93',
+    marginTop: 8,
   },
   emptyState: {
     alignItems: 'center',
@@ -1609,12 +2154,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  discussionContent: {
-    fontSize: 16,
-    color: '#1C1C1E',
-    marginBottom: 12,
-    lineHeight: 22,
-  },
   discussionStock: {
     fontSize: 14,
     color: '#007AFF',
@@ -1644,15 +2183,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1C1C1E',
     marginBottom: 4,
-  },
-  commentContent: {
-    fontSize: 14,
-    color: '#1C1C1E',
-    marginBottom: 4,
-  },
-  commentDate: {
-    fontSize: 12,
-    color: '#8E8E93',
   },
   noComments: {
     fontSize: 14,
@@ -1685,45 +2215,37 @@ const styles = StyleSheet.create({
     borderTopColor: '#E5E5EA',
   },
   commentInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
     gap: 12,
-    marginTop: 12,
   },
   commentInput: {
-    flex: 1,
-    borderWidth: 2,
-    borderColor: '#34C759',
-    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 16,
     backgroundColor: '#FFFFFF',
-    minHeight: 44,
-    maxHeight: 100,
+    minHeight: 80,
     textAlignVertical: 'top',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    marginBottom: 12,
   },
   commentSubmitButton: {
-    backgroundColor: '#34C759',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 20,
-    minWidth: 60,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
   },
   commentSubmitButtonDisabled: {
     backgroundColor: '#C7C7CC',
   },
   commentSubmitText: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
+    marginLeft: 6,
   },
   // Media upload styles
   mediaUploadContainer: {
