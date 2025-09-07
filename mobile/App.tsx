@@ -20,6 +20,8 @@ import SocialScreen from './screens/SocialScreen';
 import AIPortfolioScreen from './screens/AIPortfolioScreen';
 import PortfolioScreen from './screens/PortfolioScreen';
 import PortfolioManagementScreen from './screens/PortfolioManagementScreen';
+import PremiumAnalyticsScreen from './screens/PremiumAnalyticsScreen';
+import SubscriptionScreen from './screens/SubscriptionScreen';
 
 // Components
 import BottomTabBar from './components/BottomTabBar';
@@ -112,6 +114,16 @@ export default function App() {
         return <PortfolioScreen navigateTo={navigateTo} />;
       case 'portfolio-management':
         return <PortfolioManagementScreen navigateTo={navigateTo} />;
+      case 'premium-analytics':
+        return <PremiumAnalyticsScreen navigateTo={navigateTo} />;
+      case 'subscription':
+        return <SubscriptionScreen navigateTo={navigateTo} />;
+      case 'portfolio-analytics':
+        return <PremiumAnalyticsScreen navigateTo={navigateTo} />;
+      case 'stock-screening':
+        return <StockScreen navigateTo={navigateTo} />;
+      case 'ai-recommendations':
+        return <AIPortfolioScreen navigateTo={navigateTo} />;
       case 'social':
         return <SocialScreen />;
       default:

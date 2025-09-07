@@ -129,7 +129,7 @@ const IntelligentAlertDemo: React.FC = () => {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
-        <Icon name="brain" size={32} color="#007AFF" />
+        <Icon name="cpu" size={32} color="#007AFF" />
         <Text style={styles.title}>AI Stock Analysis</Text>
         <Text style={styles.subtitle}>
           Intelligent algorithms analyze technical indicators, market conditions, and your profile

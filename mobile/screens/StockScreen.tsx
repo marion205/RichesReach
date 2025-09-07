@@ -29,6 +29,42 @@ const GET_STOCKS = gql`
   }
 `;
 
+// Premium query for advanced stock screening
+const GET_ADVANCED_STOCK_SCREENING = gql`
+  query GetAdvancedStockScreening(
+    $sector: String
+    $minMarketCap: Float
+    $maxMarketCap: Float
+    $minPeRatio: Float
+    $maxPeRatio: Float
+    $minBeginnerScore: Int
+    $sortBy: String
+    $limit: Int
+  ) {
+    advancedStockScreening(
+      sector: $sector
+      minMarketCap: $minMarketCap
+      maxMarketCap: $maxMarketCap
+      minPeRatio: $minPeRatio
+      maxPeRatio: $maxPeRatio
+      minBeginnerScore: $minBeginnerScore
+      sortBy: $sortBy
+      limit: $limit
+    ) {
+      symbol
+      companyName
+      sector
+      marketCap
+      peRatio
+      beginnerFriendlyScore
+      currentPrice
+      mlScore
+      riskLevel
+      growthPotential
+    }
+  }
+`;
+
 const GET_BEGINNER_FRIENDLY_STOCKS = gql`
   query GetBeginnerFriendlyStocks {
     beginnerFriendlyStocks {
@@ -216,6 +252,21 @@ export default function StockScreen({ navigateTo }: { navigateTo: (screen: strin
     },
     onError: (error) => {
       console.error('❌ Watchlist query error:', error);
+    },
+  });
+
+  // Premium query for advanced stock screening
+  const { data: screeningData, loading: screeningLoading } = useQuery(GET_ADVANCED_STOCK_SCREENING, {
+    variables: {
+      limit: 50,
+      sortBy: 'ml_score'
+    },
+    fetchPolicy: 'cache-and-network',
+    onCompleted: (data) => {
+      console.log('🔍 Stock screening query completed:', data);
+    },
+    onError: (error) => {
+      console.error('❌ Stock screening query error:', error);
     },
   });
 
