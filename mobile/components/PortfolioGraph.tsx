@@ -9,6 +9,8 @@ import {
 import { LineChart } from 'react-native-chart-kit';
 import Icon from 'react-native-vector-icons/Feather';
 import PortfolioEducationModal from './PortfolioEducationModal';
+import EducationalTooltip from './EducationalTooltip';
+import { getTermExplanation } from '../data/financialTerms';
 import webSocketService, { PortfolioUpdate } from '../services/WebSocketService';
 
 const { width } = Dimensions.get('window');
@@ -220,29 +222,42 @@ export default function PortfolioGraph({
 
       {/* Value Display */}
       <View style={styles.valueContainer}>
-        <TouchableOpacity 
-          style={styles.valueTouchable}
-          onPress={() => handleElementPress('totalValue')}
-          activeOpacity={0.7}
+        <EducationalTooltip
+          term="Total Value"
+          explanation={getTermExplanation('Total Value')}
+          position="top"
         >
-          <Text style={styles.valueText}>{formatCurrency(currentTotalValue)}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={styles.returnTouchable}
-          onPress={() => handleElementPress('return')}
-          activeOpacity={0.7}
+          <TouchableOpacity 
+            style={styles.valueTouchable}
+            onPress={() => handleElementPress('totalValue')}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.valueText}>{formatCurrency(currentTotalValue)}</Text>
+          </TouchableOpacity>
+        </EducationalTooltip>
+        
+        <EducationalTooltip
+          term="Total Return"
+          explanation={getTermExplanation('Total Return')}
+          position="top"
         >
-          <View style={styles.returnContainer}>
-            <Icon 
-              name={returnIcon} 
-              size={16} 
-              color={returnColor} 
-            />
-            <Text style={[styles.returnText, { color: returnColor }]}>
-              {formatCurrency(Math.abs(currentTotalReturn))} ({formatPercent(currentTotalReturnPercent)})
-            </Text>
-          </View>
-        </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.returnTouchable}
+            onPress={() => handleElementPress('return')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.returnContainer}>
+              <Icon 
+                name={returnIcon} 
+                size={16} 
+                color={returnColor} 
+              />
+              <Text style={[styles.returnText, { color: returnColor }]}>
+                {formatCurrency(Math.abs(currentTotalReturn))} ({formatPercent(currentTotalReturnPercent)})
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </EducationalTooltip>
       </View>
 
       {/* Chart */}

@@ -15,7 +15,13 @@ import {
 import { gql, useMutation, useApolloClient } from '@apollo/client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Feather';
-import * as LocalAuthentication from 'expo-local-authentication';
+// Optional import for biometric authentication
+let LocalAuthentication: any = null;
+try {
+  LocalAuthentication = require('expo-local-authentication');
+} catch (error) {
+  // expo-local-authentication not available
+}
 
 const { width } = Dimensions.get('window');
 

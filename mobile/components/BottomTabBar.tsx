@@ -13,6 +13,7 @@ const BottomTabBar: React.FC<BottomTabBarProps> = ({ currentScreen, onNavigate }
     { id: 'stock', label: 'Stocks', icon: 'trending-up' },
     { id: 'ai-portfolio', label: 'AI Portfolio', icon: 'cpu' },
     { id: 'portfolio', label: 'Portfolio', icon: 'bar-chart-2' },
+    { id: 'news', label: 'News', icon: 'globe' },
     { id: 'social', label: 'Discuss', icon: 'users' },
     { id: 'profile', label: 'Profile', icon: 'user' },
   ];
@@ -55,12 +56,15 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     paddingVertical: 8,
+    paddingHorizontal: 2,
   },
   tabLabel: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#8E8E93',
     marginTop: 4,
     fontWeight: '500',
+    textAlign: 'center',
+    lineHeight: 14,
   },
   activeTabLabel: {
     color: '#007AFF',

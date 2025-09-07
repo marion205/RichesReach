@@ -17,7 +17,7 @@ interface NewsCardProps {
   showSaveButton?: boolean;
 }
 
-const NewsCard: React.FC<NewsCardProps> = ({ 
+const NewsCard: React.FC<NewsCardProps> = ({
   news, 
   onSave, 
   onUnsave, 
@@ -25,22 +25,24 @@ const NewsCard: React.FC<NewsCardProps> = ({
 }) => {
   const handleNewsPress = async () => {
     try {
-      await Linking.openURL(news.url);
+      if (news?.url) {
+        await Linking.openURL(news.url);
+      }
     } catch (error) {
       console.error('Failed to open news URL:', error);
     }
   };
 
   const handleSavePress = () => {
-    if (news.isSaved && onUnsave) {
+    if (news?.isSaved && onUnsave) {
       onUnsave(news.id);
-    } else if (!news.isSaved && onSave) {
+    } else if (!news?.isSaved && onSave) {
       onSave(news);
     }
   };
 
   const getSentimentColor = () => {
-    switch (news.sentiment) {
+    switch (news?.sentiment) {
       case 'positive': return '#34C759';
       case 'negative': return '#FF3B30';
       default: return '#8E8E93';
@@ -48,7 +50,7 @@ const NewsCard: React.FC<NewsCardProps> = ({
   };
 
   const getSentimentIcon = () => {
-    switch (news.sentiment) {
+    switch (news?.sentiment) {
       case 'positive': return 'trending-up';
       case 'negative': return 'trending-down';
       default: return 'minus';
@@ -74,10 +76,10 @@ const NewsCard: React.FC<NewsCardProps> = ({
       <View style={styles.header}>
         <View style={styles.sourceInfo}>
           <Icon name="globe" size={16} color="#8E8E93" />
-          <Text style={styles.source}>{news.source}</Text>
-          <Text style={styles.timeAgo}>• {formatTimeAgo(news.publishedAt)}</Text>
+          <Text style={styles.source}>{news?.source || 'Unknown Source'}</Text>
+          <Text style={styles.timeAgo}>• {formatTimeAgo(news?.publishedAt || new Date().toISOString())}</Text>
         </View>
-        {news.sentiment && (
+        {news?.sentiment && (
           <View style={[styles.sentimentBadge, { backgroundColor: getSentimentColor() }]}>
             <Icon name={getSentimentIcon()} size={12} color="#FFFFFF" />
           </View>
@@ -85,28 +87,28 @@ const NewsCard: React.FC<NewsCardProps> = ({
       </View>
 
       <Text style={styles.title} numberOfLines={3}>
-        {news.title}
+        {news?.title || 'No Title'}
       </Text>
 
-      {news.description && (
+      {news?.description && (
         <Text style={styles.description} numberOfLines={3}>
           {news.description}
         </Text>
       )}
 
-      {news.imageUrl && (
+      {news?.imageUrl && (
         <Image source={{ uri: news.imageUrl }} style={styles.image} />
       )}
 
       <View style={styles.footer}>
         <View style={styles.footerLeft}>
-          {news.readTime && (
+          {news?.readTime && (
             <View style={styles.readTimeContainer}>
               <Icon name="clock" size={14} color="#8E8E93" />
               <Text style={styles.readTimeText}>{news.readTime} min read</Text>
             </View>
           )}
-          {news.category && (
+          {news?.category && (
             <View style={styles.categoryContainer}>
               <Text style={styles.categoryText}>{news.category.replace('-', ' ')}</Text>
             </View>
@@ -120,10 +122,10 @@ const NewsCard: React.FC<NewsCardProps> = ({
               onPress={handleSavePress}
             >
               <Icon 
-                name={news.isSaved ? "bookmark" : "bookmark"} 
+                name={news?.isSaved ? "bookmark" : "bookmark"} 
                 size={16} 
-                color={news.isSaved ? "#34C759" : "#8E8E93"} 
-                style={news.isSaved ? {} : { opacity: 0.5 }}
+                color={news?.isSaved ? "#34C759" : "#8E8E93"} 
+                style={news?.isSaved ? {} : { opacity: 0.5 }}
               />
             </TouchableOpacity>
           )}

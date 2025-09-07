@@ -189,14 +189,9 @@ export default function SignUpScreen({ navigateTo, onSignUp, onNavigateToLogin }
           profilePic: profilePic || null
         } 
       });
-      // User created successfully
-      Alert.alert(
-        'Success!', 
-        'Your account has been created successfully! Please log in.',
-        [{ text: 'OK', onPress: onSignUp }]
-      );
-      // Clear cache after successful signup
+      // User created successfully - go directly to onboarding
       await client.resetStore();
+      onSignUp();
     } catch (err) {
       console.error('Signup error:', err);
       Alert.alert('Signup Failed', 'There was an error creating your account. Please try again.');

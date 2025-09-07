@@ -71,7 +71,7 @@ interface PortfolioItem {
   totalValue: number;
 }
 
-const PortfolioCalculator: React.FC<PortfolioCalculatorProps> = ({ watchlistItems }) => {
+const PortfolioCalculator: React.FC<PortfolioCalculatorProps> = ({ watchlistItems, onPortfolioUpdate }) => {
   const [portfolioItems, setPortfolioItems] = useState<PortfolioItem[]>([]);
   const [totalPortfolioValue, setTotalPortfolioValue] = useState(0);
   const [isEditing, setIsEditing] = useState(false);

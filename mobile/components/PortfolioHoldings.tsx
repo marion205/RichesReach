@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
+import EducationalTooltip from './EducationalTooltip';
+import { getTermExplanation } from '../data/financialTerms';
 
 interface Holding {
   symbol: string;
@@ -89,22 +91,46 @@ export default function PortfolioHoldings({ holdings, onStockPress }: PortfolioH
             
             <View style={styles.cardBody}>
               <View style={styles.positionInfo}>
-                <Text style={styles.sharesText}>{holding.shares} shares</Text>
-                <Text style={styles.priceText}>{formatCurrency(holding.currentPrice)}</Text>
+                <EducationalTooltip
+                  term="Shares"
+                  explanation={getTermExplanation('Share')}
+                  position="top"
+                >
+                  <Text style={styles.sharesText}>{holding.shares} shares</Text>
+                </EducationalTooltip>
+                <EducationalTooltip
+                  term="Current Price"
+                  explanation={getTermExplanation('Current Price')}
+                  position="top"
+                >
+                  <Text style={styles.priceText}>{formatCurrency(holding.currentPrice)}</Text>
+                </EducationalTooltip>
               </View>
               
               <View style={styles.valueInfo}>
-                <Text style={styles.valueText}>{formatCurrency(holding.totalValue)}</Text>
-                <View style={styles.returnContainer}>
-                  <Icon 
-                    name={getReturnIcon(holding.returnAmount)} 
-                    size={12} 
-                    color={getReturnColor(holding.returnAmount)} 
-                  />
-                  <Text style={[styles.returnText, { color: getReturnColor(holding.returnAmount) }]}>
-                    {formatPercent(holding.returnPercent)}
-                  </Text>
-                </View>
+                <EducationalTooltip
+                  term="Total Value"
+                  explanation={getTermExplanation('Total Value')}
+                  position="top"
+                >
+                  <Text style={styles.valueText}>{formatCurrency(holding.totalValue)}</Text>
+                </EducationalTooltip>
+                <EducationalTooltip
+                  term="Return Percentage"
+                  explanation={getTermExplanation('Return Percentage')}
+                  position="top"
+                >
+                  <View style={styles.returnContainer}>
+                    <Icon 
+                      name={getReturnIcon(holding.returnAmount)} 
+                      size={12} 
+                      color={getReturnColor(holding.returnAmount)} 
+                    />
+                    <Text style={[styles.returnText, { color: getReturnColor(holding.returnAmount) }]}>
+                      {formatPercent(holding.returnPercent)}
+                    </Text>
+                  </View>
+                </EducationalTooltip>
               </View>
             </View>
           </TouchableOpacity>

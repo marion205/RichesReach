@@ -80,15 +80,15 @@ const SavedArticles: React.FC<SavedArticlesProps> = ({ visible, onClose }) => {
     // Filter by search query
     if (searchQuery.trim()) {
       filtered = filtered.filter(article =>
-        article.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        article.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        article.source.toLowerCase().includes(searchQuery.toLowerCase())
+        article?.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        article?.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        article?.source?.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
 
     // Filter by category
     if (filterCategory) {
-      filtered = filtered.filter(article => article.category === filterCategory);
+      filtered = filtered.filter(article => article?.category === filterCategory);
     }
 
     return filtered;
