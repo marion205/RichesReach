@@ -219,6 +219,18 @@ const TOGGLE_FOLLOW = gql`
 
 // Real data will be fetched from GraphQL queries
 
+// Discussion Categories
+const DISCUSSION_CATEGORIES = {
+  GENERAL: { id: 'general', name: 'General', icon: 'message-circle', color: '#8E8E93' },
+  BEGINNER: { id: 'beginner', name: 'Beginner Questions', icon: 'help-circle', color: '#AF52DE' },
+  PORTFOLIO: { id: 'portfolio', name: 'Portfolio Review', icon: 'pie-chart', color: '#34C759' },
+  NEWS: { id: 'news', name: 'Market News', icon: 'newspaper', color: '#FF9500' },
+  STRATEGY: { id: 'strategy', name: 'Investment Strategy', icon: 'target', color: '#007AFF' },
+  CRYPTO: { id: 'crypto', name: 'Crypto Discussion', icon: 'bitcoin', color: '#FF3B30' },
+  EARNINGS: { id: 'earnings', name: 'Earnings Reports', icon: 'trending-up', color: '#32D74B' },
+  DIVIDENDS: { id: 'dividends', name: 'Dividends', icon: 'dollar-sign', color: '#FFD60A' },
+};
+
 const SocialScreen: React.FC = () => {
 
   const [refreshing, setRefreshing] = useState(false);
@@ -228,6 +240,7 @@ const SocialScreen: React.FC = () => {
   const [createContent, setCreateContent] = useState('');
   const [createStock, setCreateStock] = useState('');
   const [createVisibility, setCreateVisibility] = useState<'public' | 'followers'>('followers');
+  const [createCategory, setCreateCategory] = useState<string>('general');
   
   // Media state
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -681,6 +694,29 @@ const SocialScreen: React.FC = () => {
     }
   };
 
+  const showMediaOptions = () => {
+    console.log('📱 Showing media options...');
+    Alert.alert(
+      'Add Media',
+      'Choose the type of media you want to add',
+      [
+        {
+          text: 'Photo',
+          onPress: pickImage,
+        },
+        {
+          text: 'Video',
+          onPress: pickVideo,
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ],
+      { cancelable: true }
+    );
+  };
+
   const removeMedia = () => {
     console.log('🗑️ Removing media...');
     setSelectedImage(null);
@@ -1023,6 +1059,39 @@ const SocialScreen: React.FC = () => {
                     autoCapitalize="characters"
                   />
 
+                  <Text style={styles.modalLabel}>Category</Text>
+                  <ScrollView 
+                    horizontal 
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.categoryScrollView}
+                    contentContainerStyle={styles.categoryContainer}
+                  >
+                    {Object.values(DISCUSSION_CATEGORIES).map((category) => (
+                      <TouchableOpacity
+                        key={category.id}
+                        style={[
+                          styles.categoryButton,
+                          createCategory === category.id && styles.categoryButtonSelected,
+                          { borderColor: category.color }
+                        ]}
+                        onPress={() => setCreateCategory(category.id)}
+                      >
+                        <Icon 
+                          name={category.icon} 
+                          size={16} 
+                          color={createCategory === category.id ? '#FFFFFF' : category.color} 
+                        />
+                        <Text style={[
+                          styles.categoryButtonText,
+                          createCategory === category.id && styles.categoryButtonTextSelected,
+                          { color: createCategory === category.id ? '#FFFFFF' : category.color }
+                        ]}>
+                          {category.name}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+
                   <Text style={styles.modalLabel}>Post Visibility</Text>
                   <View style={styles.visibilityContainer}>
                     <TouchableOpacity
@@ -1134,39 +1203,20 @@ const SocialScreen: React.FC = () => {
                     <TouchableOpacity 
                       style={[
                         styles.mediaButton,
-                        selectedImage && styles.mediaButtonSelected
+                        (selectedImage || selectedVideo) && styles.mediaButtonSelected
                       ]} 
-                      onPress={pickImage}
+                      onPress={showMediaOptions}
                     >
                       <Icon 
-                        name="image" 
+                        name={selectedImage ? "image" : selectedVideo ? "video" : "plus"} 
                         size={20} 
-                        color={selectedImage ? "#FFFFFF" : "#007AFF"} 
+                        color={(selectedImage || selectedVideo) ? "#FFFFFF" : "#007AFF"} 
                       />
                       <Text style={[
                         styles.mediaButtonText,
-                        selectedImage && styles.mediaButtonTextSelected
+                        (selectedImage || selectedVideo) && styles.mediaButtonTextSelected
                       ]}>
-                        Photo
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={[
-                        styles.mediaButton,
-                        selectedVideo && styles.mediaButtonSelected
-                      ]} 
-                      onPress={pickVideo}
-                    >
-                      <Icon 
-                        name="video" 
-                        size={20} 
-                        color={selectedVideo ? "#FFFFFF" : "#007AFF"} 
-                      />
-                      <Text style={[
-                        styles.mediaButtonText,
-                        selectedVideo && styles.mediaButtonTextSelected
-                      ]}>
-                        Video
+                        {selectedImage ? "Photo Added" : selectedVideo ? "Video Added" : "Add Media"}
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -1677,12 +1727,10 @@ const styles = StyleSheet.create({
   },
   // Media upload styles
   mediaUploadContainer: {
-    flexDirection: 'row',
-    gap: 12,
+    alignItems: 'center',
     marginBottom: 16,
   },
   mediaButton: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1692,6 +1740,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E5EA',
     gap: 8,
+    minWidth: 120,
   },
   mediaButtonText: {
     fontSize: 14,
@@ -1754,6 +1803,33 @@ const styles = StyleSheet.create({
   removeAttachmentButton: {
     padding: 4,
     marginLeft: 8,
+  },
+  categoryScrollView: {
+    marginBottom: 16,
+  },
+  categoryContainer: {
+    paddingHorizontal: 4,
+    gap: 8,
+  },
+  categoryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    backgroundColor: '#FFFFFF',
+    gap: 6,
+  },
+  categoryButtonSelected: {
+    backgroundColor: '#007AFF',
+  },
+  categoryButtonText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  categoryButtonTextSelected: {
+    color: '#FFFFFF',
   },
   visibilityContainer: {
     flexDirection: 'row',

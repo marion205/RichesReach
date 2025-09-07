@@ -183,7 +183,7 @@ class ErrorService {
         },
         ...(severity === ErrorSeverity.CRITICAL ? [{
           text: 'Report Issue',
-          style: 'default',
+          style: 'default' as const,
           onPress: () => this.reportError(errorInfo),
         }] : []),
       ]

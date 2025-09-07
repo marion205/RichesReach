@@ -78,40 +78,49 @@ const NewsCategories: React.FC<NewsCategoriesProps> = ({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.categoriesContainer}
       >
-        {categories.map(({ category, count, label }) => (
-          <TouchableOpacity
-            key={category}
-            style={[
-              styles.categoryButton,
-              selectedCategory === category && styles.categoryButtonActive,
-            ]}
-            onPress={() => onCategorySelect(category)}
-          >
-            <Icon
-              name={getCategoryIcon(category)}
-              size={16}
-              color={selectedCategory === category ? '#FFFFFF' : getCategoryColor(category)}
-            />
-            <Text
+        {categories && Array.isArray(categories) && categories.length > 0 ? categories.map((item) => {
+          const { category, count, label } = item || {};
+          if (!category || !label) return null;
+          
+          return (
+            <TouchableOpacity
+              key={category}
               style={[
-                styles.categoryLabel,
-                selectedCategory === category && styles.categoryLabelActive,
+                styles.categoryButton,
+                selectedCategory === category && styles.categoryButtonActive,
               ]}
+              onPress={() => onCategorySelect(category)}
             >
-              {label}
-            </Text>
-            <View style={styles.countContainer}>
+              <Icon
+                name={getCategoryIcon(category)}
+                size={16}
+                color={selectedCategory === category ? '#FFFFFF' : getCategoryColor(category)}
+              />
               <Text
                 style={[
-                  styles.countText,
-                  selectedCategory === category && styles.countTextActive,
+                  styles.categoryLabel,
+                  selectedCategory === category && styles.categoryLabelActive,
                 ]}
               >
-                {count}
+                {label}
               </Text>
-            </View>
-          </TouchableOpacity>
-        ))}
+              <View style={styles.countContainer}>
+                <Text
+                  style={[
+                    styles.countText,
+                    selectedCategory === category && styles.countTextActive,
+                  ]}
+                >
+                  {count || 0}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          );
+        }) : (
+          <View style={styles.loadingContainer}>
+            <Text style={styles.loadingText}>Loading categories...</Text>
+          </View>
+        )}
       </ScrollView>
     </View>
   );
@@ -169,6 +178,16 @@ const styles = StyleSheet.create({
   },
   countTextActive: {
     color: '#FFFFFF',
+  },
+  loadingContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#8E8E93',
+    fontStyle: 'italic',
   },
 });
 

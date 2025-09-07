@@ -325,6 +325,15 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigateTo, onLogout }) =
           </TouchableOpacity>
           
           <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => navigateTo?.('onboarding')}
+          >
+            <Icon name="user-plus" size={20} color="#AF52DE" />
+            <Text style={styles.actionButtonText}>Update Investment Profile</Text>
+            <Icon name="chevron-right" size={16} color="#C7C7CC" style={styles.actionArrow} />
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
             style={[styles.actionButton, styles.premiumButton]}
             onPress={() => navigateTo?.('premium-analytics')}
           >

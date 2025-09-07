@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { ApolloProvider } from '@apollo/client';
 import { client } from './src/ApolloProvider';
 // Use only Expo Go compatible services to avoid "Exception in HostFunction" errors
@@ -22,18 +22,31 @@ import PortfolioScreen from './screens/PortfolioScreen';
 import PortfolioManagementScreen from './screens/PortfolioManagementScreen';
 import PremiumAnalyticsScreen from './screens/PremiumAnalyticsScreen';
 import SubscriptionScreen from './screens/SubscriptionScreen';
+import LearningPathsScreen from './screens/LearningPathsScreen';
+import NewsScreen from './screens/NewsScreen';
+import OnboardingScreen, { UserProfile } from './screens/OnboardingScreen';
 
 // Components
 import BottomTabBar from './components/BottomTabBar';
+import PersonalizedDashboard from './components/PersonalizedDashboard';
+
+// Services
+import UserProfileService from './services/UserProfileService';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('home');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Initialize services only if available
+  // Initialize services and check onboarding status
   useEffect(() => {
     const initializeServices = async () => {
       try {
+        // Check if user has completed onboarding
+        const userProfileService = UserProfileService.getInstance();
+        const onboardingCompleted = await userProfileService.isOnboardingCompleted();
+        setHasCompletedOnboarding(onboardingCompleted);
         // Initialize push notifications with error handling
         if (pushNotificationService) {
           try {
@@ -50,7 +63,7 @@ export default function App() {
               };
             }
           } catch (notificationError) {
-            console.warn('⚠️ Push notifications not available (likely Expo Go):', notificationError.message);
+            console.warn('⚠️ Push notifications not available (likely Expo Go):', notificationError instanceof Error ? notificationError.message : 'Unknown error');
           }
         } else {
           console.log('📱 Push notification service not available in Expo Go');
@@ -62,13 +75,15 @@ export default function App() {
             await priceAlertService.initialize();
             console.log('📊 Price alert service initialized successfully');
           } catch (priceAlertError) {
-            console.warn('⚠️ Price alert service initialization failed:', priceAlertError.message);
+            console.warn('⚠️ Price alert service initialization failed:', priceAlertError instanceof Error ? priceAlertError.message : 'Unknown error');
           }
         } else {
           console.log('📊 Price alert service not available in Expo Go');
         }
       } catch (error) {
         console.error('Error initializing services:', error);
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -81,7 +96,44 @@ export default function App() {
 
   const handleLogin = () => {
     setIsLoggedIn(true);
-    setCurrentScreen('home');
+    // Check if user needs onboarding after login
+    checkOnboardingStatus();
+  };
+
+  const handleSignUp = () => {
+    setIsLoggedIn(true);
+    // New users always need onboarding
+    setHasCompletedOnboarding(false);
+    setCurrentScreen('onboarding');
+  };
+
+  const checkOnboardingStatus = async () => {
+    try {
+      const userProfileService = UserProfileService.getInstance();
+      const onboardingCompleted = await userProfileService.isOnboardingCompleted();
+      setHasCompletedOnboarding(onboardingCompleted);
+      
+      if (onboardingCompleted) {
+        setCurrentScreen('home');
+      } else {
+        setCurrentScreen('onboarding');
+      }
+    } catch (error) {
+      console.error('Error checking onboarding status:', error);
+      setCurrentScreen('onboarding');
+    }
+  };
+
+  const handleOnboardingComplete = async (profile: UserProfile) => {
+    try {
+      const userProfileService = UserProfileService.getInstance();
+      await userProfileService.saveProfile(profile);
+      await userProfileService.markOnboardingCompleted();
+      setHasCompletedOnboarding(true);
+      setCurrentScreen('home');
+    } catch (error) {
+      console.error('Error saving user profile:', error);
+    }
   };
 
   const handleLogout = () => {
@@ -90,20 +142,36 @@ export default function App() {
   };
 
   const renderScreen = () => {
+    // Show loading screen while initializing
+    if (isLoading) {
+      return (
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Loading...</Text>
+        </View>
+      );
+    }
+
     if (!isLoggedIn) {
       switch (currentScreen) {
         case 'login':
           return <LoginScreen onLogin={handleLogin} onNavigateToSignUp={() => setCurrentScreen('signup')} />;
         case 'signup':
-          return <SignUpScreen navigateTo={navigateTo} onSignUp={handleLogin} onNavigateToLogin={() => setCurrentScreen('login')} />;
+          return <SignUpScreen navigateTo={navigateTo} onSignUp={handleSignUp} onNavigateToLogin={() => setCurrentScreen('login')} />;
         default:
           return <LoginScreen onLogin={handleLogin} onNavigateToSignUp={() => setCurrentScreen('signup')} />;
       }
     }
 
+    // Show onboarding if user is logged in but hasn't completed onboarding
+    if (isLoggedIn && !hasCompletedOnboarding) {
+      return <OnboardingScreen onComplete={handleOnboardingComplete} />;
+    }
+
     switch (currentScreen) {
       case 'home':
         return <HomeScreen navigateTo={navigateTo} />;
+      case 'onboarding':
+        return <OnboardingScreen onComplete={handleOnboardingComplete} />;
       case 'profile':
         return <ProfileScreen navigateTo={navigateTo} onLogout={handleLogout} />;
       case 'stock':
@@ -126,6 +194,10 @@ export default function App() {
         return <AIPortfolioScreen navigateTo={navigateTo} />;
       case 'social':
         return <SocialScreen />;
+      case 'learning-paths':
+        return <LearningPathsScreen />;
+      case 'news':
+        return <NewsScreen />;
       default:
         return <HomeScreen navigateTo={navigateTo} />;
     }
@@ -148,5 +220,15 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F2F2F7',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F2F2F7',
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#8E8E93',
   },
 });

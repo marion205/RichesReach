@@ -151,7 +151,7 @@ const DiscussionCard: React.FC<DiscussionCardProps> = ({
 
       {/* Actions */}
       <View style={styles.actions}>
-        <TouchableOpacity style={styles.actionButton} onPress={onLike}>
+        <TouchableOpacity style={styles.actionButton} onPress={onUpvote}>
           <Icon name="heart" size={20} color="#FF3B30" />
           <Text style={styles.actionText}>{discussion.score}</Text>
         </TouchableOpacity>

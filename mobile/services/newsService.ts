@@ -55,8 +55,8 @@ class NewsService {
     };
   } = {};
   
-  // Cache duration: 30 minutes (1800000 ms)
-  private readonly CACHE_DURATION = 30 * 60 * 1000;
+  // Cache duration: 2 hours (7200000 ms) to reduce API calls
+  private readonly CACHE_DURATION = 2 * 60 * 60 * 1000;
 
   constructor() {
     this.loadSavedArticles();
@@ -189,7 +189,6 @@ class NewsService {
     }
     
     try {
-      console.log(`🌐 Fetching fresh news for ${category} from NewsAPI...`);
       
       // Build query parameters
       let query = 'finance OR investing OR stocks OR markets OR economy';
@@ -221,62 +220,88 @@ class NewsService {
       }
       
       // Make real API call to NewsAPI
-      const response = await fetch(
-        `${NEWS_API_BASE_URL}/everything?q=${encodeURIComponent(query)}&language=en&sortBy=publishedAt&pageSize=20&apiKey=${NEWS_API_KEY}`
-      );
+      const apiUrl = `${NEWS_API_BASE_URL}/everything?q=${encodeURIComponent(query)}&language=en&sortBy=publishedAt&pageSize=20&apiKey=${NEWS_API_KEY}`;
       
-      if (!response.ok) {
-        if (response.status === 429) {
-          console.warn('NewsAPI rate limit reached (429), using cached data if available');
-          // Try to return any cached data, even if expired
-          const expiredCache = this.newsCache[category];
-          if (expiredCache && expiredCache.articles.length > 0) {
-            console.log(`📰 Returning expired cache for ${category} due to rate limit`);
-            return expiredCache.articles;
+      // Add timeout to prevent hanging
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
+      try {
+        const response = await fetch(apiUrl, {
+          signal: controller.signal,
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          }
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          
+          // Handle rate limit specifically
+          if (response.status === 429) {
+            return this.generateMockNews(category);
           }
           
-          // If no cache available, return mock data instead of throwing error
-          console.log(`📰 No cache available, returning mock data for ${category}`);
+          throw new Error(`API Error ${response.status}: ${errorText}`);
+        }
+        
+        const data = await response.json();
+        
+        // Check for rate limit in response body
+        if (data.status === 'error' && data.code === 'rateLimited') {
           return this.generateMockNews(category);
         }
         
-        // For other errors, throw as usual
-        throw new Error(`NewsAPI error: ${response.status}`);
+        // Check if we have articles in the response
+        if (!data.articles || !Array.isArray(data.articles)) {
+          return this.generateMockNews(category);
+        }
+        
+        // Transform API response to our format
+        const articles: NewsArticle[] = data.articles
+          .filter((article: any) => article && typeof article === 'object') // Filter out null/undefined articles
+          .map((article: any, index: number) => ({
+            id: `real-${index}`,
+            title: article?.title || 'No Title',
+            description: article?.description || 'No description available',
+            url: article?.url || '#',
+            publishedAt: article?.publishedAt || new Date().toISOString(),
+            source: article?.source?.name || 'Unknown Source',
+            sentiment: this.analyzeSentiment((article?.title || '') + ' ' + (article?.description || '')),
+            imageUrl: article?.urlToImage || this.getDefaultImage(category),
+            category: category,
+            readTime: this.calculateReadTime((article?.title || '') + ' ' + (article?.description || '')),
+            isSaved: false,
+          }));
+        
+        // Cache the fresh articles
+        this.cacheNews(category, articles);
+        
+        return articles;
+        
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        
+        if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+          throw new Error('Request timed out');
+        }
+        
+        throw fetchError;
       }
-      
-      const data = await response.json();
-      
-      // Transform API response to our format
-      const articles: NewsArticle[] = data.articles.map((article: any, index: number) => ({
-        id: `real-${index}`,
-        title: article.title || 'No Title',
-        description: article.description || 'No description available',
-        url: article.url || '#',
-        publishedAt: article.publishedAt || new Date().toISOString(),
-        source: article.source?.name || 'Unknown Source',
-        sentiment: this.analyzeSentiment(article.title + ' ' + article.description),
-        imageUrl: article.urlToImage || this.getDefaultImage(category),
-        category: category,
-        readTime: this.calculateReadTime(article.title + ' ' + article.description),
-        isSaved: false,
-      }));
-      
-      // Cache the fresh articles
-      this.cacheNews(category, articles);
-      
-      return articles;
     } catch (error) {
       console.error('Error fetching real news:', error);
       
-      // Try to return expired cache as last resort
+      // Try to return any cached data, even if expired
       const expiredCache = this.newsCache[category];
       if (expiredCache && expiredCache.articles.length > 0) {
-        console.log(`📰 Returning expired cache for ${category} as fallback`);
         return expiredCache.articles;
       }
       
-      // Fallback to mock data if no cache available
-      return this.generateMockNews(category);
+      // If no cache available, use fallback news
+      return this.getFallbackNews();
     }
   }
 
@@ -307,6 +332,24 @@ class NewsService {
       return personalized;
     } catch (error) {
       console.error('Error fetching personalized news:', error);
+      return this.getFallbackNews();
+    }
+  }
+
+  // Get news with category and personalization support
+  async getNews(category: NewsCategory = NEWS_CATEGORIES.ALL, personalized: boolean = false): Promise<NewsArticle[]> {
+    try {
+      if (personalized) {
+        const personalizedNews = await this.getPersonalizedNews();
+        return personalizedNews;
+      } else {
+        // Get real news from API
+        const realTimeNews = await this.getRealTimeNews(category);
+        return realTimeNews;
+      }
+    } catch (error) {
+      console.error('Error fetching news:', error);
+      // Only use fallback if API completely fails
       return this.getFallbackNews();
     }
   }
@@ -360,6 +403,7 @@ class NewsService {
         imageUrl: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=400&h=200&fit=crop',
         category: NEWS_CATEGORIES.ECONOMY,
         readTime: 3,
+        isSaved: false,
       },
       {
         id: '2',
@@ -372,6 +416,7 @@ class NewsService {
         imageUrl: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=400&h=200&fit=crop',
         category: NEWS_CATEGORIES.TECHNOLOGY,
         readTime: 4,
+        isSaved: false,
       },
       {
         id: '3',
@@ -384,6 +429,7 @@ class NewsService {
         imageUrl: 'https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=400&h=200&fit=crop',
         category: NEWS_CATEGORIES.MARKETS,
         readTime: 2,
+        isSaved: false,
       },
       {
         id: '4',
@@ -396,6 +442,7 @@ class NewsService {
         imageUrl: 'https://images.unsplash.com/photo-1621761191319-c6fb62004040?w=400&h=200&fit=crop',
         category: NEWS_CATEGORIES.CRYPTO,
         readTime: 3,
+        isSaved: false,
       },
       {
         id: '5',
@@ -408,6 +455,7 @@ class NewsService {
         imageUrl: 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=400&h=200&fit=crop',
         category: NEWS_CATEGORIES.REAL_ESTATE,
         readTime: 4,
+        isSaved: false,
       },
       {
         id: '6',
@@ -432,6 +480,7 @@ class NewsService {
         imageUrl: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=400&h=200&fit=crop',
         category: NEWS_CATEGORIES.PERSONAL_FINANCE,
         readTime: 3,
+        isSaved: false,
       },
       {
         id: '8',
@@ -444,12 +493,14 @@ class NewsService {
         imageUrl: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=400&h=200&fit=crop',
         category: NEWS_CATEGORIES.MARKETS,
         readTime: 4,
+        isSaved: false,
       }
     ];
 
     // Filter by category if not ALL
     if (category !== NEWS_CATEGORIES.ALL) {
-      return baseNews.filter(article => article.category === category);
+      const filtered = baseNews.filter(article => article.category === category);
+      return filtered;
     }
 
     return baseNews;
@@ -457,19 +508,8 @@ class NewsService {
 
   // Fallback news if API fails
   private getFallbackNews(): NewsArticle[] {
-    return [
-      {
-        id: 'fallback-1',
-        title: 'Market Update: S&P 500 Shows Resilience',
-        description: 'Despite market volatility, the S&P 500 continues to demonstrate strength in key sectors.',
-        url: 'https://example.com/fallback-news-1',
-        publishedAt: new Date().toISOString(),
-        source: 'Market Update',
-        sentiment: 'neutral' as const,
-        category: NEWS_CATEGORIES.MARKETS,
-        readTime: 2,
-      }
-    ];
+    // Return the full mock news data as fallback
+    return this.generateMockNews(NEWS_CATEGORIES.ALL);
   }
 
   // Get news categories with counts
@@ -485,11 +525,23 @@ class NewsService {
       { category: NEWS_CATEGORIES.REAL_ESTATE, label: 'Real Estate' },
     ];
 
-    // Get counts for each category
+    // Get counts for each category from API
     const categoriesWithCounts = await Promise.all(
       categories.map(async ({ category, label }) => {
-        const news = await this.getRealTimeNews(category);
-        return { category, count: news.length, label };
+        try {
+          const news = await this.getRealTimeNews(category);
+          return { category, count: news.length, label };
+        } catch (error) {
+          console.warn(`Failed to get count for category ${category}, using cached data`);
+          // Check if we have cached data for this category
+          const cachedData = this.newsCache[category];
+          if (cachedData && cachedData.articles.length > 0) {
+            return { category, count: cachedData.articles.length, label };
+          }
+          
+          // Fallback to default count if no cache available
+          return { category, count: 0, label };
+        }
       })
     );
 

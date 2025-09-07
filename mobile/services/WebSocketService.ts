@@ -203,7 +203,7 @@ class WebSocketService {
       };
 
       this.stockPriceSocket.onerror = (error) => {
-        console.error('❌ Stock prices WebSocket error:', error);
+        console.error('Stock prices WebSocket error:', error);
       };
 
     } catch (error) {
@@ -242,7 +242,7 @@ class WebSocketService {
       };
 
       this.discussionSocket.onerror = (error) => {
-        console.error('❌ Discussions WebSocket error:', error);
+        console.error('Discussions WebSocket error:', error);
       };
 
     } catch (error) {
@@ -257,7 +257,6 @@ class WebSocketService {
       this.portfolioSocket = new WebSocket(url);
       
       this.portfolioSocket.onopen = () => {
-        console.log('📊 Portfolio WebSocket connected');
         
         // Send authentication token if available
         if (this.token) {
@@ -278,12 +277,11 @@ class WebSocketService {
       };
 
       this.portfolioSocket.onclose = () => {
-        console.log('📊 Portfolio WebSocket disconnected');
         this.handleReconnect('portfolio');
       };
 
       this.portfolioSocket.onerror = (error) => {
-        console.error('❌ Portfolio WebSocket error:', error);
+        console.error('Portfolio WebSocket error:', error);
       };
 
     } catch (error) {
@@ -500,8 +498,8 @@ class WebSocketService {
         // Generate mock market conditions
         const marketConditions = {
           marketTrend: this.determineMarketTrend(priceUpdate.change_percent),
-          volatility: isSignificantPriceMove ? 'high' : 'medium',
-          volume: isHighVolume ? 'high' : 'normal',
+          volatility: (isSignificantPriceMove ? 'high' : 'medium') as 'high' | 'medium' | 'low',
+          volume: (isHighVolume ? 'high' : 'normal') as 'high' | 'low' | 'normal',
           sectorPerformance: priceUpdate.change_percent * 0.8, // Mock sector performance
         };
 
@@ -574,7 +572,7 @@ class WebSocketService {
       'price_target': '🎯'
     };
 
-    const emoji = alertTypeEmoji[alert.alertType] || '📊';
+    const emoji = alertTypeEmoji[alert.alertType as keyof typeof alertTypeEmoji] || '📊';
     const title = `${emoji} ${alert.symbol} ${alert.alertType.replace('_', ' ').toUpperCase()}`;
     
     let message = `Confidence: ${Math.round(alert.confidence)}%\n\n`;

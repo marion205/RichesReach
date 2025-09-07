@@ -14,15 +14,12 @@ import {
 } from 'react-native';
 import { useApolloClient, useQuery, gql } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
-import NewsCard from '../components/NewsCard';
-import NewsCategories from '../components/NewsCategories';
-import NewsPreferences from '../components/NewsPreferences';
-import NewsAlerts from '../components/NewsAlerts';
-import SavedArticles from '../components/SavedArticles';
 import PortfolioGraph from '../components/PortfolioGraph';
 import PortfolioHoldings from '../components/PortfolioHoldings';
-import newsService, { NewsCategory, NewsArticle, NEWS_CATEGORIES } from '../services/newsService';
+import BasicRiskMetrics from '../components/BasicRiskMetrics';
+import PortfolioComparison from '../components/PortfolioComparison';
 import webSocketService, { PortfolioUpdate } from '../services/WebSocketService';
+import UserProfileService, { ExtendedUserProfile } from '../services/UserProfileService';
 
 // GraphQL Query for Portfolio Data
 const GET_PORTFOLIO_METRICS = gql`
@@ -68,26 +65,19 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
     errorPolicy: 'ignore',
   });
   
-  // Debug portfolio data
-  console.log('Portfolio Data:', portfolioData);
-  console.log('Portfolio Loading:', portfolioLoading);
-  console.log('Portfolio Error:', portfolioError);
+  // User profile state
+  const [userProfile, setUserProfile] = useState<ExtendedUserProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
   
   // State
-  const [refreshing, setRefreshing] = useState(false);
   
   // Live portfolio data from WebSocket
   const [liveHoldings, setLiveHoldings] = useState<any[]>([]);
   const [isLiveData, setIsLiveData] = useState(false);
+  const [liveTotalValue, setLiveTotalValue] = useState<number | null>(null);
+  const [liveTotalReturn, setLiveTotalReturn] = useState<number | null>(null);
+  const [liveTotalReturnPercent, setLiveTotalReturnPercent] = useState<number | null>(null);
 
-  // News state
-  const [newsArticles, setNewsArticles] = useState<NewsArticle[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<NewsCategory>(NEWS_CATEGORIES.ALL);
-  const [newsCategories, setNewsCategories] = useState<Array<{ category: NewsCategory; count: number; label: string }>>([]);
-  const [showPreferences, setShowPreferences] = useState(false);
-  const [showAlerts, setShowAlerts] = useState(false);
-  const [showSavedArticles, setShowSavedArticles] = useState(false);
-  const [isPersonalized, setIsPersonalized] = useState(false);
 
   // Chatbot state
   const [chatOpen, setChatOpen] = useState(false);
@@ -96,11 +86,23 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
   const [chatSending, setChatSending] = useState(false);
   const listRef = useRef<FlatList<ChatMsg>>(null);
 
-  // Load news on component mount
+
+  // Load user profile
   useEffect(() => {
-    loadNews();
-    loadNewsCategories();
-  }, [selectedCategory, isPersonalized]);
+    const loadUserProfile = async () => {
+      try {
+        const userProfileService = UserProfileService.getInstance();
+        const profile = await userProfileService.getProfile();
+        setUserProfile(profile);
+      } catch (error) {
+        console.error('Error loading user profile:', error);
+      } finally {
+        setProfileLoading(false);
+      }
+    };
+
+    loadUserProfile();
+  }, []);
 
   // WebSocket setup for live portfolio updates
   useEffect(() => {
@@ -109,11 +111,14 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
         // Set up portfolio update callback
         webSocketService.setCallbacks({
           onPortfolioUpdate: (portfolio: PortfolioUpdate) => {
-            console.log('📊 Live portfolio update received in HomeScreen:', portfolio);
-            
             // Update live holdings data
             setLiveHoldings(portfolio.holdings);
             setIsLiveData(true);
+            
+            // Update live portfolio totals
+            setLiveTotalValue(portfolio.totalValue);
+            setLiveTotalReturn(portfolio.totalReturn);
+            setLiveTotalReturnPercent(portfolio.totalReturnPercent);
           }
         });
         
@@ -139,34 +144,6 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
     };
   }, []);
 
-  const loadNews = async () => {
-    try {
-      let news;
-      if (isPersonalized) {
-        news = await newsService.getPersonalizedNews();
-      } else {
-        news = await newsService.getRealTimeNews(selectedCategory);
-      }
-      setNewsArticles(news);
-    } catch (error) {
-      console.error('Error loading news:', error);
-    }
-  };
-
-  const loadNewsCategories = async () => {
-    try {
-      const categories = await newsService.getNewsCategories();
-      setNewsCategories(categories);
-    } catch (error) {
-      console.error('Error loading news categories:', error);
-    }
-  };
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await loadNews();
-    setRefreshing(false);
-  };
 
   // -------- Chatbot --------
 
@@ -763,23 +740,94 @@ Feel free to ask about any of these topics or try one of the quick prompts above
     }
   };
 
+  // Helper functions for personalization
+  const getExperienceIcon = (level: string) => {
+    switch (level) {
+      case 'beginner': return 'book-open';
+      case 'intermediate': return 'trending-up';
+      case 'advanced': return 'bar-chart-2';
+      default: return 'user';
+    }
+  };
+
+  const getUserStyleSummary = (profile: ExtendedUserProfile): string => {
+    const experience = profile.experienceLevel;
+    const risk = profile.riskTolerance;
+    
+    if (experience === 'beginner' && risk === 'conservative') {
+      return 'Conservative Beginner - Focus on learning and low-risk investments';
+    } else if (experience === 'beginner' && risk === 'moderate') {
+      return 'Balanced Beginner - Ready to explore moderate risk investments';
+    } else if (experience === 'intermediate' && risk === 'aggressive') {
+      return 'Growth-Oriented Investor - Seeking higher returns with calculated risk';
+    } else if (experience === 'advanced' && risk === 'aggressive') {
+      return 'Sophisticated Investor - Advanced strategies and high-risk opportunities';
+    } else {
+      return 'Balanced Investor - Steady growth with moderate risk';
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Content */}
       <ScrollView
         style={styles.content}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
       >
+        {/* Personalized Welcome Section */}
+        {userProfile && (
+          <View style={styles.welcomeSection}>
+            <View style={styles.welcomeHeader}>
+              <View style={styles.profileIcon}>
+                <Icon 
+                  name={getExperienceIcon(userProfile.experienceLevel)} 
+                  size={20} 
+                  color="#FFFFFF" 
+                />
+              </View>
+              <View style={styles.welcomeText}>
+                <Text style={styles.welcomeTitle}>
+                  Welcome back, {userProfile.experienceLevel} investor!
+                </Text>
+                <Text style={styles.welcomeSubtitle}>
+                  {getUserStyleSummary(userProfile)}
+                </Text>
+              </View>
+            </View>
+            
+            {/* Quick Stats */}
+            <View style={styles.quickStats}>
+              <View style={styles.statItem}>
+                <Icon name="clock" size={16} color="#007AFF" />
+                <Text style={styles.statValue}>{userProfile.stats.totalLearningTime}m</Text>
+                <Text style={styles.statLabel}>Learning</Text>
+              </View>
+              <View style={styles.statItem}>
+                <Icon name="check-circle" size={16} color="#34C759" />
+                <Text style={styles.statValue}>{userProfile.stats.modulesCompleted}</Text>
+                <Text style={styles.statLabel}>Modules</Text>
+              </View>
+              <View style={styles.statItem}>
+                <Icon name="trending-up" size={16} color="#FF3B30" />
+                <Text style={styles.statValue}>{userProfile.stats.streakDays}</Text>
+                <Text style={styles.statLabel}>Streak</Text>
+              </View>
+            </View>
+          </View>
+        )}
+
         {/* Portfolio Graph - First thing users see */}
         <PortfolioGraph
-          totalValue={portfolioData?.portfolioMetrics?.totalValue || 14303.52}
-          totalReturn={portfolioData?.portfolioMetrics?.totalReturn || 2145.53}
-          totalReturnPercent={portfolioData?.portfolioMetrics?.totalReturnPercent || 17.65}
+          totalValue={isLiveData && liveTotalValue ? liveTotalValue : (portfolioData?.portfolioMetrics?.totalValue || 14303.52)}
+          totalReturn={isLiveData && liveTotalReturn ? liveTotalReturn : (portfolioData?.portfolioMetrics?.totalReturn || 2145.53)}
+          totalReturnPercent={isLiveData && liveTotalReturnPercent ? liveTotalReturnPercent : (portfolioData?.portfolioMetrics?.totalReturnPercent || 17.65)}
           onPress={() => {
             // Navigate to portfolio details
-            console.log('Portfolio graph pressed');
+            navigateTo('PortfolioEducation', { 
+              clickedElement: 'chart',
+              totalValue: liveTotalValue || portfolioData?.portfolioMetrics?.totalValue,
+              totalReturn: liveTotalReturn || portfolioData?.portfolioMetrics?.totalReturn,
+              totalReturnPercent: liveTotalReturnPercent || portfolioData?.portfolioMetrics?.totalReturnPercent
+            });
           }}
         />
 
@@ -789,104 +837,93 @@ Feel free to ask about any of these topics or try one of the quick prompts above
             holdings={isLiveData && liveHoldings.length > 0 ? liveHoldings : portfolioData?.portfolioMetrics?.holdings}
             onStockPress={(symbol) => {
               // Navigate to stock detail or search
-              console.log('Stock pressed:', symbol);
+              navigateTo('StockDetail', { symbol });
             }}
           />
         )}
 
-
-        {/* News Section */}
-        <View style={styles.newsSection}>
-          <View style={styles.newsHeader}>
-            <View style={styles.newsHeaderLeft}>
-              <Icon name="rss" size={20} color="#34C759" />
-              <Text style={styles.newsTitle}>Financial News</Text>
-            </View>
-            <View style={styles.newsHeaderRight}>
-              <TouchableOpacity 
-                style={styles.savedButton}
-                onPress={() => setShowSavedArticles(true)}
-              >
-                <Icon name="bookmark" size={16} color="#5856D6" />
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={styles.alertsButton}
-                onPress={() => setShowAlerts(true)}
-              >
-                <Icon name="bell" size={16} color="#FF9500" />
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={styles.personalizeButton}
-                onPress={() => setIsPersonalized(!isPersonalized)}
-              >
-                <Icon 
-                  name={isPersonalized ? "user-check" : "user"} 
-                  size={16} 
-                  color={isPersonalized ? "#34C759" : "#8E8E93"} 
-                />
-                <Text style={[
-                  styles.personalizeText,
-                  isPersonalized && styles.personalizeTextActive
-                ]}>
-                  {isPersonalized ? 'Personal' : 'All'}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={styles.preferencesButton}
-                onPress={() => setShowPreferences(true)}
-              >
-                <Icon name="settings" size={16} color="#8E8E93" />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* News Categories */}
-          {newsCategories.length > 0 && (
-            <NewsCategories
-              selectedCategory={selectedCategory}
-              onCategorySelect={setSelectedCategory}
-              categories={newsCategories}
-            />
-          )}
-
-          <FlatList
-            data={newsArticles}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <NewsCard 
-                news={item} 
-                onSave={newsService.saveArticle}
-                onUnsave={newsService.unsaveArticle}
-                showSaveButton={true}
-              />
-            )}
-            horizontal={false}
-            showsVerticalScrollIndicator={false}
-            scrollEnabled={false}
+        {/* Basic Risk Metrics */}
+        {(portfolioData?.portfolioMetrics?.holdings || liveHoldings.length > 0) && (
+          <BasicRiskMetrics
+            holdings={isLiveData && liveHoldings.length > 0 ? liveHoldings : portfolioData?.portfolioMetrics?.holdings}
+            totalValue={isLiveData && liveTotalValue ? liveTotalValue : (portfolioData?.portfolioMetrics?.totalValue || 0)}
+            totalReturn={isLiveData && liveTotalReturn ? liveTotalReturn : (portfolioData?.portfolioMetrics?.totalReturn || 0)}
+            totalReturnPercent={isLiveData && liveTotalReturnPercent ? liveTotalReturnPercent : (portfolioData?.portfolioMetrics?.totalReturnPercent || 0)}
           />
+        )}
+
+        {/* Portfolio Comparison */}
+        {(portfolioData?.portfolioMetrics?.holdings || liveHoldings.length > 0) && (
+          <PortfolioComparison
+            totalValue={isLiveData && liveTotalValue ? liveTotalValue : (portfolioData?.portfolioMetrics?.totalValue || 0)}
+            totalReturn={isLiveData && liveTotalReturn ? liveTotalReturn : (portfolioData?.portfolioMetrics?.totalReturn || 0)}
+            totalReturnPercent={isLiveData && liveTotalReturnPercent ? liveTotalReturnPercent : (portfolioData?.portfolioMetrics?.totalReturnPercent || 0)}
+            portfolioHistory={[
+              { date: '2024-01-01', value: 12000 },
+              { date: '2024-01-15', value: 12200 },
+              { date: '2024-02-01', value: 12500 },
+              { date: '2024-02-15', value: 12300 },
+              { date: '2024-03-01', value: 12800 },
+              { date: '2024-03-15', value: 13100 },
+              { date: '2024-04-01', value: 13500 },
+              { date: '2024-04-15', value: 13800 },
+              { date: '2024-05-01', value: 14200 },
+              { date: '2024-05-15', value: 14100 },
+              { date: '2024-06-01', value: 14400 },
+              { date: '2024-06-15', value: 14200 },
+            ]}
+          />
+        )}
+
+        {/* Learning Paths Quick Access */}
+        <View style={styles.learningSection}>
+          <View style={styles.learningHeader}>
+            <View style={styles.learningHeaderLeft}>
+              <Icon name="book-open" size={20} color="#AF52DE" />
+              <Text style={styles.learningTitle}>Learn Investing</Text>
+            </View>
+            <TouchableOpacity 
+              style={styles.learningButton}
+              onPress={() => navigateTo('learning-paths')}
+            >
+              <Text style={styles.learningButtonText}>View All</Text>
+              <Icon name="chevron-right" size={16} color="#AF52DE" />
+            </TouchableOpacity>
+          </View>
+          
+          <View style={styles.learningCards}>
+            <TouchableOpacity 
+              style={styles.learningCard}
+              onPress={() => navigateTo('learning-paths')}
+            >
+              <View style={styles.learningCardIcon}>
+                <Icon name="play-circle" size={24} color="#34C759" />
+              </View>
+              <View style={styles.learningCardContent}>
+                <Text style={styles.learningCardTitle}>Getting Started</Text>
+                <Text style={styles.learningCardDescription}>Learn the basics of investing</Text>
+                <Text style={styles.learningCardMeta}>5 modules • 25 min</Text>
+              </View>
+              <Icon name="chevron-right" size={16} color="#8E8E93" />
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.learningCard}
+              onPress={() => navigateTo('learning-paths')}
+            >
+              <View style={styles.learningCardIcon}>
+                <Icon name="bar-chart-2" size={24} color="#007AFF" />
+              </View>
+              <View style={styles.learningCardContent}>
+                <Text style={styles.learningCardTitle}>Portfolio Management</Text>
+                <Text style={styles.learningCardDescription}>Optimize your investments</Text>
+                <Text style={styles.learningCardMeta}>4 modules • 20 min</Text>
+              </View>
+              <Icon name="chevron-right" size={16} color="#8E8E93" />
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* News Preferences Modal */}
-        <NewsPreferences
-          visible={showPreferences}
-          onClose={() => setShowPreferences(false)}
-          onPreferencesUpdated={() => {
-            loadNews();
-            loadNewsCategories();
-          }}
-        />
-
-        {/* News Alerts Modal */}
-        <NewsAlerts
-          visible={showAlerts}
-          onClose={() => setShowAlerts(false)}
-        />
-
-        {/* Saved Articles Modal */}
-        <SavedArticles
-          visible={showSavedArticles}
-          onClose={() => setShowSavedArticles(false)}
-        />
       </ScrollView>
 
       {/* Chatbot Floating Button */}
@@ -988,6 +1025,72 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
+  },
+
+  // Personalized Welcome Section
+  welcomeSection: {
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 8,
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+  },
+  welcomeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  profileIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#007AFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  welcomeText: {
+    flex: 1,
+  },
+  welcomeTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1C1C1E',
+    marginBottom: 4,
+  },
+  welcomeSubtitle: {
+    fontSize: 14,
+    color: '#8E8E93',
+    lineHeight: 20,
+  },
+  quickStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E5EA',
+  },
+  statItem: {
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1C1C1E',
+    marginTop: 4,
+    marginBottom: 2,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#8E8E93',
   },
 
   // Portfolio Card Fallback
@@ -1124,65 +1227,82 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
-  // News Section
-  newsSection: {
+  // Learning Section
+  learningSection: {
     marginTop: 24,
     marginBottom: 16,
   },
-  newsHeader: {
+  learningHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 16,
     paddingHorizontal: 16,
   },
-  newsHeaderLeft: {
+  learningHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  newsHeaderRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  newsTitle: {
+  learningTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#1C1C1E',
   },
-  personalizeButton: {
+  learningButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: '#F2F2F7',
+    gap: 4,
   },
-  personalizeText: {
+  learningButtonText: {
     fontSize: 14,
     fontWeight: '600',
+    color: '#AF52DE',
+  },
+  learningCards: {
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  learningCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  learningCardIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#F2F2F7',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  learningCardContent: {
+    flex: 1,
+  },
+  learningCardTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1C1C1E',
+    marginBottom: 4,
+  },
+  learningCardDescription: {
+    fontSize: 13,
+    color: '#8E8E93',
+    marginBottom: 4,
+  },
+  learningCardMeta: {
+    fontSize: 12,
     color: '#8E8E93',
   },
-  personalizeTextActive: {
-    color: '#34C759',
-  },
-  savedButton: {
-    padding: 8,
-    borderRadius: 16,
-    backgroundColor: '#F2F2F7',
-  },
-  alertsButton: {
-    padding: 8,
-    borderRadius: 16,
-    backgroundColor: '#F2F2F7',
-  },
-  preferencesButton: {
-    padding: 8,
-    borderRadius: 16,
-    backgroundColor: '#F2F2F7',
-  },
+
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
