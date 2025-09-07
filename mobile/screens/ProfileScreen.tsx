@@ -323,6 +323,15 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigateTo, onLogout }) =
             <Text style={styles.actionButtonText}>Discussion Hub</Text>
             <Icon name="chevron-right" size={16} color="#C7C7CC" style={styles.actionArrow} />
           </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.actionButton, styles.premiumButton]}
+            onPress={() => navigateTo?.('premium-analytics')}
+          >
+            <Icon name="star" size={20} color="#FFD700" />
+            <Text style={[styles.actionButtonText, styles.premiumButtonText]}>Premium Analytics</Text>
+            <Icon name="chevron-right" size={16} color="#FFD700" style={styles.actionArrow} />
+          </TouchableOpacity>
         </View>
 
         {/* Profile Stats */}
@@ -940,6 +949,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 8,
     fontStyle: 'italic',
+  },
+  premiumButton: {
+    backgroundColor: '#FFF8E1',
+    borderWidth: 1,
+    borderColor: '#FFD700',
+  },
+  premiumButtonText: {
+    color: '#B8860B',
+    fontWeight: '600',
   },
 });
 

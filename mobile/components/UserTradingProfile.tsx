@@ -246,7 +246,7 @@ const UserTradingProfile: React.FC<UserTradingProfileProps> = ({ onProfileSet })
 
       {/* AI Explanation */}
       <View style={styles.aiExplanation}>
-        <Icon name="brain" size={24} color="#007AFF" />
+        <Icon name="cpu" size={24} color="#007AFF" />
         <Text style={styles.aiExplanationTitle}>How AI Recommendations Work</Text>
         <Text style={styles.aiExplanationText}>
           Our AI analyzes technical indicators (RSI, MACD, Bollinger Bands), market conditions, 

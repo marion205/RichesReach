@@ -42,8 +42,16 @@ class Query(graphene.ObjectType):
     portfolio_names = graphene.List(graphene.String)
     portfolio_value = graphene.Float()
     
+    # Regular portfolio analytics (not premium)
+    portfolio_metrics = graphene.Field('core.premium_types.PortfolioMetricsType')
+    
     # Stock price queries
     current_stock_prices = graphene.List('core.types.StockPriceType', symbols=graphene.List(graphene.String))
+    
+    # Test queries for premium features (no auth required for testing)
+    test_portfolio_metrics = graphene.Field('core.premium_types.PortfolioMetricsType')
+    test_ai_recommendations = graphene.Field('core.premium_types.AIRecommendationsType')
+    test_stock_screening = graphene.List('core.premium_types.StockScreeningResultType')
 
     # Phase 3 Social Features - TODO: Uncomment when types are available
     watchlists = graphene.List(WatchlistType, user_id=graphene.ID())
@@ -620,3 +628,35 @@ class Query(graphene.ObjectType):
         
         from .portfolio_service import PortfolioService
         return PortfolioService.get_portfolio_names(user)
+    
+    def resolve_portfolio_metrics(self, info):
+        """Get portfolio metrics (regular feature, not premium)"""
+        from .premium_analytics import PremiumAnalyticsService
+        service = PremiumAnalyticsService()
+        
+        # For testing purposes, use user ID 1 if no user is authenticated
+        user = info.context.user
+        user_id = user.id if user and not user.is_anonymous else 1
+        
+        return service.get_portfolio_performance_metrics(user_id)
+    
+    def resolve_test_portfolio_metrics(self, info):
+        """Test portfolio metrics (no auth required)"""
+        from .premium_analytics import PremiumAnalyticsService
+        service = PremiumAnalyticsService()
+        # Use user ID 1 for testing
+        return service.get_portfolio_performance_metrics(1)
+    
+    def resolve_test_ai_recommendations(self, info):
+        """Test AI recommendations (no auth required)"""
+        from .premium_analytics import PremiumAnalyticsService
+        service = PremiumAnalyticsService()
+        # Use user ID 1 for testing
+        return service.get_ai_recommendations(1, "medium")
+    
+    def resolve_test_stock_screening(self, info):
+        """Test stock screening (no auth required)"""
+        from .premium_analytics import PremiumAnalyticsService
+        service = PremiumAnalyticsService()
+        # Return some sample screening results
+        return service.get_advanced_stock_screening({})

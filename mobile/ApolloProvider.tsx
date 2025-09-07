@@ -9,8 +9,8 @@ import { Platform } from 'react-native';
 // Create HTTP link
 const httpLink = createHttpLink({
   uri: Platform.OS === 'android' 
-    ? 'http://10.0.2.2:8000/graphql/' // Android emulator
-    : 'http://192.168.1.151:8000/graphql/', // iOS simulator - use your local IP
+    ? 'http://10.0.2.2:8001/graphql/' // Android emulator
+    : 'http://localhost:8001/graphql/', // iOS simulator - use localhost
 });
 
 // Auth link to add JWT token to headers

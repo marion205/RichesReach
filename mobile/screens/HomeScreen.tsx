@@ -12,14 +12,40 @@ import {
   Alert,
   Image,
 } from 'react-native';
-import { useApolloClient } from '@apollo/client';
+import { useApolloClient, useQuery, gql } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
 import NewsCard from '../components/NewsCard';
 import NewsCategories from '../components/NewsCategories';
 import NewsPreferences from '../components/NewsPreferences';
 import NewsAlerts from '../components/NewsAlerts';
 import SavedArticles from '../components/SavedArticles';
+import PortfolioGraph from '../components/PortfolioGraph';
+import PortfolioHoldings from '../components/PortfolioHoldings';
 import newsService, { NewsCategory, NewsArticle, NEWS_CATEGORIES } from '../services/newsService';
+import webSocketService, { PortfolioUpdate } from '../services/WebSocketService';
+
+// GraphQL Query for Portfolio Data
+const GET_PORTFOLIO_METRICS = gql`
+  query GetPortfolioMetrics {
+    portfolioMetrics {
+      totalValue
+      totalCost
+      totalReturn
+      totalReturnPercent
+      holdings {
+        symbol
+        companyName
+        shares
+        currentPrice
+        totalValue
+        costBasis
+        returnAmount
+        returnPercent
+        sector
+      }
+    }
+  }
+`;
 
 
 
@@ -36,8 +62,23 @@ interface ChatMsg {
 export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string, data?: any) => void }) {
   const client = useApolloClient();
   
+  // Portfolio data query
+  const { data: portfolioData, loading: portfolioLoading, error: portfolioError } = useQuery(GET_PORTFOLIO_METRICS, {
+    fetchPolicy: 'cache-and-network',
+    errorPolicy: 'ignore',
+  });
+  
+  // Debug portfolio data
+  console.log('Portfolio Data:', portfolioData);
+  console.log('Portfolio Loading:', portfolioLoading);
+  console.log('Portfolio Error:', portfolioError);
+  
   // State
   const [refreshing, setRefreshing] = useState(false);
+  
+  // Live portfolio data from WebSocket
+  const [liveHoldings, setLiveHoldings] = useState<any[]>([]);
+  const [isLiveData, setIsLiveData] = useState(false);
 
   // News state
   const [newsArticles, setNewsArticles] = useState<NewsArticle[]>([]);
@@ -60,6 +101,43 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
     loadNews();
     loadNewsCategories();
   }, [selectedCategory, isPersonalized]);
+
+  // WebSocket setup for live portfolio updates
+  useEffect(() => {
+    const setupWebSocket = async () => {
+      try {
+        // Set up portfolio update callback
+        webSocketService.setCallbacks({
+          onPortfolioUpdate: (portfolio: PortfolioUpdate) => {
+            console.log('📊 Live portfolio update received in HomeScreen:', portfolio);
+            
+            // Update live holdings data
+            setLiveHoldings(portfolio.holdings);
+            setIsLiveData(true);
+          }
+        });
+        
+        // Connect to WebSocket
+        webSocketService.connect();
+        
+        // Subscribe to portfolio updates
+        setTimeout(() => {
+          webSocketService.subscribeToPortfolio();
+        }, 1000);
+        
+      } catch (error) {
+        console.error('Error setting up portfolio WebSocket in HomeScreen:', error);
+      }
+    };
+    
+    setupWebSocket();
+    
+    // Cleanup on unmount
+    return () => {
+      // Don't disconnect the shared WebSocket service
+      // as other components might be using it
+    };
+  }, []);
 
   const loadNews = async () => {
     try {
@@ -687,12 +765,6 @@ Feel free to ask about any of these topics or try one of the quick prompts above
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Icon name="home" size={24} color="#34C759" />
-        <Text style={styles.headerTitle}>Financial News</Text>
-      </View>
-
       {/* Content */}
       <ScrollView
         style={styles.content}
@@ -700,17 +772,28 @@ Feel free to ask about any of these topics or try one of the quick prompts above
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {/* Logo */}
-        <View style={styles.welcomeContainer}>
-          <Image 
-            source={require('../assets/whitelogo1.png')} 
-            style={styles.logo}
-            resizeMode="contain"
+        {/* Portfolio Graph - First thing users see */}
+        <PortfolioGraph
+          totalValue={portfolioData?.portfolioMetrics?.totalValue || 14303.52}
+          totalReturn={portfolioData?.portfolioMetrics?.totalReturn || 2145.53}
+          totalReturnPercent={portfolioData?.portfolioMetrics?.totalReturnPercent || 17.65}
+          onPress={() => {
+            // Navigate to portfolio details
+            console.log('Portfolio graph pressed');
+          }}
+        />
+
+        {/* Portfolio Holdings */}
+        {(portfolioData?.portfolioMetrics?.holdings || liveHoldings.length > 0) && (
+          <PortfolioHoldings
+            holdings={isLiveData && liveHoldings.length > 0 ? liveHoldings : portfolioData?.portfolioMetrics?.holdings}
+            onStockPress={(symbol) => {
+              // Navigate to stock detail or search
+              console.log('Stock pressed:', symbol);
+            }}
           />
-          <Text style={styles.welcomeSubtitle}>
-            Stay informed with the latest financial news and get personalized financial education.
-          </Text>
-        </View>
+        )}
+
 
         {/* News Section */}
         <View style={styles.newsSection}>
@@ -907,56 +990,40 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8f9fa',
   },
 
-  // Header
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1C1C1E',
-  },
-
-  // Welcome Section
-  welcomeContainer: {
-    alignItems: 'center',
-    padding: 40,
+  // Portfolio Card Fallback
+  portfolioCardFallback: {
     backgroundColor: '#FFFFFF',
     marginHorizontal: 16,
-    marginVertical: 12,
+    marginVertical: 8,
     borderRadius: 16,
+    padding: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 5,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    alignItems: 'center',
   },
-  logo: {
-    width: 280,
-    height: 112,
-    marginBottom: 16,
-  },
-  welcomeTitle: {
-    fontSize: 24,
+  fallbackTitle: {
+    fontSize: 20,
     fontWeight: '700',
     color: '#1C1C1E',
-    marginTop: 16,
     marginBottom: 8,
-    textAlign: 'center',
   },
-  welcomeSubtitle: {
-    fontSize: 16,
+  fallbackValue: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#1C1C1E',
+    marginBottom: 4,
+  },
+  fallbackSubtext: {
+    fontSize: 14,
     color: '#8E8E93',
-    textAlign: 'center',
-    lineHeight: 22,
   },
+
+
 
   // Summary Stats
   summaryContainer: {

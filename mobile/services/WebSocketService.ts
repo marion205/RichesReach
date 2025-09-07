@@ -53,9 +53,30 @@ export interface CommentUpdate {
   created_at: string;
 }
 
+export interface PortfolioUpdate {
+  totalValue: number;
+  totalCost: number;
+  totalReturn: number;
+  totalReturnPercent: number;
+  holdings: Array<{
+    symbol: string;
+    companyName: string;
+    shares: number;
+    currentPrice: number;
+    totalValue: number;
+    costBasis: number;
+    returnAmount: number;
+    returnPercent: number;
+    sector: string;
+  }>;
+  timestamp: number;
+  marketStatus: 'open' | 'closed' | 'pre-market' | 'after-hours';
+}
+
 class WebSocketService {
   private stockPriceSocket: WebSocket | null = null;
   private discussionSocket: WebSocket | null = null;
+  private portfolioSocket: WebSocket | null = null;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000; // Start with 1 second
@@ -68,6 +89,7 @@ class WebSocketService {
   private onNewDiscussion?: (discussion: DiscussionUpdate) => void;
   private onNewComment?: (comment: CommentUpdate) => void;
   private onDiscussionUpdate?: (discussionId: string, updates: any) => void;
+  private onPortfolioUpdate?: (portfolio: PortfolioUpdate) => void;
   private onConnectionStatusChange?: (connected: boolean) => void;
 
   constructor() {
@@ -115,6 +137,7 @@ class WebSocketService {
     onNewDiscussion?: (discussion: DiscussionUpdate) => void;
     onNewComment?: (comment: CommentUpdate) => void;
     onDiscussionUpdate?: (discussionId: string, updates: any) => void;
+    onPortfolioUpdate?: (portfolio: PortfolioUpdate) => void;
     onConnectionStatusChange?: (connected: boolean) => void;
   }) {
     this.onStockPriceUpdate = callbacks.onStockPriceUpdate;
@@ -122,6 +145,7 @@ class WebSocketService {
     this.onNewDiscussion = callbacks.onNewDiscussion;
     this.onNewComment = callbacks.onNewComment;
     this.onDiscussionUpdate = callbacks.onDiscussionUpdate;
+    this.onPortfolioUpdate = callbacks.onPortfolioUpdate;
     this.onConnectionStatusChange = callbacks.onConnectionStatusChange;
   }
 
@@ -130,13 +154,16 @@ class WebSocketService {
       return;
     }
 
-            const baseUrl = 'ws://localhost:8001/ws';
+            const baseUrl = 'ws://192.168.1.151:8001/ws';
     
     // Connect to stock prices WebSocket
     this.connectStockPrices(baseUrl);
     
     // Connect to discussions WebSocket
     this.connectDiscussions(baseUrl);
+    
+    // Connect to portfolio WebSocket
+    this.connectPortfolio(baseUrl);
   }
 
   private connectStockPrices(baseUrl: string) {
@@ -223,6 +250,47 @@ class WebSocketService {
     }
   }
 
+  private connectPortfolio(baseUrl: string) {
+    try {
+      const url = `${baseUrl}/portfolio/`;
+      
+      this.portfolioSocket = new WebSocket(url);
+      
+      this.portfolioSocket.onopen = () => {
+        console.log('📊 Portfolio WebSocket connected');
+        
+        // Send authentication token if available
+        if (this.token) {
+          this.portfolioSocket?.send(JSON.stringify({
+            type: 'authenticate',
+            token: this.token
+          }));
+        }
+      };
+
+      this.portfolioSocket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          this.handlePortfolioMessage(data);
+        } catch (error) {
+          console.error('Error parsing portfolio WebSocket message:', error);
+        }
+      };
+
+      this.portfolioSocket.onclose = () => {
+        console.log('📊 Portfolio WebSocket disconnected');
+        this.handleReconnect('portfolio');
+      };
+
+      this.portfolioSocket.onerror = (error) => {
+        console.error('❌ Portfolio WebSocket error:', error);
+      };
+
+    } catch (error) {
+      console.error('Error creating portfolio WebSocket:', error);
+    }
+  }
+
   private handleStockPriceMessage(data: any) {
     switch (data.type) {
       case 'initial_prices':
@@ -299,7 +367,31 @@ class WebSocketService {
     }
   }
 
-  private handleReconnect(type: 'stock-prices' | 'discussions') {
+  private handlePortfolioMessage(data: any) {
+    switch (data.type) {
+      case 'portfolio_update':
+        const portfolioUpdate: PortfolioUpdate = {
+          totalValue: data.totalValue,
+          totalCost: data.totalCost,
+          totalReturn: data.totalReturn,
+          totalReturnPercent: data.totalReturnPercent,
+          holdings: data.holdings,
+          timestamp: data.timestamp,
+          marketStatus: data.marketStatus
+        };
+        
+        this.onPortfolioUpdate?.(portfolioUpdate);
+        break;
+        
+      case 'pong':
+        break;
+        
+      default:
+        // Unknown message type
+    }
+  }
+
+  private handleReconnect(type: 'stock-prices' | 'discussions' | 'portfolio') {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       return;
     }
@@ -309,8 +401,10 @@ class WebSocketService {
     setTimeout(() => {
       if (type === 'stock-prices') {
         this.connectStockPrices('ws://localhost:8001/ws');
-      } else {
+      } else if (type === 'discussions') {
         this.connectDiscussions('ws://localhost:8001/ws');
+      } else if (type === 'portfolio') {
+        this.connectPortfolio('ws://localhost:8001/ws');
       }
     }, this.reconnectDelay);
     
@@ -323,6 +417,14 @@ class WebSocketService {
       this.stockPriceSocket.send(JSON.stringify({
         type: 'subscribe_stocks',
         symbols: symbols
+      }));
+    }
+  }
+
+  public subscribeToPortfolio() {
+    if (this.portfolioSocket?.readyState === WebSocket.OPEN) {
+      this.portfolioSocket.send(JSON.stringify({
+        type: 'subscribe_portfolio'
       }));
     }
   }
@@ -358,6 +460,11 @@ class WebSocketService {
     if (this.discussionSocket) {
       this.discussionSocket.close();
       this.discussionSocket = null;
+    }
+    
+    if (this.portfolioSocket) {
+      this.portfolioSocket.close();
+      this.portfolioSocket = null;
     }
     
     this.isConnected = false;
