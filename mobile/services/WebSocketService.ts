@@ -162,8 +162,8 @@ class WebSocketService {
     // Connect to discussions WebSocket
     this.connectDiscussions(baseUrl);
     
-    // Connect to portfolio WebSocket
-    this.connectPortfolio(baseUrl);
+    // Connect to portfolio WebSocket (disabled for now - using mock data)
+    // this.connectPortfolio(baseUrl);
   }
 
   private connectStockPrices(baseUrl: string) {

@@ -110,6 +110,10 @@ class PremiumAnalyticsService:
             metrics["max_drawdown"] = self._estimate_max_drawdown(metrics["holdings"])
             
             return metrics
+            
+        except Exception as e:
+            logger.error(f"Error calculating portfolio metrics: {e}")
+            return self._get_mock_portfolio_data()
     
     def _get_mock_portfolio_data(self):
         """Return mock portfolio data with different individual stock returns"""

@@ -815,6 +815,7 @@ Feel free to ask about any of these topics or try one of the quick prompts above
           </View>
         )}
 
+
         {/* Portfolio Graph - First thing users see */}
         <PortfolioGraph
           totalValue={isLiveData && liveTotalValue ? liveTotalValue : (portfolioData?.portfolioMetrics?.totalValue || 14303.52)}
@@ -1017,6 +1018,9 @@ Feel free to ask about any of these topics or try one of the quick prompts above
           </View>
         </View>
       )}
+
+
+
     </SafeAreaView>
   );
 }
@@ -1611,5 +1615,174 @@ const styles = StyleSheet.create({
   },
   chatSendButtonDisabled: {
     backgroundColor: '#ccc',
+  },
+  
+  // Social Guide Button
+  socialGuideButton: {
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 16,
+    marginVertical: 8,
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+  },
+  socialGuideContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  socialGuideIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#007AFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  socialGuideText: {
+    flex: 1,
+  },
+  socialGuideTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1C1C1E',
+    marginBottom: 4,
+  },
+  socialGuideSubtitle: {
+    fontSize: 14,
+    color: '#8E8E93',
+    lineHeight: 20,
+  },
+  
+  // Test User Button
+  testUserButton: {
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 16,
+    marginVertical: 8,
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+  },
+  testUserContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  testUserIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#34C759',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  testUserText: {
+    flex: 1,
+  },
+  testUserTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1C1C1E',
+    marginBottom: 4,
+  },
+  testUserSubtitle: {
+    fontSize: 14,
+    color: '#8E8E93',
+    lineHeight: 20,
+  },
+  
+  // Search Test Button
+  searchTestButton: {
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 16,
+    marginVertical: 8,
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+  },
+  searchTestContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  searchTestIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#FF9500',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  searchTestText: {
+    flex: 1,
+  },
+  searchTestTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1C1C1E',
+    marginBottom: 4,
+  },
+  searchTestSubtitle: {
+    fontSize: 14,
+    color: '#8E8E93',
+    lineHeight: 20,
+  },
+  
+  // Modal Styles
+  modalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  modalContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    width: '90%',
+    height: '80%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5EA',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1C1C1E',
+  },
+  modalCloseButton: {
+    padding: 8,
   },
 });
