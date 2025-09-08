@@ -20,6 +20,7 @@ import PortfolioHoldings from '../components/PortfolioHoldings';
 import BasicRiskMetrics from '../components/BasicRiskMetrics';
 import PortfolioComparison from '../components/PortfolioComparison';
 import MarketDataConfig from '../components/MarketDataConfig';
+import RealTimePortfolio from '../components/RealTimePortfolio';
 import webSocketService, { PortfolioUpdate } from '../services/WebSocketService';
 import UserProfileService, { ExtendedUserProfile } from '../services/UserProfileService';
 
@@ -90,6 +91,9 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
 
   // Market data config modal
   const [marketDataConfigOpen, setMarketDataConfigOpen] = useState(false);
+  
+  // Portfolio view toggle
+  const [useRealTimePortfolio, setUseRealTimePortfolio] = useState(true);
 
 
   // Load user profile
@@ -821,31 +825,60 @@ Feel free to ask about any of these topics or try one of the quick prompts above
         )}
 
 
-        {/* Portfolio Graph - First thing users see */}
-        <PortfolioGraph
-          totalValue={isLiveData && liveTotalValue ? liveTotalValue : (portfolioData?.portfolioMetrics?.totalValue || 14303.52)}
-          totalReturn={isLiveData && liveTotalReturn ? liveTotalReturn : (portfolioData?.portfolioMetrics?.totalReturn || 2145.53)}
-          totalReturnPercent={isLiveData && liveTotalReturnPercent ? liveTotalReturnPercent : (portfolioData?.portfolioMetrics?.totalReturnPercent || 17.65)}
-          onPress={() => {
-            // Navigate to portfolio details
-            navigateTo('PortfolioEducation', { 
-              clickedElement: 'chart',
-              totalValue: liveTotalValue || portfolioData?.portfolioMetrics?.totalValue,
-              totalReturn: liveTotalReturn || portfolioData?.portfolioMetrics?.totalReturn,
-              totalReturnPercent: liveTotalReturnPercent || portfolioData?.portfolioMetrics?.totalReturnPercent
-            });
-          }}
-        />
+        {/* Portfolio Toggle */}
+        <View style={styles.portfolioToggleContainer}>
+          <Text style={styles.portfolioToggleLabel}>Portfolio View:</Text>
+          <TouchableOpacity 
+            style={styles.portfolioToggle}
+            onPress={() => setUseRealTimePortfolio(!useRealTimePortfolio)}
+          >
+            <Text style={[styles.toggleText, useRealTimePortfolio && styles.toggleTextActive]}>
+              Real-time
+            </Text>
+            <Text style={[styles.toggleText, !useRealTimePortfolio && styles.toggleTextActive]}>
+              Static
+            </Text>
+          </TouchableOpacity>
+        </View>
 
-        {/* Portfolio Holdings */}
-        {(portfolioData?.portfolioMetrics?.holdings || liveHoldings.length > 0) && (
-          <PortfolioHoldings
-            holdings={isLiveData && liveHoldings.length > 0 ? liveHoldings : portfolioData?.portfolioMetrics?.holdings}
-            onStockPress={(symbol) => {
-              // Navigate to stock detail or search
-              navigateTo('StockDetail', { symbol });
-            }}
-          />
+        {/* Real-time Portfolio */}
+        {useRealTimePortfolio ? (
+          <View style={styles.realTimePortfolioContainer}>
+            <RealTimePortfolio 
+              onHoldingPress={(holding) => {
+                navigateTo('StockDetail', { symbol: holding.symbol });
+              }}
+            />
+          </View>
+        ) : (
+          <>
+            {/* Portfolio Graph - First thing users see */}
+            <PortfolioGraph
+              totalValue={isLiveData && liveTotalValue ? liveTotalValue : (portfolioData?.portfolioMetrics?.totalValue || 14303.52)}
+              totalReturn={isLiveData && liveTotalReturn ? liveTotalReturn : (portfolioData?.portfolioMetrics?.totalReturn || 2145.53)}
+              totalReturnPercent={isLiveData && liveTotalReturnPercent ? liveTotalReturnPercent : (portfolioData?.portfolioMetrics?.totalReturnPercent || 17.65)}
+              onPress={() => {
+                // Navigate to portfolio details
+                navigateTo('PortfolioEducation', { 
+                  clickedElement: 'chart',
+                  totalValue: liveTotalValue || portfolioData?.portfolioMetrics?.totalValue,
+                  totalReturn: liveTotalReturn || portfolioData?.portfolioMetrics?.totalReturn,
+                  totalReturnPercent: liveTotalReturnPercent || portfolioData?.portfolioMetrics?.totalReturnPercent
+                });
+              }}
+            />
+
+            {/* Portfolio Holdings */}
+            {(portfolioData?.portfolioMetrics?.holdings || liveHoldings.length > 0) && (
+              <PortfolioHoldings
+                holdings={isLiveData && liveHoldings.length > 0 ? liveHoldings : portfolioData?.portfolioMetrics?.holdings}
+                onStockPress={(symbol) => {
+                  // Navigate to stock detail or search
+                  navigateTo('StockDetail', { symbol });
+                }}
+              />
+            )}
+          </>
         )}
 
         {/* Basic Risk Metrics */}
@@ -1817,5 +1850,58 @@ const styles = StyleSheet.create({
   },
   modalCloseButton: {
     padding: 8,
+  },
+
+  // Portfolio Toggle Styles
+  portfolioToggleContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginVertical: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  portfolioToggleLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  portfolioToggle: {
+    flexDirection: 'row',
+    backgroundColor: '#f0f0f0',
+    borderRadius: 8,
+    padding: 2,
+  },
+  toggleText: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#666',
+  },
+  toggleTextActive: {
+    backgroundColor: '#007AFF',
+    color: '#fff',
+    borderRadius: 6,
+  },
+  realTimePortfolioContainer: {
+    flex: 1,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
   },
 });
