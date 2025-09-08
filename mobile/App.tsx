@@ -39,9 +39,12 @@ import UserProfileService from './services/UserProfileService';
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('home');
   
-  // Debug currentScreen changes
+  // Track currentScreen changes for analytics (production)
   useEffect(() => {
-    console.log('🔄 currentScreen state changed to:', currentScreen);
+    // Track screen changes for analytics in production
+    if (!__DEV__) {
+      // Analytics tracking would go here
+    }
   }, [currentScreen]);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
@@ -60,8 +63,6 @@ export default function App() {
           try {
             const notificationsEnabled = await pushNotificationService.initialize();
             if (notificationsEnabled) {
-              console.log('📱 Push notifications initialized successfully');
-              
               // Set up notification listeners
               const { notificationListener, responseListener } = pushNotificationService.setupNotificationListeners();
 
@@ -71,10 +72,11 @@ export default function App() {
               };
             }
           } catch (notificationError) {
-            console.warn('⚠️ Push notifications not available (likely Expo Go):', notificationError instanceof Error ? notificationError.message : 'Unknown error');
+            // Push notifications not available (likely Expo Go)
+            if (__DEV__) {
+              console.warn('⚠️ Push notifications not available:', notificationError instanceof Error ? notificationError.message : 'Unknown error');
+            }
           }
-        } else {
-          console.log('📱 Push notification service not available in Expo Go');
         }
 
         // Initialize price alert service
