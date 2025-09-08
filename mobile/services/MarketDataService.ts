@@ -44,7 +44,9 @@ export interface MarketStatus {
 
 class MarketDataService {
   private apiKey: string = 'OHYSFF1AE446O7CR'; // Your Alpha Vantage API key
+  private newsApiKey: string = '94a335c7316145f79840edd62f77e11e'; // Your NewsAPI key
   private baseUrl: string = 'https://www.alphavantage.co/query';
+  private newsBaseUrl: string = 'https://newsapi.org/v2';
   private cache: Map<string, { data: any; timestamp: number }> = new Map();
   private cacheTimeout: number = 60000; // 1 minute cache
 
@@ -180,33 +182,62 @@ class MarketDataService {
     }
   }
 
-  // Get market news
-  public async getMarketNews(topics: string[] = ['general']): Promise<MarketNews[]> {
+  // Get market news from NewsAPI
+  public async getMarketNews(topics: string[] = ['finance', 'stocks', 'market']): Promise<MarketNews[]> {
     try {
-      const data = await this.makeApiCall({
-        function: 'NEWS_SENTIMENT',
-        topics: topics.join(','),
-        limit: '50'
-      });
+      const query = topics.join(' OR ');
+      const url = `${this.newsBaseUrl}/everything?q=${encodeURIComponent(query)}&apiKey=${this.newsApiKey}&sortBy=publishedAt&pageSize=20&language=en`;
+      
+      const response = await fetch(url);
+      const data = await response.json();
 
-      if (data['Error Message']) {
-        throw new Error(data['Error Message']);
+      if (data.status !== 'ok') {
+        throw new Error(data.message || 'Failed to fetch news');
       }
 
-      const news = data.feed || [];
-      return news.map((article: any) => ({
-        id: article.uuid,
+      const articles = data.articles || [];
+      return articles.map((article: any, index: number) => ({
+        id: `news-${index}-${Date.now()}`,
         title: article.title,
-        summary: article.summary,
-        source: article.source,
-        publishedAt: article.time_published,
+        summary: article.description || article.content?.substring(0, 200) + '...',
+        source: article.source.name,
+        publishedAt: article.publishedAt,
         url: article.url,
-        sentiment: this.mapSentiment(article.overall_sentiment_score),
-        relatedSymbols: article.ticker_sentiment?.map((t: any) => t.ticker) || []
+        sentiment: this.analyzeSentiment(article.title + ' ' + (article.description || '')),
+        relatedSymbols: this.extractStockSymbols(article.title + ' ' + (article.description || ''))
       }));
     } catch (error) {
       console.error('Failed to get market news:', error);
       return this.getMockNews();
+    }
+  }
+
+  // Get news for specific stock symbol
+  public async getStockNews(symbol: string): Promise<MarketNews[]> {
+    try {
+      const url = `${this.newsBaseUrl}/everything?q=${encodeURIComponent(symbol)}&apiKey=${this.newsApiKey}&sortBy=publishedAt&pageSize=10&language=en`;
+      
+      const response = await fetch(url);
+      const data = await response.json();
+
+      if (data.status !== 'ok') {
+        throw new Error(data.message || 'Failed to fetch stock news');
+      }
+
+      const articles = data.articles || [];
+      return articles.map((article: any, index: number) => ({
+        id: `stock-${symbol}-${index}-${Date.now()}`,
+        title: article.title,
+        summary: article.description || article.content?.substring(0, 200) + '...',
+        source: article.source.name,
+        publishedAt: article.publishedAt,
+        url: article.url,
+        sentiment: this.analyzeSentiment(article.title + ' ' + (article.description || '')),
+        relatedSymbols: [symbol]
+      }));
+    } catch (error) {
+      console.error(`Failed to get news for ${symbol}:`, error);
+      return [];
     }
   }
 
@@ -396,6 +427,42 @@ class MarketDataService {
     if (score > 0.1) return 'positive';
     if (score < -0.1) return 'negative';
     return 'neutral';
+  }
+
+  // Simple sentiment analysis based on keywords
+  private analyzeSentiment(text: string): 'positive' | 'negative' | 'neutral' {
+    const positiveWords = ['up', 'rise', 'gain', 'surge', 'rally', 'bullish', 'positive', 'growth', 'profit', 'success', 'strong', 'beat', 'exceed', 'outperform'];
+    const negativeWords = ['down', 'fall', 'drop', 'decline', 'crash', 'bearish', 'negative', 'loss', 'weak', 'miss', 'disappoint', 'underperform', 'concern', 'risk'];
+    
+    const lowerText = text.toLowerCase();
+    let positiveScore = 0;
+    let negativeScore = 0;
+    
+    positiveWords.forEach(word => {
+      if (lowerText.includes(word)) positiveScore++;
+    });
+    
+    negativeWords.forEach(word => {
+      if (lowerText.includes(word)) negativeScore++;
+    });
+    
+    if (positiveScore > negativeScore) return 'positive';
+    if (negativeScore > positiveScore) return 'negative';
+    return 'neutral';
+  }
+
+  // Extract stock symbols from text
+  private extractStockSymbols(text: string): string[] {
+    const symbols: string[] = [];
+    const commonSymbols = ['AAPL', 'MSFT', 'GOOGL', 'TSLA', 'AMZN', 'META', 'NVDA', 'NFLX', 'AMD', 'INTC', 'CRM', 'ADBE', 'PYPL', 'UBER', 'LYFT'];
+    
+    commonSymbols.forEach(symbol => {
+      if (text.toUpperCase().includes(symbol)) {
+        symbols.push(symbol);
+      }
+    });
+    
+    return symbols;
   }
 
   // Clear cache

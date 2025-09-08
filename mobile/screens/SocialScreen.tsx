@@ -26,6 +26,7 @@ import LoadingErrorState from '../components/LoadingErrorState';
 import SocialFeed from '../components/SocialFeed';
 import UserProfileCard from '../components/UserProfileCard';
 import DiscoverUsers from '../components/DiscoverUsers';
+import FinancialNews from '../components/FinancialNews';
 import webSocketService, { DiscussionUpdate } from '../services/WebSocketService';
 import errorService, { ErrorType, ErrorSeverity } from '../services/ErrorService';
 
@@ -247,10 +248,10 @@ const SocialScreen: React.FC<SocialScreenProps> = ({ onNavigate }) => {
   const [modalLocalScore, setModalLocalScore] = useState(0);
   
   // Feed type state
-  const [feedType, setFeedType] = useState<'trending' | 'following' | 'social-feed' | 'discover'>('trending');
+  const [feedType, setFeedType] = useState<'trending' | 'following' | 'social-feed' | 'discover' | 'news'>('trending');
   
   // Debug wrapper for setFeedType
-  const handleFeedTypeChange = (newFeedType: 'trending' | 'following' | 'social-feed' | 'discover') => {
+  const handleFeedTypeChange = (newFeedType: 'trending' | 'following' | 'social-feed' | 'discover' | 'news') => {
     console.log('🔄 Feed type changing from', feedType, 'to', newFeedType);
     setFeedType(newFeedType);
   };
@@ -987,6 +988,10 @@ const SocialScreen: React.FC<SocialScreenProps> = ({ onNavigate }) => {
     
     if (feedType === 'discover') {
       return <DiscoverUsers onNavigate={onNavigate || (() => {})} />;
+    }
+    
+    if (feedType === 'news') {
+      return <FinancialNews limit={15} />;
     }
     
     return (
