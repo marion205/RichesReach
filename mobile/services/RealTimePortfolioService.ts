@@ -43,6 +43,9 @@ class RealTimePortfolioService {
     try {
       console.log('📊 Loading portfolio data...');
       
+      // Pre-load data to avoid rate limits
+      await MarketDataService.preloadPortfolioData();
+      
       // Get current portfolio data
       const portfolioData = await this.getCurrentPortfolio();
       if (!portfolioData) {

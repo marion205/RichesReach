@@ -23,7 +23,6 @@ import PortfolioManagementScreen from './screens/PortfolioManagementScreen';
 import PremiumAnalyticsScreen from './screens/PremiumAnalyticsScreen';
 import SubscriptionScreen from './screens/SubscriptionScreen';
 import LearningPathsScreen from './screens/LearningPathsScreen';
-import NewsScreen from './screens/NewsScreen';
 import OnboardingScreen, { UserProfile } from './screens/OnboardingScreen';
 import DiscoverUsersScreen from './screens/DiscoverUsersScreen';
 import UserProfileScreen from './screens/UserProfileScreen';
@@ -219,8 +218,6 @@ export default function App() {
         return <SocialScreen onNavigate={navigateTo} />;
       case 'learning-paths':
         return <LearningPathsScreen />;
-      case 'news':
-        return <NewsScreen />;
       case 'discover-users':
         return <DiscoverUsersScreen onNavigate={navigateTo} />;
       case 'user-profile':

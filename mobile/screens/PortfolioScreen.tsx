@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,11 +7,12 @@ import {
   ScrollView,
   RefreshControl,
   Alert,
+  TouchableOpacity,
 } from 'react-native';
 import { useQuery } from '@apollo/client';
 import { gql } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
-import PortfolioCalculator from '../components/PortfolioCalculator';
+import MarketDataService from '../services/MarketDataService';
 
 const GET_MY_WATCHLIST = gql`
   query GetMyWatchlist {
@@ -36,8 +37,42 @@ interface PortfolioScreenProps {
 
 const PortfolioScreen: React.FC<PortfolioScreenProps> = ({ navigateTo }) => {
   const [refreshing, setRefreshing] = useState(false);
+  const [realTimePrices, setRealTimePrices] = useState<{ [key: string]: number }>({});
+  const [loadingPrices, setLoadingPrices] = useState(false);
 
   const { data: watchlistData, loading: watchlistLoading, error: watchlistError, refetch } = useQuery(GET_MY_WATCHLIST);
+
+  // Fetch real-time prices when watchlist data changes
+  useEffect(() => {
+    if (watchlistData?.myWatchlist) {
+      fetchRealTimePrices(watchlistData.myWatchlist);
+    }
+  }, [watchlistData]);
+
+  // Fetch real-time prices for watchlist items
+  const fetchRealTimePrices = async (watchlistItems: any[]) => {
+    if (watchlistItems.length === 0) return;
+    
+    setLoadingPrices(true);
+    try {
+      const symbols = watchlistItems.map(item => item.stock.symbol);
+      const quotes = await MarketDataService.getMultipleQuotes(symbols);
+      
+      const prices: { [key: string]: number } = {};
+      quotes.forEach((quote) => {
+        if (quote.price > 0) {
+          prices[quote.symbol] = quote.price;
+        }
+      });
+      
+      setRealTimePrices(prices);
+      console.log(`📊 Fetched real prices for ${Object.keys(prices).length} watchlist stocks`);
+    } catch (error) {
+      console.error('Failed to fetch real-time prices for watchlist:', error);
+    } finally {
+      setLoadingPrices(false);
+    }
+  };
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -55,7 +90,7 @@ const PortfolioScreen: React.FC<PortfolioScreenProps> = ({ navigateTo }) => {
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <Icon name="bar-chart-2" size={24} color="#34C759" />
-          <Text style={styles.headerTitle}>Portfolio Calculator</Text>
+          <Text style={styles.headerTitle}>Portfolio</Text>
         </View>
         <View style={styles.loadingContainer}>
           <Icon name="refresh-cw" size={32} color="#34C759" />
@@ -70,7 +105,7 @@ const PortfolioScreen: React.FC<PortfolioScreenProps> = ({ navigateTo }) => {
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <Icon name="bar-chart-2" size={24} color="#34C759" />
-          <Text style={styles.headerTitle}>Portfolio Calculator</Text>
+          <Text style={styles.headerTitle}>Portfolio</Text>
         </View>
         <View style={styles.errorContainer}>
           <Icon name="alert-circle" size={48} color="#FF3B30" />
@@ -95,13 +130,13 @@ const PortfolioScreen: React.FC<PortfolioScreenProps> = ({ navigateTo }) => {
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <Icon name="bar-chart-2" size={24} color="#34C759" />
-          <Text style={styles.headerTitle}>Portfolio Calculator</Text>
+          <Text style={styles.headerTitle}>Portfolio</Text>
         </View>
         <View style={styles.emptyContainer}>
           <Icon name="bar-chart-2" size={64} color="#9CA3AF" />
           <Text style={styles.emptyTitle}>No Stocks in Portfolio</Text>
           <Text style={styles.emptySubtitle}>
-            Add stocks to your watchlist first to use the portfolio calculator.
+            Add stocks to your watchlist to start building your portfolio.
           </Text>
           <View style={styles.emptyActions}>
             <Text 
@@ -120,7 +155,7 @@ const PortfolioScreen: React.FC<PortfolioScreenProps> = ({ navigateTo }) => {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Icon name="bar-chart-2" size={24} color="#34C759" />
-        <Text style={styles.headerTitle}>Portfolio Calculator</Text>
+        <Text style={styles.headerTitle}>Portfolio</Text>
       </View>
 
       <ScrollView
@@ -130,41 +165,91 @@ const PortfolioScreen: React.FC<PortfolioScreenProps> = ({ navigateTo }) => {
         }
         showsVerticalScrollIndicator={false}
       >
-        <PortfolioCalculator watchlistItems={watchlistItems} />
-        
-        {/* Additional Portfolio Features */}
-        <View style={styles.featuresSection}>
-          <Text style={styles.featuresTitle}>Portfolio Features</Text>
+        {/* Portfolio Overview */}
+        <View style={styles.portfolioOverview}>
+          <Text style={styles.overviewTitle}>Your Watchlist</Text>
+          <Text style={styles.overviewSubtitle}>
+            {watchlistItems.length} stocks being tracked
+            {loadingPrices && ' • Loading prices...'}
+          </Text>
           
-          <View style={styles.featureCard}>
-            <View style={styles.featureHeader}>
-              <Icon name="trending-up" size={20} color="#34C759" />
-              <Text style={styles.featureTitle}>Real-Time Calculations</Text>
-            </View>
-            <Text style={styles.featureDescription}>
-              See your portfolio value update instantly as you adjust share quantities.
-            </Text>
+          <View style={styles.watchlistGrid}>
+            {watchlistItems.slice(0, 6).map((item: any) => (
+              <View key={item.id} style={styles.watchlistItem}>
+                <Text style={styles.stockSymbol}>{item.stock.symbol}</Text>
+                <Text style={styles.stockName} numberOfLines={1}>
+                  {item.stock.companyName}
+                </Text>
+                <View style={styles.priceContainer}>
+                  <Text style={styles.stockPrice}>
+                    ${realTimePrices[item.stock.symbol] ? realTimePrices[item.stock.symbol].toFixed(2) : 'N/A'}
+                  </Text>
+                  {realTimePrices[item.stock.symbol] && (
+                    <Text style={styles.livePriceIndicator}>Live</Text>
+                  )}
+                </View>
+              </View>
+            ))}
           </View>
+          
+          {watchlistItems.length > 6 && (
+            <Text style={styles.moreStocks}>
+              +{watchlistItems.length - 6} more stocks
+            </Text>
+          )}
+        </View>
+        
+        {/* Portfolio Actions */}
+        <View style={styles.actionsSection}>
+          <Text style={styles.actionsTitle}>Portfolio Management</Text>
+          
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => navigateTo?.('portfolio-management')}
+          >
+            <View style={styles.actionContent}>
+              <Icon name="edit" size={24} color="#34C759" />
+              <View style={styles.actionText}>
+                <Text style={styles.actionTitle}>Manage Holdings</Text>
+                <Text style={styles.actionDescription}>
+                  Add, edit, or remove stocks from your portfolio
+                </Text>
+              </View>
+              <Icon name="chevron-right" size={20} color="#8E8E93" />
+            </View>
+          </TouchableOpacity>
 
-          <View style={styles.featureCard}>
-            <View style={styles.featureHeader}>
-              <Icon name="edit" size={20} color="#34C759" />
-              <Text style={styles.featureTitle}>Interactive Input</Text>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => navigateTo?.('stock')}
+          >
+            <View style={styles.actionContent}>
+              <Icon name="search" size={24} color="#34C759" />
+              <View style={styles.actionText}>
+                <Text style={styles.actionTitle}>Discover Stocks</Text>
+                <Text style={styles.actionDescription}>
+                  Find new stocks to add to your watchlist
+                </Text>
+              </View>
+              <Icon name="chevron-right" size={20} color="#8E8E93" />
             </View>
-            <Text style={styles.featureDescription}>
-              Input exact share quantities or use quick add buttons for fast adjustments.
-            </Text>
-          </View>
+          </TouchableOpacity>
 
-          <View style={styles.featureCard}>
-            <View style={styles.featureHeader}>
-              <Icon name="refresh-cw" size={20} color="#34C759" />
-              <Text style={styles.featureTitle}>Easy Reset</Text>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => navigateTo?.('ai-portfolio')}
+          >
+            <View style={styles.actionContent}>
+              <Icon name="cpu" size={24} color="#34C759" />
+              <View style={styles.actionText}>
+                <Text style={styles.actionTitle}>AI Recommendations</Text>
+                <Text style={styles.actionDescription}>
+                  Get personalized stock recommendations
+                </Text>
+              </View>
+              <Icon name="chevron-right" size={20} color="#8E8E93" />
             </View>
-            <Text style={styles.featureDescription}>
-              Reset all share quantities to zero with a single tap.
-            </Text>
-          </View>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -260,38 +345,116 @@ const styles = StyleSheet.create({
     color: '#34C759',
     fontWeight: '600',
   },
-  featuresSection: {
+  portfolioOverview: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
     padding: 20,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  featuresTitle: {
-    fontSize: 18,
+  overviewTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1C1C1E',
+    marginBottom: 4,
+  },
+  overviewSubtitle: {
+    fontSize: 14,
+    color: '#8E8E93',
+    marginBottom: 16,
+  },
+  watchlistGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  watchlistItem: {
+    width: '30%',
+    backgroundColor: '#F8F9FA',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  stockSymbol: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1C1C1E',
+    marginBottom: 4,
+  },
+  stockName: {
+    fontSize: 12,
+    color: '#8E8E93',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  priceContainer: {
+    alignItems: 'center',
+  },
+  stockPrice: {
+    fontSize: 14,
     fontWeight: '600',
+    color: '#34C759',
+  },
+  livePriceIndicator: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#34C759',
+    backgroundColor: '#E8F5E8',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 4,
+    textAlign: 'center',
+    marginTop: 2,
+  },
+  moreStocks: {
+    fontSize: 14,
+    color: '#8E8E93',
+    textAlign: 'center',
+    fontStyle: 'italic',
+    marginTop: 8,
+  },
+  actionsSection: {
+    marginTop: 8,
+    paddingHorizontal: 16,
+  },
+  actionsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
     color: '#1C1C1E',
     marginBottom: 16,
   },
-  featureCard: {
+  actionButton: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 2,
+    elevation: 3,
   },
-  featureHeader: {
+  actionContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
   },
-  featureTitle: {
+  actionText: {
+    flex: 1,
+    marginLeft: 16,
+  },
+  actionTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: '#1C1C1E',
+    marginBottom: 4,
   },
-  featureDescription: {
+  actionDescription: {
     fontSize: 14,
     color: '#8E8E93',
     lineHeight: 20,

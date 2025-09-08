@@ -84,7 +84,7 @@ const SocialNav: React.FC<SocialNavProps> = ({ feedType, onFeedTypeChange }) => 
         onPress={() => onFeedTypeChange('news')}
       >
         <Icon 
-          name="newspaper"
+          name="file-text"
           size={20} 
           color={feedType === 'news' ? '#34C759' : '#8E8E93'} 
         />
