@@ -363,7 +363,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigateTo, onLogout }) =
               </Text>
             )}
             <Text style={styles.statCardSubtitle}>
-              {portfolioValue > 0 ? 'Based on your saved portfolio' : 'Use Portfolio Calculator to add shares'}
+              {portfolioValue > 0 ? 'Based on your saved portfolio' : 'Add stocks to your portfolio to see value'}
             </Text>
             <View style={styles.statCardArrow}>
               <Icon name="chevron-right" size={16} color="#C7C7CC" />

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -21,6 +21,7 @@ import {
   REMOVE_PORTFOLIO_HOLDING,
   GET_STOCKS_FOR_PORTFOLIO 
 } from '../graphql/portfolioQueries';
+import MarketDataService from '../services/MarketDataService';
 
 interface PortfolioManagementScreenProps {
   navigateTo?: (screen: string) => void;
@@ -38,6 +39,8 @@ const PortfolioManagementScreen: React.FC<PortfolioManagementScreenProps> = ({ n
   const [shares, setShares] = useState('');
   const [averagePrice, setAveragePrice] = useState('');
   const [editShares, setEditShares] = useState('');
+  const [realTimePrices, setRealTimePrices] = useState<{ [key: string]: number }>({});
+  const [loadingPrices, setLoadingPrices] = useState(false);
 
   // Queries
   const { data: portfoliosData, loading: portfoliosLoading, refetch } = useQuery(GET_MY_PORTFOLIOS);
@@ -51,6 +54,38 @@ const PortfolioManagementScreen: React.FC<PortfolioManagementScreenProps> = ({ n
   const [updatePortfolioHolding] = useMutation(UPDATE_PORTFOLIO_HOLDING);
   const [updateHoldingShares] = useMutation(UPDATE_HOLDING_SHARES);
   const [removePortfolioHolding] = useMutation(REMOVE_PORTFOLIO_HOLDING);
+
+  // Fetch real-time prices for stocks
+  const fetchRealTimePrices = async (stocks: any[]) => {
+    if (stocks.length === 0) return;
+    
+    setLoadingPrices(true);
+    try {
+      const symbols = stocks.map(stock => stock.symbol);
+      const quotes = await MarketDataService.getMultipleQuotes(symbols);
+      
+      const prices: { [key: string]: number } = {};
+      quotes.forEach((quote) => {
+        if (quote.price > 0) {
+          prices[quote.symbol] = quote.price;
+        }
+      });
+      
+      setRealTimePrices(prices);
+      console.log(`📊 Fetched real prices for ${Object.keys(prices).length} stocks in portfolio management`);
+    } catch (error) {
+      console.error('Failed to fetch real-time prices:', error);
+    } finally {
+      setLoadingPrices(false);
+    }
+  };
+
+  // Update real-time prices when stocks data changes
+  useEffect(() => {
+    if (stocksData?.stocks) {
+      fetchRealTimePrices(stocksData.stocks);
+    }
+  }, [stocksData]);
 
   const handleCreatePortfolio = () => {
     if (!newPortfolioName.trim()) {
@@ -69,16 +104,16 @@ const PortfolioManagementScreen: React.FC<PortfolioManagementScreenProps> = ({ n
     }
 
     try {
-      await createPortfolioHolding({
-        variables: {
-          stockId: selectedStock.id,
-          shares: parseInt(shares),
-          portfolioName: selectedPortfolio,
-          averagePrice: averagePrice ? parseFloat(averagePrice) : null,
-          currentPrice: selectedStock.currentPrice,
-        },
-        refetchQueries: [GET_MY_PORTFOLIOS],
-      });
+        await createPortfolioHolding({
+          variables: {
+            stockId: selectedStock.id,
+            shares: parseInt(shares),
+            portfolioName: selectedPortfolio,
+            averagePrice: averagePrice ? parseFloat(averagePrice) : null,
+            currentPrice: realTimePrices[selectedStock.symbol] || selectedStock.currentPrice,
+          },
+          refetchQueries: [GET_MY_PORTFOLIOS],
+        });
 
       Alert.alert('Success', `Added ${shares} shares of ${selectedStock.symbol} to ${selectedPortfolio}`);
       setShowAddStockModal(false);
@@ -168,7 +203,14 @@ const PortfolioManagementScreen: React.FC<PortfolioManagementScreenProps> = ({ n
         <Text style={styles.stockSymbol}>{item.symbol}</Text>
         <Text style={styles.stockName}>{item.companyName}</Text>
       </View>
-      <Text style={styles.stockPrice}>${item.currentPrice}</Text>
+      <View style={styles.priceContainer}>
+        <Text style={styles.stockPrice}>
+          ${realTimePrices[item.symbol] ? realTimePrices[item.symbol].toFixed(2) : item.currentPrice}
+        </Text>
+        {realTimePrices[item.symbol] && (
+          <Text style={styles.livePriceIndicator}>Live</Text>
+        )}
+      </View>
     </TouchableOpacity>
   );
 
@@ -661,10 +703,24 @@ const styles = StyleSheet.create({
   stockInfo: {
     flex: 1,
   },
+  priceContainer: {
+    alignItems: 'flex-end',
+  },
   stockPrice: {
     fontSize: 14,
     fontWeight: '600',
     color: '#34C759',
+  },
+  livePriceIndicator: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#34C759',
+    backgroundColor: '#E8F5E8',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 4,
+    textAlign: 'center',
+    marginTop: 2,
   },
 });
 

@@ -245,7 +245,7 @@ const PersonalizedDashboard: React.FC<PersonalizedDashboardProps> = ({ onNavigat
           </TouchableOpacity>
           <TouchableOpacity 
             style={styles.actionCard}
-            onPress={() => onNavigate('news')}
+            onPress={() => onNavigate('social')}
           >
             <Icon name="globe" size={24} color="#FF9500" />
             <Text style={styles.actionText}>News</Text>

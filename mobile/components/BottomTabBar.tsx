@@ -13,7 +13,6 @@ const BottomTabBar: React.FC<BottomTabBarProps> = ({ currentScreen, onNavigate }
     { id: 'stock', label: 'Stocks', icon: 'trending-up' },
     { id: 'ai-portfolio', label: 'AI Portfolio', icon: 'cpu' },
     { id: 'portfolio', label: 'Portfolio', icon: 'bar-chart-2' },
-    { id: 'news', label: 'News', icon: 'globe' },
     { id: 'social', label: 'Discuss', icon: 'users' },
     { id: 'profile', label: 'Profile', icon: 'user' },
   ];
