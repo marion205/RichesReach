@@ -19,8 +19,8 @@ import PortfolioGraph from '../components/PortfolioGraph';
 import PortfolioHoldings from '../components/PortfolioHoldings';
 import BasicRiskMetrics from '../components/BasicRiskMetrics';
 import PortfolioComparison from '../components/PortfolioComparison';
-import MarketDataConfig from '../components/MarketDataConfig';
 import RealTimePortfolio from '../components/RealTimePortfolio';
+import RealTimePortfolioService, { PortfolioMetrics } from '../services/RealTimePortfolioService';
 import webSocketService, { PortfolioUpdate } from '../services/WebSocketService';
 import UserProfileService, { ExtendedUserProfile } from '../services/UserProfileService';
 
@@ -89,12 +89,28 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
   const [chatSending, setChatSending] = useState(false);
   const listRef = useRef<FlatList<ChatMsg>>(null);
 
-  // Market data config modal
-  const [marketDataConfigOpen, setMarketDataConfigOpen] = useState(false);
-  
   // Portfolio view toggle
-  const [useRealTimePortfolio, setUseRealTimePortfolio] = useState(true);
+  const [useRealTimePortfolio, setUseRealTimePortfolio] = useState(false);
+  
+  // Real portfolio data
+  const [realPortfolioData, setRealPortfolioData] = useState<PortfolioMetrics | null>(null);
 
+
+  // Load real portfolio data
+  useEffect(() => {
+    const loadRealPortfolioData = async () => {
+      try {
+        const portfolioData = await RealTimePortfolioService.getCurrentMetrics();
+        if (portfolioData) {
+          setRealPortfolioData(portfolioData);
+        }
+      } catch (error) {
+        console.error('Failed to load real portfolio data:', error);
+      }
+    };
+
+    loadRealPortfolioData();
+  }, []);
 
   // Load user profile
   useEffect(() => {
@@ -854,24 +870,24 @@ Feel free to ask about any of these topics or try one of the quick prompts above
           <>
             {/* Portfolio Graph - First thing users see */}
             <PortfolioGraph
-              totalValue={isLiveData && liveTotalValue ? liveTotalValue : (portfolioData?.portfolioMetrics?.totalValue || 14303.52)}
-              totalReturn={isLiveData && liveTotalReturn ? liveTotalReturn : (portfolioData?.portfolioMetrics?.totalReturn || 2145.53)}
-              totalReturnPercent={isLiveData && liveTotalReturnPercent ? liveTotalReturnPercent : (portfolioData?.portfolioMetrics?.totalReturnPercent || 17.65)}
+              totalValue={realPortfolioData?.totalValue || (isLiveData && liveTotalValue ? liveTotalValue : (portfolioData?.portfolioMetrics?.totalValue || 14303.52))}
+              totalReturn={realPortfolioData?.totalReturn || (isLiveData && liveTotalReturn ? liveTotalReturn : (portfolioData?.portfolioMetrics?.totalReturn || 2145.53))}
+              totalReturnPercent={realPortfolioData?.totalReturnPercent || (isLiveData && liveTotalReturnPercent ? liveTotalReturnPercent : (portfolioData?.portfolioMetrics?.totalReturnPercent || 17.65))}
               onPress={() => {
                 // Navigate to portfolio details
                 navigateTo('PortfolioEducation', { 
                   clickedElement: 'chart',
-                  totalValue: liveTotalValue || portfolioData?.portfolioMetrics?.totalValue,
-                  totalReturn: liveTotalReturn || portfolioData?.portfolioMetrics?.totalReturn,
-                  totalReturnPercent: liveTotalReturnPercent || portfolioData?.portfolioMetrics?.totalReturnPercent
+                  totalValue: realPortfolioData?.totalValue || liveTotalValue || portfolioData?.portfolioMetrics?.totalValue,
+                  totalReturn: realPortfolioData?.totalReturn || liveTotalReturn || portfolioData?.portfolioMetrics?.totalReturn,
+                  totalReturnPercent: realPortfolioData?.totalReturnPercent || liveTotalReturnPercent || portfolioData?.portfolioMetrics?.totalReturnPercent
                 });
               }}
             />
 
             {/* Portfolio Holdings */}
-            {(portfolioData?.portfolioMetrics?.holdings || liveHoldings.length > 0) && (
+            {(realPortfolioData?.holdings || portfolioData?.portfolioMetrics?.holdings || liveHoldings.length > 0) && (
               <PortfolioHoldings
-                holdings={isLiveData && liveHoldings.length > 0 ? liveHoldings : portfolioData?.portfolioMetrics?.holdings}
+                holdings={realPortfolioData?.holdings || (isLiveData && liveHoldings.length > 0 ? liveHoldings : portfolioData?.portfolioMetrics?.holdings)}
                 onStockPress={(symbol) => {
                   // Navigate to stock detail or search
                   navigateTo('StockDetail', { symbol });
@@ -882,21 +898,21 @@ Feel free to ask about any of these topics or try one of the quick prompts above
         )}
 
         {/* Basic Risk Metrics */}
-        {(portfolioData?.portfolioMetrics?.holdings || liveHoldings.length > 0) && (
+        {(realPortfolioData?.holdings || portfolioData?.portfolioMetrics?.holdings || liveHoldings.length > 0) && (
           <BasicRiskMetrics
-            holdings={isLiveData && liveHoldings.length > 0 ? liveHoldings : portfolioData?.portfolioMetrics?.holdings}
-            totalValue={isLiveData && liveTotalValue ? liveTotalValue : (portfolioData?.portfolioMetrics?.totalValue || 0)}
-            totalReturn={isLiveData && liveTotalReturn ? liveTotalReturn : (portfolioData?.portfolioMetrics?.totalReturn || 0)}
-            totalReturnPercent={isLiveData && liveTotalReturnPercent ? liveTotalReturnPercent : (portfolioData?.portfolioMetrics?.totalReturnPercent || 0)}
+            holdings={realPortfolioData?.holdings || (isLiveData && liveHoldings.length > 0 ? liveHoldings : portfolioData?.portfolioMetrics?.holdings)}
+            totalValue={realPortfolioData?.totalValue || (isLiveData && liveTotalValue ? liveTotalValue : (portfolioData?.portfolioMetrics?.totalValue || 0))}
+            totalReturn={realPortfolioData?.totalReturn || (isLiveData && liveTotalReturn ? liveTotalReturn : (portfolioData?.portfolioMetrics?.totalReturn || 0))}
+            totalReturnPercent={realPortfolioData?.totalReturnPercent || (isLiveData && liveTotalReturnPercent ? liveTotalReturnPercent : (portfolioData?.portfolioMetrics?.totalReturnPercent || 0))}
           />
         )}
 
         {/* Portfolio Comparison */}
-        {(portfolioData?.portfolioMetrics?.holdings || liveHoldings.length > 0) && (
+        {(realPortfolioData?.holdings || portfolioData?.portfolioMetrics?.holdings || liveHoldings.length > 0) && (
           <PortfolioComparison
-            totalValue={isLiveData && liveTotalValue ? liveTotalValue : (portfolioData?.portfolioMetrics?.totalValue || 0)}
-            totalReturn={isLiveData && liveTotalReturn ? liveTotalReturn : (portfolioData?.portfolioMetrics?.totalReturn || 0)}
-            totalReturnPercent={isLiveData && liveTotalReturnPercent ? liveTotalReturnPercent : (portfolioData?.portfolioMetrics?.totalReturnPercent || 0)}
+            totalValue={realPortfolioData?.totalValue || (isLiveData && liveTotalValue ? liveTotalValue : (portfolioData?.portfolioMetrics?.totalValue || 0))}
+            totalReturn={realPortfolioData?.totalReturn || (isLiveData && liveTotalReturn ? liveTotalReturn : (portfolioData?.portfolioMetrics?.totalReturn || 0))}
+            totalReturnPercent={realPortfolioData?.totalReturnPercent || (isLiveData && liveTotalReturnPercent ? liveTotalReturnPercent : (portfolioData?.portfolioMetrics?.totalReturnPercent || 0))}
             portfolioHistory={[
               { date: '2024-01-01', value: 12000 },
               { date: '2024-01-15', value: 12200 },
@@ -965,18 +981,10 @@ Feel free to ask about any of these topics or try one of the quick prompts above
 
       </ScrollView>
 
-      {/* Floating Action Buttons */}
-      <View style={styles.floatingButtons}>
-        <TouchableOpacity 
-          style={[styles.floatingButton, styles.marketDataButton]} 
-          onPress={() => setMarketDataConfigOpen(true)}
-        >
-          <Icon name="trending-up" size={20} color="#fff" />
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.floatingButton, styles.chatButton]} onPress={openChat}>
-          <Icon name="message-circle" size={24} color="#fff" />
-        </TouchableOpacity>
-      </View>
+      {/* Chatbot Floating Button */}
+      <TouchableOpacity style={styles.chatButton} onPress={openChat}>
+        <Icon name="message-circle" size={24} color="#fff" />
+      </TouchableOpacity>
 
       {/* Chatbot Modal */}
       {chatOpen && (
@@ -1065,14 +1073,6 @@ Feel free to ask about any of these topics or try one of the quick prompts above
         </View>
       )}
 
-      {/* Market Data Configuration Modal */}
-      <Modal
-        visible={marketDataConfigOpen}
-        animationType="slide"
-        presentationStyle="pageSheet"
-      >
-        <MarketDataConfig onClose={() => setMarketDataConfigOpen(false)} />
-      </Modal>
 
     </SafeAreaView>
   );
@@ -1516,30 +1516,17 @@ const styles = StyleSheet.create({
   },
 
   // Chatbot Styles
-  floatingButtons: {
+  chatButton: {
     position: 'absolute',
     bottom: 20,
     right: 20,
-    flexDirection: 'column',
-    gap: 10,
-  },
-  floatingButton: {
+    backgroundColor: '#00cc99',
     width: 50,
     height: 50,
     borderRadius: 25,
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-  marketDataButton: {
-    backgroundColor: '#007AFF',
-  },
-  chatButton: {
-    backgroundColor: '#00cc99',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
