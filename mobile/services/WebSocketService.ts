@@ -84,6 +84,9 @@ class WebSocketService {
   private reconnectDelay = 1000; // Start with 1 second
   private isConnected = false;
   private token: string | null = null;
+  private baseUrl: string = '';
+  private reconnectTimeout: NodeJS.Timeout | null = null;
+  private realMarketDataInterval: NodeJS.Timeout | null = null;
 
   // Event callbacks
   private onStockPriceUpdate?: (price: StockPrice) => void;
@@ -99,8 +102,126 @@ class WebSocketService {
   }
 
   private setupEventListeners() {
-    // Handle app state changes
-    // You can add app state listeners here if needed
+    // Handle app state changes for connection management
+    this.setupAppStateListeners();
+    
+    // Handle network connectivity changes
+    this.setupNetworkListeners();
+    
+    // Handle authentication state changes
+    this.setupAuthListeners();
+  }
+
+  private setupAppStateListeners() {
+    // Import AppState from react-native (optional)
+    try {
+      const { AppState } = require('react-native');
+      
+      // Handle app state changes
+      AppState.addEventListener('change', (nextAppState: string) => {
+        if (nextAppState === 'active') {
+          // App came to foreground - reconnect if needed
+          if (!this.isConnected) {
+            this.reconnect();
+          }
+        } else if (nextAppState === 'background') {
+          // App went to background - reduce connection frequency
+          this.handleAppBackground();
+        }
+      });
+    } catch (error) {
+      // AppState not available, skip app state monitoring
+      if (__DEV__) {
+        console.warn('AppState not available, skipping app state monitoring');
+      }
+    }
+  }
+
+  private setupNetworkListeners() {
+    // Import NetInfo from @react-native-community/netinfo (optional)
+    try {
+      const NetInfo = require('@react-native-community/netinfo');
+      
+      // Handle network connectivity changes
+      NetInfo.addEventListener((state: any) => {
+        if (state.isConnected) {
+          // Network is back - reconnect if needed
+          if (!this.isConnected) {
+            this.reconnect();
+          }
+        } else {
+          // Network is down - handle gracefully
+          this.handleNetworkDisconnection();
+        }
+      });
+    } catch (error) {
+      // NetInfo not available, skip network monitoring
+      if (__DEV__) {
+        console.warn('NetInfo not available, skipping network monitoring');
+      }
+    }
+  }
+
+  private setupAuthListeners() {
+    // Handle authentication state changes
+    // This would typically integrate with your auth service
+    // For now, we'll use a simple token validation approach
+    
+    // Check token validity periodically
+    setInterval(() => {
+      if (this.token && this.isConnected) {
+        this.validateToken();
+      }
+    }, 300000); // Check every 5 minutes
+  }
+
+  private handleAppBackground() {
+    // Reduce polling frequency when app is in background
+    if (this.realMarketDataInterval) {
+      clearInterval(this.realMarketDataInterval);
+      // Set a longer interval for background polling
+      this.realMarketDataInterval = setInterval(() => {
+        this.pollRealMarketData();
+      }, 60000); // Poll every minute in background
+    }
+  }
+
+  private handleNetworkDisconnection() {
+    // Handle network disconnection gracefully
+    this.isConnected = false;
+    this.onConnectionStatusChange?.(false);
+    
+    // Stop all polling
+    if (this.realMarketDataInterval) {
+      clearInterval(this.realMarketDataInterval);
+    }
+    
+    // Clear reconnection attempts
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+    }
+  }
+
+  private async validateToken() {
+    try {
+      // Validate token with backend
+      const response = await fetch(`${this.baseUrl}/auth/validate/`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        // Token is invalid - clear it and disconnect
+        this.token = '';
+        this.disconnect();
+        this.onConnectionStatusChange?.(false);
+      }
+    } catch (error) {
+      console.error('Token validation error:', error);
+    }
   }
 
   public setToken(token: string) {
@@ -459,31 +580,6 @@ class WebSocketService {
     }
   }
 
-  public disconnect() {
-    // Stop real market data polling
-    if (this.marketDataInterval) {
-      clearInterval(this.marketDataInterval);
-      this.marketDataInterval = undefined;
-    }
-    
-    if (this.stockPriceSocket) {
-      this.stockPriceSocket.close();
-      this.stockPriceSocket = null;
-    }
-    
-    if (this.discussionSocket) {
-      this.discussionSocket.close();
-      this.discussionSocket = null;
-    }
-    
-    if (this.portfolioSocket) {
-      this.portfolioSocket.close();
-      this.portfolioSocket = null;
-    }
-    
-    this.isConnected = false;
-    this.onConnectionStatusChange?.(false);
-  }
 
   public getConnectionStatus(): boolean {
     return this.isConnected;
@@ -691,6 +787,63 @@ class WebSocketService {
       message: `${alert.alertType.replace('_', ' ')} - ${alert.reason}`,
       timestamp: Date.now()
     });
+  }
+
+  /**
+   * Set the base URL for WebSocket connections
+   */
+  public setBaseUrl(url: string) {
+    this.baseUrl = url;
+  }
+
+  /**
+   * Reconnect to all WebSocket connections
+   */
+  public reconnect() {
+    this.disconnect();
+    this.connect();
+  }
+
+  /**
+   * Disconnect from all WebSocket connections
+   */
+  public disconnect() {
+    this.isConnected = false;
+    
+    if (this.stockPriceSocket) {
+      this.stockPriceSocket.close();
+      this.stockPriceSocket = null;
+    }
+    
+    if (this.discussionSocket) {
+      this.discussionSocket.close();
+      this.discussionSocket = null;
+    }
+    
+    if (this.portfolioSocket) {
+      this.portfolioSocket.close();
+      this.portfolioSocket = null;
+    }
+    
+    // Clear intervals
+    if (this.realMarketDataInterval) {
+      clearInterval(this.realMarketDataInterval);
+      this.realMarketDataInterval = null;
+    }
+    
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
+    }
+    
+    this.onConnectionStatusChange?.(false);
+  }
+
+  /**
+   * Poll real market data (fallback when WebSocket fails)
+   */
+  private pollRealMarketData() {
+    this.fetchAndUpdateRealMarketData();
   }
 }
 

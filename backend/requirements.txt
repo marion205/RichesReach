@@ -17,8 +17,8 @@ statsmodels>=0.14.0
 prophet>=1.1.0
 
 # Deep learning (optional, for advanced features)
-tensorflow==2.12.0
-keras==2.12.0
+tensorflow>=2.13.0
+keras>=2.13.0
 
 # Financial analysis
 yfinance==0.2.18
