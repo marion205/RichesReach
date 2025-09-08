@@ -250,9 +250,7 @@ const SocialScreen: React.FC<SocialScreenProps> = ({ onNavigate }) => {
   // Feed type state
   const [feedType, setFeedType] = useState<'trending' | 'following' | 'social-feed' | 'discover' | 'news'>('trending');
   
-  // Debug wrapper for setFeedType
   const handleFeedTypeChange = (newFeedType: 'trending' | 'following' | 'social-feed' | 'discover' | 'news') => {
-    console.log('🔄 Feed type changing from', feedType, 'to', newFeedType);
     setFeedType(newFeedType);
   };
   
@@ -402,15 +400,11 @@ const SocialScreen: React.FC<SocialScreenProps> = ({ onNavigate }) => {
 
 
   const handleUpvote = (discussionId: string) => {
-    console.log('🔼 Upvoting discussion:', discussionId);
-    // Just log for now - the visual state is handled by RedditDiscussionCard
-    console.log('✅ Upvote handled locally');
+    // Visual state is handled by RedditDiscussionCard
   };
 
   const handleDownvote = (discussionId: string) => {
-    console.log('🔽 Downvoting discussion:', discussionId);
-    // Just log for now - the visual state is handled by RedditDiscussionCard
-    console.log('✅ Downvote handled locally');
+    // Visual state is handled by RedditDiscussionCard
   };
 
   const handleToggleFollow = async (userId: string) => {
