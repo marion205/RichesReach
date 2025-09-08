@@ -546,7 +546,7 @@ class WebSocketService {
    */
   // Real market data polling
   private marketDataInterval?: NodeJS.Timeout;
-  private watchedSymbols: string[] = ['AAPL', 'MSFT', 'GOOGL', 'TSLA', 'AMZN'];
+  private watchedSymbols: string[] = ['AAPL', 'MSFT', 'GOOGL', 'TSLA', 'AMZN', 'META', 'NVDA', 'NFLX', 'AMD', 'INTC', 'CRM', 'ADBE', 'PYPL', 'UBER', 'LYFT'];
 
   private startRealMarketDataPolling() {
     // Clear any existing interval

@@ -3,8 +3,8 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 
 interface SocialNavProps {
-  feedType: 'trending' | 'following' | 'social-feed' | 'discover';
-  onFeedTypeChange: (type: 'trending' | 'following' | 'social-feed' | 'discover') => void;
+  feedType: 'trending' | 'following' | 'social-feed' | 'discover' | 'news';
+  onFeedTypeChange: (type: 'trending' | 'following' | 'social-feed' | 'discover' | 'news') => void;
 }
 
 const SocialNav: React.FC<SocialNavProps> = ({ feedType, onFeedTypeChange }) => {
@@ -76,6 +76,23 @@ const SocialNav: React.FC<SocialNavProps> = ({ feedType, onFeedTypeChange }) => 
           feedType === 'discover' && styles.activeTabLabel
         ]}>
           Discover
+        </Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[styles.tab, feedType === 'news' && styles.activeTab]}
+        onPress={() => onFeedTypeChange('news')}
+      >
+        <Icon 
+          name="newspaper"
+          size={20} 
+          color={feedType === 'news' ? '#34C759' : '#8E8E93'} 
+        />
+        <Text style={[
+          styles.tabLabel,
+          feedType === 'news' && styles.activeTabLabel
+        ]}>
+          News
         </Text>
       </TouchableOpacity>
     </View>
