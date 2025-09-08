@@ -10,7 +10,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Animated,
-  Dimensions
+  Dimensions,
+  Image
 } from 'react-native';
 import { gql, useMutation, useApolloClient } from '@apollo/client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -36,9 +37,10 @@ const LOGIN = gql`
 interface EnhancedLoginScreenProps {
   onLogin: (token: string) => void;
   onNavigateToSignUp: () => void;
+  onNavigateToForgotPassword: () => void;
 }
 
-export default function EnhancedLoginScreen({ onLogin, onNavigateToSignUp }: EnhancedLoginScreenProps) {
+export default function EnhancedLoginScreen({ onLogin, onNavigateToSignUp, onNavigateToForgotPassword }: EnhancedLoginScreenProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -193,11 +195,7 @@ export default function EnhancedLoginScreen({ onLogin, onNavigateToSignUp }: Enh
   };
 
   const handleForgotPassword = () => {
-    Alert.alert(
-      'Forgot Password',
-      'Password reset functionality will be available soon. Please contact support for assistance.',
-      [{ text: 'OK' }]
-    );
+    onNavigateToForgotPassword();
   };
 
   return (
@@ -213,7 +211,7 @@ export default function EnhancedLoginScreen({ onLogin, onNavigateToSignUp }: Enh
         <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
           {/* Header */}
           <View style={styles.header}>
-            <Icon name="trending-up" size={60} color="#00cc99" />
+            <Image source={require('../assets/whitelogo1.png')} style={styles.logo} resizeMode="contain" />
             <Text style={styles.title}>Welcome Back</Text>
             <Text style={styles.subtitle}>Sign in to continue your financial journey</Text>
           </View>
@@ -333,7 +331,7 @@ export default function EnhancedLoginScreen({ onLogin, onNavigateToSignUp }: Enh
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#ffffff',
   },
   scrollContainer: {
     flexGrow: 1,
@@ -348,6 +346,12 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     marginBottom: 40,
+  },
+  logo: {
+    width: '80%',
+    height: 200,
+    marginBottom: 30,
+    resizeMode: 'contain',
   },
   title: {
     fontSize: 28,

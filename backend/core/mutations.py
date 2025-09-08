@@ -906,6 +906,141 @@ class VoteDiscussion(graphene.Mutation):
             )
 
 
+class ForgotPassword(graphene.Mutation):
+    """Send password reset email"""
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    class Arguments:
+        email = graphene.String(required=True)
+
+    def mutate(self, info, email):
+        # Check rate limiting for password reset
+        is_limited, attempts_remaining, reset_time = RateLimiter.is_rate_limited(
+            info.context, action='password_reset', max_attempts=3, window_minutes=60
+        )
+        if is_limited:
+            raise GraphQLError(f"Too many password reset attempts. Please try again after {reset_time}.")
+        
+        try:
+            user = User.objects.get(email=email)
+            
+            # Generate reset token
+            reset_token = SecurityUtils.generate_secure_token()
+            cache_key = f"password_reset_{reset_token}"
+            cache.set(cache_key, user.id, timeout=3600)  # 1 hour
+            
+            # Send reset email
+            reset_url = f"{settings.FRONTEND_URL}/reset-password?token={reset_token}"
+            send_mail(
+                'Reset your RichesReach password',
+                f'Click the link to reset your password: {reset_url}',
+                settings.DEFAULT_FROM_EMAIL,
+                [email],
+                fail_silently=False,
+            )
+            
+            return ForgotPassword(
+                success=True,
+                message="Password reset email sent. Please check your inbox."
+            )
+        except User.DoesNotExist:
+            return ForgotPassword(
+                success=True,
+                message="If an account with that email exists, a password reset email has been sent."
+            )
+        except Exception as e:
+            return ForgotPassword(success=False, message=str(e))
+
+class ResetPassword(graphene.Mutation):
+    """Reset password with token"""
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    class Arguments:
+        token = graphene.String(required=True)
+        new_password = graphene.String(required=True)
+
+    def mutate(self, info, token, new_password):
+        # Check rate limiting for password reset confirmation
+        is_limited, attempts_remaining, reset_time = RateLimiter.is_rate_limited(
+            info.context, action='password_reset_confirm', max_attempts=5, window_minutes=60
+        )
+        if is_limited:
+            raise GraphQLError(f"Too many password reset attempts. Please try again after {reset_time}.")
+        
+        # Validate password strength
+        password_validation = PasswordValidator.validate_password(new_password)
+        if not password_validation['is_valid']:
+            suggestions = ', '.join(password_validation['suggestions'])
+            raise GraphQLError(f"Password is too weak. {suggestions}")
+        
+        try:
+            cache_key = f"password_reset_{token}"
+            user_id = cache.get(cache_key)
+            
+            if not user_id:
+                raise GraphQLError("Invalid or expired reset token.")
+            
+            user = User.objects.get(id=user_id)
+            user.set_password(new_password)
+            user.save()
+            
+            # Delete the reset token
+            cache.delete(cache_key)
+            
+            return ResetPassword(
+                success=True,
+                message="Password reset successfully. You can now log in with your new password."
+            )
+        except User.DoesNotExist:
+            raise GraphQLError("Invalid reset token.")
+        except Exception as e:
+            return ResetPassword(success=False, message=str(e))
+
+class ChangePassword(graphene.Mutation):
+    """Change password for authenticated user"""
+    success = graphene.Boolean()
+    message = graphene.String()
+
+    class Arguments:
+        current_password = graphene.String(required=True)
+        new_password = graphene.String(required=True)
+
+    def mutate(self, info, current_password, new_password):
+        user = info.context.user
+        if not user.is_authenticated:
+            raise GraphQLError("You must be logged in to change your password.")
+        
+        # Check rate limiting for password change
+        is_limited, attempts_remaining, reset_time = RateLimiter.is_rate_limited(
+            info.context, action='password_change', max_attempts=5, window_minutes=60
+        )
+        if is_limited:
+            raise GraphQLError(f"Too many password change attempts. Please try again after {reset_time}.")
+        
+        # Validate current password
+        if not user.check_password(current_password):
+            raise GraphQLError("Current password is incorrect.")
+        
+        # Validate new password strength
+        password_validation = PasswordValidator.validate_password(new_password)
+        if not password_validation['is_valid']:
+            suggestions = ', '.join(password_validation['suggestions'])
+            raise GraphQLError(f"New password is too weak. {suggestions}")
+        
+        try:
+            user.set_password(new_password)
+            user.save()
+            
+            return ChangePassword(
+                success=True,
+                message="Password changed successfully."
+            )
+        except Exception as e:
+            return ChangePassword(success=False, message=str(e))
+
+
 class Mutation(graphene.ObjectType):
     # User management
     create_user = CreateUser.Field()
@@ -932,6 +1067,9 @@ class Mutation(graphene.ObjectType):
     tokenAuth = graphql_jwt.ObtainJSONWebToken.Field()
     verify_token = graphql_jwt.Verify.Field()
     refresh_token = graphql_jwt.Refresh.Field()
+    forgot_password = ForgotPassword.Field()
+    reset_password = ResetPassword.Field()
+    change_password = ChangePassword.Field()
     
     # Social features
     create_post = CreatePost.Field()

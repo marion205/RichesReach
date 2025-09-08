@@ -24,7 +24,7 @@ const LOGIN = gql`
   }
 `;
 
-export default function LoginScreen({ onLogin, onNavigateToSignUp }: { onLogin: (token: string) => void; onNavigateToSignUp: () => void }) {
+export default function LoginScreen({ onLogin, onNavigateToSignUp, onNavigateToForgotPassword }: { onLogin: (token: string) => void; onNavigateToSignUp: () => void; onNavigateToForgotPassword: () => void }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -103,6 +103,12 @@ export default function LoginScreen({ onLogin, onNavigateToSignUp }: { onLogin: 
         <TouchableOpacity style={styles.button} onPress={handleLogin}>
           <Text style={styles.buttonText}>
             {loginLoading ? 'Logging In...' : 'Log In'}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={onNavigateToForgotPassword}>
+          <Text style={{ textAlign: 'center', marginTop: 10, color: '#007aff' }}>
+            Forgot Password?
           </Text>
         </TouchableOpacity>
 
