@@ -13,6 +13,8 @@ const priceAlertService = expoGoCompatiblePriceAlertService;
 // Screens
 import HomeScreen from './screens/HomeScreen';
 import LoginScreen from './screens/LoginScreen';
+import EnhancedLoginScreen from './screens/EnhancedLoginScreen';
+import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
 import SignUpScreen from './screens/SignUpScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import StockScreen from './screens/StockScreen';
@@ -174,11 +176,24 @@ export default function App() {
     if (!isLoggedIn) {
       switch (currentScreen) {
         case 'login':
-          return <LoginScreen onLogin={handleLogin} onNavigateToSignUp={() => setCurrentScreen('signup')} />;
+          return <LoginScreen 
+            onLogin={handleLogin} 
+            onNavigateToSignUp={() => setCurrentScreen('signup')} 
+            onNavigateToForgotPassword={() => setCurrentScreen('forgot-password')} 
+          />;
+        case 'forgot-password':
+          return <ForgotPasswordScreen 
+            onNavigateToLogin={() => setCurrentScreen('login')} 
+            onNavigateToResetPassword={(email) => setCurrentScreen('reset-password')} 
+          />;
         case 'signup':
           return <SignUpScreen navigateTo={navigateTo} onSignUp={handleSignUp} onNavigateToLogin={() => setCurrentScreen('login')} />;
         default:
-          return <LoginScreen onLogin={handleLogin} onNavigateToSignUp={() => setCurrentScreen('signup')} />;
+          return <LoginScreen 
+            onLogin={handleLogin} 
+            onNavigateToSignUp={() => setCurrentScreen('signup')} 
+            onNavigateToForgotPassword={() => setCurrentScreen('forgot-password')} 
+          />;
       }
     }
 
