@@ -109,13 +109,28 @@ class MarketDataService {
         symbol: symbol.toUpperCase()
       });
 
+      // Check for API errors
       if (data['Error Message']) {
-        throw new Error(data['Error Message']);
+        console.warn(`API Error for ${symbol}:`, data['Error Message']);
+        return this.getMockQuote(symbol);
+      }
+
+      // Check for rate limit messages
+      if (data['Note']) {
+        console.warn(`Rate limit for ${symbol}:`, data['Note']);
+        return this.getMockQuote(symbol);
+      }
+
+      // Check for invalid API key
+      if (data['Information'] && data['Information'].includes('API key')) {
+        console.warn(`API key issue for ${symbol}:`, data['Information']);
+        return this.getMockQuote(symbol);
       }
 
       const quote = data['Global Quote'];
-      if (!quote) {
-        throw new Error('No quote data available');
+      if (!quote || !quote['05. price']) {
+        console.warn(`No quote data available for ${symbol}, using mock data`);
+        return this.getMockQuote(symbol);
       }
 
       return {
@@ -132,16 +147,34 @@ class MarketDataService {
         marketStatus: this.getMarketStatus()
       };
     } catch (error) {
-      console.error(`Failed to get quote for ${symbol}:`, error);
+      console.warn(`Failed to get quote for ${symbol}:`, error.message);
       // Return mock data as fallback
       return this.getMockQuote(symbol);
     }
   }
 
-  // Get multiple stock quotes
+  // Get multiple stock quotes with rate limiting
   public async getMultipleQuotes(symbols: string[]): Promise<StockQuote[]> {
-    const promises = symbols.map(symbol => this.getStockQuote(symbol));
-    return Promise.all(promises);
+    const quotes: StockQuote[] = [];
+    
+    // Process symbols one by one to avoid rate limiting
+    for (let i = 0; i < symbols.length; i++) {
+      const symbol = symbols[i];
+      try {
+        const quote = await this.getStockQuote(symbol);
+        quotes.push(quote);
+        
+        // Add delay between API calls to respect rate limits (5 calls per minute)
+        if (i < symbols.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second delay
+        }
+      } catch (error) {
+        console.warn(`Failed to get quote for ${symbol}, using mock data`);
+        quotes.push(this.getMockQuote(symbol));
+      }
+    }
+    
+    return quotes;
   }
 
   // Get historical data
@@ -357,8 +390,27 @@ class MarketDataService {
 
   // Helper methods for fallback data
   private getMockQuote(symbol: string): StockQuote {
-    const basePrice = 100 + Math.random() * 200;
-    const change = (Math.random() - 0.5) * 10;
+    // Use realistic base prices for known symbols
+    const symbolPrices: { [key: string]: number } = {
+      'AAPL': 239.69,
+      'MSFT': 495.00,
+      'GOOGL': 180.50,
+      'TSLA': 250.00,
+      'AMZN': 150.00,
+      'META': 350.00,
+      'NVDA': 800.00,
+      'NFLX': 400.00,
+      'AMD': 120.00,
+      'INTC': 45.00,
+      'CRM': 200.00,
+      'ADBE': 500.00,
+      'PYPL': 60.00,
+      'UBER': 70.00,
+      'LYFT': 15.00
+    };
+
+    const basePrice = symbolPrices[symbol] || (100 + Math.random() * 200);
+    const change = (Math.random() - 0.5) * (basePrice * 0.05); // ±5% change
     const changePercent = (change / basePrice) * 100;
 
     return {
@@ -366,10 +418,10 @@ class MarketDataService {
       price: basePrice,
       change,
       changePercent,
-      volume: Math.floor(Math.random() * 1000000),
-      high: basePrice + Math.random() * 5,
-      low: basePrice - Math.random() * 5,
-      open: basePrice + (Math.random() - 0.5) * 2,
+      volume: Math.floor(Math.random() * 10000000) + 1000000,
+      high: basePrice + Math.random() * (basePrice * 0.02),
+      low: basePrice - Math.random() * (basePrice * 0.02),
+      open: basePrice + (Math.random() - 0.5) * (basePrice * 0.01),
       previousClose: basePrice - change,
       timestamp: new Date().toISOString().split('T')[0],
       marketStatus: this.getMarketStatus()
