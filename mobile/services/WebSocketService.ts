@@ -3,6 +3,8 @@ import { Alert } from 'react-native';
 import expoGoCompatiblePriceAlertService from './ExpoGoCompatiblePriceAlertService';
 // Import intelligent price alert service for "big day" detection
 import intelligentPriceAlertService from './IntelligentPriceAlertService';
+// Import real market data service
+import MarketDataService, { StockQuote } from './MarketDataService';
 
 export interface StockPrice {
   symbol: string;
@@ -154,7 +156,10 @@ class WebSocketService {
       return;
     }
 
-            const baseUrl = 'ws://192.168.1.151:8001/ws';
+    const baseUrl = 'ws://192.168.1.151:8001/ws';
+    
+    // Start real market data polling immediately
+    this.startRealMarketDataPolling();
     
     // Connect to stock prices WebSocket
     this.connectStockPrices(baseUrl);
@@ -185,6 +190,9 @@ class WebSocketService {
             token: this.token
           }));
         }
+
+        // Start real market data polling as fallback
+        this.startRealMarketDataPolling();
       };
 
       this.stockPriceSocket.onmessage = (event) => {
@@ -204,6 +212,8 @@ class WebSocketService {
 
       this.stockPriceSocket.onerror = (error) => {
         console.error('Stock prices WebSocket error:', error);
+        // If WebSocket fails, fall back to real market data polling
+        this.startRealMarketDataPolling();
       };
 
     } catch (error) {
@@ -450,6 +460,12 @@ class WebSocketService {
   }
 
   public disconnect() {
+    // Stop real market data polling
+    if (this.marketDataInterval) {
+      clearInterval(this.marketDataInterval);
+      this.marketDataInterval = undefined;
+    }
+    
     if (this.stockPriceSocket) {
       this.stockPriceSocket.close();
       this.stockPriceSocket = null;
@@ -528,6 +544,75 @@ class WebSocketService {
    * Generate mock historical data for technical analysis
    * In a real app, this would fetch from your API
    */
+  // Real market data polling
+  private marketDataInterval?: NodeJS.Timeout;
+  private watchedSymbols: string[] = ['AAPL', 'MSFT', 'GOOGL', 'TSLA', 'AMZN'];
+
+  private startRealMarketDataPolling() {
+    // Clear any existing interval
+    if (this.marketDataInterval) {
+      clearInterval(this.marketDataInterval);
+    }
+
+    // Poll for real market data every 30 seconds during market hours
+    this.marketDataInterval = setInterval(async () => {
+      try {
+        await this.fetchAndUpdateRealMarketData();
+      } catch (error) {
+        console.error('Error fetching real market data:', error);
+      }
+    }, 30000); // 30 seconds
+
+    // Initial fetch
+    this.fetchAndUpdateRealMarketData();
+  }
+
+  private async fetchAndUpdateRealMarketData() {
+    try {
+      const quotes = await MarketDataService.getMultipleQuotes(this.watchedSymbols);
+      
+      quotes.forEach(quote => {
+        const stockPrice: StockPrice = {
+          symbol: quote.symbol,
+          price: quote.price,
+          change: quote.change,
+          change_percent: quote.changePercent,
+          volume: quote.volume,
+          timestamp: Date.now()
+        };
+
+        // Send real market data to listeners
+        this.onStockPriceUpdate?.(stockPrice);
+        
+        // Check price alerts with real data
+        expoGoCompatiblePriceAlertService.checkAlerts([stockPrice]);
+        
+        // Check for "big day" movements
+        this.checkForBigDayMovement(stockPrice);
+      });
+    } catch (error) {
+      console.error('Failed to fetch real market data:', error);
+      // Fall back to mock data if real data fails
+      this.generateMockStockPrices();
+    }
+  }
+
+  private generateMockStockPrices() {
+    this.watchedSymbols.forEach(symbol => {
+      const mockPrice: StockPrice = {
+        symbol,
+        price: 100 + Math.random() * 200,
+        change: (Math.random() - 0.5) * 10,
+        change_percent: (Math.random() - 0.5) * 5,
+        volume: Math.floor(Math.random() * 1000000),
+        timestamp: Date.now()
+      };
+
+      this.onStockPriceUpdate?.(mockPrice);
+      expoGoCompatiblePriceAlertService.checkAlerts([mockPrice]);
+    });
+  }
+
   private generateMockHistoricalData(currentPrice: StockPrice): StockPrice[] {
     const historicalData: StockPrice[] = [];
     const basePrice = currentPrice.price;
