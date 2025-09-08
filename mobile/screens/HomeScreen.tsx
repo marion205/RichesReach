@@ -11,6 +11,7 @@ import {
   TextInput,
   Alert,
   Image,
+  Modal,
 } from 'react-native';
 import { useApolloClient, useQuery, gql } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
@@ -18,6 +19,7 @@ import PortfolioGraph from '../components/PortfolioGraph';
 import PortfolioHoldings from '../components/PortfolioHoldings';
 import BasicRiskMetrics from '../components/BasicRiskMetrics';
 import PortfolioComparison from '../components/PortfolioComparison';
+import MarketDataConfig from '../components/MarketDataConfig';
 import webSocketService, { PortfolioUpdate } from '../services/WebSocketService';
 import UserProfileService, { ExtendedUserProfile } from '../services/UserProfileService';
 
@@ -85,6 +87,9 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
   const [chatInput, setChatInput] = useState('');
   const [chatSending, setChatSending] = useState(false);
   const listRef = useRef<FlatList<ChatMsg>>(null);
+
+  // Market data config modal
+  const [marketDataConfigOpen, setMarketDataConfigOpen] = useState(false);
 
 
   // Load user profile
@@ -927,10 +932,18 @@ Feel free to ask about any of these topics or try one of the quick prompts above
 
       </ScrollView>
 
-      {/* Chatbot Floating Button */}
-      <TouchableOpacity style={styles.chatButton} onPress={openChat}>
-        <Icon name="message-circle" size={24} color="#fff" />
-      </TouchableOpacity>
+      {/* Floating Action Buttons */}
+      <View style={styles.floatingButtons}>
+        <TouchableOpacity 
+          style={[styles.floatingButton, styles.marketDataButton]} 
+          onPress={() => setMarketDataConfigOpen(true)}
+        >
+          <Icon name="trending-up" size={20} color="#fff" />
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.floatingButton, styles.chatButton]} onPress={openChat}>
+          <Icon name="message-circle" size={24} color="#fff" />
+        </TouchableOpacity>
+      </View>
 
       {/* Chatbot Modal */}
       {chatOpen && (
@@ -1019,7 +1032,14 @@ Feel free to ask about any of these topics or try one of the quick prompts above
         </View>
       )}
 
-
+      {/* Market Data Configuration Modal */}
+      <Modal
+        visible={marketDataConfigOpen}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <MarketDataConfig onClose={() => setMarketDataConfigOpen(false)} />
+      </Modal>
 
     </SafeAreaView>
   );
@@ -1463,17 +1483,30 @@ const styles = StyleSheet.create({
   },
 
   // Chatbot Styles
-  chatButton: {
+  floatingButtons: {
     position: 'absolute',
     bottom: 20,
     right: 20,
-    backgroundColor: '#00cc99',
+    flexDirection: 'column',
+    gap: 10,
+  },
+  floatingButton: {
     width: 50,
     height: 50,
     borderRadius: 25,
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  marketDataButton: {
+    backgroundColor: '#007AFF',
+  },
+  chatButton: {
+    backgroundColor: '#00cc99',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
