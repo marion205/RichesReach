@@ -38,32 +38,81 @@ class RealTimePortfolioService {
   private lastPortfolioData: PortfolioMetrics | null = null;
   private updateFrequency: number = 30000; // 30 seconds
 
-  // Start real-time portfolio tracking
-  public startTracking() {
-    if (this.isTracking) {
-      return;
+  // Get portfolio data (simplified - no real-time tracking)
+  public async getPortfolioData(): Promise<PortfolioMetrics | null> {
+    try {
+      console.log('📊 Loading portfolio data...');
+      
+      // Get current portfolio data
+      const portfolioData = await this.getCurrentPortfolio();
+      if (!portfolioData) {
+        console.log('No portfolio data found');
+        return null;
+      }
+
+      // Get real-time quotes for all holdings
+      const symbols = portfolioData.holdings.map(holding => holding.symbol);
+      const quotes = await MarketDataService.getMultipleQuotes(symbols);
+
+      // Update holdings with real-time prices
+      const updatedHoldings: PortfolioHolding[] = portfolioData.holdings.map(holding => {
+        const quote = quotes.find(q => q.symbol === holding.symbol);
+        if (quote) {
+          const currentPrice = quote.price;
+          const totalValue = holding.shares * currentPrice;
+          const returnAmount = totalValue - holding.costBasis;
+          const returnPercent = (returnAmount / holding.costBasis) * 100;
+
+          return {
+            ...holding,
+            currentPrice,
+            totalValue,
+            returnAmount,
+            returnPercent,
+            lastUpdated: new Date().toISOString()
+          };
+        }
+        return holding;
+      });
+
+      // Calculate portfolio metrics
+      const totalValue = updatedHoldings.reduce((sum, holding) => sum + holding.totalValue, 0);
+      const totalCost = updatedHoldings.reduce((sum, holding) => sum + holding.costBasis, 0);
+      const totalReturn = totalValue - totalCost;
+      const totalReturnPercent = (totalReturn / totalCost) * 100;
+
+      // Calculate day change
+      const dayChange = this.calculateDayChange(updatedHoldings, quotes);
+      const dayChangePercent = this.lastPortfolioData ? 
+        ((totalValue - this.lastPortfolioData.totalValue) / this.lastPortfolioData.totalValue) * 100 : 0;
+
+      const updatedPortfolio: PortfolioMetrics = {
+        totalValue,
+        totalCost,
+        totalReturn,
+        totalReturnPercent,
+        dayChange,
+        dayChangePercent,
+        holdings: updatedHoldings,
+        lastUpdated: new Date().toISOString()
+      };
+
+      // Store updated portfolio
+      await this.savePortfolio(updatedPortfolio);
+      this.lastPortfolioData = updatedPortfolio;
+
+      console.log('✅ Portfolio data loaded successfully:', {
+        totalValue: totalValue.toFixed(2),
+        totalReturn: totalReturn.toFixed(2),
+        totalReturnPercent: totalReturnPercent.toFixed(2)
+      });
+
+      return updatedPortfolio;
+
+    } catch (error) {
+      console.error('❌ Error loading portfolio data:', error);
+      return null;
     }
-
-    this.isTracking = true;
-    console.log('🚀 Starting real-time portfolio tracking...');
-
-    // Initial portfolio load
-    this.updatePortfolio();
-
-    // Set up periodic updates
-    this.updateInterval = setInterval(() => {
-      this.updatePortfolio();
-    }, this.updateFrequency);
-  }
-
-  // Stop real-time portfolio tracking
-  public stopTracking() {
-    if (this.updateInterval) {
-      clearInterval(this.updateInterval);
-      this.updateInterval = undefined;
-    }
-    this.isTracking = false;
-    console.log('⏹️ Stopped real-time portfolio tracking');
   }
 
   // Subscribe to portfolio updates
