@@ -38,3 +38,8 @@ chrono = { version = "0.4", features = ["serde"] }
 
 # Math utilities
 num-traits = "0.2"
+
+# Options analysis dependencies
+statrs = "0.16"  # Statistical functions for Black-Scholes
+
+# Additional dependencies for improved version
