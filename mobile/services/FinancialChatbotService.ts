@@ -67,20 +67,22 @@ class FinancialChatbotService {
       'options', 'futures', 'forex', 'crypto', 'bitcoin', 'cryptocurrency', 'blockchain',
       'robinhood', 'fidelity', 'vanguard', 'schwab', 'etrade', 'ameritrade',
       'dollar cost averaging', 'dca', 'rebalancing', 'allocation', 'sector',
-      'growth', 'value', 'dividend', 'income', 'capital gains', 'tax loss harvesting'
+      'growth', 'value', 'dividend', 'income', 'capital gains', 'tax loss harvesting',
+      // Add spending and purchase-related keywords
+      'purchase', 'spend', 'spending', 'cost', 'price', 'expensive', 'cheap',
+      'afford', 'affordable', 'worth', 'value', 'should i', 'worth it', 'jordans',
+      'shoes', 'clothes', 'car', 'house', 'phone', 'laptop', 'gadget', 'item'
     ];
 
     // Non-financial keywords that should be rejected
     const nonFinancialKeywords = [
-      'weather', 'cooking', 'recipe', 'travel', 'vacation', 'hotel', 'restaurant',
-      'movie', 'music', 'sports', 'game', 'gaming', 'fashion', 'clothing', 'shopping',
+      'weather', 'cooking', 'recipe', 'movie', 'music', 'sports', 'game', 'gaming',
       'relationship', 'dating', 'marriage', 'family', 'children', 'pets', 'animals',
       'health', 'medical', 'doctor', 'hospital', 'medicine', 'drug', 'exercise',
       'fitness', 'gym', 'workout', 'diet', 'food', 'nutrition', 'weight loss',
       'politics', 'election', 'government', 'law', 'legal', 'court', 'crime',
       'education', 'school', 'university', 'college', 'degree', 'course', 'study',
       'technology', 'programming', 'coding', 'software', 'hardware', 'computer',
-      'car', 'vehicle', 'automobile', 'house', 'home', 'real estate', 'property',
       'job', 'career', 'work', 'employment', 'salary', 'interview', 'resume'
     ];
 
@@ -1162,6 +1164,82 @@ Trading involves buying and selling securities to profit from price movements.
 3. **Start Small**: Use small amounts initially
 4. **Keep Records**: Track all trades and performance
 5. **Continuous Learning**: Markets evolve constantly
+
+*This is educational information only. For personalized financial advice, consult a qualified financial advisor.*`;
+    }
+
+    if (input.includes('jordans') || input.includes('shoes') || input.includes('clothes') || input.includes('fashion')) {
+      return `**Smart Spending on Fashion Items**
+
+When considering buying items like Jordans, shoes, or clothes, here's a financial perspective:
+
+**Before You Buy:**
+• **Budget Check**: Can you afford it without affecting essential expenses?
+• **Value Assessment**: Will you wear/use it regularly?
+• **Quality vs. Price**: Is the quality worth the cost?
+• **Alternative Options**: Are there similar items for less?
+
+**Financial Decision Framework:**
+• **Emergency Fund First**: Ensure you have 3-6 months expenses saved
+• **Needs vs. Wants**: Is this a need or a want?
+• **Opportunity Cost**: What else could you do with this money?
+• **Long-term Impact**: How will this affect your financial goals?
+
+**Smart Shopping Tips:**
+• **Wait 24-48 hours**: Avoid impulse purchases
+• **Look for sales/discounts**: Don't pay full price if you can wait
+• **Consider resale value**: Some items hold value better than others
+• **Set a monthly clothing budget**: Track your fashion spending
+
+**Questions to Ask Yourself:**
+• Do I already have something similar?
+• Will I still want this in 6 months?
+• Can I pay cash without going into debt?
+• Does this align with my financial goals?
+
+Remember: It's okay to treat yourself occasionally, but make sure it fits within your overall financial plan!
+
+*This is educational information only. For personalized financial advice, consult a qualified financial advisor.*`;
+    }
+
+    if (input.includes('should i') && (input.includes('buy') || input.includes('purchase'))) {
+      return `**Smart Purchase Decision Framework**
+
+When asking "Should I buy this?", consider these financial factors:
+
+**Financial Health Check:**
+• **Emergency Fund**: Do you have 3-6 months of expenses saved?
+• **Debt Status**: Are you debt-free or actively paying down debt?
+• **Budget**: Does this fit within your monthly budget?
+• **Savings Goals**: Will this purchase affect your long-term goals?
+
+**The 24-Hour Rule:**
+• Wait at least 24 hours before making non-essential purchases
+• Sleep on it - you might feel differently tomorrow
+• Research alternatives and compare prices
+• Consider if you really need it or just want it
+
+**Cost-Benefit Analysis:**
+• **Cost**: Total price + any additional expenses (maintenance, insurance, etc.)
+• **Benefit**: How much value/joy will this bring you?
+• **Opportunity Cost**: What else could you do with this money?
+• **Long-term Value**: Will this purchase appreciate or depreciate?
+
+**Questions to Ask:**
+• Can I afford this without going into debt?
+• Do I already have something that serves the same purpose?
+• Will I still want this in 6 months?
+• How many hours of work does this cost me?
+• Does this align with my values and goals?
+
+**Red Flags:**
+• Feeling pressured to buy immediately
+• Can't afford it without credit cards
+• Haven't researched alternatives
+• Buying to impress others
+• Emotional purchase (retail therapy)
+
+Remember: The best purchase is often the one you don't make!
 
 *This is educational information only. For personalized financial advice, consult a qualified financial advisor.*`;
     }
