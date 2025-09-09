@@ -115,6 +115,8 @@ const GET_AI_RECOMMENDATIONS = gql`
       }
       riskAssessment {
         overallRisk
+        volatilityEstimate
+        recommendations
       }
       marketOutlook {
         overallSentiment
@@ -1226,7 +1228,10 @@ const PremiumAnalyticsScreen: React.FC<PremiumAnalyticsScreenProps> = ({ navigat
               <View style={styles.riskAssessmentItem}>
                 <Text style={styles.riskAssessmentLabel}>Volatility Estimate</Text>
                 <Text style={styles.riskAssessmentValue}>
-                  {recommendations.riskAssessment.volatilityEstimate}%
+                  {recommendations.riskAssessment.volatilityEstimate ? 
+                    `${recommendations.riskAssessment.volatilityEstimate}%` : 
+                    'N/A'
+                  }
                 </Text>
               </View>
               {recommendations.riskAssessment.recommendations && (
