@@ -112,10 +112,22 @@ class FinancialChatbotService {
     let amount = 0;
     if (amountMatch) {
       let numStr = amountMatch[1].replace(/,/g, '');
-      const multiplier = input.includes('thousand') || input.includes('k') ? 1000 :
-                        input.includes('million') || input.includes('m') ? 1000000 :
-                        input.includes('billion') || input.includes('b') ? 1000000000 : 1;
+      // Check for multiplier words in the full match, not just the input
+      const fullMatch = amountMatch[0].toLowerCase();
+      const multiplier = fullMatch.includes('thousand') || fullMatch.includes('k') ? 1000 :
+                        fullMatch.includes('million') || fullMatch.includes('m') ? 1000000 :
+                        fullMatch.includes('billion') || fullMatch.includes('b') ? 1000000000 : 1;
       amount = parseFloat(numStr) * multiplier;
+      
+      // Debug logging
+      console.log('Amount extraction debug:', {
+        input: userInput,
+        amountMatch: amountMatch[0],
+        numStr,
+        fullMatch,
+        multiplier,
+        finalAmount: amount
+      });
     }
 
     // Extract time horizon
@@ -128,7 +140,7 @@ class FinancialChatbotService {
 
     // Extract goal
     let goal = 'general investment';
-    if (input.includes('trip') || input.includes('travel') || input.includes('vacation')) {
+    if (input.includes('trip') || input.includes('travel') || input.includes('vacation') || input.includes('miami') || input.includes('spending money')) {
       goal = 'travel fund';
     } else if (input.includes('retirement')) {
       goal = 'retirement';
@@ -162,6 +174,31 @@ class FinancialChatbotService {
     context: InvestmentContext
   ): Promise<string> {
     const { amount, timeHorizon, goal, riskTolerance } = context;
+
+    // Handle small amounts for travel/spending money
+    if (amount > 0 && amount < 2000 && (goal === 'travel fund' || userInput.toLowerCase().includes('spending money'))) {
+      return `For $${amount.toLocaleString()} in spending money for your trip, here are some practical suggestions:
+
+**Short-term Savings Strategy:**
+• Keep the money in a high-yield savings account (4-5% APY)
+• Consider a money market account for easy access
+• Use a travel rewards credit card for purchases (pay off immediately)
+
+**Budgeting Tips:**
+• Set a daily spending limit ($${Math.round(amount / 7).toLocaleString()} per day for a week)
+• Use cash for small purchases to control spending
+• Track expenses with a budgeting app
+
+**Travel Money Tips:**
+• Notify your bank about travel plans
+• Carry some cash for emergencies
+• Use ATMs at banks (avoid hotel/airport ATMs with high fees)
+• Consider travel insurance for larger trips
+
+This amount is better suited for immediate spending rather than investment, as the short timeframe doesn't allow for meaningful growth.
+
+*This is educational information only. For personalized financial advice, consult a qualified financial advisor.*`;
+    }
 
     // Generate stock recommendations based on context
     const recommendations = await this.getStockRecommendations(context);
