@@ -140,7 +140,7 @@ class FinancialChatbotService {
 
     // Extract goal
     let goal = 'general investment';
-    if (input.includes('trip') || input.includes('travel') || input.includes('vacation') || input.includes('miami') || input.includes('spending money')) {
+    if (input.includes('trip') || input.includes('travel') || input.includes('vacation') || input.includes('miami') || input.includes('spending money') || input.includes('travel spending')) {
       goal = 'travel fund';
     } else if (input.includes('retirement')) {
       goal = 'retirement';
@@ -176,7 +176,7 @@ class FinancialChatbotService {
     const { amount, timeHorizon, goal, riskTolerance } = context;
 
     // Handle small amounts for travel/spending money
-    if (amount > 0 && amount < 2000 && (goal === 'travel fund' || userInput.toLowerCase().includes('spending money'))) {
+    if (amount > 0 && amount < 2000 && (goal === 'travel fund' || userInput.toLowerCase().includes('spending money') || userInput.toLowerCase().includes('travel spending'))) {
       return `For $${amount.toLocaleString()} in spending money for your trip, here are some practical suggestions:
 
 **Short-term Savings Strategy:**
