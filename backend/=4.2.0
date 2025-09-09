@@ -1,0 +1,4 @@
+Requirement already satisfied: Django in /Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages (4.2.1)
+Requirement already satisfied: asgiref<4,>=3.6.0 in /Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages (from Django) (3.7.2)
+Requirement already satisfied: sqlparse>=0.3.1 in /Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages (from Django) (0.4.4)
+Requirement already satisfied: typing-extensions>=4 in /Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages (from asgiref<4,>=3.6.0->Django) (4.15.0)
