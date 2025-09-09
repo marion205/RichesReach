@@ -504,19 +504,45 @@ const PremiumAnalyticsScreen: React.FC<PremiumAnalyticsScreenProps> = ({ navigat
   const getFilteredStrategies = (strategies: any[]) => {
     if (!strategies) return [];
     
-    return strategies.filter(strategy => {
+    console.log('🔍 Filtering strategies:', {
+      totalStrategies: strategies.length,
+      marketOutlook,
+      strategies: strategies.map(s => ({ name: s.strategyName, outlook: s.marketOutlook, type: s.strategyType }))
+    });
+    
+    // If no specific outlook is selected, show all strategies
+    if (marketOutlook === 'Neutral') {
+      console.log('📊 Showing all strategies (Neutral outlook)');
+      return strategies;
+    }
+    
+    const filtered = strategies.filter(strategy => {
       const outlook = strategy.marketOutlook?.toLowerCase() || '';
+      const strategyType = strategy.strategyType?.toLowerCase() || '';
+      
       switch (marketOutlook) {
         case 'Bullish':
-          return outlook.includes('bullish') || outlook.includes('income') || outlook.includes('protection');
+          return outlook.includes('bullish') || 
+                 outlook.includes('income') || 
+                 strategyType.includes('income') ||
+                 strategy.strategyName?.toLowerCase().includes('covered call');
         case 'Bearish':
-          return outlook.includes('bearish') || outlook.includes('hedge') || outlook.includes('protection');
-        case 'Neutral':
-          return outlook.includes('neutral') || outlook.includes('range') || outlook.includes('volatility');
+          return outlook.includes('bearish') || 
+                 outlook.includes('hedge') || 
+                 outlook.includes('protection') ||
+                 strategyType.includes('hedge') ||
+                 strategy.strategyName?.toLowerCase().includes('protective put');
         default:
           return true;
       }
     });
+    
+    console.log('📊 Filtered strategies:', {
+      filteredCount: filtered.length,
+      filtered: filtered.map(s => ({ name: s.strategyName, outlook: s.marketOutlook, type: s.strategyType }))
+    });
+    
+    return filtered;
   };
 
   // Queries
@@ -1845,7 +1871,7 @@ const PremiumAnalyticsScreen: React.FC<PremiumAnalyticsScreenProps> = ({ navigat
                 <Icon name="loader" size={16} color="#007AFF" style={{ marginLeft: 8 }} />
               )}
             </Text>
-            {getFilteredStrategies(options?.recommendedStrategies || [])?.slice(0, 4).map((strategy, index) => (
+            {(getFilteredStrategies(options?.recommendedStrategies || []) || options?.recommendedStrategies || [])?.slice(0, 4).map((strategy, index) => (
               <View key={index} style={styles.strategyCard}>
                 <View style={styles.strategyHeader}>
                   <Text style={styles.strategyName}>{strategy.strategyName}</Text>
