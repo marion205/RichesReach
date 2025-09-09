@@ -30,6 +30,12 @@ class UserType(DjangoObjectType):
     is_following_user = graphene.Boolean()
     is_followed_by_user = graphene.Boolean()
     
+    # Add camelCase aliases for frontend compatibility
+    followersCount = graphene.Int()
+    followingCount = graphene.Int()
+    isFollowingUser = graphene.Boolean()
+    isFollowedByUser = graphene.Boolean()
+    
     def resolve_followers_count(self, info):
         return self.followers.count()
     
@@ -43,6 +49,25 @@ class UserType(DjangoObjectType):
         return user.is_following(self)
     
     def resolve_is_followed_by_user(self, info):
+        user = info.context.user
+        if user.is_anonymous:
+            return False
+        return user.is_followed_by(self)
+    
+    # Resolvers for camelCase aliases
+    def resolve_followersCount(self, info):
+        return self.followers.count()
+    
+    def resolve_followingCount(self, info):
+        return self.following.count()
+    
+    def resolve_isFollowingUser(self, info):
+        user = info.context.user
+        if user.is_anonymous:
+            return False
+        return user.is_following(self)
+    
+    def resolve_isFollowedByUser(self, info):
         user = info.context.user
         if user.is_anonymous:
             return False
