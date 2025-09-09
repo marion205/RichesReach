@@ -360,16 +360,194 @@ Please ask me about personal finance, investing, or money management topics!`;
       return `**Emergency Fund Strategy:**\n\n**How Much to Save:**\n• 3-6 months of expenses\n• Start with $1,000 if in debt\n• Increase as income grows\n\n**Where to Keep It:**\n• High-yield savings account\n• Money market account\n• Easy access, no penalties\n\n**Building Your Fund:**\n• Set up automatic transfers\n• Use windfalls (tax refunds, bonuses)\n• Cut unnecessary expenses\n\nAn emergency fund provides financial security and peace of mind!`;
     }
     
+    // Check for specific financial education topics
+    if (input.includes('etf') || input.includes('exchange traded fund')) {
+      return `**Exchange-Traded Fund (ETF)**
+
+An ETF is a type of investment fund that trades on stock exchanges, similar to stocks. ETFs hold assets such as stocks, commodities, or bonds and generally operate with an arbitrage mechanism designed to keep it trading close to its net asset value.
+
+**Key Benefits:**
+• Diversification across many assets
+• Lower expense ratios than mutual funds
+• Tax efficiency
+• Intraday trading like stocks
+• Transparency of holdings
+
+**Popular ETF Examples:**
+• SPY (S&P 500 ETF)
+• QQQ (Nasdaq-100 ETF)
+• VTI (Total Stock Market ETF)
+
+ETFs are excellent for both beginners and experienced investors looking for cost-effective diversification.
+
+*This is educational information only. For personalized financial advice, consult a qualified financial advisor.*`;
+    }
+
+    if (input.includes('index fund') || input.includes('index funds')) {
+      return `**Index Funds Explained**
+
+An index fund is a type of mutual fund or ETF designed to track the performance of a specific market index.
+
+**How They Work:**
+• Automatically track a market index (e.g., S&P 500)
+• Buy all stocks in the index proportionally
+• Rebalance automatically when index changes
+• Low management fees (passive management)
+
+**Popular Indexes:**
+• S&P 500: 500 largest US companies
+• Russell 2000: 2000 small-cap companies
+• MSCI World: Global developed markets
+
+**Benefits:**
+• Low costs (expense ratios typically 0.03-0.15%)
+• Broad diversification
+• Consistent with market performance
+• Tax efficient
+• Easy to understand
+
+Index funds are perfect for beginners and experienced investors who want market returns with minimal effort.
+
+*This is educational information only. For personalized financial advice, consult a qualified financial advisor.*`;
+    }
+
+    if (input.includes('ira') || input.includes('roth') || input.includes('traditional')) {
+      return `**Roth IRA vs Traditional IRA**
+
+Both IRAs offer tax advantages, but they work differently:
+
+**Traditional IRA:**
+• Tax-deductible contributions (reduce current year taxes)
+• Tax-deferred growth
+• Required minimum distributions (RMDs) starting at age 72
+• Early withdrawal penalties before age 59½
+
+**Roth IRA:**
+• After-tax contributions (no current year tax deduction)
+• Tax-free growth and withdrawals
+• No RMDs during your lifetime
+• Contributions can be withdrawn penalty-free anytime
+
+**Choose Traditional IRA if:**
+• You expect to be in a lower tax bracket in retirement
+• You want immediate tax savings
+
+**Choose Roth IRA if:**
+• You expect to be in a higher tax bracket in retirement
+• You want tax-free income in retirement
+• You want flexibility with withdrawals
+
+*This is educational information only. For personalized financial advice, consult a qualified financial advisor.*`;
+    }
+
+    if (input.includes('compound interest') || input.includes('compounding')) {
+      return `**Compound Interest Power**
+
+Compound interest is earning interest on your interest, creating exponential growth.
+
+**How It Works:**
+• You earn interest on your principal
+• You earn interest on previously earned interest
+• Growth accelerates over time
+• Time is your greatest ally
+
+**The Rule of 72:**
+• Divide 72 by your interest rate
+• Result is years to double your money
+• Example: 8% return = 9 years to double
+
+**Examples:**
+• $1,000 at 7% for 10 years = $1,967
+• $1,000 at 7% for 20 years = $3,870
+• $1,000 at 7% for 30 years = $7,612
+
+**Maximizing Compound Interest:**
+• Start investing early
+• Invest regularly
+• Reinvest dividends
+• Avoid withdrawing early
+• Choose growth investments
+
+Albert Einstein called compound interest "the eighth wonder of the world" - start investing today!
+
+*This is educational information only. For personalized financial advice, consult a qualified financial advisor.*`;
+    }
+
+    if (input.includes('diversification') || input.includes('diversify')) {
+      return `**Diversification Strategy**
+
+Diversification is spreading your investments across different assets to reduce risk.
+
+**Types of Diversification:**
+• Asset classes (stocks, bonds, real estate)
+• Sectors (technology, healthcare, finance)
+• Geographic regions (US, international, emerging markets)
+• Company sizes (large-cap, mid-cap, small-cap)
+• Investment styles (growth, value, blend)
+
+**Benefits:**
+• Reduces portfolio volatility
+• Protects against single-asset losses
+• Improves risk-adjusted returns
+• Provides stability during market downturns
+
+**How to Diversify:**
+• Use index funds for broad exposure
+• Invest in different sectors
+• Include international investments
+• Mix stocks and bonds
+• Consider real estate (REITs)
+
+Remember: Diversification doesn't guarantee profits or protect against all losses, but it's a fundamental risk management strategy.
+
+*This is educational information only. For personalized financial advice, consult a qualified financial advisor.*`;
+    }
+
+    if (input.includes('options') || input.includes('option')) {
+      return `**Options Trading Basics**
+
+Options are contracts that give you the right to buy or sell stocks at specific prices.
+
+**Types of Options:**
+• Call Options: Right to BUY at strike price
+• Put Options: Right to SELL at strike price
+
+**Key Terms:**
+• Strike Price: Price at which you can exercise the option
+• Expiration Date: When the option expires
+• Premium: Cost to buy the option
+• In-the-Money: Option has intrinsic value
+• Out-of-the-Money: Option has no intrinsic value
+
+**Basic Strategies:**
+• Covered Call: Sell calls against stock you own
+• Protective Put: Buy puts to protect stock positions
+• Long Call: Bet on stock price increase
+• Long Put: Bet on stock price decrease
+
+**Risk Considerations:**
+• Options can expire worthless
+• Time decay works against you
+• Leverage amplifies both gains and losses
+• Complex strategies require experience
+• Start with paper trading
+
+Remember: Options are advanced instruments. Master the basics before complex strategies.
+
+*This is educational information only. For personalized financial advice, consult a qualified financial advisor.*`;
+    }
+
     // Default response
     return `I understand you're asking about "${userInput}". This is a great financial question!
 
 Here are some topics I can help with:
-• **Investment strategies** - Stocks, ETFs, mutual funds
+• **Investment basics** - ETFs, index funds, stocks, options
 • **Retirement planning** - IRAs, 401(k)s, pension plans
 • **Budgeting** - 50/30/20 rule, zero-based budgeting
 • **Debt management** - Payoff strategies, consolidation
 • **Emergency funds** - How much to save, where to keep it
 • **Risk management** - Diversification, asset allocation
+• **Financial concepts** - Compound interest, market cap, expense ratios
 
 Feel free to ask about any of these topics or try asking about a specific investment scenario!`;
   }
