@@ -46,6 +46,18 @@ const GET_PORTFOLIO_METRICS = gql`
   }
 `;
 
+const GET_ME = gql`
+  query GetMe {
+    me {
+      id
+      name
+      email
+      hasPremiumAccess
+      subscriptionTier
+    }
+  }
+`;
+
 
 
 
@@ -63,6 +75,12 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
   
   // Portfolio data query
   const { data: portfolioData, loading: portfolioLoading, error: portfolioError } = useQuery(GET_PORTFOLIO_METRICS, {
+    fetchPolicy: 'cache-and-network',
+    errorPolicy: 'ignore',
+  });
+  
+  // User data query for premium status
+  const { data: userData, loading: userLoading } = useQuery(GET_ME, {
     fetchPolicy: 'cache-and-network',
     errorPolicy: 'ignore',
   });
@@ -872,6 +890,7 @@ Feel free to ask about any of these topics or try one of the quick prompts above
             totalReturn={realPortfolioData?.totalReturn || (isLiveData && liveTotalReturn ? liveTotalReturn : (portfolioData?.portfolioMetrics?.totalReturn || 0))}
             totalReturnPercent={realPortfolioData?.totalReturnPercent || (isLiveData && liveTotalReturnPercent ? liveTotalReturnPercent : (portfolioData?.portfolioMetrics?.totalReturnPercent || 0))}
             onNavigate={navigateTo}
+            hasPremiumAccess={userData?.me?.hasPremiumAccess || false}
           />
         )}
 

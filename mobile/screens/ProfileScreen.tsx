@@ -27,6 +27,8 @@ const GET_ME = gql`
       followingCount
       isFollowingUser
       isFollowedByUser
+      hasPremiumAccess
+      subscriptionTier
     }
   }
 `;

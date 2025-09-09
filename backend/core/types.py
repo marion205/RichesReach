@@ -36,6 +36,10 @@ class UserType(DjangoObjectType):
     isFollowingUser = graphene.Boolean()
     isFollowedByUser = graphene.Boolean()
     
+    # Add subscription status fields
+    hasPremiumAccess = graphene.Boolean()
+    subscriptionTier = graphene.String()
+    
     def resolve_followers_count(self, info):
         return self.followers.count()
     
@@ -72,6 +76,18 @@ class UserType(DjangoObjectType):
         if user.is_anonymous:
             return False
         return user.is_followed_by(self)
+    
+    def resolve_hasPremiumAccess(self, info):
+        """Check if user has premium access"""
+        from .premium_types import _has_premium_access
+        return _has_premium_access(self)
+    
+    def resolve_subscriptionTier(self, info):
+        """Get user's subscription tier"""
+        from .premium_types import _has_premium_access
+        if _has_premium_access(self):
+            return "premium"
+        return "free"
 
 class IncomeProfileType(DjangoObjectType):
     class Meta:
