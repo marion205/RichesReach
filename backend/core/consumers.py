@@ -444,44 +444,61 @@ class PortfolioConsumer(AsyncWebsocketConsumer):
             return self._get_mock_portfolio_data()
     
     def _get_mock_portfolio_data(self):
-        """Fallback mock portfolio data"""
+        """Fallback portfolio data using real stock prices from database"""
         import random
         
-        # Base prices (will be modified with small random changes)
-        base_holdings = [
-            {
-                'symbol': 'AAPL',
-                'companyName': 'Apple Inc.',
-                'shares': 10,
-                'basePrice': 175.43,
-                'costBasis': 1500.00,
-                'sector': 'Technology'
-            },
-            {
-                'symbol': 'MSFT',
-                'companyName': 'Microsoft Corporation',
-                'shares': 5,
-                'basePrice': 378.85,
-                'costBasis': 1800.00,
-                'sector': 'Technology'
-            },
-            {
-                'symbol': 'GOOGL',
-                'companyName': 'Alphabet Inc.',
-                'shares': 3,
-                'basePrice': 142.56,
-                'costBasis': 400.00,
-                'sector': 'Technology'
-            },
-            {
-                'symbol': 'NFLX',
-                'companyName': 'Netflix Inc.',
-                'shares': 8,
-                'basePrice': 485.20,
-                'costBasis': 3500.00,
-                'sector': 'Communication Services'
-            }
-        ]
+        # Get real stock data from database
+        try:
+            from .models import Stock
+            real_stocks = Stock.objects.filter(
+                current_price__isnull=False,
+                current_price__gt=0
+            ).order_by('?')[:4]  # Get 4 random stocks with real prices
+            
+            if real_stocks:
+                base_holdings = []
+                for stock in real_stocks:
+                    base_holdings.append({
+                        'symbol': stock.symbol,
+                        'companyName': getattr(stock, 'name', stock.symbol),
+                        'shares': random.randint(1, 20),
+                        'basePrice': float(stock.current_price),
+                        'costBasis': float(stock.current_price) * random.randint(1, 20),
+                        'sector': getattr(stock, 'sector', 'Unknown')
+                    })
+            else:
+                # Fallback to default stocks if no database stocks available
+                base_holdings = [
+                    {
+                        'symbol': 'AAPL',
+                        'companyName': 'Apple Inc.',
+                        'shares': 10,
+                        'basePrice': 175.43,
+                        'costBasis': 1500.00,
+                        'sector': 'Technology'
+                    },
+                    {
+                        'symbol': 'MSFT',
+                        'companyName': 'Microsoft Corporation',
+                        'shares': 5,
+                        'basePrice': 378.85,
+                        'costBasis': 1800.00,
+                        'sector': 'Technology'
+                    }
+                ]
+        except Exception as e:
+            logger.error(f"Error getting real stock data for portfolio: {e}")
+            # Last resort fallback
+            base_holdings = [
+                {
+                    'symbol': 'AAPL',
+                    'companyName': 'Apple Inc.',
+                    'shares': 10,
+                    'basePrice': 175.43,
+                    'costBasis': 1500.00,
+                    'sector': 'Technology'
+                }
+            ]
         
         # Generate realistic price variations (±0.1% to ±1.5%)
         holdings = []

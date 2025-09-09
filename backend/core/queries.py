@@ -52,6 +52,7 @@ class Query(graphene.ObjectType):
     test_portfolio_metrics = graphene.Field('core.premium_types.PortfolioMetricsType')
     test_ai_recommendations = graphene.Field('core.premium_types.AIRecommendationsType')
     test_stock_screening = graphene.List('core.premium_types.StockScreeningResultType')
+    test_options_analysis = graphene.Field('core.premium_types.OptionsAnalysisType', symbol=graphene.String(required=True))
 
     # Phase 3 Social Features - TODO: Uncomment when types are available
     watchlists = graphene.List(WatchlistType, user_id=graphene.ID())
@@ -660,3 +661,10 @@ class Query(graphene.ObjectType):
         service = PremiumAnalyticsService()
         # Return some sample screening results
         return service.get_advanced_stock_screening({})
+    
+    def resolve_test_options_analysis(self, info, symbol):
+        """Test options analysis (no auth required)"""
+        from .options_service import OptionsAnalysisService
+        service = OptionsAnalysisService()
+        # Return options analysis for the given symbol
+        return service.get_comprehensive_analysis(symbol)

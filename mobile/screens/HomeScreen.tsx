@@ -881,18 +881,32 @@ Feel free to ask about any of these topics or try one of the quick prompts above
             totalReturn={realPortfolioData?.totalReturn || (isLiveData && liveTotalReturn ? liveTotalReturn : (portfolioData?.portfolioMetrics?.totalReturn || 0))}
             totalReturnPercent={realPortfolioData?.totalReturnPercent || (isLiveData && liveTotalReturnPercent ? liveTotalReturnPercent : (portfolioData?.portfolioMetrics?.totalReturnPercent || 0))}
             portfolioHistory={[
-              { date: '2024-01-01', value: 12000 },
-              { date: '2024-01-15', value: 12200 },
-              { date: '2024-02-01', value: 12500 },
-              { date: '2024-02-15', value: 12300 },
-              { date: '2024-03-01', value: 12800 },
-              { date: '2024-03-15', value: 13100 },
-              { date: '2024-04-01', value: 13500 },
-              { date: '2024-04-15', value: 13800 },
-              { date: '2024-05-01', value: 14200 },
-              { date: '2024-05-15', value: 14100 },
-              { date: '2024-06-01', value: 14400 },
-              { date: '2024-06-15', value: 14200 },
+              // 1 year ago (September 2023)
+              { date: '2023-09-08', value: 10000 },
+              { date: '2023-10-08', value: 10200 },
+              { date: '2023-11-08', value: 10500 },
+              { date: '2023-12-08', value: 10800 },
+              
+              // 6 months ago (March 2024)
+              { date: '2024-01-08', value: 11000 },
+              { date: '2024-02-08', value: 11200 },
+              { date: '2024-03-08', value: 11500 },
+              { date: '2024-04-08', value: 11800 },
+              { date: '2024-05-08', value: 12000 },
+              
+              // 3 months ago (June 2024)
+              { date: '2024-06-08', value: 12200 },
+              { date: '2024-07-08', value: 12500 },
+              
+              // 1 month ago (August 2024)
+              { date: '2024-08-08', value: 12800 },
+              { date: '2024-08-15', value: 12900 },
+              { date: '2024-08-22', value: 13000 },
+              { date: '2024-08-29', value: 13050 },
+              
+              // Recent (September 2024)
+              { date: '2024-09-01', value: 13100 },
+              { date: '2024-09-08', value: 13100 },
             ]}
           />
         )}

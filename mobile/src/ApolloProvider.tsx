@@ -11,7 +11,7 @@ import { getMainDefinition } from '@apollo/client/utilities';
 const HTTP_URL = 'http://localhost:8001/graphql/'; 
 // Local development → use localhost
 // iOS Simulator → use localhost (should work with Expo Go)
-// Android Emulator → use http://10.0.2.2:8000/graphql/
+// Android Emulator → use http://10.0.2.2:8001/graphql/
 
 const httpLink = createHttpLink({ uri: HTTP_URL });
 

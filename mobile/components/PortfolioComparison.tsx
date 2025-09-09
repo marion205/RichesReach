@@ -80,26 +80,106 @@ const PortfolioComparison: React.FC<PortfolioComparisonProps> = ({
     }
   ];
 
-  // Generate mock chart data for comparison
+  // Filter portfolio history based on selected timeframe
+  const getFilteredPortfolioHistory = () => {
+    const totalPoints = portfolioHistory.length;
+    
+    // Calculate how many data points to take based on timeframe
+    let pointsToTake: number;
+    
+    switch (selectedTimeframe) {
+      case '1M':
+        pointsToTake = Math.min(4, totalPoints); // Last 4 points (1 month)
+        break;
+      case '3M':
+        pointsToTake = Math.min(8, totalPoints); // Last 8 points (3 months)
+        break;
+      case '6M':
+        pointsToTake = Math.min(12, totalPoints); // Last 12 points (6 months)
+        break;
+      case '1Y':
+        pointsToTake = totalPoints; // All points (1 year)
+        break;
+      default:
+        pointsToTake = Math.min(4, totalPoints);
+    }
+    
+    // Always return at least 2 points for comparison
+    const actualPoints = Math.max(2, pointsToTake);
+    return portfolioHistory.slice(-actualPoints);
+  };
+
+  // Calculate performance metrics for the selected timeframe
+  const getTimeframePerformance = () => {
+    const filteredHistory = getFilteredPortfolioHistory();
+    
+    // Always ensure we have at least 2 data points
+    if (filteredHistory.length < 2) {
+      return {
+        totalReturn: totalReturn,
+        totalReturnPercent: totalReturnPercent,
+        startValue: totalValue - totalReturn,
+        endValue: totalValue
+      };
+    }
+    
+    const startValue = filteredHistory[0].value;
+    const endValue = filteredHistory[filteredHistory.length - 1].value;
+    const timeframeReturn = endValue - startValue;
+    const timeframeReturnPercent = startValue > 0 ? (timeframeReturn / startValue) * 100 : 0;
+    
+    // Debug logging
+    console.log(`Timeframe: ${selectedTimeframe}, Points: ${filteredHistory.length}, Start: ${startValue}, End: ${endValue}, Return: ${timeframeReturn}, Percent: ${timeframeReturnPercent}`);
+    
+    return {
+      totalReturn: timeframeReturn,
+      totalReturnPercent: timeframeReturnPercent,
+      startValue,
+      endValue
+    };
+  };
+
+  // Generate mock chart data for comparison based on filtered timeframe
   const generateChartData = () => {
-    const baseValue = totalValue * 0.9; // Start slightly below current value
-    const portfolioData = portfolioHistory.map((point, index) => {
-      const growth = (totalReturnPercent / 100) * (index / portfolioHistory.length);
+    const filteredHistory = getFilteredPortfolioHistory();
+    const timeframePerformance = getTimeframePerformance();
+    
+    if (filteredHistory.length === 0) {
+      return {
+        labels: [],
+        datasets: []
+      };
+    }
+    
+    const baseValue = timeframePerformance.startValue;
+    const portfolioData = filteredHistory.map((point, index) => {
+      const growth = (timeframePerformance.totalReturnPercent / 100) * (index / filteredHistory.length);
       return baseValue * (1 + growth);
     });
 
-    const sp500Data = portfolioHistory.map((_, index) => {
-      const growth = (12.3 / 100) * (index / portfolioHistory.length);
+    // Adjust benchmark returns based on timeframe
+    const getBenchmarkReturn = (annualReturn: number) => {
+      switch (selectedTimeframe) {
+        case '1M': return annualReturn / 12;
+        case '3M': return annualReturn / 4;
+        case '6M': return annualReturn / 2;
+        case '1Y': return annualReturn;
+        default: return annualReturn / 12;
+      }
+    };
+
+    const sp500Data = filteredHistory.map((_, index) => {
+      const growth = (getBenchmarkReturn(12.3) / 100) * (index / filteredHistory.length);
       return baseValue * (1 + growth);
     });
 
-    const nasdaqData = portfolioHistory.map((_, index) => {
-      const growth = (18.7 / 100) * (index / portfolioHistory.length);
+    const nasdaqData = filteredHistory.map((_, index) => {
+      const growth = (getBenchmarkReturn(18.7) / 100) * (index / filteredHistory.length);
       return baseValue * (1 + growth);
     });
 
     return {
-      labels: portfolioHistory.map(point => {
+      labels: filteredHistory.map(point => {
         const date = new Date(point.date);
         return `${date.getMonth() + 1}/${date.getDate()}`;
       }),
@@ -152,8 +232,22 @@ const PortfolioComparison: React.FC<PortfolioComparisonProps> = ({
   };
 
   const renderBenchmarkCard = (benchmark: Benchmark) => {
-    const isOutperforming = totalReturnPercent > benchmark.returnPercent;
-    const difference = totalReturnPercent - benchmark.returnPercent;
+    const timeframePerformance = getTimeframePerformance();
+    
+    // Adjust benchmark return based on timeframe
+    const getBenchmarkReturn = (annualReturn: number) => {
+      switch (selectedTimeframe) {
+        case '1M': return annualReturn / 12;
+        case '3M': return annualReturn / 4;
+        case '6M': return annualReturn / 2;
+        case '1Y': return annualReturn;
+        default: return annualReturn / 12;
+      }
+    };
+    
+    const adjustedBenchmarkReturn = getBenchmarkReturn(benchmark.returnPercent);
+    const isOutperforming = timeframePerformance.totalReturnPercent > adjustedBenchmarkReturn;
+    const difference = timeframePerformance.totalReturnPercent - adjustedBenchmarkReturn;
     
     return (
       <View key={benchmark.id} style={styles.benchmarkCard}>
@@ -170,14 +264,14 @@ const PortfolioComparison: React.FC<PortfolioComparisonProps> = ({
           <View style={styles.benchmarkPerformance}>
             <Text style={[
               styles.benchmarkReturn,
-              { color: getPerformanceColor(benchmark.returnPercent) }
+              { color: getPerformanceColor(adjustedBenchmarkReturn) }
             ]}>
-              {formatPercent(benchmark.returnPercent)}
+              {formatPercent(adjustedBenchmarkReturn)}
             </Text>
             <Icon 
-              name={getPerformanceIcon(benchmark.returnPercent)} 
+              name={getPerformanceIcon(adjustedBenchmarkReturn)} 
               size={14} 
-              color={getPerformanceColor(benchmark.returnPercent)} 
+              color={getPerformanceColor(adjustedBenchmarkReturn)} 
             />
           </View>
         </View>
@@ -187,9 +281,9 @@ const PortfolioComparison: React.FC<PortfolioComparisonProps> = ({
             <Text style={styles.comparisonLabel}>Your Portfolio</Text>
             <Text style={[
               styles.comparisonValue,
-              { color: getPerformanceColor(totalReturnPercent) }
+              { color: getPerformanceColor(timeframePerformance.totalReturnPercent) }
             ]}>
-              {formatPercent(totalReturnPercent)}
+              {formatPercent(timeframePerformance.totalReturnPercent)}
             </Text>
           </View>
           <View style={styles.comparisonItem}>
@@ -256,18 +350,18 @@ const PortfolioComparison: React.FC<PortfolioComparisonProps> = ({
             <Text style={styles.summaryLabel}>Total Return</Text>
             <Text style={[
               styles.summaryValue,
-              { color: getPerformanceColor(totalReturnPercent) }
+              { color: getPerformanceColor(getTimeframePerformance().totalReturnPercent) }
             ]}>
-              {formatPercent(totalReturnPercent)}
+              {formatPercent(getTimeframePerformance().totalReturnPercent)}
             </Text>
           </View>
           <View style={styles.summaryItem}>
             <Text style={styles.summaryLabel}>Return Amount</Text>
             <Text style={[
               styles.summaryValue,
-              { color: getPerformanceColor(totalReturn) }
+              { color: getPerformanceColor(getTimeframePerformance().totalReturn) }
             ]}>
-              {formatCurrency(totalReturn)}
+              {formatCurrency(getTimeframePerformance().totalReturn)}
             </Text>
           </View>
         </View>

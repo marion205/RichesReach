@@ -509,7 +509,7 @@ const SocialScreen: React.FC<SocialScreenProps> = ({ onNavigate }) => {
 
     console.log('🔍 Testing backend connection before comment...');
     try {
-      const testResponse = await fetch('http://192.168.1.151:8000/graphql/', {
+      const testResponse = await fetch('http://192.168.1.151:8001/graphql/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -867,7 +867,7 @@ const SocialScreen: React.FC<SocialScreenProps> = ({ onNavigate }) => {
     // Test backend connection first
     try {
       console.log('🔍 Testing backend connection...');
-      const response = await fetch('http://192.168.1.151:8000/graphql/', {
+      const response = await fetch('http://192.168.1.151:8001/graphql/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -928,7 +928,7 @@ const SocialScreen: React.FC<SocialScreenProps> = ({ onNavigate }) => {
       
       console.log('📤 Sending GraphQL mutation with variables:', variables);
       console.log('🔗 GraphQL mutation query:', CREATE_DISCUSSION.loc?.source?.body);
-      console.log('🌐 Apollo Client URI:', 'http://192.168.1.151:8000/graphql/');
+      console.log('🌐 Apollo Client URI:', 'http://192.168.1.151:8001/graphql/');
       console.log('🔐 Auth token available:', !!await AsyncStorage.getItem('token'));
       
       const result = await createStockDiscussion({
