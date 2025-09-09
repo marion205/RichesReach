@@ -45,3 +45,19 @@ infrastructure/archives/*.tar.gz
 
 # OS files
 Thumbs.db
+
+# Deployment archives
+deployment/*.tar.gz
+deployment/richesreach-*.tar.gz
+infrastructure/archives/*.tar.gz
+
+# Large build artifacts
+mobile/dist/
+mobile/_expo/
+deployment/richesreach-production/mobile-dist/
+deployment/richesreach-production/_expo/
+
+# ML model files (too large for git)
+backend/ml_models/*.pkl
+backend/ml_models/*.joblib
+
