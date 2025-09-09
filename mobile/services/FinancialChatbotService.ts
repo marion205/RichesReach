@@ -70,8 +70,8 @@ class FinancialChatbotService {
       'growth', 'value', 'dividend', 'income', 'capital gains', 'tax loss harvesting',
       // Add spending and purchase-related keywords
       'purchase', 'spend', 'spending', 'cost', 'price', 'expensive', 'cheap',
-      'afford', 'affordable', 'worth', 'value', 'should i', 'worth it', 'jordans',
-      'shoes', 'clothes', 'car', 'house', 'phone', 'laptop', 'gadget', 'item'
+      'afford', 'affordable', 'worth', 'value', 'should i', 'worth it', 'buy',
+      'get', 'item', 'product', 'thing', 'stuff'
     ];
 
     // Non-financial keywords that should be rejected
@@ -1168,81 +1168,56 @@ Trading involves buying and selling securities to profit from price movements.
 *This is educational information only. For personalized financial advice, consult a qualified financial advisor.*`;
     }
 
-    if (input.includes('jordans') || input.includes('shoes') || input.includes('clothes') || input.includes('fashion')) {
-      return `**Smart Spending on Fashion Items**
-
-When considering buying items like Jordans, shoes, or clothes, here's a financial perspective:
-
-**Before You Buy:**
-• **Budget Check**: Can you afford it without affecting essential expenses?
-• **Value Assessment**: Will you wear/use it regularly?
-• **Quality vs. Price**: Is the quality worth the cost?
-• **Alternative Options**: Are there similar items for less?
-
-**Financial Decision Framework:**
-• **Emergency Fund First**: Ensure you have 3-6 months expenses saved
-• **Needs vs. Wants**: Is this a need or a want?
-• **Opportunity Cost**: What else could you do with this money?
-• **Long-term Impact**: How will this affect your financial goals?
-
-**Smart Shopping Tips:**
-• **Wait 24-48 hours**: Avoid impulse purchases
-• **Look for sales/discounts**: Don't pay full price if you can wait
-• **Consider resale value**: Some items hold value better than others
-• **Set a monthly clothing budget**: Track your fashion spending
-
-**Questions to Ask Yourself:**
-• Do I already have something similar?
-• Will I still want this in 6 months?
-• Can I pay cash without going into debt?
-• Does this align with my financial goals?
-
-Remember: It's okay to treat yourself occasionally, but make sure it fits within your overall financial plan!
-
-*This is educational information only. For personalized financial advice, consult a qualified financial advisor.*`;
-    }
-
-    if (input.includes('should i') && (input.includes('buy') || input.includes('purchase'))) {
+    // Smart purchase decision framework - works for any item
+    if (input.includes('should i') && (input.includes('buy') || input.includes('purchase') || input.includes('get'))) {
       return `**Smart Purchase Decision Framework**
 
-When asking "Should I buy this?", consider these financial factors:
+When considering any purchase, here's a comprehensive financial evaluation:
 
-**Financial Health Check:**
-• **Emergency Fund**: Do you have 3-6 months of expenses saved?
-• **Debt Status**: Are you debt-free or actively paying down debt?
-• **Budget**: Does this fit within your monthly budget?
-• **Savings Goals**: Will this purchase affect your long-term goals?
+**Before You Buy - Ask These Questions:**
 
-**The 24-Hour Rule:**
-• Wait at least 24 hours before making non-essential purchases
-• Sleep on it - you might feel differently tomorrow
-• Research alternatives and compare prices
-• Consider if you really need it or just want it
+**1. Financial Health Check:**
+• Do you have an emergency fund (6+ months expenses)?
+• Are you debt-free or actively paying down debt?
+• Are you contributing to retirement accounts?
+• Does this purchase fit your budget?
 
-**Cost-Benefit Analysis:**
-• **Cost**: Total price + any additional expenses (maintenance, insurance, etc.)
-• **Benefit**: How much value/joy will this bring you?
-• **Opportunity Cost**: What else could you do with this money?
-• **Long-term Value**: Will this purchase appreciate or depreciate?
+**2. Value Assessment:**
+• **Need vs. Want**: Is this essential or discretionary?
+• **Cost per Use**: How often will you actually use this?
+• **Quality vs. Price**: Will a cheaper alternative work?
+• **Opportunity Cost**: What else could this money do?
 
-**Questions to Ask:**
-• Can I afford this without going into debt?
-• Do I already have something that serves the same purpose?
-• Will I still want this in 6 months?
-• How many hours of work does this cost me?
-• Does this align with my values and goals?
+**3. Purchase Timing:**
+• **Wait 24-48 Hours**: Avoid impulse purchases
+• **Research Prices**: Compare options and look for deals
+• **Consider Used/Refurbished**: Often 30-70% cheaper
+• **Seasonal Sales**: Wait for better timing if possible
 
-**Red Flags:**
-• Feeling pressured to buy immediately
-• Can't afford it without credit cards
-• Haven't researched alternatives
-• Buying to impress others
-• Emotional purchase (retail therapy)
+**4. Smart Spending Rules:**
+• **Cash Only**: Never finance non-essential purchases
+• **Budget Allocation**: Limit discretionary spending to 10-20% of income
+• **Quality Over Quantity**: Buy fewer, better items
+• **One In, One Out**: Replace rather than accumulate
 
-Remember: The best purchase is often the one you don't make!
+**5. Alternative Approaches:**
+• **Borrow/Rent**: For items you'll rarely use
+• **Save Up**: Set aside money monthly until you can afford it
+• **Buy Used**: Check online marketplaces and thrift stores
+• **DIY/Repair**: Fix what you have instead of replacing
+
+**6. Long-term Thinking:**
+• Will this bring lasting value or temporary satisfaction?
+• Could this money grow if invested instead?
+• What would your future self think of this purchase?
+• Does this align with your financial goals?
+
+**Remember**: Every purchase is a choice between spending now vs. investing for the future. Choose wisely!
 
 *This is educational information only. For personalized financial advice, consult a qualified financial advisor.*`;
     }
+
+
 
     // Default response
     return `I understand you're asking about "${userInput}". This is a great financial question!
