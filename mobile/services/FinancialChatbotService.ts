@@ -933,6 +933,226 @@ Effective debt management is crucial for financial health.
 *This is educational information only. For personalized financial advice, consult a qualified financial advisor.*`;
     }
 
+    if (input.includes('credit score') || input.includes('credit scores')) {
+      return `**Credit Score Importance**
+
+Your credit score is a three-digit number that represents your creditworthiness to lenders.
+
+**Credit Score Ranges:**
+• **Excellent (750-850)**: Best interest rates and terms
+• **Good (700-749)**: Good rates, some premium options
+• **Fair (650-699)**: Higher rates, limited options
+• **Poor (600-649)**: High rates, few options
+• **Very Poor (300-599)**: Very high rates, limited approval
+
+**What Affects Your Credit Score:**
+• **Payment History (35%)**: On-time payments are crucial
+• **Credit Utilization (30%)**: Keep balances under 30% of limits
+• **Credit History Length (15%)**: Longer history is better
+• **Credit Mix (10%)**: Different types of credit (cards, loans)
+• **New Credit (10%)**: Recent applications and accounts
+
+**Why Credit Scores Matter:**
+• **Interest Rates**: Better scores = lower rates
+• **Loan Approval**: Higher scores = easier approval
+• **Insurance Premiums**: Some insurers use credit scores
+• **Rental Applications**: Landlords often check credit
+• **Employment**: Some employers check credit
+
+**Improving Your Credit Score:**
+• Pay bills on time, every time
+• Keep credit card balances low
+• Don't close old accounts unnecessarily
+• Limit new credit applications
+• Check your credit report regularly
+
+**Credit Monitoring:**
+• Free annual credit reports from AnnualCreditReport.com
+• Credit monitoring services
+• Dispute errors immediately
+• Set up payment reminders
+
+*This is educational information only. For personalized financial advice, consult a qualified financial advisor.*`;
+    }
+
+    if (input.includes('dollar cost averaging') || input.includes('dca')) {
+      return `**Dollar-Cost Averaging (DCA)**
+
+DCA is an investment strategy where you invest a fixed amount regularly, regardless of market conditions.
+
+**How DCA Works:**
+• Invest the same amount at regular intervals
+• Buy more shares when prices are low
+• Buy fewer shares when prices are high
+• Reduces impact of market volatility
+• Example: $500 every month into an index fund
+
+**Benefits:**
+• **Reduces Timing Risk**: Don't need to predict market movements
+• **Emotional Discipline**: Removes emotion from investing decisions
+• **Lower Average Cost**: Often results in better average purchase price
+• **Habit Formation**: Builds consistent investing habits
+• **Reduces Volatility Impact**: Smooths out market ups and downs
+
+**DCA Example:**
+Month 1: $500 ÷ $100/share = 5 shares
+Month 2: $500 ÷ $80/share = 6.25 shares
+Month 3: $500 ÷ $120/share = 4.17 shares
+Average cost: $1,500 ÷ 15.42 shares = $97.28/share
+
+**When to Use DCA:**
+• Regular income (salary, wages)
+• Long-term investment goals
+• Volatile markets
+• Building wealth over time
+• Retirement savings
+
+**DCA vs Lump Sum:**
+• **DCA**: Lower risk, potentially lower returns
+• **Lump Sum**: Higher risk, potentially higher returns
+• **Historical Data**: Lump sum often outperforms DCA
+• **Psychological**: DCA feels safer and more manageable
+
+**Implementation Tips:**
+• Automate your investments
+• Choose low-cost index funds
+• Stay consistent regardless of market conditions
+• Increase amounts when possible
+• Don't stop during market downturns
+
+*This is educational information only. For personalized financial advice, consult a qualified financial advisor.*`;
+    }
+
+    if (input.includes('analyze stocks') || input.includes('stock analysis') || input.includes('how to analyze')) {
+      return `**How to Analyze Stocks**
+
+Stock analysis helps you make informed investment decisions by evaluating a company's financial health and growth potential.
+
+**Fundamental Analysis:**
+
+**Financial Statements:**
+• **Income Statement**: Revenue, expenses, profit margins
+• **Balance Sheet**: Assets, liabilities, shareholder equity
+• **Cash Flow Statement**: Operating, investing, financing cash flows
+
+**Key Financial Ratios:**
+• **P/E Ratio**: Price-to-earnings (valuation)
+• **PEG Ratio**: P/E divided by growth rate
+• **Debt-to-Equity**: Financial leverage
+• **ROE**: Return on equity (profitability)
+• **Current Ratio**: Liquidity measure
+
+**Company Metrics:**
+• **Revenue Growth**: Year-over-year growth rates
+• **Profit Margins**: Gross, operating, net margins
+• **Market Share**: Industry position
+• **Management Quality**: Leadership track record
+• **Competitive Advantage**: Moat analysis
+
+**Technical Analysis:**
+• **Price Charts**: Support and resistance levels
+• **Moving Averages**: Trend identification
+• **Volume Analysis**: Trading activity
+• **Momentum Indicators**: RSI, MACD
+• **Chart Patterns**: Head and shoulders, triangles
+
+**Qualitative Factors:**
+• **Industry Trends**: Growth prospects
+• **Competitive Position**: Market leadership
+• **Management Team**: Experience and vision
+• **Business Model**: Sustainability
+• **Regulatory Environment**: Legal risks
+
+**Analysis Process:**
+1. **Research the Company**: Business model, products, services
+2. **Review Financials**: Last 3-5 years of statements
+3. **Calculate Ratios**: Compare to industry averages
+4. **Assess Growth**: Revenue and earnings trends
+5. **Evaluate Risks**: Industry, company-specific risks
+6. **Determine Valuation**: Fair value estimate
+7. **Make Decision**: Buy, hold, or sell
+
+**Red Flags to Avoid:**
+• Declining revenue or earnings
+• High debt levels
+• Poor management
+• Industry in decline
+• Accounting irregularities
+
+*This is educational information only. For personalized financial advice, consult a qualified financial advisor.*`;
+    }
+
+    if (input.includes('trading fundamentals') || input.includes('trading basics')) {
+      return `**Trading Fundamentals**
+
+Trading involves buying and selling securities to profit from price movements.
+
+**Types of Trading:**
+• **Day Trading**: Buy and sell within the same day
+• **Swing Trading**: Hold positions for days to weeks
+• **Position Trading**: Hold for months to years
+• **Scalping**: Very short-term trades (minutes)
+• **Momentum Trading**: Follow price trends
+
+**Essential Trading Concepts:**
+
+**Market Orders:**
+• **Market Order**: Execute immediately at current price
+• **Limit Order**: Execute only at specified price or better
+• **Stop Order**: Trigger when price reaches certain level
+• **Stop-Limit Order**: Combination of stop and limit
+
+**Risk Management:**
+• **Position Sizing**: Don't risk more than 1-2% per trade
+• **Stop Losses**: Set predetermined exit points
+• **Diversification**: Don't put all money in one trade
+• **Risk-Reward Ratio**: Aim for at least 1:2 ratio
+• **Maximum Drawdown**: Limit total portfolio losses
+
+**Trading Psychology:**
+• **Emotional Control**: Don't let fear or greed drive decisions
+• **Discipline**: Stick to your trading plan
+• **Patience**: Wait for good setups
+• **Accept Losses**: Part of trading, learn from them
+• **Avoid Revenge Trading**: Don't try to recover losses quickly
+
+**Technical Analysis Basics:**
+• **Support/Resistance**: Price levels that tend to hold
+• **Trend Lines**: Direction of price movement
+• **Volume**: Confirms price movements
+• **Moving Averages**: Smooth price data
+• **Chart Patterns**: Predict future movements
+
+**Fundamental Analysis:**
+• **Earnings Reports**: Company financial performance
+• **Economic Indicators**: GDP, inflation, employment
+• **Industry News**: Sector-specific developments
+• **Company News**: Product launches, management changes
+• **Market Sentiment**: Overall market mood
+
+**Trading Platforms:**
+• **Brokerage Accounts**: Choose based on fees and features
+• **Charting Software**: Technical analysis tools
+• **News Sources**: Stay informed about market events
+• **Educational Resources**: Learn continuously
+
+**Common Trading Mistakes:**
+• **Overtrading**: Too many trades, high fees
+• **Lack of Plan**: No clear entry/exit strategy
+• **Ignoring Risk**: Not using stop losses
+• **Emotional Trading**: Fear and greed decisions
+• **Chasing Performance**: Following hot tips
+
+**Getting Started:**
+1. **Learn the Basics**: Understand markets and instruments
+2. **Paper Trade**: Practice without real money
+3. **Start Small**: Use small amounts initially
+4. **Keep Records**: Track all trades and performance
+5. **Continuous Learning**: Markets evolve constantly
+
+*This is educational information only. For personalized financial advice, consult a qualified financial advisor.*`;
+    }
+
     // Default response
     return `I understand you're asking about "${userInput}". This is a great financial question!
 
