@@ -488,6 +488,36 @@ const PremiumAnalyticsScreen: React.FC<PremiumAnalyticsScreenProps> = ({ navigat
   // Rebalancing state
   const [rebalancingPerformed, setRebalancingPerformed] = useState(false);
   const [lastRebalancingResult, setLastRebalancingResult] = useState(null);
+  
+  // Market outlook state
+  const [marketOutlook, setMarketOutlook] = useState<'Bullish' | 'Bearish' | 'Neutral'>('Neutral');
+  
+  // Function to cycle through market outlook options
+  const toggleMarketOutlook = () => {
+    const outlooks: ('Bullish' | 'Bearish' | 'Neutral')[] = ['Bullish', 'Bearish', 'Neutral'];
+    const currentIndex = outlooks.indexOf(marketOutlook);
+    const nextIndex = (currentIndex + 1) % outlooks.length;
+    setMarketOutlook(outlooks[nextIndex]);
+  };
+  
+  // Function to filter strategies based on market outlook
+  const getFilteredStrategies = (strategies: any[]) => {
+    if (!strategies) return [];
+    
+    return strategies.filter(strategy => {
+      const outlook = strategy.marketOutlook?.toLowerCase() || '';
+      switch (marketOutlook) {
+        case 'Bullish':
+          return outlook.includes('bullish') || outlook.includes('income') || outlook.includes('protection');
+        case 'Bearish':
+          return outlook.includes('bearish') || outlook.includes('hedge') || outlook.includes('protection');
+        case 'Neutral':
+          return outlook.includes('neutral') || outlook.includes('range') || outlook.includes('volatility');
+        default:
+          return true;
+      }
+    });
+  };
 
   // Queries
   const { data: metricsData, loading: metricsLoading, refetch: refetchMetrics } = useQuery(
@@ -1785,6 +1815,27 @@ const PremiumAnalyticsScreen: React.FC<PremiumAnalyticsScreenProps> = ({ navigat
           </View>
         )}
 
+        {/* Market Outlook Toggle */}
+        <View style={styles.section}>
+          <View style={styles.marketOutlookToggle}>
+            <Text style={styles.marketOutlookLabel}>Market Outlook:</Text>
+            <TouchableOpacity 
+              style={styles.marketOutlookButton}
+              onPress={toggleMarketOutlook}
+              activeOpacity={0.7}
+            >
+              <View style={[
+                styles.marketOutlookDot,
+                { 
+                  backgroundColor: marketOutlook === 'Bullish' ? '#34C759' : 
+                                  marketOutlook === 'Bearish' ? '#FF3B30' : '#007AFF'
+                }
+              ]} />
+              <Text style={styles.marketOutlookText}>{marketOutlook}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         {/* Recommended Strategies */}
         {options?.recommendedStrategies && options.recommendedStrategies.length > 0 && (
           <View style={styles.section}>
@@ -1794,7 +1845,7 @@ const PremiumAnalyticsScreen: React.FC<PremiumAnalyticsScreenProps> = ({ navigat
                 <Icon name="loader" size={16} color="#007AFF" style={{ marginLeft: 8 }} />
               )}
             </Text>
-            {options?.recommendedStrategies?.slice(0, 4).map((strategy, index) => (
+            {getFilteredStrategies(options?.recommendedStrategies || [])?.slice(0, 4).map((strategy, index) => (
               <View key={index} style={styles.strategyCard}>
                 <View style={styles.strategyHeader}>
                   <Text style={styles.strategyName}>{strategy.strategyName}</Text>
@@ -2902,6 +2953,43 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: '#F2F2F7',
+  },
+  marketOutlookToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  marketOutlookLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000',
+  },
+  marketOutlookButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F2F2F7',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  marketOutlookDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 8,
+  },
+  marketOutlookText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#000',
   },
   breakevenLabel: {
     fontSize: 12,
