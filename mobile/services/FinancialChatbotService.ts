@@ -574,6 +574,365 @@ Remember: Options are advanced instruments. Master the basics before complex str
 *This is educational information only. For personalized financial advice, consult a qualified financial advisor.*`;
     }
 
+    if (input.includes('market cap') || input.includes('market capitalization')) {
+      return `**Market Capitalization (Market Cap)**
+
+Market cap is the total value of a company's outstanding shares of stock.
+
+**How It's Calculated:**
+• Market Cap = Current Stock Price × Total Outstanding Shares
+• Example: $100 stock price × 1 billion shares = $100 billion market cap
+
+**Market Cap Categories:**
+• **Large Cap**: $10+ billion (Apple, Microsoft, Amazon)
+• **Mid Cap**: $2-10 billion (established companies with growth potential)
+• **Small Cap**: $300 million - $2 billion (smaller, potentially faster-growing companies)
+• **Micro Cap**: Under $300 million (very small companies, higher risk)
+
+**Why Market Cap Matters:**
+• Indicates company size and stability
+• Affects stock volatility and liquidity
+• Determines index inclusion (S&P 500 requires large cap)
+• Influences investment strategy and risk level
+
+**Investment Considerations:**
+• Large cap: More stable, lower growth potential
+• Small cap: Higher risk, potentially higher returns
+• Diversify across different market caps for balanced portfolio
+
+*This is educational information only. For personalized financial advice, consult a qualified financial advisor.*`;
+    }
+
+    if (input.includes('pe ratio') || input.includes('price to earnings') || input.includes('p/e')) {
+      return `**Price-to-Earnings (P/E) Ratio**
+
+The P/E ratio compares a company's stock price to its earnings per share.
+
+**How It's Calculated:**
+• P/E Ratio = Stock Price ÷ Earnings Per Share (EPS)
+• Example: $100 stock price ÷ $5 EPS = 20 P/E ratio
+
+**What P/E Tells You:**
+• **High P/E (20+)**: Investors expect high growth, stock may be overvalued
+• **Low P/E (under 15)**: Stock may be undervalued or company has issues
+• **Average P/E**: Varies by industry and market conditions
+
+**P/E Categories:**
+• **Trailing P/E**: Based on past 12 months earnings
+• **Forward P/E**: Based on projected future earnings
+• **Industry P/E**: Compare to similar companies
+
+**Limitations:**
+• Doesn't account for growth rates
+• Can be misleading for companies with no earnings
+• Varies significantly by industry
+
+*This is educational information only. For personalized financial advice, consult a qualified financial advisor.*`;
+    }
+
+    if (input.includes('dividend') || input.includes('dividends')) {
+      return `**Dividends Explained**
+
+Dividends are payments made by companies to shareholders from their profits.
+
+**Types of Dividends:**
+• **Cash Dividends**: Direct cash payments to shareholders
+• **Stock Dividends**: Additional shares instead of cash
+• **Special Dividends**: One-time extra payments
+
+**Key Dividend Metrics:**
+• **Dividend Yield**: Annual dividend ÷ stock price (e.g., $2 dividend ÷ $100 stock = 2% yield)
+• **Dividend Payout Ratio**: Dividends paid ÷ net income
+• **Dividend Growth Rate**: How much dividends increase annually
+
+**Dividend Aristocrats:**
+• Companies that have increased dividends for 25+ consecutive years
+• Examples: Coca-Cola, Johnson & Johnson, Procter & Gamble
+
+**Benefits:**
+• Regular income stream
+• Reinvestment for compound growth
+• Often indicates stable, profitable companies
+
+**Considerations:**
+• Dividends are not guaranteed
+• High yields can indicate problems
+• Tax implications on dividend income
+
+*This is educational information only. For personalized financial advice, consult a qualified financial advisor.*`;
+    }
+
+    if (input.includes('volatility') || input.includes('volatile')) {
+      return `**Volatility in Investing**
+
+Volatility measures how much a stock's price fluctuates over time.
+
+**Types of Volatility:**
+• **Historical Volatility**: Based on past price movements
+• **Implied Volatility**: Market's expectation of future price swings
+• **Realized Volatility**: Actual price movements that occurred
+
+**Measuring Volatility:**
+• **Standard Deviation**: Statistical measure of price dispersion
+• **Beta**: Compares stock volatility to market (S&P 500)
+• **VIX**: "Fear index" measuring market volatility expectations
+
+**Volatility Levels:**
+• **Low Volatility (Beta < 1)**: Less volatile than market (utilities, consumer staples)
+• **High Volatility (Beta > 1)**: More volatile than market (tech stocks, small caps)
+
+**Investment Implications:**
+• Higher volatility = higher risk and potential returns
+• Lower volatility = more stable, predictable returns
+• Diversification helps reduce portfolio volatility
+
+**Managing Volatility:**
+• Dollar-cost averaging
+• Diversification across sectors
+• Appropriate asset allocation
+• Long-term perspective
+
+*This is educational information only. For personalized financial advice, consult a qualified financial advisor.*`;
+    }
+
+    if (input.includes('beta') || input.includes('stock beta')) {
+      return `**Beta in Stock Analysis**
+
+Beta measures a stock's volatility relative to the overall market.
+
+**How Beta Works:**
+• **Beta = 1.0**: Moves exactly with the market
+• **Beta > 1.0**: More volatile than market (amplifies market movements)
+• **Beta < 1.0**: Less volatile than market (dampens market movements)
+• **Beta = 0**: No correlation with market (rare)
+
+**Examples:**
+• **High Beta (1.5+)**: Tech stocks, small caps, growth stocks
+• **Low Beta (0.5-0.8)**: Utilities, consumer staples, bonds
+• **Negative Beta**: Some defensive stocks, inverse ETFs
+
+**Using Beta:**
+• **Risk Assessment**: Higher beta = higher risk
+• **Portfolio Construction**: Mix high and low beta stocks
+• **Market Timing**: High beta stocks amplify market trends
+
+**Limitations:**
+• Based on historical data
+• Doesn't predict future volatility
+• Can change over time
+• Doesn't account for company-specific risks
+
+*This is educational information only. For personalized financial advice, consult a qualified financial advisor.*`;
+    }
+
+    if (input.includes('expense ratio') || input.includes('expense ratios')) {
+      return `**Expense Ratios in Funds**
+
+An expense ratio is the annual fee charged by mutual funds and ETFs.
+
+**How It Works:**
+• Expressed as a percentage of assets under management
+• Automatically deducted from fund returns
+• Example: 0.5% expense ratio on $10,000 investment = $50 annual fee
+
+**Typical Expense Ratios:**
+• **Index Funds/ETFs**: 0.03% - 0.15% (very low)
+• **Actively Managed Funds**: 0.5% - 2.0% (higher)
+• **Target Date Funds**: 0.1% - 0.8%
+
+**Impact on Returns:**
+• Lower expense ratios = higher net returns
+• Over 30 years, 0.5% difference can cost thousands
+• Example: $10,000 at 7% return over 30 years:
+  - 0.1% expense ratio: $76,123
+  - 0.6% expense ratio: $66,439
+  - Difference: $9,684
+
+**What's Included:**
+• Management fees
+• Administrative costs
+• Marketing expenses (12b-1 fees)
+• Operating expenses
+
+**Choosing Funds:**
+• Compare expense ratios within same category
+• Lower is generally better
+• Consider total return, not just fees
+
+*This is educational information only. For personalized financial advice, consult a qualified financial advisor.*`;
+    }
+
+    if (input.includes('401k') || input.includes('401(k)')) {
+      return `**401(k) Retirement Plans**
+
+A 401(k) is an employer-sponsored retirement savings plan with tax advantages.
+
+**How 401(k)s Work:**
+• Employee contributions deducted from paycheck
+• Employer may match contributions (free money!)
+• Investments grow tax-deferred
+• Withdrawals taxed as income in retirement
+
+**Contribution Limits (2024):**
+• Employee: $23,000 (under 50), $30,500 (50+)
+• Total (employee + employer): $69,000
+• Catch-up contributions: $7,500 for 50+
+
+**Types of 401(k)s:**
+• **Traditional 401(k)**: Pre-tax contributions, tax-deferred growth
+• **Roth 401(k)**: After-tax contributions, tax-free withdrawals
+• **Some plans offer both options**
+
+**Employer Matching:**
+• Common: 50% match up to 6% of salary
+• Example: Earn $50,000, contribute 6% ($3,000), get $1,500 match
+• Always contribute enough to get full match!
+
+**Investment Options:**
+• Usually 10-20 mutual funds/ETFs
+• Target-date funds (set and forget)
+• Index funds (low cost)
+• Company stock (limit exposure)
+
+**Withdrawal Rules:**
+• Penalty-free at age 59½
+• Required minimum distributions at 73
+• Early withdrawal penalty: 10% + taxes
+
+*This is educational information only. For personalized financial advice, consult a qualified financial advisor.*`;
+    }
+
+    if (input.includes('emergency fund') || input.includes('emergency funds')) {
+      return `**Emergency Fund Essentials**
+
+An emergency fund is money set aside for unexpected expenses.
+
+**How Much to Save:**
+• **Minimum**: 1 month of expenses
+• **Recommended**: 3-6 months of expenses
+• **Conservative**: 6-12 months of expenses
+• **Variable income**: 6-12 months (more uncertainty)
+
+**What Counts as Emergency:**
+• Job loss or reduced income
+• Medical emergencies
+• Major car repairs
+• Home repairs (roof, HVAC)
+• Unexpected travel (family emergency)
+
+**Where to Keep It:**
+• **High-yield savings account**: 4-5% APY, FDIC insured
+• **Money market account**: Slightly higher rates
+• **CDs**: Higher rates, but less accessible
+• **NOT in stocks**: Too volatile for emergencies
+
+**Building Your Fund:**
+• Start small: $500-1,000 first
+• Automate transfers from checking
+• Use windfalls: tax refunds, bonuses
+• Cut expenses temporarily
+• Sell unused items
+
+**Emergency Fund vs. Other Savings:**
+• Separate from vacation fund
+• Different from house down payment
+• Not for planned expenses
+• Focus on accessibility and safety
+
+*This is educational information only. For personalized financial advice, consult a qualified financial advisor.*`;
+    }
+
+    if (input.includes('budget') || input.includes('budgeting')) {
+      return `**Budgeting Strategies**
+
+A budget is a plan for how to spend and save your money.
+
+**Popular Budgeting Methods:**
+
+**50/30/20 Rule:**
+• 50%: Needs (housing, food, utilities, minimum debt payments)
+• 30%: Wants (entertainment, dining out, hobbies)
+• 20%: Savings and debt repayment
+
+**Zero-Based Budgeting:**
+• Every dollar assigned a purpose
+• Income minus expenses = $0
+• More detailed tracking required
+
+**Envelope Method:**
+• Cash in envelopes for different categories
+• When envelope is empty, stop spending
+• Great for controlling discretionary spending
+
+**Steps to Create a Budget:**
+1. **Track income**: All sources of monthly income
+2. **List expenses**: Fixed and variable costs
+3. **Categorize**: Needs vs. wants
+4. **Set limits**: Realistic spending targets
+5. **Track spending**: Use apps or spreadsheets
+6. **Review monthly**: Adjust as needed
+
+**Budgeting Apps:**
+• Mint: Automatic categorization
+• YNAB: Zero-based budgeting
+• Personal Capital: Investment tracking
+• Goodbudget: Envelope method
+
+**Common Budgeting Mistakes:**
+• Not tracking small purchases
+• Being too restrictive
+• Not accounting for irregular expenses
+• Not reviewing and adjusting
+
+*This is educational information only. For personalized financial advice, consult a qualified financial advisor.*`;
+    }
+
+    if (input.includes('debt') || input.includes('debt management')) {
+      return `**Debt Management Strategies**
+
+Effective debt management is crucial for financial health.
+
+**Types of Debt:**
+• **Good Debt**: Low interest, builds wealth (mortgage, student loans)
+• **Bad Debt**: High interest, depreciating assets (credit cards, payday loans)
+• **Neutral Debt**: Moderate interest, necessary (car loans)
+
+**Debt Payoff Strategies:**
+
+**Debt Snowball Method:**
+• Pay minimums on all debts
+• Extra payments on smallest debt first
+• Builds momentum and motivation
+• Psychological benefits
+
+**Debt Avalanche Method:**
+• Pay minimums on all debts
+• Extra payments on highest interest rate debt
+• Saves more money in interest
+• Mathematically optimal
+
+**Debt Consolidation:**
+• Combine multiple debts into one payment
+• Lower interest rate or payment
+• Balance transfer credit cards
+• Personal loans
+• Home equity loans
+
+**Debt Settlement:**
+• Negotiate with creditors for lower payoff
+• Damages credit score
+• Tax implications on forgiven debt
+• Last resort option
+
+**Preventing New Debt:**
+• Build emergency fund
+• Use cash for purchases
+• Avoid lifestyle inflation
+• Track spending carefully
+
+*This is educational information only. For personalized financial advice, consult a qualified financial advisor.*`;
+    }
+
     // Default response
     return `I understand you're asking about "${userInput}". This is a great financial question!
 
