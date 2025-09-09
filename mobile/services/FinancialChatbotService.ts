@@ -140,7 +140,14 @@ class FinancialChatbotService {
 
     // Extract goal
     let goal = 'general investment';
-    if (input.includes('trip') || input.includes('travel') || input.includes('vacation') || input.includes('miami') || input.includes('spending money') || input.includes('travel spending')) {
+    
+    // Check for travel-related spending (any combination of travel words + spending/money words)
+    const travelWords = ['trip', 'travel', 'vacation', 'miami', 'holiday', 'getaway', 'journey'];
+    const spendingWords = ['spending', 'spend', 'cost', 'money', 'budget', 'cash', 'dollars'];
+    const hasTravelWord = travelWords.some(word => input.includes(word));
+    const hasSpendingWord = spendingWords.some(word => input.includes(word));
+    
+    if (hasTravelWord && hasSpendingWord) {
       goal = 'travel fund';
     } else if (input.includes('retirement')) {
       goal = 'retirement';
@@ -176,7 +183,13 @@ class FinancialChatbotService {
     const { amount, timeHorizon, goal, riskTolerance } = context;
 
     // Handle small amounts for travel/spending money
-    if (amount > 0 && amount < 2000 && (goal === 'travel fund' || userInput.toLowerCase().includes('spending money') || userInput.toLowerCase().includes('travel spending'))) {
+    const input = userInput.toLowerCase();
+    const travelWords = ['trip', 'travel', 'vacation', 'miami', 'holiday', 'getaway', 'journey'];
+    const spendingWords = ['spending', 'spend', 'cost', 'money', 'budget', 'cash', 'dollars'];
+    const hasTravelWord = travelWords.some(word => input.includes(word));
+    const hasSpendingWord = spendingWords.some(word => input.includes(word));
+    
+    if (amount > 0 && amount < 2000 && (goal === 'travel fund' || (hasTravelWord && hasSpendingWord))) {
       return `For $${amount.toLocaleString()} in spending money for your trip, here are some practical suggestions:
 
 **Short-term Savings Strategy:**
