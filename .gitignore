@@ -28,3 +28,20 @@ ios/Pods/
 ios/build/
 DerivedData/
 *.xcworkspace/xcuserdata/
+
+# Deployment archives
+infrastructure/archives/*.tar.gz
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+Thumbs.db
