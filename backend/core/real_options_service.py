@@ -193,7 +193,7 @@ class RealOptionsService:
             {
                 'strategy_name': 'Protective Put',
                 'strategy_type': 'Hedge',
-                'max_profit': 999999.0,  # Use large number instead of inf
+                'max_profit': round(current_price * 0.15, 2),  # Realistic 15% upside potential
                 'max_loss': round(current_price * 0.05, 2),
                 'breakeven_points': [current_price + 2.0],
                 'probability_of_profit': 0.45,
