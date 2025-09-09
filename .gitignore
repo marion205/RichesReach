@@ -61,3 +61,12 @@ deployment/richesreach-production/_expo/
 backend/ml_models/*.pkl
 backend/ml_models/*.joblib
 
+
+# Large build artifacts and compiled files
+mobile/dist/_expo/
+deployment/richesreach-production/mobile-dist/_expo/
+**/*.hbc
+**/*.pkl
+**/*.joblib
+db.sqlite3
+
