@@ -82,7 +82,18 @@ class RiskAssessmentType(graphene.ObjectType):
     concentration_risk = graphene.String()
     sector_risk = graphene.String()
     volatility_estimate = graphene.Float()
+    volatilityEstimate = graphene.Float()  # Alias for frontend compatibility
     recommendations = graphene.List(graphene.String)
+    
+    def resolve_volatilityEstimate(self, info):
+        """Resolver for volatilityEstimate alias"""
+        # Handle both dict and object formats
+        if hasattr(self, 'volatility_estimate'):
+            return self.volatility_estimate
+        elif isinstance(self, dict) and 'volatility_estimate' in self:
+            return self['volatility_estimate']
+        else:
+            return None
 
 class MarketOutlookType(graphene.ObjectType):
     """AI-powered market outlook"""
