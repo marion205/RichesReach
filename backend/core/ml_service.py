@@ -628,8 +628,10 @@ class MLService:
             # Use improved ML service for training
             improved_ml = ImprovedMLService()
             if improved_ml.is_available():
-                # Get real market data
-                symbols = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'NFLX', 'KO', 'JPM']
+                # Get real market data from database
+                from .models import Stock
+                all_stocks = Stock.objects.all()[:20]  # Get top 20 stocks from database
+                symbols = [stock.symbol for stock in all_stocks]
                 market_data = improved_ml.get_enhanced_stock_data(symbols, days=365)
                 
                 if market_data:
