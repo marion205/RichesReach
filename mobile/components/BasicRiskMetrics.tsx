@@ -26,6 +26,7 @@ interface BasicRiskMetricsProps {
   totalValue: number;
   totalReturn: number;
   totalReturnPercent: number;
+  onNavigate?: (screen: string, data?: any) => void;
 }
 
 const BasicRiskMetrics: React.FC<BasicRiskMetricsProps> = ({
@@ -33,6 +34,7 @@ const BasicRiskMetrics: React.FC<BasicRiskMetricsProps> = ({
   totalValue,
   totalReturn,
   totalReturnPercent,
+  onNavigate,
 }) => {
   // Calculate basic risk metrics
   const calculateDiversificationScore = () => {
@@ -169,7 +171,11 @@ const BasicRiskMetrics: React.FC<BasicRiskMetricsProps> = ({
       </View>
 
       {/* Upgrade Prompt */}
-      <TouchableOpacity style={styles.upgradePrompt}>
+      <TouchableOpacity 
+        style={styles.upgradePrompt}
+        onPress={() => onNavigate?.('premium-analytics')}
+        activeOpacity={0.7}
+      >
         <View style={styles.upgradeContent}>
           <Icon name="star" size={16} color="#FFD60A" />
           <Text style={styles.upgradeText}>

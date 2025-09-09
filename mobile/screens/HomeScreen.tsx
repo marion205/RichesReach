@@ -871,6 +871,7 @@ Feel free to ask about any of these topics or try one of the quick prompts above
             totalValue={realPortfolioData?.totalValue || (isLiveData && liveTotalValue ? liveTotalValue : (portfolioData?.portfolioMetrics?.totalValue || 0))}
             totalReturn={realPortfolioData?.totalReturn || (isLiveData && liveTotalReturn ? liveTotalReturn : (portfolioData?.portfolioMetrics?.totalReturn || 0))}
             totalReturnPercent={realPortfolioData?.totalReturnPercent || (isLiveData && liveTotalReturnPercent ? liveTotalReturnPercent : (portfolioData?.portfolioMetrics?.totalReturnPercent || 0))}
+            onNavigate={navigateTo}
           />
         )}
 
