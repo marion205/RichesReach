@@ -10,6 +10,7 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
 import time
 import random
+from .enhanced_api_service import enhanced_api_service
 
 logger = logging.getLogger(__name__)
 
@@ -126,29 +127,48 @@ class MarketDataService:
     
     def _fetch_real_market_data(self) -> Optional[Dict[str, Any]]:
         """Fetch real market data from APIs"""
-        # This is a placeholder for real API integration
-        # In production, implement actual API calls to financial data providers
-        
-        # Example: Alpha Vantage API for S&P 500 data
-        if self.alpha_vantage_key:
-            try:
-                # Fetch S&P 500 data
-                sp500_url = f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=SPY&apikey={self.alpha_vantage_key}"
-                response = requests.get(sp500_url, timeout=10)
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    # Process the data and return market indicators
-                    # This is simplified - you'd want to calculate returns, volatility, etc.
-                    return {
-                        'sp500_return': 0.05,  # Placeholder
-                        'volatility': 0.15,    # Placeholder
-                        'last_updated': datetime.now().isoformat()
-                    }
-            except Exception as e:
-                logger.warning(f"Failed to fetch Alpha Vantage data: {e}")
-        
-        return None
+        try:
+            # Use the MarketDataAPIService to get real market data
+            from .market_data_api_service import MarketDataAPIService, DataProvider
+            import asyncio
+            
+            async def get_market_data():
+                service = MarketDataAPIService()
+                try:
+                    # Get SPY (S&P 500 ETF) data
+                    spy_data = await service.get_stock_quote('SPY')
+                    if spy_data:
+                        # Calculate basic market indicators
+                        current_price = spy_data.get('price', 0)
+                        change = spy_data.get('change', 0)
+                        change_percent = spy_data.get('change_percent', 0)
+                        
+                        # Estimate volatility from price range
+                        high = spy_data.get('high', current_price)
+                        low = spy_data.get('low', current_price)
+                        daily_range = (high - low) / current_price if current_price > 0 else 0
+                        
+                        return {
+                            'sp500_return': change_percent / 100,  # Convert to decimal
+                            'volatility': min(daily_range * 2, 0.5),  # Estimate annualized volatility
+                            'current_price': current_price,
+                            'change': change,
+                            'change_percent': change_percent,
+                            'last_updated': datetime.now().isoformat()
+                        }
+                except Exception as e:
+                    logger.error(f"Error fetching market data: {e}")
+                    return None
+                finally:
+                    if service.session:
+                        await service.session.close()
+            
+            # Run the async function
+            return asyncio.run(get_market_data())
+            
+        except Exception as e:
+            logger.error(f"Failed to fetch real market data: {e}")
+            return None
     
     def _fetch_sector_data(self) -> Optional[Dict[str, str]]:
         """Fetch real sector performance data"""

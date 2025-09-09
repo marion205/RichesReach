@@ -250,6 +250,22 @@ const PortfolioScreen: React.FC<PortfolioScreenProps> = ({ navigateTo }) => {
               <Icon name="chevron-right" size={20} color="#8E8E93" />
             </View>
           </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.actionButton, { backgroundColor: '#FFF8E1' }]}
+            onPress={() => navigateTo?.('premium-analytics')}
+          >
+            <View style={styles.actionContent}>
+              <Icon name="star" size={24} color="#FFD700" />
+              <View style={styles.actionText}>
+                <Text style={[styles.actionTitle, { color: '#B8860B' }]}>Options Analysis</Text>
+                <Text style={styles.actionDescription}>
+                  Advanced options strategies and market sentiment
+                </Text>
+              </View>
+              <Icon name="chevron-right" size={20} color="#8E8E93" />
+            </View>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </SafeAreaView>

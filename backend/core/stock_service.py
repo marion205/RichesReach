@@ -367,8 +367,10 @@ def background_batch_analysis(symbols: List[str], include_technical: bool = True
 def update_stock_data_periodic() -> Dict[str, Any]:
     """Periodic task to update stock data"""
     try:
-        # Get popular stocks from database or config
-        popular_symbols = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'NFLX']
+        # Get popular stocks from database dynamically
+        from .models import Stock
+        popular_stocks = Stock.objects.all()[:20]  # Get top 20 stocks from database
+        popular_symbols = [stock.symbol for stock in popular_stocks]
         
         logger.info(f"Starting periodic stock data update for {len(popular_symbols)} symbols")
         
@@ -431,7 +433,10 @@ def refresh_stock_cache(symbols: List[str] = None) -> Dict[str, Any]:
     """Task to refresh cache for specific symbols"""
     try:
         if not symbols:
-            symbols = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA']
+            # Get default symbols from database
+            from .models import Stock
+            default_stocks = Stock.objects.all()[:10]  # Get top 10 stocks from database
+            symbols = [stock.symbol for stock in default_stocks]
         
         logger.info(f"Refreshing cache for {len(symbols)} symbols")
         
@@ -474,7 +479,9 @@ class AlphaVantageService:
     """Service for fetching stock data from Alpha Vantage API"""
     
     def __init__(self):
-        self.api_key = 'K0A7XYLDNXHNQ1WI'  # Hardcoded API key for now
+        from .enhanced_api_service import enhanced_api_service
+        self.enhanced_api = enhanced_api_service
+        self.api_key = 'K0A7XYLDNXHNQ1WI'  # Fallback key
         self.base_url = "https://www.alphavantage.co/query"
         self.session = requests.Session()
         self.session.headers.update({
@@ -482,29 +489,17 @@ class AlphaVantageService:
         })
     
     def search_and_sync_stocks(self, search_query: str) -> List[Stock]:
-        """Search for stocks and sync them to the database"""
-        if not self.api_key:
-            logger.warning("Alpha Vantage API key not configured")
-            return []
-        
+        """Search for stocks and sync them to the database using enhanced API service"""
         try:
-            # Search for stocks
-            params = {
-                'function': 'SYMBOL_SEARCH',
-                'keywords': search_query,
-                'apikey': self.api_key
-            }
+            # Use enhanced API service with intelligent caching
+            data = self.enhanced_api.search_stocks(search_query)
             
-            response = self.session.get(self.base_url, params=params, timeout=10)
-            response.raise_for_status()
-            data = response.json()
-            
-            if 'Error Message' in data:
-                logger.error(f"Alpha Vantage API error: {data['Error Message']}")
+            if not data:
+                logger.warning("No data returned from enhanced API service")
                 return []
             
             if 'bestMatches' not in data:
-                logger.warning("No matches found in Alpha Vantage response")
+                logger.warning("No matches found in API response")
                 return []
             
             stocks = []

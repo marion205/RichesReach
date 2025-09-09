@@ -24,12 +24,8 @@ class EnhancedStockService:
     def __init__(self):
         self.market_data_service = MarketDataAPIService()
         self.cache_timeout = 300  # 5 minutes cache
-        self.fallback_prices = {
-            'AAPL': 185.50, 'MSFT': 375.20, 'GOOGL': 142.80, 'AMZN': 155.30,
-            'TSLA': 245.60, 'NVDA': 485.90, 'META': 380.25, 'NFLX': 485.20,
-            'AMD': 125.40, 'INTC': 45.80, 'SPY': 450.20, 'QQQ': 380.50,
-            'VTI': 240.30, 'VXUS': 55.80, 'BND': 75.40, 'GLD': 195.60
-        }
+        # No hardcoded fallback prices - always use real data from database
+        self.fallback_prices = {}
     
     async def get_real_time_price(self, symbol: str) -> Optional[Dict[str, Any]]:
         """
@@ -51,35 +47,29 @@ class EnhancedStockService:
             # Try to get real-time price from market data APIs
             logger.info(f"Fetching real-time price for {symbol}")
             
-            # Try Yahoo Finance first (most reliable)
+            # Use the unified MarketDataAPIService (prioritizes Finnhub, then Alpha Vantage)
             try:
-                price_data = await self._fetch_yahoo_price(symbol)
+                price_data = await self.market_data_service.get_stock_quote(symbol)
                 if price_data and price_data.get('price', 0) > 0:
-                    self._cache_price(symbol, price_data)
-                    logger.info(f"Yahoo Finance price for {symbol}: ${price_data['price']}")
-                    return price_data
+                    # Convert to our expected format
+                    formatted_data = {
+                        'symbol': symbol,
+                        'price': price_data['price'],
+                        'change': price_data.get('change', 0),
+                        'change_percent': f"{price_data.get('change_percent', 0):.2f}%",
+                        'volume': price_data.get('volume', 0),
+                        'high': price_data.get('high', 0),
+                        'low': price_data.get('low', 0),
+                        'open': price_data.get('open', 0),
+                        'source': price_data.get('provider', 'api'),
+                        'verified': True,
+                        'last_updated': timezone.now().isoformat()
+                    }
+                    self._cache_price(symbol, formatted_data)
+                    logger.info(f"API service price for {symbol}: ${formatted_data['price']} from {formatted_data['source']}")
+                    return formatted_data
             except Exception as e:
-                logger.warning(f"Yahoo Finance failed for {symbol}: {e}")
-            
-            # Try Alpha Vantage
-            try:
-                price_data = await self._fetch_alpha_vantage_price(symbol)
-                if price_data and price_data.get('price', 0) > 0:
-                    self._cache_price(symbol, price_data)
-                    logger.info(f"Alpha Vantage price for {symbol}: ${price_data['price']}")
-                    return price_data
-            except Exception as e:
-                logger.warning(f"Alpha Vantage failed for {symbol}: {e}")
-            
-            # Try Finnhub
-            try:
-                price_data = await self._fetch_finnhub_price(symbol)
-                if price_data and price_data.get('price', 0) > 0:
-                    self._cache_price(symbol, price_data)
-                    logger.info(f"Finnhub price for {symbol}: ${price_data['price']}")
-                    return price_data
-            except Exception as e:
-                logger.warning(f"Finnhub failed for {symbol}: {e}")
+                logger.warning(f"Market data API service failed for {symbol}: {e}")
             
             # Try database fallback
             db_price = self._get_database_price(symbol)

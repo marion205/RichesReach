@@ -163,15 +163,23 @@ class MarketDataAPIService:
             Stock quote data or None if error
         """
         try:
+            # Initialize session if not already done
+            if not self.session:
+                import aiohttp
+                self.session = aiohttp.ClientSession()
+            
             # Try preferred provider first
             if provider and self._check_rate_limit(provider):
                 quote = await self._fetch_quote_from_provider(symbol, provider)
                 if quote:
                     return quote
             
-            # Try other available providers
+            # Try other available providers (only implemented ones)
+            implemented_providers = [DataProvider.ALPHA_VANTAGE, DataProvider.FINNHUB, DataProvider.YAHOO_FINANCE, DataProvider.IEX_CLOUD]
             for available_provider in self.api_keys.keys():
-                if available_provider != provider and self._check_rate_limit(available_provider):
+                if (available_provider != provider and 
+                    available_provider in implemented_providers and 
+                    self._check_rate_limit(available_provider)):
                     quote = await self._fetch_quote_from_provider(symbol, available_provider)
                     if quote:
                         return quote
@@ -215,21 +223,30 @@ class MarketDataAPIService:
             'apikey': api_key.key
         }
         
-        async with self.session.get(url, params=params) as response:
-            if response.status == 200:
-                data = await response.json()
-                if 'Global Quote' in data:
-                    quote = data['Global Quote']
-                    return {
-                        'symbol': symbol,
-                        'price': float(quote.get('05. price', 0)),
-                        'change': float(quote.get('09. change', 0)),
-                        'change_percent': float(quote.get('10. change percent', '0%').rstrip('%')),
-                        'volume': int(quote.get('06. volume', 0)),
-                        'market_cap': float(quote.get('07. market cap', 0)),
-                        'provider': 'alpha_vantage',
-                        'timestamp': datetime.now().isoformat()
-                    }
+        # Create SSL context that doesn't verify certificates (for development)
+        import ssl
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        
+        connector = aiohttp.TCPConnector(ssl=ssl_context)
+        
+        async with aiohttp.ClientSession(connector=connector) as temp_session:
+            async with temp_session.get(url, params=params) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if 'Global Quote' in data:
+                        quote = data['Global Quote']
+                        return {
+                            'symbol': symbol,
+                            'price': float(quote.get('05. price', 0)),
+                            'change': float(quote.get('09. change', 0)),
+                            'change_percent': float(quote.get('10. change percent', '0%').rstrip('%')),
+                            'volume': int(quote.get('06. volume', 0)),
+                            'market_cap': float(quote.get('07. market cap', 0)),
+                            'provider': 'alpha_vantage',
+                            'timestamp': datetime.now().isoformat()
+                        }
         
         return None
     
@@ -245,21 +262,30 @@ class MarketDataAPIService:
             'token': api_key.key
         }
         
-        async with self.session.get(url, params=params) as response:
-            if response.status == 200:
-                data = await response.json()
-                return {
-                    'symbol': symbol,
-                    'price': data.get('c', 0),
-                    'change': data.get('d', 0),
-                    'change_percent': data.get('dp', 0),
-                    'high': data.get('h', 0),
-                    'low': data.get('l', 0),
-                    'open': data.get('o', 0),
-                    'previous_close': data.get('pc', 0),
-                    'provider': 'finnhub',
-                    'timestamp': datetime.now().isoformat()
-                }
+        # Create SSL context that doesn't verify certificates (for development)
+        import ssl
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        
+        connector = aiohttp.TCPConnector(ssl=ssl_context)
+        
+        async with aiohttp.ClientSession(connector=connector) as temp_session:
+            async with temp_session.get(url, params=params) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return {
+                        'symbol': symbol,
+                        'price': data.get('c', 0),
+                        'change': data.get('d', 0),
+                        'change_percent': data.get('dp', 0),
+                        'high': data.get('h', 0),
+                        'low': data.get('l', 0),
+                        'open': data.get('o', 0),
+                        'previous_close': data.get('pc', 0),
+                        'provider': 'finnhub',
+                        'timestamp': datetime.now().isoformat()
+                    }
         
         return None
     
