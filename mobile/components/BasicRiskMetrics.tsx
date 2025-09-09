@@ -27,6 +27,7 @@ interface BasicRiskMetricsProps {
   totalReturn: number;
   totalReturnPercent: number;
   onNavigate?: (screen: string, data?: any) => void;
+  hasPremiumAccess?: boolean;
 }
 
 const BasicRiskMetrics: React.FC<BasicRiskMetricsProps> = ({
@@ -35,6 +36,7 @@ const BasicRiskMetrics: React.FC<BasicRiskMetricsProps> = ({
   totalReturn,
   totalReturnPercent,
   onNavigate,
+  hasPremiumAccess = false,
 }) => {
   // Calculate basic risk metrics
   const calculateDiversificationScore = () => {
@@ -170,16 +172,16 @@ const BasicRiskMetrics: React.FC<BasicRiskMetricsProps> = ({
         </View>
       </View>
 
-      {/* Upgrade Prompt */}
+      {/* Premium Feature Button */}
       <TouchableOpacity 
         style={styles.upgradePrompt}
-        onPress={() => onNavigate?.('premium-analytics')}
+        onPress={() => onNavigate?.(hasPremiumAccess ? 'premium-analytics' : 'subscription')}
         activeOpacity={0.7}
       >
         <View style={styles.upgradeContent}>
           <Icon name="star" size={16} color="#FFD60A" />
           <Text style={styles.upgradeText}>
-            Unlock advanced analytics with Premium
+            {hasPremiumAccess ? 'Premium Analytics' : 'Unlock advanced analytics with Premium'}
           </Text>
         </View>
         <Icon name="chevron-right" size={16} color="#8E8E93" />
