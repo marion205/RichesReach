@@ -22,50 +22,50 @@ const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({ navigateTo }) =
   const plans = [
     {
       id: 'basic',
-      name: 'Basic Premium',
-      price: '$9.99',
-      period: '/month',
-      description: 'Perfect for individual investors',
+      name: 'Free',
+      price: 'Free',
+      period: '',
+      description: 'Perfect for getting started',
       features: [
-        'Advanced Portfolio Analytics',
-        'Enhanced Stock Screening',
-        'Basic AI Recommendations',
-        'Risk Analysis Tools',
-        'Sector Allocation Insights',
-        'Performance Metrics'
+        'Basic Portfolio Tracking',
+        'Limited AI Recommendations',
+        'Community Access',
+        'Educational Content',
+        'Basic Market Data',
+        'Standard Support'
       ],
       popular: false,
     },
     {
       id: 'pro',
-      name: 'Pro Premium',
-      price: '$19.99',
+      name: 'Premium',
+      price: '$9.99',
       period: '/month',
       description: 'For serious investors and traders',
       features: [
-        'Everything in Basic',
+        'Everything in Free',
+        'Advanced Portfolio Analytics',
+        'Enhanced Stock Screening',
         'AI-Powered Stock Recommendations',
         'Market Timing Signals',
         'Portfolio Rebalancing Alerts',
-        'Advanced ML Features',
-        'Options Flow Analysis',
         'Priority Support'
       ],
       popular: true,
     },
     {
       id: 'elite',
-      name: 'Elite Premium',
-      price: '$49.99',
+      name: 'Pro',
+      price: '$19.99',
       period: '/month',
       description: 'Professional-grade tools',
       features: [
-        'Everything in Pro',
+        'Everything in Premium',
         'Real-time Options Analysis',
+        'Advanced ML Features',
+        'Options Flow Analysis',
         'Advanced Charting Tools',
         'Backtesting Capabilities',
-        'Expert Analyst Reports',
-        'White-label Solutions',
         'Dedicated Account Manager'
       ],
       popular: false,
@@ -73,9 +73,21 @@ const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({ navigateTo }) =
   ];
 
   const handleSubscribe = (planId: string) => {
+    const plan = plans.find(p => p.id === planId);
+    
+    if (planId === 'basic') {
+      // Free plan - no payment required
+      Alert.alert(
+        'Free Plan Activated',
+        'You now have access to the free features!',
+        [{ text: 'OK', onPress: () => navigateTo('home') }]
+      );
+      return;
+    }
+    
     Alert.alert(
       'Subscribe to Premium',
-      `Are you ready to upgrade to ${plans.find(p => p.id === planId)?.name}?`,
+      `Are you ready to upgrade to ${plan?.name} for ${plan?.price}${plan?.period}?`,
       [
         { text: 'Cancel', style: 'cancel' },
         { 
@@ -139,7 +151,10 @@ const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({ navigateTo }) =
           styles.subscribeButtonText,
           selectedPlan === plan.id && styles.selectedSubscribeButtonText
         ]}>
-          {selectedPlan === plan.id ? 'Selected' : 'Select Plan'}
+          {plan.id === 'basic' 
+            ? (selectedPlan === plan.id ? 'Activated' : 'Get Free Plan')
+            : (selectedPlan === plan.id ? 'Selected' : 'Subscribe')
+          }
         </Text>
       </TouchableOpacity>
     </TouchableOpacity>
