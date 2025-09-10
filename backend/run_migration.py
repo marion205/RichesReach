@@ -24,7 +24,7 @@ def run_migration():
         print("Migration completed successfully!")
         
         # Show migration status
-        print("\n📋 Migration Status:")
+        print("\n Migration Status:")
         execute_from_command_line(['manage.py', 'showmigrations', 'core'])
         
     except Exception as e:
