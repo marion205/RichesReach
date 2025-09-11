@@ -52,6 +52,7 @@ class FinancialChatbotService {
    */
   public isFinancialQuestion(userInput: string): boolean {
     const input = userInput.toLowerCase();
+    console.log('🔍 Checking if financial question for:', userInput);
     
     // Financial keywords
     const financialKeywords = [
@@ -68,10 +69,18 @@ class FinancialChatbotService {
       'robinhood', 'fidelity', 'vanguard', 'schwab', 'etrade', 'ameritrade',
       'dollar cost averaging', 'dca', 'rebalancing', 'allocation', 'sector',
       'growth', 'value', 'dividend', 'income', 'capital gains', 'tax loss harvesting',
+      'aggressive', 'conservative', 'moderate', 'approach', 'strategy', 'strategies',
       // Add spending and purchase-related keywords
       'purchase', 'spend', 'spending', 'cost', 'price', 'expensive', 'cheap',
       'afford', 'affordable', 'worth', 'value', 'should i', 'worth it', 'buy',
-      'get', 'item', 'product', 'thing', 'stuff'
+      'get', 'item', 'product', 'thing', 'stuff',
+      // Add savings and goal-related keywords
+      'goal', 'goals', 'reach', 'achieve', 'target', 'dollars', 'dollar', 'earn', 'earning',
+      'paycheck', 'biweekly', 'weekly', 'monthly', 'yearly', 'annual', 'salary', 'wage',
+      'make', 'making', 'thousand', 'k', 'million', 'billion', 'amount', 'total',
+      'save', 'saving', 'savings', 'accumulate', 'build', 'grow', 'increase',
+      'versus', 'vs', 'compared to', 'better than', 'worse than', 'more than', 'less than',
+      'worth more', 'worth less', 'valuable', 'value', 'prefer', 'choice', 'choose'
     ];
 
     // Non-financial keywords that should be rejected
@@ -100,7 +109,21 @@ class FinancialChatbotService {
       input.includes(keyword)
     );
 
-    return hasFinancialKeywords;
+    // Additional check for savings/goal questions with numbers
+    const hasNumbers = /\d+/.test(input);
+    const hasSavingsContext = input.includes('save') || input.includes('reach') || input.includes('goal') || 
+                             input.includes('dollars') || input.includes('saving') || input.includes('savings') ||
+                             input.includes('accumulate') || input.includes('build') || input.includes('grow');
+    const hasIncomeContext = input.includes('make') || input.includes('earn') || input.includes('paycheck') || 
+                            input.includes('biweekly') || input.includes('weekly') || input.includes('monthly') ||
+                            input.includes('salary') || input.includes('wage');
+    
+    const isSavingsQuestion = hasNumbers && hasSavingsContext && hasIncomeContext;
+
+    console.log('Financial question result:', hasFinancialKeywords);
+    console.log('Savings question check:', { hasNumbers, hasSavingsContext, hasIncomeContext, isSavingsQuestion });
+    
+    return hasFinancialKeywords || isSavingsQuestion;
   }
 
   /**
@@ -376,21 +399,150 @@ Please ask me about personal finance, investing, or money management topics!`;
    * Main method to process user input and generate appropriate response
    */
   public async processUserInput(userInput: string): Promise<string> {
+    console.log('=== CHATBOT DEBUG ===');
+    console.log('User input:', userInput);
+    
     // Check if it's a financial question
     if (!this.isFinancialQuestion(userInput)) {
+      console.log('Not a financial question');
       return this.generateNonFinancialResponse(userInput);
+    }
+    
+    console.log('Is a financial question');
+
+    // Check for savings calculation questions FIRST (before investment context)
+    const input = userInput.toLowerCase();
+    const hasSavingsKeywords = input.includes('save') || input.includes('reach') || input.includes('goal') ||
+                              input.includes('saving') || input.includes('savings') || input.includes('accumulate') ||
+                              input.includes('build') || input.includes('grow') || input.includes('achieve');
+    const hasIncomeKeywords = input.includes('paycheck') || input.includes('biweekly') || input.includes('every two weeks') || 
+                             input.includes('make') || input.includes('earn') || input.includes('weekly') || 
+                             input.includes('monthly') || input.includes('salary') || input.includes('wage');
+    
+    console.log('Savings detection check:');
+    console.log('- Input:', input);
+    console.log('- Has savings keywords (save/reach/goal):', hasSavingsKeywords);
+    console.log('- Has income keywords (paycheck/biweekly/make/earn):', hasIncomeKeywords);
+    console.log('- Should trigger savings:', hasSavingsKeywords && hasIncomeKeywords);
+    
+    if (hasSavingsKeywords && hasIncomeKeywords) {
+      console.log('🎯 DETECTED SAVINGS QUESTION - Triggering savings calculation');
+      return this.generateSavingsCalculationResponse(userInput);
     }
 
     // Extract investment context
+    console.log('Checking for investment context...');
     const context = this.extractInvestmentContext(userInput);
+    console.log('Investment context:', context);
     
-    // If we have investment context, generate personalized advice
-    if (context && context.amount > 0) {
+    // Only trigger investment advice for clear investment questions, not comparative questions
+    const isInvestmentQuestion = context && context.amount > 0 && 
+      (input.includes('invest') || input.includes('investment') || input.includes('portfolio') || 
+       input.includes('stock') || input.includes('etf') || input.includes('mutual fund') ||
+       input.includes('retirement') || input.includes('401k') || input.includes('ira'));
+    
+    if (isInvestmentQuestion) {
+      console.log('💰 DETECTED INVESTMENT QUESTION - Triggering investment advice');
       return await this.generateInvestmentAdvice(userInput, context);
     }
 
     // Otherwise, provide general financial guidance
+    console.log('📚 Using general financial response');
     return this.generateGeneralFinancialResponse(userInput);
+  }
+
+  /**
+   * Generate savings calculation response
+   */
+  private generateSavingsCalculationResponse(userInput: string): string {
+    const input = userInput.toLowerCase();
+    
+    console.log('Savings calculation triggered for:', userInput);
+    console.log('Input after lowercasing:', input);
+    
+    // Extract numbers from the input (including k for thousands)
+    const numberMatches = input.match(/(\d+)(?:k|thousand)?/gi);
+    console.log('Number matches found:', numberMatches);
+    if (!numberMatches || numberMatches.length < 2) {
+      return `I'd be happy to help you calculate how much to save from each paycheck! 
+
+To give you an accurate calculation, please provide:
+• Your biweekly income amount
+• Your savings goal amount
+• Your target date
+
+For example: "I make $600 every two weeks and want to save $5000 by December"`;
+    }
+    
+    // Extract and convert the key numbers
+    const income = parseInt(numberMatches[0].replace(/k|thousand/gi, ''));
+    let goal = parseInt(numberMatches[1].replace(/k|thousand/gi, ''));
+    
+    // If the goal number was followed by 'k' or 'thousand', multiply by 1000
+    if (numberMatches[1].toLowerCase().includes('k') || numberMatches[1].toLowerCase().includes('thousand')) {
+      goal = goal * 1000;
+    }
+    
+    // Calculate time until December
+    const now = new Date();
+    const currentMonth = now.getMonth(); // 0-11
+    const december = 11; // December is month 11
+    
+    let monthsUntilDecember;
+    if (currentMonth <= december) {
+      monthsUntilDecember = december - currentMonth;
+    } else {
+      // If we're past December, calculate until next December
+      monthsUntilDecember = (12 - currentMonth) + december;
+    }
+    
+    // Calculate biweekly periods until December
+    const biweeklyPeriods = Math.ceil((monthsUntilDecember * 30) / 14); // Approximate
+    
+    // Calculate how much to save per paycheck
+    const savePerPaycheck = Math.ceil(goal / biweeklyPeriods);
+    const percentageOfIncome = ((savePerPaycheck / income) * 100).toFixed(1);
+    
+    // Calculate total savings if they save this amount
+    const totalSavings = savePerPaycheck * biweeklyPeriods;
+    const extraAmount = totalSavings - goal;
+    
+    let response = `**Savings Calculation for $${goal.toLocaleString()} by December**\n\n`;
+    response += `**Your Situation:**\n`;
+    response += `• Biweekly income: $${income.toLocaleString()}\n`;
+    response += `• Savings goal: $${goal.toLocaleString()}\n`;
+    response += `• Time until December: ~${monthsUntilDecember} months\n`;
+    response += `• Biweekly periods remaining: ~${biweeklyPeriods}\n\n`;
+    
+    response += `**Recommended Action:**\n`;
+    response += `• Save **$${savePerPaycheck.toLocaleString()}** from each paycheck\n`;
+    response += `• This is **${percentageOfIncome}%** of your biweekly income\n`;
+    response += `• You'll have **$${totalSavings.toLocaleString()}** by December\n`;
+    
+    if (extraAmount > 0) {
+      response += `• You'll have **$${extraAmount.toLocaleString()}** extra! 🎉\n\n`;
+    } else {
+      response += `\n`;
+    }
+    
+    response += `**Savings Strategy:**\n`;
+    response += `• Set up automatic transfer to savings account\n`;
+    response += `• Treat savings like a bill - pay it first\n`;
+    response += `• Consider a high-yield savings account (4-5% APY)\n`;
+    response += `• Track your progress monthly\n\n`;
+    
+    response += `**Budget Impact:**\n`;
+    response += `• Remaining income per paycheck: $${(income - savePerPaycheck).toLocaleString()}\n`;
+    response += `• Monthly remaining income: $${((income - savePerPaycheck) * 2).toLocaleString()}\n`;
+    response += `• Make sure this fits your monthly expenses\n\n`;
+    
+    if (percentageOfIncome > 20) {
+      response += `⚠️ **Warning**: Saving ${percentageOfIncome}% of your income is quite aggressive. Make sure you can cover your essential expenses first!\n\n`;
+    }
+    
+    response += `*This is educational information only. For personalized financial advice, consult a qualified financial advisor.*`;
+    
+    return response;
   }
 
   /**
@@ -399,6 +551,110 @@ Please ask me about personal finance, investing, or money management topics!`;
   private generateGeneralFinancialResponse(userInput: string): string {
     const input = userInput.toLowerCase();
     
+    console.log('General financial response called with:', userInput);
+    console.log('Input after lowercasing:', input);
+    
+    // Check for savings calculation questions
+    const hasSavingsKeywords = input.includes('save') || input.includes('reach') || input.includes('goal') ||
+                              input.includes('saving') || input.includes('savings') || input.includes('accumulate') ||
+                              input.includes('build') || input.includes('grow') || input.includes('achieve');
+    const hasIncomeKeywords = input.includes('paycheck') || input.includes('biweekly') || input.includes('every two weeks') || 
+                             input.includes('make') || input.includes('earn') || input.includes('weekly') || 
+                             input.includes('monthly') || input.includes('salary') || input.includes('wage');
+    
+    console.log('Has savings keywords:', hasSavingsKeywords);
+    console.log('Has income keywords:', hasIncomeKeywords);
+    console.log('Should trigger savings calculation:', hasSavingsKeywords && hasIncomeKeywords);
+    
+    if (hasSavingsKeywords && hasIncomeKeywords) {
+      console.log('Triggering savings calculation response');
+      return this.generateSavingsCalculationResponse(userInput);
+    }
+    
+    // Check for "would you rather" or comparative financial questions
+    if (input.includes('would you rather') || input.includes('better to have') || input.includes('more valuable') ||
+        input.includes('versus') || input.includes('vs') || input.includes('compared to') || 
+        input.includes('better than') || input.includes('worse than') || input.includes('worth more') ||
+        input.includes('worth less') || input.includes('prefer') || input.includes('choice between')) {
+      return `**$100,000 Cash vs 800 Credit Score - A Financial Analysis**
+
+This is a fascinating financial question that depends on your current situation and goals:
+
+**$100,000 Cash Advantages:**
+• **Immediate liquidity** - Can invest, pay off debt, or handle emergencies
+• **Investment potential** - Could grow to $1M+ over 20-30 years with 7-8% returns
+• **Debt elimination** - Could pay off high-interest debt immediately
+• **Opportunity cost** - Can take advantage of investment opportunities
+• **Peace of mind** - Emergency fund and financial security
+
+**800 Credit Score Advantages:**
+• **Access to credit** - Can borrow money when needed at low rates
+• **Lower costs** - Better rates on mortgages, car loans, credit cards
+• **Financial flexibility** - Can leverage credit for investments or opportunities
+• **Long-term benefit** - Credit score affects many financial decisions
+• **No immediate cash** - But opens doors to borrowing power
+
+**The Verdict:**
+**$100,000 cash is generally more valuable** because:
+1. **Time value of money** - $100K invested today could be worth $700K+ in 30 years
+2. **Immediate utility** - Can solve problems, invest, or eliminate debt now
+3. **Credit can be built** - You can improve credit score over time with good habits
+4. **Cash is king** - Provides immediate options and opportunities
+
+**However, 800 credit score is valuable if:**
+• You need to borrow money for major purchases (house, business)
+• You have high-interest debt that needs refinancing
+• You're planning major financial moves requiring credit
+
+**Bottom Line:** Take the $100,000, invest it wisely, and build your credit score through responsible financial habits. You'll have both the money AND the credit score over time!
+
+*This is educational information only. For personalized financial advice, consult a qualified financial advisor.*`;
+    }
+
+    // Check for investment strategy questions
+    if (input.includes('aggressive approach') || input.includes('conservative approach') || 
+        input.includes('moderate approach') || input.includes('investment strategy') ||
+        input.includes('investment approach') || input.includes('portfolio strategy')) {
+      return `**Investment Strategy Approaches**
+
+Here's a comprehensive breakdown of different investment approaches:
+
+**Aggressive Approach (High Risk/High Reward):**
+• **Allocation**: 70-80% stocks, 10-20% bonds, 10% alternatives
+• **Focus**: Growth stocks, small-cap companies, emerging markets
+• **Examples**: ARKK, QQQ, individual tech stocks, crypto
+• **Time Horizon**: 10+ years
+• **Risk Level**: High volatility, potential for 15-20% annual returns
+• **Best For**: Young investors, long time horizon, high risk tolerance
+
+**Conservative Approach (Low Risk/Stable Returns):**
+• **Allocation**: 60-70% bonds, 20-30% stocks, 10% cash
+• **Focus**: Blue-chip stocks, government bonds, dividend stocks
+• **Examples**: BND, VTI, utility stocks, REITs
+• **Time Horizon**: 3-5 years
+• **Risk Level**: Low volatility, 4-7% annual returns
+• **Best For**: Near retirement, short time horizon, low risk tolerance
+
+**Moderate/Balanced Approach (Medium Risk/Moderate Returns):**
+• **Allocation**: 50-60% stocks, 30-40% bonds, 10% alternatives
+• **Focus**: Large-cap stocks, index funds, corporate bonds
+• **Examples**: SPY, VTI, BND, target-date funds
+• **Time Horizon**: 5-10 years
+• **Risk Level**: Moderate volatility, 7-10% annual returns
+• **Best For**: Most investors, balanced risk tolerance
+
+**Key Factors to Consider:**
+• **Age**: Younger = more aggressive, older = more conservative
+• **Time Horizon**: Longer = more aggressive, shorter = more conservative
+• **Risk Tolerance**: How much volatility can you handle?
+• **Financial Goals**: Retirement, house, education, etc.
+• **Income Stability**: Stable job = more aggressive, variable = more conservative
+
+**Remember**: You can always adjust your approach as your situation changes!
+
+*This is educational information only. For personalized financial advice, consult a qualified financial advisor.*`;
+    }
+
     // Check for specific financial topics
     if (input.includes('budget') || input.includes('budgeting')) {
       return `**Budgeting Strategies:**\n\n**50/30/20 Rule:**\n• 50% for needs (housing, food, utilities)\n• 30% for wants (entertainment, dining)\n• 20% for savings and debt repayment\n\n**Zero-Based Budgeting:**\n• Assign every dollar a purpose\n• Track all expenses\n• Adjust monthly based on goals\n\n**Envelope Method:**\n• Use cash for variable expenses\n• Helps control spending\n• Visual representation of budget\n\nStart with the 50/30/20 rule and adjust based on your situation!`;

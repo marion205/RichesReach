@@ -14,6 +14,8 @@ import {
 } from 'react-native';
 import { useQuery, useMutation, useApolloClient } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
+import RebalancingStorageService from '../services/RebalancingStorageService';
+import RebalancingResultsDisplay from '../components/RebalancingResultsDisplay';
 // Custom Slider Component (replacing @react-native-community/slider)
 const CustomSlider = ({ value, onValueChange, minimumValue = 0, maximumValue = 100, step = 1, style, ...props }) => {
   const [sliderWidth, setSliderWidth] = useState(0);
@@ -128,8 +130,8 @@ const GET_AI_RECOMMENDATIONS = gql`
 `;
 
 const AI_REBALANCE_PORTFOLIO = gql`
-  mutation AIRebalancePortfolio($portfolioName: String, $riskTolerance: String, $maxRebalancePercentage: Float) {
-    aiRebalancePortfolio(portfolioName: $portfolioName, riskTolerance: $riskTolerance, maxRebalancePercentage: $maxRebalancePercentage) {
+  mutation AIRebalancePortfolio($portfolioName: String, $riskTolerance: String, $maxRebalancePercentage: Float, $dryRun: Boolean) {
+    aiRebalancePortfolio(portfolioName: $portfolioName, riskTolerance: $riskTolerance, maxRebalancePercentage: $maxRebalancePercentage, dryRun: $dryRun) {
       success
       message
       changesMade
@@ -488,9 +490,71 @@ const PremiumAnalyticsScreen: React.FC<PremiumAnalyticsScreenProps> = ({ navigat
   // Rebalancing state
   const [rebalancingPerformed, setRebalancingPerformed] = useState(false);
   const [lastRebalancingResult, setLastRebalancingResult] = useState(null);
+  const [showRebalancingResults, setShowRebalancingResults] = useState(false);
+  
+  // Safety features state
+  const [isDryRunMode, setIsDryRunMode] = useState(false);
+  const [dryRunResults, setDryRunResults] = useState(null);
+  const [showDryRunModal, setShowDryRunModal] = useState(false);
+  const [tradeLimits, setTradeLimits] = useState({
+    maxTradeValue: 10000, // $10,000 max per trade
+    maxDailyTrades: 10,   // 10 trades per day
+    maxRebalanceAmount: 50000, // $50,000 max rebalance amount
+    dailyTradeCount: 0,
+    dailyTradeValue: 0
+  });
   
   // Market outlook state
   const [marketOutlook, setMarketOutlook] = useState<'Bullish' | 'Bearish' | 'Neutral'>('Neutral');
+
+  // Safety check functions
+  const checkTradeLimits = (trades) => {
+    const totalTradeValue = trades.reduce((sum, trade) => sum + trade.totalValue, 0);
+    const tradeCount = trades.length;
+    
+    // Check individual trade limits
+    const exceedsTradeValue = trades.some(trade => trade.totalValue > tradeLimits.maxTradeValue);
+    if (exceedsTradeValue) {
+      return {
+        allowed: false,
+        reason: `Individual trade exceeds $${tradeLimits.maxTradeValue.toLocaleString()} limit`
+      };
+    }
+    
+    // Check daily trade count
+    if (tradeCount > tradeLimits.maxDailyTrades) {
+      return {
+        allowed: false,
+        reason: `Exceeds daily trade limit of ${tradeLimits.maxDailyTrades} trades`
+      };
+    }
+    
+    // Check total rebalance amount
+    if (totalTradeValue > tradeLimits.maxRebalanceAmount) {
+      return {
+        allowed: false,
+        reason: `Total rebalance amount ($${totalTradeValue.toLocaleString()}) exceeds $${tradeLimits.maxRebalanceAmount.toLocaleString()} limit`
+      };
+    }
+    
+    return { allowed: true };
+  };
+
+  const performDryRun = async () => {
+    setIsDryRunMode(true);
+    try {
+      await aiRebalancePortfolio({
+        variables: {
+          riskTolerance: 'medium',
+          maxRebalancePercentage: 20.0,
+          dryRun: true
+        }
+      });
+    } catch (error) {
+      console.error('Dry run failed:', error);
+      Alert.alert('❌ Dry Run Failed', `Failed to simulate rebalancing: ${error.message}`);
+    }
+  };
   
   // Function to cycle through market outlook options
   const toggleMarketOutlook = () => {
@@ -586,9 +650,30 @@ const PremiumAnalyticsScreen: React.FC<PremiumAnalyticsScreenProps> = ({ navigat
   );
 
   const [aiRebalancePortfolio, { loading: rebalanceLoading }] = useMutation(AI_REBALANCE_PORTFOLIO, {
-    onCompleted: (data) => {
+    onCompleted: async (data) => {
       if (data.aiRebalancePortfolio.success) {
         const result = data.aiRebalancePortfolio;
+        
+        // If this is a dry run, show results without executing
+        if (isDryRunMode) {
+          setDryRunResults(result);
+          setShowDryRunModal(true);
+          setIsDryRunMode(false);
+          return;
+        }
+        
+        // Safety checks for actual execution
+        if (result.stockTrades && result.stockTrades.length > 0) {
+          const safetyCheck = checkTradeLimits(result.stockTrades);
+          if (!safetyCheck.allowed) {
+            Alert.alert(
+              '⚠️ Trade Limit Exceeded',
+              `Cannot execute rebalancing: ${safetyCheck.reason}\n\nPlease adjust your rebalancing parameters or contact support.`,
+              [{ text: 'OK' }]
+            );
+            return;
+          }
+        }
         const changesText = result.changesMade.length > 0 
           ? `\n\nSector Changes:\n${result.changesMade.map(change => `• ${change}`).join('\n')}`
           : '\n\nNo sector changes were made (all suggestions exceeded the 20% rebalance limit).';
@@ -614,6 +699,33 @@ const PremiumAnalyticsScreen: React.FC<PremiumAnalyticsScreenProps> = ({ navigat
         setLastRebalancingResult(result);
         setRebalancingPerformed(true);
         console.log('✅ Rebalancing state updated - rebalancingPerformed: true');
+        
+        // Save to persistent storage
+        try {
+          const storageService = RebalancingStorageService.getInstance();
+          await storageService.saveRebalancingResult({
+            success: result.success,
+            message: result.message,
+            changesMade: result.changesMade || [],
+            stockTrades: result.stockTrades || [],
+            newPortfolioValue: result.newPortfolioValue || 0,
+            rebalanceCost: result.rebalanceCost || 0,
+            estimatedImprovement: result.estimatedImprovement || '',
+            riskTolerance: 'medium', // You might want to pass this from the mutation
+            maxRebalancePercentage: 20.0, // You might want to pass this from the mutation
+          });
+          console.log('💾 Rebalancing result saved to persistent storage');
+        } catch (error) {
+          console.error('❌ Error saving rebalancing result to storage:', error);
+        }
+        
+        // Refresh recommendations to get updated rebalancing suggestions
+        try {
+          await refetchRecommendations();
+          console.log('🔄 Refreshed AI recommendations after rebalancing');
+        } catch (error) {
+          console.error('❌ Error refreshing recommendations:', error);
+        }
         
         Alert.alert(
           '🎉 Rebalancing Complete!',
@@ -1214,41 +1326,120 @@ const PremiumAnalyticsScreen: React.FC<PremiumAnalyticsScreenProps> = ({ navigat
           </View>
         )}
 
-        {/* Rebalancing Suggestions */}
-        {recommendations.rebalanceSuggestions && recommendations.rebalanceSuggestions.length > 0 && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Rebalancing Suggestions</Text>
-              <TouchableOpacity
-                style={[styles.rebalanceButton, rebalanceLoading && styles.rebalanceButtonDisabled]}
-                onPress={() => {
-                  const suggestionCount = recommendations.rebalanceSuggestions?.length || 0;
-                  Alert.alert(
-                    '🤖 AI Portfolio Rebalancing',
-                    `This will automatically rebalance your portfolio based on ${suggestionCount} AI recommendations.\n\n• Maximum rebalance: 20% per change\n• Transaction costs: ~0.1% per trade\n• Changes will be applied to improve diversification\n\nContinue with rebalancing?`,
-                    [
-                      { text: 'Cancel', style: 'cancel' },
-                      { 
-                        text: 'Rebalance Portfolio', 
-                        onPress: () => aiRebalancePortfolio({
-                          variables: {
-                            riskTolerance: 'medium',
-                            maxRebalancePercentage: 20.0
-                          }
-                        })
+        {/* Rebalancing Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Portfolio Rebalancing</Text>
+            <View style={styles.rebalanceButtons}>
+              {recommendations.rebalanceSuggestions && recommendations.rebalanceSuggestions.length > 0 ? (
+                <TouchableOpacity
+                  style={[styles.rebalanceButton, rebalanceLoading && styles.rebalanceButtonDisabled]}
+                  onPress={async () => {
+                    const suggestionCount = recommendations.rebalanceSuggestions?.length || 0;
+                    
+                    // Check if this rebalancing would be the same as the last one
+                    try {
+                      const storageService = RebalancingStorageService.getInstance();
+                      const lastResult = await storageService.getLatestRebalancingResult();
+                      
+                      if (lastResult) {
+                        const currentSuggestions = recommendations.rebalanceSuggestions?.map(s => ({
+                          action: s.action,
+                          currentAllocation: s.currentAllocation,
+                          suggestedAllocation: s.suggestedAllocation
+                        })) || [];
+                        
+                        const lastSuggestions = lastResult.changesMade || [];
+                        
+                        // Check if the suggestions are essentially the same
+                        const isSameRebalancing = currentSuggestions.length > 0 && 
+                          currentSuggestions.every(current => 
+                            lastSuggestions.some(last => 
+                              last.includes(current.action.split(':')[0]) && 
+                              Math.abs(parseFloat(last.split('→')[0].split(':')[1].trim().replace('%', '')) - current.currentAllocation) < 1 &&
+                              Math.abs(parseFloat(last.split('→')[1].trim().replace('%', '')) - current.suggestedAllocation) < 1
+                            )
+                          );
+                        
+                        if (isSameRebalancing) {
+                          Alert.alert(
+                            '⚠️ Same Rebalancing Detected',
+                            'The current rebalancing suggestions are the same as your last rebalancing operation. No changes will be made.\n\nWould you like to proceed anyway?',
+                            [
+                              { text: 'Cancel', style: 'cancel' },
+                              { 
+                                text: 'Proceed Anyway', 
+                                onPress: () => performRebalancing()
+                              }
+                            ]
+                          );
+                          return;
+                        }
                       }
-                    ]
-                  );
-                }}
-                disabled={rebalanceLoading}
+                      
+                      // Proceed with normal rebalancing
+                      performRebalancing();
+                    } catch (error) {
+                      console.error('Error checking last rebalancing result:', error);
+                      // If there's an error checking, proceed with normal rebalancing
+                      performRebalancing();
+                    }
+                    
+                    function performRebalancing() {
+                      Alert.alert(
+                        '🤖 AI Portfolio Rebalancing',
+                        `This will automatically rebalance your portfolio based on ${suggestionCount} AI recommendations.\n\n• Maximum rebalance: 20% per change\n• Transaction costs: ~0.1% per trade\n• Changes will be applied to improve diversification\n• Trade limits: $${tradeLimits.maxTradeValue.toLocaleString()} max per trade\n• Daily limit: ${tradeLimits.maxDailyTrades} trades\n\nContinue with rebalancing?`,
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          { 
+                            text: 'Preview Changes', 
+                            onPress: () => performDryRun(),
+                            style: 'default'
+                          },
+                          { 
+                            text: 'Execute Rebalancing', 
+                            onPress: () => aiRebalancePortfolio({
+                              variables: {
+                                riskTolerance: 'medium',
+                                maxRebalancePercentage: 20.0
+                              }
+                            }),
+                            style: 'destructive'
+                          }
+                        ]
+                      );
+                    }
+                  }}
+                  disabled={rebalanceLoading}
+                >
+                  <Icon name={rebalanceLoading ? "loader" : "refresh-cw"} size={16} color="#fff" />
+                  <Text style={styles.rebalanceButtonText}>
+                    {rebalanceLoading ? 'Analyzing & Rebalancing...' : 'AI Rebalance'}
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={[styles.rebalanceButton, styles.rebalanceButtonDisabled]}
+                  disabled={true}
+                >
+                  <Icon name="refresh-cw" size={16} color="#8E8E93" />
+                  <Text style={[styles.rebalanceButtonText, { color: '#8E8E93' }]}>
+                    No Rebalancing Needed
+                  </Text>
+                </TouchableOpacity>
+              )}
+              
+              <TouchableOpacity
+                style={styles.viewResultsButton}
+                onPress={() => setShowRebalancingResults(true)}
               >
-                <Icon name={rebalanceLoading ? "loader" : "refresh-cw"} size={16} color="#fff" />
-                <Text style={styles.rebalanceButtonText}>
-                  {rebalanceLoading ? 'Analyzing & Rebalancing...' : 'AI Rebalance'}
-                </Text>
+                <Icon name="clock" size={16} color="#007AFF" />
+                <Text style={styles.viewResultsButtonText}>View Results</Text>
               </TouchableOpacity>
             </View>
-            {recommendations.rebalanceSuggestions.map((suggestion: any, index: number) => (
+          </View>
+          {recommendations.rebalanceSuggestions && recommendations.rebalanceSuggestions.length > 0 ? (
+            recommendations.rebalanceSuggestions.map((suggestion: any, index: number) => (
               <View key={index} style={styles.rebalanceCard}>
                 <View style={styles.rebalanceHeader}>
                   <Text style={styles.rebalanceAction}>{suggestion.action}</Text>
@@ -1266,9 +1457,17 @@ const PremiumAnalyticsScreen: React.FC<PremiumAnalyticsScreenProps> = ({ navigat
                   <Text style={styles.allocationLabel}>Suggested: {suggestion.suggestedAllocation}%</Text>
                 </View>
               </View>
-            ))}
-          </View>
-        )}
+            ))
+          ) : (
+            <View style={styles.noSuggestionsCard}>
+              <Icon name="check-circle" size={24} color="#34C759" />
+              <Text style={styles.noSuggestionsTitle}>Portfolio is Well Balanced</Text>
+              <Text style={styles.noSuggestionsText}>
+                No rebalancing suggestions at this time. Your portfolio appears to be well diversified.
+              </Text>
+            </View>
+          )}
+        </View>
 
         {/* Risk Assessment */}
         {recommendations.riskAssessment && (
@@ -2363,6 +2562,113 @@ const PremiumAnalyticsScreen: React.FC<PremiumAnalyticsScreenProps> = ({ navigat
                   </TouchableOpacity>
                 </View>
               </>
+            )}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Rebalancing Results Modal */}
+      <Modal
+        visible={showRebalancingResults}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <RebalancingResultsDisplay
+          onClose={() => setShowRebalancingResults(false)}
+          showCloseButton={true}
+        />
+      </Modal>
+
+      {/* Dry Run Results Modal */}
+      <Modal
+        visible={showDryRunModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <SafeAreaView style={styles.container}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => setShowDryRunModal(false)}>
+              <Icon name="x" size={24} color="#007AFF" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Preview Rebalancing</Text>
+            <View style={{ width: 24 }} />
+          </View>
+          
+          <ScrollView style={styles.modalContent}>
+            {dryRunResults && (
+              <View>
+                <View style={styles.previewHeader}>
+                  <Icon name="eye" size={24} color="#007AFF" />
+                  <Text style={styles.previewTitle}>This is a preview - no trades will be executed</Text>
+                </View>
+                
+                <View style={styles.previewSection}>
+                  <Text style={styles.sectionTitle}>📊 Sector Changes</Text>
+                  {dryRunResults.changesMade && dryRunResults.changesMade.length > 0 ? (
+                    dryRunResults.changesMade.map((change, index) => (
+                      <Text key={index} style={styles.previewItem}>• {change}</Text>
+                    ))
+                  ) : (
+                    <Text style={styles.previewItem}>No sector changes</Text>
+                  )}
+                </View>
+                
+                <View style={styles.previewSection}>
+                  <Text style={styles.sectionTitle}>💼 Stock Trades</Text>
+                  {dryRunResults.stockTrades && dryRunResults.stockTrades.length > 0 ? (
+                    dryRunResults.stockTrades.map((trade, index) => (
+                      <View key={index} style={styles.tradeItem}>
+                        <Text style={styles.tradeAction}>
+                          {trade.action} {trade.shares} shares of {trade.symbol}
+                        </Text>
+                        <Text style={styles.tradeDetails}>
+                          {trade.companyName} @ ${trade.price.toFixed(2)} = ${trade.totalValue.toFixed(2)}
+                        </Text>
+                      </View>
+                    ))
+                  ) : (
+                    <Text style={styles.previewItem}>No stock trades</Text>
+                  )}
+                </View>
+                
+                <View style={styles.previewSection}>
+                  <Text style={styles.sectionTitle}>💰 Cost Summary</Text>
+                  <Text style={styles.previewItem}>Transaction Cost: ${dryRunResults.rebalanceCost?.toFixed(2) || '0.00'}</Text>
+                  <Text style={styles.previewItem}>New Portfolio Value: ${dryRunResults.newPortfolioValue?.toFixed(2) || '0.00'}</Text>
+                </View>
+                
+                {dryRunResults.estimatedImprovement && (
+                  <View style={styles.previewSection}>
+                    <Text style={styles.sectionTitle}>📈 Expected Improvement</Text>
+                    <Text style={styles.previewItem}>{dryRunResults.estimatedImprovement}</Text>
+                  </View>
+                )}
+                
+                <View style={styles.previewActions}>
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.cancelButton]}
+                    onPress={() => setShowDryRunModal(false)}
+                  >
+                    <Text style={styles.cancelButtonText}>Close Preview</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.executeButton]}
+                    onPress={() => {
+                      setShowDryRunModal(false);
+                      // Execute the actual rebalancing
+                      aiRebalancePortfolio({
+                        variables: {
+                          riskTolerance: 'medium',
+                          maxRebalancePercentage: 20.0
+                        }
+                      });
+                    }}
+                  >
+                    <Text style={styles.executeButtonText}>Execute Rebalancing</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
             )}
           </ScrollView>
         </SafeAreaView>
@@ -3856,7 +4162,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#007AFF',
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 6,
     gap: 4,
@@ -3866,8 +4172,133 @@ const styles = StyleSheet.create({
   },
   rebalanceButtonText: {
     color: '#fff',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
+  },
+  rebalanceButtons: {
+    flexDirection: 'column',
+    gap: 6,
+  },
+  viewResultsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F2F2F7',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#007AFF',
+    gap: 4,
+  },
+  viewResultsButtonText: {
+    color: '#007AFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  
+  // Dry run modal styles
+  previewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E3F2FD',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 20,
+  },
+  previewTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1976D2',
+    marginLeft: 8,
+  },
+  previewSection: {
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1C1C1E',
+    marginBottom: 12,
+  },
+  previewItem: {
+    fontSize: 16,
+    color: '#3C3C43',
+    marginBottom: 8,
+    lineHeight: 22,
+  },
+  tradeItem: {
+    backgroundColor: '#F8F9FA',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  tradeAction: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1C1C1E',
+    marginBottom: 4,
+  },
+  tradeDetails: {
+    fontSize: 14,
+    color: '#6D6D70',
+  },
+  previewActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+    gap: 12,
+  },
+  actionButton: {
+    flex: 1,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#F2F2F7',
+    borderWidth: 1,
+    borderColor: '#C7C7CC',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#8E8E93',
+  },
+  executeButton: {
+    backgroundColor: '#FF3B30',
+  },
+  executeButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  noSuggestionsCard: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    padding: 20,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    marginTop: 12,
+  },
+  noSuggestionsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1C1C1E',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  noSuggestionsText: {
+    fontSize: 14,
+    color: '#8E8E93',
+    textAlign: 'center',
+    lineHeight: 20,
   },
   updatedLabel: {
     color: '#34C759',

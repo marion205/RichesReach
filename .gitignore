@@ -70,3 +70,8 @@ deployment/richesreach-production/mobile-dist/_expo/
 **/*.joblib
 db.sqlite3
 
+
+# Large deployment files
+*.tar.gz
+deployment/*.tar.gz
+infrastructure/archives/*.tar.gz

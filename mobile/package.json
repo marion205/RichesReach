@@ -11,7 +11,9 @@
     "build:android": "eas build --platform android",
     "build:all": "eas build --platform all",
     "submit:ios": "eas submit --platform ios",
-    "submit:android": "eas submit --platform android"
+    "submit:android": "eas submit --platform android",
+    "performance": "expo start --no-dev --minify",
+    "analyze": "expo start --analyze"
   },
   "dependencies": {
     "@apollo/client": "3.7.0",
