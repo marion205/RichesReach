@@ -325,48 +325,48 @@ def main():
     model = ProductionR2Model()
     
     # Train model
-    print("\n🚀 Training model...")
+    print("\n Training model...")
     train_results = model.train()
     
     if 'error' in train_results:
-        print(f"❌ Training failed: {train_results['error']}")
+        print(f" Training failed: {train_results['error']}")
         return
     
-    print(f"✅ Training successful!")
+    print(f"  Training successful!")
     print(f"  Training R²: {train_results['train_r2']:.3f}")
     print(f"  Features: {train_results['n_features']}")
     print(f"  Samples: {train_results['n_samples']}")
     
     # Test predictions
-    print(f"\n🔮 Testing predictions...")
+    print(f"\n Testing predictions...")
     test_symbols = ['AAPL', 'META', 'TSLA']
     
     for symbol in test_symbols:
         pred_results = model.predict(symbol)
         
         if 'error' in pred_results:
-            print(f"  ❌ {symbol}: {pred_results['error']}")
+            print(f"   {symbol}: {pred_results['error']}")
         else:
             latest = pred_results['latest_prediction']
-            print(f"  ✅ {symbol}: {pred_results['n_predictions']} predictions")
+            print(f"   {symbol}: {pred_results['n_predictions']} predictions")
             print(f"     Latest: {latest['date']} - Return: {latest['predicted_return']:.3f} ({latest['confidence']} confidence)")
     
     # Model info
-    print(f"\n📊 Model Information:")
+    print(f"\n Model Information:")
     info = model.get_model_info()
     print(f"  Trained: {info['is_trained']}")
     print(f"  Config: {info['config']}")
     print(f"  Features: {info['n_features']}")
     print(f"  XGBoost: {'✓' if info['has_xgb'] else '✗'}")
     
-    print(f"\n🎯 PRODUCTION READY!")
-    print(f"  ✅ R² Score: 0.023 (exceeds target of 0.01)")
-    print(f"  ✅ Weekly prediction horizon")
-    print(f"  ✅ Outlier handling with winsorization")
-    print(f"  ✅ Walk-forward validation")
-    print(f"  ✅ Production-grade features")
+    print(f"\n PRODUCTION READY!")
+    print(f"     R² Score: 0.023 (exceeds target of 0.01)")
+    print(f"     Weekly prediction horizon")
+    print(f"     Outlier handling with winsorization")
+    print(f"     Walk-forward validation")
+    print(f"     Production-grade features")
     
-    print(f"\n🚀 DEPLOYMENT STEPS:")
+    print(f"\n  DEPLOYMENT STEPS:")
     print(f"  1. Integrate this model into your ML service")
     print(f"  2. Set up real-time data feeds")
     print(f"  3. Implement model monitoring")
