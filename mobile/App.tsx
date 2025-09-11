@@ -28,6 +28,7 @@ import LearningPathsScreen from './screens/LearningPathsScreen';
 import OnboardingScreen, { UserProfile } from './screens/OnboardingScreen';
 import DiscoverUsersScreen from './screens/DiscoverUsersScreen';
 import UserProfileScreen from './screens/UserProfileScreen';
+import AIOptionsScreen from './screens/AIOptionsScreen';
 
 // Components
 import BottomTabBar from './components/BottomTabBar';
@@ -246,6 +247,8 @@ export default function App() {
         return <UserProfileScreen userId={userId} onNavigate={navigateTo} />;
       case 'social-feed':
         return <SocialScreen onNavigate={navigateTo} />;
+      case 'ai-options':
+        return <AIOptionsScreen navigation={{ goBack: () => setCurrentScreen('home') }} />;
       default:
         // Handle user-profile with userId pattern
         console.log('🖥️ default case - currentScreen:', currentScreen);
