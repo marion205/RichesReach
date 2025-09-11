@@ -41,9 +41,32 @@ const AIOptionsScreen: React.FC<AIOptionsScreenProps> = ({ navigation }) => {
     loadRecommendations();
   }, []);
 
+  // Auto-reload when risk tolerance changes immediately
+  useEffect(() => {
+    if (riskTolerance) {
+      loadRecommendations();
+    }
+  }, [riskTolerance]);
+
+  // Auto-reload when symbol changes with debounce
+  useEffect(() => {
+    if (symbol && symbol.length >= 1) {
+      const timeoutId = setTimeout(() => {
+        loadRecommendations();
+      }, 1000); // 1 second debounce
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [symbol]);
+
   const loadRecommendations = async () => {
     try {
-      console.log('🎯 AI Options Screen: Starting to load recommendations...');
+      console.log('🎯 AI Options Screen: Starting to load recommendations...', {
+        symbol,
+        riskTolerance,
+        portfolioValue,
+        timeHorizon
+      });
       setLoading(true);
       
       const response = await aiOptionsService.getRecommendations(
@@ -57,6 +80,7 @@ const AIOptionsScreen: React.FC<AIOptionsScreenProps> = ({ navigation }) => {
         recommendationsCount: response.recommendations?.length || 0,
         hasMarketAnalysis: !!response.market_analysis,
         symbol: response.symbol,
+        riskTolerance: response.risk_tolerance,
       });
       
       setRecommendations(response.recommendations);
@@ -325,7 +349,13 @@ const AIOptionsScreen: React.FC<AIOptionsScreenProps> = ({ navigation }) => {
               <TextInput
                 style={styles.symbolInput}
                 value={symbol}
-                onChangeText={setSymbol}
+                onChangeText={(text) => {
+                  setSymbol(text);
+                  // Show loading when user is typing
+                  if (text.length >= 1) {
+                    setLoading(true);
+                  }
+                }}
                 placeholder="Symbol (e.g., AAPL)"
                 placeholderTextColor="#8E8E93"
                 autoCapitalize="characters"
@@ -350,7 +380,11 @@ const AIOptionsScreen: React.FC<AIOptionsScreenProps> = ({ navigation }) => {
                         styles.riskButton,
                         riskTolerance === risk && styles.riskButtonActive
                       ]}
-                      onPress={() => setRiskTolerance(risk)}
+                      onPress={() => {
+                        setRiskTolerance(risk);
+                        // Visual feedback that data is reloading
+                        setLoading(true);
+                      }}
                     >
                       <Text style={[
                         styles.riskButtonText,
@@ -387,6 +421,16 @@ const AIOptionsScreen: React.FC<AIOptionsScreenProps> = ({ navigation }) => {
               </View>
             </View>
           </View>
+
+          {/* Status Message */}
+          {loading && (
+            <View style={styles.statusMessage}>
+              <ActivityIndicator size="small" color="#007AFF" />
+              <Text style={styles.statusText}>
+                {symbol !== 'AAPL' ? `Loading data for ${symbol}...` : 'Loading recommendations...'}
+              </Text>
+            </View>
+          )}
 
           {/* Market Analysis */}
           {renderMarketAnalysis()}
@@ -461,6 +505,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     fontSize: 16,
     marginRight: 12,
+  },
+  inputLoadingIndicator: {
+    position: 'absolute',
+    right: 50,
+    top: 8,
+  },
+  statusMessage: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F0F8FF',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#007AFF',
+  },
+  statusText: {
+    marginLeft: 8,
+    fontSize: 14,
+    color: '#007AFF',
+    fontWeight: '500',
   },
   searchButton: {
     backgroundColor: '#007AFF',
