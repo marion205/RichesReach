@@ -546,6 +546,197 @@ For example: "I make $600 every two weeks and want to save $5000 by December"`;
   }
 
   /**
+   * Generate comparative financial response based on the actual question asked
+   */
+  private generateComparativeFinancialResponse(userInput: string): string {
+    const input = userInput.toLowerCase();
+    
+    // Roth vs Traditional IRA
+    if (input.includes('roth') && input.includes('traditional') && input.includes('ira')) {
+      return `**Roth IRA vs Traditional IRA - A Comprehensive Comparison**
+
+This is one of the most important retirement planning decisions you'll make. Here's the breakdown:
+
+**Roth IRA Advantages:**
+• **Tax-free withdrawals** - Pay taxes now, withdraw tax-free in retirement
+• **No required minimum distributions (RMDs)** - Keep money growing as long as you want
+• **Tax diversification** - Hedge against future tax rate increases
+• **Early withdrawal flexibility** - Can withdraw contributions (not earnings) penalty-free
+• **Estate planning benefits** - Heirs receive tax-free distributions
+
+**Traditional IRA Advantages:**
+• **Immediate tax deduction** - Reduce current year's taxable income
+• **Lower current tax burden** - Pay taxes later when you might be in a lower bracket
+• **Higher effective contribution** - $7,000 contribution costs less after tax deduction
+• **Forced savings** - Tax penalty discourages early withdrawals
+
+**Key Decision Factors:**
+
+**Choose Roth IRA if:**
+• You're in a low tax bracket now (12% or below)
+• You expect to be in a higher tax bracket in retirement
+• You want tax-free growth and withdrawals
+• You want flexibility with withdrawals
+• You're young and have decades for tax-free growth
+
+**Choose Traditional IRA if:**
+• You're in a high tax bracket now (22% or above)
+• You expect to be in a lower tax bracket in retirement
+• You need the immediate tax deduction
+• You want to maximize current year tax savings
+
+**The Math:**
+If you're in the 22% bracket and contribute $7,000:
+• **Roth**: Costs $7,000 + $1,540 in taxes = $8,540 total
+• **Traditional**: Costs $7,000, saves $1,540 in taxes = $5,460 net cost
+
+**Bottom Line:**
+• **Young earners (under 30)**: Usually Roth IRA
+• **High earners (over $100k)**: Usually Traditional IRA
+• **Middle income ($50k-$100k)**: Depends on expected retirement income
+• **Consider both**: Many people benefit from having both types
+
+*This is educational information only. For personalized advice, consult a qualified financial advisor.*`;
+    }
+    
+    // 401k vs IRA
+    if (input.includes('401k') && input.includes('ira')) {
+      return `**401(k) vs IRA - Which Retirement Account is Better?**
+
+Both are excellent retirement savings vehicles, but they serve different purposes:
+
+**401(k) Advantages:**
+• **Higher contribution limits** - $23,000 vs $7,000 (2024)
+• **Employer matching** - Free money from your employer
+• **Automatic payroll deduction** - Easy to save consistently
+• **Higher income limits** - No income restrictions for contributions
+• **Loan options** - Can borrow against your 401(k) in emergencies
+
+**IRA Advantages:**
+• **More investment options** - Choose from thousands of funds/stocks
+• **Lower fees** - Often cheaper than 401(k) plans
+• **Roth option** - Tax-free withdrawals in retirement
+• **Portability** - Take it with you when you change jobs
+• **No vesting schedule** - All contributions are immediately yours
+
+**The Strategy:**
+1. **First**: Contribute enough to 401(k) to get full employer match
+2. **Second**: Max out IRA ($7,000) for better investment options
+3. **Third**: Return to 401(k) to max out ($23,000)
+4. **Fourth**: Consider taxable accounts for additional savings
+
+**Example with $50,000 salary:**
+• 401(k) match: 3% = $1,500 (free money!)
+• 401(k) contribution: 10% = $5,000
+• IRA contribution: $7,000
+• Total saved: $13,500 (27% of income)
+
+**Bottom Line:**
+Don't choose one over the other - use both strategically. Start with 401(k) matching, then IRA, then back to 401(k) for maximum tax-advantaged savings.
+
+*This is educational information only. For personalized advice, consult a qualified financial advisor.*`;
+    }
+    
+    // Cash vs Credit
+    if (input.includes('cash') && (input.includes('credit') || input.includes('debt'))) {
+      return `**Cash vs Credit - The Financial Flexibility Question**
+
+This depends on your specific situation, but here's the framework:
+
+**Cash Advantages:**
+• **No interest payments** - Keep 100% of your money
+• **No debt stress** - Peace of mind and financial freedom
+• **Better negotiation power** - Cash buyers often get better deals
+• **Emergency fund** - Liquid money for unexpected expenses
+• **Investment opportunities** - Can invest when opportunities arise
+
+**Credit Advantages:**
+• **Leverage** - Use other people's money to build wealth
+• **Credit score building** - Responsible use improves credit
+• **Rewards and benefits** - Cash back, points, purchase protection
+• **Cash flow management** - Keep cash invested while paying monthly
+• **Large purchases** - Buy homes, cars, education that cash can't cover
+
+**The Smart Approach:**
+• **Emergency fund first** - 3-6 months expenses in cash
+• **High-interest debt** - Pay off credit cards and personal loans
+• **Low-interest debt** - Consider keeping if you can invest at higher returns
+• **Large purchases** - Use credit strategically for homes, education, business
+
+**Rule of Thumb:**
+If the interest rate is higher than your expected investment returns, pay cash. If lower, consider using credit and investing the difference.
+
+*This is educational information only. For personalized advice, consult a qualified financial advisor.*`;
+    }
+    
+    // Investment vs Savings
+    if (input.includes('invest') && input.includes('save')) {
+      return `**Investing vs Saving - Building Wealth Over Time**
+
+Both are important, but they serve different purposes in your financial plan:
+
+**Saving (Cash/Bonds) Advantages:**
+• **Guaranteed returns** - No risk of losing principal
+• **Liquidity** - Access money immediately when needed
+• **Stability** - Predictable, safe growth
+• **Emergency fund** - Essential for financial security
+• **Short-term goals** - Perfect for purchases within 1-3 years
+
+**Investing (Stocks/ETFs) Advantages:**
+• **Higher returns** - Historically 7-10% annually vs 2-3% savings
+• **Compound growth** - Money grows exponentially over time
+• **Inflation protection** - Outpaces inflation long-term
+• **Wealth building** - The path to financial independence
+• **Long-term goals** - Retirement, major purchases 5+ years away
+
+**The Strategy:**
+1. **Emergency fund** - 3-6 months expenses in high-yield savings
+2. **Short-term goals** - Savings account or CDs
+3. **Long-term goals** - Invest in diversified index funds
+4. **Retirement** - Max out 401(k) and IRA with stock-heavy allocation
+
+**The Math:**
+• **$10,000 saved** at 3% for 30 years = $24,273
+• **$10,000 invested** at 7% for 30 years = $76,123
+• **Difference**: $51,850 more through investing!
+
+**Bottom Line:**
+Save for emergencies and short-term goals, invest for long-term wealth building. Time is your greatest asset - start investing early and consistently.
+
+*This is educational information only. For personalized advice, consult a qualified financial advisor.*`;
+    }
+    
+    // Generic comparative response for other questions
+    return `**Financial Comparison Analysis**
+
+You're asking about comparing "${userInput}" - this is a great financial question that requires careful analysis!
+
+**Key Factors to Consider:**
+• **Your current financial situation** - Income, expenses, debt, savings
+• **Your goals and timeline** - Short-term vs long-term objectives
+• **Risk tolerance** - How comfortable are you with uncertainty?
+• **Tax implications** - How will this affect your tax situation?
+• **Opportunity costs** - What else could you do with this money?
+
+**Questions to Ask Yourself:**
+1. What's your primary goal with this decision?
+2. What's your time horizon?
+3. How much risk can you afford to take?
+4. What are the costs and benefits of each option?
+5. How does this fit into your overall financial plan?
+
+**General Framework:**
+• **Short-term needs** (under 3 years): Usually safer, more liquid options
+• **Long-term goals** (5+ years): Often better to take calculated risks
+• **Emergency situations**: Prioritize safety and accessibility
+• **Wealth building**: Focus on growth potential and tax efficiency
+
+**Remember:** There's rarely a "one-size-fits-all" answer in personal finance. The best choice depends on your unique circumstances, goals, and risk tolerance.
+
+*This is educational information only. For personalized advice, consult a qualified financial advisor.*`;
+  }
+
+  /**
    * Generate general financial response for non-investment questions
    */
   private generateGeneralFinancialResponse(userInput: string): string {
@@ -576,45 +767,36 @@ For example: "I make $600 every two weeks and want to save $5000 by December"`;
         input.includes('versus') || input.includes('vs') || input.includes('compared to') || 
         input.includes('better than') || input.includes('worse than') || input.includes('worth more') ||
         input.includes('worth less') || input.includes('prefer') || input.includes('choice between')) {
-      return `**$100,000 Cash vs 800 Credit Score - A Financial Analysis**
-
-This is a fascinating financial question that depends on your current situation and goals:
-
-**$100,000 Cash Advantages:**
-• **Immediate liquidity** - Can invest, pay off debt, or handle emergencies
-• **Investment potential** - Could grow to $1M+ over 20-30 years with 7-8% returns
-• **Debt elimination** - Could pay off high-interest debt immediately
-• **Opportunity cost** - Can take advantage of investment opportunities
-• **Peace of mind** - Emergency fund and financial security
-
-**800 Credit Score Advantages:**
-• **Access to credit** - Can borrow money when needed at low rates
-• **Lower costs** - Better rates on mortgages, car loans, credit cards
-• **Financial flexibility** - Can leverage credit for investments or opportunities
-• **Long-term benefit** - Credit score affects many financial decisions
-• **No immediate cash** - But opens doors to borrowing power
-
-**The Verdict:**
-**$100,000 cash is generally more valuable** because:
-1. **Time value of money** - $100K invested today could be worth $700K+ in 30 years
-2. **Immediate utility** - Can solve problems, invest, or eliminate debt now
-3. **Credit can be built** - You can improve credit score over time with good habits
-4. **Cash is king** - Provides immediate options and opportunities
-
-**However, 800 credit score is valuable if:**
-• You need to borrow money for major purchases (house, business)
-• You have high-interest debt that needs refinancing
-• You're planning major financial moves requiring credit
-
-**Bottom Line:** Take the $100,000, invest it wisely, and build your credit score through responsible financial habits. You'll have both the money AND the credit score over time!
-
-*This is educational information only. For personalized financial advice, consult a qualified financial advisor.*`;
+      return this.generateComparativeFinancialResponse(userInput);
     }
 
-    // Check for investment strategy questions
-    if (input.includes('aggressive approach') || input.includes('conservative approach') || 
-        input.includes('moderate approach') || input.includes('investment strategy') ||
-        input.includes('investment approach') || input.includes('portfolio strategy')) {
+    // Check for specific financial topics
+    if (input.includes('etf') || input.includes('exchange traded fund')) {
+      return this.generateETFResponse();
+    }
+    
+    if (input.includes('budget') || input.includes('budgeting')) {
+      return this.generateBudgetingResponse();
+    }
+    
+    if (input.includes('debt') && (input.includes('pay') || input.includes('payoff') || input.includes('eliminate'))) {
+      return this.generateDebtPayoffResponse();
+    }
+    
+    if (input.includes('emergency fund') || input.includes('emergency savings')) {
+      return this.generateEmergencyFundResponse();
+    }
+    
+    if (input.includes('credit score') || input.includes('credit card')) {
+      return this.generateCreditResponse();
+    }
+    
+    if (input.includes('retirement') || input.includes('retire')) {
+      return this.generateRetirementResponse();
+    }
+    
+    if (input.includes('investment strategy') || input.includes('aggressive approach') || input.includes('conservative approach') || 
+        input.includes('moderate approach') || input.includes('investment approach') || input.includes('portfolio strategy')) {
       return `**Investment Strategy Approaches**
 
 Here's a comprehensive breakdown of different investment approaches:
@@ -1488,6 +1670,595 @@ Here are some topics I can help with:
 • **Financial concepts** - Compound interest, market cap, expense ratios
 
 Feel free to ask about any of these topics or try asking about a specific investment scenario!`;
+  }
+
+  /**
+   * Generate ETF-specific response
+   */
+  private generateETFResponse(): string {
+    return `**ETFs (Exchange-Traded Funds) - The Smart Investor's Choice**
+
+ETFs are one of the best investment vehicles for most people. Here's why:
+
+**What are ETFs?**
+• **Baskets of stocks** - Own hundreds of companies in one investment
+• **Trade like stocks** - Buy and sell throughout the day
+• **Low costs** - Much cheaper than mutual funds
+• **Diversification** - Spread risk across many investments
+• **Transparency** - You know exactly what you own
+
+**Popular ETF Categories:**
+
+**1. Total Stock Market ETFs:**
+• VTI (Vanguard Total Stock Market) - 0.03% expense ratio
+• ITOT (iShares Core S&P Total U.S. Stock Market) - 0.03% expense ratio
+• **Best for**: Beginners, long-term wealth building
+
+**2. S&P 500 ETFs:**
+• VOO (Vanguard S&P 500) - 0.03% expense ratio
+• SPY (SPDR S&P 500) - 0.0945% expense ratio
+• **Best for**: Large-cap exposure, market tracking
+
+**3. International ETFs:**
+• VXUS (Vanguard Total International Stock) - 0.08% expense ratio
+• VEA (Vanguard FTSE Developed Markets) - 0.05% expense ratio
+• **Best for**: Global diversification
+
+**4. Bond ETFs:**
+• BND (Vanguard Total Bond Market) - 0.03% expense ratio
+• AGG (iShares Core U.S. Aggregate Bond) - 0.03% expense ratio
+• **Best for**: Income, stability
+
+**5. Sector ETFs:**
+• VGT (Vanguard Information Technology) - 0.10% expense ratio
+• VHT (Vanguard Health Care) - 0.10% expense ratio
+• **Best for**: Targeted exposure to specific industries
+
+**Why Choose ETFs?**
+• **Low fees** - Often 0.03-0.10% vs 1-2% for mutual funds
+• **Tax efficiency** - Lower capital gains distributions
+• **Flexibility** - Trade anytime during market hours
+• **Diversification** - Own hundreds of companies instantly
+• **Transparency** - See holdings daily
+
+**Getting Started:**
+1. **Start simple** - VTI (total stock market) + BND (bonds)
+2. **Age-based allocation** - 100 minus your age = stock percentage
+3. **Dollar-cost average** - Invest regularly regardless of market
+4. **Rebalance annually** - Keep your target allocation
+
+**Example Portfolio:**
+• **Age 25**: 75% VTI, 25% BND
+• **Age 35**: 65% VTI, 25% VXUS, 10% BND
+• **Age 50**: 50% VTI, 20% VXUS, 30% BND
+
+**Bottom Line:**
+ETFs are the foundation of smart investing. Low cost, diversified, and simple. Perfect for building long-term wealth!
+
+*This is educational information only. For personalized advice, consult a qualified financial advisor.*`;
+  }
+
+  /**
+   * Generate budgeting response
+   */
+  private generateBudgetingResponse(): string {
+    return `**Budgeting Strategies - Take Control of Your Money**
+
+Budgeting is the foundation of financial success. Here are proven methods:
+
+**1. The 50/30/20 Rule (Simplest)**
+• **50% Needs** - Housing, food, utilities, minimum debt payments
+• **30% Wants** - Entertainment, dining out, hobbies, shopping
+• **20% Savings** - Emergency fund, retirement, debt payoff, investments
+
+**Example with $5,000 monthly income:**
+• Needs: $2,500 (rent, groceries, utilities, car payment)
+• Wants: $1,500 (restaurants, movies, clothes, fun)
+• Savings: $1,000 (emergency fund, 401k, investments)
+
+**2. Zero-Based Budgeting (Most Detailed)**
+• **Every dollar has a job** - Assign every dollar before you spend it
+• **Track everything** - Know where every penny goes
+• **Adjust monthly** - Budget changes as life changes
+• **Use apps** - YNAB, EveryDollar, or simple spreadsheet
+
+**3. The 80/20 Rule (Minimalist)**
+• **80% for living** - All your expenses and wants
+• **20% for saving** - Emergency fund, retirement, investments
+• **Simple and effective** - Easy to follow long-term
+
+**4. The Envelope Method (Cash-Based)**
+• **Physical envelopes** - Separate cash for each category
+• **No overspending** - When envelope is empty, you're done
+• **Visual control** - See exactly how much you have left
+• **Great for beginners** - Forces discipline
+
+**Budgeting Apps to Consider:**
+• **YNAB** - Zero-based budgeting, $14.99/month
+• **Mint** - Free, automatic categorization
+• **EveryDollar** - Dave Ramsey's app, free and paid versions
+• **PocketGuard** - Simple spending tracker
+• **Goodbudget** - Digital envelope method
+
+**Essential Budget Categories:**
+• **Housing** - Rent/mortgage, insurance, property taxes
+• **Transportation** - Car payment, gas, maintenance, insurance
+• **Food** - Groceries, dining out
+• **Utilities** - Electric, water, gas, internet, phone
+• **Insurance** - Health, life, disability
+• **Debt payments** - Credit cards, student loans, personal loans
+• **Savings** - Emergency fund, retirement, goals
+• **Entertainment** - Movies, hobbies, subscriptions
+
+**Pro Tips:**
+• **Start with tracking** - Know where your money goes first
+• **Be realistic** - Don't cut everything at once
+• **Review weekly** - Check progress and adjust
+• **Use automation** - Set up automatic transfers to savings
+• **Emergency fund first** - Build 3-6 months expenses
+• **Pay yourself first** - Save before spending
+
+**Common Budgeting Mistakes:**
+• **Too restrictive** - Unrealistic cuts lead to failure
+• **Not tracking** - Guessing instead of knowing
+• **No emergency fund** - Unexpected expenses derail budget
+• **Ignoring irregular expenses** - Car repairs, gifts, holidays
+• **Not adjusting** - Life changes, budget should too
+
+**Bottom Line:**
+The best budget is the one you'll actually follow. Start simple, track everything, and adjust as needed. Consistency beats perfection!
+
+*This is educational information only. For personalized advice, consult a qualified financial advisor.*`;
+  }
+
+  /**
+   * Generate debt payoff response
+   */
+  private generateDebtPayoffResponse(): string {
+    return `**Debt Payoff Strategies - Get Out of Debt Faster**
+
+Debt can be a major obstacle to building wealth. Here are proven strategies:
+
+**1. The Debt Snowball Method (Psychological)**
+• **Pay minimums** on all debts
+• **Extra payments** on smallest debt first
+• **Roll payments** to next debt when one is paid off
+• **Motivation** - Quick wins keep you going
+
+**Example:**
+• Credit Card A: $500 (minimum $25)
+• Credit Card B: $2,000 (minimum $50)
+• Personal Loan: $5,000 (minimum $200)
+• **Strategy**: Pay extra on $500 card first, then roll $75 to $2,000 card
+
+**2. The Debt Avalanche Method (Mathematical)**
+• **Pay minimums** on all debts
+• **Extra payments** on highest interest rate debt first
+• **Saves money** - Reduces total interest paid
+• **Efficient** - Mathematically optimal
+
+**Example:**
+• Credit Card A: $2,000 at 24% APR
+• Credit Card B: $3,000 at 18% APR
+• Personal Loan: $5,000 at 12% APR
+• **Strategy**: Pay extra on 24% card first, then 18% card
+
+**3. The Debt Consolidation Method**
+• **Combine debts** into one lower-rate loan
+• **Simpler management** - One payment instead of multiple
+• **Lower interest** - Often reduces overall rate
+• **Fixed timeline** - Clear payoff date
+
+**Options:**
+• **Balance transfer** - 0% APR credit card (temporary)
+• **Personal loan** - Fixed rate, fixed term
+• **Home equity loan** - Use home equity (risky)
+• **401(k) loan** - Borrow from retirement (not recommended)
+
+**4. The Debt Settlement Method (Last Resort)**
+• **Negotiate** with creditors for lower payoff amount
+• **Damages credit** - Shows as "settled" on credit report
+• **Tax implications** - Forgiven debt may be taxable
+• **Professional help** - Consider credit counseling
+
+**Debt Payoff Tools:**
+• **Debt payoff calculator** - See how much you'll save
+• **Budget apps** - Track payments and progress
+• **Automatic payments** - Never miss a payment
+• **Payment calendar** - Visual progress tracking
+
+**Debt Payoff Tips:**
+• **Stop using credit** - Cut up cards or freeze them
+• **Increase income** - Side hustle, overtime, better job
+• **Reduce expenses** - Cut unnecessary spending
+• **Use windfalls** - Tax refunds, bonuses, gifts
+• **Celebrate milestones** - Reward progress
+• **Stay motivated** - Track total debt reduction
+
+**Emergency Fund vs Debt Payoff:**
+• **Small emergency fund first** - $1,000 to avoid new debt
+• **Then attack debt** - Focus on high-interest debt
+• **Build full emergency fund** - 3-6 months expenses
+• **Continue investing** - Don't stop retirement savings
+
+**When to Consider Bankruptcy:**
+• **Debt exceeds assets** - You're insolvent
+• **Can't make minimum payments** - Even with budget cuts
+• **Debt is 50%+ of income** - Unmanageable burden
+• **No light at end of tunnel** - 5+ years to pay off
+• **Consult attorney** - Understand consequences
+
+**Prevention Strategies:**
+• **Emergency fund** - 3-6 months expenses
+• **Live below means** - Spend less than you earn
+• **Avoid lifestyle inflation** - Don't increase spending with raises
+• **Use cash** - Debit cards instead of credit
+• **Regular budget reviews** - Stay on track
+
+**Bottom Line:**
+Choose the method that motivates you most. The snowball method works for many people because quick wins provide motivation. The avalanche method saves more money. Either way, consistency is key!
+
+*This is educational information only. For personalized advice, consult a qualified financial advisor.*`;
+  }
+
+  /**
+   * Generate emergency fund response
+   */
+  private generateEmergencyFundResponse(): string {
+    return `**Emergency Fund - Your Financial Safety Net**
+
+An emergency fund is the foundation of financial security. Here's everything you need to know:
+
+**What is an Emergency Fund?**
+• **Cash savings** - 3-6 months of essential expenses
+• **Liquid access** - Available within 24-48 hours
+• **Separate account** - Not mixed with other savings
+• **True emergencies only** - Job loss, medical bills, car repairs
+
+**How Much Do You Need?**
+
+**Starter Emergency Fund:**
+• **$1,000** - Basic safety net
+• **Goal**: Avoid new debt from small emergencies
+• **Timeline**: 1-3 months to build
+
+**Full Emergency Fund:**
+• **3-6 months expenses** - Complete financial cushion
+• **Calculate**: Monthly expenses × 3-6
+• **Timeline**: 6-12 months to build
+
+**Factors to Consider:**
+• **Job stability** - Stable job = 3 months, unstable = 6+ months
+• **Income sources** - Multiple income streams = smaller fund
+• **Health insurance** - Good coverage = smaller fund
+• **Family size** - More dependents = larger fund
+• **Debt level** - High debt = larger fund needed
+
+**Where to Keep Your Emergency Fund:**
+
+**High-Yield Savings Account (Best Option):**
+• **FDIC insured** - Up to $250,000 protected
+• **High interest** - 4-5% APY currently
+• **Easy access** - Online transfers, ATM cards
+• **Examples**: Ally, Marcus, Capital One 360
+
+**Money Market Account:**
+• **Higher rates** - Often better than savings
+• **Check writing** - Some allow limited checks
+• **FDIC insured** - Same protection as savings
+• **Minimum balance** - May require higher minimums
+
+**CDs (Certificate of Deposit):**
+• **Higher rates** - Fixed rate for term
+• **Penalty for early withdrawal** - Not ideal for emergencies
+• **Ladder strategy** - Multiple CDs maturing at different times
+• **Good for**: Part of emergency fund you won't need immediately
+
+**What NOT to Use:**
+• **Checking account** - Too easy to spend
+• **Investment accounts** - Risk of loss when you need money
+• **Credit cards** - Not savings, just debt
+• **Home equity** - Not liquid, risky
+
+**Building Your Emergency Fund:**
+
+**Step 1: Calculate Your Target**
+• List all essential monthly expenses
+• Multiply by 3-6 months
+• Example: $3,000/month × 6 = $18,000
+
+**Step 2: Start Small**
+• Begin with $1,000 goal
+• Use any extra money: tax refunds, bonuses, side hustle
+• Cut expenses temporarily to build fund
+
+**Step 3: Automate Savings**
+• Set up automatic transfers
+• Pay yourself first
+• Treat it like a bill
+
+**Step 4: Increase Contributions**
+• Use raises and bonuses
+• Redirect debt payments when debt is paid off
+• Side hustle income
+
+**Emergency Fund vs Other Goals:**
+• **Before investing** - Build emergency fund first
+• **Before extra debt payments** - Basic fund before avalanche/snowball
+• **Before large purchases** - Don't buy house/car without emergency fund
+• **Alongside retirement** - Can build both simultaneously
+
+**What Qualifies as an Emergency?**
+✅ **True Emergencies:**
+• Job loss or reduced hours
+• Medical emergency
+• Major car repair
+• Home repair (roof, HVAC, plumbing)
+• Family emergency requiring travel
+
+❌ **Not Emergencies:**
+• Vacation
+• Holiday gifts
+• New clothes
+• Entertainment
+• Planned expenses
+
+**Rebuilding After Use:**
+• **Immediate priority** - Rebuild as soon as possible
+• **Temporary budget cuts** - Reduce other spending
+• **Pause investing** - Focus on emergency fund first
+• **Use windfalls** - Tax refunds, bonuses, gifts
+
+**Emergency Fund Milestones:**
+• **$1,000** - Basic protection
+• **1 month expenses** - Good progress
+• **3 months expenses** - Solid foundation
+• **6 months expenses** - Complete security
+• **12 months expenses** - Maximum safety (optional)
+
+**Bottom Line:**
+An emergency fund is not optional - it's essential. Start with $1,000, then build to 3-6 months of expenses. It's the foundation that allows you to take risks, invest confidently, and sleep well at night.
+
+*This is educational information only. For personalized advice, consult a qualified financial advisor.*`;
+  }
+
+  /**
+   * Generate credit response
+   */
+  private generateCreditResponse(): string {
+    return `**Credit Score & Credit Cards - Build and Maintain Good Credit**
+
+Credit is a powerful financial tool when used responsibly. Here's how to master it:
+
+**Understanding Credit Scores:**
+
+**FICO Score Ranges:**
+• **800-850** - Excellent (best rates)
+• **740-799** - Very Good (great rates)
+• **670-739** - Good (decent rates)
+• **580-669** - Fair (higher rates)
+• **300-579** - Poor (difficult to get credit)
+
+**What Affects Your Credit Score:**
+• **Payment History (35%)** - Most important factor
+• **Credit Utilization (30%)** - How much credit you're using
+• **Length of Credit History (15%)** - Age of your accounts
+• **Credit Mix (10%)** - Different types of credit
+• **New Credit (10%)** - Recent credit applications
+
+**Building Good Credit:**
+
+**1. Pay Bills On Time (Most Important)**
+• **Set up autopay** - Never miss a payment
+• **Payment history** - 35% of your score
+• **Even one late payment** - Can hurt for years
+• **All bills count** - Utilities, rent, medical bills
+
+**2. Keep Credit Utilization Low**
+• **Under 30%** - Ideally under 10%
+• **Pay off monthly** - Don't carry balances
+• **Multiple cards** - Spread spending across cards
+• **Request limit increases** - Lower utilization ratio
+
+**3. Don't Close Old Accounts**
+• **Length of history** - Older accounts help
+• **Available credit** - Closing reduces total credit limit
+• **Use occasionally** - Keep accounts active
+• **Annual fees** - Consider closing if fees are high
+
+**4. Apply for Credit Sparingly**
+• **Hard inquiries** - Stay on report for 2 years
+• **Rate shopping** - Multiple applications in 30 days count as one
+• **Pre-approval** - Use soft inquiries when possible
+• **Space out applications** - 6+ months between applications
+
+**Credit Card Strategy:**
+
+**Types of Credit Cards:**
+• **Cash back** - 1-5% back on purchases
+• **Travel rewards** - Points for flights, hotels
+• **Balance transfer** - Low/0% APR for debt consolidation
+• **Secured cards** - For building credit from scratch
+• **Store cards** - Often easier to get approved
+
+**Best Practices:**
+• **Pay in full monthly** - Avoid interest charges
+• **Use for everything** - Maximize rewards and protection
+• **Track spending** - Know where your money goes
+• **Set up alerts** - Monitor for fraud and spending
+• **Review statements** - Check for errors and fees
+
+**Credit Card Rewards Strategy:**
+• **Choose based on spending** - Match rewards to your habits
+• **Maximize sign-up bonuses** - Often worth $200-500
+• **Use multiple cards** - Different rewards for different categories
+• **Pay attention to fees** - Annual fees vs rewards earned
+• **Redeem regularly** - Don't let points expire
+
+**Common Credit Mistakes:**
+• **Carrying balances** - Paying interest unnecessarily
+• **Maxing out cards** - High utilization hurts score
+• **Applying for too many cards** - Multiple hard inquiries
+• **Closing old accounts** - Reduces credit history length
+• **Ignoring credit reports** - Not checking for errors
+
+**Improving Bad Credit:**
+
+**If Your Score is Below 600:**
+• **Get secured card** - Requires deposit, builds credit
+• **Become authorized user** - On someone else's good account
+• **Pay down debt** - Reduce credit utilization
+• **Dispute errors** - Check credit reports for mistakes
+• **Be patient** - Takes time to rebuild credit
+
+**Credit Monitoring:**
+• **Free credit reports** - AnnualCreditReport.com
+• **Credit monitoring apps** - Credit Karma, Credit Sesame
+• **Bank apps** - Many banks offer free credit scores
+• **Check monthly** - Stay on top of changes
+
+**When to Use Credit vs Cash:**
+• **Use credit for** - Online purchases, travel, large purchases, building credit
+• **Use cash for** - Small purchases, places that charge credit fees
+• **Never use credit for** - Things you can't afford to pay off monthly
+
+**Credit vs Debit Cards:**
+• **Credit advantages** - Rewards, protection, builds credit, float
+• **Debit advantages** - No debt risk, easier to budget
+• **Best approach** - Use credit responsibly, pay off monthly
+
+**Bottom Line:**
+Good credit opens doors to better rates on loans, credit cards, and even insurance. Build it slowly, use it responsibly, and monitor it regularly. The key is treating credit as a tool, not free money.
+
+*This is educational information only. For personalized advice, consult a qualified financial advisor.*`;
+  }
+
+  /**
+   * Generate retirement response
+   */
+  private generateRetirementResponse(): string {
+    return `**Retirement Planning - Secure Your Financial Future**
+
+Retirement planning is one of the most important financial decisions you'll make. Here's your comprehensive guide:
+
+**Why Start Early:**
+• **Compound interest** - Time is your greatest asset
+• **$1,000 at 25** - Becomes $10,000+ at 65 (7% return)
+• **$1,000 at 35** - Becomes $5,000+ at 65 (7% return)
+• **The difference** - Starting 10 years earlier = 2x more money
+
+**Retirement Account Types:**
+
+**1. 401(k) - Employer Sponsored**
+• **Contribution limit** - $23,000 (2024), $30,500 if 50+
+• **Employer matching** - Free money (usually 3-6%)
+• **Tax advantages** - Pre-tax contributions reduce current taxes
+• **Vesting schedule** - May need to stay 3-5 years for full match
+• **Loan options** - Can borrow against 401(k) in emergencies
+
+**2. IRA - Individual Retirement Account**
+• **Contribution limit** - $7,000 (2024), $8,000 if 50+
+• **Traditional IRA** - Tax deduction now, taxes on withdrawal
+• **Roth IRA** - Pay taxes now, tax-free withdrawal
+• **Income limits** - Roth IRA has income restrictions
+• **More investment options** - Choose from thousands of funds
+
+**3. Roth IRA - Tax-Free Growth**
+• **Tax-free withdrawals** - No taxes in retirement
+• **No RMDs** - Keep money growing as long as you want
+• **Early withdrawal flexibility** - Contributions can be withdrawn penalty-free
+• **Estate planning** - Heirs receive tax-free distributions
+• **Income limits** - Single: $161k, Married: $240k (2024)
+
+**Retirement Savings Strategy:**
+
+**Step 1: Get the Match**
+• **Contribute enough** to get full employer 401(k) match
+• **Free money** - Usually 3-6% of salary
+• **Example**: $50k salary, 3% match = $1,500 free money
+
+**Step 2: Max Out IRA**
+• **Better investment options** - Lower fees, more choices
+• **Roth vs Traditional** - Depends on current vs future tax bracket
+• **$7,000 limit** - Much lower than 401(k) limit
+
+**Step 3: Max Out 401(k)**
+• **Higher limit** - $23,000 vs $7,000 for IRA
+• **Pre-tax savings** - Reduces current year taxes
+• **Automatic investing** - Payroll deduction
+
+**Step 4: Taxable Accounts**
+• **After maxing tax-advantaged** - Additional savings
+• **More flexibility** - No contribution limits or withdrawal rules
+• **Tax-efficient investing** - Index funds, tax-loss harvesting
+
+**How Much to Save:**
+
+**General Rules:**
+• **10-15% of income** - Minimum for comfortable retirement
+• **15-20%** - For early retirement or higher lifestyle
+• **25%+** - For financial independence (FIRE movement)
+
+**Age-Based Guidelines:**
+• **25-30**: 10-15% of income
+• **30-40**: 15-20% of income
+• **40-50**: 20-25% of income
+• **50+**: 25%+ of income
+
+**The 4% Rule:**
+• **Withdraw 4% annually** - From retirement savings
+• **$1 million saved** - = $40,000 annual income
+• **Adjust for inflation** - Increase withdrawals with inflation
+• **Conservative estimate** - May need to adjust based on market
+
+**Retirement Investment Strategy:**
+
+**Young Investors (20s-30s):**
+• **90-100% stocks** - Decades to recover from market downturns
+• **Index funds** - VTI (total stock market), VXUS (international)
+• **Aggressive growth** - Time is on your side
+
+**Mid-Career (40s-50s):**
+• **70-80% stocks, 20-30% bonds** - Start adding stability
+• **Target date funds** - Automatically adjust allocation
+• **Rebalance annually** - Maintain target allocation
+
+**Near Retirement (50s-60s):**
+• **50-60% stocks, 40-50% bonds** - More conservative
+• **Income focus** - Dividend stocks, bond funds
+• **Preserve capital** - Less time to recover from losses
+
+**Common Retirement Mistakes:**
+• **Not starting early** - Missing years of compound growth
+• **Not getting employer match** - Leaving free money on table
+• **Too conservative** - Not enough growth for long-term goals
+• **Too aggressive** - Taking unnecessary risks near retirement
+• **Not rebalancing** - Letting allocation drift over time
+• **Cashing out early** - Paying penalties and taxes
+
+**Retirement Planning Tools:**
+• **Retirement calculators** - Fidelity, Vanguard, Schwab
+• **Monte Carlo simulations** - Test different scenarios
+• **Social Security calculator** - Estimate benefits
+• **Healthcare cost estimates** - Plan for medical expenses
+
+**Social Security:**
+• **Full retirement age** - 67 for those born 1960+
+• **Early retirement** - 62 (reduced benefits)
+• **Delayed retirement** - 70 (increased benefits)
+• **Average benefit** - $1,800/month (2024)
+• **Don't rely solely** - Supplement with personal savings
+
+**Healthcare in Retirement:**
+• **Medicare** - Starts at 65
+• **Medigap/Advantage** - Supplemental coverage
+• **Long-term care** - Consider insurance or self-funding
+• **HSAs** - Triple tax advantage for medical expenses
+
+**Bottom Line:**
+Start early, save consistently, and invest appropriately for your age. The key is time - every year you delay costs you thousands in future retirement income. Even small amounts saved early can grow into significant wealth.
+
+*This is educational information only. For personalized advice, consult a qualified financial advisor.*`;
   }
 }
 

@@ -24,6 +24,14 @@ except ImportError:
     ML_SERVICES_AVAILABLE = False
     logging.warning("ML services not available - running in basic mode")
 
+# Import AI Options API separately (always available)
+try:
+    from core.ai_options_api import router as ai_options_router
+    AI_OPTIONS_AVAILABLE = True
+except ImportError as e:
+    AI_OPTIONS_AVAILABLE = False
+    logging.warning(f"AI Options API not available: {e}")
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -43,6 +51,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include AI Options router
+if AI_OPTIONS_AVAILABLE:
+    app.include_router(ai_options_router)
 
 # Initialize services
 if ML_SERVICES_AVAILABLE:

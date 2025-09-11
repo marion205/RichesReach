@@ -1890,6 +1890,117 @@ const PremiumAnalyticsScreen: React.FC<PremiumAnalyticsScreenProps> = ({ navigat
             </View>
         </View>
 
+        {/* Options Education Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Options Trading Education</Text>
+          
+          <View style={styles.educationCard}>
+            <View style={styles.educationHeader}>
+              <Icon name="book-open" size={20} color="#007AFF" />
+              <Text style={styles.educationTitle}>What are Options?</Text>
+            </View>
+            <Text style={styles.educationText}>
+              Options give you the right (but not obligation) to buy or sell a stock at a specific price by a certain date. 
+              They're powerful tools for income generation, hedging, and speculation.
+            </Text>
+          </View>
+
+          <View style={styles.educationCard}>
+            <View style={styles.educationHeader}>
+              <Icon name="trending-up" size={20} color="#34C759" />
+              <Text style={styles.educationTitle}>Key Strategies</Text>
+            </View>
+            <View style={styles.strategyList}>
+              <View style={styles.strategyItem}>
+                <Text style={styles.strategyName}>Covered Calls</Text>
+                <Text style={styles.strategyDesc}>Generate income by selling call options on stocks you own</Text>
+              </View>
+              <View style={styles.strategyItem}>
+                <Text style={styles.strategyName}>Protective Puts</Text>
+                <Text style={styles.strategyDesc}>Hedge downside risk by buying put options</Text>
+              </View>
+              <View style={styles.strategyItem}>
+                <Text style={styles.strategyName}>Iron Condors</Text>
+                <Text style={styles.strategyDesc}>Profit from range-bound markets with limited risk</Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.educationCard}>
+            <View style={styles.educationHeader}>
+              <Icon name="alert-triangle" size={20} color="#FF9500" />
+              <Text style={styles.educationTitle}>Risk Management</Text>
+            </View>
+            <Text style={styles.educationText}>
+              • Never risk more than you can afford to lose{'\n'}
+              • Understand the Greeks (Delta, Gamma, Theta, Vega){'\n'}
+              • Start with paper trading to practice{'\n'}
+              • Consider your risk tolerance and investment goals
+            </Text>
+          </View>
+
+          <View style={styles.educationCard}>
+            <View style={styles.educationHeader}>
+              <Icon name="info" size={20} color="#8E8E93" />
+              <Text style={styles.educationTitle}>Important Terms</Text>
+            </View>
+            <View style={styles.termsList}>
+              <View style={styles.termItem}>
+                <Text style={styles.termName}>Strike Price:</Text>
+                <Text style={styles.termDesc}>The price at which you can buy/sell the stock</Text>
+              </View>
+              <View style={styles.termItem}>
+                <Text style={styles.termName}>Expiration:</Text>
+                <Text style={styles.termDesc}>The date when the option expires</Text>
+              </View>
+              <View style={styles.termItem}>
+                <Text style={styles.termName}>Premium:</Text>
+                <Text style={styles.termDesc}>The cost to buy the option</Text>
+              </View>
+              <View style={styles.termItem}>
+                <Text style={styles.termName}>IV (Implied Volatility):</Text>
+                <Text style={styles.termDesc}>Market's expectation of future price movement</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* AI Options Button */}
+        <View style={styles.section}>
+          <TouchableOpacity
+            style={styles.aiOptionsButton}
+            onPress={() => navigateTo('ai-options')}
+          >
+            <View style={styles.aiOptionsContent}>
+              <View style={styles.aiOptionsHeader}>
+                <Icon name="brain" size={24} color="#007AFF" />
+                <Text style={styles.aiOptionsTitle}>AI Options Recommendations</Text>
+              </View>
+              <Text style={styles.aiOptionsDescription}>
+                Get hedge fund-level options strategy recommendations powered by advanced AI and machine learning
+              </Text>
+              <View style={styles.aiOptionsFeatures}>
+                <View style={styles.featureItem}>
+                  <Icon name="check" size={16} color="#34C759" />
+                  <Text style={styles.featureText}>Smart Strategy Selection</Text>
+                </View>
+                <View style={styles.featureItem}>
+                  <Icon name="check" size={16} color="#34C759" />
+                  <Text style={styles.featureText}>Risk-Adjusted Returns</Text>
+                </View>
+                <View style={styles.featureItem}>
+                  <Icon name="check" size={16} color="#34C759" />
+                  <Text style={styles.featureText}>Real-time Market Analysis</Text>
+                </View>
+              </View>
+              <View style={styles.aiOptionsFooter}>
+                <Text style={styles.aiOptionsAction}>Tap to Access AI Options</Text>
+                <Icon name="arrow-right" size={20} color="#007AFF" />
+              </View>
+            </View>
+          </TouchableOpacity>
+        </View>
+
         {/* Market Sentiment */}
         {options?.marketSentiment && (
           <View style={styles.section}>
@@ -4309,6 +4420,135 @@ const styles = StyleSheet.create({
     color: '#34C759',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  // Education Section Styles
+  educationCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  educationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  educationTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000',
+    marginLeft: 8,
+  },
+  educationText: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 20,
+  },
+  strategyList: {
+    marginTop: 8,
+  },
+  strategyItem: {
+    marginBottom: 8,
+  },
+  strategyName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 2,
+  },
+  strategyDesc: {
+    fontSize: 13,
+    color: '#666',
+    lineHeight: 18,
+  },
+  termsList: {
+    marginTop: 8,
+  },
+  termItem: {
+    marginBottom: 6,
+  },
+  termName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#007AFF',
+  },
+  termDesc: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  // AI Options Button Styles
+  aiOptionsButton: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: '#e8f4fd',
+  },
+  aiOptionsContent: {
+    alignItems: 'center',
+  },
+  aiOptionsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  aiOptionsTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#000',
+    marginLeft: 12,
+  },
+  aiOptionsDescription: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  aiOptionsFeatures: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  featureItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 8,
+    marginVertical: 4,
+  },
+  featureText: {
+    fontSize: 12,
+    color: '#34C759',
+    marginLeft: 4,
+    fontWeight: '500',
+  },
+  aiOptionsFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f0f8ff',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  aiOptionsAction: {
+    fontSize: 14,
+    color: '#007AFF',
+    fontWeight: '600',
+    marginRight: 8,
   },
 });
 
