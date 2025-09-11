@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback, memo } from 'react';
 import {
   View,
   Text,
@@ -71,19 +71,22 @@ interface ChatMsg {
   content: string;
 }
 
-export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string, data?: any) => void }) {
+const HomeScreen = ({ navigateTo }: { navigateTo: (screen: string, data?: any) => void }) => {
   const client = useApolloClient();
   
-  // Portfolio data query
+  
+  // Portfolio data query with subtle optimization
   const { data: portfolioData, loading: portfolioLoading, error: portfolioError } = useQuery(GET_PORTFOLIO_METRICS, {
-    fetchPolicy: 'cache-and-network',
     errorPolicy: 'ignore',
+    fetchPolicy: 'cache-first', // Use cache when available
+    notifyOnNetworkStatusChange: false, // Reduce unnecessary re-renders
   });
   
-  // User data query for premium status
+  // User data query for premium status with subtle optimization
   const { data: userData, loading: userLoading } = useQuery(GET_ME, {
-    fetchPolicy: 'cache-and-network',
     errorPolicy: 'ignore',
+    fetchPolicy: 'cache-first', // Use cache when available
+    notifyOnNetworkStatusChange: false, // Reduce unnecessary re-renders
   });
   
   // User profile state
@@ -106,6 +109,15 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
   const [chatInput, setChatInput] = useState('');
   const [chatSending, setChatSending] = useState(false);
   const listRef = useRef<FlatList<ChatMsg>>(null);
+  
+  // Debounced chat input for better performance
+  const [debouncedChatInput, setDebouncedChatInput] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedChatInput(chatInput);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [chatInput]);
 
   // Real portfolio data
   const [realPortfolioData, setRealPortfolioData] = useState<PortfolioMetrics | null>(null);
@@ -190,7 +202,7 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
 
 
   // -------- Chatbot --------
-  const quickPrompts = [
+  const quickPrompts = useMemo(() => [
     'What is an ETF?',
     'Roth vs Traditional IRA',
     'Explain 50/30/20 budgeting',
@@ -206,7 +218,7 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
     'Options trading basics',
     'How to trade options',
     'Trading fundamentals',
-  ];
+  ], []);
 
   // AI Response Generator using Financial Chatbot Service
   const generateAIResponse = async (userInput: string): Promise<string> => {
@@ -311,17 +323,17 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
     }
   };
 
-  // Helper functions for personalization
-  const getExperienceIcon = (level: string) => {
+  // Memoized helper functions for personalization (performance optimization)
+  const getExperienceIcon = useCallback((level: string) => {
     switch (level) {
       case 'beginner': return 'book-open';
       case 'intermediate': return 'trending-up';
       case 'advanced': return 'bar-chart-2';
       default: return 'user';
     }
-  };
+  }, []);
 
-  const getUserStyleSummary = (profile: ExtendedUserProfile): string => {
+  const getUserStyleSummary = useCallback((profile: ExtendedUserProfile): string => {
     const experience = profile.experienceLevel;
     const risk = profile.riskTolerance;
     
@@ -336,7 +348,50 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
     } else {
       return 'Balanced Investor - Steady growth with moderate risk';
     }
-  };
+  }, []);
+
+  // Memoized portfolio calculations for better performance
+  const portfolioValues = useMemo(() => {
+    const totalValue = realPortfolioData?.totalValue || (isLiveData && liveTotalValue ? liveTotalValue : (portfolioData?.portfolioMetrics?.totalValue || 14303.52));
+    const totalReturn = realPortfolioData?.totalReturn || (isLiveData && liveTotalReturn ? liveTotalReturn : (portfolioData?.portfolioMetrics?.totalReturn || 2145.53));
+    const totalReturnPercent = realPortfolioData?.totalReturnPercent || (isLiveData && liveTotalReturnPercent ? liveTotalReturnPercent : (portfolioData?.portfolioMetrics?.totalReturnPercent || 17.65));
+    
+    return { totalValue, totalReturn, totalReturnPercent };
+  }, [realPortfolioData, isLiveData, liveTotalValue, liveTotalReturn, liveTotalReturnPercent, portfolioData]);
+
+  const portfolioHoldings = useMemo(() => {
+    return realPortfolioData?.holdings || (isLiveData && liveHoldings.length > 0 ? liveHoldings : portfolioData?.portfolioMetrics?.holdings);
+  }, [realPortfolioData, isLiveData, liveHoldings, portfolioData]);
+
+  // Memoized portfolio history for better performance
+  const portfolioHistory = useMemo(() => [
+    // 1 year ago (September 2023)
+    { date: '2023-09-08', value: 10000 },
+    { date: '2023-10-08', value: 10200 },
+    { date: '2023-11-08', value: 10500 },
+    { date: '2023-12-08', value: 10800 },
+    
+    // 6 months ago (March 2024)
+    { date: '2024-01-08', value: 11000 },
+    { date: '2024-02-08', value: 11200 },
+    { date: '2024-03-08', value: 11500 },
+    { date: '2024-04-08', value: 11800 },
+    { date: '2024-05-08', value: 12000 },
+    
+    // 3 months ago (June 2024)
+    { date: '2024-06-08', value: 12200 },
+    { date: '2024-07-08', value: 12500 },
+    
+    // 1 month ago (August 2024)
+    { date: '2024-08-08', value: 12800 },
+    { date: '2024-08-15', value: 12900 },
+    { date: '2024-08-22', value: 13000 },
+    { date: '2024-08-29', value: 13050 },
+    
+    // Recent (September 2024)
+    { date: '2024-09-01', value: 13100 },
+    { date: '2024-09-08', value: 13100 },
+  ], []);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -389,24 +444,24 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
 
         {/* Portfolio Graph - First thing users see */}
         <PortfolioGraph
-          totalValue={realPortfolioData?.totalValue || (isLiveData && liveTotalValue ? liveTotalValue : (portfolioData?.portfolioMetrics?.totalValue || 14303.52))}
-          totalReturn={realPortfolioData?.totalReturn || (isLiveData && liveTotalReturn ? liveTotalReturn : (portfolioData?.portfolioMetrics?.totalReturn || 2145.53))}
-          totalReturnPercent={realPortfolioData?.totalReturnPercent || (isLiveData && liveTotalReturnPercent ? liveTotalReturnPercent : (portfolioData?.portfolioMetrics?.totalReturnPercent || 17.65))}
+          totalValue={portfolioValues.totalValue}
+          totalReturn={portfolioValues.totalReturn}
+          totalReturnPercent={portfolioValues.totalReturnPercent}
           onPress={() => {
             // Navigate to portfolio details
             navigateTo('PortfolioEducation', { 
               clickedElement: 'chart',
-              totalValue: realPortfolioData?.totalValue || liveTotalValue || portfolioData?.portfolioMetrics?.totalValue,
-              totalReturn: realPortfolioData?.totalReturn || liveTotalReturn || portfolioData?.portfolioMetrics?.totalReturn,
-              totalReturnPercent: realPortfolioData?.totalReturnPercent || liveTotalReturnPercent || portfolioData?.portfolioMetrics?.totalReturnPercent
+              totalValue: portfolioValues.totalValue,
+              totalReturn: portfolioValues.totalReturn,
+              totalReturnPercent: portfolioValues.totalReturnPercent
             });
           }}
         />
 
         {/* Portfolio Holdings */}
-        {(realPortfolioData?.holdings || portfolioData?.portfolioMetrics?.holdings || liveHoldings.length > 0) && (
+        {portfolioHoldings && portfolioHoldings.length > 0 && (
           <PortfolioHoldings
-            holdings={realPortfolioData?.holdings || (isLiveData && liveHoldings.length > 0 ? liveHoldings : portfolioData?.portfolioMetrics?.holdings)}
+            holdings={portfolioHoldings}
             onStockPress={(symbol) => {
               // Navigate to stock detail or search
               navigateTo('StockDetail', { symbol });
@@ -415,51 +470,24 @@ export default function HomeScreen({ navigateTo }: { navigateTo: (screen: string
         )}
 
         {/* Basic Risk Metrics */}
-        {(realPortfolioData?.holdings || portfolioData?.portfolioMetrics?.holdings || liveHoldings.length > 0) && (
+        {portfolioHoldings && portfolioHoldings.length > 0 && (
           <BasicRiskMetrics
-            holdings={realPortfolioData?.holdings || (isLiveData && liveHoldings.length > 0 ? liveHoldings : portfolioData?.portfolioMetrics?.holdings)}
-            totalValue={realPortfolioData?.totalValue || (isLiveData && liveTotalValue ? liveTotalValue : (portfolioData?.portfolioMetrics?.totalValue || 0))}
-            totalReturn={realPortfolioData?.totalReturn || (isLiveData && liveTotalReturn ? liveTotalReturn : (portfolioData?.portfolioMetrics?.totalReturn || 0))}
-            totalReturnPercent={realPortfolioData?.totalReturnPercent || (isLiveData && liveTotalReturnPercent ? liveTotalReturnPercent : (portfolioData?.portfolioMetrics?.totalReturnPercent || 0))}
+            holdings={portfolioHoldings}
+            totalValue={portfolioValues.totalValue}
+            totalReturn={portfolioValues.totalReturn}
+            totalReturnPercent={portfolioValues.totalReturnPercent}
             onNavigate={navigateTo}
             hasPremiumAccess={userData?.me?.hasPremiumAccess || false}
           />
         )}
 
         {/* Portfolio Comparison */}
-        {(realPortfolioData?.holdings || portfolioData?.portfolioMetrics?.holdings || liveHoldings.length > 0) && (
+        {portfolioHoldings && portfolioHoldings.length > 0 && (
           <PortfolioComparison
-            totalValue={realPortfolioData?.totalValue || (isLiveData && liveTotalValue ? liveTotalValue : (portfolioData?.portfolioMetrics?.totalValue || 0))}
-            totalReturn={realPortfolioData?.totalReturn || (isLiveData && liveTotalReturn ? liveTotalReturn : (portfolioData?.portfolioMetrics?.totalReturn || 0))}
-            totalReturnPercent={realPortfolioData?.totalReturnPercent || (isLiveData && liveTotalReturnPercent ? liveTotalReturnPercent : (portfolioData?.portfolioMetrics?.totalReturnPercent || 0))}
-            portfolioHistory={[
-              // 1 year ago (September 2023)
-              { date: '2023-09-08', value: 10000 },
-              { date: '2023-10-08', value: 10200 },
-              { date: '2023-11-08', value: 10500 },
-              { date: '2023-12-08', value: 10800 },
-              
-              // 6 months ago (March 2024)
-              { date: '2024-01-08', value: 11000 },
-              { date: '2024-02-08', value: 11200 },
-              { date: '2024-03-08', value: 11500 },
-              { date: '2024-04-08', value: 11800 },
-              { date: '2024-05-08', value: 12000 },
-              
-              // 3 months ago (June 2024)
-              { date: '2024-06-08', value: 12200 },
-              { date: '2024-07-08', value: 12500 },
-              
-              // 1 month ago (August 2024)
-              { date: '2024-08-08', value: 12800 },
-              { date: '2024-08-15', value: 12900 },
-              { date: '2024-08-22', value: 13000 },
-              { date: '2024-08-29', value: 13050 },
-              
-              // Recent (September 2024)
-              { date: '2024-09-01', value: 13100 },
-              { date: '2024-09-08', value: 13100 },
-            ]}
+            totalValue={portfolioValues.totalValue}
+            totalReturn={portfolioValues.totalReturn}
+            totalReturnPercent={portfolioValues.totalReturnPercent}
+            portfolioHistory={portfolioHistory}
           />
         )}
 
@@ -1373,3 +1401,5 @@ const styles = StyleSheet.create({
   },
 
 });
+
+export default memo(HomeScreen);

@@ -621,10 +621,11 @@ class PremiumMutations(graphene.ObjectType):
         RebalanceResultType,
         portfolio_name=graphene.String(description="Portfolio to rebalance (optional)"),
         risk_tolerance=graphene.String(description="Risk tolerance: low, medium, high"),
-        max_rebalance_percentage=graphene.Float(description="Maximum percentage to rebalance (default: 20%)")
+        max_rebalance_percentage=graphene.Float(description="Maximum percentage to rebalance (default: 20%)"),
+        dry_run=graphene.Boolean(description="Preview changes without executing (default: false)")
     )
     
-    def resolve_ai_rebalance_portfolio(self, info, portfolio_name=None, risk_tolerance="medium", max_rebalance_percentage=20.0):
+    def resolve_ai_rebalance_portfolio(self, info, portfolio_name=None, risk_tolerance="medium", max_rebalance_percentage=20.0, dry_run=False):
         """AI-powered portfolio rebalancing"""
         user = getattr(info.context, 'user', None)
         
@@ -667,17 +668,20 @@ class PremiumMutations(graphene.ObjectType):
                     estimated_improvement="N/A"
                 )
             
-            # Apply rebalancing suggestions (simulated)
+            # Apply rebalancing suggestions (actually update portfolio)
             changes_made = []
             stock_trades = []
             total_cost = 0.0
+            
+            # Import PortfolioService for actual portfolio updates
+            from .portfolio_service import PortfolioService
+            from django.db import transaction
             
             # Get real stock prices from market data service
             from .enhanced_stock_service import EnhancedStockService
             stock_service = EnhancedStockService()
             
-            # Smart stock selection with lazy loading and diversity algorithm
-            # Use caching to speed up repeated calls
+            # Optimized stock selection with enhanced caching
             from django.core.cache import cache
             cache_key = f"rebalance_stocks_{risk_tolerance}_{max_rebalance_percentage}"
             sector_stocks = cache.get(cache_key)
@@ -685,13 +689,15 @@ class PremiumMutations(graphene.ObjectType):
             if sector_stocks is None:
                 sector_stocks = {}
                 
-                # Simplified approach: Get diverse stocks with randomization
+                # Optimized approach: Pre-filtered stock selection
                 import random
                 
-                # Get all stocks and group them by sector
-                all_stocks = Stock.objects.all()
+                # Use select_related and only() for faster queries
+                all_stocks = Stock.objects.select_related().only(
+                    'symbol', 'company_name', 'sector', 'current_price', 'market_cap', 'pe_ratio', 'dividend_yield', 'debt_ratio', 'volatility', 'beginner_friendly_score'
+                ).filter(current_price__gt=0)
                 
-                # Group stocks by sector
+                # Pre-group stocks by sector with optimized data structure
                 stocks_by_sector = {}
                 for stock in all_stocks:
                     sector = getattr(stock, 'sector', None) or 'Mixed'
@@ -715,87 +721,258 @@ class PremiumMutations(graphene.ObjectType):
                             # Randomly sample 20 stocks to get variety
                             stocks_in_sector = random.sample(stocks_in_sector, 20)
                         
-                        # Filter by price range and performance metrics
+                        # Industry-standard comprehensive scoring system
                         quality_stocks = []
                         for stock in stocks_in_sector:
-                            price = float(stock.current_price) if stock.current_price else 0
-                            # Only consider stocks with valid prices and data
-                            if price > 0 and 5.0 <= price <= 2000.0:  # Must have valid price
-                                # Calculate performance score based on available metrics
-                                performance_score = 0
+                            try:
+                                price = float(stock.current_price) if stock.current_price else 0
+                                # Quick price validation
+                                if not (5.0 <= price <= 2000.0):
+                                    continue
                                 
-                                # Use market cap as a proxy for company size/quality
+                                # Initialize comprehensive scoring system
+                                performance_score = 0
+                                scoring_details = {}
+                                
+                                # 1. FINANCIAL HEALTH SCORING (30 points max)
+                                financial_score = 0
+                                
+                                # P/E Ratio Analysis (10 points)
+                                pe_ratio = getattr(stock, 'pe_ratio', None)
+                                if pe_ratio:
+                                    try:
+                                        pe_value = float(pe_ratio)
+                                        if 5 <= pe_value <= 15:  # Excellent value
+                                            financial_score += 10
+                                            scoring_details['pe_ratio'] = 'excellent'
+                                        elif 15 < pe_value <= 25:  # Good value
+                                            financial_score += 7
+                                            scoring_details['pe_ratio'] = 'good'
+                                        elif 25 < pe_value <= 35:  # Fair value
+                                            financial_score += 4
+                                            scoring_details['pe_ratio'] = 'fair'
+                                        elif pe_value > 35:  # Overvalued
+                                            financial_score += 1
+                                            scoring_details['pe_ratio'] = 'overvalued'
+                                        else:  # Negative or very low P/E
+                                            financial_score += 2
+                                            scoring_details['pe_ratio'] = 'low'
+                                    except:
+                                        financial_score += 5  # Neutral if invalid
+                                        scoring_details['pe_ratio'] = 'unknown'
+                                else:
+                                    financial_score += 5  # Neutral if missing
+                                    scoring_details['pe_ratio'] = 'missing'
+                                
+                                # Debt Ratio Analysis (10 points)
+                                debt_ratio = getattr(stock, 'debt_ratio', None)
+                                if debt_ratio:
+                                    try:
+                                        debt_value = float(debt_ratio)
+                                        if debt_value <= 0.3:  # Low debt - excellent
+                                            financial_score += 10
+                                            scoring_details['debt_ratio'] = 'excellent'
+                                        elif 0.3 < debt_value <= 0.5:  # Moderate debt - good
+                                            financial_score += 7
+                                            scoring_details['debt_ratio'] = 'good'
+                                        elif 0.5 < debt_value <= 0.7:  # High debt - fair
+                                            financial_score += 4
+                                            scoring_details['debt_ratio'] = 'fair'
+                                        else:  # Very high debt - poor
+                                            financial_score += 1
+                                            scoring_details['debt_ratio'] = 'poor'
+                                    except:
+                                        financial_score += 5  # Neutral if invalid
+                                        scoring_details['debt_ratio'] = 'unknown'
+                                else:
+                                    financial_score += 5  # Neutral if missing
+                                    scoring_details['debt_ratio'] = 'missing'
+                                
+                                # Dividend Yield Analysis (10 points)
+                                dividend_yield = getattr(stock, 'dividend_yield', None)
+                                if dividend_yield:
+                                    try:
+                                        div_value = float(dividend_yield)
+                                        if 2 <= div_value <= 6:  # Good dividend yield
+                                            financial_score += 10
+                                            scoring_details['dividend_yield'] = 'excellent'
+                                        elif 1 <= div_value < 2 or 6 < div_value <= 8:  # Moderate
+                                            financial_score += 6
+                                            scoring_details['dividend_yield'] = 'good'
+                                        elif div_value > 8:  # Potentially unsustainable
+                                            financial_score += 3
+                                            scoring_details['dividend_yield'] = 'high'
+                                        else:  # Low or no dividend
+                                            financial_score += 4
+                                            scoring_details['dividend_yield'] = 'low'
+                                    except:
+                                        financial_score += 5  # Neutral if invalid
+                                        scoring_details['dividend_yield'] = 'unknown'
+                                else:
+                                    financial_score += 5  # Neutral if missing
+                                    scoring_details['dividend_yield'] = 'missing'
+                                
+                                performance_score += financial_score
+                                scoring_details['financial_score'] = financial_score
+                                
+                                # 2. GROWTH & SIZE SCORING (25 points max)
+                                growth_score = 0
+                                
+                                # Market Cap Analysis (15 points)
                                 market_cap = getattr(stock, 'market_cap', None)
                                 if market_cap:
                                     try:
                                         market_cap_value = float(market_cap)
-                                        if market_cap_value > 10000000000:  # > $10B market cap (mega cap)
-                                            performance_score += 40
-                                        elif market_cap_value > 1000000000:  # > $1B market cap (large cap)
-                                            performance_score += 30
-                                        elif market_cap_value > 100000000:  # > $100M market cap (mid cap)
-                                            performance_score += 20
-                                        else:
-                                            performance_score += 10
+                                        if market_cap_value > 100000000000:  # > $100B - Mega cap
+                                            growth_score += 15
+                                            scoring_details['market_cap'] = 'mega_cap'
+                                        elif market_cap_value > 10000000000:  # > $10B - Large cap
+                                            growth_score += 12
+                                            scoring_details['market_cap'] = 'large_cap'
+                                        elif market_cap_value > 1000000000:  # > $1B - Mid cap
+                                            growth_score += 9
+                                            scoring_details['market_cap'] = 'mid_cap'
+                                        elif market_cap_value > 300000000:  # > $300M - Small cap
+                                            growth_score += 6
+                                            scoring_details['market_cap'] = 'small_cap'
+                                        else:  # Micro cap
+                                            growth_score += 3
+                                            scoring_details['market_cap'] = 'micro_cap'
                                     except:
-                                        performance_score += 15  # Default for unknown market cap
+                                        growth_score += 8  # Neutral if invalid
+                                        scoring_details['market_cap'] = 'unknown'
                                 else:
-                                    performance_score += 15
+                                    growth_score += 8  # Neutral if missing
+                                    scoring_details['market_cap'] = 'missing'
                                 
-                                # Use volume as a proxy for liquidity and interest
-                                volume = getattr(stock, 'volume', None)
-                                if volume:
+                                # Price Stability (10 points)
+                                if 20 <= price <= 200:  # Sweet spot for price
+                                    growth_score += 10
+                                    scoring_details['price_stability'] = 'excellent'
+                                elif 10 <= price < 20 or 200 < price <= 500:  # Good range
+                                    growth_score += 7
+                                    scoring_details['price_stability'] = 'good'
+                                elif 5 <= price < 10 or 500 < price <= 1000:  # Acceptable
+                                    growth_score += 4
+                                    scoring_details['price_stability'] = 'fair'
+                                else:  # Very low or very high price
+                                    growth_score += 2
+                                    scoring_details['price_stability'] = 'poor'
+                                
+                                performance_score += growth_score
+                                scoring_details['growth_score'] = growth_score
+                                
+                                # 3. RISK ASSESSMENT SCORING (20 points max)
+                                risk_score = 0
+                                
+                                # Volatility Analysis (15 points)
+                                volatility = getattr(stock, 'volatility', None)
+                                if volatility:
                                     try:
-                                        volume_value = float(volume)
-                                        if volume_value > 1000000:  # High volume
-                                            performance_score += 15
-                                        elif volume_value > 100000:  # Medium volume
-                                            performance_score += 10
-                                        else:
-                                            performance_score += 5
+                                        vol_value = float(volatility)
+                                        if vol_value <= 15:  # Low volatility - stable
+                                            risk_score += 15
+                                            scoring_details['volatility'] = 'low'
+                                        elif 15 < vol_value <= 25:  # Moderate volatility
+                                            risk_score += 10
+                                            scoring_details['volatility'] = 'moderate'
+                                        elif 25 < vol_value <= 40:  # High volatility
+                                            risk_score += 5
+                                            scoring_details['volatility'] = 'high'
+                                        else:  # Very high volatility
+                                            risk_score += 2
+                                            scoring_details['volatility'] = 'very_high'
                                     except:
-                                        performance_score += 8
+                                        risk_score += 8  # Neutral if invalid
+                                        scoring_details['volatility'] = 'unknown'
                                 else:
-                                    performance_score += 8
+                                    risk_score += 8  # Neutral if missing
+                                    scoring_details['volatility'] = 'missing'
                                 
-                                # Use price as a quality indicator (higher price often = better company)
-                                if price > 100:
-                                    performance_score += 20
-                                elif price > 50:
-                                    performance_score += 15
-                                elif price > 20:
-                                    performance_score += 10
+                                # Beginner Friendliness (5 points)
+                                beginner_score = getattr(stock, 'beginner_friendly_score', None)
+                                if beginner_score:
+                                    try:
+                                        beginner_value = int(beginner_score)
+                                        if beginner_value >= 80:  # Very beginner friendly
+                                            risk_score += 5
+                                            scoring_details['beginner_friendly'] = 'excellent'
+                                        elif beginner_value >= 60:  # Good for beginners
+                                            risk_score += 4
+                                            scoring_details['beginner_friendly'] = 'good'
+                                        elif beginner_value >= 40:  # Moderate
+                                            risk_score += 3
+                                            scoring_details['beginner_friendly'] = 'fair'
+                                        else:  # Not beginner friendly
+                                            risk_score += 1
+                                            scoring_details['beginner_friendly'] = 'poor'
+                                    except:
+                                        risk_score += 3  # Neutral if invalid
+                                        scoring_details['beginner_friendly'] = 'unknown'
                                 else:
-                                    performance_score += 5
+                                    risk_score += 3  # Neutral if missing
+                                    scoring_details['beginner_friendly'] = 'missing'
                                 
-                                # Check for additional performance metrics if available
-                                # Look for any performance-related fields
-                                for field_name in ['pe_ratio', 'pb_ratio', 'dividend_yield', 'eps', 'revenue_growth']:
-                                    field_value = getattr(stock, field_name, None)
-                                    if field_value:
-                                        try:
-                                            field_float = float(field_value)
-                                            if field_name == 'pe_ratio' and 5 <= field_float <= 25:  # Good P/E range
-                                                performance_score += 10
-                                            elif field_name == 'pb_ratio' and 0.5 <= field_float <= 3:  # Good P/B range
-                                                performance_score += 8
-                                            elif field_name == 'dividend_yield' and field_float > 0:  # Has dividends
-                                                performance_score += 5
-                                            elif field_name == 'eps' and field_float > 0:  # Positive earnings
-                                                performance_score += 12
-                                            elif field_name == 'revenue_growth' and field_float > 0:  # Growing revenue
-                                                performance_score += 8
-                                        except:
-                                            continue
+                                performance_score += risk_score
+                                scoring_details['risk_score'] = risk_score
                                 
-                                # Add some randomness for variety (but performance is primary)
-                                performance_score += random.random() * 5  # Reduced randomness, performance is more important
+                                # 4. SECTOR & QUALITY BONUS (15 points max)
+                                quality_bonus = 0
                                 
-                                quality_stocks.append({
-                                    'stock': stock,
-                                    'price': price,
-                                    'performance_score': performance_score
-                                })
+                                # Sector Quality Bonus (10 points)
+                                sector = getattr(stock, 'sector', '').lower()
+                                if any(tech in sector for tech in ['technology', 'tech', 'software', 'semiconductor']):
+                                    quality_bonus += 10  # Tech sector bonus
+                                    scoring_details['sector_bonus'] = 'technology'
+                                elif any(health in sector for health in ['healthcare', 'health', 'medical', 'pharmaceutical']):
+                                    quality_bonus += 8  # Healthcare sector bonus
+                                    scoring_details['sector_bonus'] = 'healthcare'
+                                elif any(finance in sector for finance in ['financial', 'banking', 'insurance']):
+                                    quality_bonus += 6  # Financial sector bonus
+                                    scoring_details['sector_bonus'] = 'financial'
+                                elif any(consumer in sector for consumer in ['consumer', 'retail', 'discretionary']):
+                                    quality_bonus += 4  # Consumer sector bonus
+                                    scoring_details['sector_bonus'] = 'consumer'
+                                else:
+                                    quality_bonus += 5  # Neutral for other sectors
+                                    scoring_details['sector_bonus'] = 'other'
+                                
+                                # Company Name Quality (5 points)
+                                company_name = getattr(stock, 'company_name', '').lower()
+                                if any(quality in company_name for quality in ['inc', 'corp', 'ltd', 'group', 'holdings']):
+                                    quality_bonus += 5  # Established company
+                                    scoring_details['company_quality'] = 'established'
+                                else:
+                                    quality_bonus += 3  # Neutral
+                                    scoring_details['company_quality'] = 'neutral'
+                                
+                                performance_score += quality_bonus
+                                scoring_details['quality_bonus'] = quality_bonus
+                                
+                                # 5. FINAL ADJUSTMENTS
+                                # Add small randomness for variety (0-2 points)
+                                random_bonus = random.random() * 2
+                                performance_score += random_bonus
+                                scoring_details['random_bonus'] = round(random_bonus, 2)
+                                
+                                # Calculate total possible score (100 points max)
+                                max_possible_score = 30 + 25 + 20 + 15 + 2  # 92 points + 8 bonus
+                                scoring_details['max_possible'] = max_possible_score
+                                scoring_details['total_score'] = round(performance_score, 2)
+                                scoring_details['score_percentage'] = round((performance_score / max_possible_score) * 100, 1)
+                                
+                                # Only include stocks with decent scores (60%+ of max possible)
+                                if performance_score >= (max_possible_score * 0.6):
+                                    quality_stocks.append({
+                                        'stock': stock,
+                                        'price': price,
+                                        'performance_score': performance_score,
+                                        'scoring_details': scoring_details
+                                    })
+                                    
+                            except (ValueError, TypeError) as e:
+                                logger.warning(f"Error scoring stock {getattr(stock, 'symbol', 'unknown')}: {e}")
+                                continue  # Skip invalid stocks
                         
                         # Sort by performance score (best performers first) and take top 3-4
                         quality_stocks.sort(key=lambda x: x['performance_score'], reverse=True)
@@ -806,11 +983,16 @@ class PremiumMutations(graphene.ObjectType):
                             logger.info(f"Selected {len(selected_stocks)} top-performing stocks for {sector_name}:")
                             for item in selected_stocks:
                                 stock = item['stock']
-                                logger.info(f"  {stock.symbol}: ${item['price']:.2f} (score: {item['performance_score']:.1f})")
+                                details = item['scoring_details']
+                                logger.info(f"  {stock.symbol}: ${item['price']:.2f} (score: {item['performance_score']:.1f}/{details['max_possible']} = {details['score_percentage']:.1f}%)")
+                                logger.info(f"    Financial: {details['financial_score']}/30, Growth: {details['growth_score']}/25, Risk: {details['risk_score']}/20, Quality: {details['quality_bonus']}/15")
+                                logger.info(f"    P/E: {details['pe_ratio']}, Debt: {details['debt_ratio']}, Volatility: {details['volatility']}, Sector: {details['sector_bonus']}")
                                 sector_stocks[sector_name].append({
                                     'symbol': stock.symbol,
-                                    'name': getattr(stock, 'name', None) or stock.symbol,
-                                    'price': item['price']
+                                    'name': getattr(stock, 'company_name', None) or stock.symbol,
+                                    'price': item['price'],
+                                    'score': item['performance_score'],
+                                    'score_percentage': details['score_percentage']
                                 })
                         else:
                             # Fallback: if no stocks with valid prices, use any stocks from this sector
@@ -822,7 +1004,7 @@ class PremiumMutations(graphene.ObjectType):
                                     price = float(stock.current_price) if stock.current_price else 100.0  # Default price
                                     sector_stocks[sector_name].append({
                                         'symbol': stock.symbol,
-                                        'name': getattr(stock, 'name', None) or stock.symbol,
+                                        'name': getattr(stock, 'company_name', None) or stock.symbol,
                                         'price': price
                                     })
                 
@@ -838,91 +1020,167 @@ class PremiumMutations(graphene.ObjectType):
                         estimated_improvement="N/A"
                     )
                 
-                # Cache the results for 5 minutes to speed up repeated calls
-                cache.set(cache_key, sector_stocks, 300)
+                # Cache the results for 15 minutes to speed up repeated calls
+                cache.set(cache_key, sector_stocks, 900)  # 15 minutes
             
+            # Process rebalancing suggestions (dry run or actual execution)
             for suggestion in recommendations['rebalance_suggestions'][:3]:  # Limit to top 3 suggestions
                 action = suggestion['action']
                 current_alloc = suggestion['current_allocation']
                 suggested_alloc = suggestion['suggested_allocation']
-                
+            
                 # Calculate change percentage
                 change_pct = abs(suggested_alloc - current_alloc)
                 
                 # Only apply if change is within max_rebalance_percentage
                 if change_pct <= max_rebalance_percentage:
                     changes_made.append(f"{action}: {current_alloc:.1f}% → {suggested_alloc:.1f}%")
-                    
-                    # Generate specific stock trades based on the action
-                    if "Increase Technology" in action:
-                        # Find technology-related stocks
-                        tech_sectors = [sector for sector in sector_stocks.keys() if 'tech' in sector.lower() or 'technology' in sector.lower()]
-                        if tech_sectors:
-                            tech_stocks = sector_stocks[tech_sectors[0]][:2]  # Buy top 2 tech stocks
-                            for stock in tech_stocks:
-                                shares = max(1, int((float(portfolio.total_value) * 0.05) / stock['price']))  # 5% of portfolio per stock
-                                trade_value = shares * stock['price']
-                                stock_trades.append(StockTradeType(
-                                    symbol=stock['symbol'],
-                                    company_name=stock['name'],
-                                    action="BUY",
-                                    shares=shares,
-                                    price=stock['price'],
-                                    total_value=trade_value,
-                                    reason="Increase Technology sector exposure"
-                                ))
-                                # Calculate transaction cost (0.1% of trade value)
-                                cost = trade_value * 0.001
-                                total_cost += cost
-                    
-                    elif "Increase Healthcare" in action:
-                        # Find healthcare-related stocks
-                        health_sectors = [sector for sector in sector_stocks.keys() if 'health' in sector.lower() or 'healthcare' in sector.lower() or 'medical' in sector.lower()]
-                        if health_sectors:
-                            health_stocks = sector_stocks[health_sectors[0]][:2]  # Buy top 2 healthcare stocks
-                            for stock in health_stocks:
-                                shares = max(1, int((float(portfolio.total_value) * 0.05) / stock['price']))  # 5% of portfolio per stock
-                                trade_value = shares * stock['price']
-                                stock_trades.append(StockTradeType(
-                                    symbol=stock['symbol'],
-                                    company_name=stock['name'],
-                                    action="BUY",
-                                    shares=shares,
-                                    price=stock['price'],
-                                    total_value=trade_value,
-                                    reason="Increase Healthcare sector exposure"
-                                ))
-                                # Calculate transaction cost (0.1% of trade value)
-                                cost = trade_value * 0.001
-                                total_cost += cost
-                    
-                    elif "Reduce Consumer Cyclical" in action:
-                        # Sell consumer cyclical stocks (simulate selling existing holdings)
-                        consumer_stocks = sector_stocks['Consumer Cyclical'][:2]  # Sell top 2 consumer stocks
-                        for stock in consumer_stocks:
-                            shares = max(1, int((float(portfolio.total_value) * 0.03) / stock['price']))  # 3% of portfolio per stock
+                
+                # Generate specific stock trades based on the action
+                if "Increase Technology" in action:
+                    # Find technology-related stocks
+                    tech_sectors = [sector for sector in sector_stocks.keys() if 'tech' in sector.lower() or 'technology' in sector.lower()]
+                    if tech_sectors:
+                        tech_stocks = sector_stocks[tech_sectors[0]][:2]  # Buy top 2 tech stocks
+                        for stock in tech_stocks:
+                            shares = max(1, int((float(portfolio.total_value) * 0.05) / stock['price']))  # 5% of portfolio per stock
+                            trade_value = shares * stock['price']
+                            
+                            # Add to stock trades (always for dry run, execute if not dry run)
                             stock_trades.append(StockTradeType(
                                 symbol=stock['symbol'],
                                 company_name=stock['name'],
-                                action="SELL",
+                                action="BUY",
                                 shares=shares,
                                 price=stock['price'],
-                                total_value=shares * stock['price'],
-                                reason="Reduce Consumer Cyclical sector exposure"
+                                total_value=trade_value,
+                                reason="Increase Technology sector exposure"
                             ))
-                    
-                            # Simulate transaction cost (0.1% of trade value)
-                            trade_value = shares * stock['price']
+                            
+                            # Only execute actual trades if not dry run
+                            if not dry_run:
+                                try:
+                                    # Find the stock by symbol (optimized query)
+                                    stock_obj = Stock.objects.only('id', 'symbol').get(symbol=stock['symbol'])
+                                    PortfolioService.add_holding_to_portfolio(
+                                        user=portfolio.user,
+                                        stock_id=stock_obj.id,
+                                        shares=shares,
+                                        portfolio_name="AI Rebalanced Portfolio",
+                                        current_price=stock['price']
+                                    )
+                                    print(f"✅ Added {shares} shares of {stock['symbol']} to portfolio")
+                                except Stock.DoesNotExist:
+                                    print(f"❌ Stock {stock['symbol']} not found in database")
+                                    continue
+                            
+                            # Calculate transaction cost (0.1% of trade value)
                             cost = trade_value * 0.001
                             total_cost += cost
+                    
+                elif "Increase Healthcare" in action:
+                    # Find healthcare-related stocks
+                    health_sectors = [sector for sector in sector_stocks.keys() if 'health' in sector.lower() or 'healthcare' in sector.lower() or 'medical' in sector.lower()]
+                    if health_sectors:
+                        health_stocks = sector_stocks[health_sectors[0]][:2]  # Buy top 2 healthcare stocks
+                        for stock in health_stocks:
+                            shares = max(1, int((float(portfolio.total_value) * 0.05) / stock['price']))  # 5% of portfolio per stock
+                            trade_value = shares * stock['price']
+                            
+                            # Add to stock trades (always for dry run, execute if not dry run)
+                            stock_trades.append(StockTradeType(
+                                symbol=stock['symbol'],
+                                company_name=stock['name'],
+                                action="BUY",
+                                shares=shares,
+                                price=stock['price'],
+                                total_value=trade_value,
+                                reason="Increase Healthcare sector exposure"
+                            ))
+                            
+                            # Only execute actual trades if not dry run
+                            if not dry_run:
+                                try:
+                                    # Find the stock by symbol (optimized query)
+                                    stock_obj = Stock.objects.only('id', 'symbol').get(symbol=stock['symbol'])
+                                    PortfolioService.add_holding_to_portfolio(
+                                        user=portfolio.user,
+                                        stock_id=stock_obj.id,
+                                        shares=shares,
+                                        portfolio_name="AI Rebalanced Portfolio",
+                                        current_price=stock['price']
+                                    )
+                                    print(f"✅ Added {shares} shares of {stock['symbol']} to portfolio")
+                                except Stock.DoesNotExist:
+                                    print(f"❌ Stock {stock['symbol']} not found in database")
+                                    continue
+                            
+                            # Calculate transaction cost (0.1% of trade value)
+                            cost = trade_value * 0.001
+                            total_cost += cost
+                    
+                elif "Reduce Consumer Cyclical" in action:
+                    # Sell consumer cyclical stocks (actually remove from portfolio)
+                    consumer_stocks = sector_stocks['Consumer Cyclical'][:2]  # Sell top 2 consumer stocks
+                    for stock in consumer_stocks:
+                        shares = max(1, int((float(portfolio.total_value) * 0.03) / stock['price']))  # 3% of portfolio per stock
+                        
+                        # Add to stock trades (always for dry run, execute if not dry run)
+                        stock_trades.append(StockTradeType(
+                            symbol=stock['symbol'],
+                            company_name=stock['name'],
+                            action="SELL",
+                            shares=shares,
+                            price=stock['price'],
+                            total_value=shares * stock['price'],
+                            reason="Reduce Consumer Cyclical sector exposure"
+                        ))
+                        
+                        # Only execute actual trades if not dry run
+                        if not dry_run:
+                            try:
+                                # Find the stock by symbol
+                                stock_obj = Stock.objects.get(symbol=stock['symbol'])
+                                # Find existing portfolio holding
+                                existing_holding = Portfolio.objects.filter(
+                                    user=portfolio.user,
+                                    stock=stock_obj
+                                ).first()
+                                
+                                if existing_holding:
+                                    # Reduce shares or remove if selling all
+                                    if existing_holding.shares <= shares:
+                                        existing_holding.delete()
+                                        print(f"✅ Removed {stock['symbol']} from portfolio")
+                                    else:
+                                        existing_holding.shares -= shares
+                                        existing_holding.save()
+                                        print(f"✅ Reduced {shares} shares of {stock['symbol']} from portfolio")
+                                else:
+                                    print(f"⚠️ Stock {stock['symbol']} not found in portfolio")
+                                    continue
+                            except Stock.DoesNotExist:
+                                print(f"❌ Stock {stock['symbol']} not found in database")
+                                continue
+                        
+                        # Calculate transaction cost (0.1% of trade value)
+                        trade_value = shares * stock['price']
+                        cost = trade_value * 0.001
+                        total_cost += cost
             
             # Calculate estimated improvement
             diversification_score = recommendations.get('portfolio_analysis', {}).get('diversification_score', 0)
             estimated_improvement = f"Expected diversification score improvement: {diversification_score:.1f} → {min(diversification_score + 15, 100):.1f}"
             
+            # Determine message based on dry run status
+            if dry_run:
+                message = f"Preview: {len(changes_made)} changes and {len(stock_trades)} trades would be executed (no actual trades made)"
+            else:
+                message = f"Successfully rebalanced portfolio with {len(changes_made)} changes and {len(stock_trades)} trades"
+            
             return RebalanceResultType(
                 success=True,
-                message=f"Successfully rebalanced portfolio with {len(changes_made)} changes and {len(stock_trades)} trades",
+                message=message,
                 changes_made=changes_made,
                 stock_trades=stock_trades,
                 new_portfolio_value=float(portfolio.total_value),
