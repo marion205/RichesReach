@@ -48,16 +48,7 @@ const AIOptionsScreen: React.FC<AIOptionsScreenProps> = ({ navigation }) => {
     }
   }, [riskTolerance]);
 
-  // Auto-reload when symbol changes with debounce
-  useEffect(() => {
-    if (symbol && symbol.length >= 1) {
-      const timeoutId = setTimeout(() => {
-        loadRecommendations();
-      }, 1000); // 1 second debounce
-
-      return () => clearTimeout(timeoutId);
-    }
-  }, [symbol]);
+  // Note: Symbol changes only trigger reload when search button is pressed
 
   const loadRecommendations = async () => {
     try {
@@ -349,23 +340,21 @@ const AIOptionsScreen: React.FC<AIOptionsScreenProps> = ({ navigation }) => {
               <TextInput
                 style={styles.symbolInput}
                 value={symbol}
-                onChangeText={(text) => {
-                  setSymbol(text);
-                  // Show loading when user is typing
-                  if (text.length >= 1) {
-                    setLoading(true);
-                  }
-                }}
+                onChangeText={setSymbol}
                 placeholder="Symbol (e.g., AAPL)"
                 placeholderTextColor="#8E8E93"
                 autoCapitalize="characters"
               />
               <TouchableOpacity
-                style={styles.searchButton}
+                style={[styles.searchButton, loading && styles.searchButtonDisabled]}
                 onPress={loadRecommendations}
                 disabled={loading}
               >
-                <Icon name="search" size={20} color="#fff" />
+                {loading ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Icon name="search" size={20} color="#fff" />
+                )}
               </TouchableOpacity>
             </View>
 
@@ -427,7 +416,7 @@ const AIOptionsScreen: React.FC<AIOptionsScreenProps> = ({ navigation }) => {
             <View style={styles.statusMessage}>
               <ActivityIndicator size="small" color="#007AFF" />
               <Text style={styles.statusText}>
-                {symbol !== 'AAPL' ? `Loading data for ${symbol}...` : 'Loading recommendations...'}
+                Loading AI recommendations for {symbol}...
               </Text>
             </View>
           )}
@@ -534,6 +523,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 8,
+  },
+  searchButtonDisabled: {
+    backgroundColor: '#8E8E93',
+    opacity: 0.6,
   },
   parameterRow: {
     flexDirection: 'row',
