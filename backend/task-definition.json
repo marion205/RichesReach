@@ -11,7 +11,7 @@
   "containerDefinitions": [
     {
       "name": "ai-service",
-      "image": "python:3.10-slim",
+      "image": "498606688292.dkr.ecr.us-east-1.amazonaws.com/riches-reach-ai-ai-service:latest",
       "portMappings": [
         {
           "containerPort": 8000,
@@ -20,10 +20,15 @@
       ],
       "essential": true,
       "workingDirectory": "/app",
-      "command": [
-        "/bin/bash",
-        "-c",
-        "pip install fastapi uvicorn && mkdir -p /app && cd /app && python -c \"import urllib.request; urllib.request.urlretrieve('https://riches-reach-ai-models-498606688292.s3.amazonaws.com/deployments/riches-reach-ai-latest.zip', '/tmp/code.zip'); import zipfile; zipfile.ZipFile('/tmp/code.zip').extractall('.'); import subprocess; subprocess.run(['uvicorn', 'main:app', '--host', '0.0.0.0', '--port', '8000'])\""
+      "environment": [
+        {
+          "name": "ENVIRONMENT",
+          "value": "production"
+        },
+        {
+          "name": "AWS_REGION",
+          "value": "us-east-1"
+        }
       ],
       "logConfiguration": {
         "logDriver": "awslogs",
