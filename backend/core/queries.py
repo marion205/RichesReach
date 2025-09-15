@@ -26,13 +26,7 @@ class Query(graphene.ObjectType):
     # Stock queries
     stocks = graphene.List(StockType, search=graphene.String(required=False))
     stock = graphene.Field(StockType, symbol=graphene.String(required=True))
-    # my_watchlist = graphene.List(WatchlistItemType)  # TODO: Uncomment when WatchlistItemType is available
     beginner_friendly_stocks = graphene.List(StockType)
-    
-    # Rust Engine queries - TODO: Uncomment when types are available
-    # rust_stock_analysis = graphene.Field(RustStockAnalysisType, symbol=graphene.String(required=True))
-    # rust_recommendations = graphene.List(RustRecommendationType)
-    # rust_health = graphene.Field(RustHealthType)
     
     # AI Portfolio queries
     ai_portfolio_recommendations = graphene.List(AIPortfolioRecommendationType, userId=graphene.ID(required=True))
@@ -41,8 +35,6 @@ class Query(graphene.ObjectType):
     my_portfolios = graphene.Field('core.portfolio_types.PortfolioSummaryType')
     portfolio_names = graphene.List(graphene.String)
     portfolio_value = graphene.Float()
-    
-    # Regular portfolio analytics (not premium)
     portfolio_metrics = graphene.Field('core.premium_types.PortfolioMetricsType')
     
     # Stock price queries
@@ -53,8 +45,21 @@ class Query(graphene.ObjectType):
     test_ai_recommendations = graphene.Field('core.premium_types.AIRecommendationsType')
     test_stock_screening = graphene.List('core.premium_types.StockScreeningResultType')
     test_options_analysis = graphene.Field('core.premium_types.OptionsAnalysisType', symbol=graphene.String(required=True))
-
-    # Phase 3 Social Features - TODO: Uncomment when types are available
+    
+    # Advanced stock screening query
+    advanced_stock_screening = graphene.List(
+        'core.premium_types.StockScreeningResultType',
+        sector=graphene.String(required=False),
+        min_market_cap=graphene.Float(required=False),
+        max_market_cap=graphene.Float(required=False),
+        min_pe_ratio=graphene.Float(required=False),
+        max_pe_ratio=graphene.Float(required=False),
+        min_beginner_score=graphene.Int(required=False),
+        sort_by=graphene.String(required=False),
+        limit=graphene.Int(required=False)
+    )
+    
+    # Phase 3 Social Features
     watchlists = graphene.List(WatchlistType, user_id=graphene.ID())
     watchlist = graphene.Field(WatchlistType, id=graphene.ID(required=True))
     public_watchlists = graphene.List(WatchlistType)
@@ -64,17 +69,8 @@ class Query(graphene.ObjectType):
     # Discussion queries (Reddit-style)
     stock_discussions = graphene.List('core.types.StockDiscussionType', stock_symbol=graphene.String(required=False), limit=graphene.Int(required=False))
     discussion_detail = graphene.Field('core.types.StockDiscussionType', id=graphene.ID(required=True))
-    # stock_discussions = graphene.List(StockDiscussionType, stock_symbol=graphene.String())
-    # trending_discussions = graphene.List(StockDiscussionType)
-    # user_discussions = graphene.List(StockDiscussionType, user_id=graphene.ID())
-    # discussion = graphene.Field(StockDiscussionType, id=graphene.ID(required=True))
-    # portfolios = graphene.List(PortfolioType, user_id=graphene.ID())
-    # portfolio = graphene.Field(PortfolioType, id=graphene.ID(required=True))
-    # public_portfolios = graphene.List(PortfolioType)
-    # price_alerts = graphene.List(PriceAlertType, user_id=graphene.ID())
+    
     social_feed = graphene.List('core.types.StockDiscussionType')
-    # user_achievements = graphene.List(UserAchievementType, user_id=graphene.ID())
-    # stock_sentiment = graphene.Field(StockSentimentType, stock_symbol=graphene.String())
     top_performers = graphene.List(StockType)
     market_sentiment = graphene.Field(graphene.JSONString)
 
@@ -85,13 +81,12 @@ class Query(graphene.ObjectType):
         # Exclude current user and return users they don't follow
         return User.objects.exclude(id=user.id).exclude(
             id__in=user.following.values_list('following', flat=True)
-        )[:20]  # Limit to 20 users
+        )[:20] # Limit to 20 users
 
     def resolve_search_users(root, info, query=None):
         user = info.context.user
         if user.is_anonymous:
             return []
-        
         if query:
             # Search by name or email
             users = User.objects.filter(
@@ -103,8 +98,7 @@ class Query(graphene.ObjectType):
             users = User.objects.exclude(id=user.id).exclude(
                 id__in=user.following.values_list('following', flat=True)
             )
-        
-        return users[:20]  # Limit results
+        return users[:20] # Limit results
 
     def resolve_me(root, info):
         user = info.context.user
@@ -116,21 +110,19 @@ class Query(graphene.ObjectType):
         user = info.context.user
         if user.is_anonymous:
             return []
-        
         # Get users that the current user follows
         following_users = user.following.values_list('following', flat=True)
-        
         # Return posts from followed users + current user's own posts
         return Post.objects.filter(
             user__in=list(following_users) + [user]
         ).select_related("user").order_by("-created_at")
-    
+
     def resolve_my_chat_sessions(self, info):
         user = info.context.user
         if user.is_anonymous:
             return []
         return ChatSession.objects.filter(user=user).order_by('-updated_at')
-    
+
     def resolve_chat_session(self, info, id):
         user = info.context.user
         if user.is_anonymous:
@@ -139,7 +131,7 @@ class Query(graphene.ObjectType):
             return ChatSession.objects.get(id=id, user=user)
         except ChatSession.DoesNotExist:
             return None
-    
+
     def resolve_chat_messages(self, info, session_id):
         user = info.context.user
         if user.is_anonymous:
@@ -149,27 +141,27 @@ class Query(graphene.ObjectType):
             return session.messages.all()
         except ChatSession.DoesNotExist:
             return []
-    
+
     def resolve_user(self, info, id):
         try:
             return User.objects.get(id=id)
         except User.DoesNotExist:
             return None
-    
+
     def resolve_user_posts(self, info, user_id):
         try:
             user = User.objects.get(id=user_id)
             return user.posts.all().order_by('-created_at')
         except User.DoesNotExist:
             return []
-    
+
     def resolve_post_comments(self, info, post_id):
         try:
             post = Post.objects.get(id=post_id)
             return post.comments.all().order_by('-created_at')
         except Post.DoesNotExist:
             return []
-    
+
     def resolve_stocks(self, info, search=None):
         """Get all stocks or search by symbol/company name"""
         if search:
@@ -177,18 +169,15 @@ class Query(graphene.ObjectType):
             db_stocks = Stock.objects.filter(
                 models.Q(symbol__icontains=search.upper()) |
                 models.Q(company_name__icontains=search)
-            )[:50]  # Limit search results
-            
+            )[:50] # Limit search results
             # If we have results, return them
             if db_stocks.exists():
                 return db_stocks
-            
             # If no results, try API search
             try:
                 from .stock_service import AlphaVantageService
                 service = AlphaVantageService()
                 api_stocks = service.search_and_sync_stocks(search)
-                
                 if api_stocks:
                     return api_stocks
                 else:
@@ -196,84 +185,214 @@ class Query(graphene.ObjectType):
             except Exception as e:
                 print(f"API search error: {e}")
                 return Stock.objects.none()
-        
-        return Stock.objects.all()[:100]  # Limit to 100 stocks
-    
+        return Stock.objects.all()[:100] # Limit to 100 stocks
+
     def resolve_stock(self, info, symbol):
         """Get a specific stock by symbol"""
         try:
             return Stock.objects.get(symbol=symbol.upper())
         except Stock.DoesNotExist:
             return None
-    
-    def resolve_my_watchlist(self, info):
-        """Get current user's watchlist items"""
-        user = info.context.user
-        if user.is_anonymous:
-            return []
-        
-        # Get all watchlist items from all user's watchlists
-        from .models import WatchlistItem
-        return WatchlistItem.objects.filter(
-            watchlist__user=user
-        ).select_related('stock', 'watchlist').order_by('-added_at')
-    
+
     def resolve_beginner_friendly_stocks(self, info):
         """Get stocks suitable for beginner investors (under $30k/year)"""
         return Stock.objects.filter(
-            beginner_friendly_score__gte=65,  # Moderate beginner-friendly score
-            market_cap__gte=10000000000,     # Mid to large cap companies (>$10B)
+            beginner_friendly_score__gte=65, # Moderate beginner-friendly score
+            market_cap__gte=10000000000, # Mid to large cap companies (>$10B)
         ).order_by('-beginner_friendly_score')[:20]
-    
-    
-    def resolve_rust_recommendations(self, info):
-        """Get beginner-friendly recommendations from Rust engine"""
+
+    def resolve_ai_portfolio_recommendations(self, info, userId):
+        """Get AI portfolio recommendations for a user"""
         try:
-            from .stock_service import AlphaVantageService
-            service = AlphaVantageService()
-            recommendations = service.get_rust_recommendations()
-            if recommendations:
-                return [
-                    RustRecommendationType(
-                        symbol=rec.get('symbol', ''),
-                        reason=rec.get('reason', ''),
-                        riskLevel=rec.get('riskLevel', 'Unknown'),
-                        beginnerScore=rec.get('beginnerScore', 0)
-                    )
-                    for rec in recommendations
-                ]
-            return []
+            return AIPortfolioRecommendation.objects.filter(user_id=userId).order_by('-created_at')
         except Exception as e:
-            print(f"Rust recommendations error: {e}")
+            print(f"AI recommendations error: {e}")
             return []
-    
-    def resolve_rust_health(root, info):
+
+    def resolve_my_portfolios(self, info):
+        """Get current user's portfolios"""
+        user = info.context.user
+        if user.is_anonymous:
+            return None
+        # This would return a summary of all user's portfolios
+        return {"portfolios": Portfolio.objects.filter(user=user)}
+
+    def resolve_portfolio_names(self, info):
+        """Get list of portfolio names for current user"""
+        user = info.context.user
+        if user.is_anonymous:
+            return []
+        return list(Portfolio.objects.filter(user=user).values_list('name', flat=True))
+
+    def resolve_portfolio_value(self, info):
+        """Get total portfolio value for current user"""
+        user = info.context.user
+        if user.is_anonymous:
+            return 0.0
+        # This would calculate total value across all portfolios
+        return 0.0  # Placeholder
+
+    def resolve_portfolio_metrics(self, info):
+        """Get portfolio metrics for current user"""
+        user = info.context.user
+        if user.is_anonymous:
+            return None
+        # This would return comprehensive portfolio metrics
+        return None  # Placeholder
+
+    def resolve_current_stock_prices(self, info, symbols):
+        """Get current stock prices for given symbols"""
+        # This would fetch real-time prices
+        return []  # Placeholder
+
+    def resolve_test_portfolio_metrics(self, info):
+        """Test endpoint for portfolio metrics"""
+        return None  # Placeholder
+
+    def resolve_test_ai_recommendations(self, info):
+        """Test endpoint for AI recommendations"""
+        return None  # Placeholder
+
+    def resolve_test_stock_screening(self, info):
+        """Test endpoint for stock screening"""
+        return []  # Placeholder
+
+    def resolve_advanced_stock_screening(self, info, sector=None, min_market_cap=None, max_market_cap=None, 
+                                        min_pe_ratio=None, max_pe_ratio=None, min_beginner_score=None, 
+                                        sort_by=None, limit=50):
+        """Advanced stock screening with filters"""
+        queryset = Stock.objects.all()
+        
+        # Apply filters
+        if sector:
+            queryset = queryset.filter(sector__icontains=sector)
+        if min_market_cap:
+            queryset = queryset.filter(market_cap__gte=min_market_cap)
+        if max_market_cap:
+            queryset = queryset.filter(market_cap__lte=max_market_cap)
+        if min_pe_ratio:
+            queryset = queryset.filter(pe_ratio__gte=min_pe_ratio)
+        if max_pe_ratio:
+            queryset = queryset.filter(pe_ratio__lte=max_pe_ratio)
+        if min_beginner_score:
+            queryset = queryset.filter(beginner_friendly_score__gte=min_beginner_score)
+        
+        # Apply sorting
+        if sort_by == 'ml_score':
+            queryset = queryset.order_by('-beginner_friendly_score')
+        elif sort_by == 'market_cap':
+            queryset = queryset.order_by('-market_cap')
+        elif sort_by == 'pe_ratio':
+            queryset = queryset.order_by('pe_ratio')
+        else:
+            queryset = queryset.order_by('symbol')
+        
+        # Apply limit
+        if limit:
+            queryset = queryset[:limit]
+        
+        # Convert to screening results format
+        results = []
+        for stock in queryset:
+            results.append({
+                'symbol': stock.symbol,
+                'company_name': stock.company_name,
+                'sector': stock.sector,
+                'market_cap': float(stock.market_cap) if stock.market_cap else None,
+                'pe_ratio': float(stock.pe_ratio) if stock.pe_ratio else None,
+                'dividend_yield': float(stock.dividend_yield) if stock.dividend_yield else None,
+                'beginner_friendly_score': stock.beginner_friendly_score,
+                'score': float(stock.beginner_friendly_score),  # For GraphQL schema
+                'ml_score': float(stock.beginner_friendly_score),  # For mobile app compatibility
+                'reasoning': f"Based on beginner-friendly score of {stock.beginner_friendly_score}",
+                'current_price': float(stock.current_price) if stock.current_price else None,
+                'volatility': float(stock.volatility) if stock.volatility else None,
+                'debt_ratio': float(stock.debt_ratio) if stock.debt_ratio else None,
+            })
+        
+        return results
+
+    def resolve_rust_stock_analysis(self, info, symbol):
+        """Rust engine stock analysis"""
         try:
-            from .stock_service import rust_stock_service
-            health = rust_stock_service.health_check()
-            return RustHealthType(
-                status=health.get('status', 'unknown'),
-                service='rust_stock_engine',
-                timestamp=timezone.now()
-            )
-        except Exception as e:
-            return RustHealthType(
-                status='error',
-                service='rust_stock_engine',
-                timestamp=timezone.now()
-            )
-    
-    # Phase 3 Social Feature Resolvers
-    def resolve_watchlists(root, info, user_id=None):
+            stock = Stock.objects.get(symbol=symbol)
+            
+            # Calculate analysis based on stock data
+            risk_level = "Low"
+            recommendation = "HOLD"
+            beginner_score = float(stock.beginner_friendly_score) if stock.beginner_friendly_score else 50.0
+            
+            # Determine risk level based on volatility
+            if stock.volatility:
+                if stock.volatility > 0.3:
+                    risk_level = "High"
+                elif stock.volatility > 0.15:
+                    risk_level = "Medium"
+                else:
+                    risk_level = "Low"
+            
+            # Determine recommendation based on beginner score and other factors
+            if beginner_score >= 80:
+                recommendation = "STRONG BUY"
+            elif beginner_score >= 60:
+                recommendation = "BUY"
+            elif beginner_score >= 40:
+                recommendation = "HOLD"
+            elif beginner_score >= 20:
+                recommendation = "SELL"
+            else:
+                recommendation = "AVOID"
+            
+            # Create technical indicators
+            technical_indicators = {
+                'rsi': 50.0,  # Placeholder
+                'macd': 0.0,  # Placeholder
+                'bollinger_bands': {'upper': 0, 'middle': 0, 'lower': 0},  # Placeholder
+                'moving_averages': {'sma_20': 0, 'sma_50': 0, 'sma_200': 0}  # Placeholder
+            }
+            
+            # Create fundamental analysis
+            fundamental_analysis = {
+                'pe_ratio': float(stock.pe_ratio) if stock.pe_ratio else None,
+                'market_cap': float(stock.market_cap) if stock.market_cap else None,
+                'debt_ratio': float(stock.debt_ratio) if stock.debt_ratio else None,
+                'dividend_yield': float(stock.dividend_yield) if stock.dividend_yield else None
+            }
+            
+            # Create reasoning
+            reasoning = [
+                f"Beginner-friendly score: {beginner_score}/100",
+                f"Risk level: {risk_level}",
+                f"Volatility: {float(stock.volatility) if stock.volatility else 'N/A'}",
+                f"PE Ratio: {float(stock.pe_ratio) if stock.pe_ratio else 'N/A'}"
+            ]
+            
+            return {
+                'symbol': symbol,
+                'beginnerFriendlyScore': beginner_score,  # Match GraphQL field name
+                'riskLevel': risk_level,  # Match GraphQL field name
+                'recommendation': recommendation,
+                'technicalIndicators': technical_indicators,  # Match GraphQL field name
+                'fundamentalAnalysis': fundamental_analysis,  # Match GraphQL field name
+                'reasoning': reasoning
+            }
+            
+        except Stock.DoesNotExist:
+            return None
+
+    def resolve_test_options_analysis(self, info, symbol):
+        """Test endpoint for options analysis"""
+        return None  # Placeholder
+
+    def resolve_watchlists(self, root, info, user_id=None):
         user = info.context.user
         if not user.is_authenticated:
             return []
-        
         if user_id:
             return Watchlist.objects.filter(user_id=user_id, is_public=True)
         return Watchlist.objects.filter(user=user)
-    
-    def resolve_watchlist(root, info, id):
+
+    def resolve_watchlist(self, root, info, id):
         try:
             watchlist = Watchlist.objects.get(id=id)
             if watchlist.is_public or watchlist.user == info.context.user:
@@ -281,390 +400,52 @@ class Query(graphene.ObjectType):
             return None
         except Watchlist.DoesNotExist:
             return None
-    
-    def resolve_public_watchlists(root, info):
+
+    def resolve_public_watchlists(self, root, info):
         return Watchlist.objects.filter(is_public=True).order_by('-created_at')[:20]
-    
-    def resolve_stock_discussions(root, info, stock_symbol=None):
-        if stock_symbol:
-            return StockDiscussion.objects.filter(stock__symbol=stock_symbol.upper()).order_by('-created_at')
-        return StockDiscussion.objects.all().order_by('-created_at')[:50]
-    
-    def resolve_trending_discussions(root, info):
-        # Get discussions with most likes in the last 7 days
-        from django.utils import timezone
-        from datetime import timedelta
-        
-        week_ago = timezone.now() - timedelta(days=7)
-        return StockDiscussion.objects.filter(
-            created_at__gte=week_ago
-        ).annotate(
-            like_count=models.Count('likes')
-        ).order_by('-like_count', '-created_at')[:20]
-    
-    def resolve_user_discussions(root, info, user_id=None):
-        if user_id:
-            return StockDiscussion.objects.filter(user_id=user_id).order_by('-created_at')
+
+    def resolve_my_watchlist(self, info):
+        """Get current user's watchlist items"""
         user = info.context.user
-        if user.is_authenticated:
-            return StockDiscussion.objects.filter(user=user).order_by('-created_at')
-        return []
-    
-    def resolve_discussion(root, info, id):
+        if user.is_anonymous:
+            return []
+        return Watchlist.objects.filter(user=user)
+
+
+    def resolve_stock_discussions(self, root, info, stock_symbol=None, limit=None):
+        if stock_symbol:
+            discussions = StockDiscussion.objects.filter(stock__symbol=stock_symbol.upper()).order_by('-created_at')
+        else:
+            discussions = StockDiscussion.objects.all().order_by('-created_at')
+        
+        if limit:
+            discussions = discussions[:limit]
+        else:
+            discussions = discussions[:50]
+        
+        return discussions
+
+    def resolve_discussion_detail(self, root, info, id):
         try:
             return StockDiscussion.objects.get(id=id)
         except StockDiscussion.DoesNotExist:
             return None
-    
-    def resolve_portfolios(root, info, user_id=None):
-        user = info.context.user
-        if not user.is_authenticated:
-            return []
-        
-        if user_id:
-            return Portfolio.objects.filter(user_id=user_id, is_public=True)
-        return Portfolio.objects.filter(user=user)
-    
-    def resolve_portfolio(root, info, id):
-        try:
-            portfolio = Portfolio.objects.get(id=id)
-            if portfolio.is_public or portfolio.user == info.context.user:
-                return portfolio
-            return None
-        except Portfolio.DoesNotExist:
-            return None
-    
-    def resolve_public_portfolios(root, info):
-        return Portfolio.objects.filter(is_public=True).order_by('-created_at')[:20]
-    
-    def resolve_price_alerts(root, info, user_id=None):
-        user = info.context.user
-        if not user.is_authenticated:
-            return []
-        
-        if user_id and user_id == str(user.id):
-            return PriceAlert.objects.filter(user=user, is_active=True)
-        return []
-    
-    def resolve_social_feed(root, info):
+
+    def resolve_social_feed(self, root, info):
         """Get personalized feed - only posts from followed users + user's own posts"""
         user = info.context.user
         if not user.is_authenticated:
             return []
-        
         # Get posts from followed users + user's own posts
-        # This shows only follower-only posts (not public posts)
         followed_users = user.following.values_list('following', flat=True)
         return StockDiscussion.objects.filter(
             models.Q(user__in=followed_users) | models.Q(user=user)
         ).order_by('-created_at')[:50]
-    
-    def resolve_user_achievements(root, info, user_id=None):
-        if user_id:
-            return UserAchievement.objects.filter(user_id=user_id).order_by('-earned_at')
-        user = info.context.user
-        if user.is_authenticated:
-            return UserAchievement.objects.filter(user=user).order_by('-earned_at')
-        return []
-    
-    def resolve_stock_sentiment(root, info, stock_symbol):
-        try:
-            stock = Stock.objects.get(symbol=stock_symbol.upper())
-            sentiment, created = StockSentiment.objects.get_or_create(stock=stock)
-            return sentiment
-        except Stock.DoesNotExist:
-            return None
-    
-    def resolve_top_performers(root, info):
-        # Get stocks with highest beginner-friendly scores
-        return Stock.objects.filter(
-            beginner_friendly_score__isnull=False
-        ).order_by('-beginner_friendly_score')[:10]
-    
-    def resolve_market_sentiment(root, info):
-        # Aggregate sentiment across all stocks
-        sentiments = StockSentiment.objects.all()
-        if sentiments.exists():
-            avg_sentiment = sum(s.sentiment_score for s in sentiments) / sentiments.count()
-            total_votes = sum(s.total_votes for s in sentiments)
-            
-            return {
-                'average_sentiment': float(avg_sentiment),
-                'total_votes': total_votes,
-                'stocks_tracked': sentiments.count(),
-                'market_mood': 'bullish' if avg_sentiment > 0.1 else 'bearish' if avg_sentiment < -0.1 else 'neutral'
-            }
-        return {
-            'average_sentiment': 0,
-            'total_votes': 0,
-            'stocks_tracked': 0,
-            'market_mood': 'neutral'
-        }
-    
-    def resolve_ai_portfolio_recommendations(root, info, userId):
-        """Get AI portfolio recommendations for a user"""
-        user = info.context.user
-        if user.is_anonymous:
-            return []
-        
-        # Only allow users to see their own recommendations
-        if str(user.id) != str(userId):
-            return []
-        
-        from .models import AIPortfolioRecommendation
-        return AIPortfolioRecommendation.objects.filter(user=user).order_by('-created_at')
 
-    def resolve_my_watchlist(self, info):
-        """Get current user's watchlist"""
-        user = info.context.user
-        if user.is_anonymous:
-            return []
-        
-        from .models import Watchlist
-        return Watchlist.objects.filter(user=user).order_by('-added_at')
+    def resolve_top_performers(self, info):
+        """Get top performing stocks"""
+        return Stock.objects.all().order_by('-price_change_percent')[:20]
 
-    def resolve_rust_stock_analysis(self, info, symbol):
-        """Get Rust engine stock analysis (mock implementation)"""
-        from .types import RustStockAnalysisType, TechnicalIndicatorsType, FundamentalAnalysisType
-        
-        # Mock analysis data - in a real implementation, this would call the Rust engine
-        return RustStockAnalysisType(
-            symbol=symbol.upper(),
-            beginnerFriendlyScore=7.5,
-            riskLevel="Medium",
-            recommendation="Hold",
-            technicalIndicators=TechnicalIndicatorsType(
-                rsi=45.2,
-                macd=0.15,
-                macdSignal=0.12,
-                macdHistogram=0.03,
-                sma20=150.25,
-                sma50=148.75,
-                ema12=150.10,
-                ema26=149.85,
-                bollingerUpper=155.50,
-                bollingerLower=145.00,
-                bollingerMiddle=150.25
-            ),
-            fundamentalAnalysis=FundamentalAnalysisType(
-                valuationScore=6.8,
-                growthScore=7.2,
-                stabilityScore=8.1,
-                dividendScore=5.5,
-                debtScore=7.9
-            ),
-            reasoning=[
-                f"Based on technical and fundamental analysis, {symbol.upper()} shows moderate growth potential with balanced risk.",
-                "The stock is trading near its moving averages with positive momentum indicators.",
-                "RSI indicates neutral momentum with room for upward movement.",
-                "MACD shows bullish crossover potential in the near term.",
-                "Fundamental metrics suggest stable financial health and growth prospects."
-            ]
-        )
-    
-    def resolve_stock_discussions(self, info, stock_symbol=None, limit=20):
-        """Get stock discussions (Reddit-style) - shows public posts and posts from followed users"""
-        user = info.context.user
-        
-        if user.is_anonymous:
-            # Anonymous users only see public posts
-            discussions = StockDiscussion.objects.filter(visibility='public')
-        else:
-            # Authenticated users see:
-            # 1. All public posts
-            # 2. Posts from users they follow (regardless of visibility)
-            # 3. Their own posts (regardless of visibility)
-            followed_users = user.following.values_list('following', flat=True)
-            discussions = StockDiscussion.objects.filter(
-                models.Q(visibility='public') |  # Public posts
-                models.Q(user__in=followed_users) |  # Posts from followed users
-                models.Q(user=user)  # User's own posts
-            ).distinct()
-        
-        if stock_symbol:
-            try:
-                stock = Stock.objects.get(symbol=stock_symbol.upper())
-                discussions = discussions.filter(stock=stock)
-            except Stock.DoesNotExist:
-                return []
-        
-        return discussions.order_by('-created_at')[:limit]
-    
-    def resolve_discussion_detail(self, info, id):
-        """Get detailed discussion with comments"""
-        try:
-            return StockDiscussion.objects.get(id=id)
-        except StockDiscussion.DoesNotExist:
-            return None
-
-    def resolve_social_feed(self, info):
-        """Get social feed - posts from users the current user follows"""
-        user = info.context.user
-        
-        if user.is_anonymous:
-            # Anonymous users see no social feed
-            return []
-        
-        # Get users that the current user follows
-        followed_users = user.following.values_list('following', flat=True)
-        
-        if not followed_users:
-            # If user isn't following anyone, return empty list
-            return []
-        
-        # Return posts from followed users only
-        discussions = StockDiscussion.objects.filter(
-            user__in=followed_users
-        ).select_related('user', 'stock').prefetch_related('comments').order_by('-created_at')
-        
-        return discussions
-
-    def resolve_my_portfolio(self, info):
-        """Get current user's portfolio"""
-        user = info.context.user
-        if user.is_anonymous:
-            return []
-        return Portfolio.objects.filter(user=user)
-
-    def resolve_portfolio_value(self, info):
-        """Get current user's total portfolio value"""
-        user = info.context.user
-        if user.is_anonymous:
-            return 0
-        
-        portfolio_items = Portfolio.objects.filter(user=user)
-        total_value = sum(item.total_value for item in portfolio_items)
-        return total_value
-    
-    def resolve_current_stock_prices(self, info, symbols=None):
-        """Get current stock prices with enhanced real-time data"""
-        import asyncio
-        import logging
-        
-        logger = logging.getLogger(__name__)
-        
-        if not symbols:
-            return []
-        
-        try:
-            # Use enhanced stock service for real-time prices
-            from .enhanced_stock_service import enhanced_stock_service
-            
-            # Get real-time prices asynchronously
-            async def get_prices():
-                return await enhanced_stock_service.get_multiple_prices(symbols)
-            
-            # Run async function
-            prices_data = asyncio.run(get_prices())
-            
-            prices = []
-            for symbol in symbols:
-                price_data = prices_data.get(symbol)
-                if price_data and price_data.get('price', 0) > 0:
-                    prices.append({
-                        'symbol': symbol,
-                        'current_price': price_data['price'],
-                        'change': price_data.get('change', 0.0),
-                        'change_percent': price_data.get('change_percent', '0%'),
-                        'last_updated': price_data.get('last_updated', timezone.now().isoformat()),
-                        'source': price_data.get('source', 'unknown'),
-                        'verified': price_data.get('verified', False),
-                        'api_response': price_data
-                    })
-                    
-                    # Log price source
-                    if price_data.get('verified'):
-                        logger.info(f"Real-time price for {symbol}: ${price_data['price']} from {price_data.get('source')}")
-                    else:
-                        logger.info(f"Using fallback price for {symbol}: ${price_data['price']}")
-                    
-                    # Update database with new price
-                    enhanced_stock_service.update_stock_price_in_database(symbol, price_data)
-                else:
-                    logger.warning(f"No price data available for {symbol}")
-            
-            return prices
-            
-        except Exception as e:
-            logger.error(f"Error getting current stock prices: {e}")
-            
-            # Fallback to database prices
-            prices = []
-            for symbol in symbols:
-                try:
-                    stock = Stock.objects.get(symbol=symbol.upper())
-                    if stock.current_price:
-                        prices.append({
-                            'symbol': symbol,
-                            'current_price': float(stock.current_price),
-                            'change': 0.0,
-                            'change_percent': '0%',
-                            'last_updated': stock.last_updated.isoformat() if stock.last_updated else timezone.now().isoformat(),
-                            'source': 'database',
-                            'verified': False,
-                            'api_response': None
-                        })
-                        logger.info(f"💾 Database fallback for {symbol}: ${stock.current_price}")
-                except Stock.DoesNotExist:
-                    logger.warning(f"Stock {symbol} not found in database")
-                except Exception as e:
-                    logger.error(f"Error getting database price for {symbol}: {e}")
-            
-            return prices
-    
-    def resolve_my_portfolios(self, info):
-        """Get all portfolios for the current user"""
-        user = info.context.user
-        if not user or user.is_anonymous:
-            return None
-        
-        from .portfolio_service import PortfolioService
-        return PortfolioService.get_user_portfolios(user)
-    
-    def resolve_portfolio_names(self, info):
-        """Get list of portfolio names for the current user"""
-        user = info.context.user
-        if not user or user.is_anonymous:
-            return []
-        
-        from .portfolio_service import PortfolioService
-        return PortfolioService.get_portfolio_names(user)
-    
-    def resolve_portfolio_metrics(self, info):
-        """Get portfolio metrics (regular feature, not premium)"""
-        from .premium_analytics import PremiumAnalyticsService
-        service = PremiumAnalyticsService()
-        
-        # For testing purposes, use user ID 1 if no user is authenticated
-        user = info.context.user
-        user_id = user.id if user and not user.is_anonymous else 1
-        
-        return service.get_portfolio_performance_metrics(user_id)
-    
-    def resolve_test_portfolio_metrics(self, info):
-        """Test portfolio metrics (no auth required)"""
-        from .premium_analytics import PremiumAnalyticsService
-        service = PremiumAnalyticsService()
-        # Use user ID 1 for testing
-        return service.get_portfolio_performance_metrics(1)
-    
-    def resolve_test_ai_recommendations(self, info):
-        """Test AI recommendations (no auth required)"""
-        from .premium_analytics import PremiumAnalyticsService
-        service = PremiumAnalyticsService()
-        # Use user ID 1 for testing
-        return service.get_ai_recommendations(1, "medium")
-    
-    def resolve_test_stock_screening(self, info):
-        """Test stock screening (no auth required)"""
-        from .premium_analytics import PremiumAnalyticsService
-        service = PremiumAnalyticsService()
-        # Return some sample screening results
-        return service.get_advanced_stock_screening({})
-    
-    def resolve_test_options_analysis(self, info, symbol):
-        """Test options analysis (no auth required)"""
-        from .options_service import OptionsAnalysisService
-        service = OptionsAnalysisService()
-        # Return options analysis for the given symbol
-        return service.get_comprehensive_analysis(symbol)
+    def resolve_market_sentiment(self, info):
+        """Get market sentiment data"""
+        return {"sentiment": "neutral", "confidence": 0.5}  # Placeholder

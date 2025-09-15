@@ -1,40 +1,36 @@
 # Docker Compose for local testing
 version: '3.8'
-
 services:
-  ai-service:
-    build: .
-    ports:
-      - "8000:8000"
-    environment:
-      - ENVIRONMENT=development
-      - DATABASE_URL=postgresql://admin:password@db:5432/richesreach
-      - REDIS_URL=redis://redis:6379
-    depends_on:
-      - db
-      - redis
-    volumes:
-      - ./models:/app/models
-      - ./logs:/app/logs
-
-  db:
-    image: postgres:13
-    environment:
-      - POSTGRES_DB=richesreach
-      - POSTGRES_USER=admin
-      - POSTGRES_PASSWORD=password
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-  redis:
-    image: redis:6-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-
+ai-service:
+build: .
+ports:
+- "8000:8000"
+environment:
+- ENVIRONMENT=development
+- DATABASE_URL=postgresql://admin:password@db:5432/richesreach
+- REDIS_URL=redis://redis:6379
+depends_on:
+- db
+- redis
 volumes:
-  postgres_data:
-  redis_data:
+- ./models:/app/models
+- ./logs:/app/logs
+db:
+image: postgres:13
+environment:
+- POSTGRES_DB=richesreach
+- POSTGRES_USER=admin
+- POSTGRES_PASSWORD=password
+ports:
+- "5432:5432"
+volumes:
+- postgres_data:/var/lib/postgresql/data
+redis:
+image: redis:6-alpine
+ports:
+- "6379:6379"
+volumes:
+- redis_data:/data
+volumes:
+postgres_data:
+redis_data:

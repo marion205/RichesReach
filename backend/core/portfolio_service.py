@@ -8,6 +8,7 @@ import json
 
 User = get_user_model()
 
+
 class PortfolioService:
     """Service to manage virtual portfolios using the existing Portfolio model"""
     
@@ -32,26 +33,28 @@ class PortfolioService:
                     'holdings_count': 0
                 }
             
-            # Calculate holding value
-            holding_value = Decimal('0')
-            if holding.current_price and holding.shares:
-                holding_value = holding.current_price * holding.shares
-            
-            portfolios[portfolio_name]['holdings'].append({
-                'id': holding.id,
-                'stock': holding.stock,
-                'shares': holding.shares,
-                'average_price': holding.average_price,
-                'current_price': holding.current_price,
-                'total_value': holding_value,
-                'notes': holding.notes,
-                'created_at': holding.created_at,
-                'updated_at': holding.updated_at
-            })
-            
-            portfolios[portfolio_name]['total_value'] += holding_value
-            portfolios[portfolio_name]['holdings_count'] += 1
-            total_value += holding_value
+            # Only include holdings with shares > 0 in the display
+            if holding.shares > 0:
+                # Calculate holding value
+                holding_value = Decimal('0')
+                if holding.current_price and holding.shares:
+                    holding_value = holding.current_price * holding.shares
+                
+                portfolios[portfolio_name]['holdings'].append({
+                    'id': holding.id,
+                    'stock': holding.stock,
+                    'shares': holding.shares,
+                    'average_price': holding.average_price,
+                    'current_price': holding.current_price,
+                    'total_value': holding_value,
+                    'notes': holding.notes,
+                    'created_at': holding.created_at,
+                    'updated_at': holding.updated_at
+                })
+                
+                portfolios[portfolio_name]['total_value'] += holding_value
+                portfolios[portfolio_name]['holdings_count'] += 1
+                total_value += holding_value
         
         # Convert to list and sort by total value
         portfolio_list = list(portfolios.values())
@@ -93,7 +96,6 @@ class PortfolioService:
                 portfolio_item.save()
             
             return portfolio_item
-            
         except Stock.DoesNotExist:
             return None
     

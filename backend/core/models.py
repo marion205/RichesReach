@@ -1,7 +1,6 @@
 # core/models.py
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
-
 class UserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
         if not email:
@@ -11,11 +10,12 @@ class UserManager(BaseUserManager):
         user.set_password(password)
         user.save(using=self._db)
         return user
-
+    
     def create_superuser(self, email, password=None, **extra_fields):
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
         return self.create_user(email, password, **extra_fields)
+
 
 class User(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(unique=True)
@@ -23,7 +23,6 @@ class User(AbstractBaseUser, PermissionsMixin):
     profile_pic = models.URLField(max_length=500, blank=True, null=True)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
-    
     # Enhanced security fields
     failed_login_attempts = models.IntegerField(default=0)
     locked_until = models.DateTimeField(null=True, blank=True)
@@ -31,16 +30,13 @@ class User(AbstractBaseUser, PermissionsMixin):
     email_verified = models.BooleanField(default=False)
     two_factor_enabled = models.BooleanField(default=False)
     two_factor_secret = models.CharField(max_length=32, blank=True)
-    
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['name']
-
     objects = UserManager()
-
+    
     def __str__(self):
         return self.email
     
@@ -85,11 +81,9 @@ class User(AbstractBaseUser, PermissionsMixin):
     def record_failed_login(self):
         """Record a failed login attempt"""
         self.failed_login_attempts += 1
-        
         # Lock account after 5 failed attempts
         if self.failed_login_attempts >= 5:
             self.lock_account(minutes=30)
-        
         self.save()
     
     def clear_failed_logins(self):
@@ -97,12 +91,13 @@ class User(AbstractBaseUser, PermissionsMixin):
         self.failed_login_attempts = 0
         self.save()
 
+
 class Post(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='posts')
     content = models.TextField()
     image = models.URLField(max_length=500, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
-
+    
     def __str__(self):
         return f"{self.user.name}: {self.content[:30]}"
     
@@ -119,6 +114,7 @@ class Post(models.Model):
             return False
         return self.likes.filter(user=user).exists()
 
+
 class ChatSession(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='chat_sessions')
     title = models.CharField(max_length=255, blank=True)
@@ -128,13 +124,13 @@ class ChatSession(models.Model):
     def __str__(self):
         return f"{self.user.name} - {self.title or 'Chat Session'} ({self.created_at.strftime('%Y-%m-%d %H:%M')})"
 
+
 class ChatMessage(models.Model):
     ROLE_CHOICES = [
         ('user', 'User'),
         ('assistant', 'Assistant'),
         ('system', 'System'),
     ]
-    
     session = models.ForeignKey(ChatSession, on_delete=models.CASCADE, related_name='messages')
     role = models.CharField(max_length=10, choices=ROLE_CHOICES)
     content = models.TextField()
@@ -148,6 +144,7 @@ class ChatMessage(models.Model):
     def __str__(self):
         return f"{self.role}: {self.content[:50]}..."
 
+
 class Source(models.Model):
     message = models.ForeignKey(ChatMessage, on_delete=models.CASCADE, related_name='sources')
     title = models.CharField(max_length=255)
@@ -156,6 +153,7 @@ class Source(models.Model):
     
     def __str__(self):
         return self.title
+
 
 class Like(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='likes')
@@ -168,6 +166,7 @@ class Like(models.Model):
     
     def __str__(self):
         return f"{self.user.name} likes {self.post.content[:30]}"
+
 
 class Comment(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='comments')
@@ -184,6 +183,7 @@ class Comment(models.Model):
     def __str__(self):
         return f"{self.user.name}: {self.content[:30]}"
 
+
 class Follow(models.Model):
     follower = models.ForeignKey(User, on_delete=models.CASCADE, related_name='following')
     following = models.ForeignKey(User, on_delete=models.CASCADE, related_name='followers')
@@ -196,18 +196,19 @@ class Follow(models.Model):
     def __str__(self):
         return f"{self.follower.name} follows {self.following.name}"
 
+
 class Stock(models.Model):
     """Stock model to store basic stock information"""
     symbol = models.CharField(max_length=10, unique=True)
     company_name = models.CharField(max_length=255)
     sector = models.CharField(max_length=100, blank=True, null=True)
-    market_cap = models.BigIntegerField(blank=True, null=True)  # Market capitalization
+    market_cap = models.BigIntegerField(blank=True, null=True) # Market capitalization
     pe_ratio = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
     dividend_yield = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)
     debt_ratio = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)
     volatility = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)
-    beginner_friendly_score = models.IntegerField(default=0)  # 0-100 score for beginners
-    current_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)  # Current stock price
+    beginner_friendly_score = models.IntegerField(default=0) # 0-100 score for beginners
+    current_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True) # Current stock price
     last_updated = models.DateTimeField(auto_now=True)
     
     def __str__(self):
@@ -215,6 +216,7 @@ class Stock(models.Model):
     
     class Meta:
         ordering = ['symbol']
+
 
 class StockData(models.Model):
     """Historical stock price data"""
@@ -230,19 +232,20 @@ class StockData(models.Model):
         unique_together = ['stock', 'date']
         ordering = ['-date']
 
+
 class Watchlist(models.Model):
     """User's stock watchlist"""
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='watchlists')
     stock = models.ForeignKey(Stock, on_delete=models.CASCADE, related_name='watchlisted_by', default=1)
     added_at = models.DateTimeField(auto_now_add=True)
-    notes = models.TextField(blank=True, null=True)  # User's personal notes about the stock
-    target_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)  # User's target price
-    created_at = models.DateTimeField(auto_now_add=True)  # For compatibility with existing table
-    updated_at = models.DateTimeField(auto_now=True)  # For compatibility with existing table
-    description = models.TextField(blank=True, default="")  # For compatibility with existing table
-    is_public = models.BooleanField(default=False)  # For compatibility with existing table
-    is_shared = models.BooleanField(default=False)  # For compatibility with existing table
-    name = models.CharField(max_length=100, blank=True, null=True)  # For compatibility with existing table
+    notes = models.TextField(blank=True, null=True) # User's personal notes about the stock
+    target_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True) # User's target price
+    created_at = models.DateTimeField(auto_now_add=True) # For compatibility with existing table
+    updated_at = models.DateTimeField(auto_now=True) # For compatibility with existing table
+    description = models.TextField(blank=True, default="") # For compatibility with existing table
+    is_public = models.BooleanField(default=False) # For compatibility with existing table
+    is_shared = models.BooleanField(default=False) # For compatibility with existing table
+    name = models.CharField(max_length=100, blank=True, null=True) # For compatibility with existing table
     
     class Meta:
         unique_together = ['user', 'stock']
@@ -251,12 +254,13 @@ class Watchlist(models.Model):
     def __str__(self):
         return f"{self.user.name} - {self.stock.symbol}"
 
+
 class IncomeProfile(models.Model):
     """User's income and investment profile"""
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='incomeProfile')
     income_bracket = models.CharField(max_length=50)
     age = models.IntegerField()
-    investment_goals = models.JSONField(default=list)  # List of investment goals
+    investment_goals = models.JSONField(default=list) # List of investment goals
     risk_tolerance = models.CharField(max_length=20, choices=[
         ('Conservative', 'Conservative'),
         ('Moderate', 'Moderate'),
@@ -274,6 +278,7 @@ class IncomeProfile(models.Model):
     def __str__(self):
         return f"{self.user.name} - {self.risk_tolerance} Profile"
 
+
 class AIPortfolioRecommendation(models.Model):
     """AI-generated portfolio recommendations"""
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='ai_recommendations')
@@ -282,8 +287,8 @@ class AIPortfolioRecommendation(models.Model):
         ('Moderate', 'Moderate'),
         ('Aggressive', 'Aggressive')
     ])
-    portfolio_allocation = models.JSONField(default=dict)  # Asset allocation percentages
-    recommended_stocks = models.JSONField(default=list)  # List of recommended stocks with details
+    portfolio_allocation = models.JSONField(default=dict) # Asset allocation percentages
+    recommended_stocks = models.JSONField(default=list) # List of recommended stocks with details
     expected_portfolio_return = models.FloatField(null=True, blank=True)
     risk_assessment = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -302,7 +307,7 @@ class Portfolio(models.Model):
     stock = models.ForeignKey(Stock, on_delete=models.CASCADE, related_name='portfolio_holdings')
     shares = models.IntegerField(default=0)
     notes = models.TextField(blank=True, null=True)
-    average_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)  # Required field
+    average_price = models.DecimalField(max_digits=10, decimal_places=2, default=0) # Required field
     current_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
     total_value = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -331,15 +336,14 @@ class StockDiscussion(models.Model):
         ('public', 'Public - Everyone can see'),
         ('followers', 'Followers Only - Only followers can see'),
     ]
-    
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='discussions')
     stock = models.ForeignKey(Stock, on_delete=models.CASCADE, related_name='discussions', null=True, blank=True)
     title = models.CharField(max_length=200)
     content = models.TextField()
-    discussion_type = models.CharField(max_length=20, default='general')  # general, analysis, news, etc.
-    visibility = models.CharField(max_length=10, choices=VISIBILITY_CHOICES, default='followers')  # public or followers
-    is_analysis = models.BooleanField(default=False)  # Required by existing table
-    analysis_data = models.TextField(blank=True, null=True)  # Required by existing table
+    discussion_type = models.CharField(max_length=20, default='general') # general, analysis, news, etc.
+    visibility = models.CharField(max_length=10, choices=VISIBILITY_CHOICES, default='followers') # public or followers
+    is_analysis = models.BooleanField(default=False) # Required by existing table
+    analysis_data = models.TextField(blank=True, null=True) # Required by existing table
     upvotes = models.IntegerField(default=0)
     downvotes = models.IntegerField(default=0)
     is_pinned = models.BooleanField(default=False)

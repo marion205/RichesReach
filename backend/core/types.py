@@ -2,6 +2,7 @@
 import graphene
 from graphene_django import DjangoObjectType
 from .models import User, Post, ChatSession, ChatMessage, Source, Like, Comment, Follow, Stock, StockData, Watchlist, IncomeProfile, AIPortfolioRecommendation, Portfolio, StockDiscussion, DiscussionComment
+# TODO: Add missing models: WatchlistItem, StockDiscussion, DiscussionComment, Portfolio, PortfolioPosition, PriceAlert, SocialFeed, UserAchievement, StockSentiment, IncomeProfile, AIPortfolioRecommendation, StockRecommendation
 
 class UserType(DjangoObjectType):
     class Meta:
@@ -30,13 +31,7 @@ class UserType(DjangoObjectType):
     is_following_user = graphene.Boolean()
     is_followed_by_user = graphene.Boolean()
     
-    # Add camelCase aliases for frontend compatibility
-    followersCount = graphene.Int()
-    followingCount = graphene.Int()
-    isFollowingUser = graphene.Boolean()
-    isFollowedByUser = graphene.Boolean()
-    
-    # Add subscription status fields
+    # Add premium/subscription fields that the frontend expects
     hasPremiumAccess = graphene.Boolean()
     subscriptionTier = graphene.String()
     
@@ -58,36 +53,13 @@ class UserType(DjangoObjectType):
             return False
         return user.is_followed_by(self)
     
-    # Resolvers for camelCase aliases
-    def resolve_followersCount(self, info):
-        return self.followers.count()
-    
-    def resolve_followingCount(self, info):
-        return self.following.count()
-    
-    def resolve_isFollowingUser(self, info):
-        user = info.context.user
-        if user.is_anonymous:
-            return False
-        return user.is_following(self)
-    
-    def resolve_isFollowedByUser(self, info):
-        user = info.context.user
-        if user.is_anonymous:
-            return False
-        return user.is_followed_by(self)
-    
     def resolve_hasPremiumAccess(self, info):
-        """Check if user has premium access"""
-        from .premium_types import _has_premium_access
-        return _has_premium_access(self)
+        # For now, return False for all users (no premium features implemented yet)
+        return False
     
     def resolve_subscriptionTier(self, info):
-        """Get user's subscription tier"""
-        from .premium_types import _has_premium_access
-        if _has_premium_access(self):
-            return "premium"
-        return "free"
+        # For now, return 'free' for all users (no subscription system implemented yet)
+        return 'free'
 
 class IncomeProfileType(DjangoObjectType):
     class Meta:
@@ -314,6 +286,70 @@ class WatchlistItemType(graphene.ObjectType):
     def resolve_addedAt(self, info):
         return self.added_at
 
+# class StockDiscussionType(graphene.ObjectType):
+#     id = graphene.ID()
+#     title = graphene.String()
+#     content = graphene.String()
+#     discussion_type = graphene.String()
+#     discussionType = graphene.String()  # camelCase field
+#     is_analysis = graphene.Boolean()
+#     analysis_data = graphene.JSONString()
+#     created_at = graphene.DateTime()
+#     createdAt = graphene.DateTime()  # camelCase field
+#     updated_at = graphene.DateTime()
+#     updatedAt = graphene.DateTime()  # camelCase field
+#     user = graphene.Field('core.types.UserType')
+#     stock = graphene.Field(StockType)
+#     likes = graphene.List('core.types.UserType')
+#     like_count = graphene.Int()
+#     likeCount = graphene.Int()  # camelCase field
+#     comments = graphene.List(lambda: DiscussionCommentType)
+#     comment_count = graphene.Int()
+#     commentCount = graphene.Int()  # camelCase field
+#     
+#     def resolve_likes(self, info):
+#         return self.likes.all()
+#     
+#     def resolve_like_count(self, info):
+#         return self.likes.count()
+#     
+#     def resolve_comments(self, info):
+#         return self.comments.all()
+#     
+#     def resolve_comment_count(self, info):
+#         return self.comments.count()
+#     
+#     # Resolvers for camelCase fields
+#     def resolve_discussionType(self, info):
+#         return self.discussion_type
+#     
+#     def resolve_createdAt(self, info):
+#         return self.created_at
+#     
+#     def resolve_updatedAt(self, info):
+#         return self.updated_at
+#     
+#     def resolve_likeCount(self, info):
+#         return self.likes.count()
+#     
+#     def resolve_commentCount(self, info):
+#         return self.comments.count()
+
+# class DiscussionCommentType(graphene.ObjectType):
+#     id = graphene.ID()
+#     content = graphene.String()
+#     created_at = graphene.DateTime()
+#     updated_at = graphene.DateTime()
+#     user = graphene.Field('core.types.UserType')
+#     discussion = graphene.Field(StockDiscussionType)
+#     likes = graphene.List('core.types.UserType')
+#     like_count = graphene.Int()
+#     
+#     def resolve_likes(self, info):
+#         return self.likes.all()
+#     
+#     def resolve_like_count(self, info):
+#         return self.likes.count()
 
 class PortfolioType(DjangoObjectType):
     class Meta:
@@ -505,11 +541,17 @@ class StockSentimentType(graphene.ObjectType):
     last_updated = graphene.DateTime()
     stock = graphene.Field(StockType)
 
+# class DiscussionContent(graphene.ObjectType):
+#     """Union type for discussion content"""
+#     discussion = graphene.Field(StockDiscussionType)
 
 class WatchlistContent(graphene.ObjectType):
     """Union type for watchlist content"""
     watchlist = graphene.Field(WatchlistType)
 
+# class PortfolioContent(graphene.ObjectType):
+#     """Union type for portfolio content"""
+#     portfolio = graphene.Field(PortfolioType)
 
 # Rust Analysis Types
 class TechnicalIndicatorsType(graphene.ObjectType):
@@ -545,6 +587,71 @@ class RustHealthType(graphene.ObjectType):
     timestamp = graphene.String()
 
 
+# class IncomeProfileType(DjangoObjectType):
+#     class Meta:
+#         model = IncomeProfile
+#         fields = ("id", "income_bracket", "age", "investment_goals", "risk_tolerance", "investment_horizon", "created_at", "updated_at")
+
+
+# class AIPortfolioRecommendationType(DjangoObjectType):
+#     class Meta:
+#         model = AIPortfolioRecommendation
+#         fields = ("id", "user", "risk_profile", "portfolio_allocation", "expected_portfolio_return", "risk_assessment", "created_at")
+#     
+#     # Add computed field for stock recommendations
+#     recommendedStocks = graphene.List('core.types.StockRecommendationType')
+#     
+#     # Add camelCase aliases for frontend compatibility
+#     riskProfile = graphene.String()
+#     expectedPortfolioReturn = graphene.String()
+#     riskAssessment = graphene.String()
+#     portfolioAllocation = graphene.JSONString()
+#     
+#     def resolve_recommendedStocks(self, info):
+#         return self.recommendedStocks.all()
+#     
+#     def resolve_riskProfile(self, info):
+#         return self.risk_profile
+#     
+#     def resolve_expectedPortfolioReturn(self, info):
+#         return self.expected_portfolio_return
+#     
+#     def resolve_riskAssessment(self, info):
+#         return self.risk_assessment
+#     
+#     def resolve_portfolioAllocation(self, info):
+#         return self.portfolio_allocation
+
+
+# class StockRecommendationType(DjangoObjectType):
+#     class Meta:
+#         model = StockRecommendation
+#         fields = ("id", "portfolio_recommendation", "stock", "allocation", "reasoning", "risk_level", "expected_return")
+#     
+#     # Add computed fields for frontend compatibility
+#     companyName = graphene.String()
+#     symbol = graphene.String()
+#     riskLevel = graphene.String()
+#     expectedReturn = graphene.String()
+#     allocation = graphene.Float()
+#     
+#     def resolve_companyName(self, info):
+#         return self.stock.company_name if self.stock else None
+#     
+#     def resolve_symbol(self, info):
+#         return self.stock.symbol if self.stock else None
+#     
+#     def resolve_riskLevel(self, info):
+#         return self.risk_level
+#     
+#     def resolve_expectedReturn(self, info):
+#         return self.expected_return
+#     
+#     def resolve_allocation(self, info):
+#         return self.allocation
+    
+#     def resolve_reasoning(self, info):
+#         return self.reasoning
 
 
 class StockPriceType(graphene.ObjectType):

@@ -1,51 +1,51 @@
 {
-  "cloudwatch": {
-    "region": "us-east-1",
-    "namespace": "riches-reach-ai/ai-service",
-    "metrics": [
-      {
-        "name": "APIRequests",
-        "unit": "Count",
-        "description": "Number of API requests"
-      },
-      {
-        "name": "APILatency",
-        "unit": "Milliseconds",
-        "description": "API response time"
-      },
-      {
-        "name": "ModelAccuracy",
-        "unit": "Percent",
-        "description": "ML model accuracy"
-      },
-      {
-        "name": "DataQualityScore",
-        "unit": "None",
-        "description": "Market data quality score"
-      }
-    ]
-  },
-  "alerts": [
-    {
-      "name": "HighLatency",
-      "description": "API response time > 1000ms",
-      "threshold": 1000,
-      "evaluation_periods": 2,
-      "period": 300
-    },
-    {
-      "name": "LowAccuracy",
-      "description": "Model accuracy < 80%",
-      "threshold": 80,
-      "evaluation_periods": 3,
-      "period": 3600
-    },
-    {
-      "name": "DataQualityDegradation",
-      "description": "Data quality score < 0.7",
-      "threshold": 0.7,
-      "evaluation_periods": 2,
-      "period": 1800
-    }
-  ]
+"cloudwatch": {
+"region": "us-east-1",
+"namespace": "riches-reach-ai/ai-service",
+"metrics": [
+{
+"name": "APIRequests",
+"unit": "Count",
+"description": "Number of API requests"
+},
+{
+"name": "APILatency",
+"unit": "Milliseconds",
+"description": "API response time"
+},
+{
+"name": "ModelAccuracy",
+"unit": "Percent",
+"description": "ML model accuracy"
+},
+{
+"name": "DataQualityScore",
+"unit": "None",
+"description": "Market data quality score"
+}
+]
+},
+"alerts": [
+{
+"name": "HighLatency",
+"description": "API response time > 1000ms",
+"threshold": 1000,
+"evaluation_periods": 2,
+"period": 300
+},
+{
+"name": "LowAccuracy",
+"description": "Model accuracy < 80%",
+"threshold": 80,
+"evaluation_periods": 3,
+"period": 3600
+},
+{
+"name": "DataQualityDegradation",
+"description": "Data quality score < 0.7",
+"threshold": 0.7,
+"evaluation_periods": 2,
+"period": 1800
+}
+]
 }
