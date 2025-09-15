@@ -54,7 +54,6 @@ if (storedKey) {
 this.apiKey = storedKey;
 }
 } catch (error) {
-console.log('No API key found, using demo key');
 }
 }
 public async setApiKey(apiKey: string) {
@@ -104,7 +103,6 @@ console.warn(`Rate limit for ${symbol}:`, data['Note']);
 // For rate limits, try to use cached data first
 const cached = this.cache.get(JSON.stringify({ function: 'GLOBAL_QUOTE', symbol: symbol.toUpperCase() }));
 if (cached) {
-console.log(`Using cached data for ${symbol} due to rate limit`);
 const quote = cached.data['Global Quote'];
 if (quote && quote['05. price']) {
 return {
@@ -123,7 +121,6 @@ marketStatus: this.getMarketStatus()
 }
 }
 // Only use mock data if no cached data available
-console.log(`No cached data available for ${symbol}, using mock data`);
 return this.getMockQuote(symbol);
 }
 // Check for invalid API key
@@ -214,7 +211,6 @@ const cacheKey = 'market-news';
 const cached = this.cache.get(cacheKey);
 // Use cached news for 2 hours to respect rate limits
 if (cached && Date.now() - cached.timestamp < 2 * 60 * 60 * 1000) {
-console.log(' Using cached market news to avoid rate limits');
 return cached.data;
 }
 try {
@@ -244,12 +240,10 @@ relatedSymbols: this.extractStockSymbols(article.title + ' ' + (article.descript
 }));
 // Cache the news for 2 hours
 this.cache.set(cacheKey, { data: newsData, timestamp: Date.now() });
-console.log(` Fetched ${newsData.length} real news articles`);
 return newsData;
 } catch (error) {
 console.error('Failed to get market news:', error);
 if (cached) {
-console.log(' Using cached news due to API error');
 return cached.data;
 }
 return this.getMockNews();
@@ -261,7 +255,6 @@ const cacheKey = `stock-news-${symbol}`;
 const cached = this.cache.get(cacheKey);
 // Use cached news for 2 hours to respect rate limits
 if (cached && Date.now() - cached.timestamp < 2 * 60 * 60 * 1000) {
-console.log(` Using cached news for ${symbol} to avoid rate limits`);
 return cached.data;
 }
 try {
@@ -290,12 +283,10 @@ relatedSymbols: [symbol]
 }));
 // Cache the news for 2 hours
 this.cache.set(cacheKey, { data: newsData, timestamp: Date.now() });
-console.log(` Fetched ${newsData.length} real news articles for ${symbol}`);
 return newsData;
 } catch (error) {
 console.error(`Failed to get news for ${symbol}:`, error);
 if (cached) {
-console.log(` Using cached news for ${symbol} due to API error`);
 return cached.data;
 }
 return [];
@@ -558,7 +549,6 @@ return symbols;
 // Pre-populate cache with real data (call this once per day)
 public async preloadPortfolioData(): Promise<void> {
 const symbols = ['AAPL', 'MSFT', 'TSLA']; // Core portfolio symbols
-console.log(' Pre-loading portfolio data to avoid rate limits...');
 for (const symbol of symbols) {
 try {
 const data = await this.makeApiCall({
@@ -566,9 +556,7 @@ function: 'GLOBAL_QUOTE',
 symbol: symbol.toUpperCase()
 });
 if (data['Global Quote'] && data['Global Quote']['05. price']) {
-console.log(` Pre-loaded data for ${symbol}: $${data['Global Quote']['05. price']}`);
 } else if (data['Note']) {
-console.log(` Rate limit hit while pre-loading ${symbol}`);
 break; // Stop if we hit rate limit
 }
 } catch (error) {

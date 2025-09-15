@@ -57,7 +57,6 @@ prices[quote.symbol] = quote.price;
 }
 });
 setRealTimePrices(prices);
-console.log(` Fetched real prices for ${Object.keys(prices).length} watchlist stocks`);
 } catch (error) {
 console.error('Failed to fetch real-time prices for watchlist:', error);
 } finally {

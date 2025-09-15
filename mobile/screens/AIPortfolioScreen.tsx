@@ -223,15 +223,7 @@ if (!incomeBracket || !age || selectedGoals.length === 0 || !riskTolerance || !i
 Alert.alert('Missing Information', 'Please fill in all fields.');
 return;
 }
-// Debug logging to see what values are being sent
-console.log(' Creating profile with values:', {
-incomeBracket,
-age: parseInt(age),
-investmentGoals: selectedGoals,
-riskTolerance,
-investmentHorizon
-});
-try {
+  try {
 const result = await createIncomeProfile({
 variables: {
 incomeBracket,
@@ -241,9 +233,8 @@ riskTolerance,
 investmentHorizon
 }
 });
-if (result.data?.createIncomeProfile?.success) {
-console.log('SUCCESS: Profile created successfully with risk level:', riskTolerance);
-Alert.alert('Success', 'Income profile created successfully!');
+    if (result.data?.createIncomeProfile?.success) {
+      Alert.alert('Success', 'Income profile created successfully!');
 setShowProfileForm(false);
 // Force refresh user data first
 await refetchUser();
@@ -261,17 +252,12 @@ Alert.alert('Error', 'Failed to create profile. Please try again.');
 };
 const handleGenerateRecommendations = async () => {
 setIsGeneratingRecommendations(true);
-try {
-console.log(' Generating AI recommendations...');
-console.log(' Current user profile:', userData?.me?.incomeProfile);
-console.log(' Current risk tolerance:', userData?.me?.incomeProfile?.riskTolerance);
-const result = await generateAIRecommendations();
-if (result.data?.generateAiRecommendations?.success) {
-console.log('SUCCESS: Recommendations generated successfully');
-refetchRecommendations();
-} else {
-console.log('ERROR: Failed to generate recommendations:', result.data?.generateAiRecommendations?.message);
-Alert.alert('Error', result.data?.generateAiRecommendations?.message || 'Failed to generate recommendations');
+    try {
+      const result = await generateAIRecommendations();
+      if (result.data?.generateAiRecommendations?.success) {
+        refetchRecommendations();
+      } else {
+        Alert.alert('Error', result.data?.generateAiRecommendations?.message || 'Failed to generate recommendations');
 }
 } catch (error) {
 console.error('ERROR: Error generating recommendations:', error);

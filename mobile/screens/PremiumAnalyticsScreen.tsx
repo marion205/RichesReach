@@ -119,7 +119,6 @@ confidence
 keyFactors
 }
 }
-}
 `;
 const AI_REBALANCE_PORTFOLIO = gql`
 mutation AIRebalancePortfolio($portfolioName: String, $riskTolerance: String, $maxRebalancePercentage: Float, $dryRun: Boolean) {
@@ -233,7 +232,6 @@ sentimentScore
 sentimentDescription
 }
 }
-}
 `;
 // Fallback test query (no auth required)
 const GET_OPTIONS_ANALYSIS_TEST = gql`
@@ -271,7 +269,6 @@ riskRewardRatio
 daysToExpiration
 totalCost
 totalCredit
-}
 }
 }
 `;
@@ -428,7 +425,6 @@ recommendations.push('Low diversification score - spread risk across more sector
 return recommendations.length > 0 ? recommendations : ['Portfolio is well balanced across sectors'];
 };
 const PremiumAnalyticsScreen: React.FC<PremiumAnalyticsScreenProps> = ({ navigateTo }) => {
-console.log('🚀 PremiumAnalyticsScreen: Component mounted/rendered');
 const [activeTab, setActiveTab] = useState<'metrics' | 'recommendations' | 'screening' | 'options'>('metrics');
 const [refreshing, setRefreshing] = useState(false);
 const [selectedSymbol, setSelectedSymbol] = useState('AAPL');
@@ -476,16 +472,11 @@ const [marketOutlook, setMarketOutlook] = useState<'Bullish' | 'Bearish' | 'Neut
 
 // Track active tab changes
 useEffect(() => {
-console.log('📱 PremiumAnalyticsScreen: Active tab changed to:', activeTab);
 }, [activeTab]);
 
 // Track metrics loading state
 useEffect(() => {
-console.log('📊 PremiumAnalyticsScreen: Metrics loading state changed:', {
-metricsLoading,
-hasMetricsData: !!metricsData,
-hasPortfolioMetrics: !!metricsData?.portfolioMetrics
-});
+  // Track loading state changes
 }, [metricsLoading, metricsData]);
 // Safety check functions
 const checkTradeLimits = (trades) => {
@@ -540,14 +531,8 @@ setMarketOutlook(outlooks[nextIndex]);
 // Function to filter strategies based on market outlook
 const getFilteredStrategies = (strategies: any[]) => {
 if (!strategies) return [];
-console.log(' Filtering strategies:', {
-totalStrategies: strategies.length,
-marketOutlook,
-strategies: strategies.map(s => ({ name: s.strategyName, outlook: s.marketOutlook, type: s.strategyType }))
-});
 // If no specific outlook is selected, show all strategies
 if (marketOutlook === 'Neutral') {
-console.log(' Showing all strategies (Neutral outlook)');
 return strategies;
 }
 const filtered = strategies.filter(strategy => {
@@ -569,38 +554,17 @@ default:
 return true;
 }
 });
-console.log(' Filtered strategies:', {
-filteredCount: filtered.length,
-filtered: filtered.map(s => ({ name: s.strategyName, outlook: s.marketOutlook, type: s.strategyType }))
-});
+// Filtered strategies ready
 return filtered;
 };
 // Queries
-console.log('🔍 PremiumAnalyticsScreen: About to execute portfolio metrics query');
 const { data: metricsData, loading: metricsLoading, refetch: refetchMetrics } = useQuery(
 GET_PREMIUM_PORTFOLIO_METRICS,
 {
 errorPolicy: 'all',
 onCompleted: (data) => {
-console.log('📊 PremiumAnalyticsScreen: Metrics query completed successfully');
-        console.log('📊 Metrics data received:', {
-          hasData: !!data,
-          hasPortfolioMetrics: !!data?.portfolioMetrics,
-          portfolioMetricsKeys: data?.portfolioMetrics ? Object.keys(data.portfolioMetrics) : 'N/A',
-          totalValue: data?.portfolioMetrics?.totalValue,
-          totalCost: data?.portfolioMetrics?.totalCost,
-          totalReturn: data?.portfolioMetrics?.totalReturn,
-          totalReturnPercent: data?.portfolioMetrics?.totalReturnPercent,
-          dayChange: data?.portfolioMetrics?.dayChange,
-          dayChangePercent: data?.portfolioMetrics?.dayChangePercent,
-          volatility: data?.portfolioMetrics?.volatility,
-          sharpeRatio: data?.portfolioMetrics?.sharpeRatio,
-          maxDrawdown: data?.portfolioMetrics?.maxDrawdown,
-          beta: data?.portfolioMetrics?.beta,
-          alpha: data?.portfolioMetrics?.alpha,
-          holdingsCount: data?.portfolioMetrics?.holdings?.length || 0,
-          holdings: data?.portfolioMetrics?.holdings
-        });
+          // Portfolio metrics data loaded
+        },
 },
 onError: (error) => {
 console.error('❌ PremiumAnalyticsScreen: Metrics query error:', error);
@@ -621,7 +585,6 @@ Alert.alert(
 );
 }
 }
-}
 );
 const { data: recommendationsData, loading: recommendationsLoading, error: recommendationsError, refetch: refetchRecommendations } = useQuery(
 GET_AI_RECOMMENDATIONS,
@@ -629,22 +592,8 @@ GET_AI_RECOMMENDATIONS,
 variables: { riskTolerance: 'medium' },
 errorPolicy: 'ignore',
 onCompleted: (data) => {
-console.log('🤖 PremiumAnalyticsScreen: AI Recommendations query completed successfully');
-console.log('🤖 Recommendations data received:', {
-hasData: !!data,
-hasAiRecommendations: !!data?.aiRecommendations,
-aiRecommendationsKeys: data?.aiRecommendations ? Object.keys(data.aiRecommendations) : 'N/A',
-hasMarketOutlook: !!data?.aiRecommendations?.marketOutlook,
-marketOutlookKeys: data?.aiRecommendations?.marketOutlook ? Object.keys(data.aiRecommendations.marketOutlook) : 'N/A',
-hasPortfolioAnalysis: !!data?.aiRecommendations?.portfolioAnalysis,
-hasBuyRecommendations: !!data?.aiRecommendations?.buyRecommendations,
-buyRecommendationsCount: data?.aiRecommendations?.buyRecommendations?.length || 0,
-hasSellRecommendations: !!data?.aiRecommendations?.sellRecommendations,
-sellRecommendationsCount: data?.aiRecommendations?.sellRecommendations?.length || 0,
-hasRebalanceSuggestions: !!data?.aiRecommendations?.rebalanceSuggestions,
-rebalanceSuggestionsCount: data?.aiRecommendations?.rebalanceSuggestions?.length || 0,
-hasRiskAssessment: !!data?.aiRecommendations?.riskAssessment
-});
+          // AI recommendations data loaded
+        },
 },
 onError: (error) => {
 console.error('❌ PremiumAnalyticsScreen: AI Recommendations query error:', error);
@@ -663,7 +612,6 @@ Alert.alert(
 { text: 'Upgrade', onPress: () => navigateTo('subscription') }
 ]
 );
-}
 }
 }
 );
@@ -707,10 +655,8 @@ const improvementText = result.estimatedImprovement
 ? `\n\n${result.estimatedImprovement}`
 : '';
 // Store the rebalancing result
-console.log(' Storing rebalancing result:', result);
 setLastRebalancingResult(result);
 setRebalancingPerformed(true);
-console.log(' Rebalancing state updated - rebalancingPerformed: true');
 // Save to persistent storage
 try {
 const storageService = RebalancingStorageService.getInstance();
@@ -725,14 +671,12 @@ estimatedImprovement: result.estimatedImprovement || '',
 riskTolerance: 'medium', // You might want to pass this from the mutation
 maxRebalancePercentage: 20.0, // You might want to pass this from the mutation
 });
-console.log(' Rebalancing result saved to persistent storage');
 } catch (error) {
 console.error(' Error saving rebalancing result to storage:', error);
 }
 // Refresh recommendations to get updated rebalancing suggestions
 try {
 await refetchRecommendations();
-console.log(' Refreshed AI recommendations after rebalancing');
 } catch (error) {
 console.error(' Error refreshing recommendations:', error);
 }
@@ -742,7 +686,6 @@ Alert.alert(
 [
 { text: 'View Updated Recommendations', onPress: () => {
 // The state is already set above, this just confirms the user wants to see updates
-console.log('User clicked View Updated Recommendations');
 }}
 ]
 );
@@ -761,19 +704,8 @@ GET_OPTIONS_ANALYSIS,
 variables: { symbol: selectedSymbol },
 errorPolicy: 'all',
 onCompleted: (data) => {
-console.log('📈 PremiumAnalyticsScreen: Options Analysis query completed successfully');
-console.log('📈 Options data received:', {
-hasData: !!data,
-hasOptionsAnalysis: !!data?.optionsAnalysis,
-optionsAnalysisKeys: data?.optionsAnalysis ? Object.keys(data.optionsAnalysis) : 'N/A',
-underlyingSymbol: data?.optionsAnalysis?.underlyingSymbol,
-underlyingPrice: data?.optionsAnalysis?.underlyingPrice,
-hasOptionsChain: !!data?.optionsAnalysis?.optionsChain,
-hasMarketSentiment: !!data?.optionsAnalysis?.marketSentiment,
-hasUnusualFlow: !!data?.optionsAnalysis?.unusualFlow,
-hasRecommendedStrategies: !!data?.optionsAnalysis?.recommendedStrategies,
-recommendedStrategiesCount: data?.optionsAnalysis?.recommendedStrategies?.length || 0
-});
+          // Options analysis data loaded
+        },
 },
 onError: (error) => {
 console.error('❌ PremiumAnalyticsScreen: Options Analysis Error:', error);
@@ -794,7 +726,6 @@ Alert.alert(
 );
 }
 }
-}
 );
 // Fallback test query if premium fails
 const { data: testOptionsData, loading: testOptionsLoading, error: testOptionsError } = useQuery(
@@ -804,12 +735,8 @@ variables: { symbol: selectedSymbol },
 errorPolicy: 'all',
 skip: !optionsError, // Only run if premium query fails
 onCompleted: (data) => {
-console.log('📈 PremiumAnalyticsScreen: Test Options Analysis query completed successfully');
-console.log('📈 Test options data received:', {
-hasData: !!data,
-hasTestOptionsAnalysis: !!data?.testOptionsAnalysis,
-testOptionsAnalysisKeys: data?.testOptionsAnalysis ? Object.keys(data.testOptionsAnalysis) : 'N/A'
-});
+          // Test options analysis data loaded
+        },
 },
 onError: (error) => {
 console.error('❌ PremiumAnalyticsScreen: Test Options Analysis Error:', error);
@@ -824,12 +751,6 @@ stack: error.stack
 );
 // Options data - accessible throughout component
 const options = optionsData?.optionsAnalysis || testOptionsData?.testOptionsAnalysis;
-console.log('📈 Final options object:', {
-hasOptions: !!options,
-optionsKeys: options ? Object.keys(options) : 'N/A',
-isFromOptionsData: !!optionsData?.optionsAnalysis,
-isFromTestData: !!testOptionsData?.testOptionsAnalysis
-});
 const onRefresh = async () => {
 setRefreshing(true);
 try {
@@ -889,17 +810,8 @@ setScreeningLoading(false);
 }
 };
 const renderMetricsTab = () => {
-console.log('🎯 PremiumAnalyticsScreen: renderMetricsTab called');
-console.log('🎯 Metrics state:', {
-metricsLoading,
-hasMetricsData: !!metricsData,
-hasPortfolioMetrics: !!metricsData?.portfolioMetrics,
-metricsDataKeys: metricsData ? Object.keys(metricsData) : 'N/A',
-portfolioMetricsKeys: metricsData?.portfolioMetrics ? Object.keys(metricsData.portfolioMetrics) : 'N/A'
-});
 
 if (metricsLoading) {
-console.log('🎯 Rendering loading state for metrics');
 return (
 <View style={styles.loadingContainer}>
 <Text style={styles.loadingText}>Loading advanced metrics...</Text>
@@ -907,9 +819,7 @@ return (
 );
 }
 const metrics = metricsData?.portfolioMetrics;
-console.log('🎯 Metrics object:', metrics);
 if (!metrics) {
-console.log('❌ No metrics data available, rendering error state');
 return (
 <View style={styles.errorContainer}>
 <Icon name="alert-circle" size={48} color="#FF3B30" />
@@ -932,18 +842,15 @@ parsedSectorAllocation = {};
 // Parse risk metrics JSON string if it exists
 let parsedRiskMetrics = {};
 if (metrics.riskMetrics) {
-console.log(' Raw risk metrics:', metrics.riskMetrics, 'Type:', typeof metrics.riskMetrics);
 try {
 parsedRiskMetrics = typeof metrics.riskMetrics === 'string' 
 ? JSON.parse(metrics.riskMetrics) 
 : metrics.riskMetrics;
-console.log(' Parsed risk metrics:', parsedRiskMetrics);
 } catch (error) {
 console.error(' Error parsing risk metrics:', error);
 parsedRiskMetrics = {};
 }
 } else {
-console.log(' No risk metrics data found');
 }
 // Create updated metrics object with parsed data
 const updatedMetrics = {
@@ -952,11 +859,6 @@ sectorAllocation: parsedSectorAllocation,
 riskMetrics: parsedRiskMetrics
 };
 // Debug: Log the parsed risk metrics
-console.log(' Parsed Risk Metrics:', {
-riskMetrics: updatedMetrics.riskMetrics,
-diversificationScore: updatedMetrics.riskMetrics?.diversification_score,
-diversificationScoreType: typeof updatedMetrics.riskMetrics?.diversification_score
-});
 return (
 <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
 {/* Performance Overview */}
@@ -1031,13 +933,7 @@ Diversification helps reduce risk by spreading investments across various indust
 <Text style={styles.diversificationScore}>
 {(() => {
 const score = updatedMetrics.riskMetrics?.diversification_score;
-console.log(' Diversification score check:', {
-score,
-scoreType: typeof score,
-isNull: score == null,
-isNaN: isNaN(Number(score)),
-numberValue: Number(score)
-});
+// Score processing
 if (score != null && !isNaN(Number(score))) {
 return `${Math.round(Number(score))}/100`;
 } else {
@@ -1169,29 +1065,13 @@ if (lastRebalancingResult.estimatedImprovement) {
 }
 // Reduce risk score slightly due to better diversification
 const newRiskScore = Math.max(1, (original.riskScore || 0) - 1);
-console.log(' Updated Portfolio Analysis:', {
-original: {
-totalValue: original.totalValue,
-numHoldings: original.numHoldings,
-diversificationScore: original.diversificationScore,
-riskScore: original.riskScore
-},
-updated: {
-totalValue: newTotalValue,
-numHoldings: newNumHoldings,
-diversificationScore: newDiversificationScore,
-riskScore: newRiskScore
-},
-trades: trades.length,
-totalTradeValue
-});
+
 return {
 ...original,
 totalValue: newTotalValue,
 numHoldings: newNumHoldings,
 diversificationScore: newDiversificationScore,
 riskScore: newRiskScore
-};
 };
 const renderRecommendationsTab = () => {
 if (recommendationsLoading) {
@@ -1215,7 +1095,6 @@ parsedSectorBreakdown = {};
 }
 }
 // Debug logging
-console.log('AI Recommendations Debug:', {
 recommendationsData,
 recommendations,
 parsedSectorBreakdown,
@@ -1791,21 +1670,7 @@ Alert.alert(
 );
 };
 const renderOptionsTab = () => {
-console.log(' Options Tab Debug:', {
-loading: optionsLoading,
-testLoading: testOptionsLoading,
-hasData: !!optionsData,
-hasTestData: !!testOptionsData,
-hasError: !!optionsError,
-hasTestError: !!testOptionsError,
-dataKeys: optionsData ? Object.keys(optionsData) : 'No data',
-testDataKeys: testOptionsData ? Object.keys(testOptionsData) : 'No test data',
-errorMessage: optionsError?.message,
-testErrorMessage: testOptionsError?.message,
-options: options,
-hasOptions: !!options,
-optionsKeys: options ? Object.keys(options) : 'No options'
-});
+// Options analysis data ready
 // Don't return early on loading - show content with loading indicator
 // Always show the same UI structure to prevent flashing
 return (
@@ -2279,19 +2144,15 @@ return (
 {/* Header */}
 <View style={styles.header}>
 <TouchableOpacity onPress={() => {
-console.log('Back button pressed, attempting navigation to portfolio');
 try {
 navigateTo('portfolio');
-console.log('Navigation to portfolio successful');
 } catch (error) {
 console.error('Navigation error:', error);
 // Fallback - try other common routes
 try {
-console.log('Trying fallback navigation to home');
 navigateTo('home');
 } catch (fallbackError) {
 console.error('Fallback navigation error:', fallbackError);
-}
 }
 }}>
 <Icon name="arrow-left" size={24} color="#000" />

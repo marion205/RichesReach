@@ -44,7 +44,6 @@ loadRecommendations();
 // Note: Symbol changes only trigger reload when search button is pressed
 const loadRecommendations = async () => {
 try {
-console.log(' AI Options Screen: Starting to load recommendations...', {
 symbol,
 riskTolerance,
 portfolioValue,
@@ -57,7 +56,6 @@ riskTolerance,
 parseFloat(portfolioValue),
 parseInt(timeHorizon)
 );
-console.log(' AI Options Screen: Successfully received response:', {
 recommendationsCount: response.recommendations?.length || 0,
 hasMarketAnalysis: !!response.market_analysis,
 symbol: response.symbol,

@@ -110,7 +110,6 @@ console.error('Error saving intelligent alerts:', error);
 public async setUserProfile(profile: UserProfile): Promise<void> {
 this.userProfile = profile;
 await AsyncStorage.setItem(this.USER_PROFILE_KEY, JSON.stringify(profile));
-console.log(' User trading profile updated:', profile);
 }
 /**
 * Get user trading profile

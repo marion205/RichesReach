@@ -40,7 +40,6 @@ timestamp: now,
 expiresAt,
 };
 await AsyncStorage.setItem(key, JSON.stringify(cachedData));
-console.log(` Cached data for key: ${key}`);
 } catch (error) {
 console.error(`Error caching data for key ${key}:`, error);
 }
@@ -61,7 +60,6 @@ if (now > cachedData.expiresAt) {
 await AsyncStorage.removeItem(key);
 return null;
 }
-console.log(` Retrieved cached data for key: ${key}`);
 return cachedData.data;
 } catch (error) {
 console.error(`Error retrieving cached data for key ${key}:`, error);

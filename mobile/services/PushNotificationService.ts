@@ -38,12 +38,10 @@ return true;
 }
 // Check if device supports push notifications
 if (!Device.isDevice) {
-console.log('Must use physical device for Push Notifications');
 return false;
 }
 // Check if running in Expo Go (which has limited notification support)
 if (__DEV__ && !Constants.expoConfig?.extra?.eas) {
-console.log('Running in Expo Go - notifications may not work properly');
 // Return true but with limited functionality
 this.isInitialized = true;
 return true;
@@ -56,7 +54,6 @@ const { status } = await Notifications.requestPermissionsAsync();
 finalStatus = status;
 }
 if (finalStatus !== 'granted') {
-console.log('Failed to get push token for push notification!');
 return false;
 }
 // Get the push token
@@ -64,7 +61,6 @@ const token = await Notifications.getExpoPushTokenAsync({
 projectId: Constants.expoConfig?.extra?.eas?.projectId,
 });
 this.expoPushToken = token.data;
-console.log(' Push notification token:', this.expoPushToken);
 // Save token to storage
 await AsyncStorage.setItem('expoPushToken', this.expoPushToken);
 // Configure notification channels for Android
@@ -137,7 +133,6 @@ sound: 'default',
 trigger: null, // Show immediately
 ...(Platform.OS === 'android' && { channelId }),
 });
-console.log(' Local notification sent:', notification.title);
 } catch (error) {
 console.error('Error sending local notification:', error);
 }
@@ -243,7 +238,6 @@ sound: 'default',
 trigger,
 ...(Platform.OS === 'android' && { channelId }),
 });
-console.log(' Notification scheduled:', notificationId);
 return notificationId;
 } catch (error) {
 console.error('Error scheduling notification:', error);
@@ -256,7 +250,6 @@ throw error;
 public async cancelNotification(notificationId: string): Promise<void> {
 try {
 await Notifications.cancelScheduledNotificationAsync(notificationId);
-console.log(' Notification cancelled:', notificationId);
 } catch (error) {
 console.error('Error cancelling notification:', error);
 }
@@ -267,7 +260,6 @@ console.error('Error cancelling notification:', error);
 public async cancelAllNotifications(): Promise<void> {
 try {
 await Notifications.cancelAllScheduledNotificationsAsync();
-console.log(' All notifications cancelled');
 } catch (error) {
 console.error('Error cancelling all notifications:', error);
 }
@@ -292,22 +284,17 @@ responseListener: Notifications.Subscription;
 } {
 // Listener for notifications received while app is running
 const notificationListener = Notifications.addNotificationReceivedListener(notification => {
-console.log(' Notification received:', notification);
 });
 // Listener for user interactions with notifications
 const responseListener = Notifications.addNotificationResponseReceivedListener(response => {
-console.log(' Notification response:', response);
 const data = response.notification.request.content.data;
 // Handle different notification types
 if (data.type === 'price_alert') {
 // Navigate to stock details
-console.log('Navigate to stock:', data.symbol);
 } else if (data.type === 'mention') {
 // Navigate to discussion
-console.log('Navigate to discussion:', data.discussionTitle);
 } else if (data.type === 'follow') {
 // Navigate to user profile
-console.log('Navigate to user profile:', data.followerName);
 }
 });
 return {

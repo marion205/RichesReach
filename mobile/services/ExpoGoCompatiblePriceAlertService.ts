@@ -155,17 +155,11 @@ return currentPrice <= alert.targetPrice;
 private async triggerAlert(alert: PriceAlert, currentPrice: StockPrice): Promise<void> {
 try {
 // In Expo Go compatible mode, just log the alert
-console.log(' PRICE ALERT TRIGGERED (Expo Go compatible):');
-console.log(` Symbol: ${alert.symbol}`);
-console.log(` Current Price: $${currentPrice.price.toFixed(2)}`);
-console.log(` Target Price: $${alert.targetPrice.toFixed(2)}`);
-console.log(` Alert Type: ${alert.alertType}`);
 // Mark alert as triggered
 await this.updateAlert(alert.id, {
 triggeredAt: Date.now(),
 isActive: false,
 });
-console.log(' Price alert triggered (Expo Go compatible):', alert.symbol, currentPrice.price);
 } catch (error) {
 console.error('Error triggering price alert:', error);
 }

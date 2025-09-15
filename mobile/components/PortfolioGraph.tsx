@@ -107,7 +107,6 @@ try {
 // Set up portfolio update callback
 wsService.current.setCallbacks({
 onPortfolioUpdate: (portfolio: PortfolioUpdate) => {
-console.log(' Live portfolio update received:', portfolio);
 // Update live data
 setLiveTotalValue(portfolio.totalValue);
 setLiveTotalReturn(portfolio.totalReturn);

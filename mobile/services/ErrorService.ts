@@ -221,7 +221,6 @@ this.errorLog = [];
 private reportError(errorInfo: ErrorInfo): void {
 // Here you would integrate with a crash reporting service
 // like Crashlytics, Sentry, or Bugsnag
-console.log('Reporting error:', errorInfo);
 // For now, just show a confirmation
 Alert.alert(
 'Error Reported',

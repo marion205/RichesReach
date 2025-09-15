@@ -61,7 +61,6 @@ const hasHardware = await LocalAuthentication.hasHardwareAsync();
 const isEnrolled = await LocalAuthentication.isEnrolledAsync();
 setIsBiometricAvailable(hasHardware && isEnrolled);
 } catch (error) {
-console.log('Biometric check failed:', error);
 }
 };
 const loadRememberedCredentials = async () => {
@@ -73,7 +72,6 @@ setEmail(lastEmail);
 setRememberMe(true);
 }
 } catch (error) {
-console.log('Failed to load remembered credentials:', error);
 }
 };
 const validateEmail = (email: string) => {
@@ -129,7 +127,6 @@ Alert.alert('Biometric Success', 'Please enter your password to complete login.'
 }
 }
 } catch (error) {
-console.log('Biometric authentication failed:', error);
 Alert.alert('Authentication Failed', 'Biometric authentication failed. Please try again.');
 }
 };

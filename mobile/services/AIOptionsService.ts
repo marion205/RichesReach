@@ -100,15 +100,12 @@ timeHorizon: number = 30,
 maxRecommendations: number = 5
 ): Promise<AIOptionsResponse> {
 try {
-console.log(' AI Options Service: Starting request...');
-console.log(' Request details:', {
 symbol: symbol.toUpperCase(),
 user_risk_tolerance: userRiskTolerance,
 portfolio_value: portfolioValue,
 time_horizon: timeHorizon,
 max_recommendations: maxRecommendations,
 });
-console.log(' API URL:', `${this.baseUrl}/recommendations`);
 const requestBody = {
 symbol: symbol.toUpperCase(),
 user_risk_tolerance: userRiskTolerance,
@@ -116,7 +113,6 @@ portfolio_value: portfolioValue,
 time_horizon: timeHorizon,
 max_recommendations: maxRecommendations,
 };
-console.log(' Request body:', JSON.stringify(requestBody, null, 2));
 const response = await fetch(`${this.baseUrl}/recommendations`, {
 method: 'POST',
 headers: {
@@ -124,15 +120,12 @@ headers: {
 },
 body: JSON.stringify(requestBody),
 });
-console.log(' Response status:', response.status);
-console.log(' Response headers:', response.headers);
 if (!response.ok) {
 const errorText = await response.text();
 console.error(' HTTP Error Response:', errorText);
 throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
 }
 const data = await response.json();
-console.log(' Success! Received data:', {
 symbol: data.symbol,
 total_recommendations: data.total_recommendations,
 recommendations_count: data.recommendations?.length || 0,
