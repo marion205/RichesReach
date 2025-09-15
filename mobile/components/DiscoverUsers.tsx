@@ -67,7 +67,6 @@ interface DiscoverUsersProps {
 onNavigate: (screen: string, params?: any) => void;
 }
 const DiscoverUsers: React.FC<DiscoverUsersProps> = ({ onNavigate }) => {
-console.log(' DiscoverUsers component rendered!');
 const [searchTerm, setSearchTerm] = useState('');
 const [selectedExperience, setSelectedExperience] = useState<string>('');
 const [sortBy, setSortBy] = useState('followers');
@@ -78,7 +77,6 @@ const [error, setError] = useState<string | null>(null);
 const mockUserService = MockUserService.getInstance();
 // Load users from mock service
 const loadUsers = () => {
-console.log(' loadUsers called with searchTerm:', searchTerm);
 setLoading(true);
 setError(null);
 try {
@@ -89,7 +87,6 @@ searchTerm.trim() || undefined,
 selectedExperience || undefined, 
 sortBy
 );
-console.log(' Mock users loaded:', mockUsers.length, 'users');
 setUsers(mockUsers);
 } catch (err) {
 setError('Failed to load users');

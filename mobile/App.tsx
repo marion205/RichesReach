@@ -78,12 +78,10 @@ console.warn(' Push notifications not available:', notificationError instanceof 
 if (priceAlertService) {
 try {
 await priceAlertService.initialize();
-console.log(' Price alert service initialized successfully');
 } catch (priceAlertError) {
 console.warn(' Price alert service initialization failed:', priceAlertError instanceof Error ? priceAlertError.message : 'Unknown error');
 }
 } else {
-console.log(' Price alert service not available in Expo Go');
 }
 } catch (error) {
 console.error('Error initializing services:', error);
@@ -94,26 +92,19 @@ setIsLoading(false);
 initializeServices();
 }, []);
 const navigateTo = (screen: string, params?: any) => {
-console.log(' navigateTo called:', { screen, params });
-console.log(' Current currentScreen before change:', currentScreen);
   if (screen === 'user-profile' && params?.userId) {
     const newScreen = `user-profile-${params.userId}`;
-    console.log(' Setting currentScreen to:', newScreen);
     setCurrentScreen(newScreen);
   } else if (screen === 'user-portfolios' && params?.userId) {
     const newScreen = `user-portfolios-${params.userId}`;
-    console.log(' Setting currentScreen to:', newScreen);
     setCurrentScreen(newScreen);
   } else if (screen === 'user-activity' && params?.userId) {
     const newScreen = `user-activity-${params.userId}`;
-    console.log(' Setting currentScreen to:', newScreen);
     setCurrentScreen(newScreen);
   } else if (screen === 'message-user' && params?.userId) {
     const newScreen = `message-user-${params.userId}`;
-    console.log(' Setting currentScreen to:', newScreen);
     setCurrentScreen(newScreen);
   } else {
-console.log(' Setting currentScreen to:', screen);
 setCurrentScreen(screen);
 }
 };
@@ -194,7 +185,6 @@ onNavigateToForgotPassword={() => setCurrentScreen('forgot-password')}
 if (isLoggedIn && !hasCompletedOnboarding) {
 return <OnboardingScreen onComplete={handleOnboardingComplete} />;
 }
-console.log(' renderScreen switch - currentScreen:', currentScreen);
 switch (currentScreen) {
 case 'home':
 return <HomeScreen navigateTo={navigateTo} />;
@@ -231,28 +221,24 @@ return <DiscoverUsersScreen onNavigate={navigateTo} />;
       const userId = currentScreen.startsWith('user-profile-') 
         ? currentScreen.replace('user-profile-', '') 
         : 'default-user';
-      console.log(' user-profile case - userId:', userId);
       return <UserProfileScreen userId={userId} onNavigate={navigateTo} />;
     case 'user-portfolios':
       // Extract userId from currentScreen if it's in format 'user-portfolios-{userId}'
       const portfolioUserId = currentScreen.startsWith('user-portfolios-') 
         ? currentScreen.replace('user-portfolios-', '') 
         : 'default-user';
-      console.log(' user-portfolios case - userId:', portfolioUserId);
       return <UserPortfoliosScreen userId={portfolioUserId} onNavigate={navigateTo} />;
     case 'user-activity':
       // Extract userId from currentScreen if it's in format 'user-activity-{userId}'
       const activityUserId = currentScreen.startsWith('user-activity-') 
         ? currentScreen.replace('user-activity-', '') 
         : 'default-user';
-      console.log(' user-activity case - userId:', activityUserId);
       return <UserActivityScreen userId={activityUserId} onNavigate={navigateTo} />;
     case 'message-user':
       // Extract userId from currentScreen if it's in format 'message-user-{userId}'
       const messageUserId = currentScreen.startsWith('message-user-') 
         ? currentScreen.replace('message-user-', '') 
         : 'default-user';
-      console.log(' message-user case - userId:', messageUserId);
       return <MessageScreen userId={messageUserId} onNavigate={navigateTo} />;
 case 'social-feed':
 return <SocialScreen onNavigate={navigateTo} />;
@@ -260,28 +246,22 @@ case 'ai-options':
 return <AIOptionsScreen navigation={{ goBack: () => setCurrentScreen('home') }} />;
     default:
       // Handle user-profile and user-portfolios with userId pattern
-      console.log(' default case - currentScreen:', currentScreen);
       if (currentScreen.startsWith('user-profile-')) {
         const userId = currentScreen.replace('user-profile-', '');
-        console.log(' default case - userId:', userId);
         return <UserProfileScreen userId={userId} onNavigate={navigateTo} />;
       }
       if (currentScreen.startsWith('user-portfolios-')) {
         const userId = currentScreen.replace('user-portfolios-', '');
-        console.log(' default case - portfolio userId:', userId);
         return <UserPortfoliosScreen userId={userId} onNavigate={navigateTo} />;
       }
       if (currentScreen.startsWith('user-activity-')) {
         const userId = currentScreen.replace('user-activity-', '');
-        console.log(' default case - activity userId:', userId);
         return <UserActivityScreen userId={userId} onNavigate={navigateTo} />;
       }
       if (currentScreen.startsWith('message-user-')) {
         const userId = currentScreen.replace('message-user-', '');
-        console.log(' default case - message userId:', userId);
         return <MessageScreen userId={userId} onNavigate={navigateTo} />;
       }
-      console.log(' default case - returning HomeScreen');
       return <HomeScreen navigateTo={navigateTo} />;
 }
 };

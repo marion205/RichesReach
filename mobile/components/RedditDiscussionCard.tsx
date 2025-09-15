@@ -38,7 +38,6 @@ const RedditDiscussionCard: React.FC<RedditDiscussionCardProps> = ({
     onComment,
     onPress,
 }) => {
-console.log(' RedditDiscussionCard rendered for discussion:', {
 id: discussion.id,
 title: discussion.title,
 score: discussion.score,
@@ -184,14 +183,12 @@ color={userVote === 'downvote' ? '#7193FF' : '#8E8E93'}
                     <TouchableOpacity 
                         style={styles.avatarContainer}
                         onPress={() => {
-                            console.log('Profile picture clicked for user:', discussion.user.name);
                             // TODO: Navigate to user profile or show profile modal
                             Alert.alert(
                                 'User Profile',
                                 `${discussion.user.name}`,
                                 [
                                     { text: 'Close', style: 'cancel' },
-                                    { text: 'View Profile', onPress: () => console.log('Navigate to profile') }
                                 ]
                             );
                         }}
@@ -213,13 +210,11 @@ color={userVote === 'downvote' ? '#7193FF' : '#8E8E93'}
                 <View style={styles.userDetails}>
                     <TouchableOpacity 
                         onPress={() => {
-                            console.log('Username clicked for user:', discussion.user.name);
                             Alert.alert(
                                 'User Profile',
                                 `${discussion.user.name}`,
                                 [
                                     { text: 'Close', style: 'cancel' },
-                                    { text: 'View Profile', onPress: () => console.log('Navigate to profile') }
                                 ]
                             );
                         }}
@@ -361,7 +356,6 @@ onPress={() => Linking.openURL(link)}
 <TouchableOpacity 
 style={styles.actionButton} 
 onPress={() => {
-console.log(' RedditDiscussionCard comment button pressed for discussion:', discussion.id);
 onComment();
 }}
 >
@@ -371,7 +365,6 @@ onComment();
 <TouchableOpacity 
 style={styles.actionButton}
 onPress={() => {
-console.log(' Share button clicked for discussion:', discussion.id);
 // Create share text
 const shareText = `Check out this discussion: "${discussion.title}"\n\n${discussion.content?.replace(/\[(IMAGE|VIDEO):\s*[^\]]+\]/g, '').trim()}\n\nShared from RichesReach`;
 // For now, we'll use a simple alert
@@ -385,7 +378,6 @@ Alert.alert(
 { 
 text: 'Copy Link', 
 onPress: () => {
-console.log(' Discussion shared:', discussion.id);
 Alert.alert('Success', 'Discussion link copied to clipboard!');
 }
 }
@@ -400,18 +392,15 @@ Alert.alert('Success', 'Discussion link copied to clipboard!');
 <TouchableOpacity 
 style={styles.actionButton}
 onPress={() => {
-console.log(' Save button clicked for discussion:', discussion.id);
 // Toggle saved state
 setIsSaved(!isSaved);
 if (!isSaved) {
 // Saving
-console.log(' Discussion saved:', discussion.id);
 setTimeout(() => {
 Alert.alert('Success', 'Discussion saved to your bookmarks!');
 }, 100);
 } else {
 // Unsaving
-console.log(' Discussion unsaved:', discussion.id);
 setTimeout(() => {
 Alert.alert('Success', 'Discussion removed from your bookmarks!');
 }, 100);

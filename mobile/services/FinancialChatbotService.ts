@@ -46,7 +46,6 @@ return FinancialChatbotService.instance;
 */
 public isFinancialQuestion(userInput: string): boolean {
 const input = userInput.toLowerCase();
-console.log(' Checking if financial question for:', userInput);
 // Financial keywords
 const financialKeywords = [
 'invest', 'investment', 'stock', 'stocks', 'etf', 'mutual fund', 'bond', 'bonds',
@@ -106,8 +105,6 @@ const hasIncomeContext = input.includes('make') || input.includes('earn') || inp
 input.includes('biweekly') || input.includes('weekly') || input.includes('monthly') ||
 input.includes('salary') || input.includes('wage');
 const isSavingsQuestion = hasNumbers && hasSavingsContext && hasIncomeContext;
-console.log('Financial question result:', hasFinancialKeywords);
-console.log('Savings question check:', { hasNumbers, hasSavingsContext, hasIncomeContext, isSavingsQuestion });
 return hasFinancialKeywords || isSavingsQuestion;
 }
 /**
@@ -127,7 +124,6 @@ fullMatch.includes('million') || fullMatch.includes('m') ? 1000000 :
 fullMatch.includes('billion') || fullMatch.includes('b') ? 1000000000 : 1;
 amount = parseFloat(numStr) * multiplier;
 // Debug logging
-console.log('Amount extraction debug:', {
 input: userInput,
 amountMatch: amountMatch[0],
 numStr,
@@ -352,14 +348,10 @@ Please ask me about personal finance, investing, or money management topics!`;
 * Main method to process user input and generate appropriate response
 */
 public async processUserInput(userInput: string): Promise<string> {
-console.log('=== CHATBOT DEBUG ===');
-console.log('User input:', userInput);
 // Check if it's a financial question
 if (!this.isFinancialQuestion(userInput)) {
-console.log('Not a financial question');
 return this.generateNonFinancialResponse(userInput);
 }
-console.log('Is a financial question');
 // Check for savings calculation questions FIRST (before investment context)
 const input = userInput.toLowerCase();
 const hasSavingsKeywords = input.includes('save') || input.includes('reach') || input.includes('goal') ||
@@ -368,30 +360,20 @@ input.includes('build') || input.includes('grow') || input.includes('achieve');
 const hasIncomeKeywords = input.includes('paycheck') || input.includes('biweekly') || input.includes('every two weeks') || 
 input.includes('make') || input.includes('earn') || input.includes('weekly') || 
 input.includes('monthly') || input.includes('salary') || input.includes('wage');
-console.log('Savings detection check:');
-console.log('- Input:', input);
-console.log('- Has savings keywords (save/reach/goal):', hasSavingsKeywords);
-console.log('- Has income keywords (paycheck/biweekly/make/earn):', hasIncomeKeywords);
-console.log('- Should trigger savings:', hasSavingsKeywords && hasIncomeKeywords);
 if (hasSavingsKeywords && hasIncomeKeywords) {
-console.log(' DETECTED SAVINGS QUESTION - Triggering savings calculation');
 return this.generateSavingsCalculationResponse(userInput);
 }
 // Extract investment context
-console.log('Checking for investment context...');
 const context = this.extractInvestmentContext(userInput);
-console.log('Investment context:', context);
 // Only trigger investment advice for clear investment questions, not comparative questions
 const isInvestmentQuestion = context && context.amount > 0 && 
 (input.includes('invest') || input.includes('investment') || input.includes('portfolio') || 
 input.includes('stock') || input.includes('etf') || input.includes('mutual fund') ||
 input.includes('retirement') || input.includes('401k') || input.includes('ira'));
 if (isInvestmentQuestion) {
-console.log(' DETECTED INVESTMENT QUESTION - Triggering investment advice');
 return await this.generateInvestmentAdvice(userInput, context);
 }
 // Otherwise, provide general financial guidance
-console.log(' Using general financial response');
 return this.generateGeneralFinancialResponse(userInput);
 }
 /**
@@ -399,11 +381,8 @@ return this.generateGeneralFinancialResponse(userInput);
 */
 private generateSavingsCalculationResponse(userInput: string): string {
 const input = userInput.toLowerCase();
-console.log('Savings calculation triggered for:', userInput);
-console.log('Input after lowercasing:', input);
 // Extract numbers from the input (including k for thousands)
 const numberMatches = input.match(/(\d+)(?:k|thousand)?/gi);
-console.log('Number matches found:', numberMatches);
 if (!numberMatches || numberMatches.length < 2) {
 return `I'd be happy to help you calculate how much to save from each paycheck! 
 To give you an accurate calculation, please provide:
@@ -623,8 +602,6 @@ You're asking about comparing "${userInput}" - this is a great financial questio
 */
 private generateGeneralFinancialResponse(userInput: string): string {
 const input = userInput.toLowerCase();
-console.log('General financial response called with:', userInput);
-console.log('Input after lowercasing:', input);
 // Check for savings calculation questions
 const hasSavingsKeywords = input.includes('save') || input.includes('reach') || input.includes('goal') ||
 input.includes('saving') || input.includes('savings') || input.includes('accumulate') ||
@@ -632,11 +609,7 @@ input.includes('build') || input.includes('grow') || input.includes('achieve');
 const hasIncomeKeywords = input.includes('paycheck') || input.includes('biweekly') || input.includes('every two weeks') || 
 input.includes('make') || input.includes('earn') || input.includes('weekly') || 
 input.includes('monthly') || input.includes('salary') || input.includes('wage');
-console.log('Has savings keywords:', hasSavingsKeywords);
-console.log('Has income keywords:', hasIncomeKeywords);
-console.log('Should trigger savings calculation:', hasSavingsKeywords && hasIncomeKeywords);
 if (hasSavingsKeywords && hasIncomeKeywords) {
-console.log('Triggering savings calculation response');
 return this.generateSavingsCalculationResponse(userInput);
 }
 // Check for "would you rather" or comparative financial questions

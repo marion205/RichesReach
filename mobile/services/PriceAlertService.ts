@@ -79,7 +79,6 @@ createdAt: Date.now(),
 };
 this.alerts.push(alert);
 await this.saveAlerts();
-console.log(' Price alert added:', alert);
 return alert;
 }
 /**
@@ -89,7 +88,6 @@ public async removeAlert(alertId: string): Promise<void> {
 await this.initialize();
 this.alerts = this.alerts.filter(alert => alert.id !== alertId);
 await this.saveAlerts();
-console.log(' Price alert removed:', alertId);
 }
 /**
 * Update a price alert
@@ -100,7 +98,6 @@ const alertIndex = this.alerts.findIndex(alert => alert.id === alertId);
 if (alertIndex !== -1) {
 this.alerts[alertIndex] = { ...this.alerts[alertIndex], ...updates };
 await this.saveAlerts();
-console.log(' Price alert updated:', alertId);
 }
 }
 /**
@@ -168,7 +165,6 @@ await this.updateAlert(alert.id, {
 triggeredAt: Date.now(),
 isActive: false,
 });
-console.log(' Price alert triggered:', alert.symbol, currentPrice.price);
 } catch (error) {
 console.error('Error triggering price alert:', error);
 }
@@ -179,7 +175,6 @@ console.error('Error triggering price alert:', error);
 public async clearAllAlerts(): Promise<void> {
 this.alerts = [];
 await this.saveAlerts();
-console.log(' All price alerts cleared');
 }
 /**
 * Clear triggered alerts
@@ -187,7 +182,6 @@ console.log(' All price alerts cleared');
 public async clearTriggeredAlerts(): Promise<void> {
 this.alerts = this.alerts.filter(alert => !alert.triggeredAt);
 await this.saveAlerts();
-console.log(' Triggered price alerts cleared');
 }
 /**
 * Get alert statistics
@@ -239,7 +233,6 @@ throw new Error('Invalid alert format');
 }
 this.alerts = importedAlerts;
 await this.saveAlerts();
-console.log(' Price alerts imported successfully');
 } catch (error) {
 console.error('Error importing price alerts:', error);
 throw error;

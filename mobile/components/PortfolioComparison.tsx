@@ -116,7 +116,6 @@ const endValue = filteredHistory[filteredHistory.length - 1].value;
 const timeframeReturn = endValue - startValue;
 const timeframeReturnPercent = startValue > 0 ? (timeframeReturn / startValue) * 100 : 0;
 // Debug logging
-console.log(`Timeframe: ${selectedTimeframe}, Points: ${filteredHistory.length}, Start: ${startValue}, End: ${endValue}, Return: ${timeframeReturn}, Percent: ${timeframeReturnPercent}`);
 return {
 totalReturn: timeframeReturn,
 totalReturnPercent: timeframeReturnPercent,

@@ -227,7 +227,6 @@ fetchPolicy: 'cache-and-network',
 const { data: watchlistData, loading: watchlistLoading, refetch: refetchWatchlist, error: watchlistError } = useQuery(GET_MY_WATCHLIST, {
 fetchPolicy: 'cache-and-network',
 onCompleted: (data) => {
-console.log(' Watchlist query completed:', data);
 },
 onError: (error) => {
 console.error(' Watchlist query error:', error);
@@ -241,7 +240,6 @@ sortBy: 'ml_score'
 },
 fetchPolicy: 'cache-and-network',
 onCompleted: (data) => {
-console.log(' Stock screening query completed:', data);
 },
 onError: (error) => {
 console.error(' Stock screening query error:', error);

@@ -99,9 +99,8 @@ if (quote.price > 0) {
 prices[quote.symbol] = quote.price;
 }
 });
-setRealTimePrices(prices);
-console.log(` Fetched real prices for ${Object.keys(prices).length} stocks in portfolio management`);
-} catch (error: any) {
+      setRealTimePrices(prices);
+    } catch (error: any) {
 console.error('Failed to fetch real-time prices:', error);
 } finally {
 setLoadingPrices(false);
@@ -114,23 +113,17 @@ fetchRealTimePrices(stocksData.stocks);
 }
 }, [stocksData]);
 const handleCreatePortfolio = async () => {
-console.log('handleCreatePortfolio called!');
-console.log('Portfolio name:', newPortfolioName);
-
 if (!newPortfolioName.trim()) {
 Alert.alert('Error', 'Please enter a portfolio name');
 return;
 }
 
 try {
-console.log('Creating portfolio with name:', newPortfolioName.trim());
 const result = await createPortfolio({
 variables: {
 portfolioName: newPortfolioName.trim()
 }
 });
-
-console.log('Portfolio creation result:', result);
 
 if (result.data?.createPortfolio?.success) {
 setShowCreatePortfolioModal(false);
@@ -146,12 +139,8 @@ console.error('Error details:', JSON.stringify(error, null, 2));
 Alert.alert('Error', `Failed to create portfolio: ${error?.message || error?.toString() || 'Unknown error'}`);
 }
 };
-const handleAddStock = async () => {
-console.log('handleAddStock called with:');
-console.log('selectedStock:', selectedStock);
-console.log('shares:', shares);
-console.log('selectedPortfolio:', selectedPortfolio);
-if (!selectedStock || !shares || !selectedPortfolio) {
+  const handleAddStock = async () => {
+    if (!selectedStock || !shares || !selectedPortfolio) {
 Alert.alert('Error', 'Please select a stock, enter shares, and choose a portfolio');
 return;
 }
@@ -295,10 +284,8 @@ onPress={() => handleRemoveStock(holding.id, holding.stock.symbol)}
 )}
 <TouchableOpacity
 style={styles.addStockButton}
-onPress={() => {
-console.log('Add Stock clicked for portfolio:', portfolio);
-console.log('Portfolio name:', portfolio.name);
-setSelectedPortfolio(portfolio.name);
+                onPress={() => {
+                  setSelectedPortfolio(portfolio.name);
 setShowAddStockModal(true);
 }}
 >

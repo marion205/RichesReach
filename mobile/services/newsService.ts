@@ -102,7 +102,6 @@ return now < cached.expiresAt;
 // Get cached news for a category
 private getCachedNews(category: NewsCategory): NewsArticle[] | null {
 if (this.isCacheValid(category)) {
-console.log(` Using cached news for ${category} (${this.newsCache[category].articles.length} articles)`);
 return this.newsCache[category].articles;
 }
 return null;
@@ -115,16 +114,13 @@ articles,
 timestamp: now,
 expiresAt: now + this.CACHE_DURATION
 };
-console.log(` Cached ${articles.length} articles for ${category} (expires in ${this.CACHE_DURATION / 60000} minutes)`);
 }
 // Clear cache for a specific category or all categories
 clearCache(category?: NewsCategory): void {
 if (category) {
 delete this.newsCache[category];
-console.log(` Cleared cache for ${category}`);
 } else {
 this.newsCache = {};
-console.log(` Cleared all news cache`);
 }
 }
 // Force refresh by clearing cache and fetching fresh data

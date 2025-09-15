@@ -47,7 +47,6 @@ const existingResults = await this.getRebalancingResults();
 const updatedResults = [rebalancingResult, ...existingResults].slice(0, this.MAX_RESULTS);
 // Save to AsyncStorage
 await AsyncStorage.setItem(this.STORAGE_KEY, JSON.stringify(updatedResults));
-console.log(' Rebalancing result saved:', rebalancingResult.id);
 } catch (error) {
 console.error(' Error saving rebalancing result:', error);
 throw error;
@@ -87,7 +86,6 @@ return null;
 async clearAllResults(): Promise<void> {
 try {
 await AsyncStorage.removeItem(this.STORAGE_KEY);
-console.log(' All rebalancing results cleared');
 } catch (error) {
 console.error(' Error clearing rebalancing results:', error);
 throw error;
@@ -101,7 +99,6 @@ try {
 const results = await this.getRebalancingResults();
 const recentResults = results.slice(0, keepCount);
 await AsyncStorage.setItem(this.STORAGE_KEY, JSON.stringify(recentResults));
-console.log(` Cleared old rebalancing results, kept ${recentResults.length} most recent`);
 } catch (error) {
 console.error(' Error clearing old rebalancing results:', error);
 throw error;

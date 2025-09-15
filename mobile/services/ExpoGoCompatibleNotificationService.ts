@@ -25,7 +25,6 @@ try {
 if (this.isInitialized) {
 return true;
 }
-console.log(' Expo Go Compatible Notification Service initialized');
 this.isInitialized = true;
 return true;
 } catch (error) {
@@ -116,7 +115,6 @@ public setupNotificationListeners(): {
 notificationListener: any;
 responseListener: any;
 } {
-console.log(' Setting up Expo Go compatible notification listeners');
 return {
 notificationListener: { remove: () => {} },
 responseListener: { remove: () => {} }
@@ -129,7 +127,6 @@ public removeNotificationListeners(
 notificationListener: any,
 responseListener: any
 ): void {
-console.log(' Removing Expo Go compatible notification listeners');
 }
 /**
 * Check if notifications are enabled

@@ -36,13 +36,11 @@ private updateFrequency: number = 30000; // 30 seconds
 // Get portfolio data (simplified - no real-time tracking)
 public async getPortfolioData(): Promise<PortfolioMetrics | null> {
 try {
-console.log(' Loading portfolio data...');
 // Pre-load data to avoid rate limits
 await MarketDataService.preloadPortfolioData();
 // Get current portfolio data
 const portfolioData = await this.getCurrentPortfolio();
 if (!portfolioData) {
-console.log('No portfolio data found');
 return null;
 }
 // Get real-time quotes for all holdings
@@ -89,7 +87,6 @@ lastUpdated: new Date().toISOString()
 // Store updated portfolio
 await this.savePortfolio(updatedPortfolio);
 this.lastPortfolioData = updatedPortfolio;
-console.log(' Portfolio data loaded successfully:', {
 totalValue: totalValue.toFixed(2),
 totalReturn: totalReturn.toFixed(2),
 totalReturnPercent: totalReturnPercent.toFixed(2)
@@ -124,11 +121,9 @@ console.error('Error in portfolio update callback:', error);
 // Update portfolio with real-time data
 private async updatePortfolio() {
 try {
-console.log(' Updating portfolio with real-time data...');
 // Get current portfolio data
 const portfolioData = await this.getCurrentPortfolio();
 if (!portfolioData) {
-console.log('No portfolio data found');
 return;
 }
 // Get real-time quotes for all holdings
@@ -181,7 +176,6 @@ type: 'portfolio_refresh',
 data: updatedPortfolio,
 timestamp: Date.now()
 });
-console.log(' Portfolio updated successfully:', {
 totalValue: totalValue.toFixed(2),
 totalReturn: totalReturn.toFixed(2),
 totalReturnPercent: totalReturnPercent.toFixed(2)

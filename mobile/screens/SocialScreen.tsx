@@ -280,9 +280,8 @@ webSocketService.setToken(token);
 }
 // Set up WebSocket callbacks
 webSocketService.setCallbacks({
-onConnectionStatusChange: (connected) => {
-console.log(' WebSocket connection status:', connected);
-setIsWebSocketConnected(connected);
+      onConnectionStatusChange: (connected) => {
+        setIsWebSocketConnected(connected);
 if (!connected) {
 errorService.handleWebSocketError(
 new Error('WebSocket disconnected'),
@@ -291,19 +290,16 @@ new Error('WebSocket disconnected'),
 );
 }
 },
-onNewDiscussion: (discussion: DiscussionUpdate) => {
-console.log(' New discussion received via WebSocket:', discussion.title);
-// Refetch discussions to get the latest data
+      onNewDiscussion: (discussion: DiscussionUpdate) => {
+        // Refetch discussions to get the latest data
 refetchDiscussions();
 },
-onNewComment: (comment) => {
-console.log(' New comment received via WebSocket:', comment.content);
-// Refetch discussions to get the latest comments
+      onNewComment: (comment) => {
+        // Refetch discussions to get the latest comments
 refetchDiscussions();
 },
-onDiscussionUpdate: (discussionId, updates) => {
-console.log(' Discussion update received via WebSocket:', discussionId, updates);
-// Refetch discussions to get the latest updates
+      onDiscussionUpdate: (discussionId, updates) => {
+        // Refetch discussions to get the latest updates
 refetchDiscussions();
 }
 });
@@ -357,20 +353,15 @@ const handleDownvote = (discussionId: string) => {
 };
 const handleToggleFollow = async (userId: string) => {
 try {
-console.log(' Toggling follow for user:', userId);
 const result = await toggleFollow({
 variables: { userId }
 });
-console.log(' Follow result:', result);
 if (result.data?.toggleFollow?.success) {
-console.log(' Follow toggle successful');
 // Refetch all relevant data
 await Promise.all([
 refetchDiscussions()
 ]);
-console.log(' All data refetched after follow toggle');
 } else {
-console.log(' Follow toggle failed');
 }
 } catch (error) {
 console.error(' Follow toggle error:', error);
@@ -389,59 +380,24 @@ if (hasContent && createContent.trim().length < 10) return true;
 return false;
 };
 const handleDiscussionComment = (discussionId: string) => {
-console.log(' COMMENT BUTTON CLICKED');
-console.log(' Comment button data:', {
-discussionId: discussionId,
-discussionsData: discussionsData,
-stockDiscussions: discussionsData?.stockDiscussions
-});
-// Open discussion detail instead of comment modal (X-style)
+  // Open discussion detail instead of comment modal (X-style)
 const discussion = discussionsData?.stockDiscussions?.find((d: any) => d.id === discussionId);
-console.log(' Found discussion:', discussion);
 if (discussion) {
-console.log(' Discussion found, opening detail modal');
-console.log(' Discussion details:', {
-id: discussion.id,
-title: discussion.title,
-score: discussion.score,
-commentCount: discussion.commentCount
-});
-setDiscussionDetail(discussion);
-setSelectedDiscussionId(discussionId);
-setCommentContent(''); // Reset comment input
-setShowCommentModal(false); // Close comment modal if open
-setShowDiscussionDetail(true); // Open discussion detail modal
-console.log(' Modal state updated:', {
-discussionDetail: discussion,
-selectedDiscussionId: discussionId,
-showCommentModal: false,
-showDiscussionDetail: true
-});
+  setDiscussionDetail(discussion);
+  setSelectedDiscussionId(discussionId);
+  setCommentContent(''); // Reset comment input
+  setShowCommentModal(false); // Close comment modal if open
+  setShowDiscussionDetail(true); // Open discussion detail modal
 } else {
-console.log(' Discussion not found for ID:', discussionId);
 }
 };
 const handleCommentSubmit = async () => {
-console.log(' COMMENT SUBMISSION STARTED');
-console.log(' Current state:', {
-commentContent: commentContent,
-commentContentLength: commentContent?.length || 0,
-selectedDiscussionId: selectedDiscussionId,
-isCommenting: isCommenting,
-showCommentModal: showCommentModal
-});
 if (!commentContent.trim()) {
-console.log(' No comment content provided');
 Alert.alert('Error', 'Please enter a comment');
 return;
 }
-console.log(' Starting comment submission...');
-console.log(' Comment data:', {
-discussionId: selectedDiscussionId,
-content: commentContent.trim(),
-contentLength: commentContent.trim().length
-});
-console.log(' Testing backend connection before comment...');
+// Starting comment submission
+// Test backend connection
 try {
 const testResponse = await fetch('http://192.168.1.151:8001/graphql/', {
 method: 'POST',
@@ -452,66 +408,29 @@ body: JSON.stringify({
 query: '{ __typename }'
 })
 });
-console.log(' Backend connection test status:', testResponse.status);
-if (testResponse.ok) {
-console.log(' Backend is reachable for comment');
-} else {
-console.log(' Backend connection failed for comment');
-}
 } catch (testError) {
-console.log(' Backend connection test failed:', testError);
+// Backend connection test failed
 }
 setIsCommenting(true);
-console.log(' Set isCommenting to true');
 try {
-console.log(' Sending comment GraphQL mutation...');
-console.log(' Comment mutation variables:', { 
-discussionId: selectedDiscussionId, 
-content: commentContent.trim() 
-});
 const result = await commentOnDiscussion({ 
 variables: { 
 discussionId: selectedDiscussionId, 
 content: commentContent.trim() 
 } 
 });
-console.log(' Comment mutation completed successfully!');
-console.log(' Comment result:', result);
-console.log(' Comment result data:', result.data);
-console.log(' Comment result data.createDiscussionComment:', result.data?.createDiscussionComment);
 if (result.data?.createDiscussionComment?.success) {
-console.log(' Comment creation was successful!');
-console.log(' Created comment:', result.data.createDiscussionComment.comment);
 } else {
-console.log(' Comment creation returned success: false');
-console.log(' Error message:', result.data?.createDiscussionComment?.message);
 }
 // Refetch discussions to update comment count
-console.log(' Refetching discussions to update comment count...');
-console.log(' Before refetch - discussionsData:', discussionsData?.stockDiscussions?.map((d: any) => ({
-id: d.id,
-title: d.title,
-commentCount: d.commentCount
-})));
 // Add a small delay to ensure backend has processed the comment
-console.log('⏳ Waiting 500ms for backend to process comment...');
 await new Promise(resolve => setTimeout(resolve, 500));
 const refetchResult = await refetchDiscussions();
-console.log(' Refetch result:', refetchResult);
-console.log(' After refetch - discussionsData:', discussionsData?.stockDiscussions?.map((d: any) => ({
-id: d.id,
-title: d.title,
-commentCount: d.commentCount
-})));
-console.log(' Discussions refetched after comment');
 // Close modal and reset
-console.log(' Closing modal and resetting form...');
 setShowCommentModal(false);
 setCommentContent('');
 setSelectedDiscussionId('');
-console.log(' Modal closed and form reset');
 Alert.alert('Success', 'Comment added successfully!');
-console.log(' Comment submission completed successfully!');
 } catch (error) {
 console.error(' COMMENT SUBMISSION FAILED');
 console.error(' Failed to add comment:', error);
@@ -526,14 +445,11 @@ console.error(' GraphQL errors:', (error as any).graphQLErrors);
 }
 Alert.alert('Error', 'Failed to add comment. Please try again.');
 } finally {
-console.log(' Comment submission process finished');
 setIsCommenting(false);
-console.log(' Set isCommenting to false');
 }
 };
 // Media picker functions
 const pickImage = async () => {
-console.log(' Picking image...');
 try {
 const result = await ImagePicker.launchImageLibraryAsync({
 mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -542,12 +458,10 @@ aspect: [16, 9],
 quality: 0.8,
 });
 if (!result.canceled && result.assets[0]) {
-console.log(' Image selected:', result.assets[0].uri);
 setSelectedImage(result.assets[0].uri);
 setSelectedVideo(null);
 setMediaType('image');
 } else {
-console.log(' Image selection cancelled');
 }
 } catch (error) {
 console.error(' Error picking image:', error);
@@ -555,7 +469,6 @@ Alert.alert('Error', 'Failed to pick image');
 }
 };
 const pickVideo = async () => {
-console.log(' Picking video...');
 try {
 const result = await ImagePicker.launchImageLibraryAsync({
 mediaTypes: ImagePicker.MediaTypeOptions.Videos,
@@ -563,12 +476,10 @@ allowsEditing: true,
 quality: 0.8,
 });
 if (!result.canceled && result.assets[0]) {
-console.log(' Video selected:', result.assets[0].uri);
 setSelectedVideo(result.assets[0].uri);
 setSelectedImage(null);
 setMediaType('video');
 } else {
-console.log(' Video selection cancelled');
 }
 } catch (error) {
 console.error(' Error picking video:', error);
@@ -576,7 +487,6 @@ Alert.alert('Error', 'Failed to pick video');
 }
 };
 const showMediaOptions = () => {
-console.log(' Showing media options...');
 Alert.alert(
 'Add Media',
 'Choose the type of media you want to add',
@@ -598,19 +508,15 @@ style: 'cancel',
 );
 };
 const removeMedia = () => {
-console.log(' Removing media...');
 setSelectedImage(null);
 setSelectedVideo(null);
 setMediaType(null);
 };
 const handleShareDiscussion = (discussion: any) => {
-console.log(' Share button clicked!', discussion?.id);
 if (!discussion) {
-console.log(' No discussion provided');
 return;
 }
 const shareText = `Check out this discussion: "${discussion.title}"\n\n${discussion.content?.replace(/\[(IMAGE|VIDEO):\s*[^\]]+\]/g, '').trim()}\n\nShared from RichesReach`;
-console.log(' Sharing discussion:', shareText);
 // Use a simple alert that should work
 setTimeout(() => {
 Alert.alert(
@@ -621,7 +527,6 @@ Alert.alert(
 { 
 text: 'Copy Link', 
 onPress: () => {
-console.log(' Discussion shared:', discussion.id);
 Alert.alert('Success', 'Discussion link copied to clipboard!');
 }
 }
@@ -630,20 +535,16 @@ Alert.alert('Success', 'Discussion link copied to clipboard!');
 }, 100);
 };
 const handleSaveDiscussion = (discussion: any) => {
-console.log(' Save button clicked!', discussion?.id);
 if (!discussion) {
-console.log(' No discussion provided');
 return;
 }
 // For now, we'll just show a success message
 // In a real app, you'd save to a saved discussions list
-console.log(' Discussion saved:', discussion.id);
 setTimeout(() => {
 Alert.alert('Success', 'Discussion saved to your bookmarks!');
 }, 100);
 };
 const handleModalVote = (voteType: 'upvote' | 'downvote') => {
-console.log(' Modal vote:', voteType);
 if (modalUserVote === voteType) {
 // Remove vote if clicking same button
 setModalUserVote(null);
@@ -728,12 +629,9 @@ setIsCommenting(false);
 }
 };
 const handleDiscussionPress = (discussionId: string) => {
-console.log(' Discussion pressed:', discussionId);
-console.log(' Available discussions:', discussionsData?.stockDiscussions?.length || 0);
 // Find the discussion from the current data
 const discussion = discussionsData?.stockDiscussions?.find((d: any) => d.id === discussionId);
 if (discussion) {
-console.log(' Discussion found:', discussion);
 setDiscussionDetail(discussion);
 setSelectedDiscussionId(discussionId);
 setCommentContent(''); // Reset comment input for new discussion
@@ -742,24 +640,12 @@ setShowDiscussionDetail(true); // Open discussion detail modal
 // Initialize modal voting state
 setModalUserVote(null);
 setModalLocalScore(discussion.score || 0);
-console.log(' Modal should be opening now...');
 } else {
-console.log(' Discussion not found for ID:', discussionId);
 }
 };
 const handleCreateSubmit = async () => {
-console.log(' Starting discussion creation process...');
-console.log(' Form data:', {
-title: createTitle,
-titleLength: createTitle.trim().length,
-content: createContent,
-contentLength: createContent.trim().length,
-stock: createStock,
-stockLength: createStock.trim().length
-});
 // Test backend connection first
 try {
-console.log(' Testing backend connection...');
 const response = await fetch('http://192.168.1.151:8001/graphql/', {
 method: 'POST',
 headers: {
@@ -769,39 +655,30 @@ body: JSON.stringify({
 query: '{ __schema { types { name } } }'
 })
 });
-console.log(' Backend connection test status:', response.status);
 if (response.ok) {
-console.log(' Backend is reachable');
 } else {
-console.log(' Backend connection failed:', response.status);
 }
 } catch (error) {
-console.log(' Backend connection error:', error);
 }
 // Use the helper function for validation
 if (isSubmitDisabled()) {
-console.log(' Validation failed: Form validation failed');
 Alert.alert('Error', 'Please check your input and try again');
 return;
 }
 // Validate minimum length requirements
 if (createTitle.trim().length < 5) {
-console.log(' Validation failed: Title too short');
 Alert.alert('Error', 'Title must be at least 5 characters long');
 return;
 }
-console.log(' Validation passed, proceeding with GraphQL mutation...');
 try {
 // Prepare content with media information
 let finalContent = createContent.trim();
 // Add media information to content if media is selected
 if (selectedImage) {
 finalContent += `\n\n[IMAGE: ${selectedImage}]`;
-console.log(' Adding image to content:', selectedImage);
 }
 if (selectedVideo) {
 finalContent += `\n\n[VIDEO: ${selectedVideo}]`;
-console.log(' Adding video to content:', selectedVideo);
 }
 // Creating discussion
 const variables = {
@@ -811,25 +688,14 @@ stockSymbol: createStock.trim() || null, // Optional - like Reddit posts
 discussionType: 'general', // Default to general discussion
 visibility: createVisibility // Public or followers only
 };
-console.log(' Sending GraphQL mutation with variables:', variables);
-console.log(' GraphQL mutation query:', CREATE_DISCUSSION.loc?.source?.body);
-console.log(' Apollo Client URI:', 'http://192.168.1.151:8001/graphql/');
-console.log(' Auth token available:', !!await AsyncStorage.getItem('token'));
 const result = await createStockDiscussion({
 variables: variables
 });
-console.log(' Received GraphQL response:', result);
-console.log(' Response data:', result.data);
-console.log(' CreateStockDiscussion result:', result.data?.createStockDiscussion);
 // Discussion created successfully
 if (result.data?.createStockDiscussion?.success) {
-console.log(' Discussion created successfully!');
-console.log(' Created discussion:', result.data.createStockDiscussion.discussion);
 Alert.alert('Success', 'Discussion created successfully!');
 // Refetch discussions to show the new item
-console.log(' Refetching discussions...');
 await refetchDiscussions();
-console.log(' Discussions refetched');
 setShowCreateModal(false);
 setCreateTitle('');
 setCreateContent('');
@@ -839,9 +705,7 @@ setCreateVisibility('followers'); // Reset to default
 setSelectedImage(null);
 setSelectedVideo(null);
 setMediaType(null);
-console.log(' Form cleared and modal closed');
 } else {
-console.log(' Discussion creation failed:', result.data?.createStockDiscussion?.message);
 Alert.alert('Error', result.data?.createStockDiscussion?.message || 'Failed to create discussion');
 }
 } catch (error) {
@@ -866,34 +730,23 @@ return <FinancialNews limit={15} />;
 return (
 <View>
 {discussionsData?.stockDiscussions?.map((discussion: any) => {
-console.log(' Rendering RedditDiscussionCard for discussion:', {
-id: discussion.id,
-title: discussion.title,
-score: discussion.score,
-commentCount: discussion.commentCount
-});
 return (
 <RedditDiscussionCard
 key={discussion.id}
 discussion={discussion}
 onUpvote={() => {
-console.log(' Upvote button clicked for discussion:', discussion.id);
 handleUpvote(discussion.id);
 }}
 onDownvote={() => {
-console.log(' Downvote button clicked for discussion:', discussion.id);
 handleDownvote(discussion.id);
 }}
 onComment={() => {
-console.log(' Comment button clicked for discussion:', discussion.id);
 handleDiscussionComment(discussion.id);
 }}
 onPress={() => {
-console.log(' Discussion card pressed for discussion:', discussion.id);
 handleDiscussionPress(discussion.id);
 }}
 onFollow={(userId) => {
-console.log(' Follow button clicked for user:', userId);
 handleToggleFollow(userId);
 }}
 />
@@ -944,12 +797,6 @@ visible={showCreateModal}
 animationType="slide"
 transparent={true}
 onShow={() => {
-console.log(' Create discussion modal opened');
-console.log(' Initial form state:', {
-title: createTitle,
-content: createContent,
-stock: createStock
-});
 }}
 >
 <KeyboardAvoidingView
@@ -974,7 +821,6 @@ style={styles.closeButton}
 style={styles.textInput}
 value={createTitle}
 onChangeText={(text) => {
-console.log(' Title changed:', text, 'Length:', text.length);
 setCreateTitle(text);
 }}
 placeholder="Enter discussion title"
@@ -984,7 +830,6 @@ placeholder="Enter discussion title"
 style={styles.textInput}
 value={createStock}
 onChangeText={(text) => {
-console.log(' Stock symbol changed:', text, 'Length:', text.length);
 setCreateStock(text);
 }}
 placeholder="e.g., AAPL (leave blank for general discussion)"
@@ -1030,7 +875,6 @@ styles.visibilityOption,
 createVisibility === 'public' && styles.visibilityOptionSelected
 ]}
 onPress={() => {
-console.log(' Public visibility selected');
 setCreateVisibility('public');
 }}
 >
@@ -1058,7 +902,6 @@ styles.visibilityOption,
 createVisibility === 'followers' && styles.visibilityOptionSelected
 ]}
 onPress={() => {
-console.log(' Followers visibility selected');
 setCreateVisibility('followers');
 }}
 >
@@ -1087,7 +930,6 @@ ref={contentInputRef}
 style={[styles.textInput, styles.textArea]}
 value={createContent}
 onChangeText={(text) => {
-console.log(' Content changed:', text, 'Length:', text.length);
 setCreateContent(text);
 }}
 placeholder="Share your thoughts, analysis, or questions (optional if you upload media). You can include links to images, videos, or articles!"
@@ -1106,16 +948,12 @@ selectTextOnFocus={false}
 clearButtonMode="never"
 onContentSizeChange={(event) => {
 // Allow dynamic height for multiline
-console.log(' Content size changed:', event.nativeEvent.contentSize);
 }}
 onSelectionChange={(event) => {
-console.log(' Selection changed:', event.nativeEvent.selection);
 }}
 onFocus={() => {
-console.log(' Content TextInput focused');
 }}
 onBlur={() => {
-console.log(' Content TextInput blurred');
 }}
 contextMenuHidden={false}
 allowFontScaling={true}
@@ -1184,17 +1022,6 @@ styles.commentSubmitButton,
 isSubmitDisabled() && styles.commentSubmitButtonDisabled
 ]}
 onPress={() => {
-console.log(' Create button pressed');
-console.log(' Button state check:', {
-hasTitle: !!createTitle.trim(),
-hasContent: !!createContent.trim(),
-hasMedia: selectedImage || selectedVideo,
-titleLength: createTitle.trim().length,
-contentLength: createContent.trim().length,
-titleValid: createTitle.trim().length >= 5,
-contentValid: createContent.trim().length >= 10,
-buttonDisabled: isSubmitDisabled()
-});
 handleCreateSubmit();
 }}
 disabled={isSubmitDisabled()}
@@ -1265,7 +1092,6 @@ visible={showDiscussionDetail}
 animationType="slide"
 transparent={true}
 onShow={() => {
-console.log(' Discussion Detail Modal opened for:', discussionDetail?.id);
 }}
 >
 <KeyboardAvoidingView
@@ -1350,7 +1176,6 @@ style={styles.mediaItem}
 onPress={() => {
 // For now, just show an alert with the image path
 // In a real app, you'd want to open a full-screen image viewer
-console.log('Image clicked:', media.uri);
 }}
 >
 <Image source={{ uri: media.uri }} style={styles.mediaImage} />
@@ -1365,7 +1190,6 @@ return (
 key={`media-${index}`} 
 style={styles.mediaItem}
 onPress={() => {
-console.log('Video clicked:', media.uri);
 }}
 >
 <View style={styles.videoPlaceholder}>

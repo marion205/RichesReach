@@ -341,7 +341,7 @@ class ConnectionManager:
             self.stock_connections.remove(websocket)
         elif connection_type == "discussion" and websocket in self.discussion_connections:
             self.discussion_connections.remove(websocket)
-        logger.info(f"WebSocket disconnected. Total connections: {len(self.active_connections)}")
+        # WebSocket disconnected
 
     async def send_personal_message(self, message: str, websocket: WebSocket):
         try:
@@ -644,11 +644,9 @@ async def generate_stock_data(symbol: str) -> Dict[str, Any]:
         # Check cache first
         cached_data = stock_cache.get(symbol)
         if cached_data:
-            logger.info(f"Using cached data for {symbol}")
             return cached_data
         
         # Try to get real-time data from APIs with timeout
-        logger.info(f"Fetching real data for {symbol}")
         try:
             # Add timeout to prevent hanging
             price_data = await asyncio.wait_for(
@@ -661,7 +659,6 @@ async def generate_stock_data(symbol: str) -> Dict[str, Any]:
         
         if price_data and price_data.get('price', 0) > 0:
             # Use real data from API
-            logger.info(f"Using real API data for {symbol}: ${price_data['price']} from {price_data.get('provider', 'api')}")
             formatted_data = await format_real_stock_data(symbol, price_data)
             # Cache the data
             stock_cache.set(symbol, formatted_data)
@@ -923,18 +920,7 @@ async def graphql_endpoint(request_data: dict):
     variables = request_data.get("variables", {})
     
     # Debug logging
-    logger.info(f"Received GraphQL query: {query[:200]}...")
-    logger.info(f"Query contains 'stocks': {'stocks' in query}")
-    logger.info(f"Query contains 'query': {'query' in query}")
-    logger.info(f"Query contains 'me': {'me' in query and 'myPortfolios' not in query and 'createPortfolio' not in query}")
-    logger.info(f"Query contains 'premiumPortfolioMetrics': {'premiumPortfolioMetrics' in query}")
-    logger.info(f"Query contains 'portfolioMetrics': {'portfolioMetrics' in query}")
-    logger.info(f"Query contains 'optionsAnalysis': {'optionsAnalysis' in query}")
-    logger.info(f"Query contains 'testOptionsAnalysis': {'testOptionsAnalysis' in query}")
-    logger.info(f"Query contains 'aiRecommendations': {'aiRecommendations' in query}")
-    logger.info(f"Query contains 'createPortfolio': {'createPortfolio' in query}")
-    logger.info(f"Full query: {query}")
-    logger.info(f"Variables received: {variables}")
+    # Process GraphQL query
     
     # Parse query to extract requested fields
     def extract_fields(query_str, field_name):
@@ -988,7 +974,6 @@ async def graphql_endpoint(request_data: dict):
     elif "mutation" in query.lower() and "createPortfolioHolding" in query:
         try:
             logger.info("Processing createPortfolioHolding mutation")
-            logger.info(f"Variables received: {variables}")
             
             # Extract variables
             portfolio_name = variables.get("portfolioName", "Unknown Portfolio")
@@ -1040,10 +1025,7 @@ async def graphql_endpoint(request_data: dict):
     elif "mutation" in query.lower() and "createPortfolio" in query and "createPortfolioHolding" not in query:
         try:
             logger.info("Processing createPortfolio mutation")
-            logger.info(f"Variables received: {variables}")
-            logger.info(f"Variables type: {type(variables)}")
             portfolio_name = variables.get("portfolioName", "")
-            logger.info(f"Portfolio name extracted: '{portfolio_name}'")
             
             if not portfolio_name or not portfolio_name.strip():
                 return {
@@ -1123,8 +1105,7 @@ async def graphql_endpoint(request_data: dict):
     
     # Handle generateAiRecommendations mutation
     elif "generateAiRecommendations" in query:
-        logger.info("Matched generateAiRecommendations condition")
-        logger.info("Generate AI Recommendations mutation requested")
+        logger.info("Processing generateAiRecommendations mutation")
         
         # Generate AI portfolio recommendations
         recommendations = {
@@ -1229,8 +1210,7 @@ async def graphql_endpoint(request_data: dict):
     
     # Handle createIncomeProfile mutation
     elif "createIncomeProfile" in query:
-        logger.info("Matched createIncomeProfile condition")
-        logger.info("Create Income Profile mutation requested")
+        logger.info("Processing createIncomeProfile mutation")
         
         income_bracket = variables.get("incomeBracket", "Medium")
         age = variables.get("age", 32)
@@ -1261,8 +1241,7 @@ async def graphql_endpoint(request_data: dict):
     
     # Handle createDiscussionComment mutation
     elif "createDiscussionComment" in query:
-        logger.info("Matched createDiscussionComment condition")
-        logger.info("Create Discussion Comment mutation requested")
+        logger.info("Processing createDiscussionComment mutation")
         
         discussion_id = variables.get("discussionId", "discussion_1")
         content = variables.get("content", "Great discussion!")
@@ -1361,7 +1340,7 @@ async def graphql_endpoint(request_data: dict):
     
     # Handle stocks queries separately (must be before me handler)
     elif "stocks" in query and "GetStocksForPortfolio" in query:
-        logger.info("Processing stocks query - returning stock search data")
+        # Processing stocks query
         search_term = variables.get("search", "").lower()
         
         # Update prices in background (non-blocking)
@@ -1419,7 +1398,7 @@ async def graphql_endpoint(request_data: dict):
     
     # Handle myPortfolios queries separately
     elif "myPortfolios" in query:
-        logger.info("Processing myPortfolios query - returning portfolio data")
+        # Processing myPortfolios query
         response_data = {
             "myPortfolios": {
                 "totalPortfolios": 2,
@@ -1596,7 +1575,7 @@ async def graphql_endpoint(request_data: dict):
     
     # Handle socialFeed queries separately (must be before me handler)
     elif "socialFeed" in query:
-        logger.info("Processing socialFeed query - returning social feed data")
+        # Processing socialFeed query
         
         # Mock social feed data
         social_feed_data = [
@@ -1742,7 +1721,7 @@ async def graphql_endpoint(request_data: dict):
     
     # Handle beginnerFriendlyStocks queries separately (must be before me handler)
     elif "beginnerFriendlyStocks" in query:
-        logger.info("Processing beginnerFriendlyStocks query - returning beginner-friendly stocks")
+        # Processing beginnerFriendlyStocks query
         
         # Pre-defined beginner-friendly stock database (instant, no API calls)
         beginner_stock_database = {
@@ -1787,8 +1766,7 @@ async def graphql_endpoint(request_data: dict):
     
     # Handle me queries separately (only for pure me queries)
     elif "me" in query and "beginnerFriendlyStocks" not in query and "myPortfolios" not in query and "stocks" not in query and "portfolioMetrics" not in query and "myWatchlist" not in query and "advancedStockScreening" not in query and "portfolios" not in query and "discussions" not in query and "aiRecommendations" not in query and "rustStockAnalysis" not in query and "optionsAnalysis" not in query and "testOptionsAnalysis" not in query:
-        logger.info("Processing me query - returning user profile data")
-        logger.info(f"Query contains 'beginnerFriendlyStocks': {'beginnerFriendlyStocks' in query}")
+        # Processing query
         user_profile = {
             "id": "user_1",
             "name": "Test User", 
@@ -2394,7 +2372,7 @@ async def graphql_endpoint(request_data: dict):
         
         # AI Recommendations
         if "aiRecommendations" in query:
-            logger.info("Processing aiRecommendations query - returning AI recommendations data")
+            # Processing query
             response_data["aiRecommendations"] = {
                 "portfolioAnalysis": {
                     "totalValue": 210000.75,
@@ -2577,7 +2555,7 @@ async def graphql_endpoint(request_data: dict):
         
         # Premium Portfolio metrics
         if "premiumPortfolioMetrics" in query:
-            logger.info("Processing premiumPortfolioMetrics query - returning premium portfolio data")
+            # Processing query
             response_data["premiumPortfolioMetrics"] = {
                 "totalValue": 210000.75,
                 "totalCost": 195000.00,
@@ -2609,7 +2587,7 @@ async def graphql_endpoint(request_data: dict):
         
         # Options Analysis
         if "optionsAnalysis" in query:
-            logger.info("Processing optionsAnalysis query - returning real options data")
+            # Processing query
             try:
                 # Get real options data
                 real_options_data = real_options_service.get_real_options_chain("AAPL")
@@ -3277,7 +3255,7 @@ async def graphql_endpoint(request_data: dict):
         
         # Test Options Analysis (fallback)
         if "testOptionsAnalysis" in query:
-            logger.info("Processing testOptionsAnalysis query - returning test options data")
+            # Processing query
             response_data["testOptionsAnalysis"] = {
                 "underlyingSymbol": "AAPL",
                 "underlyingPrice": 234.07,
@@ -3318,7 +3296,7 @@ async def graphql_endpoint(request_data: dict):
         
         # User profile
         if "me" in query:
-            logger.info("Processing me query - returning user profile data")
+            # Processing query
             user_profile = {
                 "id": "user_1",
                 "name": "Test User", 
