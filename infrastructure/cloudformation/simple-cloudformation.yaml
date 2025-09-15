@@ -1,201 +1,182 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: Simple RichesReach AI Infrastructure
-
 Parameters:
-  Environment:
-    Type: String
-    Default: production
-    AllowedValues:
-    - production
-    - staging
-
+Environment:
+Type: String
+Default: production
+AllowedValues:
+- production
+- staging
 Resources:
-  # VPC
-  VPC:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: 10.0.0.0/16
-      EnableDnsHostnames: true
-      EnableDnsSupport: true
-      Tags:
-      - Key: Name
-        Value: !Sub "${AWS::StackName}-vpc"
-
-  # Public Subnet
-  PublicSubnet:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: 10.0.1.0/24
-      AvailabilityZone: !Select [0, !GetAZs '']
-      Tags:
-      - Key: Name
-        Value: !Sub "${AWS::StackName}-public-subnet"
-
-  # Internet Gateway
-  InternetGateway:
-    Type: AWS::EC2::InternetGateway
-    Properties:
-      Tags:
-      - Key: Name
-        Value: !Sub "${AWS::StackName}-igw"
-
-  # Attach Internet Gateway to VPC
-  AttachGateway:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      VpcId: !Ref VPC
-      InternetGatewayId: !Ref InternetGateway
-
-  # Route Table
-  RouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref VPC
-      Tags:
-      - Key: Name
-        Value: !Sub "${AWS::StackName}-route-table"
-
-  # Route to Internet
-  Route:
-    Type: AWS::EC2::Route
-    DependsOn: AttachGateway
-    Properties:
-      RouteTableId: !Ref RouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGateway
-
-  # Associate Route Table with Subnet
-  SubnetRouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnet
-      RouteTableId: !Ref RouteTable
-
-  # Security Group
-  SecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Security group for RichesReach AI
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-      - IpProtocol: tcp
-        FromPort: 22
-        ToPort: 22
-        CidrIp: 0.0.0.0/0
-      - IpProtocol: tcp
-        FromPort: 80
-        ToPort: 80
-        CidrIp: 0.0.0.0/0
-      - IpProtocol: tcp
-        FromPort: 8000
-        ToPort: 8000
-        CidrIp: 0.0.0.0/0
-      Tags:
-      - Key: Name
-        Value: !Sub "${AWS::StackName}-sg"
-
-  # S3 Bucket for ML Models
-  ModelBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub "riches-reach-ai-models-${AWS::AccountId}"
-      VersioningConfiguration:
-        Status: Enabled
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-
-  # ECS Cluster
-  ECSCluster:
-    Type: AWS::ECS::Cluster
-    Properties:
-      ClusterName: !Sub "${AWS::StackName}-cluster"
-      CapacityProviders:
-      - FARGATE
-      DefaultCapacityProviderStrategy:
-      - CapacityProvider: FARGATE
-        Weight: 1
-
-  # ECS Task Execution Role
-  ECSTaskExecutionRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub "${AWS::StackName}-ecs-execution-role"
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-        - Effect: Allow
-          Principal:
-            Service: ecs-tasks.amazonaws.com
-          Action: sts:AssumeRole
-      ManagedPolicyArns:
-      - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
-
-  # ECS Task Role
-  ECSTaskRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub "${AWS::StackName}-ecs-task-role"
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-        - Effect: Allow
-          Principal:
-            Service: ecs-tasks.amazonaws.com
-          Action: sts:AssumeRole
-      Policies:
-      - PolicyName: AI-Service-Policy
-        PolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-          - Effect: Allow
-            Action:
-            - s3:GetObject
-            - s3:PutObject
-            - s3:DeleteObject
-            Resource: !Sub "arn:aws:s3:::${ModelBucket}/*"
-          - Effect: Allow
-            Action:
-            - cloudwatch:PutMetricData
-            Resource: '*'
-
-  # CloudWatch Log Group
-  LogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub "/ecs/${AWS::StackName}"
-      RetentionInDays: 30
-
+# VPC
+VPC:
+Type: AWS::EC2::VPC
+Properties:
+CidrBlock: 10.0.0.0/16
+EnableDnsHostnames: true
+EnableDnsSupport: true
+Tags:
+- Key: Name
+Value: !Sub "${AWS::StackName}-vpc"
+# Public Subnet
+PublicSubnet:
+Type: AWS::EC2::Subnet
+Properties:
+VpcId: !Ref VPC
+CidrBlock: 10.0.1.0/24
+AvailabilityZone: !Select [0, !GetAZs '']
+Tags:
+- Key: Name
+Value: !Sub "${AWS::StackName}-public-subnet"
+# Internet Gateway
+InternetGateway:
+Type: AWS::EC2::InternetGateway
+Properties:
+Tags:
+- Key: Name
+Value: !Sub "${AWS::StackName}-igw"
+# Attach Internet Gateway to VPC
+AttachGateway:
+Type: AWS::EC2::VPCGatewayAttachment
+Properties:
+VpcId: !Ref VPC
+InternetGatewayId: !Ref InternetGateway
+# Route Table
+RouteTable:
+Type: AWS::EC2::RouteTable
+Properties:
+VpcId: !Ref VPC
+Tags:
+- Key: Name
+Value: !Sub "${AWS::StackName}-route-table"
+# Route to Internet
+Route:
+Type: AWS::EC2::Route
+DependsOn: AttachGateway
+Properties:
+RouteTableId: !Ref RouteTable
+DestinationCidrBlock: 0.0.0.0/0
+GatewayId: !Ref InternetGateway
+# Associate Route Table with Subnet
+SubnetRouteTableAssociation:
+Type: AWS::EC2::SubnetRouteTableAssociation
+Properties:
+SubnetId: !Ref PublicSubnet
+RouteTableId: !Ref RouteTable
+# Security Group
+SecurityGroup:
+Type: AWS::EC2::SecurityGroup
+Properties:
+GroupDescription: Security group for RichesReach AI
+VpcId: !Ref VPC
+SecurityGroupIngress:
+- IpProtocol: tcp
+FromPort: 22
+ToPort: 22
+CidrIp: 0.0.0.0/0
+- IpProtocol: tcp
+FromPort: 80
+ToPort: 80
+CidrIp: 0.0.0.0/0
+- IpProtocol: tcp
+FromPort: 8000
+ToPort: 8000
+CidrIp: 0.0.0.0/0
+Tags:
+- Key: Name
+Value: !Sub "${AWS::StackName}-sg"
+# S3 Bucket for ML Models
+ModelBucket:
+Type: AWS::S3::Bucket
+Properties:
+BucketName: !Sub "riches-reach-ai-models-${AWS::AccountId}"
+VersioningConfiguration:
+Status: Enabled
+PublicAccessBlockConfiguration:
+BlockPublicAcls: true
+BlockPublicPolicy: true
+IgnorePublicAcls: true
+RestrictPublicBuckets: true
+# ECS Cluster
+ECSCluster:
+Type: AWS::ECS::Cluster
+Properties:
+ClusterName: !Sub "${AWS::StackName}-cluster"
+CapacityProviders:
+- FARGATE
+DefaultCapacityProviderStrategy:
+- CapacityProvider: FARGATE
+Weight: 1
+# ECS Task Execution Role
+ECSTaskExecutionRole:
+Type: AWS::IAM::Role
+Properties:
+RoleName: !Sub "${AWS::StackName}-ecs-execution-role"
+AssumeRolePolicyDocument:
+Version: '2012-10-17'
+Statement:
+- Effect: Allow
+Principal:
+Service: ecs-tasks.amazonaws.com
+Action: sts:AssumeRole
+ManagedPolicyArns:
+- arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+# ECS Task Role
+ECSTaskRole:
+Type: AWS::IAM::Role
+Properties:
+RoleName: !Sub "${AWS::StackName}-ecs-task-role"
+AssumeRolePolicyDocument:
+Version: '2012-10-17'
+Statement:
+- Effect: Allow
+Principal:
+Service: ecs-tasks.amazonaws.com
+Action: sts:AssumeRole
+Policies:
+- PolicyName: AI-Service-Policy
+PolicyDocument:
+Version: '2012-10-17'
+Statement:
+- Effect: Allow
+Action:
+- s3:GetObject
+- s3:PutObject
+- s3:DeleteObject
+Resource: !Sub "arn:aws:s3:::${ModelBucket}/*"
+- Effect: Allow
+Action:
+- cloudwatch:PutMetricData
+Resource: '*'
+# CloudWatch Log Group
+LogGroup:
+Type: AWS::Logs::LogGroup
+Properties:
+LogGroupName: !Sub "/ecs/${AWS::StackName}"
+RetentionInDays: 30
 Outputs:
-  VPCId:
-    Description: VPC ID
-    Value: !Ref VPC
-    Export:
-      Name: !Sub "${AWS::StackName}-VPC-ID"
-
-  SubnetId:
-    Description: Public Subnet ID
-    Value: !Ref PublicSubnet
-    Export:
-      Name: !Sub "${AWS::StackName}-Subnet-ID"
-
-  SecurityGroupId:
-    Description: Security Group ID
-    Value: !Ref SecurityGroup
-    Export:
-      Name: !Sub "${AWS::StackName}-SecurityGroup-ID"
-
-  ECSClusterName:
-    Description: ECS Cluster Name
-    Value: !Ref ECSCluster
-    Export:
-      Name: !Sub "${AWS::StackName}-ECSCluster-Name"
-
-  ModelBucketName:
-    Description: S3 bucket for ML models
-    Value: !Ref ModelBucket
-    Export:
-      Name: !Sub "${AWS::StackName}-ModelBucket-Name"
+VPCId:
+Description: VPC ID
+Value: !Ref VPC
+Export:
+Name: !Sub "${AWS::StackName}-VPC-ID"
+SubnetId:
+Description: Public Subnet ID
+Value: !Ref PublicSubnet
+Export:
+Name: !Sub "${AWS::StackName}-Subnet-ID"
+SecurityGroupId:
+Description: Security Group ID
+Value: !Ref SecurityGroup
+Export:
+Name: !Sub "${AWS::StackName}-SecurityGroup-ID"
+ECSClusterName:
+Description: ECS Cluster Name
+Value: !Ref ECSCluster
+Export:
+Name: !Sub "${AWS::StackName}-ECSCluster-Name"
+ModelBucketName:
+Description: S3 bucket for ML models
+Value: !Ref ModelBucket
+Export:
+Name: !Sub "${AWS::StackName}-ModelBucket-Name"

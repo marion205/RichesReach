@@ -1,5 +1,0 @@
-Requirement already satisfied: requests in ./venv/lib/python3.10/site-packages (2.32.5)
-Requirement already satisfied: charset_normalizer<4,>=2 in ./venv/lib/python3.10/site-packages (from requests) (3.4.3)
-Requirement already satisfied: idna<4,>=2.5 in ./venv/lib/python3.10/site-packages (from requests) (3.10)
-Requirement already satisfied: urllib3<3,>=1.21.1 in ./venv/lib/python3.10/site-packages (from requests) (1.26.20)
-Requirement already satisfied: certifi>=2017.4.17 in ./venv/lib/python3.10/site-packages (from requests) (2025.8.3)

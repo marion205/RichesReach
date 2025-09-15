@@ -1,7 +1,6 @@
 #!/bin/bash
-
 # RichesReach Pitch Deck Screenshot Capture Script
-echo "📱 RichesReach Pitch Deck Screenshots"
+echo " RichesReach Pitch Deck Screenshots"
 echo "====================================="
 echo ""
 echo "This script will help you capture the 4 key screens for your pitch deck:"
@@ -10,71 +9,58 @@ echo "2. Social Feed (Social Screen)"
 echo "3. Chatbot (Home Screen with chat)"
 echo "4. Portfolio (Portfolio Screen)"
 echo ""
-
 # Create pitch deck screenshots directory
 mkdir -p screenshots/pitch-deck
-
-echo "📸 Screenshot Capture Instructions:"
+echo " Screenshot Capture Instructions:"
 echo "=================================="
 echo ""
 echo "Your app is running in the iOS Simulator. Please follow these steps:"
 echo ""
-
-echo "1. 🤖 CHATBOT SCREEN (Home Screen)"
-echo "   - This should be your current screen"
-echo "   - Look for the chat interface at the bottom"
-echo "   - Press Enter when ready to capture..."
-read -p "   Press Enter to capture Chatbot screenshot..."
-
+echo "1. CHATBOT SCREEN (Home Screen)"
+echo " - This should be your current screen"
+echo " - Look for the chat interface at the bottom"
+echo " - Press Enter when ready to capture..."
+read -p " Press Enter to capture Chatbot screenshot..."
 xcrun simctl io booted screenshot screenshots/pitch-deck/01-chatbot-home.png
-echo "   ✅ Captured: 01-chatbot-home.png"
+echo " Captured: 01-chatbot-home.png"
 echo ""
-
-echo "2. 🧠 AI DASHBOARD SCREEN"
-echo "   - Navigate to the AI Portfolio screen"
-echo "   - Look for AI recommendations, risk assessment, portfolio allocation"
-echo "   - Press Enter when ready to capture..."
-read -p "   Press Enter to capture AI Dashboard screenshot..."
-
+echo "2. AI DASHBOARD SCREEN"
+echo " - Navigate to the AI Portfolio screen"
+echo " - Look for AI recommendations, risk assessment, portfolio allocation"
+echo " - Press Enter when ready to capture..."
+read -p " Press Enter to capture AI Dashboard screenshot..."
 xcrun simctl io booted screenshot screenshots/pitch-deck/02-ai-dashboard.png
-echo "   ✅ Captured: 02-ai-dashboard.png"
+echo " Captured: 02-ai-dashboard.png"
 echo ""
-
-echo "3. 👥 SOCIAL FEED SCREEN"
-echo "   - Navigate to the Social/Community screen"
-echo "   - Look for social posts, user interactions, community features"
-echo "   - Press Enter when ready to capture..."
-read -p "   Press Enter to capture Social Feed screenshot..."
-
+echo "3. SOCIAL FEED SCREEN"
+echo " - Navigate to the Social/Community screen"
+echo " - Look for social posts, user interactions, community features"
+echo " - Press Enter when ready to capture..."
+read -p " Press Enter to capture Social Feed screenshot..."
 xcrun simctl io booted screenshot screenshots/pitch-deck/03-social-feed.png
-echo "   ✅ Captured: 03-social-feed.png"
+echo " Captured: 03-social-feed.png"
 echo ""
-
-echo "4. 📊 PORTFOLIO SCREEN"
-echo "   - Navigate to the Portfolio screen"
-echo "   - Look for portfolio tracking, holdings, performance metrics"
-echo "   - Press Enter when ready to capture..."
-read -p "   Press Enter to capture Portfolio screenshot..."
-
+echo "4. PORTFOLIO SCREEN"
+echo " - Navigate to the Portfolio screen"
+echo " - Look for portfolio tracking, holdings, performance metrics"
+echo " - Press Enter when ready to capture..."
+read -p " Press Enter to capture Portfolio screenshot..."
 xcrun simctl io booted screenshot screenshots/pitch-deck/04-portfolio.png
-echo "   ✅ Captured: 04-portfolio.png"
+echo " Captured: 04-portfolio.png"
 echo ""
-
-echo "🎉 All screenshots captured!"
+echo " All screenshots captured!"
 echo "=========================="
 echo ""
-echo "📁 Screenshots saved to: screenshots/pitch-deck/"
+echo " Screenshots saved to: screenshots/pitch-deck/"
 echo ""
-echo "📋 Captured files:"
+echo " Captured files:"
 ls -la screenshots/pitch-deck/*.png
 echo ""
-
-echo "🎨 Next Steps:"
+echo " Next Steps:"
 echo "============="
 echo "1. Review the screenshots for quality"
 echo "2. Replace the placeholder mockups in your PowerPoint"
 echo "3. Ensure screenshots show impressive features"
 echo "4. Remove any personal information if present"
 echo ""
-
-echo "✅ Pitch deck screenshots ready!"
+echo " Pitch deck screenshots ready!"

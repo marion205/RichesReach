@@ -1,294 +1,271 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: RichesReach AI Production Database Infrastructure
-
 Parameters:
-  Environment:
-    Type: String
-    Default: production
-    AllowedValues:
-    - production
-    - staging
-    - development
-  
-  DatabaseInstanceClass:
-    Type: String
-    Default: db.t3.micro
-    Description: RDS instance class
-    AllowedValues:
-    - db.t3.micro
-    - db.t3.small
-    - db.t3.medium
-    - db.r6g.large
-    - db.r6g.xlarge
-  
-  DatabaseAllocatedStorage:
-    Type: Number
-    Default: 20
-    Description: Allocated storage in GB
-    MinValue: 20
-    MaxValue: 1000
-  
-  RedisNodeType:
-    Type: String
-    Default: cache.t3.micro
-    Description: ElastiCache node type
-    AllowedValues:
-    - cache.t3.micro
-    - cache.t3.small
-    - cache.t3.medium
-    - cache.r6g.large
-
+Environment:
+Type: String
+Default: production
+AllowedValues:
+- production
+- staging
+- development
+DatabaseInstanceClass:
+Type: String
+Default: db.t3.micro
+Description: RDS instance class
+AllowedValues:
+- db.t3.micro
+- db.t3.small
+- db.t3.medium
+- db.r6g.large
+- db.r6g.xlarge
+DatabaseAllocatedStorage:
+Type: Number
+Default: 20
+Description: Allocated storage in GB
+MinValue: 20
+MaxValue: 1000
+RedisNodeType:
+Type: String
+Default: cache.t3.micro
+Description: ElastiCache node type
+AllowedValues:
+- cache.t3.micro
+- cache.t3.small
+- cache.t3.medium
+- cache.r6g.large
 Resources:
-  # RDS Subnet Group
-  DBSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
-    Properties:
-      DBSubnetGroupDescription: Subnet group for RDS database
-      SubnetIds:
-      - Fn::ImportValue: !Sub "${AWS::StackName}-PrivateSubnet1-ID"
-      - Fn::ImportValue: !Sub "${AWS::StackName}-PrivateSubnet2-ID"
-      Tags:
-      - Key: Name
-        Value: !Sub "${AWS::StackName}-db-subnet-group"
-
-  # RDS Security Group
-  DBSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Security group for RDS database
-      VpcId:
-        Fn::ImportValue: !Sub "${AWS::StackName}-VPC-ID"
-      SecurityGroupIngress:
-      - IpProtocol: tcp
-        FromPort: 5432
-        ToPort: 5432
-        SourceSecurityGroupId:
-          Fn::ImportValue: !Sub "${AWS::StackName}-ECSSecurityGroup-ID"
-      Tags:
-      - Key: Name
-        Value: !Sub "${AWS::StackName}-db-sg"
-
-  # RDS Parameter Group
-  DBParameterGroup:
-    Type: AWS::RDS::DBParameterGroup
-    Properties:
-      Description: Parameter group for RichesReach AI database
-      Family: postgres13
-      Parameters:
-        shared_preload_libraries: 'pg_stat_statements'
-        log_min_duration_statement: '1000'
-        log_checkpoints: 'on'
-        log_connections: 'on'
-        log_disconnections: 'on'
-        log_lock_waits: 'on'
-        log_temp_files: '0'
-        log_autovacuum_min_duration: '0'
-        log_error_verbosity: 'verbose'
-
-  # RDS Database Instance
-  Database:
-    Type: AWS::RDS::DBInstance
-    Properties:
-      DBInstanceIdentifier: !Sub "${AWS::StackName}-database"
-      DBInstanceClass: !Ref DatabaseInstanceClass
-      Engine: postgres
-      EngineVersion: '13.12'
-      AllocatedStorage: !Ref DatabaseAllocatedStorage
-      StorageType: gp2
-      StorageEncrypted: true
-      MasterUsername: admin
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${AWS::StackName}-db-password:SecretString:password}}'
-      DBName: richesreach_ai
-      DBSubnetGroupName: !Ref DBSubnetGroup
-      VPCSecurityGroups:
-      - !Ref DBSecurityGroup
-      DBParameterGroupName: !Ref DBParameterGroup
-      BackupRetentionPeriod: 7
-      PreferredBackupWindow: '03:00-04:00'
-      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
-      MultiAZ: true
-      PubliclyAccessible: false
-      MonitoringInterval: 60
-      MonitoringRoleArn: !GetAtt MonitoringRole.Arn
-      EnablePerformanceInsights: true
-      PerformanceInsightsRetentionPeriod: 7
-      Tags:
-      - Key: Name
-        Value: !Sub "${AWS::StackName}-database"
-      - Key: Environment
-        Value: !Ref Environment
-
-  # IAM Role for RDS Monitoring
-  MonitoringRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub "${AWS::StackName}-rds-monitoring-role"
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-        - Effect: Allow
-          Principal:
-            Service: monitoring.rds.amazonaws.com
-          Action: sts:AssumeRole
-      ManagedPolicyArns:
-      - arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole
-
-  # ElastiCache Subnet Group
-  RedisSubnetGroup:
-    Type: AWS::ElastiCache::SubnetGroup
-    Properties:
-      Description: Subnet group for Redis cluster
-      SubnetIds:
-      - Fn::ImportValue: !Sub "${AWS::StackName}-PrivateSubnet1-ID"
-      - Fn::ImportValue: !Sub "${AWS::StackName}-PrivateSubnet2-ID"
-
-  # Redis Security Group
-  RedisSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Security group for Redis cluster
-      VpcId:
-        Fn::ImportValue: !Sub "${AWS::StackName}-VPC-ID"
-      SecurityGroupIngress:
-      - IpProtocol: tcp
-        FromPort: 6379
-        ToPort: 6379
-        SourceSecurityGroupId:
-          Fn::ImportValue: !Sub "${AWS::StackName}-ECSSecurityGroup-ID"
-      Tags:
-      - Key: Name
-        Value: !Sub "${AWS::StackName}-redis-sg"
-
-  # Redis Replication Group
-  RedisCluster:
-    Type: AWS::ElastiCache::ReplicationGroup
-    Properties:
-      ReplicationGroupId: !Sub "${AWS::StackName}-redis"
-      Description: Redis cluster for RichesReach AI caching
-      NodeType: !Ref RedisNodeType
-      NumCacheClusters: 2
-      SubnetGroupName: !Ref RedisSubnetGroup
-      SecurityGroupIds:
-      - !Ref RedisSecurityGroup
-      Port: 6379
-      Engine: redis
-      EngineVersion: '6.x'
-      AtRestEncryptionEnabled: true
-      TransitEncryptionEnabled: true
-      MultiAZEnabled: true
-      AutomaticFailoverEnabled: true
-      SnapshotRetentionLimit: 7
-      SnapshotWindow: '03:00-04:00'
-      PreferredMaintenanceWindow: 'sun:05:00-sun:06:00'
-      Tags:
-      - Key: Name
-        Value: !Sub "${AWS::StackName}-redis"
-      - Key: Environment
-        Value: !Ref Environment
-
-  # Secrets Manager for Database Password
-  DBPasswordSecret:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: !Sub "${AWS::StackName}-db-password"
-      Description: Database password for RichesReach AI
-      GenerateSecretString:
-        SecretStringTemplate: '{"username": "admin"}'
-        GenerateStringKey: "password"
-        PasswordLength: 32
-        ExcludeCharacters: '"@/\'
-      Tags:
-      - Key: Name
-        Value: !Sub "${AWS::StackName}-db-password"
-
-  # CloudWatch Alarms
-  DatabaseCPUAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub "${AWS::StackName}-database-cpu"
-      AlarmDescription: Database CPU utilization is high
-      MetricName: CPUUtilization
-      Namespace: AWS/RDS
-      Statistic: Average
-      Period: 300
-      EvaluationPeriods: 2
-      Threshold: 80
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-      - Name: DBInstanceIdentifier
-        Value: !Ref Database
-
-  DatabaseConnectionsAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub "${AWS::StackName}-database-connections"
-      AlarmDescription: Database connection count is high
-      MetricName: DatabaseConnections
-      Namespace: AWS/RDS
-      Statistic: Average
-      Period: 300
-      EvaluationPeriods: 2
-      Threshold: 80
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-      - Name: DBInstanceIdentifier
-        Value: !Ref Database
-
-  RedisCPUAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub "${AWS::StackName}-redis-cpu"
-      AlarmDescription: Redis CPU utilization is high
-      MetricName: CPUUtilization
-      Namespace: AWS/ElastiCache
-      Statistic: Average
-      Period: 300
-      EvaluationPeriods: 2
-      Threshold: 80
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-      - Name: CacheClusterId
-        Value: !Ref RedisCluster
-
+# RDS Subnet Group
+DBSubnetGroup:
+Type: AWS::RDS::DBSubnetGroup
+Properties:
+DBSubnetGroupDescription: Subnet group for RDS database
+SubnetIds:
+- Fn::ImportValue: !Sub "${AWS::StackName}-PrivateSubnet1-ID"
+- Fn::ImportValue: !Sub "${AWS::StackName}-PrivateSubnet2-ID"
+Tags:
+- Key: Name
+Value: !Sub "${AWS::StackName}-db-subnet-group"
+# RDS Security Group
+DBSecurityGroup:
+Type: AWS::EC2::SecurityGroup
+Properties:
+GroupDescription: Security group for RDS database
+VpcId:
+Fn::ImportValue: !Sub "${AWS::StackName}-VPC-ID"
+SecurityGroupIngress:
+- IpProtocol: tcp
+FromPort: 5432
+ToPort: 5432
+SourceSecurityGroupId:
+Fn::ImportValue: !Sub "${AWS::StackName}-ECSSecurityGroup-ID"
+Tags:
+- Key: Name
+Value: !Sub "${AWS::StackName}-db-sg"
+# RDS Parameter Group
+DBParameterGroup:
+Type: AWS::RDS::DBParameterGroup
+Properties:
+Description: Parameter group for RichesReach AI database
+Family: postgres13
+Parameters:
+shared_preload_libraries: 'pg_stat_statements'
+log_min_duration_statement: '1000'
+log_checkpoints: 'on'
+log_connections: 'on'
+log_disconnections: 'on'
+log_lock_waits: 'on'
+log_temp_files: '0'
+log_autovacuum_min_duration: '0'
+log_error_verbosity: 'verbose'
+# RDS Database Instance
+Database:
+Type: AWS::RDS::DBInstance
+Properties:
+DBInstanceIdentifier: !Sub "${AWS::StackName}-database"
+DBInstanceClass: !Ref DatabaseInstanceClass
+Engine: postgres
+EngineVersion: '13.12'
+AllocatedStorage: !Ref DatabaseAllocatedStorage
+StorageType: gp2
+StorageEncrypted: true
+MasterUsername: admin
+MasterUserPassword: !Sub '{{resolve:secretsmanager:${AWS::StackName}-db-password:SecretString:password}}'
+DBName: richesreach_ai
+DBSubnetGroupName: !Ref DBSubnetGroup
+VPCSecurityGroups:
+- !Ref DBSecurityGroup
+DBParameterGroupName: !Ref DBParameterGroup
+BackupRetentionPeriod: 7
+PreferredBackupWindow: '03:00-04:00'
+PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+MultiAZ: true
+PubliclyAccessible: false
+MonitoringInterval: 60
+MonitoringRoleArn: !GetAtt MonitoringRole.Arn
+EnablePerformanceInsights: true
+PerformanceInsightsRetentionPeriod: 7
+Tags:
+- Key: Name
+Value: !Sub "${AWS::StackName}-database"
+- Key: Environment
+Value: !Ref Environment
+# IAM Role for RDS Monitoring
+MonitoringRole:
+Type: AWS::IAM::Role
+Properties:
+RoleName: !Sub "${AWS::StackName}-rds-monitoring-role"
+AssumeRolePolicyDocument:
+Version: '2012-10-17'
+Statement:
+- Effect: Allow
+Principal:
+Service: monitoring.rds.amazonaws.com
+Action: sts:AssumeRole
+ManagedPolicyArns:
+- arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole
+# ElastiCache Subnet Group
+RedisSubnetGroup:
+Type: AWS::ElastiCache::SubnetGroup
+Properties:
+Description: Subnet group for Redis cluster
+SubnetIds:
+- Fn::ImportValue: !Sub "${AWS::StackName}-PrivateSubnet1-ID"
+- Fn::ImportValue: !Sub "${AWS::StackName}-PrivateSubnet2-ID"
+# Redis Security Group
+RedisSecurityGroup:
+Type: AWS::EC2::SecurityGroup
+Properties:
+GroupDescription: Security group for Redis cluster
+VpcId:
+Fn::ImportValue: !Sub "${AWS::StackName}-VPC-ID"
+SecurityGroupIngress:
+- IpProtocol: tcp
+FromPort: 6379
+ToPort: 6379
+SourceSecurityGroupId:
+Fn::ImportValue: !Sub "${AWS::StackName}-ECSSecurityGroup-ID"
+Tags:
+- Key: Name
+Value: !Sub "${AWS::StackName}-redis-sg"
+# Redis Replication Group
+RedisCluster:
+Type: AWS::ElastiCache::ReplicationGroup
+Properties:
+ReplicationGroupId: !Sub "${AWS::StackName}-redis"
+Description: Redis cluster for RichesReach AI caching
+NodeType: !Ref RedisNodeType
+NumCacheClusters: 2
+SubnetGroupName: !Ref RedisSubnetGroup
+SecurityGroupIds:
+- !Ref RedisSecurityGroup
+Port: 6379
+Engine: redis
+EngineVersion: '6.x'
+AtRestEncryptionEnabled: true
+TransitEncryptionEnabled: true
+MultiAZEnabled: true
+AutomaticFailoverEnabled: true
+SnapshotRetentionLimit: 7
+SnapshotWindow: '03:00-04:00'
+PreferredMaintenanceWindow: 'sun:05:00-sun:06:00'
+Tags:
+- Key: Name
+Value: !Sub "${AWS::StackName}-redis"
+- Key: Environment
+Value: !Ref Environment
+# Secrets Manager for Database Password
+DBPasswordSecret:
+Type: AWS::SecretsManager::Secret
+Properties:
+Name: !Sub "${AWS::StackName}-db-password"
+Description: Database password for RichesReach AI
+GenerateSecretString:
+SecretStringTemplate: '{"username": "admin"}'
+GenerateStringKey: "password"
+PasswordLength: 32
+ExcludeCharacters: '"@/\'
+Tags:
+- Key: Name
+Value: !Sub "${AWS::StackName}-db-password"
+# CloudWatch Alarms
+DatabaseCPUAlarm:
+Type: AWS::CloudWatch::Alarm
+Properties:
+AlarmName: !Sub "${AWS::StackName}-database-cpu"
+AlarmDescription: Database CPU utilization is high
+MetricName: CPUUtilization
+Namespace: AWS/RDS
+Statistic: Average
+Period: 300
+EvaluationPeriods: 2
+Threshold: 80
+ComparisonOperator: GreaterThanThreshold
+Dimensions:
+- Name: DBInstanceIdentifier
+Value: !Ref Database
+DatabaseConnectionsAlarm:
+Type: AWS::CloudWatch::Alarm
+Properties:
+AlarmName: !Sub "${AWS::StackName}-database-connections"
+AlarmDescription: Database connection count is high
+MetricName: DatabaseConnections
+Namespace: AWS/RDS
+Statistic: Average
+Period: 300
+EvaluationPeriods: 2
+Threshold: 80
+ComparisonOperator: GreaterThanThreshold
+Dimensions:
+- Name: DBInstanceIdentifier
+Value: !Ref Database
+RedisCPUAlarm:
+Type: AWS::CloudWatch::Alarm
+Properties:
+AlarmName: !Sub "${AWS::StackName}-redis-cpu"
+AlarmDescription: Redis CPU utilization is high
+MetricName: CPUUtilization
+Namespace: AWS/ElastiCache
+Statistic: Average
+Period: 300
+EvaluationPeriods: 2
+Threshold: 80
+ComparisonOperator: GreaterThanThreshold
+Dimensions:
+- Name: CacheClusterId
+Value: !Ref RedisCluster
 Outputs:
-  DatabaseEndpoint:
-    Description: RDS database endpoint
-    Value: !GetAtt Database.Endpoint.Address
-    Export:
-      Name: !Sub "${AWS::StackName}-Database-Endpoint"
-
-  DatabasePort:
-    Description: RDS database port
-    Value: !GetAtt Database.Endpoint.Port
-    Export:
-      Name: !Sub "${AWS::StackName}-Database-Port"
-
-  DatabaseName:
-    Description: RDS database name
-    Value: !Ref Database
-    Export:
-      Name: !Sub "${AWS::StackName}-Database-Name"
-
-  RedisEndpoint:
-    Description: Redis cluster endpoint
-    Value: !GetAtt RedisCluster.PrimaryEndPoint.Address
-    Export:
-      Name: !Sub "${AWS::StackName}-Redis-Endpoint"
-
-  RedisPort:
-    Description: Redis cluster port
-    Value: !GetAtt RedisCluster.PrimaryEndPoint.Port
-    Export:
-      Name: !Sub "${AWS::StackName}-Redis-Port"
-
-  DBSubnetGroupName:
-    Description: RDS subnet group name
-    Value: !Ref DBSubnetGroup
-    Export:
-      Name: !Sub "${AWS::StackName}-DBSubnetGroup-Name"
-
-  RedisSubnetGroupName:
-    Description: Redis subnet group name
-    Value: !Ref RedisSubnetGroup
-    Export:
-      Name: !Sub "${AWS::StackName}-RedisSubnetGroup-Name"
+DatabaseEndpoint:
+Description: RDS database endpoint
+Value: !GetAtt Database.Endpoint.Address
+Export:
+Name: !Sub "${AWS::StackName}-Database-Endpoint"
+DatabasePort:
+Description: RDS database port
+Value: !GetAtt Database.Endpoint.Port
+Export:
+Name: !Sub "${AWS::StackName}-Database-Port"
+DatabaseName:
+Description: RDS database name
+Value: !Ref Database
+Export:
+Name: !Sub "${AWS::StackName}-Database-Name"
+RedisEndpoint:
+Description: Redis cluster endpoint
+Value: !GetAtt RedisCluster.PrimaryEndPoint.Address
+Export:
+Name: !Sub "${AWS::StackName}-Redis-Endpoint"
+RedisPort:
+Description: Redis cluster port
+Value: !GetAtt RedisCluster.PrimaryEndPoint.Port
+Export:
+Name: !Sub "${AWS::StackName}-Redis-Port"
+DBSubnetGroupName:
+Description: RDS subnet group name
+Value: !Ref DBSubnetGroup
+Export:
+Name: !Sub "${AWS::StackName}-DBSubnetGroup-Name"
+RedisSubnetGroupName:
+Description: Redis subnet group name
+Value: !Ref RedisSubnetGroup
+Export:
+Name: !Sub "${AWS::StackName}-RedisSubnetGroup-Name"
