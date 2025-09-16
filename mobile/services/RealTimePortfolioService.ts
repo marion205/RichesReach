@@ -28,7 +28,7 @@ data: PortfolioMetrics | StockQuote | string;
 timestamp: number;
 }
 class RealTimePortfolioService {
-private updateInterval?: NodeJS.Timeout;
+private updateInterval?: ReturnType<typeof setInterval>;
 private isTracking: boolean = false;
 private updateCallbacks: ((update: PortfolioUpdate) => void)[] = [];
 private lastPortfolioData: PortfolioMetrics | null = null;
@@ -53,7 +53,7 @@ if (quote) {
 const currentPrice = quote.price;
 const totalValue = holding.shares * currentPrice;
 const returnAmount = totalValue - holding.costBasis;
-const returnPercent = (returnAmount / holding.costBasis) * 100;
+const returnPercent = holding.costBasis ? (returnAmount / holding.costBasis) * 100 : 0;
 return {
 ...holding,
 currentPrice,
@@ -69,11 +69,11 @@ return holding;
 const totalValue = updatedHoldings.reduce((sum, holding) => sum + holding.totalValue, 0);
 const totalCost = updatedHoldings.reduce((sum, holding) => sum + holding.costBasis, 0);
 const totalReturn = totalValue - totalCost;
-const totalReturnPercent = (totalReturn / totalCost) * 100;
+const totalReturnPercent = totalCost ? (totalReturn / totalCost) * 100 : 0;
 // Calculate day change
 const dayChange = this.calculateDayChange(updatedHoldings, quotes);
-const dayChangePercent = this.lastPortfolioData ? 
-((totalValue - this.lastPortfolioData.totalValue) / this.lastPortfolioData.totalValue) * 100 : 0;
+const base = this.lastPortfolioData?.totalValue ?? 0;
+const dayChangePercent = base ? ((totalValue - base) / base) * 100 : 0;
 const updatedPortfolio: PortfolioMetrics = {
 totalValue,
 totalCost,
@@ -87,9 +87,10 @@ lastUpdated: new Date().toISOString()
 // Store updated portfolio
 await this.savePortfolio(updatedPortfolio);
 this.lastPortfolioData = updatedPortfolio;
-totalValue: totalValue.toFixed(2),
-totalReturn: totalReturn.toFixed(2),
-totalReturnPercent: totalReturnPercent.toFixed(2)
+console.log({
+  totalValue: totalValue.toFixed(2),
+  totalReturn: totalReturn.toFixed(2),
+  totalReturnPercent: totalReturnPercent.toFixed(2),
 });
 return updatedPortfolio;
 } catch (error) {
@@ -136,7 +137,7 @@ if (quote) {
 const currentPrice = quote.price;
 const totalValue = holding.shares * currentPrice;
 const returnAmount = totalValue - holding.costBasis;
-const returnPercent = (returnAmount / holding.costBasis) * 100;
+const returnPercent = holding.costBasis ? (returnAmount / holding.costBasis) * 100 : 0;
 return {
 ...holding,
 currentPrice,
@@ -152,11 +153,11 @@ return holding;
 const totalValue = updatedHoldings.reduce((sum, holding) => sum + holding.totalValue, 0);
 const totalCost = updatedHoldings.reduce((sum, holding) => sum + holding.costBasis, 0);
 const totalReturn = totalValue - totalCost;
-const totalReturnPercent = (totalReturn / totalCost) * 100;
+const totalReturnPercent = totalCost ? (totalReturn / totalCost) * 100 : 0;
 // Calculate day change
 const dayChange = this.calculateDayChange(updatedHoldings, quotes);
-const dayChangePercent = this.lastPortfolioData ? 
-((totalValue - this.lastPortfolioData.totalValue) / this.lastPortfolioData.totalValue) * 100 : 0;
+const base = this.lastPortfolioData?.totalValue ?? 0;
+const dayChangePercent = base ? ((totalValue - base) / base) * 100 : 0;
 const updatedPortfolio: PortfolioMetrics = {
 totalValue,
 totalCost,
@@ -176,15 +177,16 @@ type: 'portfolio_refresh',
 data: updatedPortfolio,
 timestamp: Date.now()
 });
-totalValue: totalValue.toFixed(2),
-totalReturn: totalReturn.toFixed(2),
-totalReturnPercent: totalReturnPercent.toFixed(2)
+console.log({
+  totalValue: totalValue.toFixed(2),
+  totalReturn: totalReturn.toFixed(2),
+  totalReturnPercent: totalReturnPercent.toFixed(2),
 });
 } catch (error) {
 console.error(' Error updating portfolio:', error);
 this.notifySubscribers({
 type: 'error',
-data: error.message || 'Failed to update portfolio',
+data: (error as Error).message || 'Failed to update portfolio',
 timestamp: Date.now()
 });
 }
@@ -283,7 +285,7 @@ const quote = await MarketDataService.getStockQuote(holding.symbol);
 const currentPrice = quote.price;
 const totalValue = holding.shares * currentPrice;
 const returnAmount = totalValue - holding.costBasis;
-const returnPercent = (returnAmount / holding.costBasis) * 100;
+const returnPercent = holding.costBasis ? (returnAmount / holding.costBasis) * 100 : 0;
 const newHolding: PortfolioHolding = {
 ...holding,
 currentPrice,
@@ -348,6 +350,22 @@ this.startTracking();
 // Check if tracking is active
 public isActive(): boolean {
 return this.isTracking;
+}
+
+// Start real-time tracking
+public startTracking() {
+if (this.isTracking) return;
+this.isTracking = true;
+this.updateInterval = setInterval(() => this.updatePortfolio(), this.updateFrequency);
+}
+
+// Stop real-time tracking
+public stopTracking() {
+if (this.updateInterval) {
+clearInterval(this.updateInterval as unknown as number);
+this.updateInterval = undefined;
+}
+this.isTracking = false;
 }
 }
 export default new RealTimePortfolioService();

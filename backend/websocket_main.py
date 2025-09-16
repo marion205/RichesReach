@@ -1766,7 +1766,7 @@ async def graphql_endpoint(request_data: dict):
     
     # Handle me queries separately (only for pure me queries)
     elif "me" in query and "beginnerFriendlyStocks" not in query and "myPortfolios" not in query and "stocks" not in query and "portfolioMetrics" not in query and "myWatchlist" not in query and "advancedStockScreening" not in query and "portfolios" not in query and "discussions" not in query and "aiRecommendations" not in query and "rustStockAnalysis" not in query and "optionsAnalysis" not in query and "testOptionsAnalysis" not in query:
-        # Processing query
+        // Processing query
         user_profile = {
             "id": "user_1",
             "name": "Test User", 
@@ -2372,7 +2372,7 @@ async def graphql_endpoint(request_data: dict):
         
         # AI Recommendations
         if "aiRecommendations" in query:
-            # Processing query
+            // Processing query
             response_data["aiRecommendations"] = {
                 "portfolioAnalysis": {
                     "totalValue": 210000.75,
@@ -2555,7 +2555,7 @@ async def graphql_endpoint(request_data: dict):
         
         # Premium Portfolio metrics
         if "premiumPortfolioMetrics" in query:
-            # Processing query
+            // Processing query
             response_data["premiumPortfolioMetrics"] = {
                 "totalValue": 210000.75,
                 "totalCost": 195000.00,
@@ -2587,7 +2587,7 @@ async def graphql_endpoint(request_data: dict):
         
         # Options Analysis
         if "optionsAnalysis" in query:
-            # Processing query
+            // Processing query
             try:
                 # Get real options data
                 real_options_data = real_options_service.get_real_options_chain("AAPL")
@@ -3255,7 +3255,7 @@ async def graphql_endpoint(request_data: dict):
         
         # Test Options Analysis (fallback)
         if "testOptionsAnalysis" in query:
-            # Processing query
+            // Processing query
             response_data["testOptionsAnalysis"] = {
                 "underlyingSymbol": "AAPL",
                 "underlyingPrice": 234.07,
@@ -3296,7 +3296,7 @@ async def graphql_endpoint(request_data: dict):
         
         # User profile
         if "me" in query:
-            # Processing query
+            // Processing query
             user_profile = {
                 "id": "user_1",
                 "name": "Test User", 
@@ -4078,10 +4078,6 @@ async def graphql_endpoint(request_data: dict):
                     "ema26": round(stock_data["currentPrice"] * random.uniform(0.9, 1.1), 2)
                 },
                 "fundamentalAnalysis": {
-                    "peRatio": stock_data["peRatio"],
-                    "marketCap": stock_data["marketCap"],
-                    "dividendYield": stock_data["dividendYield"],
-                    "growthRate": round(random.uniform(-10, 20), 2),
                     "valuationScore": round(random.uniform(60, 95), 1),
                     "growthScore": round(random.uniform(50, 90), 1),
                     "stabilityScore": round(random.uniform(70, 95), 1),

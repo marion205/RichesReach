@@ -38,11 +38,6 @@ const RedditDiscussionCard: React.FC<RedditDiscussionCardProps> = ({
     onComment,
     onPress,
 }) => {
-id: discussion.id,
-title: discussion.title,
-score: discussion.score,
-commentCount: discussion.commentCount
-});
 const [userVote, setUserVote] = useState<'upvote' | 'downvote' | null>(null);
 const [localScore, setLocalScore] = useState(discussion.score);
 const [isSaved, setIsSaved] = useState(false);
@@ -136,8 +131,9 @@ if (diffInHours < 1) return 'Just now';
 if (diffInHours < 24) return `${diffInHours}h ago`;
 return date.toLocaleDateString();
 };
-const links = extractLinks(discussion.content);
-const mediaItems = extractMedia(discussion.content);
+const safeContent = discussion.content ?? '';
+const links = extractLinks(safeContent);
+const mediaItems = extractMedia(safeContent);
 const hasMedia = links.some(link => isImageUrl(link) || isVideoUrl(link)) || mediaItems.length > 0;
 return (
 <View style={styles.container}>
@@ -145,11 +141,7 @@ return (
 <View style={styles.votingSidebar}>
 <TouchableOpacity 
 style={[styles.voteButton, userVote === 'upvote' && styles.voteButtonActive]}
-onPress={(e) => {
-e.preventDefault();
-e.stopPropagation();
-handleVote('upvote');
-}}
+onPress={() => handleVote('upvote')}
 activeOpacity={0.7}
 >
 <Icon 
@@ -161,11 +153,7 @@ color={userVote === 'upvote' ? '#FF4500' : '#8E8E93'}
 <Text style={styles.scoreText}>{localScore}</Text>
 <TouchableOpacity 
 style={[styles.voteButton, userVote === 'downvote' && styles.voteButtonActive]}
-onPress={(e) => {
-e.preventDefault();
-e.stopPropagation();
-handleVote('downvote');
-}}
+onPress={() => handleVote('downvote')}
 activeOpacity={0.7}
 >
 <Icon 
@@ -408,10 +396,9 @@ Alert.alert('Success', 'Discussion removed from your bookmarks!');
 }}
 >
 <Icon 
-name={isSaved ? "bookmark" : "bookmark"} 
+name="bookmark" 
 size={18} 
 color={isSaved ? "#FF9500" : "#8E8E93"} 
-style={isSaved ? { fill: "#FF9500" } : {}} 
 />
 <Text style={[styles.actionText, isSaved && styles.savedText]}>
 {isSaved ? 'Saved' : 'Save'}
@@ -519,7 +506,6 @@ fontWeight: 'bold',
         maxWidth: 80,
         minWidth: 0,
         overflow: 'hidden',
-        whiteSpace: 'nowrap',
         textAlign: 'left',
     },
     timestamp: {
@@ -529,7 +515,6 @@ fontWeight: 'bold',
 badgeContainer: {
 flexDirection: 'row',
 alignItems: 'center',
-gap: 8,
 },
 typeBadge: {
 flexDirection: 'row',
@@ -538,6 +523,7 @@ backgroundColor: '#F6F7F8',
 paddingHorizontal: 8,
 paddingVertical: 4,
 borderRadius: 12,
+marginRight: 8,
 },
 visibilityBadge: {
 flexDirection: 'row',

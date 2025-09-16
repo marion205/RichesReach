@@ -16,40 +16,46 @@ from dataclasses import dataclass
 from enum import Enum
 from .models import Stock
 logger = logging.getLogger(__name__)
+
 class RateLimitStatus(Enum):
-OK = "ok"
-RATE_LIMITED = "rate_limited"
-DAILY_LIMIT_EXCEEDED = "daily_limit_exceeded"
+    OK = "ok"
+    RATE_LIMITED = "rate_limited"
+    DAILY_LIMIT_EXCEEDED = "daily_limit_exceeded"
+
 @dataclass
 class RateLimitInfo:
-status: RateLimitStatus
-remaining_requests: int
-reset_time: datetime
-retry_after: Optional[int] = None
+    status: RateLimitStatus
+    remaining_requests: int
+    reset_time: datetime
+    retry_after: Optional[int] = None
+
 class StockDataCache:
-"""Redis-based cache for stock data with TTL management"""
-def __init__(self):
-self.redis_client = redis.Redis(
-host=settings.REDIS_HOST,
-port=settings.REDIS_PORT,
-db=settings.REDIS_DB,
-password=settings.REDIS_PASSWORD,
-decode_responses=True
-)
-self.config = settings.STOCK_ANALYSIS_CONFIG['CACHE_TIMEOUT']
-def get_cache_key(self, data_type: str, symbol: str) -> str:
-"""Generate cache key for stock data"""
-return f"stock:{data_type}:{symbol.upper()}"
-def get(self, data_type: str, symbol: str) -> Optional[Dict[str, Any]]:
-"""Get cached stock data"""
-try:
-key = self.get_cache_key(data_type, symbol)
-data = self.redis_client.get(key)
-if data:
-return json.loads(data)
-except Exception as e:
-logger.error(f"Cache get error: {e}")
-return None
+    """Redis-based cache for stock data with TTL management"""
+    
+    def __init__(self):
+        self.redis_client = redis.Redis(
+            host=settings.REDIS_HOST,
+            port=settings.REDIS_PORT,
+            db=settings.REDIS_DB,
+            password=settings.REDIS_PASSWORD,
+            decode_responses=True
+        )
+        self.config = settings.STOCK_ANALYSIS_CONFIG['CACHE_TIMEOUT']
+    
+    def get_cache_key(self, data_type: str, symbol: str) -> str:
+        """Generate cache key for stock data"""
+        return f"stock:{data_type}:{symbol.upper()}"
+    
+    def get(self, data_type: str, symbol: str) -> Optional[Dict[str, Any]]:
+        """Get cached stock data"""
+        try:
+            key = self.get_cache_key(data_type, symbol)
+            data = self.redis_client.get(key)
+            if data:
+                return json.loads(data)
+        except Exception as e:
+            logger.error(f"Cache get error: {e}")
+        return None
 def set(self, data_type: str, symbol: str, data: Dict[str, Any]) -> bool:
 """Set cached stock data with appropriate TTL"""
 try:
@@ -480,6 +486,27 @@ return True
 except Exception as e:
 logger.error(f"Error updating stock overview for {stock.symbol}: {e}")
 return False
+def calculate_beginner_friendly_score(self, stock) -> int:
+    """Calculate beginner-friendly score for a stock using AI/ML"""
+    try:
+        # Get company overview data
+        overview_data = self._get_company_overview(stock.symbol)
+        if overview_data:
+            return self._calculate_beginner_score(overview_data)
+        else:
+            # Fallback scoring based on available data
+            score = 50  # Base score
+            if stock.market_cap and stock.market_cap >= 10_000_000_000:  # $10B+
+                score += 20
+            if stock.pe_ratio and 5 <= stock.pe_ratio <= 30:
+                score += 15
+            if stock.dividend_yield and stock.dividend_yield > 0:
+                score += 10
+            return min(100, max(0, score))
+    except Exception as e:
+        logger.error(f"Error calculating beginner score for {stock.symbol}: {e}")
+        return stock.beginner_friendly_score or 50
+
 def _calculate_beginner_score(self, overview_data: dict) -> int:
 """Calculate beginner-friendly score based on company data"""
 score = 60 # Higher base score for more stocks to qualify

@@ -8,6 +8,7 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 from pathlib import Path
 import os
+from datetime import timedelta
 from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
@@ -134,6 +135,18 @@ AUTHENTICATION_BACKENDS = [
 'graphql_jwt.backends.JSONWebTokenBackend',
 'django.contrib.auth.backends.ModelBackend',
 ]
+
+# JWT Configuration
+GRAPHQL_JWT = {
+    'JWT_ALGORITHM': 'HS256',
+    'JWT_SECRET_KEY': SECRET_KEY,
+    'JWT_EXPIRATION_DELTA': timedelta(minutes=60),
+    'JWT_REFRESH_EXPIRATION_DELTA': timedelta(days=7),
+    'JWT_VERIFY_EXPIRATION': True,
+    'JWT_LEEWAY': 0,
+    'JWT_AUTH_HEADER_PREFIX': 'JWT',
+    'JWT_AUTH_COOKIE': None,
+}
 # OpenAI Configuration
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY') # Set this in environment variable OPENAI_API_KEY
 OPENAI_MODEL = "gpt-3.5-turbo" # Default model to use

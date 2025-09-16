@@ -1,676 +1,516 @@
-import React, { useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
-View,
-Text,
-StyleSheet,
-TouchableOpacity,
-ScrollView,
-Dimensions,
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  FlatList,
+  Dimensions,
+  Animated,
 } from 'react-native';
-import { LineChart } from 'react-native-chart-kit';
 import Icon from 'react-native-vector-icons/Feather';
-import EducationalTooltip from './EducationalTooltip';
-import { getTermExplanation } from '../data/financialTerms';
+import { LineChart } from 'react-native-chart-kit';
+// Optional gradient (falls back if not installed)
+let LinearGradient: any = View;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  LinearGradient = require('react-native-linear-gradient').default;
+} catch (_) { /* fallback to View */ }
+
+// ---------- Types ----------
 const { width } = Dimensions.get('window');
+
 interface PortfolioComparisonProps {
-totalValue: number;
-totalReturn: number;
-totalReturnPercent: number;
-portfolioHistory: Array<{ date: string; value: number }>;
+  totalValue: number;
+  totalReturn: number;
+  totalReturnPercent: number;
+  portfolioHistory: Array<{ date: string; value: number }>;
 }
+
 interface Benchmark {
-id: string;
-name: string;
-symbol: string;
-returnPercent: number;
-color: string;
-icon: string;
-description: string;
+  id: string;
+  name: string;
+  symbol: string;
+  returnPercent: number; // 1Y annualized
+  color: string;
+  icon: string;
+  description: string;
+  spark?: number[]; // optional mini-series for sparkline
 }
+
+// ---------- Component ----------
 const PortfolioComparison: React.FC<PortfolioComparisonProps> = ({
-totalValue,
-totalReturn,
-totalReturnPercent,
-portfolioHistory,
+  totalValue,
+  totalReturn,
+  totalReturnPercent,
+  portfolioHistory,
 }) => {
-const [selectedTimeframe, setSelectedTimeframe] = useState<'1M' | '3M' | '6M' | '1Y'>('1M');
-const [showChart, setShowChart] = useState(false);
-// Mock benchmark data - in a real app, this would come from an API
-const benchmarks: Benchmark[] = [
-{
-id: 'sp500',
-name: 'S&P 500',
-symbol: 'SPY',
-returnPercent: 12.3,
-color: '#007AFF',
-icon: 'trending-up',
-description: 'The 500 largest US companies'
-},
-{
-id: 'nasdaq',
-name: 'NASDAQ',
-symbol: 'QQQ',
-returnPercent: 18.7,
-color: '#34C759',
-icon: 'activity',
-description: 'Technology-heavy index'
-},
-{
-id: 'dow',
-name: 'Dow Jones',
-symbol: 'DIA',
-returnPercent: 8.9,
-color: '#FF9500',
-icon: 'bar-chart',
-description: '30 large US companies'
-},
-{
-id: 'total-market',
-name: 'Total Market',
-symbol: 'VTI',
-returnPercent: 11.2,
-color: '#AF52DE',
-icon: 'pie-chart',
-description: 'Entire US stock market'
-}
-];
-// Filter portfolio history based on selected timeframe
-const getFilteredPortfolioHistory = () => {
-const totalPoints = portfolioHistory.length;
-// Calculate how many data points to take based on timeframe
-let pointsToTake: number;
-switch (selectedTimeframe) {
-case '1M':
-pointsToTake = Math.min(4, totalPoints); // Last 4 points (1 month)
-break;
-case '3M':
-pointsToTake = Math.min(8, totalPoints); // Last 8 points (3 months)
-break;
-case '6M':
-pointsToTake = Math.min(12, totalPoints); // Last 12 points (6 months)
-break;
-case '1Y':
-pointsToTake = totalPoints; // All points (1 year)
-break;
-default:
-pointsToTake = Math.min(4, totalPoints);
-}
-// Always return at least 2 points for comparison
-const actualPoints = Math.max(2, pointsToTake);
-return portfolioHistory.slice(-actualPoints);
+  const [selectedTimeframe, setSelectedTimeframe] =
+    useState<'1M' | '3M' | '6M' | '1Y'>('3M');
+  const [showChart, setShowChart] = useState(true);
+  const fade = useRef(new Animated.Value(1)).current;
+
+  // ---- Skeleton (very light) ----
+  const isLoading = !portfolioHistory || portfolioHistory.length === 0;
+
+  // ---- Benchmarks (mock) ----
+  const benchmarks: Benchmark[] = [
+    { id: 'sp500', name: 'S&P 500', symbol: 'SPY', returnPercent: 12.3, color: '#0A84FF', icon: 'trending-up',
+      description: 'The 500 largest US companies',
+      spark: [100, 102, 101, 104, 106, 108, 109, 112]
+    },
+    { id: 'nasdaq', name: 'NASDAQ', symbol: 'QQQ', returnPercent: 18.7, color: '#34C759', icon: 'activity',
+      description: 'Technology-heavy index',
+      spark: [100, 103, 105, 107, 110, 115, 118, 120]
+    },
+    { id: 'dow', name: 'Dow Jones', symbol: 'DIA', returnPercent: 8.9, color: '#FF9F0A', icon: 'bar-chart',
+      description: '30 large US companies',
+      spark: [100, 101, 101, 102, 103, 104, 105, 106]
+    },
+    { id: 'total', name: 'Total Market', symbol: 'VTI', returnPercent: 11.2, color: '#AF52DE', icon: 'pie-chart',
+      description: 'Entire US stock market',
+      spark: [100, 101, 102, 103, 105, 107, 108, 110]
+    },
+  ];
+
+  // ---- Helpers ----
+  const getBenchmarkReturn = (annualReturn: number) => {
+    switch (selectedTimeframe) {
+      case '1M': return annualReturn / 12;
+      case '3M': return annualReturn / 4;
+      case '6M': return annualReturn / 2;
+      default:   return annualReturn;
+    }
+  };
+
+  const filteredSeries = useMemo(() => {
+    const n = portfolioHistory?.length ?? 0;
+    if (n === 0) return [];
+    const take = selectedTimeframe === '1M' ? 4
+              : selectedTimeframe === '3M' ? 8
+              : selectedTimeframe === '6M' ? 12
+              : n;
+    return portfolioHistory.slice(-Math.max(2, Math.min(take, n)));
+  }, [portfolioHistory, selectedTimeframe]);
+
+  const timeframePerf = useMemo(() => {
+    if (filteredSeries.length < 2) {
+      const start = totalValue - totalReturn;
+      return { startValue: start, endValue: totalValue, pct: totalReturnPercent, amt: totalReturn };
+    }
+    const startValue = filteredSeries[0].value;
+    const endValue = filteredSeries[filteredSeries.length - 1].value;
+    const amt = endValue - startValue;
+    const pct = startValue > 0 ? (amt / startValue) * 100 : 0;
+    return { startValue, endValue, pct, amt };
+  }, [filteredSeries, totalReturn, totalReturnPercent, totalValue]);
+
+  const fmtPct = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`;
+  const fmtMoney = (v: number) =>
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v);
+  const perfColor = (v: number) => (v > 0 ? '#34C759' : v < 0 ? '#FF3B30' : '#8E8E93');
+
+  // ---- Chart data (portfolio + 2 benchmarks) ----
+  const chartData = useMemo(() => {
+    if (filteredSeries.length === 0) return { labels: [], datasets: [] as any[] };
+
+    const start = filteredSeries[0].value || 1;
+    const labels = filteredSeries.map(p => {
+      const d = new Date(p.date);
+      return `${d.getMonth() + 1}/${d.getDate()}`;
+    });
+
+    const portfolio = filteredSeries.map(p => p.value);
+    const makeRef = (annual: number) => {
+      const tfPct = getBenchmarkReturn(annual) / 100;
+      const L = filteredSeries.length;
+      return filteredSeries.map((_, i) => start * (1 + tfPct * (i / Math.max(1, L - 1))));
+    };
+
+    return {
+      labels,
+      datasets: [
+        { data: portfolio, color: (o = 1) => `rgba(10,132,255,${o})`, strokeWidth: 3 },
+        { data: makeRef(12.3), color: (o = 1) => `rgba(52,199,89,${o})`, strokeWidth: 2 },
+        { data: makeRef(18.7), color: (o = 1) => `rgba(255,159,10,${o})`, strokeWidth: 2 },
+      ],
+    };
+  }, [filteredSeries, selectedTimeframe]);
+
+  // ---- Animate on timeframe change ----
+  const flipFade = () => {
+    Animated.sequence([
+      Animated.timing(fade, { toValue: 0, duration: 120, useNativeDriver: true }),
+      Animated.timing(fade, { toValue: 1, duration: 120, useNativeDriver: true }),
+    ]).start();
+  };
+
+  // ---- Derived insights ----
+  const bestBenchmark = useMemo(() => {
+    const mapped = benchmarks.map(b => ({
+      ...b,
+      tf: getBenchmarkReturn(b.returnPercent),
+      diff: timeframePerf.pct - getBenchmarkReturn(b.returnPercent),
+    }));
+    return mapped.sort((a, b) => b.tf - a.tf)[0];
+  }, [benchmarks, selectedTimeframe, timeframePerf.pct]);
+
+  const beating = timeframePerf.pct > getBenchmarkReturn(12.3); // vs S&P by default
+  const insightText = beating
+    ? `Outperforming S&P 500 by ${fmtPct(timeframePerf.pct - getBenchmarkReturn(12.3))}. Staying diversified is working.`
+    : `Lagging S&P 500 by ${fmtPct(getBenchmarkReturn(12.3) - timeframePerf.pct)}. Consider tilting toward leaders or rebalancing.`;
+
+  // ---- Simple error guard for the chart ----
+  const ChartSafe = () => {
+    try {
+      if (!showChart) return null;
+      if (!chartData.datasets?.length) {
+        return (
+          <View style={styles.chartEmpty}>
+            <Text style={styles.chartEmptyText}>Chart unavailable</Text>
+          </View>
+        );
+      }
+      return (
+        <View style={styles.chartContainer}>
+          <Text style={styles.chartTitle}>Portfolio vs Benchmarks</Text>
+          <LineChart
+            data={chartData}
+            width={width - 40}
+            height={220}
+            bezier
+            style={styles.chart}
+            chartConfig={{
+              backgroundColor: '#FFFFFF',
+              backgroundGradientFrom: '#FFFFFF',
+              backgroundGradientTo: '#FFFFFF',
+              decimalPlaces: 0,
+              color: (o = 1) => `rgba(0,0,0,${o})`,
+              labelColor: (o = 1) => `rgba(0,0,0,${o})`,
+              formatYLabel: (y: string) => {
+                const n = Number(y);
+                if (isNaN(n)) return y;
+                if (Math.abs(n) >= 1000) return `$${(n / 1000).toFixed(1)}k`;
+                return `$${n.toFixed(0)}`;
+              },
+              propsForBackgroundLines: { strokeDasharray: '3 3' },
+              propsForDots: { r: '3', strokeWidth: '2', stroke: '#0A84FF' },
+            }}
+          />
+          <View style={styles.chartLegend}>
+            <Legend swatch="#0A84FF" label="Your Portfolio" />
+            <Legend swatch="#34C759" label="S&P 500" />
+            <Legend swatch="#FF9F0A" label="NASDAQ" />
+          </View>
+        </View>
+      );
+    } catch {
+      return (
+        <View style={styles.chartEmpty}>
+          <Text style={styles.chartEmptyText}>Something went wrong rendering the chart.</Text>
+        </View>
+      );
+    }
+  };
+
+  // ---- Render ----
+  if (isLoading) {
+    return <SkeletonCard />;
+  }
+
+  return (
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.titleRow}>
+          <Icon name="bar-chart-2" size={20} color="#007AFF" />
+          <Text style={styles.title}>Portfolio Comparison</Text>
+        </View>
+        <TouchableOpacity onPress={() => setShowChart(s => !s)} style={styles.toggleBtn}>
+          <Icon name={showChart ? 'chevron-up' : 'chevron-down'} size={16} color="#007AFF" />
+          <Text style={styles.toggleText}>{showChart ? 'Hide' : 'Show'} Chart</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Summary */}
+      <LinearGradient
+        colors={LinearGradient === View ? ['#F8F9FA', '#F8F9FA'] : ['#EAF3FF', '#FFFFFF']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.summaryCard}
+      >
+        <View style={styles.summaryHeader}>
+          <Text style={styles.summaryTitle}>Your Performance</Text>
+
+          <View style={styles.timeframeBar}>
+            {(['1M', '3M', '6M', '1Y'] as const).map(tf => {
+              const active = selectedTimeframe === tf;
+              return (
+                <TouchableOpacity
+                  key={tf}
+                  onPress={() => { if (tf !== selectedTimeframe) { setSelectedTimeframe(tf); flipFade(); } }}
+                  style={[styles.tfBtn, active && styles.tfBtnActive]}
+                >
+                  <Text style={[styles.tfText, active && styles.tfTextActive]}>{tf}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        <Animated.View style={[styles.summaryRow, { opacity: fade }]}>
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryLabel}>Total Return</Text>
+            <Text style={[styles.summaryValue, { color: perfColor(timeframePerf.pct) }]}>
+              {fmtPct(timeframePerf.pct)}
+            </Text>
+          </View>
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryLabel}>Return Amount</Text>
+            <Text style={[styles.summaryValue, { color: perfColor(timeframePerf.amt) }]}>
+              {fmtMoney(timeframePerf.amt)}
+            </Text>
+          </View>
+        </Animated.View>
+      </LinearGradient>
+
+      {/* Chart */}
+      <ChartSafe />
+
+      {/* Benchmarks Carousel */}
+      <View style={styles.benchHeader}>
+        <Text style={styles.benchTitle}>Market Benchmarks</Text>
+      </View>
+      <FlatList
+        data={benchmarks}
+        keyExtractor={(b) => b.id}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        snapToInterval={CARD_W + 12}
+        decelerationRate="fast"
+        contentContainerStyle={{ paddingHorizontal: 12 }}
+        renderItem={({ item }) => {
+          const adj = getBenchmarkReturn(item.returnPercent);
+          const diff = timeframePerf.pct - adj;
+          const outperform = diff > 0.01;
+          return (
+            <View style={[styles.benchCard, { borderColor: item.color }]}>
+              <View style={styles.benchHeaderRow}>
+                <View style={styles.benchLeft}>
+                  <View style={[styles.benchIcon, { backgroundColor: item.color }]}>
+                    <Icon name={item.icon} size={16} color="#fff" />
+                  </View>
+                  <View style={{ marginLeft: 8 }}>
+                    <Text style={styles.benchName}>{item.name}</Text>
+                    <Text style={styles.benchSymbol}>{item.symbol}</Text>
+                  </View>
+                </View>
+                <View style={styles.benchRight}>
+                  {outperform && (
+                    <View style={styles.badge}>
+                      <Icon name="check" size={10} color="#fff" />
+                      <Text style={styles.badgeText}>Outperform</Text>
+                    </View>
+                  )}
+                  <Text style={[styles.benchReturn, { color: perfColor(adj) }]}>{fmtPct(adj)}</Text>
+                </View>
+              </View>
+
+              {/* Mini Sparkline */}
+              {item.spark && (
+                <LineChart
+                  data={{ labels: new Array(item.spark.length).fill(''), datasets: [{ data: item.spark }] }}
+                  width={CARD_W - 32}
+                  height={70}
+                  withDots={false}
+                  withInnerLines={false}
+                  withOuterLines={false}
+                  withVerticalLabels={false}
+                  withHorizontalLabels={false}
+                  chartConfig={{
+                    backgroundColor: '#FFFFFF',
+                    backgroundGradientFrom: '#FFFFFF',
+                    backgroundGradientTo: '#FFFFFF',
+                    decimalPlaces: 0,
+                    color: () => item.color,
+                  }}
+                  style={{ marginTop: 4 }}
+                />
+              )}
+
+              <View style={styles.benchRow}>
+                <View style={styles.compItem}>
+                  <Text style={styles.compLabel}>Your Portf.</Text>
+                  <Text style={[styles.compValue, { color: perfColor(timeframePerf.pct) }]}>
+                    {fmtPct(timeframePerf.pct)}
+                  </Text>
+                </View>
+                <View style={styles.compItem}>
+                  <Text style={styles.compLabel}>Difference</Text>
+                  <Text style={[styles.compValue, { color: perfColor(diff) }]}>{fmtPct(diff)}</Text>
+                </View>
+              </View>
+
+              <Text style={styles.benchDesc}>{item.description}</Text>
+            </View>
+          );
+        }}
+      />
+
+      {/* Insights */}
+      <View style={styles.insights}>
+        <View style={styles.insightsHeader}>
+          <Icon name="info" size={16} color="#8E8E93" />
+          <Text style={styles.insightsTitle}>Performance Insights</Text>
+        </View>
+        <Text style={styles.insightText}>
+          {insightText}{' '}
+          <Text style={styles.insightSub}>
+            Best  in period: {bestBenchmark?.name} ({fmtPct(bestBenchmark?.tf ?? 0)}).
+          </Text>
+        </Text>
+      </View>
+    </View>
+  );
 };
-// Calculate performance metrics for the selected timeframe
-const getTimeframePerformance = () => {
-const filteredHistory = getFilteredPortfolioHistory();
-// Always ensure we have at least 2 data points
-if (filteredHistory.length < 2) {
-return {
-totalReturn: totalReturn,
-totalReturnPercent: totalReturnPercent,
-startValue: totalValue - totalReturn,
-endValue: totalValue
-};
-}
-const startValue = filteredHistory[0].value;
-const endValue = filteredHistory[filteredHistory.length - 1].value;
-const timeframeReturn = endValue - startValue;
-const timeframeReturnPercent = startValue > 0 ? (timeframeReturn / startValue) * 100 : 0;
-// Debug logging
-return {
-totalReturn: timeframeReturn,
-totalReturnPercent: timeframeReturnPercent,
-startValue,
-endValue
-};
-};
-// Generate mock chart data for comparison based on filtered timeframe
-const generateChartData = () => {
-const filteredHistory = getFilteredPortfolioHistory();
-const timeframePerformance = getTimeframePerformance();
-if (filteredHistory.length === 0) {
-return {
-labels: [],
-datasets: []
-};
-}
-const baseValue = timeframePerformance.startValue;
-const portfolioData = filteredHistory.map((point, index) => {
-const growth = (timeframePerformance.totalReturnPercent / 100) * (index / filteredHistory.length);
-return baseValue * (1 + growth);
-});
-// Adjust benchmark returns based on timeframe
-const getBenchmarkReturn = (annualReturn: number) => {
-switch (selectedTimeframe) {
-case '1M': return annualReturn / 12;
-case '3M': return annualReturn / 4;
-case '6M': return annualReturn / 2;
-case '1Y': return annualReturn;
-default: return annualReturn / 12;
-}
-};
-const sp500Data = filteredHistory.map((_, index) => {
-const growth = (getBenchmarkReturn(12.3) / 100) * (index / filteredHistory.length);
-return baseValue * (1 + growth);
-});
-const nasdaqData = filteredHistory.map((_, index) => {
-const growth = (getBenchmarkReturn(18.7) / 100) * (index / filteredHistory.length);
-return baseValue * (1 + growth);
-});
-return {
-labels: filteredHistory.map(point => {
-const date = new Date(point.date);
-return `${date.getMonth() + 1}/${date.getDate()}`;
-}),
-datasets: [
-{
-data: portfolioData,
-color: (opacity = 1) => `rgba(0, 122, 255, ${opacity})`,
-strokeWidth: 3,
-},
-{
-data: sp500Data,
-color: (opacity = 1) => `rgba(52, 199, 89, ${opacity})`,
-strokeWidth: 2,
-},
-{
-data: nasdaqData,
-color: (opacity = 1) => `rgba(255, 149, 0, ${opacity})`,
-strokeWidth: 2,
-},
-],
-};
-};
-const chartData = generateChartData();
-const getPerformanceColor = (returnPercent: number) => {
-if (returnPercent > 0) return '#34C759';
-if (returnPercent < 0) return '#FF3B30';
-return '#8E8E93';
-};
-const getPerformanceIcon = (returnPercent: number) => {
-if (returnPercent > 0) return 'trending-up';
-if (returnPercent < 0) return 'trending-down';
-return 'minus';
-};
-const formatPercent = (value: number) => {
-const sign = value >= 0 ? '+' : '';
-return `${sign}${value.toFixed(2)}%`;
-};
-const formatCurrency = (value: number) => {
-return new Intl.NumberFormat('en-US', {
-style: 'currency',
-currency: 'USD',
-minimumFractionDigits: 0,
-maximumFractionDigits: 0,
-}).format(value);
-};
-const renderBenchmarkCard = (benchmark: Benchmark) => {
-const timeframePerformance = getTimeframePerformance();
-// Adjust benchmark return based on timeframe
-const getBenchmarkReturn = (annualReturn: number) => {
-switch (selectedTimeframe) {
-case '1M': return annualReturn / 12;
-case '3M': return annualReturn / 4;
-case '6M': return annualReturn / 2;
-case '1Y': return annualReturn;
-default: return annualReturn / 12;
-}
-};
-const adjustedBenchmarkReturn = getBenchmarkReturn(benchmark.returnPercent);
-const isOutperforming = timeframePerformance.totalReturnPercent > adjustedBenchmarkReturn;
-const difference = timeframePerformance.totalReturnPercent - adjustedBenchmarkReturn;
-return (
-<View key={benchmark.id} style={styles.benchmarkCard}>
-<View style={styles.benchmarkHeader}>
-<View style={styles.benchmarkInfo}>
-<View style={[styles.benchmarkIcon, { backgroundColor: benchmark.color }]}>
-<Icon name={benchmark.icon} size={16} color="#FFFFFF" />
-</View>
-<View style={styles.benchmarkDetails}>
-<Text style={styles.benchmarkName}>{benchmark.name}</Text>
-<Text style={styles.benchmarkSymbol}>{benchmark.symbol}</Text>
-</View>
-</View>
-<View style={styles.benchmarkPerformance}>
-<Text style={[
-styles.benchmarkReturn,
-{ color: getPerformanceColor(adjustedBenchmarkReturn) }
-]}>
-{formatPercent(adjustedBenchmarkReturn)}
-</Text>
-<Icon 
-name={getPerformanceIcon(adjustedBenchmarkReturn)} 
-size={14} 
-color={getPerformanceColor(adjustedBenchmarkReturn)} 
-/>
-</View>
-</View>
-<View style={styles.comparisonRow}>
-<View style={styles.comparisonItem}>
-<Text style={styles.comparisonLabel}>Your Portfolio</Text>
-<Text style={[
-styles.comparisonValue,
-{ color: getPerformanceColor(timeframePerformance.totalReturnPercent) }
-]}>
-{formatPercent(timeframePerformance.totalReturnPercent)}
-</Text>
-</View>
-<View style={styles.comparisonItem}>
-<Text style={styles.comparisonLabel}>Difference</Text>
-<Text style={[
-styles.comparisonValue,
-{ color: getPerformanceColor(difference) }
-]}>
-{formatPercent(difference)}
-</Text>
-</View>
-</View>
-<View style={styles.benchmarkDescription}>
-<Text style={styles.descriptionText}>{benchmark.description}</Text>
-</View>
-</View>
+
+// ---------- Small bits ----------
+const CARD_W = Math.min(260, width * 0.75);
+
+const Legend = ({ swatch, label }: { swatch: string; label: string }) => (
+  <View style={styles.legendItem}>
+    <View style={[styles.legendSwatch, { backgroundColor: swatch }]} />
+    <Text style={styles.legendText}>{label}</Text>
+  </View>
 );
+
+// Light skeleton without external libs
+const SkeletonCard = () => {
+  const pulse = useRef(new Animated.Value(0.6)).current;
+  React.useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 700, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.6, duration: 700, useNativeDriver: true }),
+      ])
+    ).start();
+  }, [pulse]);
+
+  return (
+    <Animated.View style={[styles.container, { opacity: pulse }]}>
+      <View style={styles.skBlock} />
+      <View style={[styles.skBlock, { height: 140, marginTop: 12 }]} />
+      <View style={[styles.skRow]}>
+        <View style={[styles.skChip]} />
+        <View style={[styles.skChip]} />
+        <View style={[styles.skChip]} />
+      </View>
+    </Animated.View>
+  );
 };
-return (
-<View style={styles.container}>
-<View style={styles.header}>
-<View style={styles.titleContainer}>
-<Icon name="bar-chart-2" size={20} color="#007AFF" />
-<Text style={styles.title}>Portfolio Comparison</Text>
-</View>
-<EducationalTooltip
-term="Portfolio Comparison"
-explanation="Compare your portfolio performance against market benchmarks like the S&P 500 to see how well you're doing."
-position="top"
->
-<Icon name="info" size={16} color="#8E8E93" />
-</EducationalTooltip>
-</View>
-{/* Performance Summary */}
-<View style={styles.summaryCard}>
-<View style={styles.summaryHeader}>
-<Text style={styles.summaryTitle}>Your Performance</Text>
-<View style={styles.timeframeSelector}>
-{(['1M', '3M', '6M', '1Y'] as const).map((timeframe) => (
-<TouchableOpacity
-key={timeframe}
-style={[
-styles.timeframeButton,
-selectedTimeframe === timeframe && styles.timeframeButtonSelected
-]}
-onPress={() => setSelectedTimeframe(timeframe)}
->
-<Text style={[
-styles.timeframeText,
-selectedTimeframe === timeframe && styles.timeframeTextSelected
-]}>
-{timeframe}
-</Text>
-</TouchableOpacity>
-))}
-</View>
-</View>
-<View style={styles.summaryContent}>
-<View style={styles.summaryItem}>
-<Text style={styles.summaryLabel}>Total Return</Text>
-<Text style={[
-styles.summaryValue,
-{ color: getPerformanceColor(getTimeframePerformance().totalReturnPercent) }
-]}>
-{formatPercent(getTimeframePerformance().totalReturnPercent)}
-</Text>
-</View>
-<View style={styles.summaryItem}>
-<Text style={styles.summaryLabel}>Return Amount</Text>
-<Text style={[
-styles.summaryValue,
-{ color: getPerformanceColor(getTimeframePerformance().totalReturn) }
-]}>
-{formatCurrency(getTimeframePerformance().totalReturn)}
-</Text>
-</View>
-</View>
-</View>
-{/* Chart Toggle */}
-<TouchableOpacity
-style={styles.chartToggle}
-onPress={() => setShowChart(!showChart)}
->
-<View style={styles.chartToggleContent}>
-<Icon name="trending-up" size={16} color="#007AFF" />
-<Text style={styles.chartToggleText}>
-{showChart ? 'Hide' : 'Show'} Performance Chart
-</Text>
-</View>
-<Icon 
-name={showChart ? 'chevron-up' : 'chevron-down'} 
-size={16} 
-color="#8E8E93" 
-/>
-</TouchableOpacity>
-{/* Chart */}
-{showChart && (
-<View style={styles.chartContainer}>
-<Text style={styles.chartTitle}>Portfolio vs Benchmarks</Text>
-<LineChart
-data={chartData}
-width={width - 40}
-height={220}
-chartConfig={{
-backgroundColor: '#FFFFFF',
-backgroundGradientFrom: '#FFFFFF',
-backgroundGradientTo: '#FFFFFF',
-decimalPlaces: 0,
-color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-style: {
-borderRadius: 16,
-},
-propsForDots: {
-r: '4',
-strokeWidth: '2',
-stroke: '#007AFF',
-},
-}}
-bezier
-style={styles.chart}
-/>
-<View style={styles.chartLegend}>
-<View style={styles.legendItem}>
-<View style={[styles.legendColor, { backgroundColor: '#007AFF' }]} />
-<Text style={styles.legendText}>Your Portfolio</Text>
-</View>
-<View style={styles.legendItem}>
-<View style={[styles.legendColor, { backgroundColor: '#34C759' }]} />
-<Text style={styles.legendText}>S&P 500</Text>
-</View>
-<View style={styles.legendItem}>
-<View style={[styles.legendColor, { backgroundColor: '#FF9500' }]} />
-<Text style={styles.legendText}>NASDAQ</Text>
-</View>
-</View>
-</View>
-)}
-{/* Benchmarks */}
-<View style={styles.benchmarksContainer}>
-<Text style={styles.benchmarksTitle}>Market Benchmarks</Text>
-<ScrollView 
-horizontal 
-showsHorizontalScrollIndicator={false}
-contentContainerStyle={styles.benchmarksScroll}
->
-{benchmarks.map(renderBenchmarkCard)}
-</ScrollView>
-</View>
-{/* Insights */}
-<View style={styles.insightsCard}>
-<View style={styles.insightsHeader}>
-<Text style={styles.insightsTitle}>Performance Insights</Text>
-</View>
-<View style={styles.insightsContent}>
-{totalReturnPercent > 12.3 ? (
-<Text style={styles.insightText}>
-<Text style={styles.insightHighlight}>Outperforming S&P 500!</Text> Your portfolio is beating the market average. Great job!
-</Text>
-) : (
-<Text style={styles.insightText}>
-<Text style={styles.insightHighlight}>Consider diversification</Text> to potentially improve returns and reduce risk.
-</Text>
-)}
-</View>
-</View>
-</View>
-);
-};
+
+// ---------- Styles ----------
 const styles = StyleSheet.create({
-container: {
-backgroundColor: '#FFFFFF',
-borderRadius: 16,
-padding: 16,
-marginVertical: 8,
-shadowColor: '#000',
-shadowOffset: { width: 0, height: 2 },
-shadowOpacity: 0.1,
-shadowRadius: 4,
-elevation: 3,
-},
-header: {
-flexDirection: 'row',
-justifyContent: 'space-between',
-alignItems: 'center',
-marginBottom: 16,
-},
-titleContainer: {
-flexDirection: 'row',
-alignItems: 'center',
-gap: 8,
-},
-title: {
-fontSize: 18,
-fontWeight: '700',
-color: '#1C1C1E',
-},
-summaryCard: {
-backgroundColor: '#F8F9FA',
-borderRadius: 12,
-padding: 16,
-marginBottom: 16,
-},
-summaryHeader: {
-flexDirection: 'row',
-justifyContent: 'space-between',
-alignItems: 'center',
-marginBottom: 12,
-},
-summaryTitle: {
-fontSize: 16,
-fontWeight: '600',
-color: '#1C1C1E',
-},
-timeframeSelector: {
-flexDirection: 'row',
-backgroundColor: '#FFFFFF',
-borderRadius: 8,
-padding: 2,
-},
-timeframeButton: {
-paddingHorizontal: 12,
-paddingVertical: 6,
-borderRadius: 6,
-},
-timeframeButtonSelected: {
-backgroundColor: '#007AFF',
-},
-timeframeText: {
-fontSize: 12,
-fontWeight: '500',
-color: '#8E8E93',
-},
-timeframeTextSelected: {
-color: '#FFFFFF',
-},
-summaryContent: {
-flexDirection: 'row',
-justifyContent: 'space-between',
-},
-summaryItem: {
-alignItems: 'center',
-},
-summaryLabel: {
-fontSize: 12,
-color: '#8E8E93',
-marginBottom: 4,
-},
-summaryValue: {
-fontSize: 18,
-fontWeight: '700',
-},
-chartToggle: {
-flexDirection: 'row',
-justifyContent: 'space-between',
-alignItems: 'center',
-backgroundColor: '#F2F2F7',
-borderRadius: 8,
-padding: 12,
-marginBottom: 16,
-},
-chartToggleContent: {
-flexDirection: 'row',
-alignItems: 'center',
-gap: 8,
-},
-chartToggleText: {
-fontSize: 14,
-fontWeight: '500',
-color: '#007AFF',
-},
-chartContainer: {
-backgroundColor: '#F8F9FA',
-borderRadius: 12,
-padding: 16,
-marginBottom: 16,
-},
-chartTitle: {
-fontSize: 16,
-fontWeight: '600',
-color: '#1C1C1E',
-marginBottom: 12,
-textAlign: 'center',
-},
-chart: {
-marginVertical: 8,
-borderRadius: 16,
-},
-chartLegend: {
-flexDirection: 'row',
-justifyContent: 'center',
-gap: 16,
-marginTop: 12,
-},
-legendItem: {
-flexDirection: 'row',
-alignItems: 'center',
-gap: 6,
-},
-legendColor: {
-width: 12,
-height: 12,
-borderRadius: 6,
-},
-legendText: {
-fontSize: 12,
-color: '#8E8E93',
-},
-benchmarksContainer: {
-marginBottom: 16,
-},
-benchmarksTitle: {
-fontSize: 16,
-fontWeight: '600',
-color: '#1C1C1E',
-marginBottom: 12,
-},
-benchmarksScroll: {
-paddingRight: 16,
-},
-benchmarkCard: {
-backgroundColor: '#F8F9FA',
-borderRadius: 12,
-padding: 16,
-marginRight: 12,
-minWidth: 200,
-},
-benchmarkHeader: {
-flexDirection: 'row',
-justifyContent: 'space-between',
-alignItems: 'center',
-marginBottom: 12,
-},
-benchmarkInfo: {
-flexDirection: 'row',
-alignItems: 'center',
-gap: 8,
-},
-benchmarkIcon: {
-width: 32,
-height: 32,
-borderRadius: 8,
-justifyContent: 'center',
-alignItems: 'center',
-},
-benchmarkDetails: {
-flex: 1,
-},
-benchmarkName: {
-fontSize: 14,
-fontWeight: '600',
-color: '#1C1C1E',
-},
-benchmarkSymbol: {
-fontSize: 12,
-color: '#8E8E93',
-},
-benchmarkPerformance: {
-flexDirection: 'row',
-alignItems: 'center',
-gap: 4,
-},
-benchmarkReturn: {
-fontSize: 16,
-fontWeight: '700',
-},
-comparisonRow: {
-flexDirection: 'row',
-justifyContent: 'space-between',
-marginBottom: 8,
-},
-comparisonItem: {
-alignItems: 'center',
-},
-comparisonLabel: {
-fontSize: 11,
-color: '#8E8E93',
-marginBottom: 2,
-},
-comparisonValue: {
-fontSize: 14,
-fontWeight: '600',
-},
-benchmarkDescription: {
-marginTop: 8,
-},
-descriptionText: {
-fontSize: 12,
-color: '#8E8E93',
-lineHeight: 16,
-},
-insightsCard: {
-backgroundColor: '#FFF8E1',
-borderRadius: 12,
-padding: 16,
-borderLeftWidth: 4,
-borderLeftColor: '#FFD60A',
-},
-insightsHeader: {
-flexDirection: 'row',
-alignItems: 'center',
-gap: 8,
-marginBottom: 8,
-},
-insightsTitle: {
-fontSize: 14,
-fontWeight: '600',
-color: '#1C1C1E',
-},
-insightsContent: {
-marginLeft: 24,
-},
-insightText: {
-fontSize: 13,
-color: '#1C1C1E',
-lineHeight: 18,
-},
-insightHighlight: {
-fontWeight: '600',
-},
+  container: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginVertical: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+
+  // Header
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  title: { fontSize: 18, fontWeight: '700', color: '#1C1C1E' },
+  toggleBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 8, paddingVertical: 4 },
+  toggleText: { color: '#007AFF', fontWeight: '600' },
+
+  // Summary
+  summaryCard: { borderRadius: 12, padding: 14, marginBottom: 12 },
+  summaryHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  summaryTitle: { fontSize: 16, fontWeight: '700', color: '#1C1C1E' },
+  timeframeBar: { flexDirection: 'row', backgroundColor: '#fff', borderRadius: 8, padding: 2, borderWidth: 1, borderColor: '#E5E5EA' },
+  tfBtn: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6 },
+  tfBtnActive: { backgroundColor: '#007AFF' },
+  tfText: { fontSize: 12, color: '#8E8E93', fontWeight: '600' },
+  tfTextActive: { color: '#fff' },
+  summaryRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  summaryItem: { alignItems: 'center', flex: 1 },
+  summaryLabel: { fontSize: 12, color: '#8E8E93', marginBottom: 2 },
+  summaryValue: { fontSize: 18, fontWeight: '700' },
+
+  // Chart
+  chartContainer: { backgroundColor: '#F8F9FA', borderRadius: 12, padding: 16, marginTop: 4, marginBottom: 12 },
+  chartTitle: { fontSize: 16, fontWeight: '600', color: '#1C1C1E', textAlign: 'center', marginBottom: 12 },
+  chart: { borderRadius: 12 },
+  chartLegend: { flexDirection: 'row', justifyContent: 'center', gap: 14, marginTop: 8 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  legendSwatch: { width: 10, height: 10, borderRadius: 6 },
+  legendText: { fontSize: 12, color: '#8E8E93' },
+  chartEmpty: { backgroundColor: '#F8F9FA', borderRadius: 12, padding: 28, alignItems: 'center', marginBottom: 12 },
+  chartEmptyText: { color: '#8E8E93' },
+
+  // Benchmarks
+  benchHeader: { marginTop: 2, marginBottom: 6 },
+  benchTitle: { fontSize: 16, fontWeight: '700', color: '#1C1C1E' },
+  benchCard: {
+    width: CARD_W,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    padding: 16,
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+  },
+  benchHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  benchLeft: { flexDirection: 'row', alignItems: 'center' },
+  benchRight: { alignItems: 'flex-end' },
+  benchIcon: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  benchName: { fontSize: 14, fontWeight: '600', color: '#1C1C1E' },
+  benchSymbol: { fontSize: 12, color: '#8E8E93' },
+  benchReturn: { fontSize: 16, fontWeight: '700', marginTop: 4 },
+  benchRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
+  compItem: { alignItems: 'center', flex: 1 },
+  compLabel: { fontSize: 11, color: '#8E8E93' },
+  compValue: { fontSize: 14, fontWeight: '700' },
+  benchDesc: { fontSize: 12, color: '#8E8E93', lineHeight: 16, marginTop: 8 },
+
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#34C759',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginBottom: 4,
+  },
+  badgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
+
+  // Insights
+  insights: {
+    backgroundColor: '#FFF8E1',
+    borderRadius: 12,
+    padding: 14,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FFD60A',
+    marginTop: 12,
+  },
+  insightsHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+  insightsTitle: { fontSize: 14, fontWeight: '700', color: '#1C1C1E' },
+  insightText: { fontSize: 13, color: '#1C1C1E', lineHeight: 18 },
+  insightSub: { fontWeight: '600' },
+
+  // Skeleton
+  skBlock: { height: 80, backgroundColor: '#EEE', borderRadius: 12 },
+  skRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  skChip: { flex: 1, height: 44, backgroundColor: '#EEE', borderRadius: 8 },
 });
+
 export default PortfolioComparison;

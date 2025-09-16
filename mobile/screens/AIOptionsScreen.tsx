@@ -43,19 +43,26 @@ loadRecommendations();
 }, [riskTolerance]);
 // Note: Symbol changes only trigger reload when search button is pressed
 const loadRecommendations = async () => {
-try {
-symbol,
-riskTolerance,
-portfolioValue,
-timeHorizon
-});
 setLoading(true);
+console.log({ symbol, riskTolerance, portfolioValue, timeHorizon });
+
+// Defensive parsing for numeric inputs
+const pv = Number.parseFloat(portfolioValue || '0');
+const th = Number.parseInt(timeHorizon || '0', 10);
+if (Number.isNaN(pv) || Number.isNaN(th)) {
+Alert.alert('Invalid input', 'Please enter numeric values.');
+setLoading(false);
+return;
+}
+
+try {
 const response = await aiOptionsService.getRecommendations(
 symbol,
 riskTolerance,
-parseFloat(portfolioValue),
-parseInt(timeHorizon)
+pv,
+th
 );
+console.log({
 recommendationsCount: response.recommendations?.length || 0,
 hasMarketAnalysis: !!response.market_analysis,
 symbol: response.symbol,
@@ -130,17 +137,17 @@ styles.strategyTypeBadge,
 <Text style={styles.strategyRationale}>{rec.reasoning.strategy_rationale}</Text>
 <View style={styles.metricsRow}>
 <View style={styles.metric}>
-<Text style={styles.metricValue}>${rec.max_profit.toFixed(0)}</Text>
+<Text style={styles.metricValue}>${rec.analytics.max_profit.toFixed(0)}</Text>
 <Text style={styles.metricLabel}>Max Profit</Text>
 </View>
 <View style={styles.metric}>
-<Text style={[styles.metricValue, { color: rec.max_loss > 0 ? '#FF3B30' : '#34C759' }]}>
-${Math.abs(rec.max_loss).toFixed(0)}
+<Text style={[styles.metricValue, { color: rec.analytics.max_loss > 0 ? '#FF3B30' : '#34C759' }]}>
+${Math.abs(rec.analytics.max_loss).toFixed(0)}
 </Text>
 <Text style={styles.metricLabel}>Max Loss</Text>
 </View>
 <View style={styles.metric}>
-<Text style={styles.metricValue}>{(rec.probability_of_profit * 100).toFixed(0)}%</Text>
+<Text style={styles.metricValue}>{(rec.analytics.probability_of_profit * 100).toFixed(0)}%</Text>
 <Text style={styles.metricLabel}>Prob. Profit</Text>
 </View>
 </View>
@@ -155,7 +162,7 @@ styles.riskValue,
 </Text>
 </View>
 <Text style={styles.expectedReturn}>
-Expected Return: {(rec.expected_return * 100).toFixed(1)}%
+Expected Return: {(rec.analytics.expected_return * 100).toFixed(1)}%
 </Text>
 </View>
 </View>
@@ -180,7 +187,7 @@ return (
 <Text style={styles.sectionTitle}>Market Analysis</Text>
 <View style={styles.analysisRow}>
 <Text style={styles.analysisLabel}>Current Price:</Text>
-<Text style={styles.analysisValue}>${marketAnalysis.current_price.toFixed(2)}</Text>
+<Text style={styles.analysisValue}>${Number(marketAnalysis?.current_price ?? 0).toFixed(2)}</Text>
 </View>
 <View style={styles.analysisRow}>
 <Text style={styles.analysisLabel}>Volatility:</Text>
@@ -256,7 +263,7 @@ onPress={() => setSelectedRecommendation(null)}
 {option.action.toUpperCase()} {option.quantity} {option.type.toUpperCase()}(s)
 </Text>
 <Text style={styles.optionText}>
-Strike: ${option.strike} | Premium: ${option.premium.toFixed(2)}
+Strike: ${option.strike} | Premium: ${Number(option?.premium ?? 0).toFixed(2)}
 </Text>
 <Text style={styles.optionText}>
 Expiration: {option.expiration}
@@ -332,8 +339,6 @@ riskTolerance === risk && styles.riskButtonActive
 ]}
 onPress={() => {
 setRiskTolerance(risk);
-// Visual feedback that data is reloading
-setLoading(true);
 }}
 >
 <Text style={[

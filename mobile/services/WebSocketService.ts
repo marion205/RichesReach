@@ -74,13 +74,16 @@ private stockPriceSocket: WebSocket | null = null;
 private discussionSocket: WebSocket | null = null;
 private portfolioSocket: WebSocket | null = null;
 private reconnectAttempts = 0;
-private maxReconnectAttempts = 5;
-private reconnectDelay = 1000; // Start with 1 second
+private maxReconnectAttempts = 8;
+private reconnectDelay = 500; // Start with 500ms
 private isConnected = false;
 private token: string | null = null;
 private baseUrl: string = '';
 private reconnectTimeout: NodeJS.Timeout | null = null;
 private realMarketDataInterval: NodeJS.Timeout | null = null;
+private heartbeat?: any;
+private subscribed = false;
+private backoffBase = 500; // ms
 // Event callbacks
 private onStockPriceUpdate?: (price: StockPrice) => void;
 private onPriceAlert?: (alert: PriceAlert) => void;
@@ -264,15 +267,19 @@ const url = `${baseUrl}/stock-prices/`;
 this.stockPriceSocket = new WebSocket(url);
 this.stockPriceSocket.onopen = () => {
 this.reconnectAttempts = 0;
-this.reconnectDelay = 1000;
 this.isConnected = true;
 this.onConnectionStatusChange?.(true);
+this.startHeartbeat();
 // Send authentication token if available
 if (this.token) {
 this.stockPriceSocket?.send(JSON.stringify({
 type: 'authenticate',
 token: this.token
 }));
+}
+// Auto-resubscribe if previously subscribed
+if (this.subscribed) {
+this.subscribeToPortfolio();
 }
 // Start real market data polling as fallback
 this.startRealMarketDataPolling();
@@ -288,6 +295,7 @@ console.error('Error parsing stock price message:', error);
 this.stockPriceSocket.onclose = (event) => {
 this.isConnected = false;
 this.onConnectionStatusChange?.(false);
+this.stopHeartbeat();
 this.handleReconnect('stock-prices');
 };
 this.stockPriceSocket.onerror = (error) => {
@@ -446,18 +454,33 @@ private handleReconnect(type: 'stock-prices' | 'discussions' | 'portfolio') {
 if (this.reconnectAttempts >= this.maxReconnectAttempts) {
 return;
 }
+const delay = Math.min(8000, this.backoffBase * 2 ** this.reconnectAttempts);
 this.reconnectAttempts++;
 setTimeout(() => {
 if (type === 'stock-prices') {
-this.connectStockPrices('ws://localhost:8001/ws');
+this.connectStockPrices('ws://192.168.1.151:8001/ws');
 } else if (type === 'discussions') {
-this.connectDiscussions('ws://localhost:8001/ws');
+this.connectDiscussions('ws://192.168.1.151:8001/ws');
 } else if (type === 'portfolio') {
-this.connectPortfolio('ws://localhost:8001/ws');
+this.connectPortfolio('ws://192.168.1.151:8001/ws');
 }
-}, this.reconnectDelay);
-// Exponential backoff
-this.reconnectDelay = Math.min(this.reconnectDelay * 2, 30000);
+}, delay);
+}
+
+private startHeartbeat() {
+this.stopHeartbeat();
+this.heartbeat = setInterval(() => {
+try { 
+if (this.stockPriceSocket?.readyState === WebSocket.OPEN) {
+this.stockPriceSocket.send(JSON.stringify({ type: 'ping' })); 
+}
+} catch {}
+}, 15000);
+}
+
+private stopHeartbeat() {
+if (this.heartbeat) clearInterval(this.heartbeat);
+this.heartbeat = undefined;
 }
 public subscribeToStocks(symbols: string[]) {
 if (this.stockPriceSocket?.readyState === WebSocket.OPEN) {
@@ -468,9 +491,19 @@ symbols: symbols
 }
 }
 public subscribeToPortfolio() {
-if (this.portfolioSocket?.readyState === WebSocket.OPEN) {
-this.portfolioSocket.send(JSON.stringify({
+this.subscribed = true;
+if (this.stockPriceSocket?.readyState === WebSocket.OPEN) {
+this.stockPriceSocket.send(JSON.stringify({
 type: 'subscribe_portfolio'
+}));
+}
+}
+
+public unsubscribeFromPortfolio() {
+this.subscribed = false;
+if (this.stockPriceSocket?.readyState === WebSocket.OPEN) {
+this.stockPriceSocket.send(JSON.stringify({
+type: 'unsubscribe_portfolio'
 }));
 }
 }
