@@ -31,12 +31,7 @@ risk_factors: string[];
 key_benefits: string[];
 };
 risk_score: number;
-expected_return: number;
-max_profit: number;
-max_loss: number;
-probability_of_profit: number;
 days_to_expiration: number;
-market_outlook: string;
 created_at: string;
 }
 export interface MarketAnalysis {
@@ -100,11 +95,12 @@ timeHorizon: number = 30,
 maxRecommendations: number = 5
 ): Promise<AIOptionsResponse> {
 try {
-symbol: symbol.toUpperCase(),
-user_risk_tolerance: userRiskTolerance,
-portfolio_value: portfolioValue,
-time_horizon: timeHorizon,
-max_recommendations: maxRecommendations,
+console.log({
+  symbol: symbol.toUpperCase(),
+  user_risk_tolerance: userRiskTolerance,
+  portfolio_value: portfolioValue,
+  time_horizon: timeHorizon,
+  max_recommendations: maxRecommendations,
 });
 const requestBody = {
 symbol: symbol.toUpperCase(),
@@ -126,19 +122,21 @@ console.error(' HTTP Error Response:', errorText);
 throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
 }
 const data = await response.json();
-symbol: data.symbol,
-total_recommendations: data.total_recommendations,
-recommendations_count: data.recommendations?.length || 0,
+console.log({
+  symbol: data.symbol,
+  total_recommendations: data.total_recommendations,
+  recommendations_count: data.recommendations?.length || 0,
 });
 return data;
 } catch (error) {
 console.error(' Error getting AI options recommendations:', error);
+const err = error as Error;
 console.error('Error details:', {
-name: error.name,
-message: error.message,
-stack: error.stack,
+name: err?.name,
+message: err?.message,
+stack: err?.stack,
 });
-throw new Error(`Failed to get AI options recommendations: ${error.message}`);
+throw new Error(`Failed to get AI options recommendations: ${err?.message || 'Unknown error'}`);
 }
 }
 /**
@@ -251,14 +249,14 @@ throw new Error('Failed to check AI options health');
 * Format recommendation for display
 */
 formatRecommendation(rec: OptionsRecommendation): string {
-const profitLoss = rec.max_loss > 0 ? 
-`Max Profit: $${rec.max_profit.toFixed(2)} | Max Loss: $${rec.max_loss.toFixed(2)}` :
-`Max Profit: $${rec.max_profit.toFixed(2)} | Max Loss: $${Math.abs(rec.max_loss).toFixed(2)}`;
+const profitLoss = rec.analytics.max_loss > 0 ? 
+`Max Profit: $${rec.analytics.max_profit.toFixed(2)} | Max Loss: $${rec.analytics.max_loss.toFixed(2)}` :
+`Max Profit: $${rec.analytics.max_profit.toFixed(2)} | Max Loss: $${Math.abs(rec.analytics.max_loss).toFixed(2)}`;
 return `${rec.strategy_name} (${rec.confidence_score.toFixed(0)}% confidence)
 ${rec.reasoning.strategy_rationale}
 ${profitLoss}
-Probability of Profit: ${(rec.probability_of_profit * 100).toFixed(0)}%
-Expected Return: ${(rec.expected_return * 100).toFixed(1)}%`;
+Probability of Profit: ${(rec.analytics.probability_of_profit * 100).toFixed(0)}%
+Expected Return: ${(rec.analytics.expected_return * 100).toFixed(1)}%`;
 }
 /**
 * Get strategy type color

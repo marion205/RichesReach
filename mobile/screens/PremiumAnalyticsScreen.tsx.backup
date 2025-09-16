@@ -6,6 +6,7 @@ StyleSheet,
 ScrollView,
 TouchableOpacity,
 Alert,
+RefreshControl,
 Dimensions,
 SafeAreaView,
 TextInput,
@@ -39,7 +40,7 @@ activeOpacity={1}
 >
 <View style={styles.sliderTrack}>
 <View style={[styles.sliderFill, { width: thumbPosition }]} />
-<View style={[styles.sliderThumb, { left: Math.max(0, Math.min(thumbPosition - 10, sliderWidth - 20)) }]} />
+<View style={[styles.sliderThumb, { left: thumbPosition - 10 }]} />
 </View>
 </TouchableOpacity>
 </View>
@@ -62,8 +63,6 @@ query GetPremiumPortfolioMetrics {
     maxDrawdown
     beta
     alpha
-    sectorAllocation
-    riskMetrics
     holdings {
       symbol
       companyName
@@ -120,7 +119,6 @@ confidence
 keyFactors
 }
 }
-}
 `;
 const AI_REBALANCE_PORTFOLIO = gql`
 mutation AIRebalancePortfolio($portfolioName: String, $riskTolerance: String, $maxRebalancePercentage: Float, $dryRun: Boolean) {
@@ -145,142 +143,134 @@ estimatedImprovement
 `;
 // Options Analysis Queries - Using premium query for authenticated users
 const GET_OPTIONS_ANALYSIS = gql`
-  query GetOptionsAnalysis($symbol: String!) {
-    optionsAnalysis(symbol: $symbol) {
-      underlyingSymbol
-      underlyingPrice
-      optionsChain {
-        expirationDates
-        calls {
-          symbol
-          contractSymbol
-          strike
-          expirationDate
-          optionType
-          bid
-          ask
-          lastPrice
-          volume
-          openInterest
-          impliedVolatility
-          delta
-          gamma
-          theta
-          vega
-          rho
-          intrinsicValue
-          timeValue
-          daysToExpiration
-        }
-        puts {
-          symbol
-          contractSymbol
-          strike
-          expirationDate
-          optionType
-          bid
-          ask
-          lastPrice
-          volume
-          openInterest
-          impliedVolatility
-          delta
-          gamma
-          theta
-          vega
-          rho
-          intrinsicValue
-          timeValue
-          daysToExpiration
-        }
-        greeks {
-          delta
-          gamma
-          theta
-          vega
-          rho
-        }
-      }
-      unusualFlow {
-        symbol
-        contractSymbol
-        optionType
-        strike
-        expirationDate
-        volume
-        openInterest
-        premium
-        impliedVolatility
-        unusualActivityScore
-        activityType
-      }
-      recommendedStrategies {
-        strategyName
-        strategyType
-        description
-        riskLevel
-        marketOutlook
-        maxProfit
-        maxLoss
-        breakevenPoints
-        probabilityOfProfit
-        riskRewardRatio
-        daysToExpiration
-        totalCost
-        totalCredit
-      }
-      marketSentiment {
-        putCallRatio
-        impliedVolatilityRank
-        skew
-        sentimentScore
-        sentimentDescription
-      }
-    }
-  }
+query GetOptionsAnalysis($symbol: String!) {
+optionsAnalysis(symbol: $symbol) {
+underlyingSymbol
+underlyingPrice
+optionsChain {
+expirationDates
+calls {
+symbol
+contractSymbol
+strike
+expirationDate
+optionType
+bid
+ask
+lastPrice
+volume
+openInterest
+impliedVolatility
+delta
+gamma
+theta
+vega
+rho
+intrinsicValue
+timeValue
+daysToExpiration
+}
+puts {
+symbol
+contractSymbol
+strike
+expirationDate
+optionType
+bid
+ask
+lastPrice
+volume
+openInterest
+impliedVolatility
+delta
+gamma
+theta
+vega
+rho
+intrinsicValue
+timeValue
+daysToExpiration
+}
+greeks {
+delta
+gamma
+theta
+vega
+rho
+}
+}
+unusualFlow {
+symbol
+contractSymbol
+optionType
+strike
+expirationDate
+volume
+openInterest
+premium
+impliedVolatility
+unusualActivityScore
+activityType
+}
+recommendedStrategies {
+strategyName
+strategyType
+maxProfit
+maxLoss
+breakevenPoints
+probabilityOfProfit
+riskRewardRatio
+daysToExpiration
+totalCost
+totalCredit
+}
+marketSentiment {
+putCallRatio
+impliedVolatilityRank
+skew
+sentimentScore
+sentimentDescription
+}
+}
 `;
 // Fallback test query (no auth required)
 const GET_OPTIONS_ANALYSIS_TEST = gql`
-  query TestOptionsAnalysis($symbol: String!) {
-    testOptionsAnalysis(symbol: $symbol) {
-      underlyingSymbol
-      underlyingPrice
-      marketSentiment {
-        sentimentDescription
-        sentimentScore
-        putCallRatio
-        impliedVolatilityRank
-      }
-      unusualFlow {
-        symbol
-        contractSymbol
-        optionType
-        strike
-        expirationDate
-        volume
-        openInterest
-        premium
-        impliedVolatility
-        unusualActivityScore
-        activityType
-      }
-      recommendedStrategies {
-        strategyName
-        strategyType
-        description
-        riskLevel
-        marketOutlook
-        maxProfit
-        maxLoss
-        breakevenPoints
-        probabilityOfProfit
-        riskRewardRatio
-        daysToExpiration
-        totalCost
-        totalCredit
-      }
-    }
-  }
+query TestOptionsAnalysis($symbol: String!) {
+testOptionsAnalysis(symbol: $symbol) {
+underlyingSymbol
+underlyingPrice
+marketSentiment {
+sentimentDescription
+sentimentScore
+putCallRatio
+impliedVolatilityRank
+}
+unusualFlow {
+symbol
+contractSymbol
+optionType
+strike
+expirationDate
+volume
+openInterest
+premium
+impliedVolatility
+unusualActivityScore
+activityType
+}
+recommendedStrategies {
+strategyName
+strategyType
+maxProfit
+maxLoss
+breakevenPoints
+probabilityOfProfit
+riskRewardRatio
+daysToExpiration
+totalCost
+totalCredit
+}
+}
 `;
 // Stock Screening Query
 const GET_STOCK_SCREENING = gql`
@@ -299,7 +289,9 @@ growthPotential
 }
 }
 `;
-// Props interface removed - using PropTypes or JSDoc instead
+interface PremiumAnalyticsScreenProps {
+navigateTo: (screen: string) => void;
+}
 // Helper functions for sector analysis
 const getSectorInfo = (sector: string) => {
 const sectorData = {
@@ -432,8 +424,8 @@ recommendations.push('Low diversification score - spread risk across more sector
 }
 return recommendations.length > 0 ? recommendations : ['Portfolio is well balanced across sectors'];
 };
-const PremiumAnalyticsScreen = ({ navigateTo }) => {
-const [activeTab, setActiveTab] = useState('metrics');
+const PremiumAnalyticsScreen: React.FC<PremiumAnalyticsScreenProps> = ({ navigateTo }) => {
+const [activeTab, setActiveTab] = useState<'metrics' | 'recommendations' | 'screening' | 'options'>('metrics');
 const [refreshing, setRefreshing] = useState(false);
 const [selectedSymbol, setSelectedSymbol] = useState('AAPL');
 const [searchSymbol, setSearchSymbol] = useState('');
@@ -476,23 +468,22 @@ dailyTradeCount: 0,
 dailyTradeValue: 0
 });
 // Market outlook state
-const [marketOutlook, setMarketOutlook] = useState('Neutral');
+const [marketOutlook, setMarketOutlook] = useState<'Bullish' | 'Bearish' | 'Neutral'>('Neutral');
 
 // Track active tab changes
 useEffect(() => {
 }, [activeTab]);
 
+// Track metrics loading state
+useEffect(() => {
+  // Track loading state changes
+}, [metricsLoading, metricsData]);
 // Safety check functions
 const checkTradeLimits = (trades) => {
-const totalTradeValue = trades.reduce((sum, trade) => sum + (trade.totalValue || 0), 0);
+const totalTradeValue = trades.reduce((sum, trade) => sum + trade.totalValue, 0);
 const tradeCount = trades.length;
-
-// Include today's running tallies
-const projectedCount = tradeLimits.dailyTradeCount + tradeCount;
-const projectedValue = tradeLimits.dailyTradeValue + totalTradeValue;
-
 // Check individual trade limits
-const exceedsTradeValue = trades.some(trade => (trade.totalValue || 0) > tradeLimits.maxTradeValue);
+const exceedsTradeValue = trades.some(trade => trade.totalValue > tradeLimits.maxTradeValue);
 if (exceedsTradeValue) {
 return {
 allowed: false,
@@ -500,17 +491,17 @@ reason: `Individual trade exceeds $${tradeLimits.maxTradeValue.toLocaleString()}
 };
 }
 // Check daily trade count
-if (projectedCount > tradeLimits.maxDailyTrades) {
+if (tradeCount > tradeLimits.maxDailyTrades) {
 return {
 allowed: false,
 reason: `Exceeds daily trade limit of ${tradeLimits.maxDailyTrades} trades`
 };
 }
 // Check total rebalance amount
-if (projectedValue > tradeLimits.maxRebalanceAmount) {
+if (totalTradeValue > tradeLimits.maxRebalanceAmount) {
 return {
 allowed: false,
-reason: `Total rebalance amount ($${projectedValue.toLocaleString()}) exceeds $${tradeLimits.maxRebalanceAmount.toLocaleString()} limit`
+reason: `Total rebalance amount ($${totalTradeValue.toLocaleString()}) exceeds $${tradeLimits.maxRebalanceAmount.toLocaleString()} limit`
 };
 }
 return { allowed: true };
@@ -527,8 +518,7 @@ dryRun: true
 });
 } catch (error) {
 console.error('Dry run failed:', error);
-const err = error as Error;
-Alert.alert('Dry Run Failed', `Failed to simulate rebalancing: ${err?.message || 'Unknown error'}`);
+Alert.alert(' Dry Run Failed', `Failed to simulate rebalancing: ${error.message}`);
 }
 };
 // Function to cycle through market outlook options
@@ -577,14 +567,13 @@ onCompleted: (data) => {
         },
 onError: (error) => {
 console.error('❌ PremiumAnalyticsScreen: Metrics query error:', error);
-const err = error as Error;
 console.error('❌ Error details:', {
-message: err?.message,
+message: error.message,
 graphQLErrors: error.graphQLErrors,
 networkError: error.networkError,
-stack: err?.stack
+stack: error.stack
 });
-if (err?.message?.includes('Premium subscription required')) {
+if (error.message.includes('Premium subscription required')) {
 Alert.alert(
 'Premium Required',
 'This feature requires a premium subscription. Upgrade now to access advanced analytics.',
@@ -595,7 +584,7 @@ Alert.alert(
 );
 }
 }
-});
+);
 const { data: recommendationsData, loading: recommendationsLoading, error: recommendationsError, refetch: refetchRecommendations } = useQuery(
 GET_AI_RECOMMENDATIONS,
 {
@@ -606,14 +595,13 @@ onCompleted: (data) => {
         },
 onError: (error) => {
 console.error('❌ PremiumAnalyticsScreen: AI Recommendations query error:', error);
-const err = error as Error;
 console.error('❌ Recommendations error details:', {
-message: err?.message,
+message: error.message,
 graphQLErrors: error.graphQLErrors,
 networkError: error.networkError,
-stack: err?.stack
+stack: error.stack
 });
-if (err?.message?.includes('Premium subscription required')) {
+if (error.message.includes('Premium subscription required')) {
 Alert.alert(
 'Premium Required',
 'This feature requires a premium subscription. Upgrade now to access AI recommendations.',
@@ -624,7 +612,8 @@ Alert.alert(
 );
 }
 }
-});
+}
+);
 const [aiRebalancePortfolio, { loading: rebalanceLoading }] = useMutation(AI_REBALANCE_PORTFOLIO, {
 onCompleted: async (data) => {
 if (data.aiRebalancePortfolio.success) {
@@ -667,17 +656,6 @@ const improvementText = result.estimatedImprovement
 // Store the rebalancing result
 setLastRebalancingResult(result);
 setRebalancingPerformed(true);
-
-// Update daily counters if executed (not dry run)
-if (result.stockTrades?.length) {
-const addedValue = (result.stockTrades || []).reduce((s, t) => s + (t.totalValue || 0), 0);
-setTradeLimits(prev => ({
-...prev,
-dailyTradeCount: prev.dailyTradeCount + (result.stockTrades?.length || 0),
-dailyTradeValue: prev.dailyTradeValue + addedValue
-}));
-}
-
 // Save to persistent storage
 try {
 const storageService = RebalancingStorageService.getInstance();
@@ -711,12 +689,11 @@ Alert.alert(
 ]
 );
 } else {
-Alert.alert('Rebalancing Failed', data.aiRebalancePortfolio.message);
+Alert.alert(' Rebalancing Failed', data.aiRebalancePortfolio.message);
 }
 },
 onError: (error) => {
-const err = error as Error;
-Alert.alert('Error', `Rebalancing failed: ${err?.message || 'Unknown error'}`);
+Alert.alert(' Error', `Rebalancing failed: ${error.message}`);
 }
 });
 // Options Analysis Query - Try premium first, fallback to test
@@ -730,14 +707,13 @@ onCompleted: (data) => {
         },
 onError: (error) => {
 console.error('❌ PremiumAnalyticsScreen: Options Analysis Error:', error);
-const err = error as Error;
 console.error('❌ Options error details:', {
-message: err?.message,
+message: error.message,
 graphQLErrors: error.graphQLErrors,
 networkError: error.networkError,
-stack: err?.stack
+stack: error.stack
 });
-if (err?.message?.includes('Premium subscription required')) {
+if (error.message.includes('Premium subscription required')) {
 Alert.alert(
 'Premium Required',
 'This feature requires a premium subscription. Upgrade now to access options analysis.',
@@ -748,7 +724,8 @@ Alert.alert(
 );
 }
 }
-});
+}
+);
 // Fallback test query if premium fails
 const { data: testOptionsData, loading: testOptionsLoading, error: testOptionsError } = useQuery(
 GET_OPTIONS_ANALYSIS_TEST,
@@ -761,22 +738,17 @@ onCompleted: (data) => {
         },
 onError: (error) => {
 console.error('❌ PremiumAnalyticsScreen: Test Options Analysis Error:', error);
-const err = error as Error;
 console.error('❌ Test options error details:', {
-message: err?.message,
+message: error.message,
 graphQLErrors: error.graphQLErrors,
 networkError: error.networkError,
 stack: error.stack
 });
 }
-});
+}
+);
 // Options data - accessible throughout component
 const options = optionsData?.optionsAnalysis || testOptionsData?.testOptionsAnalysis;
-
-// Track metrics loading state
-useEffect(() => {
-  // Track loading state changes
-}, [metricsLoading, metricsData]);
 const onRefresh = async () => {
 setRefreshing(true);
 try {
@@ -793,19 +765,18 @@ setRefreshing(false);
 };
 const handleSearch = () => {
 if (searchSymbol.trim()) {
-const next = searchSymbol.trim().toUpperCase();
 setIsSearching(true);
-setSelectedSymbol(next);
+setSelectedSymbol(searchSymbol.trim().toUpperCase());
 setSearchSymbol('');
 // Refetch options data with new symbol
-refetchOptions({ symbol: next });
+refetchOptions();
 setTimeout(() => setIsSearching(false), 1000);
 }
 };
 const handleQuickSelect = (symbol: string) => {
 setIsSearching(true);
 setSelectedSymbol(symbol);
-refetchOptions({ symbol });
+refetchOptions();
 setTimeout(() => setIsSearching(false), 1000);
 };
 // Stock Screening Functions
@@ -1100,7 +1071,6 @@ numHoldings: newNumHoldings,
 diversificationScore: newDiversificationScore,
 riskScore: newRiskScore
 };
-};
 const renderRecommendationsTab = () => {
 if (recommendationsLoading) {
 return (
@@ -1214,7 +1184,7 @@ ${portfolioAnalysis.totalValue?.toFixed(2) || 'N/A'}
 {recommendations.marketOutlook.overallSentiment}
 </Text>
 <Text style={styles.outlookConfidence}>
-{recommendations?.marketOutlook?.confidence != null ? Math.round(recommendations.marketOutlook.confidence * 100) : 0}% confidence
+{Math.round(recommendations.marketOutlook.confidence * 100)}% confidence
 </Text>
 </View>
 <View style={styles.factorsContainer}>
@@ -1242,7 +1212,7 @@ ${portfolioAnalysis.totalValue?.toFixed(2) || 'N/A'}
 <Text style={styles.recommendationReasoning}>{rec.reasoning}</Text>
 <View style={styles.recommendationMetrics}>
 <Text style={styles.recommendationMetric}>
-Confidence: {rec?.confidence != null ? Math.round(rec.confidence * 100) : 0}%
+Confidence: {Math.round(rec.confidence * 100)}%
 </Text>
 <Text style={styles.recommendationMetric}>
 Expected Return: {rec.expectedReturn}%
@@ -1702,7 +1672,7 @@ return (
 <View style={styles.section}>
 <Text style={styles.sectionTitle}>Search Any Stock for Options Analysis</Text>
 {/* Search Input */}
-<View style={styles.optionsSearchContainer}>
+<View style={styles.searchContainer}>
 <Icon name="search" size={20} color="#8E8E93" style={styles.searchIcon} />
 <TextInput
 style={styles.searchInput}
@@ -1726,8 +1696,8 @@ onPress={() => setSearchSymbol('')}
 )}
 <TouchableOpacity
 style={[
-styles.optionsSearchButton, 
-(isSearching || !searchSymbol.trim()) && styles.optionsSearchButtonDisabled
+styles.searchButton, 
+(isSearching || !searchSymbol.trim()) && styles.searchButtonDisabled
 ]}
 onPress={handleSearch}
 disabled={isSearching || !searchSymbol.trim()}
@@ -1853,7 +1823,7 @@ onPress={() => navigateTo('ai-options')}
 >
 <View style={styles.aiOptionsContent}>
 <View style={styles.aiOptionsHeader}>
-<Icon name="cpu" size={24} color="#007AFF" />
+<Icon name="brain" size={24} color="#007AFF" />
 <Text style={styles.aiOptionsTitle}>AI Options Recommendations</Text>
 </View>
 <Text style={styles.aiOptionsDescription}>
@@ -2023,8 +1993,8 @@ Unusual Options Activity
 </View>
 <View style={styles.flowDetails}>
 <Text style={styles.flowStrike}>Strike: ${flow.strike}</Text>
-<Text style={styles.flowVolume}>Volume: {(flow?.volume ?? 0).toLocaleString()}</Text>
-<Text style={styles.flowScore}>Score: {Math.round((flow?.unusualActivityScore ?? 0) * 100)}%</Text>
+<Text style={styles.flowVolume}>Volume: {flow.volume.toLocaleString()}</Text>
+<Text style={styles.flowScore}>Score: {(flow.unusualActivityScore * 100).toFixed(0)}%</Text>
 </View>
 </View>
 ))}
@@ -2305,19 +2275,14 @@ call.expirationDate === selectedDate
 const filteredPuts = options.optionsChain.puts?.filter(put => 
 put.expirationDate === selectedDate
 ) || [];
-// Map by strike price for proper alignment
-const byStrike = new Map();
-for (const call of filteredCalls) byStrike.set(call.strike, { call });
-for (const put of filteredPuts) byStrike.set(put.strike, { ...(byStrike.get(put.strike) || {}), put });
-
-return [...byStrike.keys()].sort((a, b) => a - b).slice(0, 50).map((strike, index) => {
-const { call, put } = byStrike.get(strike);
+return filteredCalls.slice(0, 50).map((call, index) => {
+const put = filteredPuts[index];
 return (
 <View key={index} style={styles.optionsRow}>
 {/* Call Option */}
 <View style={styles.optionCell}>
 <Text style={styles.optionPrice}>
-{call?.lastPrice != null ? `$${call.lastPrice.toFixed(2)}` : 'N/A'}
+${call?.lastPrice?.toFixed(2) || 'N/A'}
 </Text>
 <Text style={styles.optionVolume}>
 Vol: {call?.volume || 0}
@@ -2329,7 +2294,7 @@ OI: {call?.openInterest || 0}
 {/* Strike Price */}
 <View style={styles.strikeCell}>
 <Text style={styles.strikePrice}>
-{call?.strike != null ? `$${call.strike.toFixed(0)}` : 'N/A'}
+${call?.strike?.toFixed(0) || 'N/A'}
 </Text>
 </View>
 {/* Put Option */}
@@ -3338,8 +3303,8 @@ fontSize: 14,
 color: '#8E8E93',
 fontStyle: 'italic',
 },
-// Options Search Styles
-optionsSearchContainer: {
+// Search Styles
+searchContainer: {
 flexDirection: 'row',
 alignItems: 'center',
 backgroundColor: '#fff',
@@ -3359,11 +3324,11 @@ fontSize: 16,
 color: '#000',
 paddingVertical: 4,
 },
-optionsSearchButton: {
+searchButton: {
 padding: 8,
 marginLeft: 8,
 },
-optionsSearchButtonDisabled: {
+searchButtonDisabled: {
 opacity: 0.5,
 },
 quickSelectLabel: {
@@ -3501,12 +3466,9 @@ flex: 1,
 height: 40,
 },
 sliderThumb: {
-position: 'absolute',
-top: -8,
+backgroundColor: '#007AFF',
 width: 20,
 height: 20,
-borderRadius: 10,
-backgroundColor: '#007AFF',
 },
 searchButton: {
 backgroundColor: '#007AFF',

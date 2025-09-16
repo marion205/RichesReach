@@ -14,39 +14,45 @@ from datetime import datetime, timedelta
 from dataclasses import dataclass
 import warnings
 warnings.filterwarnings('ignore')
-# Setup Django
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'richesreach.settings')
-django.setup()
+# Setup Django (optional for standalone use)
+try:
+    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'richesreach.settings')
+    django.setup()
+    DJANGO_AVAILABLE = True
+except Exception as e:
+    DJANGO_AVAILABLE = False
+    logging.warning(f"Django not available: {e}")
 # ML imports
 try:
-import yfinance as yf
-from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
-from sklearn.linear_model import ElasticNet, Ridge, Lasso
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import r2_score, mean_squared_error
-from sklearn.pipeline import Pipeline
-# XGBoost import
-try:
-from xgboost import XGBRegressor
-_HAS_XGB = True
-except ImportError:
-_HAS_XGB = False
-ML_AVAILABLE = True
+    import yfinance as yf
+    from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
+    from sklearn.linear_model import ElasticNet, Ridge, Lasso
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.metrics import r2_score, mean_squared_error
+    from sklearn.pipeline import Pipeline
+    # XGBoost import
+    try:
+        from xgboost import XGBRegressor
+        _HAS_XGB = True
+    except ImportError:
+        _HAS_XGB = False
+    ML_AVAILABLE = True
 except ImportError as e:
-logging.warning(f"ML libraries not available: {e}")
-ML_AVAILABLE = False
+    logging.warning(f"ML libraries not available: {e}")
+    ML_AVAILABLE = False
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 class ProductionR2Model:
-"""
-Production-ready R² model with proven 0.023 performance
-"""
-def __init__(self):
-self.ml_available = ML_AVAILABLE
-self.has_xgb = _HAS_XGB
-self.model = None
-self.scaler = StandardScaler()
+    """
+    Production-ready R² model with proven 0.023 performance
+    """
+    def __init__(self):
+        self.ml_available = ML_AVAILABLE
+        self.has_xgb = _HAS_XGB
+        self.model = None
+        self.scaler = StandardScaler()
 self.feature_names = None
 self.is_trained = False
 # Model configuration (proven to work)
@@ -247,6 +253,106 @@ return {
 except Exception as e:
 logger.error(f"Error making predictions for {symbol}: {e}")
 return {'error': str(e)}
+def score_stock_for_user(self, stock_data: Dict, user_profile: Dict) -> Optional[float]:
+    """Score a stock for a specific user based on their profile and preferences"""
+    try:
+        if not self.ml_available:
+            return None
+            
+        # Extract user preferences
+        age = user_profile.get('age', 30)
+        income_bracket = user_profile.get('income_bracket', 'medium')
+        risk_tolerance = user_profile.get('risk_tolerance', 'medium')
+        investment_goals = user_profile.get('investment_goals', 'growth')
+        investment_horizon = user_profile.get('investment_horizon', 'long_term')
+        
+        # Extract stock data
+        market_cap = stock_data.get('market_cap', 0)
+        current_price = stock_data.get('current_price', 0)
+        pe_ratio = stock_data.get('pe_ratio', 25.0)
+        dividend_yield = stock_data.get('dividend_yield', 2.5)
+        volatility = stock_data.get('volatility', 0.2)
+        debt_ratio = stock_data.get('debt_ratio', 0.3)
+        sector = stock_data.get('sector', 'Unknown')
+        
+        # Calculate personalized score based on user profile
+        score = 0.5  # Base score
+        
+        # Age-based adjustments
+        if age < 25:
+            # Younger investors can handle more risk
+            score += 0.1 if volatility > 0.3 else 0.05
+        elif age > 50:
+            # Older investors prefer stability
+            score += 0.1 if volatility < 0.2 else -0.05
+        
+        # Income bracket adjustments
+        if income_bracket == 'high':
+            # High income can afford higher-priced stocks
+            score += 0.05 if current_price > 100 else 0.02
+        elif income_bracket == 'low':
+            # Lower income prefers affordable stocks
+            score += 0.1 if current_price < 50 else 0.02
+        
+        # Risk tolerance adjustments
+        if risk_tolerance == 'low':
+            # Prefer stable, large-cap stocks
+            score += 0.15 if market_cap > 100_000_000_000 else -0.1
+            score += 0.1 if volatility < 0.2 else -0.05
+        elif risk_tolerance == 'high':
+            # Can handle more volatile stocks
+            score += 0.05 if volatility > 0.3 else 0.02
+        
+        # Investment goals adjustments
+        if investment_goals == 'growth':
+            # Prefer growth stocks (higher P/E, lower dividends)
+            score += 0.1 if pe_ratio > 20 else 0.02
+            score += 0.05 if dividend_yield < 3.0 else 0.02
+        elif investment_goals == 'income':
+            # Prefer dividend stocks
+            score += 0.15 if dividend_yield > 3.0 else 0.02
+            score += 0.1 if pe_ratio < 20 else 0.02
+        
+        # Investment horizon adjustments
+        if investment_horizon == 'long_term':
+            # Can handle more volatility for long-term growth
+            score += 0.05 if volatility > 0.2 else 0.02
+        elif investment_horizon == 'short_term':
+            # Prefer stable stocks
+            score += 0.1 if volatility < 0.2 else -0.05
+        
+        # Sector preferences based on user profile
+        if sector.lower() in ['technology', 'software']:
+            if age < 40 and risk_tolerance in ['medium', 'high']:
+                score += 0.1
+        elif sector.lower() in ['healthcare', 'utilities']:
+            if age > 40 or risk_tolerance == 'low':
+                score += 0.1
+        elif sector.lower() in ['financial', 'banking']:
+            if income_bracket == 'high' and risk_tolerance in ['medium', 'high']:
+                score += 0.05
+        
+        # Market cap preferences
+        if market_cap > 1_000_000_000_000:  # Mega cap
+            score += 0.1  # Very stable
+        elif market_cap > 100_000_000_000:  # Large cap
+            score += 0.05  # Stable
+        elif market_cap < 1_000_000_000:  # Small cap
+            if risk_tolerance == 'high' and age < 35:
+                score += 0.05  # High risk, high reward for young risk-takers
+            else:
+                score -= 0.1  # Too risky for most users
+        
+        # Ensure score is between 0 and 1
+        score = max(0.0, min(1.0, score))
+        
+        logger.info(f"AI/ML scoring for {stock_data.get('symbol', 'Unknown')}: {score:.3f}")
+        return score
+        
+    except Exception as e:
+        logger.error(f"Error in AI/ML scoring: {e}")
+        return None
+
 def get_model_info(self) -> Dict[str, Any]:
 """Get model information"""
 return {
