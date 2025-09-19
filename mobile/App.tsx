@@ -31,7 +31,10 @@ import UserProfileScreen from './screens/UserProfileScreen';
 import UserPortfoliosScreen from './screens/UserPortfoliosScreen';
 import UserActivityScreen from './screens/UserActivityScreen';
 import MessageScreen from './screens/MessageScreen';
+import TradingScreen from './screens/TradingScreen';
 import AIOptionsScreen from './screens/AIOptionsScreen';
+import BankAccountScreen from './screens/BankAccountScreen';
+import NotificationsScreen from './screens/NotificationsScreen';
 // Components
 import BottomTabBar from './components/BottomTabBar';
 import PersonalizedDashboard from './components/PersonalizedDashboard';
@@ -271,6 +274,12 @@ case 'social-feed':
 return <SocialScreen onNavigate={navigateTo} />;
 case 'ai-options':
 return <AIOptionsScreen navigation={{ goBack: () => setCurrentScreen('home') }} />;
+case 'trading':
+return <TradingScreen navigateTo={navigateTo} />;
+case 'bank-accounts':
+return <BankAccountScreen navigateTo={navigateTo} />;
+case 'notifications':
+return <NotificationsScreen navigateTo={navigateTo} />;
     default:
       // Handle user-profile and user-portfolios with userId pattern
       if (currentScreen.startsWith('user-profile-')) {

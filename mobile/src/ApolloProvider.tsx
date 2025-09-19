@@ -14,7 +14,7 @@ const getGraphQLURL = () => {
   if (__DEV__) {
     // In development, try to detect if we're on a physical device
     // For now, use localhost - if this doesn't work, the user can manually change it
-    return 'http://localhost:8000/graphql/';
+    return 'http://localhost:8123/graphql/';
   }
   // In production, use the production URL
   return 'https://your-production-url.com/graphql/';

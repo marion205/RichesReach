@@ -3,9 +3,9 @@
 * Centralized API endpoint configuration
 */
 // Development API endpoints
-export const API_BASE_URL = 'http://192.168.1.151:8000';
-export const GRAPHQL_URL = 'http://192.168.1.151:8000/graphql/';
-export const WS_URL = 'ws://192.168.1.151:8000/ws';
+export const API_BASE_URL = 'http://192.168.1.151:8123';
+export const GRAPHQL_URL = 'http://192.168.1.151:8123/graphql/';
+export const WS_URL = 'ws://192.168.1.151:8123/ws';
 // Production API endpoints (can be overridden by environment variables)
 export const PRODUCTION_API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://api.richesreach.com';
 export const PRODUCTION_GRAPHQL_URL = process.env.EXPO_PUBLIC_GRAPHQL_URL || 'https://api.richesreach.com/graphql';
