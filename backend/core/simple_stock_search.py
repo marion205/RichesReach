@@ -154,16 +154,17 @@ class SimpleStockSearchService:
         company_name = match['2. name']
         region = match['4. region']
         
+        from decimal import Decimal
         stock, created = Stock.objects.get_or_create(
             symbol=symbol,
             defaults={
                 'company_name': company_name,
                 'sector': region,
                 'market_cap': None,
-                'pe_ratio': Decimal('0.00'),
-                'dividend_yield': Decimal('0.00'),
-                'debt_ratio': Decimal('0.00'),
-                'volatility': Decimal('0.00'),
+                'pe_ratio': 0.0,
+                'dividend_yield': 0.0,
+                'debt_ratio': Decimal('0.0000'),
+                'volatility': Decimal('0.0000'),
                 'current_price': Decimal('0.00'),
                 'beginner_friendly_score': 50
             }
@@ -190,16 +191,17 @@ class SimpleStockSearchService:
         # International stocks often don't have profile data
         is_main_stock = '.' not in symbol and stock_type == 'Common Stock'
         
+        from decimal import Decimal
         stock, created = Stock.objects.get_or_create(
             symbol=symbol,
             defaults={
                 'company_name': description or display_symbol,
                 'sector': 'Unknown',
                 'market_cap': None,
-                'pe_ratio': Decimal('0.00'),
-                'dividend_yield': Decimal('0.00'),
-                'debt_ratio': Decimal('0.00'),
-                'volatility': Decimal('0.00'),
+                'pe_ratio': 0.0,
+                'dividend_yield': 0.0,
+                'debt_ratio': Decimal('0.0000'),
+                'volatility': Decimal('0.0000'),
                 'current_price': Decimal('0.00'),
                 'beginner_friendly_score': 50
             }
@@ -246,17 +248,15 @@ class SimpleStockSearchService:
             
             if 'PERatio' in data and data['PERatio'] != 'None':
                 try:
-                    from decimal import Decimal
-                    stock.pe_ratio = Decimal(str(data['PERatio']))
+                    stock.pe_ratio = float(data['PERatio'])
                 except (ValueError, TypeError):
                     pass
             
             if 'DividendYield' in data and data['DividendYield'] != 'None':
                 try:
-                    from decimal import Decimal
                     # Convert percentage to decimal
                     dividend_yield = float(data['DividendYield'].rstrip('%'))
-                    stock.dividend_yield = Decimal(str(dividend_yield / 100))
+                    stock.dividend_yield = dividend_yield / 100
                 except (ValueError, TypeError):
                     pass
             
@@ -344,29 +344,27 @@ class SimpleStockSearchService:
             # Update financial metrics
             if 'peTTM' in data and data['peTTM']:
                 try:
-                    from decimal import Decimal
                     # Get the most recent P/E ratio
                     pe_data = data['peTTM']
                     if isinstance(pe_data, list) and len(pe_data) > 0:
                         latest_pe = pe_data[0]['v']  # Most recent value
-                        stock.pe_ratio = Decimal(str(latest_pe))
+                        stock.pe_ratio = float(latest_pe)
                     elif isinstance(pe_data, (int, float)):
-                        stock.pe_ratio = Decimal(str(pe_data))
+                        stock.pe_ratio = float(pe_data)
                 except (ValueError, TypeError, KeyError, IndexError):
                     pass
             
             if 'payoutRatioTTM' in data and data['payoutRatioTTM']:
                 try:
-                    from decimal import Decimal
                     # Get the most recent payout ratio and convert to dividend yield
                     payout_data = data['payoutRatioTTM']
                     if isinstance(payout_data, list) and len(payout_data) > 0:
                         latest_payout = payout_data[0]['v']  # Most recent value
                         # Convert payout ratio to dividend yield (approximate)
                         # This is a rough calculation - actual dividend yield would need current price
-                        stock.dividend_yield = Decimal(str(latest_payout / 100))  # Convert to decimal
+                        stock.dividend_yield = latest_payout / 100  # Convert to decimal
                     elif isinstance(payout_data, (int, float)):
-                        stock.dividend_yield = Decimal(str(payout_data / 100))
+                        stock.dividend_yield = payout_data / 100
                 except (ValueError, TypeError, KeyError, IndexError):
                     pass
             

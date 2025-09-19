@@ -2,8 +2,8 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 interface SocialNavProps {
-feedType: 'trending' | 'following' | 'social-feed' | 'discover' | 'news';
-onFeedTypeChange: (type: 'trending' | 'following' | 'social-feed' | 'discover' | 'news') => void;
+feedType: 'trending' | 'following' | 'discover' | 'news';
+onFeedTypeChange: (type: 'trending' | 'following' | 'discover' | 'news') => void;
 }
 const SocialNav: React.FC<SocialNavProps> = ({ feedType, onFeedTypeChange }) => {
 return (
@@ -14,13 +14,16 @@ onPress={() => onFeedTypeChange('trending')}
 >
 <Icon 
 name="trending-up"
-size={20} 
+size={18} 
 color={feedType === 'trending' ? '#34C759' : '#8E8E93'} 
 />
-<Text style={[
+<Text 
+style={[
 styles.tabLabel,
 feedType === 'trending' && styles.activeTabLabel
-]}>
+]}
+numberOfLines={1}
+>
 Trending
 </Text>
 </TouchableOpacity>
@@ -30,30 +33,17 @@ onPress={() => onFeedTypeChange('following')}
 >
 <Icon 
 name="users"
-size={20} 
+size={18} 
 color={feedType === 'following' ? '#34C759' : '#8E8E93'} 
 />
-<Text style={[
+<Text 
+style={[
 styles.tabLabel,
 feedType === 'following' && styles.activeTabLabel
-]}>
-Following
-</Text>
-</TouchableOpacity>
-<TouchableOpacity
-style={[styles.tab, feedType === 'social-feed' && styles.activeTab]}
-onPress={() => onFeedTypeChange('social-feed')}
+]}
+numberOfLines={1}
 >
-<Icon 
-name="activity"
-size={20} 
-color={feedType === 'social-feed' ? '#34C759' : '#8E8E93'} 
-/>
-<Text style={[
-styles.tabLabel,
-feedType === 'social-feed' && styles.activeTabLabel
-]}>
-Activity
+Following
 </Text>
 </TouchableOpacity>
 <TouchableOpacity
@@ -62,13 +52,16 @@ onPress={() => onFeedTypeChange('discover')}
 >
 <Icon 
 name="search"
-size={20} 
+size={18} 
 color={feedType === 'discover' ? '#34C759' : '#8E8E93'} 
 />
-<Text style={[
+<Text 
+style={[
 styles.tabLabel,
 feedType === 'discover' && styles.activeTabLabel
-]}>
+]}
+numberOfLines={1}
+>
 Discover
 </Text>
 </TouchableOpacity>
@@ -78,13 +71,16 @@ onPress={() => onFeedTypeChange('news')}
 >
 <Icon 
 name="file-text"
-size={20} 
+size={18} 
 color={feedType === 'news' ? '#34C759' : '#8E8E93'} 
 />
-<Text style={[
+<Text 
+style={[
 styles.tabLabel,
 feedType === 'news' && styles.activeTabLabel
-]}>
+]}
+numberOfLines={1}
+>
 News
 </Text>
 </TouchableOpacity>
@@ -103,17 +99,21 @@ paddingVertical: 8,
 tab: {
 flex: 1,
 alignItems: 'center',
-paddingVertical: 12,
+paddingVertical: 8,
+paddingHorizontal: 4,
 borderRadius: 8,
+minWidth: 0, // Allow flex shrinking
 },
 activeTab: {
 backgroundColor: '#F2F8FF',
 },
 tabLabel: {
-fontSize: 12,
+fontSize: 11,
 color: '#8E8E93',
-marginTop: 4,
+marginTop: 2,
 fontWeight: '500',
+textAlign: 'center',
+numberOfLines: 1,
 },
 activeTabLabel: {
 color: '#34C759',

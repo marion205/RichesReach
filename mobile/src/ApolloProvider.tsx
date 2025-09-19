@@ -2,32 +2,70 @@
 import React from 'react';
 import { ApolloClient, InMemoryCache, ApolloProvider as Provider, createHttpLink, split } from '@apollo/client';
 import { setContext } from '@apollo/client/link/context';
+import { onError } from '@apollo/client/link/error';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getMainDefinition } from '@apollo/client/utilities';
+import JWTAuthService from '../services/JWTAuthService';
 // If you’ll add subscriptions later:
 // import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
 // import { createClient } from 'graphql-ws';
-const HTTP_URL = 'http://localhost:8000/graphql/'; 
-// Local development → use localhost
-// iOS Simulator → use localhost (should work with Expo Go)
-// Android Emulator → use http://10.0.2.2:8001/graphql/
+// Determine the correct URL based on the environment
+const getGraphQLURL = () => {
+  if (__DEV__) {
+    // In development, try to detect if we're on a physical device
+    // For now, use localhost - if this doesn't work, the user can manually change it
+    return 'http://localhost:8000/graphql/';
+  }
+  // In production, use the production URL
+  return 'https://your-production-url.com/graphql/';
+};
+
+const HTTP_URL = getGraphQLURL();
+
+
 const httpLink = createHttpLink({ uri: HTTP_URL });
+
 const authLink = setContext(async (_, { headers }) => {
 try {
-const token = await AsyncStorage.getItem('token');
-// Only log in development mode to reduce overhead
-if (__DEV__) {
-console.log(' Auth Debug - Token from storage:', token ? `${token.substring(0, 20)}...` : 'No token');
-}
+const jwtService = JWTAuthService.getInstance();
+const token = await jwtService.getValidToken();
 return {
 headers: {
 ...headers,
-...(token ? { Authorization: `Bearer ${token}` } : {}),
+...(token ? { Authorization: `JWT ${token}` } : {}),
 },
 };
 } catch (error) {
-console.error('Error getting token from storage:', error);
+console.error('Error getting token for request:', error);
 return { headers };
+}
+});
+
+// Error link to handle token expiration
+const errorLink = onError(({ graphQLErrors, networkError, operation, forward }) => {
+if (graphQLErrors) {
+graphQLErrors.forEach(({ message, locations, path }) => {
+console.error(`GraphQL error: Message: ${message}, Location: ${locations}, Path: ${path}`);
+if (message.includes('Signature has expired') || message.includes('Token is invalid')) {
+console.log('Token expired, attempting refresh...');
+// Try to refresh the token
+JWTAuthService.getInstance().refreshToken().then((newToken) => {
+if (newToken) {
+console.log('Token refreshed successfully');
+// Retry the operation
+return forward(operation);
+} else {
+console.log('Token refresh failed, user needs to login again');
+// Clear the token and redirect to login
+JWTAuthService.getInstance().logout();
+}
+});
+}
+});
+}
+
+if (networkError) {
+console.error(`Network error: ${networkError}`);
 }
 });
 // (optional) subscriptions—leave commented out if not using yet
@@ -47,7 +85,7 @@ return { headers };
 // authLink.concat(httpLink)
 // );
 const client = new ApolloClient({
-link: authLink.concat(httpLink), // swap for `link` if you enable ws
+link: errorLink.concat(authLink).concat(httpLink), // Add error handling
 cache: new InMemoryCache({
 // Optimize cache for better performance
 typePolicies: {
@@ -65,17 +103,21 @@ merge: true,
 defaultOptions: {
 watchQuery: {
 errorPolicy: 'all',
-fetchPolicy: 'cache-and-network',
+fetchPolicy: 'network-only',
 },
     query: {
       errorPolicy: 'all',
-      fetchPolicy: 'cache-and-network',
+      fetchPolicy: 'network-only',
     },
 mutate: {
 errorPolicy: 'all',
 },
 },
 });
+
+// Initialize the JWT service with the Apollo client
+JWTAuthService.getInstance().setApolloClient(client);
+
 export { client };
 export default function ApolloWrapper({ children }: { children: React.ReactNode }) {
 return <Provider client={client}>{children}</Provider>;

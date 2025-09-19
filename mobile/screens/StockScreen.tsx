@@ -91,13 +91,29 @@ const [searchQuery, setSearchQuery] = useState('');
     console.log('activeTab:', activeTab);
     console.log('searchQuery:', searchQuery);
   }, [stocks.loading, stocks.data, stocks.error, activeTab, searchQuery]);
+
+  const { list: watchlistQ, addToWatchlist, removeFromWatchlist } = useWatchlist();
+
+  // Note: Removed automatic refetch on tab change to prevent infinite loop
+  // Data will be refetched when user manually switches tabs via handleTabChange
   
   const handleTabChange = useCallback((tab: 'browse' | 'beginner' | 'watchlist') => {
     console.log('Switching to tab:', tab);
     setActiveTab(tab);
-    // No need to refetch since queries are always running
-  }, []);
-  const { list: watchlistQ, addToWatchlist, removeFromWatchlist } = useWatchlist();
+    
+    // Clear Apollo cache for the current tab to ensure fresh data
+    client.cache.evict({ fieldName: tab === 'browse' ? 'stocks' : tab === 'beginner' ? 'beginnerFriendlyStocks' : 'myWatchlist' });
+    client.cache.gc();
+    
+    // Refetch data when switching tabs to ensure fresh data
+    if (tab === 'browse') {
+      stocks.refetch();
+    } else if (tab === 'beginner') {
+      refetchBeginner?.();
+    } else if (tab === 'watchlist') {
+      watchlistQ.refetch();
+    }
+  }, [stocks, refetchBeginner, watchlistQ, client]);
 
   const showMetricTooltip = useCallback((metric: 'marketCap' | 'peRatio' | 'dividendYield') => {
     const tooltips = {
@@ -127,15 +143,22 @@ const [searchQuery, setSearchQuery] = useState('');
   }, [removeFromWatchlist]);
 
   const handleRustAnalysis = useCallback(async (symbol: string) => {
+    console.log('🔍 Starting Advanced Analysis for:', symbol);
     try {
+      console.log('📡 Making GraphQL query...');
       const { data } = await client.query({ query: GET_RUST_STOCK_ANALYSIS, variables: { symbol }, fetchPolicy: 'network-only' });
-if (data?.rustStockAnalysis) {
+      console.log('📊 Received data:', data);
+      
+      if (data?.rustStockAnalysis) {
+        console.log('✅ Setting rust data and opening modal');
         setRust(data.rustStockAnalysis);
         setRustOpen(true);
-} else {
+      } else {
+        console.log('❌ No analysis data received');
         Alert.alert('Analysis Unavailable', 'No analysis for this symbol right now.');
       }
-    } catch {
+    } catch (error) {
+      console.log('❌ Error getting analysis:', error);
       Alert.alert('Analysis Error', 'Failed to get advanced analysis.');
     }
   }, [client]);
@@ -245,7 +268,7 @@ placeholderTextColor="#999"
 
       {/* List */}
       <FlatList
-        key={activeTab} // Force re-render when tab changes
+        key={`${activeTab}-${listData.length}`} // Force re-render when tab or data changes
         data={Array.isArray(listData) ? listData : []}
         keyExtractor={activeTab === 'watchlist'
           ? ((i: any) => String(i.id))
@@ -271,6 +294,17 @@ placeholderTextColor="#999"
               {activeTab === 'watchlist' ? 'Browse and add stocks to track them' : 'Try a different search'}
 </Text>
           </View>
+        ) : null}
+        ListFooterComponent={activeTab === 'browse' && stocks.hasMore ? (
+          <TouchableOpacity 
+            style={styles.loadMoreButton} 
+            onPress={stocks.loadMore}
+            disabled={stocks.loadingMore}
+          >
+            <Text style={styles.loadMoreText}>
+              {stocks.loadingMore ? 'Loading...' : 'Load More Stocks'}
+            </Text>
+          </TouchableOpacity>
         ) : null}
       />
 
@@ -501,4 +535,19 @@ searchContainer: {
 
   tooltipModal: { backgroundColor: '#fff', borderRadius: 20, padding: 24, marginHorizontal: 20, width: '90%', maxWidth: 420 },
   tooltipDescription: { fontSize: 16, lineHeight: 24, color: '#666', marginBottom: 16, textAlign: 'left' },
+
+  loadMoreButton: {
+    backgroundColor: '#00cc99',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    marginHorizontal: 20,
+    marginVertical: 16,
+    alignItems: 'center',
+  },
+  loadMoreText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
 });

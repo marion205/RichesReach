@@ -10,6 +10,8 @@ Dimensions,
 SafeAreaView,
 TextInput,
 Modal,
+ActivityIndicator,
+RefreshControl,
 } from 'react-native';
 import { useQuery, useMutation, useApolloClient } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
@@ -596,35 +598,46 @@ Alert.alert(
 }
 }
 });
-const { data: recommendationsData, loading: recommendationsLoading, error: recommendationsError, refetch: refetchRecommendations } = useQuery(
-GET_AI_RECOMMENDATIONS,
-{
-variables: { riskTolerance: 'medium' },
-errorPolicy: 'ignore',
-onCompleted: (data) => {
-          // AI recommendations data loaded
-        },
-onError: (error) => {
-console.error('❌ PremiumAnalyticsScreen: AI Recommendations query error:', error);
-const err = error as Error;
-console.error('❌ Recommendations error details:', {
-message: err?.message,
-graphQLErrors: error.graphQLErrors,
-networkError: error.networkError,
-stack: err?.stack
-});
-if (err?.message?.includes('Premium subscription required')) {
-Alert.alert(
-'Premium Required',
-'This feature requires a premium subscription. Upgrade now to access AI recommendations.',
-[
-{ text: 'Cancel', style: 'cancel' },
-{ text: 'Upgrade', onPress: () => navigateTo('subscription') }
-]
+
+const {
+  data: recommendationsData,
+  loading: recommendationsLoading,
+  error: recommendationsError,
+  refetch: refetchRecommendations,
+} = useQuery(
+  GET_AI_RECOMMENDATIONS,
+  {
+    variables: { riskTolerance: 'medium' },
+    errorPolicy: 'all', // 'ignore' hides partial data; 'all' is usually better
+    fetchPolicy: 'network-only', // Always fetch fresh data, bypass cache
+    onCompleted: () => {
+      // AI recommendations data loaded
+    },
+    onError: (error) => {
+      console.error('❌ PremiumAnalyticsScreen: AI Recommendations query error:', error);
+      const err = error as Error;
+      console.error('❌ Recommendations error details:', {
+        message: err?.message,
+        // `any` casts avoid TS complaining when these are undefined
+        graphQLErrors: (error as any).graphQLErrors,
+        networkError: (error as any).networkError,
+        stack: err?.stack,
+      });
+
+      if (err?.message?.includes('Premium subscription required')) {
+        Alert.alert(
+          'Premium Required',
+          'This feature requires a premium subscription. Upgrade now to access AI recommendations.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Upgrade', onPress: () => navigateTo('subscription') },
+          ],
+        );
+      }
+    },
+  },
 );
-}
-}
-});
+
 const [aiRebalancePortfolio, { loading: rebalanceLoading }] = useMutation(AI_REBALANCE_PORTFOLIO, {
 onCompleted: async (data) => {
 if (data.aiRebalancePortfolio.success) {
@@ -822,7 +835,8 @@ limit: 50
 const result = await client.query({
 query: GET_STOCK_SCREENING,
 variables: variables,
-errorPolicy: 'all'
+errorPolicy: 'all',
+fetchPolicy: 'cache-first'
 });
 if (result.data && result.data.advancedStockScreening) {
 setScreeningResults(result.data.advancedStockScreening);
@@ -846,6 +860,8 @@ return (
 );
 }
 const metrics = metricsData?.portfolioMetrics;
+console.log('🔍 METRICS DATA:', metrics);
+console.log('🔍 HOLDINGS COUNT:', metrics?.holdings?.length);
 if (!metrics) {
 return (
 <View style={styles.errorContainer}>
@@ -1138,7 +1154,18 @@ Error: {recommendationsError.message}
 );
 }
 return (
-<ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
+<ScrollView 
+  style={styles.tabContent} 
+  showsVerticalScrollIndicator={false}
+  refreshControl={
+    <RefreshControl
+      refreshing={refreshing}
+      onRefresh={onRefresh}
+      tintColor="#007AFF"
+      title="Pull to refresh recommendations"
+    />
+  }
+>
 {/* Portfolio Analysis */}
 {recommendations.portfolioAnalysis && (
 <View style={styles.section}>
@@ -1229,8 +1256,20 @@ ${portfolioAnalysis.totalValue?.toFixed(2) || 'N/A'}
 {/* Buy Recommendations */}
 {recommendations.buyRecommendations && recommendations.buyRecommendations.length > 0 && (
 <View style={styles.section}>
+<View style={styles.sectionHeader}>
 <Text style={styles.sectionTitle}>Buy Recommendations</Text>
-{recommendations.buyRecommendations.map((rec: any, index: number) => (
+<TouchableOpacity 
+  style={styles.refreshButton}
+  onPress={onRefresh}
+  disabled={refreshing}
+>
+<Icon name={refreshing ? "loader" : "refresh-cw"} size={20} color="#007AFF" />
+<Text style={styles.refreshButtonText}>
+{refreshing ? 'Refreshing...' : 'Refresh'}
+</Text>
+</TouchableOpacity>
+</View>
+        {recommendations.buyRecommendations.map((rec: any, index: number) => (
 <View key={index} style={styles.recommendationCard}>
 <View style={styles.recommendationHeader}>
 <Text style={styles.recommendationSymbol}>{rec.symbol}</Text>
@@ -1245,14 +1284,17 @@ ${portfolioAnalysis.totalValue?.toFixed(2) || 'N/A'}
 Confidence: {rec?.confidence != null ? Math.round(rec.confidence * 100) : 0}%
 </Text>
 <Text style={styles.recommendationMetric}>
-Expected Return: {rec.expectedReturn}%
+Expected Return: {rec?.expectedReturn != null ? rec.expectedReturn.toFixed(1) : 'N/A'}%
 </Text>
 <Text style={styles.recommendationMetric}>
-Target: ${rec.targetPrice}
+Current: ${rec?.currentPrice != null ? rec.currentPrice.toFixed(2) : 'N/A'}
 </Text>
-</View>
-</View>
-))}
+<Text style={styles.recommendationMetric}>
+        Target: ${rec?.targetPrice != null ? rec.targetPrice.toFixed(2) : 'N/A'}
+        </Text>
+        </View>
+        </View>
+        ))}
 </View>
 )}
 {/* Rebalancing Section */}
@@ -1425,13 +1467,6 @@ No rebalancing suggestions at this time. Your portfolio appears to be well diver
 );
 };
 const renderScreeningTab = () => {
-if (screeningLoading) {
-return (
-<View style={styles.loadingContainer}>
-<Text style={styles.loadingText}>Loading stock screening...</Text>
-</View>
-);
-}
 return (
 <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
 {/* Screening Filters */}
@@ -1567,14 +1602,28 @@ screeningFilters.sortBy === sort && styles.filterChipTextActive
 </View>
 {/* Search Button */}
 <TouchableOpacity 
-style={styles.searchButton}
+style={[styles.searchButton, screeningLoading && styles.searchButtonDisabled]}
 onPress={handleScreeningSearch}
+disabled={screeningLoading}
 >
+{screeningLoading ? (
+<View style={styles.loadingButtonContent}>
+<ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
+<Text style={styles.searchButtonText}>Searching...</Text>
+</View>
+) : (
 <Text style={styles.searchButtonText}>Search Stocks</Text>
+)}
 </TouchableOpacity>
 </View>
 {/* Search Results */}
-{screeningResults && screeningResults.length > 0 && (
+{screeningLoading && (
+<View style={styles.loadingResultsContainer}>
+<ActivityIndicator size="small" color="#007AFF" />
+<Text style={styles.loadingResultsText}>Searching stocks...</Text>
+</View>
+)}
+{screeningResults && screeningResults.length > 0 && !screeningLoading && (
 <View style={styles.section}>
 <Text style={styles.sectionTitle}>
 Search Results ({screeningResults.length} stocks found)
@@ -3521,6 +3570,26 @@ color: '#fff',
 fontSize: 16,
 fontWeight: '600',
 },
+searchButtonDisabled: {
+backgroundColor: '#E5E5EA',
+},
+loadingButtonContent: {
+flexDirection: 'row',
+alignItems: 'center',
+justifyContent: 'center',
+},
+loadingResultsContainer: {
+flexDirection: 'row',
+alignItems: 'center',
+justifyContent: 'center',
+paddingVertical: 20,
+paddingHorizontal: 16,
+},
+loadingResultsText: {
+marginLeft: 8,
+fontSize: 14,
+color: '#8E8E93',
+},
 stockCard: {
 backgroundColor: '#fff',
 borderRadius: 12,
@@ -4333,6 +4402,23 @@ shadowRadius: 8,
 elevation: 6,
 borderWidth: 1,
 borderColor: '#e8f4fd',
+},
+// Refresh Button Styles
+refreshButton: {
+flexDirection: 'row',
+alignItems: 'center',
+backgroundColor: '#F2F2F7',
+paddingHorizontal: 12,
+paddingVertical: 8,
+borderRadius: 8,
+borderWidth: 1,
+borderColor: '#007AFF',
+},
+refreshButtonText: {
+color: '#007AFF',
+fontSize: 14,
+fontWeight: '600',
+marginLeft: 4,
 },
 aiOptionsContent: {
 alignItems: 'center',

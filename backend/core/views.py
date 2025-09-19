@@ -1,34 +1,31 @@
 from django.shortcuts import render
-from graphene_django.views import GraphQLView
+from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from django.utils.decorators import method_decorator
-from django.contrib.auth import get_user_model
-from .authentication import get_user_from_token
+from django.views.decorators.http import require_http_methods
+from graphene_django.views import GraphQLView
+import os
 import json
-User = get_user_model()
-class AuthenticatedGraphQLView(GraphQLView):
-    def parse_body(self, request):
-        """Parse the request body and extract the JWT token"""
-        if request.content_type == 'application/json':
-            try:
-                body = json.loads(request.body.decode('utf-8'))
-                # Extract token from Authorization header or variables
-                auth_header = request.META.get('HTTP_AUTHORIZATION', '')
-                if auth_header.startswith('Bearer '):
-                    token = auth_header[7:] # Remove 'Bearer ' prefix
-                    user = get_user_from_token(token)
-                    if user:
-                        request.user = user
-                elif auth_header.startswith('JWT '):
-                    token = auth_header[4:] # Remove 'JWT ' prefix
-                    user = get_user_from_token(token)
-                    if user:
-                        request.user = user
-            except (json.JSONDecodeError, Exception):
-                pass
-        return super().parse_body(request)
 
+# GraphQL view
+graphql_view = csrf_exempt(GraphQLView.as_view(graphiql=True))
 
-# Create the view instance with the core schema
-from .schema import schema
-graphql_view = csrf_exempt(AuthenticatedGraphQLView.as_view(schema=schema, graphiql=True))
+def stock_viewer(request):
+    """Simple view to serve the stock viewer HTML page"""
+    html_file_path = os.path.join(os.path.dirname(__file__), '..', 'stock_viewer.html')
+    with open(html_file_path, 'r') as f:
+        html_content = f.read()
+    return HttpResponse(html_content)
+
+def ai_stock_dashboard(request):
+    """AI-powered stock dashboard with ML recommendations"""
+    html_file_path = os.path.join(os.path.dirname(__file__), '..', 'ai_stock_dashboard.html')
+    with open(html_file_path, 'r') as f:
+        html_content = f.read()
+    return HttpResponse(html_content)
+
+def industry_stock_page(request):
+    """Industry-standard AI/ML stock analysis platform"""
+    html_file_path = os.path.join(os.path.dirname(__file__), '..', 'industry_standard_stock_page.html')
+    with open(html_file_path, 'r') as f:
+        html_content = f.read()
+    return HttpResponse(html_content)

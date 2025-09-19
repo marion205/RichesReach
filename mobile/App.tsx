@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { ApolloProvider } from '@apollo/client';
 import { client } from './src/ApolloProvider';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import JWTAuthService from './services/JWTAuthService';
 // Use only Expo Go compatible services to avoid "Exception in HostFunction" errors
 import expoGoCompatibleNotificationService from './services/ExpoGoCompatibleNotificationService';
 import expoGoCompatiblePriceAlertService from './services/ExpoGoCompatiblePriceAlertService';
@@ -49,12 +51,30 @@ const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
 const [isLoading, setIsLoading] = useState(true);
 // Initialize services and check onboarding status
 useEffect(() => {
-const initializeServices = async () => {
-try {
-// Check if user has completed onboarding
-const userProfileService = UserProfileService.getInstance();
-const onboardingCompleted = await userProfileService.isOnboardingCompleted();
-setHasCompletedOnboarding(onboardingCompleted);
+  const initializeServices = async () => {
+    try {
+      // Check if user is already logged in using JWT service
+      const jwtService = JWTAuthService.getInstance();
+      
+      // Set up token refresh failure callback
+      jwtService.setTokenRefreshFailureCallback(() => {
+        console.log('Token refresh failed, logging out user');
+        setIsLoggedIn(false);
+        setCurrentScreen('login');
+      });
+      
+      const isAuthenticated = await jwtService.isAuthenticated();
+      
+      if (isAuthenticated) {
+        setIsLoggedIn(true);
+        // Set initial screen to home if logged in
+        setCurrentScreen('home');
+      }
+      
+      // Check if user has completed onboarding
+      const userProfileService = UserProfileService.getInstance();
+      const onboardingCompleted = await userProfileService.isOnboardingCompleted();
+      setHasCompletedOnboarding(onboardingCompleted);
 // Initialize push notifications with error handling
 if (pushNotificationService) {
 try {
@@ -145,9 +165,16 @@ setCurrentScreen('home');
 console.error('Error saving user profile:', error);
 }
 };
-const handleLogout = () => {
+const handleLogout = async () => {
+try {
+const jwtService = JWTAuthService.getInstance();
+await jwtService.logout();
+} catch (error) {
+console.error('Logout error:', error);
+} finally {
 setIsLoggedIn(false);
 setCurrentScreen('login');
+}
 };
 const renderScreen = () => {
 // Show loading screen while initializing

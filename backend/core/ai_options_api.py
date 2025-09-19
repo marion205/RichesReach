@@ -12,21 +12,21 @@ import json
 from .ai_options_engine import AIOptionsEngine
 from .options_ml_models import OptionsMLModels
 def make_json_safe(obj):
-"""Recursively convert inf values to safe numbers"""
-if isinstance(obj, float):
-if obj == float('inf'):
-return 999999.0
-elif obj == float('-inf'):
-return -999999.0
-elif obj != obj: # NaN check
-return 0.0
-return obj
-elif isinstance(obj, dict):
-return {k: make_json_safe(v) for k, v in obj.items()}
-elif isinstance(obj, list):
-return [make_json_safe(item) for item in obj]
-else:
-return obj
+    """Recursively convert inf values to safe numbers"""
+    if isinstance(obj, float):
+        if obj == float('inf'):
+            return 999999.0
+        elif obj == float('-inf'):
+            return -999999.0
+        elif obj != obj:  # NaN check
+            return 0.0
+        return obj
+    elif isinstance(obj, dict):
+        return {k: make_json_safe(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [make_json_safe(item) for item in obj]
+    else:
+        return obj
 from .ai_options_engine import AIOptionsEngine, OptionsRecommendation
 from .options_ml_models import OptionsMLModels
 logger = logging.getLogger(__name__)
@@ -37,16 +37,17 @@ ml_models = OptionsMLModels()
 router = APIRouter(prefix="/api/ai-options", tags=["AI Options"])
 # Pydantic models for API
 class OptionsRequest(BaseModel):
-symbol: str
-user_risk_tolerance: str = "medium" # low, medium, high
-portfolio_value: float = 10000
-time_horizon: int = 30 # days
-max_recommendations: int = 5
+    symbol: str
+    user_risk_tolerance: str = "medium"  # low, medium, high
+    portfolio_value: float = 10000
+    time_horizon: int = 30  # days
+    max_recommendations: int = 5
+
 class OptionsResponse(BaseModel):
-symbol: str
-current_price: float
-recommendations: List[Dict[str, Any]]
-market_analysis: Dict[str, Any]
+    symbol: str
+    current_price: float
+    recommendations: List[Dict[str, Any]]
+    market_analysis: Dict[str, Any]
 generated_at: datetime
 total_recommendations: int
 class StrategyOptimizationRequest(BaseModel):

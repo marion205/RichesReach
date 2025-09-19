@@ -1,219 +1,296 @@
-# core/auth_utils.py
-from django.core.cache import cache
-from django.utils import timezone
-from datetime import timedelta
+"""
+Authentication utilities for ML mutations
+Handles user authentication, rate limiting, and security
+"""
+import time
 import hashlib
-import ipaddress
+import logging
+from typing import Optional, Dict, Any, Tuple
+from django.core.cache import cache
+from django.contrib.auth import get_user_model
+from django.conf import settings
+from graphql import GraphQLError
+
+logger = logging.getLogger(__name__)
+User = get_user_model()
 
 class RateLimiter:
-    """Rate limiting utility for authentication attempts"""
+    """Rate limiting utility for ML mutations"""
     
     @staticmethod
-    def get_client_ip(request):
-        """Extract client IP address from request"""
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(',')[0]
-        else:
-            ip = request.META.get('REMOTE_ADDR')
-        return ip
-    
-    @staticmethod
-    def is_rate_limited(request, action='login', max_attempts=5, window_minutes=15):
+    def is_rate_limited(context, action: str, max_attempts: int, window_minutes: int) -> Tuple[bool, Optional[str], Optional[int]]:
         """
-        Check if client is rate limited for a specific action
-        
-        Args:
-            request: Django request object
-            action: Type of action (login, signup, password_reset)
-            max_attempts: Maximum attempts allowed in window
-            window_minutes: Time window in minutes
+        Check if user is rate limited for a specific action
         
         Returns:
-            tuple: (is_limited, attempts_remaining, reset_time)
+            (is_limited, message, retry_after_seconds)
         """
-        ip = RateLimiter.get_client_ip(request)
-        cache_key = f"rate_limit_{action}_{ip}"
-        
-        attempts = cache.get(cache_key, 0)
-        
-        if attempts >= max_attempts:
-            # Calculate when the rate limit resets
-            reset_time = cache.get(f"{cache_key}_reset", timezone.now() + timedelta(minutes=window_minutes))
-            return True, 0, reset_time
-        
-        return False, max_attempts - attempts, None
+        try:
+            # Get user from context
+            user = getattr(context, 'user', None)
+            if not user or user.is_anonymous:
+                return False, None, None
+            
+            # Create rate limit key
+            key = f"rate_limit:{action}:{user.id}"
+            
+            # Get current count
+            current_count = cache.get(key, 0)
+            
+            if current_count >= max_attempts:
+                # Calculate retry after time
+                retry_after = window_minutes * 60
+                return True, f"Rate limit exceeded for {action}. Try again in {window_minutes} minutes.", retry_after
+            
+            return False, None, None
+            
+        except Exception as e:
+            logger.error(f"Rate limiting error: {e}")
+            return False, None, None
     
     @staticmethod
-    def record_attempt(request, action='login', window_minutes=15):
+    def record_attempt(context, action: str, window_minutes: int) -> None:
         """Record an attempt for rate limiting"""
-        ip = RateLimiter.get_client_ip(request)
-        cache_key = f"rate_limit_{action}_{ip}"
-        reset_key = f"{cache_key}_reset"
-        
-        attempts = cache.get(cache_key, 0) + 1
-        cache.set(cache_key, attempts, timeout=window_minutes * 60)
-        
-        # Set reset time if this is the first attempt
-        if attempts == 1:
-            cache.set(reset_key, timezone.now() + timedelta(minutes=window_minutes), timeout=window_minutes * 60)
-    
-    @staticmethod
-    def clear_attempts(request, action='login'):
-        """Clear rate limit attempts (e.g., on successful login)"""
-        ip = RateLimiter.get_client_ip(request)
-        cache_key = f"rate_limit_{action}_{ip}"
-        reset_key = f"{cache_key}_reset"
-        
-        cache.delete(cache_key)
-        cache.delete(reset_key)
+        try:
+            user = getattr(context, 'user', None)
+            if not user or user.is_anonymous:
+                return
+            
+            key = f"rate_limit:{action}:{user.id}"
+            
+            # Increment counter
+            current_count = cache.get(key, 0)
+            cache.set(key, current_count + 1, window_minutes * 60)
+            
+        except Exception as e:
+            logger.error(f"Rate limiting record error: {e}")
 
-class PasswordValidator:
-    """Password strength validation utility"""
+class MLMutationAuth:
+    """Authentication utilities for ML mutations"""
     
     @staticmethod
-    def validate_password(password):
-        """
-        Validate password strength
+    def require_authentication(context) -> User:
+        """Require user to be authenticated for ML mutations"""
+        user = getattr(context, 'user', None)
         
-        Returns:
-            dict: {
-                'is_valid': bool,
-                'score': int (0-5),
-                'strength': str,
-                'requirements': dict,
-                'suggestions': list
+        if not user or user.is_anonymous:
+            raise GraphQLError("Authentication required for ML mutations. Please log in.")
+        
+        return user
+    
+    @staticmethod
+    def require_income_profile(user: User) -> Any:
+        """Require user to have an income profile"""
+        try:
+            from .models import IncomeProfile
+            return user.incomeProfile
+        except IncomeProfile.DoesNotExist:
+            raise GraphQLError(
+                "Income profile required for ML mutations. "
+                "Please create your income profile first to get personalized recommendations."
+            )
+    
+    @staticmethod
+    def check_user_permissions(user: User, feature: str) -> bool:
+        """Check if user has permissions for specific features"""
+        try:
+            # Check if user has premium access for institutional features
+            if feature == "institutional_ml":
+                return getattr(user, 'hasPremiumAccess', False) or getattr(user, 'subscriptionTier', '') in ['PREMIUM', 'ENTERPRISE']
+            
+            # Check if user has basic access for ML features
+            if feature == "basic_ml":
+                return True  # All authenticated users can use basic ML
+            
+            return False
+            
+        except Exception as e:
+            logger.error(f"Permission check error: {e}")
+            return False
+    
+    @staticmethod
+    def get_user_context(user: User) -> Dict[str, Any]:
+        """Get user context for ML mutations"""
+        try:
+            profile = MLMutationAuth.require_income_profile(user)
+            
+            return {
+                'user_id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'has_premium': getattr(user, 'hasPremiumAccess', False),
+                'subscription_tier': getattr(user, 'subscriptionTier', 'BASIC'),
+                'income_profile': {
+                    'age': profile.age,
+                    'income_bracket': profile.income_bracket,
+                    'investment_goals': profile.investment_goals,
+                    'risk_tolerance': profile.risk_tolerance,
+                    'investment_horizon': profile.investment_horizon,
+                }
             }
-        """
-        requirements = {
-            'min_length': len(password) >= 8,
-            'has_uppercase': any(c.isupper() for c in password),
-            'has_lowercase': any(c.islower() for c in password),
-            'has_numbers': any(c.isdigit() for c in password),
-            'has_special': any(c in '!@#$%^&*(),.?":{}|<>' for c in password),
-            'no_common_patterns': not PasswordValidator._has_common_patterns(password)
-        }
-        
-        score = sum(requirements.values())
-        
-        if score <= 2:
-            strength = 'Weak'
-        elif score <= 3:
-            strength = 'Fair'
-        elif score <= 4:
-            strength = 'Good'
-        else:
-            strength = 'Strong'
-        
-        is_valid = score >= 4  # Require at least 4 out of 6 requirements
-        
-        suggestions = []
-        if not requirements['min_length']:
-            suggestions.append('Use at least 8 characters')
-        if not requirements['has_uppercase']:
-            suggestions.append('Add uppercase letters')
-        if not requirements['has_lowercase']:
-            suggestions.append('Add lowercase letters')
-        if not requirements['has_numbers']:
-            suggestions.append('Add numbers')
-        if not requirements['has_special']:
-            suggestions.append('Add special characters')
-        if not requirements['no_common_patterns']:
-            suggestions.append('Avoid common patterns like "123" or "abc"')
-        
-        return {
-            'is_valid': is_valid,
-            'score': score,
-            'strength': strength,
-            'requirements': requirements,
-            'suggestions': suggestions
-        }
-    
-    @staticmethod
-    def _has_common_patterns(password):
-        """Check for common weak patterns"""
-        common_patterns = [
-            '123', 'abc', 'password', 'qwerty', 'admin',
-            'letmein', 'welcome', 'monkey', 'dragon'
-        ]
-        
-        password_lower = password.lower()
-        return any(pattern in password_lower for pattern in common_patterns)
+            
+        except Exception as e:
+            logger.error(f"User context error: {e}")
+            return {
+                'user_id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'has_premium': False,
+                'subscription_tier': 'BASIC',
+                'income_profile': None
+            }
 
 class SecurityUtils:
-    """General security utilities"""
+    """Security utilities for ML mutations"""
     
     @staticmethod
-    def generate_secure_token(length=32):
-        """Generate a cryptographically secure random token"""
-        import secrets
-        return secrets.token_urlsafe(length)
-    
-    @staticmethod
-    def hash_sensitive_data(data):
-        """Hash sensitive data for logging/storage"""
-        return hashlib.sha256(data.encode()).hexdigest()[:16]
-    
-    @staticmethod
-    def is_suspicious_request(request):
-        """Basic suspicious request detection"""
-        # Check for common attack patterns
-        user_agent = request.META.get('HTTP_USER_AGENT', '').lower()
-        suspicious_agents = ['bot', 'crawler', 'spider', 'scraper']
-        
-        if any(agent in user_agent for agent in suspicious_agents):
+    def validate_input_data(data: Dict[str, Any], required_fields: list) -> bool:
+        """Validate input data for ML mutations"""
+        try:
+            for field in required_fields:
+                if field not in data:
+                    return False
+                
+                # Additional validation based on field type
+                if field == 'modelVersion' and not isinstance(data[field], str):
+                    return False
+                if field == 'universe' and not isinstance(data[field], list):
+                    return False
+                if field == 'constraints' and not isinstance(data[field], dict):
+                    return False
+            
             return True
-        
-        # Check for rapid requests (basic check)
-        ip = RateLimiter.get_client_ip(request)
-        cache_key = f"request_count_{ip}"
-        count = cache.get(cache_key, 0) + 1
-        cache.set(cache_key, count, timeout=60)  # 1 minute window
-        
-        if count > 100:  # More than 100 requests per minute
-            return True
-        
-        return False
+            
+        except Exception as e:
+            logger.error(f"Input validation error: {e}")
+            return False
+    
+    @staticmethod
+    def sanitize_input(data: Dict[str, Any]) -> Dict[str, Any]:
+        """Sanitize input data for ML mutations"""
+        try:
+            sanitized = {}
+            
+            for key, value in data.items():
+                if isinstance(value, str):
+                    # Remove potentially dangerous characters
+                    sanitized[key] = value.strip()[:1000]  # Limit string length
+                elif isinstance(value, (int, float)):
+                    # Validate numeric ranges
+                    if key == 'universe_limit':
+                        sanitized[key] = max(1, min(5000, int(value)))
+                    elif key == 'top_n':
+                        sanitized[key] = max(1, min(100, int(value)))
+                    else:
+                        sanitized[key] = value
+                elif isinstance(value, list):
+                    # Limit list size and sanitize items
+                    sanitized[key] = [str(item)[:50] for item in value[:100]]
+                elif isinstance(value, dict):
+                    # Recursively sanitize dict
+                    sanitized[key] = SecurityUtils.sanitize_input(value)
+                else:
+                    sanitized[key] = value
+            
+            return sanitized
+            
+        except Exception as e:
+            logger.error(f"Input sanitization error: {e}")
+            return data
+    
+    @staticmethod
+    def generate_audit_hash(data: Dict[str, Any]) -> str:
+        """Generate audit hash for ML mutation inputs"""
+        try:
+            # Create a stable hash of the input data
+            import json
+            data_str = json.dumps(data, sort_keys=True, separators=(',', ':'))
+            return hashlib.sha256(data_str.encode()).hexdigest()[:16]
+            
+        except Exception as e:
+            logger.error(f"Audit hash generation error: {e}")
+            return "unknown"
 
-class AccountLockout:
-    """Account lockout management"""
+class MLMutationValidator:
+    """Validator for ML mutation inputs"""
     
     @staticmethod
-    def is_account_locked(user):
-        """Check if user account is locked"""
-        if hasattr(user, 'locked_until') and user.locked_until:
-            return timezone.now() < user.locked_until
-        return False
+    def validate_universe(universe: Optional[list]) -> list:
+        """Validate and clean universe input"""
+        if not universe:
+            return []
+        
+        # Limit universe size
+        max_size = getattr(settings, 'INSTITUTIONAL_CONFIG', {}).get('MAX_UNIVERSE_SIZE', 2000)
+        if len(universe) > max_size:
+            raise GraphQLError(f"Universe size exceeds maximum of {max_size} symbols")
+        
+        # Validate symbols
+        valid_symbols = []
+        for symbol in universe:
+            if isinstance(symbol, str) and symbol.isalpha() and len(symbol) <= 10:
+                valid_symbols.append(symbol.upper())
+        
+        return valid_symbols
     
     @staticmethod
-    def lock_account(user, minutes=30):
-        """Lock user account for specified minutes"""
-        if hasattr(user, 'locked_until'):
-            user.locked_until = timezone.now() + timedelta(minutes=minutes)
-            user.save()
-    
-    @staticmethod
-    def unlock_account(user):
-        """Unlock user account"""
-        if hasattr(user, 'locked_until'):
-            user.locked_until = None
-            user.save()
-    
-    @staticmethod
-    def record_failed_attempt(user):
-        """Record a failed login attempt"""
-        if hasattr(user, 'failed_login_attempts'):
-            user.failed_login_attempts += 1
-            
-            # Lock account after 5 failed attempts
-            if user.failed_login_attempts >= 5:
-                AccountLockout.lock_account(user, minutes=30)
-            
-            user.save()
-    
-    @staticmethod
-    def clear_failed_attempts(user):
-        """Clear failed login attempts (on successful login)"""
-        if hasattr(user, 'failed_login_attempts'):
-            user.failed_login_attempts = 0
-            user.save()
+    def validate_constraints(constraints: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        """Validate optimization constraints"""
+        if not constraints:
+            return {}
+        
+        # Get default constraints from settings
+        default_constraints = getattr(settings, 'INSTITUTIONAL_CONFIG', {}).get('DEFAULT_CONSTRAINTS', {})
+        
+        validated = {}
+        
+        # Validate each constraint
+        for key, value in constraints.items():
+            if key in default_constraints:
+                if isinstance(value, (int, float)):
+                    # Ensure value is within reasonable bounds
+                    if key in ['max_weight_per_name', 'max_sector_weight', 'max_turnover']:
+                        validated[key] = max(0.0, min(1.0, float(value)))
+                    elif key in ['min_liquidity_score']:
+                        validated[key] = max(0.0, float(value))
+                    elif key in ['risk_aversion', 'cost_aversion']:
+                        validated[key] = max(0.0, min(100.0, float(value)))
+                    elif key in ['cvar_confidence']:
+                        validated[key] = max(0.5, min(0.99, float(value)))
+                    else:
+                        validated[key] = float(value)
+                elif key == 'long_only':
+                    validated[key] = bool(value)
+                else:
+                    validated[key] = value
+        
+        return validated
+
+def get_ml_mutation_context(info) -> Dict[str, Any]:
+    """Get comprehensive context for ML mutations"""
+    try:
+        # Get user
+        user = MLMutationAuth.require_authentication(info.context)
+        
+        # Get user context
+        user_context = MLMutationAuth.get_user_context(user)
+        
+        # Check permissions
+        has_basic_ml = MLMutationAuth.check_user_permissions(user, "basic_ml")
+        has_institutional_ml = MLMutationAuth.check_user_permissions(user, "institutional_ml")
+        
+        return {
+            'user': user,
+            'user_context': user_context,
+            'permissions': {
+                'basic_ml': has_basic_ml,
+                'institutional_ml': has_institutional_ml,
+            },
+            'rate_limiter': RateLimiter(),
+            'validator': MLMutationValidator(),
+            'security': SecurityUtils(),
+        }
+        
+    except Exception as e:
+        logger.error(f"ML mutation context error: {e}")
+        raise GraphQLError("Failed to initialize ML mutation context")

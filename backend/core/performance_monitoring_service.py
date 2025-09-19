@@ -19,82 +19,86 @@ import sqlite3
 from pathlib import Path
 logger = logging.getLogger(__name__)
 class MetricType(Enum):
-"""Types of metrics to monitor"""
-ACCURACY = "accuracy"
-PREDICTION_DRIFT = "prediction_drift"
-FEATURE_DRIFT = "feature_drift"
-MODEL_PERFORMANCE = "model_performance"
-SYSTEM_HEALTH = "system_health"
-API_PERFORMANCE = "api_performance"
+    """Types of metrics to monitor"""
+    ACCURACY = "accuracy"
+    PREDICTION_DRIFT = "prediction_drift"
+    FEATURE_DRIFT = "feature_drift"
+    MODEL_PERFORMANCE = "model_performance"
+    SYSTEM_HEALTH = "system_health"
+    API_PERFORMANCE = "api_performance"
 class AlertLevel(Enum):
-"""Alert levels for monitoring"""
-INFO = "info"
-WARNING = "warning"
-ERROR = "error"
-CRITICAL = "critical"
+    """Alert levels for monitoring"""
+    INFO = "info"
+    WARNING = "warning"
+    ERROR = "error"
+    CRITICAL = "critical"
+
 @dataclass
 class Metric:
-"""Metric data structure"""
-name: str
-value: float
-metric_type: MetricType
-timestamp: datetime
-model_name: Optional[str] = None
-metadata: Optional[Dict[str, Any]] = None
+    """Metric data structure"""
+    name: str
+    value: float
+    metric_type: MetricType
+    timestamp: datetime
+    model_name: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+
 @dataclass
 class Alert:
-"""Alert data structure"""
-level: AlertLevel
-message: str
-metric_name: str
-timestamp: datetime
-threshold: float
-current_value: float
-model_name: Optional[str] = None
+    """Alert data structure"""
+    level: AlertLevel
+    message: str
+    metric_name: str
+    timestamp: datetime
+    threshold: float
+    current_value: float
+    model_name: Optional[str] = None
+
 @dataclass
 class ModelPerformance:
-"""Model performance tracking"""
-model_name: str
-accuracy: float
-precision: float
-recall: float
-f1_score: float
-mse: float
-mae: float
-timestamp: datetime
-training_samples: int
-validation_samples: int
+    """Model performance tracking"""
+    model_name: str
+    accuracy: float
+    precision: float
+    recall: float
+    f1_score: float
+    mse: float
+    mae: float
+    timestamp: datetime
+    training_samples: int
+    validation_samples: int
 class PerformanceMonitoringService:
-"""
-Service for monitoring ML model performance and system health
-"""
-def __init__(self, db_path: str = "ml_monitoring.db"):
-self.db_path = db_path
-self.metrics_queue = queue.Queue()
-self.alerts_queue = queue.Queue()
-self.monitoring_active = False
-self.monitoring_thread = None
-# Thresholds for alerts
-self.thresholds = {
-'accuracy_drop': 0.05, # 5% drop in accuracy
-'prediction_drift': 0.1, # 10% drift in predictions
-'feature_drift': 0.15, # 15% drift in features
-'response_time': 2.0, # 2 seconds max response time
-'error_rate': 0.05, # 5% error rate
-'memory_usage': 0.9, # 90% memory usage
-'cpu_usage': 0.8 # 80% CPU usage
-}
-# Initialize database
-self._init_database()
-# Start monitoring
-self.start_monitoring()
-def _init_database(self):
-"""Initialize monitoring database"""
-try:
-conn = sqlite3.connect(self.db_path)
-cursor = conn.cursor()
-# Create metrics table
-cursor.execute('''
+    """
+    Service for monitoring ML model performance and system health
+    """
+    def __init__(self, db_path: str = "ml_monitoring.db"):
+        self.db_path = db_path
+        self.metrics_queue = queue.Queue()
+        self.alerts_queue = queue.Queue()
+        self.monitoring_active = False
+        self.monitoring_thread = None
+        # Thresholds for alerts
+        self.thresholds = {
+            'accuracy_drop': 0.05, # 5% drop in accuracy
+            'prediction_drift': 0.1, # 10% drift in predictions
+            'feature_drift': 0.15, # 15% drift in features
+            'response_time': 2.0, # 2 seconds max response time
+            'error_rate': 0.05, # 5% error rate
+            'memory_usage': 0.9, # 90% memory usage
+            'cpu_usage': 0.8 # 80% CPU usage
+        }
+        # Initialize database
+        self._init_database()
+        # Start monitoring
+        self.start_monitoring()
+    
+    def _init_database(self):
+        """Initialize monitoring database"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            # Create metrics table
+            cursor.execute('''
 CREATE TABLE IF NOT EXISTS metrics (
 id INTEGER PRIMARY KEY AUTOINCREMENT,
 name TEXT NOT NULL,
@@ -105,8 +109,8 @@ model_name TEXT,
 metadata TEXT
 )
 ''')
-# Create alerts table
-cursor.execute('''
+            # Create alerts table
+            cursor.execute('''
 CREATE TABLE IF NOT EXISTS alerts (
 id INTEGER PRIMARY KEY AUTOINCREMENT,
 level TEXT NOT NULL,
@@ -118,8 +122,8 @@ current_value REAL NOT NULL,
 model_name TEXT
 )
 ''')
-# Create model_performance table
-cursor.execute('''
+            # Create model_performance table
+            cursor.execute('''
 CREATE TABLE IF NOT EXISTS model_performance (
 id INTEGER PRIMARY KEY AUTOINCREMENT,
 model_name TEXT NOT NULL,
@@ -134,25 +138,27 @@ training_samples INTEGER NOT NULL,
 validation_samples INTEGER NOT NULL
 )
 ''')
-# Create indexes for better performance
-cursor.execute('CREATE INDEX IF NOT EXISTS idx_metrics_timestamp ON metrics(timestamp)')
-cursor.execute('CREATE INDEX IF NOT EXISTS idx_metrics_model ON metrics(model_name)')
-cursor.execute('CREATE INDEX IF NOT EXISTS idx_alerts_timestamp ON alerts(timestamp)')
-cursor.execute('CREATE INDEX IF NOT EXISTS idx_model_perf_timestamp ON model_performance(timestamp)')
-conn.commit()
-conn.close()
-logger.info("Monitoring database initialized successfully")
-except Exception as e:
-logger.error(f"Error initializing monitoring database: {e}")
-def start_monitoring(self):
-"""Start the monitoring thread"""
-if not self.monitoring_active:
-self.monitoring_active = True
-self.monitoring_thread = threading.Thread(target=self._monitoring_loop, daemon=True)
-self.monitoring_thread.start()
-logger.info("Performance monitoring started")
-def stop_monitoring(self):
-"""Stop the monitoring thread"""
+            # Create indexes for better performance
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_metrics_timestamp ON metrics(timestamp)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_metrics_model ON metrics(model_name)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_alerts_timestamp ON alerts(timestamp)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_model_perf_timestamp ON model_performance(timestamp)')
+            conn.commit()
+            conn.close()
+            logger.info("Monitoring database initialized successfully")
+        except Exception as e:
+            logger.error(f"Error initializing monitoring database: {e}")
+    
+    def start_monitoring(self):
+        """Start the monitoring thread"""
+        if not self.monitoring_active:
+            self.monitoring_active = True
+            self.monitoring_thread = threading.Thread(target=self._monitoring_loop, daemon=True)
+            self.monitoring_thread.start()
+            logger.info("Performance monitoring started")
+    
+    def stop_monitoring(self):
+        """Stop the monitoring thread"""
 self.monitoring_active = False
 if self.monitoring_thread:
 self.monitoring_thread.join()
