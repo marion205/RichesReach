@@ -2,9 +2,12 @@
 import graphene
 import graphql_jwt
 from .queries import Query
-from .mutations import Mutation
+from .mutations import Mutation, GenerateAIRecommendations
 from .types import * # Ensure all types are imported
 from .premium_types import PremiumQueries, PremiumMutations
+from .ml_mutations import GenerateMLPortfolioRecommendation, GetMLMarketAnalysis, GetMLServiceStatus, GenerateInstitutionalPortfolioRecommendation
+from .monitoring_types import MonitoringMutations
+from .ml_stock_types import MLStockRecommendationQuery, MLStockRecommendationMutations
 # Create schema with explicit introspection (legacy)
 schema = graphene.Schema(
 query=Query, 
@@ -12,12 +15,16 @@ mutation=Mutation,
 types=[] # Let Graphene auto-discover types
 )
 # Add premium features to the main schema
-class ExtendedQuery(Query, PremiumQueries):
+class ExtendedQuery(Query, PremiumQueries, MLStockRecommendationQuery):
     pass
 
-
-class ExtendedMutation(Mutation, PremiumMutations):
-    pass
+class ExtendedMutation(Mutation, PremiumMutations, MonitoringMutations, MLStockRecommendationMutations):
+    # Add ML mutations
+    generate_ml_portfolio_recommendation = GenerateMLPortfolioRecommendation.Field()
+    get_ml_market_analysis = GetMLMarketAnalysis.Field()
+    get_ml_service_status = GetMLServiceStatus.Field()
+    generate_institutional_portfolio_recommendation = GenerateInstitutionalPortfolioRecommendation.Field()
+    generate_ai_recommendations = GenerateAIRecommendations.Field()
 # Create extended schema with premium features
 extended_schema = graphene.Schema(
 query=ExtendedQuery,

@@ -248,18 +248,25 @@ this.onPortfolioUpdate = callbacks.onPortfolioUpdate;
 this.onConnectionStatusChange = callbacks.onConnectionStatusChange;
 }
 public connect() {
-if (this.isConnected) {
-return;
-}
-const baseUrl = 'ws://192.168.1.151:8001/ws';
-// Start real market data polling immediately
-this.startRealMarketDataPolling();
-// Connect to stock prices WebSocket
-this.connectStockPrices(baseUrl);
-// Connect to discussions WebSocket
-this.connectDiscussions(baseUrl);
-// Connect to portfolio WebSocket (disabled for now - using mock data)
-// this.connectPortfolio(baseUrl);
+  if (this.isConnected) {
+    return;
+  }
+  const baseUrl = 'ws://192.168.1.151:8001/ws';
+  // Start real market data polling immediately
+  this.startRealMarketDataPolling();
+  
+  // Try to connect to WebSockets, but don't fail if server is not available
+  try {
+    // Connect to stock prices WebSocket
+    this.connectStockPrices(baseUrl);
+    // Connect to discussions WebSocket
+    this.connectDiscussions(baseUrl);
+    // Connect to portfolio WebSocket (disabled for now - using mock data)
+    // this.connectPortfolio(baseUrl);
+  } catch (error) {
+    console.log('WebSocket server not available, using polling only');
+    // Continue with polling-only mode
+  }
 }
 private connectStockPrices(baseUrl: string) {
 try {
@@ -293,10 +300,13 @@ console.error('Error parsing stock price message:', error);
 }
 };
 this.stockPriceSocket.onclose = (event) => {
-this.isConnected = false;
-this.onConnectionStatusChange?.(false);
-this.stopHeartbeat();
-this.handleReconnect('stock-prices');
+  this.isConnected = false;
+  // Only trigger connection status change if we were previously connected
+  if (this.reconnectAttempts === 0) {
+    this.onConnectionStatusChange?.(false);
+  }
+  this.stopHeartbeat();
+  this.handleReconnect('stock-prices');
 };
 this.stockPriceSocket.onerror = (error) => {
 console.error('Stock prices WebSocket error:', error);

@@ -1,482 +1,292 @@
-import React, { useState, useEffect } from 'react';
-import { 
-View, 
-TextInput, 
-Text, 
-TouchableOpacity, 
-StyleSheet, 
-ScrollView, 
-Alert,
-KeyboardAvoidingView,
-Platform,
-Animated,
-Dimensions,
-Image
+// EnhancedLoginScreen.tsx
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+  SafeAreaView,
+  KeyboardAvoidingView,
+  Platform,
+  ActivityIndicator,
 } from 'react-native';
-import { gql, useMutation, useApolloClient } from '@apollo/client';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Feather';
-// Optional import for biometric authentication
-let LocalAuthentication: any = null;
-try {
-LocalAuthentication = require('expo-local-authentication');
-} catch (error) {
-// expo-local-authentication not available
-}
-const { width } = Dimensions.get('window');
-const LOGIN = gql`
-mutation TokenAuth($email: String!, $password: String!) {
-tokenAuth(email: $email, password: $password) {
-token
-}
-}
-`;
+import JWTAuthService from '../services/JWTAuthService';
+
 interface EnhancedLoginScreenProps {
-onLogin: (token: string) => void;
-onNavigateToSignUp: () => void;
-onNavigateToForgotPassword: () => void;
+  onLogin: () => void;
+  onNavigateToSignUp: () => void;
+  onNavigateToForgotPassword: () => void;
 }
-export default function EnhancedLoginScreen({ onLogin, onNavigateToSignUp, onNavigateToForgotPassword }: EnhancedLoginScreenProps) {
-const [email, setEmail] = useState('');
-const [password, setPassword] = useState('');
-const [showPassword, setShowPassword] = useState(false);
-const [rememberMe, setRememberMe] = useState(false);
-const [formErrors, setFormErrors] = useState({ email: '', password: '' });
-const [isBiometricAvailable, setIsBiometricAvailable] = useState(false);
-const [fadeAnim] = useState(new Animated.Value(0));
-const [tokenAuth, { loading: loginLoading, error: loginError }] = useMutation(LOGIN);
-const client = useApolloClient();
-useEffect(() => {
-Animated.timing(fadeAnim, {
-toValue: 1,
-duration: 1000,
-useNativeDriver: true,
-}).start();
-checkBiometricAvailability();
-loadRememberedCredentials();
-}, []);
-const checkBiometricAvailability = async () => {
-try {
-const hasHardware = await LocalAuthentication.hasHardwareAsync();
-const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-setIsBiometricAvailable(hasHardware && isEnrolled);
-} catch (error) {
-}
+
+const EnhancedLoginScreen: React.FC<EnhancedLoginScreenProps> = ({
+  onLogin,
+  onNavigateToSignUp,
+  onNavigateToForgotPassword,
+}) => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  const handleLogin = async () => {
+    if (!email.trim() || !password.trim()) {
+      Alert.alert('Error', 'Please enter both email and password');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const jwtService = JWTAuthService.getInstance();
+      await jwtService.login(email.trim(), password);
+      
+      Alert.alert('Success', 'Login successful!', [
+        {
+          text: 'OK',
+          onPress: onLogin,
+        },
+      ]);
+    } catch (error: any) {
+      console.error('Login error:', error);
+      Alert.alert(
+        'Login Failed',
+        error.message || 'Invalid email or password. Please try again.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDebugLogin = async () => {
+    setIsLoading(true);
+    try {
+      const jwtService = JWTAuthService.getInstance();
+      
+      // For development, use a test token
+      const testToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6InRlc3RAZXhhbXBsZS5jb20iLCJleHAiOjE3NTgxNzQxOTMsIm9yaWdJYXQiOjE3NTgxNzA1OTN9.CR_PY5neZzPynWXCVPtIyNM2Kg6d_fckIlhlFEEXhWo';
+      
+      await jwtService.initializeWithToken(testToken);
+      
+      Alert.alert('Debug Login', 'Logged in as test user', [
+        {
+          text: 'OK',
+          onPress: onLogin,
+        },
+      ]);
+    } catch (error) {
+      console.error('Debug login error:', error);
+      Alert.alert('Debug Login Failed', 'Could not login with test user');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardView}
+      >
+        <View style={styles.content}>
+          {/* Header */}
+          <View style={styles.header}>
+            <Icon name="trending-up" size={48} color="#007AFF" />
+            <Text style={styles.title}>RichesReach</Text>
+            <Text style={styles.subtitle}>Your Financial Future Starts Here</Text>
+          </View>
+
+          {/* Login Form */}
+          <View style={styles.form}>
+            <View style={styles.inputContainer}>
+              <Icon name="mail" size={20} color="#8E8E93" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Email"
+                placeholderTextColor="#8E8E93"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Icon name="lock" size={20} color="#8E8E93" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Password"
+                placeholderTextColor="#8E8E93"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <TouchableOpacity
+                style={styles.eyeIcon}
+                onPress={() => setShowPassword(!showPassword)}
+              >
+                <Icon
+                  name={showPassword ? 'eye-off' : 'eye'}
+                  size={20}
+                  color="#8E8E93"
+                />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.forgotPassword}
+              onPress={onNavigateToForgotPassword}
+            >
+              <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
+              onPress={handleLogin}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.loginButtonText}>Sign In</Text>
+              )}
+            </TouchableOpacity>
+
+            {/* Debug Login for Development */}
+            {__DEV__ && (
+              <TouchableOpacity
+                style={styles.debugButton}
+                onPress={handleDebugLogin}
+                disabled={isLoading}
+              >
+                <Text style={styles.debugButtonText}>Debug: Login as Test User</Text>
+              </TouchableOpacity>
+            )}
+
+            <View style={styles.signupContainer}>
+              <Text style={styles.signupText}>Don't have an account? </Text>
+              <TouchableOpacity onPress={onNavigateToSignUp}>
+                <Text style={styles.signupLink}>Sign Up</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
 };
-const loadRememberedCredentials = async () => {
-try {
-const remembered = await AsyncStorage.getItem('rememberMe');
-const lastEmail = await AsyncStorage.getItem('lastLoginEmail');
-if (remembered === 'true' && lastEmail) {
-setEmail(lastEmail);
-setRememberMe(true);
-}
-} catch (error) {
-}
-};
-const validateEmail = (email: string) => {
-const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-return emailRegex.test(email);
-};
-const validateForm = () => {
-const errors = { email: '', password: '' };
-let isValid = true;
-if (!email.trim()) {
-errors.email = 'Email is required';
-isValid = false;
-} else if (!validateEmail(email)) {
-errors.email = 'Please enter a valid email address';
-isValid = false;
-}
-if (!password.trim()) {
-errors.password = 'Password is required';
-isValid = false;
-} else if (password.length < 6) {
-errors.password = 'Password must be at least 6 characters';
-isValid = false;
-}
-setFormErrors(errors);
-return isValid;
-};
-const getErrorMessage = (error: any) => {
-if (error.message.includes('Invalid credentials')) {
-return 'Email or password is incorrect. Please try again.';
-}
-if (error.message.includes('User not found')) {
-return 'No account found with this email address.';
-}
-if (error.message.includes('Account locked')) {
-return 'Account temporarily locked. Please try again later.';
-}
-return 'Login failed. Please check your credentials and try again.';
-};
-const authenticateWithBiometrics = async () => {
-try {
-const result = await LocalAuthentication.authenticateAsync({
-promptMessage: 'Authenticate to access RichesReach',
-fallbackLabel: 'Use Passcode',
-cancelLabel: 'Cancel',
-});
-if (result.success) {
-// Try to login with stored credentials
-const storedEmail = await AsyncStorage.getItem('lastLoginEmail');
-if (storedEmail) {
-setEmail(storedEmail);
-// You could store a hashed password or use a different auth method
-Alert.alert('Biometric Success', 'Please enter your password to complete login.');
-}
-}
-} catch (error) {
-Alert.alert('Authentication Failed', 'Biometric authentication failed. Please try again.');
-}
-};
-const handleLogin = async () => {
-if (!validateForm()) return;
-try {
-await client.clearStore();
-const response = await tokenAuth({ 
-variables: { 
-email: email.trim().toLowerCase(), 
-password: password 
-},
-errorPolicy: 'all'
-});
-if (response.errors) {
-throw new Error(response.errors[0].message);
-}
-const token = response.data?.tokenAuth?.token;
-if (!token) {
-throw new Error('No token received');
-}
-// Store token securely
-await AsyncStorage.setItem('token', token);
-// Handle remember me
-if (rememberMe) {
-await AsyncStorage.setItem('rememberMe', 'true');
-await AsyncStorage.setItem('lastLoginEmail', email.trim().toLowerCase());
-} else {
-await AsyncStorage.removeItem('rememberMe');
-await AsyncStorage.removeItem('lastLoginEmail');
-}
-onLogin(token);
-} catch (err: any) {
-console.error('Login failed:', err);
-Alert.alert('Login Failed', getErrorMessage(err));
-}
-};
-const handleForgotPassword = () => {
-onNavigateToForgotPassword();
-};
-return (
-<KeyboardAvoidingView 
-style={styles.container} 
-behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
->
-<ScrollView 
-contentContainerStyle={styles.scrollContainer}
-keyboardShouldPersistTaps="handled"
-showsVerticalScrollIndicator={false}
->
-<Animated.View style={[styles.content, { opacity: fadeAnim }]}>
-{/* Header */}
-<View style={styles.header}>
-<Image source={require('../assets/whitelogo1.png')} style={styles.logo} resizeMode="contain" />
-<Text style={styles.title}>Welcome Back</Text>
-<Text style={styles.subtitle}>Sign in to continue your financial journey</Text>
-</View>
-{/* Form */}
-<View style={styles.form}>
-{/* Email Input */}
-<View style={styles.inputContainer}>
-<Icon name="mail" size={20} color="#666" style={styles.inputIcon} />
-<TextInput
-placeholder="Email Address"
-placeholderTextColor="#aaa"
-style={[styles.input, formErrors.email && styles.inputError]}
-onChangeText={setEmail}
-value={email}
-keyboardType="email-address"
-autoCapitalize="none"
-autoCorrect={false}
-returnKeyType="next"
-/>
-</View>
-{formErrors.email ? <Text style={styles.errorText}>{formErrors.email}</Text> : null}
-{/* Password Input */}
-<View style={styles.inputContainer}>
-<Icon name="lock" size={20} color="#666" style={styles.inputIcon} />
-<TextInput
-placeholder="Password"
-placeholderTextColor="#aaa"
-style={[styles.input, formErrors.password && styles.inputError]}
-onChangeText={setPassword}
-value={password}
-secureTextEntry={!showPassword}
-autoCapitalize="none"
-autoCorrect={false}
-returnKeyType="done"
-onSubmitEditing={handleLogin}
-/>
-<TouchableOpacity 
-style={styles.eyeIcon} 
-onPress={() => setShowPassword(!showPassword)}
->
-<Icon name={showPassword ? "eye-off" : "eye"} size={20} color="#666" />
-</TouchableOpacity>
-</View>
-{formErrors.password ? <Text style={styles.errorText}>{formErrors.password}</Text> : null}
-{/* Remember Me & Forgot Password */}
-<View style={styles.optionsRow}>
-<TouchableOpacity 
-style={styles.rememberMeContainer}
-onPress={() => setRememberMe(!rememberMe)}
-activeOpacity={0.7}
->
-<View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
-{rememberMe && <Icon name="check" size={16} color="#fff" />}
-</View>
-<Text style={styles.rememberMeText}>Remember me</Text>
-</TouchableOpacity>
-<TouchableOpacity onPress={handleForgotPassword} activeOpacity={0.7}>
-<Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-</TouchableOpacity>
-</View>
-{/* Login Button */}
-<TouchableOpacity 
-style={[styles.button, loginLoading && styles.buttonDisabled]} 
-onPress={handleLogin}
-disabled={loginLoading}
-activeOpacity={0.8}
->
-{loginLoading ? (
-<View style={styles.loadingContainer}>
-<Icon name="refresh-cw" size={20} color="#fff" style={styles.spinner} />
-<Text style={styles.buttonText}>Signing In...</Text>
-</View>
-) : (
-<Text style={styles.buttonText}>Sign In</Text>
-)}
-</TouchableOpacity>
-{/* Biometric Login */}
-{isBiometricAvailable && (
-<TouchableOpacity 
-style={styles.biometricButton}
-onPress={authenticateWithBiometrics}
-activeOpacity={0.8}
->
-<Icon name="smartphone" size={20} color="#00cc99" />
-<Text style={styles.biometricButtonText}>Use Biometric</Text>
-</TouchableOpacity>
-)}
-{/* Error Display */}
-{loginError && (
-<View style={styles.errorContainer}>
-<Icon name="alert-circle" size={16} color="#ef4444" />
-<Text style={styles.errorMessage}>{getErrorMessage(loginError)}</Text>
-</View>
-)}
-{/* Sign Up Link */}
-<View style={styles.signupContainer}>
-<Text style={styles.signupText}>Don't have an account? </Text>
-<TouchableOpacity onPress={onNavigateToSignUp} activeOpacity={0.7}>
-<Text style={styles.signupLinkText}>Sign up here</Text>
-</TouchableOpacity>
-</View>
-</View>
-</Animated.View>
-</ScrollView>
-</KeyboardAvoidingView>
-);
-}
+
 const styles = StyleSheet.create({
-container: {
-flex: 1,
-backgroundColor: '#ffffff',
-},
-scrollContainer: {
-flexGrow: 1,
-justifyContent: 'center',
-paddingHorizontal: 24,
-paddingVertical: 40,
-},
-content: {
-flex: 1,
-justifyContent: 'center',
-},
-header: {
-alignItems: 'center',
-marginBottom: 40,
-},
-logo: {
-width: '80%',
-height: 200,
-marginBottom: 30,
-resizeMode: 'contain',
-},
-title: {
-fontSize: 28,
-fontWeight: 'bold',
-color: '#1e293b',
-marginTop: 16,
-marginBottom: 8,
-},
-subtitle: {
-fontSize: 16,
-color: '#64748b',
-textAlign: 'center',
-lineHeight: 22,
-},
-form: {
-backgroundColor: '#ffffff',
-borderRadius: 16,
-padding: 24,
-shadowColor: '#000',
-shadowOffset: { width: 0, height: 2 },
-shadowOpacity: 0.1,
-shadowRadius: 8,
-elevation: 4,
-},
-inputContainer: {
-flexDirection: 'row',
-alignItems: 'center',
-backgroundColor: '#f8fafc',
-borderRadius: 12,
-marginBottom: 8,
-borderWidth: 1,
-borderColor: '#e2e8f0',
-},
-inputIcon: {
-marginLeft: 16,
-marginRight: 12,
-},
-input: {
-flex: 1,
-paddingVertical: 16,
-paddingHorizontal: 8,
-fontSize: 16,
-color: '#1e293b',
-},
-inputError: {
-borderColor: '#ef4444',
-backgroundColor: '#fef2f2',
-},
-eyeIcon: {
-padding: 16,
-},
-errorText: {
-color: '#ef4444',
-fontSize: 14,
-marginBottom: 16,
-marginLeft: 4,
-},
-optionsRow: {
-flexDirection: 'row',
-justifyContent: 'space-between',
-alignItems: 'center',
-marginBottom: 24,
-},
-rememberMeContainer: {
-flexDirection: 'row',
-alignItems: 'center',
-},
-checkbox: {
-width: 20,
-height: 20,
-borderRadius: 4,
-borderWidth: 2,
-borderColor: '#d1d5db',
-marginRight: 8,
-justifyContent: 'center',
-alignItems: 'center',
-},
-checkboxChecked: {
-backgroundColor: '#00cc99',
-borderColor: '#00cc99',
-},
-rememberMeText: {
-fontSize: 14,
-color: '#64748b',
-},
-forgotPasswordText: {
-fontSize: 14,
-color: '#00cc99',
-fontWeight: '600',
-},
-button: {
-backgroundColor: '#00cc99',
-borderRadius: 12,
-paddingVertical: 16,
-alignItems: 'center',
-marginBottom: 16,
-shadowColor: '#00cc99',
-shadowOffset: { width: 0, height: 4 },
-shadowOpacity: 0.3,
-shadowRadius: 8,
-elevation: 6,
-},
-buttonDisabled: {
-backgroundColor: '#94a3b8',
-shadowOpacity: 0.1,
-},
-loadingContainer: {
-flexDirection: 'row',
-alignItems: 'center',
-},
-spinner: {
-marginRight: 8,
-},
-buttonText: {
-color: '#ffffff',
-fontSize: 18,
-fontWeight: '600',
-},
-biometricButton: {
-flexDirection: 'row',
-alignItems: 'center',
-justifyContent: 'center',
-backgroundColor: '#f8fafc',
-borderRadius: 12,
-paddingVertical: 16,
-marginBottom: 16,
-borderWidth: 1,
-borderColor: '#e2e8f0',
-},
-biometricButtonText: {
-color: '#00cc99',
-fontSize: 16,
-fontWeight: '600',
-marginLeft: 8,
-},
-errorContainer: {
-flexDirection: 'row',
-alignItems: 'center',
-backgroundColor: '#fef2f2',
-borderWidth: 1,
-borderColor: '#fecaca',
-borderRadius: 8,
-padding: 12,
-marginBottom: 16,
-},
-errorMessage: {
-color: '#dc2626',
-marginLeft: 8,
-fontSize: 14,
-flex: 1,
-},
-signupContainer: {
-flexDirection: 'row',
-justifyContent: 'center',
-alignItems: 'center',
-marginTop: 8,
-},
-signupText: {
-color: '#64748b',
-fontSize: 16,
-},
-signupLinkText: {
-color: '#00cc99',
-fontSize: 16,
-fontWeight: '600',
-textDecorationLine: 'underline',
-},
+  container: {
+    flex: 1,
+    backgroundColor: '#F2F2F7',
+  },
+  keyboardView: {
+    flex: 1,
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: 24,
+    justifyContent: 'center',
+  },
+  header: {
+    alignItems: 'center',
+    marginBottom: 48,
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#1C1C1E',
+    marginTop: 16,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#8E8E93',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  form: {
+    width: '100%',
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    marginBottom: 16,
+    paddingHorizontal: 16,
+    height: 56,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+  },
+  inputIcon: {
+    marginRight: 12,
+  },
+  input: {
+    flex: 1,
+    fontSize: 16,
+    color: '#1C1C1E',
+  },
+  eyeIcon: {
+    padding: 4,
+  },
+  forgotPassword: {
+    alignSelf: 'flex-end',
+    marginBottom: 24,
+  },
+  forgotPasswordText: {
+    fontSize: 14,
+    color: '#007AFF',
+    fontWeight: '500',
+  },
+  loginButton: {
+    backgroundColor: '#007AFF',
+    borderRadius: 12,
+    height: 56,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  loginButtonDisabled: {
+    backgroundColor: '#E5E5EA',
+  },
+  loginButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  debugButton: {
+    backgroundColor: '#FF9500',
+    borderRadius: 12,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  debugButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#FFFFFF',
+  },
+  signupContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  signupText: {
+    fontSize: 14,
+    color: '#8E8E93',
+  },
+  signupLink: {
+    fontSize: 14,
+    color: '#007AFF',
+    fontWeight: '500',
+  },
 });
+
+export default EnhancedLoginScreen;

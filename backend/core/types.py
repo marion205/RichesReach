@@ -16,11 +16,14 @@ from .models import (
     Stock,
     StockData,
     Watchlist,
+    WatchlistItem,
     IncomeProfile,
     AIPortfolioRecommendation,
     Portfolio,
+    PortfolioPosition,
     StockDiscussion,
     DiscussionComment,
+    # TickerFollow,  # Temporarily commented out due to migration issues
 )
 
 # -----------------------------------------------------------------------------
@@ -43,13 +46,36 @@ class UserType(DjangoObjectType):
     following_count = graphene.Int()
     is_following_user = graphene.Boolean()
     is_followed_by_user = graphene.Boolean()
+    
+    # camelCase aliases for mobile app
+    followersCount = graphene.Int()
+    followingCount = graphene.Int()
+    isFollowingUser = graphene.Boolean()
+    isFollowedByUser = graphene.Boolean()
 
     # premium flags expected by frontend (stubbed for now)
     hasPremiumAccess = graphene.Boolean()
     subscriptionTier = graphene.String()
+    
+    # ticker follows
+    followedTickers = graphene.List('core.types.TickerType')
 
     def resolve_profilePic(self, info):
-        return self.profile_pic
+        return getattr(self, 'profile_pic', None)
+    
+    def resolve_isFollowingUser(self, info):
+        # A user cannot follow themselves, so this is always False
+        return False
+    
+    def resolve_isFollowedByUser(self, info):
+        # A user cannot be followed by themselves, so this is always False
+        return False
+    
+    def resolve_followersCount(self, info):
+        return self.followers.count()
+    
+    def resolve_followingCount(self, info):
+        return self.following.count()
 
     def resolve_incomeProfile(self, info):
         # OneToOne reverse accessor
@@ -74,6 +100,12 @@ class UserType(DjangoObjectType):
 
     def resolve_hasPremiumAccess(self, info):
         return False
+
+    def resolve_followedTickers(self, info):
+        """Return the ticker symbols this user is following"""
+        from .ticker_follows import get_followed_tickers
+        followed_symbols = get_followed_tickers(self.id)
+        return [TickerType(symbol=symbol) for symbol in followed_symbols]
 
     def resolve_subscriptionTier(self, info):
         return "free"
@@ -145,6 +177,36 @@ class StockType(DjangoObjectType):
     companyName = graphene.String()
     currentPrice = graphene.Float()
     marketCap = graphene.Float()
+    
+    # Additional fields for mobile app
+    riskLevel = graphene.String()
+    growthPotential = graphene.String()
+    
+    def resolve_riskLevel(self, info):
+        """Calculate risk level based on volatility and other factors"""
+        if self.volatility is None:
+            return "Medium"
+        
+        volatility = float(self.volatility)
+        if volatility < 0.15:
+            return "Low"
+        elif volatility < 0.25:
+            return "Medium"
+        else:
+            return "High"
+    
+    def resolve_growthPotential(self, info):
+        """Calculate growth potential based on P/E ratio and sector"""
+        if self.pe_ratio is None:
+            return "Medium"
+        
+        pe_ratio = float(self.pe_ratio)
+        if pe_ratio < 15:
+            return "High"
+        elif pe_ratio < 25:
+            return "Medium"
+        else:
+            return "Low"
     peRatio = graphene.Float()
     dividendYield = graphene.Float()
     debtRatio = graphene.Float()
@@ -242,14 +304,73 @@ class RustStockAnalysisType(graphene.ObjectType):
 # AI Portfolio Recommendations (JSON-backed child objects)
 # -----------------------------------------------------------------------------
 
-class StockRecommendationType(graphene.ObjectType):
+
+
+
+class PortfolioAnalysisType(graphene.ObjectType):
+    """Portfolio Analysis type"""
+    totalValue = graphene.Float()
+    numHoldings = graphene.Int()
+    sectorBreakdown = graphene.JSONString()
+    riskScore = graphene.Float()
+    diversificationScore = graphene.Float()
+    expectedImpact = graphene.Field('core.types.ExpectedImpactType')
+    risk = graphene.Field('core.types.RiskType')
+    assetAllocation = graphene.Field('core.types.AssetAllocationType')
+
+class ExpectedImpactType(graphene.ObjectType):
+    """Expected Impact type"""
+    evPct = graphene.Float()
+    evAbs = graphene.Float()
+    per10k = graphene.Float()
+
+class RiskType(graphene.ObjectType):
+    """Risk type"""
+    volatilityEstimate = graphene.Float()
+    maxDrawdownPct = graphene.Float()
+
+class AssetAllocationType(graphene.ObjectType):
+    """Asset Allocation type"""
+    stocks = graphene.Float()
+    bonds = graphene.Float()
+    cash = graphene.Float()
+
+class BuyRecommendationType(graphene.ObjectType):
+    """Buy Recommendation type"""
     symbol = graphene.String()
     companyName = graphene.String()
-    allocation = graphene.Float()
+    recommendation = graphene.String()
+    confidence = graphene.Float()
     reasoning = graphene.String()
-    riskLevel = graphene.String()
+    targetPrice = graphene.Float()
+    currentPrice = graphene.Float()
     expectedReturn = graphene.Float()
+    allocation = graphene.Float()
 
+class SellRecommendationType(graphene.ObjectType):
+    """Sell Recommendation type"""
+    symbol = graphene.String()
+    reasoning = graphene.String()
+
+class RebalanceSuggestionType(graphene.ObjectType):
+    """Rebalance Suggestion type"""
+    action = graphene.String()
+    currentAllocation = graphene.Float()
+    suggestedAllocation = graphene.Float()
+    reasoning = graphene.String()
+    priority = graphene.String()
+
+class RiskAssessmentType(graphene.ObjectType):
+    """Risk Assessment type"""
+    overallRisk = graphene.String()
+    volatilityEstimate = graphene.Float()
+    recommendations = graphene.List(graphene.String)
+
+class MarketOutlookType(graphene.ObjectType):
+    """Market Outlook type"""
+    overallSentiment = graphene.String()
+    confidence = graphene.Float()
+    keyFactors = graphene.List(graphene.String)
 
 class AIPortfolioRecommendationType(DjangoObjectType):
     class Meta:
@@ -268,7 +389,7 @@ class AIPortfolioRecommendationType(DjangoObjectType):
     # camelCase aliases
     riskProfile = graphene.String()
     portfolioAllocation = graphene.JSONString()
-    recommendedStocks = graphene.List(StockRecommendationType)
+    recommendedStocks = graphene.JSONString()
     expectedPortfolioReturn = graphene.Float()
     riskAssessment = graphene.String()
     createdAt = graphene.DateTime()
@@ -281,18 +402,7 @@ class AIPortfolioRecommendationType(DjangoObjectType):
         return self.portfolio_allocation
 
     def resolve_recommendedStocks(self, info):
-        data = self.recommended_stocks or []
-        return [
-            StockRecommendationType(
-                symbol=item.get("symbol", ""),
-                companyName=item.get("companyName", ""),
-                allocation=float(item.get("allocation", 0.0) or 0.0),
-                reasoning=item.get("reasoning", ""),
-                riskLevel=item.get("riskLevel", ""),
-                expectedReturn=float(item.get("expectedReturn", 0.0) or 0.0),
-            )
-            for item in data
-        ]
+        return self.recommended_stocks or []
 
     def resolve_expectedPortfolioReturn(self, info):
         val = self.expected_portfolio_return
@@ -364,18 +474,27 @@ class FollowType(DjangoObjectType):
 class WatchlistType(DjangoObjectType):
     class Meta:
         model = Watchlist
-        fields = ("id", "user", "stock", "notes", "target_price", "added_at", "created_at", "updated_at", "name",
-                  "is_public", "is_shared", "description")
+        fields = ("id", "user", "name", "description", "is_public", "is_shared", "created_at", "updated_at")
 
     # camelCase aliases
-    stock = graphene.Field(lambda: StockType)  # override for proper type
-    targetPrice = graphene.Float()
-    addedAt = graphene.DateTime()
     createdAt = graphene.DateTime()
     updatedAt = graphene.DateTime()
 
-    def resolve_stock(self, info):
-        return self.stock
+    def resolve_createdAt(self, info):
+        return self.created_at
+
+    def resolve_updatedAt(self, info):
+        return self.updated_at
+
+
+class WatchlistItemType(DjangoObjectType):
+    class Meta:
+        model = WatchlistItem
+        fields = ("id", "watchlist", "stock", "notes", "target_price", "added_at")
+
+    # camelCase aliases
+    targetPrice = graphene.Float()
+    addedAt = graphene.DateTime()
 
     def resolve_targetPrice(self, info):
         return float(self.target_price) if self.target_price is not None else None
@@ -390,33 +509,278 @@ class WatchlistType(DjangoObjectType):
         return self.updated_at
 
 
-class PortfolioType(DjangoObjectType):
+class PortfolioPositionType(DjangoObjectType):
     class Meta:
-        model = Portfolio
-        fields = ("id", "user", "stock", "shares", "notes", "average_price",
-                  "current_price", "total_value", "created_at", "updated_at")
+        model = PortfolioPosition
+        fields = ("id", "stock", "shares", "average_price", "added_at")
 
     # camelCase aliases
     stock = graphene.Field(lambda: StockType)
+    averagePrice = graphene.Float()
     currentPrice = graphene.Float()
     totalValue = graphene.Float()
+    addedAt = graphene.DateTime()
+    notes = graphene.String()
     createdAt = graphene.DateTime()
     updatedAt = graphene.DateTime()
 
-    def resolve_stock(self, info):
-        return self.stock
+    def resolve_averagePrice(self, info):
+        return float(self.average_price)
 
     def resolve_currentPrice(self, info):
-        return float(self.current_price) if self.current_price is not None else None
+        return float(self.stock.current_price) if self.stock.current_price else 0.0
 
     def resolve_totalValue(self, info):
-        return float(self.total_value) if self.total_value is not None else None
+        current_price = float(self.stock.current_price) if self.stock.current_price else 0.0
+        return float(self.shares) * current_price
+
+    def resolve_addedAt(self, info):
+        return self.added_at
+
+    def resolve_notes(self, info):
+        return getattr(self, 'notes', '') or ''
+
+    def resolve_createdAt(self, info):
+        return getattr(self, 'created_at', None)
+
+    def resolve_updatedAt(self, info):
+        return getattr(self, 'updated_at', None)
+
+
+class PortfolioType(DjangoObjectType):
+    class Meta:
+        model = Portfolio
+        fields = ("id", "name", "created_at", "updated_at")
+
+    # camelCase aliases
+    createdAt = graphene.DateTime()
+    updatedAt = graphene.DateTime()
+    holdings = graphene.List(PortfolioPositionType)
+    holdingsCount = graphene.Int()
+    totalValue = graphene.Float()
 
     def resolve_createdAt(self, info):
         return self.created_at
 
     def resolve_updatedAt(self, info):
         return self.updated_at
+
+    def resolve_holdings(self, info):
+        return self.positions.all()
+
+    def resolve_holdingsCount(self, info):
+        return self.positions.count()
+
+    def resolve_totalValue(self, info):
+        total = 0.0
+        for position in self.positions.all():
+            current_price = float(position.stock.current_price) if position.stock.current_price else 0.0
+            total += float(position.shares) * current_price
+        return total
+
+
+class MyPortfoliosType(graphene.ObjectType):
+    """Type for myPortfolios query response"""
+    totalPortfolios = graphene.Int()
+    totalValue = graphene.Float()
+    portfolios = graphene.List(PortfolioType)
+
+
+class PortfolioMetricsType(graphene.ObjectType):
+    totalValue = graphene.Float()
+    totalCost = graphene.Float()
+    totalReturn = graphene.Float()
+    totalReturnPercent = graphene.Float()
+    dayChange = graphene.Float()
+    dayChangePercent = graphene.Float()
+    positionsCount = graphene.Int()
+    volatility = graphene.Float()
+    sharpeRatio = graphene.Float()
+    maxDrawdown = graphene.Float()
+    beta = graphene.Float()
+    alpha = graphene.Float()
+    sectorAllocation = graphene.JSONString()
+    riskMetrics = graphene.JSONString()
+    holdings = graphene.List('core.types.PortfolioHoldingType')
+
+
+class StockRecommendationType(graphene.ObjectType):
+    symbol = graphene.String()
+    companyName = graphene.String()
+    recommendation = graphene.String()
+    confidence = graphene.Float()
+    reasoning = graphene.String()
+    targetPrice = graphene.Float()
+    currentPrice = graphene.Float()
+    expectedReturn = graphene.Float()
+    allocation = graphene.Float()
+
+
+class ExpectedImpactType(graphene.ObjectType):
+    """Expected Impact type"""
+    evPct = graphene.Float()
+    evAbs = graphene.Float()
+    per10k = graphene.Float()
+
+class RiskType(graphene.ObjectType):
+    """Risk type"""
+    volatilityEstimate = graphene.Float()
+    maxDrawdownPct = graphene.Float()
+    var95 = graphene.Float()
+    sharpeRatio = graphene.Float()
+
+class AssetAllocationType(graphene.ObjectType):
+    """Asset Allocation type"""
+    stocks = graphene.Float()
+    bonds = graphene.Float()
+    cash = graphene.Float()
+    alternatives = graphene.Float()
+
+class PortfolioAnalysisType(graphene.ObjectType):
+    totalValue = graphene.Float()
+    numHoldings = graphene.Int()
+    sectorBreakdown = graphene.JSONString()
+    riskScore = graphene.Float()
+    diversificationScore = graphene.Float()
+    expectedImpact = graphene.Field(ExpectedImpactType)
+    risk = graphene.Field(RiskType)
+    assetAllocation = graphene.Field(AssetAllocationType)
+
+
+class MarketInsightsType(graphene.ObjectType):
+    sectorAllocation = graphene.JSONString()
+    riskAssessment = graphene.String()
+
+
+class RebalanceSuggestionType(graphene.ObjectType):
+    action = graphene.String()
+    currentAllocation = graphene.Float()
+    suggestedAllocation = graphene.Float()
+    reasoning = graphene.String()
+    priority = graphene.String()
+
+class RiskAssessmentType(graphene.ObjectType):
+    overallRisk = graphene.String()
+    volatilityEstimate = graphene.Float()
+    recommendations = graphene.List(graphene.String)
+
+class MarketOutlookType(graphene.ObjectType):
+    overallSentiment = graphene.String()
+    confidence = graphene.Float()
+    keyFactors = graphene.List(graphene.String)
+
+class AIRecommendationsType(graphene.ObjectType):
+    portfolioAnalysis = graphene.Field(PortfolioAnalysisType)
+    buyRecommendations = graphene.List(StockRecommendationType)
+    sellRecommendations = graphene.List(StockRecommendationType)
+    rebalanceSuggestions = graphene.List(RebalanceSuggestionType)
+    riskAssessment = graphene.Field(RiskAssessmentType)
+    marketOutlook = graphene.Field(MarketOutlookType)
+    marketInsights = graphene.Field(MarketInsightsType)
+
+
+class OptionType(graphene.ObjectType):
+    symbol = graphene.String()
+    contractSymbol = graphene.String()
+    strike = graphene.Float()
+    expirationDate = graphene.String()
+    optionType = graphene.String()
+    bid = graphene.Float()
+    ask = graphene.Float()
+    lastPrice = graphene.Float()
+    volume = graphene.Int()
+    openInterest = graphene.Int()
+    impliedVolatility = graphene.Float()
+    delta = graphene.Float()
+    gamma = graphene.Float()
+    theta = graphene.Float()
+    vega = graphene.Float()
+    rho = graphene.Float()
+    intrinsicValue = graphene.Float()
+    timeValue = graphene.Float()
+    daysToExpiration = graphene.Int()
+
+class GreeksType(graphene.ObjectType):
+    delta = graphene.Float()
+    gamma = graphene.Float()
+    theta = graphene.Float()
+    vega = graphene.Float()
+    rho = graphene.Float()
+
+class OptionsChainType(graphene.ObjectType):
+    expirationDates = graphene.List(graphene.String)
+    calls = graphene.List(OptionType)
+    puts = graphene.List(OptionType)
+    greeks = graphene.Field(GreeksType)
+
+
+class VolatilityAnalysisType(graphene.ObjectType):
+    currentIV = graphene.Float()
+    historicalIV = graphene.Float()
+    volatilityRank = graphene.Float()
+
+
+class UnusualFlowType(graphene.ObjectType):
+    symbol = graphene.String()
+    contractSymbol = graphene.String()
+    optionType = graphene.String()
+    strike = graphene.Float()
+    expirationDate = graphene.String()
+    volume = graphene.Int()
+    openInterest = graphene.Int()
+    premium = graphene.Float()
+    impliedVolatility = graphene.Float()
+    unusualActivityScore = graphene.Float()
+    activityType = graphene.String()
+
+class RecommendedStrategyType(graphene.ObjectType):
+    strategyName = graphene.String()
+    strategyType = graphene.String()
+    description = graphene.String()
+    riskLevel = graphene.String()
+    marketOutlook = graphene.String()
+    maxProfit = graphene.Float()
+    maxLoss = graphene.Float()
+    breakevenPoints = graphene.List(graphene.Float)
+    probabilityOfProfit = graphene.Float()
+    riskRewardRatio = graphene.Float()
+    daysToExpiration = graphene.Int()
+    totalCost = graphene.Float()
+    totalCredit = graphene.Float()
+
+class MarketSentimentType(graphene.ObjectType):
+    putCallRatio = graphene.Float()
+    impliedVolatilityRank = graphene.Float()
+    skew = graphene.Float()
+    sentimentScore = graphene.Float()
+    sentimentDescription = graphene.String()
+
+class OptionsAnalysisType(graphene.ObjectType):
+    underlyingSymbol = graphene.String()
+    underlyingPrice = graphene.Float()
+    optionsChain = graphene.Field(OptionsChainType)
+    volatilityAnalysis = graphene.Field(VolatilityAnalysisType)
+    unusualFlow = graphene.List(UnusualFlowType)
+    recommendedStrategies = graphene.List(RecommendedStrategyType)
+    marketSentiment = graphene.Field(MarketSentimentType)
+
+
+class PortfolioHoldingType(graphene.ObjectType):
+    symbol = graphene.String()
+    companyName = graphene.String()
+    shares = graphene.Float()
+    currentPrice = graphene.Float()
+    averagePrice = graphene.Float()
+    totalValue = graphene.Float()
+    dayChange = graphene.Float()
+    dayChangePercent = graphene.Float()
+    totalReturn = graphene.Float()
+    totalReturnPercent = graphene.Float()
+    weight = graphene.Float()
+    sector = graphene.String()
+    costBasis = graphene.Float()
+    returnAmount = graphene.Float()
+    returnPercent = graphene.Float()
 
 
 # -----------------------------------------------------------------------------
@@ -430,13 +794,9 @@ class DiscussionCommentType(DjangoObjectType):
             "id",
             "user",
             "discussion",
-            "parent_comment",
             "content",
-            "upvotes",
-            "downvotes",
-            "is_deleted",
+            "likes",
             "created_at",
-            "updated_at",
         )
 
     # camelCase / computed
@@ -466,38 +826,6 @@ class DiscussionCommentType(DjangoObjectType):
         return self.reply_count
 
 
-class StockDiscussionType(DjangoObjectType):
-    class Meta:
-        model = StockDiscussion
-        fields = (
-            "id",
-            "user",
-            "stock",
-            "title",
-            "content",
-            "discussion_type",
-            "visibility",
-            "is_analysis",
-            "analysis_data",
-            "upvotes",
-            "downvotes",
-            "is_pinned",
-            "is_locked",
-            "created_at",
-            "updated_at",
-        )
-
-    # camelCase / computed
-    user = graphene.Field(lambda: UserType)
-    stock = graphene.Field(lambda: StockType)
-    discussionType = graphene.String()
-    isPinned = graphene.Boolean()
-    isLocked = graphene.Boolean()
-    createdAt = graphene.DateTime()
-    updatedAt = graphene.DateTime()
-    score = graphene.Int()
-    commentCount = graphene.Int()
-    comments = graphene.List(lambda: DiscussionCommentType)
 
     def resolve_user(self, info):
         return self.user
@@ -707,3 +1035,70 @@ class RustStockAnalysisType(graphene.ObjectType):
     technicalIndicators = graphene.Field(TechnicalIndicatorsType)
     fundamentalAnalysis = graphene.Field(FundamentalAnalysisType)
     reasoning = graphene.String()
+
+# -----------------------------------------------------------------------------
+# Discussion Types
+# -----------------------------------------------------------------------------
+
+class DiscussionCommentType(DjangoObjectType):
+    class Meta:
+        model = DiscussionComment
+        fields = ("id", "content", "created_at", "user", "discussion", "likes")
+
+# New post type definitions
+class PredictionType(graphene.ObjectType):
+    direction = graphene.String()
+    horizonDays = graphene.Int()
+    targetPrice = graphene.Float()
+    confidence = graphene.Float()
+
+class PollOptionType(graphene.ObjectType):
+    id = graphene.ID()
+    label = graphene.String()
+    votes = graphene.Int()
+
+class PollType(graphene.ObjectType):
+    question = graphene.String()
+    closesAt = graphene.DateTime()
+    options = graphene.List(PollOptionType)
+
+class TickerSearchResultType(graphene.ObjectType):
+    symbol = graphene.String()
+    companyName = graphene.String()
+    lastPrice = graphene.Float()
+    changePct = graphene.Float()
+
+class TickerType(graphene.ObjectType):
+    symbol = graphene.String()
+
+# TickerFollowType temporarily commented out due to migration issues
+# class TickerFollowType(DjangoObjectType):
+#     class Meta:
+#         model = TickerFollow
+#         fields = ("id", "symbol", "created_at")
+
+class QuoteType(graphene.ObjectType):
+    symbol = graphene.String()
+    last = graphene.Float()
+    changePct = graphene.Float()
+
+class StockDiscussionType(DjangoObjectType):
+    class Meta:
+        model = StockDiscussion
+        fields = ("id", "title", "content", "created_at", "user", "stock", "comments", "likes")
+
+    # New post type fields
+    kind = graphene.String()
+    tickers = graphene.List(graphene.String)
+    prediction = graphene.Field(lambda: PredictionType)
+    poll = graphene.Field(lambda: PollType)
+    score = graphene.Int()
+    commentCount = graphene.Int()
+
+    def resolve_score(self, info):
+        """Return the number of likes as the score"""
+        return self.likes.count()
+
+    def resolve_commentCount(self, info):
+        """Return the number of comments"""
+        return self.comments.count()

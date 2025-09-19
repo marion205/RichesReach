@@ -13,20 +13,29 @@ KeyboardAvoidingView,
 Platform,
 SafeAreaView,
 Image,
+FlatList,
+Share,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useApolloClient } from '@apollo/client';
 import { gql, useQuery, useMutation } from '@apollo/client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
+import * as Clipboard from 'expo-clipboard';
 import SocialNav from '../components/SocialNav';
-import RedditDiscussionCard from '../components/RedditDiscussionCard';
+import PostRow from '../components/PostRow';
+import PredictionModal from '../components/PredictionModal';
+import PollModal from '../components/PollModal';
+import TickerChips from '../components/TickerChips';
+import FollowingRibbon from '../components/FollowingRibbon';
+import useTickerFollows from '../hooks/useTickerFollows';
+import { GET_FOLLOWING_FEED } from '../graphql/feed';
+import { MINI_QUOTES } from '../graphql/tickerFollows';
 import LoadingErrorState from '../components/LoadingErrorState';
 import SocialFeed from '../components/SocialFeed';
-import UserProfileCard from '../components/UserProfileCard';
 import DiscoverUsers from '../components/DiscoverUsers';
 import FinancialNews from '../components/FinancialNews';
-import webSocketService, { DiscussionUpdate } from '../services/WebSocketService';
+import webSocketService from '../services/WebSocketService';
 import errorService, { ErrorType, ErrorSeverity } from '../services/ErrorService';
 // GraphQL Queries
 const GET_TRENDING_DISCUSSIONS = gql`
@@ -35,18 +44,13 @@ stockDiscussions {
 id
 title
 content
-discussionType
-visibility
 createdAt
 score
 commentCount
 user {
 id
 name
-profilePic
-followersCount
-followingCount
-isFollowingUser
+email
 }
 stock {
 symbol
@@ -69,18 +73,13 @@ socialFeed {
 id
 title
 content
-discussionType
-visibility
 createdAt
 score
 commentCount
 user {
 id
 name
-profilePic
-followersCount
-followingCount
-isFollowingUser
+email
 }
 stock {
 symbol
@@ -124,8 +123,6 @@ content
 discussionType
 visibility
 createdAt
-score
-commentCount
 user {
 name
 profilePic
@@ -197,6 +194,11 @@ onNavigate?: (screen: string, params?: any) => void;
 const SocialScreen: React.FC<SocialScreenProps> = ({ onNavigate }) => {
 const [refreshing, setRefreshing] = useState(false);
 const [showCreateModal, setShowCreateModal] = useState(false);
+const [showPrediction, setShowPrediction] = useState(false);
+const [showPoll, setShowPoll] = useState(false);
+
+// Ticker follows hook
+const { symbols: followedSymbols, set: followedTickerSet } = useTickerFollows();
 const [createTitle, setCreateTitle] = useState('');
 const [createContent, setCreateContent] = useState('');
 const [createStock, setCreateStock] = useState('');
@@ -219,8 +221,8 @@ const [discussionDetail, setDiscussionDetail] = useState<any>(null);
 const [modalUserVote, setModalUserVote] = useState<'upvote' | 'downvote' | null>(null);
 const [modalLocalScore, setModalLocalScore] = useState(0);
 // Feed type state
-const [feedType, setFeedType] = useState<'trending' | 'following' | 'social-feed' | 'discover' | 'news'>('news');
-const handleFeedTypeChange = (newFeedType: 'trending' | 'following' | 'social-feed' | 'discover' | 'news') => {
+const [feedType, setFeedType] = useState<'trending' | 'following' | 'discover' | 'news'>('trending');
+const handleFeedTypeChange = (newFeedType: 'trending' | 'following' | 'discover' | 'news') => {
 setFeedType(newFeedType);
 };
 // WebSocket connection state
@@ -229,21 +231,44 @@ const [isWebSocketConnected, setIsWebSocketConnected] = useState(false);
 const [showUserModal, setShowUserModal] = useState(false);
 const [userModalType, setUserModalType] = useState<'suggested' | 'following'>('suggested');
 const client = useApolloClient();
+
 // GraphQL queries and mutations
 const { 
 data: discussionsData, 
 loading: discussionsLoading, 
 error: discussionsError,
-refetch: refetchDiscussions 
+refetch: refetchDiscussions,
+networkStatus
 } = useQuery(
 feedType === 'trending' ? GET_TRENDING_DISCUSSIONS : GET_SOCIAL_FEED,
 {
 errorPolicy: 'all',
+notifyOnNetworkStatusChange: true,          // lets the RefreshControl show while reloading
+fetchPolicy: 'cache-and-network',           // fast UI from cache, then refresh
+nextFetchPolicy: 'cache-first',
 onError: (error) => {
 errorService.handleGraphQLError(error, 'SocialScreen', 'fetch_discussions');
 }
 }
 );
+
+// Following feed query
+const { data: followingData, loading: followingLoading, error: followingError, refetch: refetchFollowing } = useQuery(
+  GET_FOLLOWING_FEED,
+  {
+    skip: feedType !== 'following' || !followedSymbols.length,
+    variables: { symbols: followedSymbols, limit: 50 },
+    fetchPolicy: 'cache-and-network',
+  }
+);
+
+// Debounced refetch to avoid thundering herds
+const refetchDebounced = React.useRef<NodeJS.Timeout | null>(null);
+const safeRefetch = React.useCallback(() => {
+  if (refetchDebounced.current) clearTimeout(refetchDebounced.current);
+  refetchDebounced.current = setTimeout(() => { refetchDiscussions(); }, 350);
+}, [refetchDiscussions]);
+
 const [commentOnDiscussion] = useMutation(COMMENT_ON_DISCUSSION, {
 onError: (error) => {
 errorService.handleGraphQLError(error, 'SocialScreen', 'comment_discussion');
@@ -282,39 +307,27 @@ webSocketService.setToken(token);
 webSocketService.setCallbacks({
       onConnectionStatusChange: (connected) => {
         setIsWebSocketConnected(connected);
-if (!connected) {
-errorService.handleWebSocketError(
-new Error('WebSocket disconnected'),
-'SocialScreen',
-'websocket_connection'
-);
-}
-},
-      onNewDiscussion: (discussion: DiscussionUpdate) => {
-        // Refetch discussions to get the latest data
-refetchDiscussions();
-},
-      onNewComment: (comment) => {
-        // Refetch discussions to get the latest comments
-refetchDiscussions();
-},
-      onDiscussionUpdate: (discussionId, updates) => {
-        // Refetch discussions to get the latest updates
-refetchDiscussions();
-}
+        // Don't show error for WebSocket disconnection - it's optional
+        if (__DEV__) {
+          console.log('WebSocket connection status:', connected);
+        }
+      },
+      onNewDiscussion: () => safeRefetch(),
+      onNewComment: () => safeRefetch(),
+      onDiscussionUpdate: () => safeRefetch()
 });
-// Connect to WebSocket
-webSocketService.connect();
-// Set up ping interval to keep connection alive
-const pingInterval = setInterval(() => {
-webSocketService.ping();
-}, 30000); // Ping every 30 seconds
+// Connect to WebSocket (disabled for now - no server running)
+// webSocketService.connect();
+// Set up ping interval to keep connection alive (disabled for now)
+// const pingInterval = setInterval(() => {
+//   webSocketService.ping();
+// }, 30000); // Ping every 30 seconds
 return () => {
-clearInterval(pingInterval);
-webSocketService.disconnect();
+  // clearInterval(pingInterval);
+  // webSocketService.disconnect();
 };
 } catch (error) {
-console.error('Error setting up WebSocket:', error);
+// Error setting up WebSocket
 }
 };
 const cleanup = setupWebSocket();
@@ -345,12 +358,47 @@ setRefreshing(false);
 const handleCreatePress = () => {
 setShowCreateModal(true);
 };
-const handleUpvote = (discussionId: string) => {
-// Visual state is handled by RedditDiscussionCard
-};
-const handleDownvote = (discussionId: string) => {
-// Visual state is handled by RedditDiscussionCard
-};
+const handleUpvote = React.useCallback(async (discussionId: string) => {
+  try {
+    await upvoteDiscussion({ 
+      variables: { discussionId },
+      update: (cache, { data }) => {
+        if (data?.voteDiscussion?.success) {
+          // Update the cache with the new score
+          cache.modify({
+            id: cache.identify({ __typename: 'StockDiscussion', id: discussionId }),
+            fields: {
+              score() { return data.voteDiscussion.discussion.score; }
+            }
+          });
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Upvote failed:', error);
+  }
+}, [upvoteDiscussion]);
+
+const handleDownvote = React.useCallback(async (discussionId: string) => {
+  try {
+    await downvoteDiscussion({ 
+      variables: { discussionId },
+      update: (cache, { data }) => {
+        if (data?.voteDiscussion?.success) {
+          // Update the cache with the new score
+          cache.modify({
+            id: cache.identify({ __typename: 'StockDiscussion', id: discussionId }),
+            fields: {
+              score() { return data.voteDiscussion.discussion.score; }
+            }
+          });
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Downvote failed:', error);
+  }
+}, [downvoteDiscussion]);
 const handleToggleFollow = async (userId: string) => {
 try {
 const result = await toggleFollow({
@@ -364,9 +412,42 @@ refetchDiscussions()
 } else {
 }
 } catch (error) {
-console.error(' Follow toggle error:', error);
+// Follow toggle error
 }
 };
+
+const handleShareDiscussion = React.useCallback(async (discussion: any) => {
+  try {
+    const shareContent = {
+      message: `${discussion.title}\n\n${discussion.content}`,
+      url: `richesreach://discussion/${discussion.id}`,
+    };
+    await Share.share(shareContent);
+  } catch (error) {
+    console.error('Error sharing discussion:', error);
+  }
+}, []);
+
+const handleCopyToClipboard = React.useCallback(async (text: string) => {
+  try {
+    await Clipboard.setStringAsync(text);
+    Alert.alert('Copied!', 'Text copied to clipboard');
+  } catch (error) {
+    console.error('Error copying to clipboard:', error);
+    Alert.alert('Error', 'Failed to copy to clipboard');
+  }
+}, []);
+
+const handleSaveDiscussion = React.useCallback(async (discussion: any) => {
+  try {
+    // For now, copy the discussion content to clipboard as a save action
+    const saveText = `${discussion.title}\n\n${discussion.content}`;
+    await handleCopyToClipboard(saveText);
+    console.log('Discussion saved to clipboard:', discussion.id);
+  } catch (error) {
+    console.error('Error saving discussion:', error);
+  }
+}, [handleCopyToClipboard]);
 // Helper function to determine if submit button should be disabled
 const isSubmitDisabled = () => {
 const hasMedia = selectedImage || selectedVideo;
@@ -379,38 +460,65 @@ if (!hasMedia && !hasContent) return true;
 if (hasContent && createContent.trim().length < 10) return true;
 return false;
 };
-const handleDiscussionComment = (discussionId: string) => {
-  // Open discussion detail instead of comment modal (X-style)
-const discussion = discussionsData?.stockDiscussions?.find((d: any) => d.id === discussionId);
-if (discussion) {
-  setDiscussionDetail(discussion);
+// Get discussions data based on feed type
+const discussions = React.useMemo(() => {
+  if (feedType === 'following') {
+    return followingData?.feedByTickers || [];
+  } else if (feedType === 'trending') {
+    return discussionsData?.stockDiscussions || [];
+  }
+  return [];
+}, [feedType, discussionsData, followingData]);
+
+// Get all unique ticker symbols from discussions for live quotes
+const allTickerSymbols = React.useMemo(() => {
+  const symbols = new Set<string>();
+  discussions.forEach((discussion: any) => {
+    if (discussion?.stock?.symbol) {
+      symbols.add(discussion.stock.symbol);
+    }
+    if (discussion?.tickers) {
+      discussion.tickers.forEach((ticker: string) => symbols.add(ticker));
+    }
+  });
+  return Array.from(symbols);
+}, [discussions]);
+
+// Live quotes query
+const { data: quotesData } = useQuery(MINI_QUOTES, {
+  variables: { symbols: allTickerSymbols },
+  skip: allTickerSymbols.length === 0,
+  pollInterval: 30000, // Update every 30 seconds
+});
+
+// Convert quotes data to the format expected by PostRow
+const liveQuotes = React.useMemo(() => {
+  if (!quotesData?.quotes) return {};
+  const quotes: Record<string, { price: number; chg: number }> = {};
+  quotesData.quotes.forEach((quote: any) => {
+    quotes[quote.symbol] = {
+      price: quote.last,
+      chg: quote.changePct
+    };
+  });
+  return quotes;
+}, [quotesData]);
+
+const handleDiscussionComment = React.useCallback((discussionId: string) => {
+  const d = discussions.find((x: any) => x.id === discussionId);
+  if (!d) return;
+  setDiscussionDetail(d);
   setSelectedDiscussionId(discussionId);
-  setCommentContent(''); // Reset comment input
-  setShowCommentModal(false); // Close comment modal if open
-  setShowDiscussionDetail(true); // Open discussion detail modal
-} else {
-}
-};
+  setCommentContent('');
+  setShowCommentModal(false);
+  setShowDiscussionDetail(true);
+}, [discussions]);
 const handleCommentSubmit = async () => {
 if (!commentContent.trim()) {
 Alert.alert('Error', 'Please enter a comment');
 return;
 }
 // Starting comment submission
-// Test backend connection
-try {
-const testResponse = await fetch('http://192.168.1.151:8001/graphql/', {
-method: 'POST',
-headers: {
-'Content-Type': 'application/json',
-},
-body: JSON.stringify({
-query: '{ __typename }'
-})
-});
-} catch (testError) {
-// Backend connection test failed
-}
 setIsCommenting(true);
 try {
 const result = await commentOnDiscussion({ 
@@ -432,17 +540,7 @@ setCommentContent('');
 setSelectedDiscussionId('');
 Alert.alert('Success', 'Comment added successfully!');
 } catch (error) {
-console.error(' COMMENT SUBMISSION FAILED');
-console.error(' Failed to add comment:', error);
-console.error(' Error message:', (error as any)?.message);
-console.error(' Error stack:', (error as any)?.stack);
-console.error(' Error details:', JSON.stringify(error, null, 2));
-if ((error as any)?.networkError) {
-console.error(' Network error details:', (error as any).networkError);
-}
-if ((error as any)?.graphQLErrors) {
-console.error(' GraphQL errors:', (error as any).graphQLErrors);
-}
+// Comment submission failed
 Alert.alert('Error', 'Failed to add comment. Please try again.');
 } finally {
 setIsCommenting(false);
@@ -464,7 +562,7 @@ setMediaType('image');
 } else {
 }
 } catch (error) {
-console.error(' Error picking image:', error);
+// Error picking image
 Alert.alert('Error', 'Failed to pick image');
 }
 };
@@ -482,7 +580,7 @@ setMediaType('video');
 } else {
 }
 } catch (error) {
-console.error(' Error picking video:', error);
+// Error picking video
 Alert.alert('Error', 'Failed to pick video');
 }
 };
@@ -511,38 +609,6 @@ const removeMedia = () => {
 setSelectedImage(null);
 setSelectedVideo(null);
 setMediaType(null);
-};
-const handleShareDiscussion = (discussion: any) => {
-if (!discussion) {
-return;
-}
-const shareText = `Check out this discussion: "${discussion.title}"\n\n${discussion.content?.replace(/\[(IMAGE|VIDEO):\s*[^\]]+\]/g, '').trim()}\n\nShared from RichesReach`;
-// Use a simple alert that should work
-setTimeout(() => {
-Alert.alert(
-'Share Discussion',
-'Discussion content ready to share!',
-[
-{ text: 'Cancel', style: 'cancel' },
-{ 
-text: 'Copy Link', 
-onPress: () => {
-Alert.alert('Success', 'Discussion link copied to clipboard!');
-}
-}
-]
-);
-}, 100);
-};
-const handleSaveDiscussion = (discussion: any) => {
-if (!discussion) {
-return;
-}
-// For now, we'll just show a success message
-// In a real app, you'd save to a saved discussions list
-setTimeout(() => {
-Alert.alert('Success', 'Discussion saved to your bookmarks!');
-}, 100);
 };
 const handleModalVote = (voteType: 'upvote' | 'downvote') => {
 if (modalUserVote === voteType) {
@@ -618,48 +684,28 @@ if (freshDiscussion) {
 setDiscussionDetail(freshDiscussion);
 }
 } catch (error) {
-console.error('Failed to refresh discussion:', error);
+// Failed to refresh discussion
 }
 }, 1000);
 } catch (error) {
-console.error('Failed to add comment:', error);
+// Failed to add comment
 Alert.alert('Error', 'Failed to add comment. Please try again.');
 } finally {
 setIsCommenting(false);
 }
 };
-const handleDiscussionPress = (discussionId: string) => {
-// Find the discussion from the current data
-const discussion = discussionsData?.stockDiscussions?.find((d: any) => d.id === discussionId);
-if (discussion) {
-setDiscussionDetail(discussion);
-setSelectedDiscussionId(discussionId);
-setCommentContent(''); // Reset comment input for new discussion
-setShowCommentModal(false); // Close comment modal if open
-setShowDiscussionDetail(true); // Open discussion detail modal
-// Initialize modal voting state
-setModalUserVote(null);
-setModalLocalScore(discussion.score || 0);
-} else {
-}
-};
+const handleDiscussionPress = React.useCallback((discussionId: string) => {
+  const d = discussions.find((x: any) => x.id === discussionId);
+  if (!d) return;
+  setDiscussionDetail(d);
+  setSelectedDiscussionId(discussionId);
+  setCommentContent('');
+  setShowCommentModal(false);
+  setShowDiscussionDetail(true);
+  setModalUserVote(null);
+  setModalLocalScore(d.score || 0);
+}, [discussions]);
 const handleCreateSubmit = async () => {
-// Test backend connection first
-try {
-const response = await fetch('http://192.168.1.151:8001/graphql/', {
-method: 'POST',
-headers: {
-'Content-Type': 'application/json',
-},
-body: JSON.stringify({
-query: '{ __schema { types { name } } }'
-})
-});
-if (response.ok) {
-} else {
-}
-} catch (error) {
-}
 // Use the helper function for validation
 if (isSubmitDisabled()) {
 Alert.alert('Error', 'Please check your input and try again');
@@ -709,66 +755,120 @@ setMediaType(null);
 Alert.alert('Error', result.data?.createStockDiscussion?.message || 'Failed to create discussion');
 }
 } catch (error) {
-console.error(' Failed to create discussion - Full error:', error);
-console.error(' Error message:', (error as any)?.message);
-console.error(' Error stack:', (error as any)?.stack);
-console.error(' Error details:', JSON.stringify(error, null, 2));
+// Failed to create discussion
 Alert.alert('Error', `Failed to create discussion: ${(error as any)?.message || 'Unknown error'}`);
 }
 };
+// FlatList implementation for Reddit-style feed
+const keyExtractor = React.useCallback((item: any) => item.id, []);
+
+
+// Reddit-like list container - now using full-bleed design
+
+const listEmpty = React.useMemo(() => (
+  <View style={styles.emptyState}>
+    <Text style={styles.emptyStateText}>No discussions yet</Text>
+    <Text style={styles.emptyStateSubtext}>Be the first to start a discussion!</Text>
+  </View>
+), []);
+
+// Render item function using PostRow
+const renderItem = React.useCallback(({ item }: { item: any }) => {
+  return (
+    <PostRow
+      discussion={item}
+      onPress={() => handleDiscussionPress(item.id)}
+      onUpvote={() => handleUpvote(item.id)}
+      onDownvote={() => handleDownvote(item.id)}
+      onComment={() => handleDiscussionComment(item.id)}
+      onFollow={() => handleToggleFollow(item.user.id)}
+      onShare={() => handleShareDiscussion(item)}
+      onSave={() => handleSaveDiscussion(item)}
+      onPressTicker={(symbol) => onNavigate?.('Stock', { symbol })}
+      liveQuotes={liveQuotes}
+      followedTickerSet={followedTickerSet}
+    />
+  );
+}, [handleDiscussionPress, handleUpvote, handleDownvote, handleDiscussionComment, handleToggleFollow, onNavigate]);
+
+const RedditList = (
+  <FlatList
+    data={discussions}
+    keyExtractor={keyExtractor}
+    renderItem={renderItem}
+    ItemSeparatorComponent={() => <View style={{ height: 8, backgroundColor: '#F9FAFB' }} />}
+    ListEmptyComponent={listEmpty}
+    ListHeaderComponent={
+      <View style={{ borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E7EB' }}>
+        {/* Header content will be added by the parent component */}
+      </View>
+    }
+    ListFooterComponent={<View style={{ height: 24 }} />}
+    contentContainerStyle={{ paddingBottom: 24 }}
+    refreshControl={
+      <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+    }
+    removeClippedSubviews
+    initialNumToRender={8}
+    maxToRenderPerBatch={8}
+    windowSize={7}
+    updateCellsBatchingPeriod={50}
+    showsVerticalScrollIndicator={false}
+  />
+);
+
 const renderContent = () => {
-// Render different content based on feed type
-if (feedType === 'social-feed' || feedType === 'following') {
-return <SocialFeed onNavigate={onNavigate || (() => {})} />;
-}
-if (feedType === 'discover') {
-return <DiscoverUsers onNavigate={onNavigate || (() => {})} />;
-}
-if (feedType === 'news') {
-return <FinancialNews limit={15} />;
-}
-return (
-<View>
-{discussionsData?.stockDiscussions?.map((discussion: any) => {
-return (
-<RedditDiscussionCard
-key={discussion.id}
-discussion={discussion}
-onUpvote={() => {
-handleUpvote(discussion.id);
-}}
-onDownvote={() => {
-handleDownvote(discussion.id);
-}}
-onComment={() => {
-handleDiscussionComment(discussion.id);
-}}
-onPress={() => {
-handleDiscussionPress(discussion.id);
-}}
-onFollow={(userId) => {
-handleToggleFollow(userId);
-}}
-/>
-);
-}) || (
-<View style={styles.emptyState}>
-<Text style={styles.emptyStateText}>No discussions yet</Text>
-<Text style={styles.emptyStateSubtext}>Be the first to start a discussion!</Text>
-</View>
-)}
-</View>
-);
+  if (feedType === 'following') {
+    return <SocialFeed onNavigate={onNavigate || (() => {})} />;
+  }
+  if (feedType === 'discover') {
+    return <DiscoverUsers onNavigate={onNavigate || (() => {})} />;
+  }
+  if (feedType === 'news') {
+    return <FinancialNews limit={15} />;
+  }
+  return RedditList;
 };
 return (
 <SafeAreaView style={styles.container}>
 {/* Header */}
 <View style={styles.header}>
 <Text style={styles.headerTitle}>Discussion Hub</Text>
-<TouchableOpacity style={styles.createButton} onPress={handleCreatePress}>
-<Icon name="plus" size={24} color="#FFFFFF" />
-</TouchableOpacity>
+<View style={styles.headerButtons}>
+  <TouchableOpacity style={[styles.createButton, { backgroundColor: '#FF6B35' }]} onPress={() => setShowPrediction(true)}>
+    <Icon name="target" size={20} color="#FFFFFF" />
+  </TouchableOpacity>
+  <TouchableOpacity style={[styles.createButton, { backgroundColor: '#6366F1' }]} onPress={() => setShowPoll(true)}>
+    <Icon name="bar-chart-2" size={20} color="#FFFFFF" />
+  </TouchableOpacity>
+  <TouchableOpacity style={[styles.createButton, { backgroundColor: '#34C759' }]} onPress={handleCreatePress}>
+    <Icon name="plus" size={24} color="#FFFFFF" />
+  </TouchableOpacity>
 </View>
+</View>
+{/* Followed Tickers Display */}
+{feedType === 'following' && followedSymbols.length > 0 && (
+  <FollowingRibbon
+    symbols={followedSymbols}
+    liveQuotes={liveQuotes} // optional; falls back gracefully if missing
+    onPressSymbol={(symbol) => onNavigate?.('Stock', { symbol })}
+    onManagePress={() => {
+      Alert.alert(
+        'Manage Followed Tickers',
+        `You're following ${followedSymbols.length} ticker${followedSymbols.length !== 1 ? 's' : ''}: ${followedSymbols.join(', ')}`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'View Profile', 
+            onPress: () => onNavigate?.('profile'),
+            style: 'default'
+          }
+        ]
+      );
+    }}
+  />
+)}
+
 {/* Navigation */}
 <SocialNav 
 feedType={feedType}
@@ -1312,24 +1412,49 @@ onPress={() => setShowDiscussionDetail(false)}
 </View>
 </KeyboardAvoidingView>
 </Modal>
+
+{/* Prediction Modal */}
+<PredictionModal
+  visible={showPrediction}
+  onClose={() => setShowPrediction(false)}
+  onCreated={() => {
+    refetchDiscussions?.();
+    setShowPrediction(false);
+  }}
+/>
+
+{/* Poll Modal */}
+<PollModal
+  visible={showPoll}
+  onClose={() => setShowPoll(false)}
+  onCreated={() => {
+    refetchDiscussions?.();
+    setShowPoll(false);
+  }}
+/>
 </SafeAreaView>
 );
 };
 const styles = StyleSheet.create({
 container: {
 flex: 1,
-backgroundColor: '#F2F2F7',
+backgroundColor: '#FFFFFF',
 },
 header: {
 flexDirection: 'row',
 justifyContent: 'space-between',
 alignItems: 'center',
-paddingHorizontal: 16,
-paddingVertical: 16,
-paddingTop: 20,
+paddingHorizontal: 12,
+paddingVertical: 10,
+paddingTop: 18,
 backgroundColor: '#FFFFFF',
 borderBottomWidth: 1,
 borderBottomColor: '#E5E5EA',
+},
+headerButtons: {
+flexDirection: 'row',
+alignItems: 'center',
+gap: 8,
 },
 headerTitle: {
 fontSize: 24,
@@ -1346,6 +1471,7 @@ alignItems: 'center',
 },
 content: {
 flex: 1,
+backgroundColor: '#FFFFFF',
 },
 modalContainer: {
 flex: 1,

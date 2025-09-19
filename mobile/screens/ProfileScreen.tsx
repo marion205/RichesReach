@@ -14,7 +14,34 @@ Dimensions,
 import { gql, useQuery, useMutation, useApolloClient } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import JWTAuthService from '../services/JWTAuthService';
 import { GET_MY_PORTFOLIOS } from '../graphql/portfolioQueries';
+
+// --- Design tokens (light theme) ---
+const UI = {
+  bg: '#F6F7FB',
+  card: '#FFFFFF',
+  text: '#111827',
+  sub: '#6B7280',
+  border: '#E5E7EB',
+  accent: '#10B981', // Changed from blue to green
+  success: '#10B981',
+  warn: '#F59E0B',
+  danger: '#EF4444',
+  violet: '#6366F1',
+  gold: '#FFD700',
+  radius: 16,
+  space: 16,
+};
+
+// tiny utility for shadows that look good on both platforms
+const shadow = {
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.08,
+  shadowRadius: 8,
+  elevation: 3,
+};
 const GET_ME = gql`
 query GetMe {
 me {
@@ -106,8 +133,9 @@ const { width } = Dimensions.get('window');
 const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigateTo, onLogout }) => {
 const { data: meData, loading: meLoading, error: meError } = useQuery(GET_ME);
 const { data: portfoliosData, loading: portfoliosLoading, refetch: refetchPortfolios } = useQuery(GET_MY_PORTFOLIOS, {
-notifyOnNetworkStatusChange: true,
-fetchPolicy: 'cache-and-network'
+  notifyOnNetworkStatusChange: true,
+  fetchPolicy: 'network-only',  // Force network request to bypass cache
+  errorPolicy: 'all'  // Show errors if any
 });
 const { data: watchlistData, loading: watchlistLoading } = useQuery(GET_MY_WATCHLIST, {
 skip: !meData?.me?.id,
@@ -155,6 +183,15 @@ setRefreshing(false);
 // Get real portfolio value from saved portfolio data
 const portfolioValue = portfoliosData?.myPortfolios?.totalValue || 0;
 const investmentGoals = portfoliosData?.myPortfolios?.totalPortfolios || 0;
+
+// Debug logging
+console.log('Portfolio Data Debug:', {
+  portfoliosData,
+  portfolioValue,
+  investmentGoals,
+  loading: portfoliosLoading
+});
+
 const handleLogout = async () => {
 try {
 await client.clearStore();
@@ -178,17 +215,39 @@ return (
 );
 }
 if (meError) {
-return (
-<SafeAreaView style={styles.container}>
-<View style={styles.errorContainer}>
-<Icon name="alert-circle" size={48} color="#FF3B30" />
-<Text style={styles.errorTitle}>Error Loading Profile</Text>
-<Text style={styles.errorText}>
-Unable to load your profile data. Please try again.
-</Text>
-</View>
-</SafeAreaView>
-);
+const handleDebugLogin = async () => {
+  try {
+    // For development, create a test token (in production, this would come from a real login)
+    const jwtService = JWTAuthService.getInstance();
+    
+    // Generate a new token for development (this should be replaced with real login)
+    const testToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6InRlc3RAZXhhbXBsZS5jb20iLCJleHAiOjE3NTgxNzQxOTMsIm9yaWdJYXQiOjE3NTgxNzA1OTN9.CR_PY5neZzPynWXCVPtIyNM2Kg6d_fckIlhlFEEXhWo';
+    
+    await jwtService.initializeWithToken(testToken);
+    
+    // Refresh the Apollo cache to retry the query
+    await client.refetchQueries({ include: [GET_ME] });
+  } catch (error) {
+    console.error('Error setting debug token:', error);
+  }
+};
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.errorContainer}>
+        <Icon name="alert-circle" size={48} color="#FF3B30" />
+        <Text style={styles.errorTitle}>Error Loading Profile</Text>
+        <Text style={styles.errorText}>
+          Unable to load your profile data. Please try again.
+        </Text>
+{__DEV__ && (
+<TouchableOpacity style={styles.debugButton} onPress={handleDebugLogin}>
+<Text style={styles.debugButtonText}>Debug: Login as Test User</Text>
+</TouchableOpacity>
+)}
+      </View>
+    </SafeAreaView>
+  );
 }
 if (!user) {
 return (
@@ -214,18 +273,6 @@ return (
 <Text style={styles.headerTitle}>Profile</Text>
 </View>
 <View style={styles.headerRight}>
-<TouchableOpacity 
-style={styles.refreshButton}
-onPress={handleRefresh}
-disabled={refreshing}
->
-<Icon 
-name="refresh-cw" 
-size={16} 
-color={refreshing ? "#C7C7CC" : "#34C759"} 
-style={refreshing ? styles.spinningIcon : {}} 
-/>
-</TouchableOpacity>
 <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
 <Icon name="power" size={16} color="#ff4757" />
 <Text style={styles.logoutButtonText}>Logout</Text>
@@ -239,250 +286,227 @@ refreshControl={
 }
 showsVerticalScrollIndicator={false}
 >
-{/* Profile Header */}
-<View style={styles.profileHeader}>
-<TouchableOpacity 
-style={styles.profileImageContainer}
-onPress={() => navigateTo?.('stock')}
-activeOpacity={0.8}
->
+{/* Profile Hero */}
+<View style={styles.heroWrap}>
+<View style={styles.heroTop} />
+
+<View style={[styles.heroCard, shadow]}>
+<TouchableOpacity style={styles.avatarWrap} activeOpacity={0.85} onPress={() => navigateTo?.('stock')}>
 {user.profilePic ? (
-<Image source={{ uri: user.profilePic }} style={styles.profileImage} />
+<Image source={{ uri: user.profilePic }} style={styles.avatarImg} />
 ) : (
-<View style={styles.profileImagePlaceholder}>
-<Text style={styles.profileImageText}>{user.name.charAt(0).toUpperCase()}</Text>
+<View style={styles.avatarFallback}>
+<Text style={styles.avatarFallbackTxt}>{user.name.charAt(0).toUpperCase()}</Text>
 </View>
 )}
-<View style={styles.editProfileButton}>
-<Icon name="edit" size={16} color="#fff" />
-</View>
+<View style={styles.avatarRing} />
 </TouchableOpacity>
-<View style={styles.profileInfo}>
-<Text style={styles.profileName}>{user.name}</Text>
-<Text style={styles.profileEmail}>{user.email}</Text>
-<Text style={styles.profileJoinDate}>Member since {new Date().getFullYear()}</Text>
-<View style={styles.statsContainer}>
-<View style={styles.statItem}>
-<Text style={styles.statNumber}>{user.followersCount}</Text>
-<Text style={styles.statLabel}>Followers</Text>
+
+<Text style={styles.heroName}>{user.name}</Text>
+<Text style={styles.heroEmail}>{user.email}</Text>
+<Text style={styles.heroSince}>Member since {new Date().getFullYear()}</Text>
+
+<View style={styles.pillsRow}>
+<View style={styles.pill}>
+<Icon name="users" size={14} color={UI.accent} />
+<Text style={styles.pillTxt}>{user.followersCount} Followers</Text>
 </View>
-<View style={styles.statItem}>
-<Text style={styles.statNumber}>{user.followingCount}</Text>
-<Text style={styles.statLabel}>Following</Text>
+<View style={styles.pill}>
+<Icon name="user-check" size={14} color={UI.violet} />
+<Text style={styles.pillTxt}>{user.followingCount} Following</Text>
+</View>
+{meData?.me?.hasPremiumAccess && (
+<View style={[styles.pill, { borderColor: UI.gold, backgroundColor: '#FFF8E1' }]}>
+<Icon name="star" size={14} color={UI.gold} />
+<Text style={[styles.pillTxt, { color: '#B8860B' }]}>Premium</Text>
+</View>
+)}
 </View>
 </View>
 </View>
+{/* Actions */}
+<View style={styles.sectionCard}>
+<Text style={styles.sectionTitle}>Actions</Text>
+
+<TouchableOpacity style={styles.rowItem} onPress={() => navigateTo?.('stock')}>
+<View style={[styles.rowIcon, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}>
+<Icon name="edit" size={16} color={UI.success} />
 </View>
-{/* Profile Actions */}
-<View style={styles.profileActions}>
-<TouchableOpacity 
-style={styles.actionButton}
-onPress={() => navigateTo?.('stock')}
->
-<Icon name="edit" size={20} color="#34C759" />
-<Text style={styles.actionButtonText}>Manage Stocks</Text>
-<Icon name="chevron-right" size={16} color="#C7C7CC" style={styles.actionArrow} />
+<Text style={styles.rowText}>Manage Stocks</Text>
+<Icon name="chevron-right" size={18} color="#CBD5E1" />
 </TouchableOpacity>
-<TouchableOpacity 
-style={styles.actionButton}
-onPress={() => navigateTo?.('home')}
->
-<Icon name="settings" size={20} color="#007AFF" />
-<Text style={styles.actionButtonText}>News Preferences</Text>
-<Icon name="chevron-right" size={16} color="#C7C7CC" style={styles.actionArrow} />
+
+<TouchableOpacity style={styles.rowItem} onPress={() => navigateTo?.('home')}>
+<View style={[styles.rowIcon, { backgroundColor: '#F0F9FF', borderColor: '#BAE6FD' }]}>
+<Icon name="settings" size={16} color={UI.accent} />
+</View>
+<Text style={styles.rowText}>News Preferences</Text>
+<Icon name="chevron-right" size={18} color="#CBD5E1" />
 </TouchableOpacity>
-<TouchableOpacity 
-style={styles.actionButton}
-onPress={() => navigateTo?.('social')}
->
-<Icon name="help-circle" size={20} color="#FF9500" />
-<Text style={styles.actionButtonText}>Discussion Hub</Text>
-<Icon name="chevron-right" size={16} color="#C7C7CC" style={styles.actionArrow} />
+
+<TouchableOpacity style={styles.rowItem} onPress={() => navigateTo?.('social')}>
+<View style={[styles.rowIcon, { backgroundColor: '#FFF7ED', borderColor: '#FED7AA' }]}>
+<Icon name="message-circle" size={16} color={UI.warn} />
+</View>
+<Text style={styles.rowText}>Discussion Hub</Text>
+<Icon name="chevron-right" size={18} color="#CBD5E1" />
 </TouchableOpacity>
-<TouchableOpacity 
-style={styles.actionButton}
-onPress={() => navigateTo?.('onboarding')}
->
-<Icon name="user-plus" size={20} color="#AF52DE" />
-<Text style={styles.actionButtonText}>Update Investment Profile</Text>
-<Icon name="chevron-right" size={16} color="#C7C7CC" style={styles.actionArrow} />
+
+<TouchableOpacity style={styles.rowItem} onPress={() => navigateTo?.('onboarding')}>
+<View style={[styles.rowIcon, { backgroundColor: '#F5F3FF', borderColor: '#DDD6FE' }]}>
+<Icon name="user-plus" size={16} color={UI.violet} />
+</View>
+<Text style={styles.rowText}>Update Investment Profile</Text>
+<Icon name="chevron-right" size={18} color="#CBD5E1" />
 </TouchableOpacity>
-<TouchableOpacity 
-style={[styles.actionButton, styles.premiumButton]}
-onPress={() => navigateTo?.('premium-analytics')}
->
-<Icon name="star" size={20} color="#FFD700" />
-<Text style={[styles.actionButtonText, styles.premiumButtonText]}>Premium Analytics</Text>
-<Icon name="chevron-right" size={16} color="#FFD700" style={styles.actionArrow} />
+
+<TouchableOpacity style={styles.rowItem} onPress={() => navigateTo?.('premium-analytics')}>
+<View style={[styles.rowIcon, { backgroundColor: '#FFF8E1', borderColor: '#FFE58F' }]}>
+<Icon name="star" size={16} color={UI.gold} />
+</View>
+<Text style={[styles.rowText, { color: '#B8860B' }]}>Premium Analytics</Text>
+<Icon name="chevron-right" size={18} color={UI.gold} />
 </TouchableOpacity>
 </View>
-{/* Profile Stats */}
-<View style={styles.profileStats}>
-<TouchableOpacity 
-style={styles.statCard}
+{/* Key Metrics */}
+<View style={styles.sectionCard}>
+<Text style={styles.sectionTitle}>Overview</Text>
+
+<View style={styles.tileRow}>
+<TouchableOpacity
+style={[styles.tile, shadow]}
 onPress={() => navigateTo?.('portfolio-management')}
 disabled={portfoliosLoading}
+activeOpacity={0.9}
 >
-<Icon name="trending-up" size={24} color="#34C759" />
-<Text style={styles.statCardTitle}>Portfolio Value</Text>
-{portfoliosLoading || watchlistLoading ? (
-<View style={styles.loadingValue}>
-<Icon name="refresh-cw" size={16} color="#C7C7CC" style={styles.spinningIcon} />
-<Text style={styles.loadingValueText}>Loading...</Text>
+<View style={[styles.tileIcon, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}>
+<Icon name="trending-up" size={18} color={UI.success} />
 </View>
+<Text style={styles.tileLabel}>Portfolio Value</Text>
+{portfoliosLoading || watchlistLoading ? (
+<Text style={styles.tileValueMuted}>Loading…</Text>
 ) : (
-<Text style={styles.statCardValue}>
+<Text style={[styles.tileValue, { color: UI.success }]}>
 ${portfolioValue && portfolioValue > 0 ? portfolioValue.toLocaleString() : '0.00'}
 </Text>
 )}
-<Text style={styles.statCardSubtitle}>
-{portfolioValue > 0 ? 'Based on your saved portfolio' : 'Add stocks to your portfolio to see value'}
-</Text>
-<View style={styles.statCardArrow}>
-<Icon name="chevron-right" size={16} color="#C7C7CC" />
-</View>
+<Icon style={styles.tileChevron} name="chevron-right" size={16} color="#CBD5E1" />
 </TouchableOpacity>
-<TouchableOpacity 
-style={styles.statCard}
+
+<TouchableOpacity
+style={[styles.tile, shadow]}
 onPress={() => navigateTo?.('portfolio-management')}
 disabled={portfoliosLoading}
+activeOpacity={0.9}
 >
-<Icon name="crosshair" size={24} color="#007AFF" />
-<Text style={styles.statCardTitle}>Portfolios</Text>
+<View style={[styles.tileIcon, { backgroundColor: '#EEF2FF', borderColor: '#C7D2FE' }]}>
+<Icon name="crosshair" size={18} color={UI.violet} />
+</View>
+<Text style={styles.tileLabel}>Portfolios</Text>
 {portfoliosLoading ? (
-<View style={styles.loadingValue}>
-<Icon name="refresh-cw" size={16} color="#C7C7CC" style={styles.spinningIcon} />
-<Text style={styles.loadingValueText}>Loading...</Text>
-</View>
+<Text style={styles.tileValueMuted}>Loading…</Text>
 ) : (
-<Text style={styles.statCardValue}>{investmentGoals}</Text>
+<Text style={[styles.tileValue, { color: UI.violet }]}>{investmentGoals}</Text>
 )}
-<Text style={styles.statCardSubtitle}>
-{investmentGoals > 0 ? 'Active portfolios' : 'Create your first portfolio'}
-</Text>
-<View style={styles.statCardArrow}>
-<Icon name="chevron-right" size={16} color="#C7C7CC" />
-</View>
+<Icon style={styles.tileChevron} name="chevron-right" size={16} color="#CBD5E1" />
 </TouchableOpacity>
 </View>
+</View>
 {/* My Portfolios */}
-<View style={styles.portfolioHoldings}>
+<View style={styles.sectionCard}>
 <Text style={styles.sectionTitle}>My Portfolios</Text>
+
 {portfoliosLoading ? (
-<View style={styles.loadingContainer}>
-<Icon name="refresh-cw" size={24} color="#C7C7CC" style={styles.spinningIcon} />
-<Text style={styles.loadingText}>Loading portfolios...</Text>
+<View style={styles.loadingBox}>
+<Icon name="refresh-cw" size={20} color="#A3A3A3" />
+<Text style={styles.loadingBoxTxt}>Loading portfolios…</Text>
 </View>
-) : portfoliosData?.myPortfolios?.portfolios && portfoliosData.myPortfolios.portfolios.length > 0 ? (
-portfoliosData.myPortfolios.portfolios.map((portfolio: any, index: number) => (
-<View key={portfolio.name || `portfolio-${index}`} style={styles.portfolioCard}>
-<View style={styles.portfolioHeader}>
-<Text style={styles.portfolioName}>{portfolio.name}</Text>
-<Text style={styles.portfolioValue}>
-${portfolio.totalValue ? portfolio.totalValue.toLocaleString() : '0.00'}
-</Text>
+) : portfoliosData?.myPortfolios?.totalPortfolios > 0 ? (
+(portfoliosData.myPortfolios.portfolios.length > 0
+? portfoliosData.myPortfolios.portfolios
+: [{ name: 'My Portfolio', totalValue: portfoliosData?.myPortfolios?.totalValue, holdings: [] }]
+).map((portfolio: any, index: number) => (
+<View key={portfolio.name || `portfolio-${index}`} style={[styles.portCard, shadow]}>
+<View style={styles.portHeader}>
+<Text style={styles.portName}>{portfolio.name}</Text>
+<Text style={styles.portVal}>${portfolio.totalValue ? portfolio.totalValue.toLocaleString() : '0.00'}</Text>
 </View>
-<View style={styles.portfolioStats}>
-<Text style={styles.portfolioStatsText}>
-{portfolio.holdingsCount} holdings
-</Text>
+
+{portfolio.holdings?.length ? (
+<>
+{portfolio.holdings.slice(0, 3).map((h: any, i: number) => (
+<View key={h.id || `h-${i}`} style={styles.holdingRow}>
+<View style={styles.tickerBadge}>
+<Text style={styles.tickerBadgeTxt}>{h.stock.symbol}</Text>
 </View>
-{portfolio.holdings && portfolio.holdings.length > 0 && (
-<View style={styles.holdingsList}>
-{portfolio.holdings.slice(0, 3).map((holding: any, holdingIndex: number) => (
-<View key={holding.id || `holding-${holdingIndex}`} style={styles.holdingItem}>
-<View style={styles.holdingInfo}>
-<Text style={styles.stockSymbol}>{holding.stock.symbol}</Text>
-<Text style={styles.stockName}>{holding.stock.companyName}</Text>
+<View style={{ flex: 1 }}>
+<Text style={styles.holdingName}>{h.stock.companyName}</Text>
+<Text style={styles.holdingMeta}>{h.shares} shares</Text>
 </View>
-<View style={styles.holdingDetails}>
-<Text style={styles.sharesText}>{holding.shares} shares</Text>
-<Text style={styles.priceText}>
-${holding.totalValue && holding.totalValue > 0 ? holding.totalValue.toLocaleString() : '0.00'}
-</Text>
-</View>
+<Text style={styles.holdingValue}>${h.totalValue && h.totalValue > 0 ? h.totalValue.toLocaleString() : '0.00'}</Text>
 </View>
 ))}
 {portfolio.holdings.length > 3 && (
-<Text style={styles.moreHoldingsText}>
-+{portfolio.holdings.length - 3} more holdings
-</Text>
+<Text style={styles.moreText}>+{portfolio.holdings.length - 3} more holdings</Text>
 )}
-</View>
+</>
+) : (
+<Text style={styles.emptyHint}>No holdings yet</Text>
 )}
 </View>
 ))
 ) : (
-<View style={styles.emptyPortfolioContainer}>
-<Icon name="briefcase" size={48} color="#C7C7CC" />
-<Text style={styles.emptyPortfolioTitle}>No Portfolios Yet</Text>
-<Text style={styles.emptyPortfolioSubtitle}>
-Create your first portfolio to start tracking your investments
-</Text>
-<TouchableOpacity 
-style={styles.createPortfolioButton}
-onPress={() => navigateTo?.('ai-portfolio')}
->
+<View style={styles.emptyBox}>
+<Icon name="briefcase" size={40} color="#C7C7CC" />
+<Text style={styles.emptyTitle}>No Portfolios Yet</Text>
+<Text style={styles.emptySub}>Create your first portfolio to start tracking your investments</Text>
+<TouchableOpacity style={styles.ctaBtn} onPress={() => navigateTo?.('ai-portfolio')}>
 <Icon name="plus" size={16} color="#fff" />
-<Text style={styles.createPortfolioButtonText}>Create Portfolio</Text>
+<Text style={styles.ctaBtnTxt}>Create Portfolio</Text>
 </TouchableOpacity>
 </View>
 )}
 </View>
-{/* Watchlist Stocks */}
-<View style={styles.portfolioHoldings}>
-<Text style={styles.sectionTitle}>Watchlist Stocks</Text>
+{/* Watchlist */}
+<View style={styles.sectionCard}>
+<Text style={styles.sectionTitle}>Watchlist</Text>
+
 {watchlistLoading ? (
-<View style={styles.loadingContainer}>
-<Icon name="refresh-cw" size={24} color="#C7C7CC" style={styles.spinningIcon} />
-<Text style={styles.loadingText}>Loading watchlist...</Text>
+<View style={styles.loadingBox}>
+<Icon name="refresh-cw" size={20} color="#A3A3A3" />
+<Text style={styles.loadingBoxTxt}>Loading watchlist…</Text>
 </View>
-) : watchlistData?.myWatchlist && watchlistData.myWatchlist.length > 0 ? (
-watchlistData.myWatchlist.map((watchlistItem: any) => (
-<View key={watchlistItem.id} style={styles.portfolioCard}>
-<View style={styles.portfolioHeader}>
-<Text style={styles.stockSymbol}>{watchlistItem.stock.symbol}</Text>
-<Text style={styles.portfolioDate}>
-Added {new Date(watchlistItem.addedAt).toLocaleDateString()}
-</Text>
+) : watchlistData?.myWatchlist?.length ? (
+watchlistData.myWatchlist.map((w: any) => (
+<View key={w.id} style={[styles.watchRow, shadow]}>
+<View style={styles.tickerBadge}>
+<Text style={styles.tickerBadgeTxt}>{w.stock.symbol}</Text>
 </View>
-<View style={styles.holdingItem}>
-<View style={styles.holdingInfo}>
-<Text style={styles.stockName}>{watchlistItem.stock.companyName}</Text>
-<Text style={styles.stockNotes}>
-{watchlistItem.notes || 'No notes added'}
-</Text>
+<View style={{ flex: 1 }}>
+<Text style={styles.holdingName}>{w.stock.companyName}</Text>
+<Text style={styles.holdingMeta}>Added {new Date(w.addedAt).toLocaleDateString()}</Text>
+<Text style={styles.noteTxt}>{w.notes || 'No notes added'}</Text>
 </View>
-<View style={styles.holdingDetails}>
-<Text style={styles.priceText}>${watchlistItem.stock.currentPrice}</Text>
-{watchlistItem.targetPrice && (
-<Text style={styles.targetPriceText}>
-Target: ${watchlistItem.targetPrice}
-</Text>
-)}
-</View>
+<View style={{ alignItems: 'flex-end' }}>
+<Text style={styles.holdingValue}>${w.stock.currentPrice}</Text>
+{w.targetPrice && <Text style={styles.targetTxt}>Target ${w.targetPrice}</Text>}
 </View>
 </View>
 ))
 ) : (
-<View style={styles.emptyPortfolioContainer}>
-<Icon name="eye" size={48} color="#C7C7CC" />
-<Text style={styles.emptyPortfolioTitle}>No Watchlist Stocks</Text>
-<Text style={styles.emptyPortfolioSubtitle}>
-Add stocks to your watchlist to start tracking their performance
-</Text>
-<TouchableOpacity 
-style={styles.createPortfolioButton}
-onPress={() => navigateTo?.('stock')}
->
+<View style={styles.emptyBox}>
+<Icon name="eye" size={40} color="#C7C7CC" />
+<Text style={styles.emptyTitle}>No Watchlist Stocks</Text>
+<Text style={styles.emptySub}>Add stocks to your watchlist to start tracking performance</Text>
+<TouchableOpacity style={styles.ctaBtn} onPress={() => navigateTo?.('stock')}>
 <Icon name="plus" size={16} color="#fff" />
-<Text style={styles.createPortfolioButtonText}>Add Stocks</Text>
+<Text style={styles.ctaBtnTxt}>Add Stocks</Text>
 </TouchableOpacity>
 </View>
 )}
 </View>
 {/* Quick Actions */}
-<View style={styles.quickActions}>
+<View style={styles.sectionCard}>
 <Text style={styles.sectionTitle}>Quick Actions</Text>
 <View style={styles.quickActionsGrid}>
 <TouchableOpacity 
@@ -520,35 +544,17 @@ onPress={() => navigateTo?.('ai-portfolio')}
 );
 };
 const styles = StyleSheet.create({
-container: {
-flex: 1,
-backgroundColor: '#F2F2F7',
-},
+container: { flex: 1, backgroundColor: UI.bg },
+
+// Header (keep yours; unchanged)
 header: {
-flexDirection: 'row',
-justifyContent: 'space-between',
-alignItems: 'center',
-paddingHorizontal: 20,
-paddingVertical: 16,
-backgroundColor: '#FFFFFF',
-borderBottomWidth: 1,
-borderBottomColor: '#E5E5EA',
+flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+paddingHorizontal: 20, paddingVertical: 16, backgroundColor: UI.card,
+borderBottomWidth: 1, borderBottomColor: UI.border,
 },
-headerLeft: {
-flexDirection: 'row',
-alignItems: 'center',
-gap: 16,
-},
-headerRight: {
-flexDirection: 'row',
-alignItems: 'center',
-gap: 12,
-},
-headerTitle: {
-fontSize: 20,
-fontWeight: '700',
-color: '#1C1C1E',
-},
+headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+headerRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+headerTitle: { fontSize: 20, fontWeight: '700', color: UI.text },
 refreshButton: {
 padding: 8,
 borderRadius: 20,
@@ -571,173 +577,124 @@ fontSize: 14,
 fontWeight: '600',
 color: '#ff4757',
 },
-content: {
-flex: 1,
+
+content: { flex: 1 },
+
+/* --- HERO --- */
+heroWrap: { backgroundColor: UI.bg },
+heroTop: {
+height: 80,
+backgroundColor: UI.accent,
 },
-profileHeader: {
-backgroundColor: '#FFFFFF',
-paddingHorizontal: 20,
-paddingVertical: 24,
-alignItems: 'center',
-borderBottomWidth: 1,
-borderBottomColor: '#E5E5EA',
-},
-profileImageContainer: {
-position: 'relative',
-marginBottom: 16,
-},
-profileImage: {
-width: 100,
-height: 100,
-borderRadius: 50,
-},
-profileImagePlaceholder: {
-width: 100,
-height: 100,
-borderRadius: 50,
-backgroundColor: '#34C759',
-justifyContent: 'center',
-alignItems: 'center',
-},
-profileImageText: {
-fontSize: 36,
-fontWeight: '700',
-color: '#FFFFFF',
-},
-editProfileButton: {
-position: 'absolute',
-bottom: 0,
-right: 0,
-backgroundColor: '#34C759',
-width: 32,
-height: 32,
-borderRadius: 16,
-justifyContent: 'center',
-alignItems: 'center',
-borderWidth: 3,
-borderColor: '#FFFFFF',
-},
-profileInfo: {
-alignItems: 'center',
-},
-profileName: {
-fontSize: 24,
-fontWeight: '700',
-color: '#1C1C1E',
-marginBottom: 4,
-},
-profileEmail: {
-fontSize: 16,
-color: '#8E8E93',
-marginBottom: 8,
-},
-profileJoinDate: {
-fontSize: 14,
-color: '#C7C7CC',
-marginBottom: 20,
-},
-statsContainer: {
-flexDirection: 'row',
-gap: 32,
-marginBottom: 20,
-},
-statItem: {
-alignItems: 'center',
-},
-statNumber: {
-fontSize: 20,
-fontWeight: '700',
-color: '#1C1C1E',
-},
-statLabel: {
-fontSize: 14,
-color: '#8E8E93',
-marginTop: 4,
-},
-profileActions: {
-backgroundColor: '#FFFFFF',
-paddingHorizontal: 20,
-paddingVertical: 16,
-borderBottomWidth: 1,
-borderBottomColor: '#E5E5EA',
-},
-actionButton: {
-flexDirection: 'row',
-alignItems: 'center',
-gap: 12,
-paddingVertical: 16,
-borderBottomWidth: 1,
-borderBottomColor: '#F2F2F7',
-},
-actionButtonText: {
-fontSize: 16,
-color: '#1C1C1E',
-fontWeight: '500',
-flex: 1,
-},
-actionArrow: {
-marginLeft: 'auto',
-},
-profileStats: {
-backgroundColor: '#FFFFFF',
-paddingHorizontal: 20,
-paddingVertical: 16,
-borderBottomWidth: 1,
-borderBottomColor: '#E5E5EA',
-},
-statCard: {
-backgroundColor: '#F8F9FA',
-borderRadius: 12,
+heroCard: {
+marginTop: -40,
+marginHorizontal: 16,
+backgroundColor: UI.card,
+borderRadius: UI.radius,
 padding: 16,
-marginBottom: 12,
 alignItems: 'center',
+borderWidth: 1,
+borderColor: UI.border,
 },
-statCardTitle: {
-fontSize: 16,
-fontWeight: '600',
-color: '#1C1C1E',
-marginTop: 8,
-marginBottom: 4,
+avatarWrap: { width: 88, height: 88, borderRadius: 44, overflow: 'hidden', marginTop: -56, marginBottom: 8 },
+avatarImg: { width: '100%', height: '100%' },
+avatarFallback: { flex: 1, backgroundColor: UI.violet, alignItems: 'center', justifyContent: 'center' },
+avatarFallbackTxt: { fontSize: 36, color: '#fff', fontWeight: '800' },
+avatarRing: {
+position: 'absolute', inset: 0, borderRadius: 44,
+borderWidth: 3, borderColor: '#FFFFFF99',
 },
-statCardValue: {
-fontSize: 24,
-fontWeight: '700',
-color: '#34C759',
-marginBottom: 4,
+heroName: { fontSize: 20, fontWeight: '800', color: UI.text, marginTop: 4 },
+heroEmail: { fontSize: 14, color: UI.sub, marginTop: 2 },
+heroSince: { fontSize: 12, color: '#9CA3AF', marginTop: 2 },
+pillsRow: { flexDirection: 'row', gap: 8, marginTop: 12, flexWrap: 'wrap', justifyContent: 'center' },
+pill: {
+flexDirection: 'row', alignItems: 'center',
+paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999,
+backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: UI.border,
 },
-statCardSubtitle: {
-fontSize: 14,
-color: '#8E8E93',
-textAlign: 'center',
-lineHeight: 20,
+pillTxt: { marginLeft: 6, fontSize: 12, fontWeight: '700', color: UI.text },
+
+/* --- SECTION CARD WRAPPER --- */
+sectionCard: {
+backgroundColor: UI.card,
+marginTop: 16,
+marginHorizontal: 16,
+borderRadius: UI.radius,
+borderWidth: 1,
+borderColor: UI.border,
+padding: 16,
 },
-statCardArrow: {
-position: 'absolute',
-top: 16,
-right: 16,
+sectionTitle: { fontSize: 16, fontWeight: '800', color: UI.text, marginBottom: 12 },
+
+/* --- TILES --- */
+tileRow: { flexDirection: 'row', gap: 12 },
+tile: {
+flex: 1, backgroundColor: '#F9FAFB', borderRadius: 14, borderWidth: 1, borderColor: UI.border,
+padding: 14, position: 'relative',
 },
-loadingValue: {
-flexDirection: 'row',
-alignItems: 'center',
-gap: 8,
-marginBottom: 4,
+tileIcon: {
+position: 'absolute', top: 10, right: 10, padding: 8, borderRadius: 10,
+borderWidth: 1,
 },
-loadingValueText: {
-fontSize: 16,
-color: '#C7C7CC',
-fontWeight: '500',
+tileLabel: { marginTop: 8, fontSize: 12, color: UI.sub, fontWeight: '600' },
+tileValue: { marginTop: 2, fontSize: 22, fontWeight: '800' },
+tileValueMuted: { marginTop: 2, fontSize: 16, color: '#9CA3AF', fontWeight: '700' },
+tileChevron: { position: 'absolute', bottom: 10, right: 10 },
+
+/* --- ROW LIST (actions) --- */
+rowItem: {
+flexDirection: 'row', alignItems: 'center',
+paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F3F4F6',
 },
-quickActions: {
-backgroundColor: '#FFFFFF',
-paddingHorizontal: 20,
-paddingVertical: 16,
+rowIcon: {
+width: 32, height: 32, borderRadius: 8, borderWidth: 1,
+alignItems: 'center', justifyContent: 'center', marginRight: 12,
 },
-sectionTitle: {
-fontSize: 18,
-fontWeight: '700',
-color: '#1C1C1E',
-marginBottom: 16,
+rowText: { flex: 1, fontSize: 15, color: UI.text, fontWeight: '600' },
+
+/* --- PORTFOLIO CARD --- */
+portCard: {
+backgroundColor: '#F9FAFB', borderRadius: 14, borderWidth: 1, borderColor: UI.border, padding: 14, marginBottom: 12,
 },
+portHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+portName: { fontSize: 15, fontWeight: '800', color: UI.text },
+portVal: { fontSize: 16, fontWeight: '800', color: UI.success },
+holdingRow: {
+flexDirection: 'row', alignItems: 'center', paddingVertical: 10,
+borderTopWidth: 1, borderTopColor: '#EEF2F7',
+},
+tickerBadge: {
+minWidth: 52, paddingHorizontal: 10, height: 28,
+borderRadius: 999, backgroundColor: '#F1F5F9',
+alignItems: 'center', justifyContent: 'center', marginRight: 10, borderWidth: 1, borderColor: UI.border,
+},
+tickerBadgeTxt: { fontSize: 12, fontWeight: '800', color: UI.text },
+holdingName: { fontSize: 14, fontWeight: '700', color: UI.text },
+holdingMeta: { fontSize: 12, color: UI.sub, marginTop: 2 },
+holdingValue: { fontSize: 14, fontWeight: '800', color: UI.text },
+moreText: { textAlign: 'center', marginTop: 8, fontSize: 12, color: UI.sub, fontStyle: 'italic' },
+emptyHint: { fontSize: 13, color: UI.sub, marginTop: 4 },
+
+/* --- WATCHLIST ROW --- */
+watchRow: {
+flexDirection: 'row', alignItems: 'center',
+backgroundColor: '#FFFFFF', borderRadius: 12, borderWidth: 1, borderColor: UI.border,
+padding: 12, marginBottom: 10,
+},
+noteTxt: { fontSize: 12, color: '#9CA3AF', marginTop: 2, fontStyle: 'italic' },
+targetTxt: { fontSize: 12, color: UI.accent, marginTop: 2, fontWeight: '700' },
+
+/* --- EMPTY / LOADING --- */
+emptyBox: { alignItems: 'center', paddingVertical: 20 },
+emptyTitle: { fontSize: 16, fontWeight: '800', color: UI.text, marginTop: 12 },
+emptySub: { fontSize: 13, color: UI.sub, textAlign: 'center', marginTop: 4 },
+ctaBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: UI.success, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 999, marginTop: 12 },
+ctaBtnTxt: { color: '#fff', fontSize: 14, fontWeight: '800' },
+loadingBox: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8 },
+loadingBoxTxt: { color: '#9CA3AF', fontWeight: '700' },
+
+// Quick Actions (keep existing)
 quickActionsGrid: {
 flexDirection: 'row',
 flexWrap: 'wrap',
@@ -759,6 +716,8 @@ color: '#1C1C1E',
 marginTop: 8,
 textAlign: 'center',
 },
+
+// Loading and Error states
 loadingContainer: {
 flex: 1,
 justifyContent: 'center',
@@ -789,148 +748,20 @@ color: '#8E8E93',
 textAlign: 'center',
 lineHeight: 20,
 },
-portfolioHoldings: {
-backgroundColor: '#FFFFFF',
-paddingHorizontal: 20,
-paddingVertical: 16,
-borderBottomWidth: 1,
-borderBottomColor: '#E5E5EA',
+
+// Debug button
+debugButton: {
+  backgroundColor: '#007AFF',
+  paddingHorizontal: 20,
+  paddingVertical: 12,
+  borderRadius: 8,
+  marginTop: 16,
 },
-portfolioCard: {
-backgroundColor: '#F8F9FA',
-borderRadius: 12,
-padding: 16,
-marginBottom: 12,
-},
-portfolioHeader: {
-flexDirection: 'row',
-justifyContent: 'space-between',
-alignItems: 'center',
-marginBottom: 12,
-},
-portfolioName: {
-fontSize: 16,
-fontWeight: '600',
-color: '#1C1C1E',
-},
-portfolioDate: {
-fontSize: 12,
-color: '#8E8E93',
-},
-holdingItem: {
-flexDirection: 'row',
-justifyContent: 'space-between',
-alignItems: 'center',
-paddingVertical: 8,
-borderBottomWidth: 1,
-borderBottomColor: '#F2F2F7',
-},
-holdingInfo: {
-flex: 1,
-},
-stockSymbol: {
-fontSize: 14,
-fontWeight: '600',
-color: '#1C1C1E',
-},
-stockName: {
-fontSize: 12,
-color: '#8E8E93',
-marginTop: 2,
-},
-holdingDetails: {
-alignItems: 'flex-end',
-},
-sharesText: {
-fontSize: 12,
-color: '#8E8E93',
-},
-priceText: {
-fontSize: 14,
-fontWeight: '600',
-color: '#34C759',
-marginTop: 2,
-},
-noHoldingsText: {
-fontSize: 14,
-color: '#8E8E93',
-textAlign: 'center',
-fontStyle: 'italic',
-},
-emptyPortfolioContainer: {
-alignItems: 'center',
-paddingVertical: 24,
-},
-emptyPortfolioTitle: {
-fontSize: 18,
-fontWeight: '600',
-color: '#1C1C1E',
-marginTop: 16,
-marginBottom: 8,
-},
-emptyPortfolioSubtitle: {
-fontSize: 14,
-color: '#8E8E93',
-textAlign: 'center',
-lineHeight: 20,
-marginBottom: 20,
-},
-createPortfolioButton: {
-flexDirection: 'row',
-alignItems: 'center',
-gap: 8,
-backgroundColor: '#34C759',
-paddingHorizontal: 16,
-paddingVertical: 12,
-borderRadius: 20,
-},
-createPortfolioButtonText: {
-fontSize: 14,
-fontWeight: '600',
-color: '#FFFFFF',
-},
-stockNotes: {
-fontSize: 12,
-color: '#8E8E93',
-marginTop: 2,
-fontStyle: 'italic',
-},
-targetPriceText: {
-fontSize: 12,
-color: '#007AFF',
-marginTop: 2,
-fontWeight: '500',
-},
-portfolioValue: {
-fontSize: 16,
-fontWeight: '700',
-color: '#34C759',
-},
-portfolioStats: {
-marginTop: 8,
-},
-portfolioStatsText: {
-fontSize: 12,
-color: '#8E8E93',
-},
-holdingsList: {
-marginTop: 12,
-},
-moreHoldingsText: {
-fontSize: 12,
-color: '#8E8E93',
-textAlign: 'center',
-marginTop: 8,
-fontStyle: 'italic',
-},
-premiumButton: {
-backgroundColor: '#FFF8E1',
-borderWidth: 1,
-borderColor: '#FFD700',
-},
-premiumButtonText: {
-color: '#B8860B',
-fontWeight: '600',
+debugButtonText: {
+  color: '#FFFFFF',
+  fontSize: 14,
+  fontWeight: '600',
+  textAlign: 'center',
 },
 });
 export default ProfileScreen;

@@ -151,6 +151,61 @@ GRAPHQL_JWT = {
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY') # Set this in environment variable OPENAI_API_KEY
 OPENAI_MODEL = "gpt-3.5-turbo" # Default model to use
 OPENAI_MAX_TOKENS = 1000 # Maximum tokens for responses
+
+# ML Service Configuration
+ML_SERVICE_CONFIG = {
+    'ENABLED': os.getenv('ML_SERVICE_ENABLED', 'True').lower() == 'true',
+    'MODEL_PATH': os.getenv('ML_MODEL_PATH', 'backend/ml_models/'),
+    'CACHE_TIMEOUT': int(os.getenv('ML_CACHE_TIMEOUT', '3600')),  # 1 hour
+    'BATCH_SIZE': int(os.getenv('ML_BATCH_SIZE', '100')),
+    'MAX_CONCURRENT_REQUESTS': int(os.getenv('ML_MAX_CONCURRENT', '10')),
+    'FALLBACK_TO_RULES': os.getenv('ML_FALLBACK_TO_RULES', 'True').lower() == 'true',
+    'LOG_LEVEL': os.getenv('ML_LOG_LEVEL', 'INFO'),
+    'ENABLE_OPTIMIZATION': os.getenv('ML_ENABLE_OPTIMIZATION', 'True').lower() == 'true',
+    'ENABLE_RISK_METRICS': os.getenv('ML_ENABLE_RISK_METRICS', 'True').lower() == 'true',
+    'ENABLE_TRANSACTION_COSTS': os.getenv('ML_ENABLE_TRANSACTION_COSTS', 'True').lower() == 'true',
+}
+
+# Point-in-Time Data Configuration
+POINT_IN_TIME_CONFIG = {
+    'ENABLED': os.getenv('PIT_DATA_ENABLED', 'True').lower() == 'true',
+    'SNAPSHOT_FREQUENCY': os.getenv('PIT_SNAPSHOT_FREQUENCY', 'daily'),  # daily, hourly, real-time
+    'RETENTION_DAYS': int(os.getenv('PIT_RETENTION_DAYS', '90')),
+    'BATCH_SIZE': int(os.getenv('PIT_BATCH_SIZE', '1000')),
+    'ENABLE_CORPORATE_ACTIONS': os.getenv('PIT_ENABLE_CORPORATE_ACTIONS', 'True').lower() == 'true',
+}
+
+# Institutional Features Configuration
+INSTITUTIONAL_CONFIG = {
+    'ENABLED': os.getenv('INSTITUTIONAL_FEATURES_ENABLED', 'True').lower() == 'true',
+    'REQUIRE_AUTHENTICATION': os.getenv('INSTITUTIONAL_REQUIRE_AUTH', 'True').lower() == 'true',
+    'RATE_LIMIT_PER_USER': int(os.getenv('INSTITUTIONAL_RATE_LIMIT', '100')),  # requests per hour
+    'ENABLE_AUDIT_TRAIL': os.getenv('INSTITUTIONAL_ENABLE_AUDIT', 'True').lower() == 'true',
+    'ENABLE_DRY_RUN': os.getenv('INSTITUTIONAL_ENABLE_DRY_RUN', 'True').lower() == 'true',
+    'MAX_UNIVERSE_SIZE': int(os.getenv('INSTITUTIONAL_MAX_UNIVERSE', '2000')),
+    'DEFAULT_CONSTRAINTS': {
+        'max_weight_per_name': float(os.getenv('INST_MAX_WEIGHT_PER_NAME', '0.10')),
+        'max_sector_weight': float(os.getenv('INST_MAX_SECTOR_WEIGHT', '0.30')),
+        'max_turnover': float(os.getenv('INST_MAX_TURNOVER', '0.25')),
+        'min_liquidity_score': float(os.getenv('INST_MIN_LIQUIDITY', '0.0')),
+        'risk_aversion': float(os.getenv('INST_RISK_AVERSION', '5.0')),
+        'cost_aversion': float(os.getenv('INST_COST_AVERSION', '1.0')),
+        'cvar_confidence': float(os.getenv('INST_CVAR_CONFIDENCE', '0.95')),
+        'long_only': os.getenv('INST_LONG_ONLY', 'True').lower() == 'true',
+    }
+}
+
+# Monitoring Configuration
+MONITORING_CONFIG = {
+    'ENABLED': os.getenv('MONITORING_ENABLED', 'True').lower() == 'true',
+    'LOG_LEVEL': os.getenv('MONITORING_LOG_LEVEL', 'INFO'),
+    'ENABLE_METRICS': os.getenv('MONITORING_ENABLE_METRICS', 'True').lower() == 'true',
+    'ENABLE_ALERTS': os.getenv('MONITORING_ENABLE_ALERTS', 'True').lower() == 'true',
+    'METRICS_RETENTION_DAYS': int(os.getenv('MONITORING_RETENTION_DAYS', '30')),
+    'ALERT_EMAIL': os.getenv('MONITORING_ALERT_EMAIL', ''),
+    'SLACK_WEBHOOK': os.getenv('MONITORING_SLACK_WEBHOOK', ''),
+    'HEALTH_CHECK_INTERVAL': int(os.getenv('MONITORING_HEALTH_CHECK_INTERVAL', '60')),  # seconds
+}
 # AlphaVantage API Configuration
 ALPHA_VANTAGE_API_KEY = os.getenv('ALPHA_VANTAGE_API_KEY')
 if not ALPHA_VANTAGE_API_KEY:
@@ -163,14 +218,8 @@ REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', None)
 # Cache Configuration
 CACHES = {
 'default': {
-'BACKEND': 'django_redis.cache.RedisCache',
-'LOCATION': f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}',
-'OPTIONS': {
-'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-'PASSWORD': REDIS_PASSWORD,
-'SOCKET_CONNECT_TIMEOUT': 5,
-'SOCKET_TIMEOUT': 5,
-},
+'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+'LOCATION': 'unique-snowflake',
 'KEY_PREFIX': 'richesreach',
 'TIMEOUT': 300, # 5 minutes default
 }
@@ -199,14 +248,16 @@ STOCK_ANALYSIS_CONFIG = {
 'MAX_CONCURRENT_BATCHES': 3,
 }
 }
-# Celery Configuration
-CELERY_BROKER_URL = f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}'
-CELERY_RESULT_BACKEND = f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}'
+# Celery Configuration (Disabled for local development)
+CELERY_BROKER_URL = 'memory://'
+CELERY_RESULT_BACKEND = 'cache+memory://'
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 # Celery Beat Schedule
+from celery.schedules import crontab
+
 CELERY_BEAT_SCHEDULE = {
 'update-stock-data': {
 'task': 'core.stock_service.update_stock_data_periodic',
@@ -216,13 +267,20 @@ CELERY_BEAT_SCHEDULE = {
 'task': 'core.stock_service.cleanup_old_cache',
 'schedule': 86400.0, # Every day
 },
+"prewarm-universe-2am": {
+    "task": "core.tasks.prewarm_universe",
+    "schedule": crontab(hour=2, minute=0),
+    "options": {"queue": "ml_io"},
+},
+"train-stacking-3am": {
+    "task": "core.tasks.train_stacking_model",
+    "schedule": crontab(hour=3, minute=0),
+    "options": {"queue": "ml_train"},
+},
 }
-# Channels Configuration
+# Channels Configuration (Disabled for local development)
 CHANNEL_LAYERS = {
 'default': {
-'BACKEND': 'channels_redis.core.RedisChannelLayer',
-'CONFIG': {
-"hosts": [f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}'],
-},
+'BACKEND': 'channels.layers.InMemoryChannelLayer',
 },
 }
