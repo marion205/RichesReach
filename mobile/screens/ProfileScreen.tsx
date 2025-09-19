@@ -367,6 +367,30 @@ showsVerticalScrollIndicator={false}
 <Text style={[styles.rowText, { color: '#B8860B' }]}>Premium Analytics</Text>
 <Icon name="chevron-right" size={18} color={UI.gold} />
 </TouchableOpacity>
+
+<TouchableOpacity style={styles.rowItem} onPress={() => navigateTo?.('bank-accounts')}>
+<View style={[styles.rowIcon, { backgroundColor: '#F0F8FF', borderColor: '#BAE6FD' }]}>
+<Icon name="credit-card" size={16} color={UI.accent} />
+</View>
+<Text style={styles.rowText}>Bank Accounts</Text>
+<Icon name="chevron-right" size={18} color="#CBD5E1" />
+</TouchableOpacity>
+
+<TouchableOpacity style={styles.rowItem} onPress={() => navigateTo?.('notifications')}>
+<View style={[styles.rowIcon, { backgroundColor: '#FFF7ED', borderColor: '#FED7AA' }]}>
+<Icon name="bell" size={16} color={UI.warn} />
+</View>
+<Text style={styles.rowText}>Notifications</Text>
+<Icon name="chevron-right" size={18} color="#CBD5E1" />
+</TouchableOpacity>
+
+<TouchableOpacity style={styles.rowItem} onPress={() => navigateTo?.('trading')}>
+<View style={[styles.rowIcon, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}>
+<Icon name="trending-up" size={16} color={UI.success} />
+</View>
+<Text style={styles.rowText}>Trading</Text>
+<Icon name="chevron-right" size={18} color="#CBD5E1" />
+</TouchableOpacity>
 </View>
 {/* Key Metrics */}
 <View style={styles.sectionCard}>

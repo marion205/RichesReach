@@ -228,6 +228,21 @@ Get personalized stock recommendations
 </View>
 </TouchableOpacity>
 <TouchableOpacity 
+style={styles.actionButton}
+onPress={() => navigateTo?.('trading')}
+>
+<View style={styles.actionContent}>
+<Icon name="dollar-sign" size={24} color="#34C759" />
+<View style={styles.actionText}>
+<Text style={styles.actionTitle}>Trading</Text>
+<Text style={styles.actionDescription}>
+Place buy/sell orders and manage your trades
+</Text>
+</View>
+<Icon name="chevron-right" size={20} color="#8E8E93" />
+</View>
+</TouchableOpacity>
+<TouchableOpacity 
 style={[styles.actionButton, { backgroundColor: '#FFF8E1' }]}
 onPress={() => navigateTo?.('premium-analytics')}
 >

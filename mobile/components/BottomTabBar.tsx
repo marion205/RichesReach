@@ -10,6 +10,7 @@ const tabs = [
 { id: 'home', label: 'Home', icon: 'home' },
 { id: 'stock', label: 'Stocks', icon: 'trending-up' },
 { id: 'ai-portfolio', label: 'AI Portfolio', icon: 'cpu' },
+{ id: 'trading', label: 'Trading', icon: 'dollar-sign' },
 { id: 'portfolio', label: 'Portfolio', icon: 'bar-chart-2' },
 { id: 'social', label: 'Discuss', icon: 'users' },
 { id: 'profile', label: 'Profile', icon: 'user' },

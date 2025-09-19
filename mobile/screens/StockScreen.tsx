@@ -7,6 +7,7 @@ import { useApolloClient, gql, useQuery } from '@apollo/client';
 
 import StockCard from '../src/components/StockCard';
 import WatchlistCard, { WatchlistItem } from '../src/components/WatchlistCard';
+import StockChart from '../components/StockChart';
 import { useStockSearch } from '../src/hooks/useStockSearch';
 import { useWatchlist } from '../src/hooks/useWatchlist';
 
@@ -72,6 +73,7 @@ const [searchQuery, setSearchQuery] = useState('');
   const [notes, setNotes] = useState('');
   const [rust, setRust] = useState<any | null>(null);
   const [rustOpen, setRustOpen] = useState(false);
+  const [selectedStock, setSelectedStock] = useState<Stock | null>(null);
   const client = useApolloClient();
   const { stocks, screening } = useStockSearch(searchQuery, false); // Always run the query
   const { data: beginnerData, loading: beginnerLoading, refetch: refetchBeginner, error: beginnerError } =
@@ -176,8 +178,10 @@ const [searchQuery, setSearchQuery] = useState('');
       onPressAdd={() => onPressAdd(item)}
       onPressAnalysis={() => handleRustAnalysis(item.symbol)}
       onPressMetric={showMetricTooltip}
+      onPress={() => setSelectedStock(selectedStock?.symbol === item.symbol ? null : item)}
+      isSelected={selectedStock?.symbol === item.symbol}
     />
-  ), [onPressAdd, handleRustAnalysis, showMetricTooltip]);
+  ), [onPressAdd, handleRustAnalysis, showMetricTooltip, selectedStock]);
 
   const renderWatch = useCallback(({ item }: { item: WatchlistItem }) => (
     <WatchlistCard item={item} onRemove={onRemoveWatchlist} />
@@ -265,6 +269,14 @@ placeholderTextColor="#999"
 </TouchableOpacity>
         ))}
       </View>
+
+      {/* Chart Section - Show for selected stock */}
+      {selectedStock && (
+        <View style={styles.chartSection}>
+          <Text style={styles.chartTitle}>Price Chart</Text>
+          <StockChart symbol={selectedStock.symbol} />
+        </View>
+      )}
 
       {/* List */}
       <FlatList
@@ -549,5 +561,23 @@ searchContainer: {
     fontSize: 16,
     fontWeight: '600',
     color: '#fff',
+  },
+  chartSection: {
+    backgroundColor: '#fff',
+    marginHorizontal: 20,
+    marginVertical: 10,
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  chartTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#000',
+    marginBottom: 12,
   },
 });
