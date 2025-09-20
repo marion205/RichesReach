@@ -34,3 +34,4 @@ yarn-error.log*
 
 # Images/logs you don't want in git (tune as needed)
 *.log
+node_modules/
