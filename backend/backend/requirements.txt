@@ -1,0 +1,51 @@
+# RichesReach AI - Complete Requirements
+# Core Django dependencies
+Django>=4.2.0
+graphene-django>=3.1.0
+django-cors-headers>=4.0.0
+channels>=4.0.0
+channels-redis>=4.1.0
+django-celery-results>=2.5.0
+celery>=5.3.0
+redis>=4.6.0
+# ML and Data Science dependencies
+scikit-learn==1.3.0
+pandas==2.0.3
+numpy==1.23.5
+scipy==1.11.1
+matplotlib>=3.7.0
+seaborn>=0.12.0
+# Time series and forecasting
+statsmodels>=0.14.0
+prophet>=1.1.0
+# Deep learning (optional, for advanced features)
+tensorflow>=2.13.0
+keras>=2.13.0
+# Financial analysis
+yfinance==0.2.18
+ta==0.10.2
+# Portfolio optimization
+cvxpy>=1.3.0
+# Web Framework (for FastAPI endpoints)
+fastapi==0.95.2
+uvicorn[standard]==0.22.0
+# API and data fetching
+requests>=2.31.0
+aiohttp==3.8.5
+httpx==0.24.1
+# AWS SDK
+boto3==1.28.44
+botocore==1.31.44
+# Database
+psycopg2-binary==2.9.7
+redis==4.6.0
+# Monitoring
+prometheus-client==0.17.1
+structlog==23.1.0
+# Environment and configuration
+python-dotenv==1.0.0
+pydantic==1.10.8
+# Development and testing
+pytest==7.4.2
+pytest-django>=4.5.0
+pytest-asyncio==0.21.1

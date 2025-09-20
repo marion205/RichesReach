@@ -1185,6 +1185,111 @@ import re
 from collections import defaultdict, deque
 from collections import Counter as CollectionsCounter
 import threading
+
+# === Technical Indicators (Phase 3) ===
+
+# === Options Trading (Phase 3) ===
+# Simple in-memory idempotency cache (TTL seconds)
+_idem = {}
+_IDEM_TTL = 600
+def _idem_ok(key):
+    now = time.time()
+    # purge stale
+    stale = [k for k,(ts,_) in _idem.items() if now - ts > _IDEM_TTL]
+    for k in stale: _idem.pop(k, None)
+    if key in _idem: return False, _idem[key][1]
+    return True, None
+def _idem_set(key, result): _idem[key] = (time.time(), result)
+
+# === Research Hub (Phase 3) ===
+# Simple TTL cache for research data
+_research_cache = {}  # {symbol: (timestamp, payload)}
+_RESEARCH_TTL = 300
+def _cache_get(key):
+    v = _research_cache.get(key)
+    if not v: return None
+    ts, payload = v
+    if time.time() - ts > _RESEARCH_TTL:
+        _research_cache.pop(key, None); return None
+    return payload
+def _cache_set(key, payload): _research_cache[key] = (time.time(), payload)
+def sma(values, n):
+    """Simple Moving Average - lightweight, no external deps"""
+    out, s = [], 0.0
+    for i, v in enumerate(values):
+        s += v
+        if i >= n: s -= values[i-n]
+        out.append(s/n if i >= n-1 else None)
+    return out
+
+def ema(values, n):
+    """Exponential Moving Average - lightweight, no external deps"""
+    out, k = [], 2/(n+1)
+    e = None
+    for v in values:
+        e = v if e is None else (v - e)*k + e
+        out.append(e)
+    return [None]*(n-1) + out[n-1:]  # align with window
+
+def rsi(closes, n=14):
+    """Relative Strength Index - Wilder's smoothing"""
+    gains, losses = [0.0], [0.0]
+    for i in range(1, len(closes)):
+        ch = closes[i] - closes[i-1]
+        gains.append(max(ch, 0.0))
+        losses.append(-min(ch, 0.0))
+    # Wilder's smoothing
+    rsis, avg_g, avg_l = [], None, None
+    for i in range(len(closes)):
+        if i == 0: rsis.append(None); continue
+        g, l = gains[i], losses[i]
+        if i < n: rsis.append(None); continue
+        if i == n:
+            avg_g = sum(gains[1:n+1]) / n
+            avg_l = sum(losses[1:n+1]) / n
+        else:
+            avg_g = (avg_g*(n-1) + g) / n
+            avg_l = (avg_l*(n-1) + l) / n
+        rs = (avg_g / avg_l) if avg_l != 0 else 999
+        rsis.append(100 - 100/(1+rs))
+    return rsis
+
+def macd(closes, fast=12, slow=26, signal=9):
+    """MACD with signal line and histogram"""
+    e_fast = ema(closes, fast)
+    e_slow = ema(closes, slow)
+    line = []
+    for i in range(len(closes)):
+        a = e_fast[i] if i < len(e_fast) else None
+        b = e_slow[i] if i < len(e_slow) else None
+        line.append((a - b) if (a is not None and b is not None) else None)
+    # signal EMA on valid MACD values
+    macd_vals = [x for x in line if x is not None]
+    sig_vals = ema(macd_vals, signal)
+    signal_line, hist = [], []
+    j = 0
+    for i, m in enumerate(line):
+        if m is None:
+            signal_line.append(None); hist.append(None)
+        else:
+            s = sig_vals[j]; j += 1
+            signal_line.append(s); hist.append(m - s)
+    return line, signal_line, hist
+
+def bollinger(closes, n=20, k=2):
+    """Bollinger Bands - upper, middle (SMA), lower"""
+    sma_vals = sma(closes, n)
+    out_u, out_m, out_l = [], [], []
+    for i in range(len(closes)):
+        if i < n-1:
+            out_u.append(None); out_m.append(None); out_l.append(None)
+            continue
+        window = closes[i-n+1:i+1]
+        m = sma_vals[i]
+        var = sum((x - m)**2 for x in window) / n
+        std = var**0.5
+        out_u.append(m + k*std); out_m.append(m); out_l.append(m - k*std)
+    return out_u, out_m, out_l
 import random
 
 @app.middleware("http")
@@ -2793,10 +2898,181 @@ async def graphql_endpoint(request_data: dict):
         }
         return {"data": response_data}
 
-    # Stock chart data (query)
+    # Options Trading (Phase 3) - Place/Cancel/Get Orders
+    if "placeOptionOrder" in fields:
+        inp = variables.get("input") or {}
+        # fallback parse if needed...
+        idem_key = inp.get("idempotencyKey") or f"{inp.get('symbol')}-{inp.get('expiration')}-{inp.get('strike')}-{inp.get('side')}-{inp.get('quantity')}-{inp.get('orderType')}"
+        ok, cached = _idem_ok(idem_key)
+        if not ok:
+            return {"data": {"placeOptionOrder": { "success": True, "cached": True, "order": cached, "__typename": "PlaceOrderResult"}}}
+        # basic validation
+        required = ["symbol","optionType","strike","expiration","side","quantity","orderType","timeInForce"]
+        miss = [k for k in required if inp.get(k) in (None,"")]
+        if miss:
+            return {"errors":[{"message": f"Missing fields: {', '.join(miss)}"}]}
+
+        try:
+            # Translate into your trading service call
+            if inp["orderType"] == "MARKET":
+                o = await trading_service.place_market_order(
+                    symbol=inp["symbol"], option_type=inp["optionType"], strike=float(inp["strike"]),
+                    expiration=inp["expiration"], side=inp["side"], qty=int(inp["quantity"]),
+                    tif=inp["timeInForce"]
+                )
+            elif inp["orderType"] == "LIMIT":
+                if not inp.get("limitPrice"): raise ValueError("limitPrice required")
+                o = await trading_service.place_limit_order(
+                    symbol=inp["symbol"], option_type=inp["optionType"], strike=float(inp["strike"]),
+                    expiration=inp["expiration"], side=inp["side"], qty=int(inp["quantity"]),
+                    limit_price=float(inp["limitPrice"]), tif=inp["timeInForce"]
+                )
+            elif inp["orderType"] == "STOP":
+                if not inp.get("stopPrice"): raise ValueError("stopPrice required")
+                o = await trading_service.place_stop_loss_order(
+                    symbol=inp["symbol"], option_type=inp["optionType"], strike=float(inp["strike"]),
+                    expiration=inp["expiration"], side=inp["side"], qty=int(inp["quantity"]),
+                    stop_price=float(inp["stopPrice"]), tif=inp["timeInForce"]
+                )
+            else:
+                raise ValueError("Unsupported orderType")
+
+            order = {
+                "id": getattr(o, "id", f"ord_{int(time.time()*1000)}"),
+                "status": getattr(o, "status", "NEW"),
+                "symbol": inp["symbol"], "optionType": inp["optionType"],
+                "strike": float(inp["strike"]), "expiration": inp["expiration"],
+                "side": inp["side"], "orderType": inp["orderType"], "timeInForce": inp["timeInForce"],
+                "limitPrice": inp.get("limitPrice"), "stopPrice": inp.get("stopPrice"),
+                "quantity": int(inp["quantity"]), "createdAt": datetime.now().isoformat()
+            }
+            _idem_set(idem_key, order)
+            return {"data": {"placeOptionOrder": { "success": True, "cached": False, "order": order, "__typename":"PlaceOrderResult"}}}
+        except Exception as e:
+            logger.warning(f"placeOptionOrder failed: {e}")
+            return {"errors":[{"message": f"Order failed: {e}"}]}
+
+    if "cancelOrder" in fields:
+        oid = variables.get("orderId")
+        if not oid: return {"errors":[{"message":"orderId required"}]}
+        ok = await trading_service.cancel_order(oid)
+        return {"data": {"cancelOrder": {"success": bool(ok), "orderId": oid, "__typename":"CancelOrderResult"}}}
+
+    if "orders" in fields:
+        status = variables.get("status")  # NEW/FILLED/CANCELLED/ALL
+        arr = await trading_service.get_orders(status=status or None, limit=50)
+        # normalize shape
+        norm = []
+        for o in arr or []:
+            norm.append({
+                "id": getattr(o,"id",""),
+                "status": getattr(o,"status",""),
+                "symbol": getattr(o,"symbol",""),
+                "optionType": getattr(o,"option_type",""),
+                "strike": getattr(o,"strike",0.0),
+                "expiration": getattr(o,"expiration",""),
+                "side": getattr(o,"side",""),
+                "orderType": getattr(o,"order_type",""),
+                "timeInForce": getattr(o,"time_in_force",""),
+                "limitPrice": getattr(o,"limit_price",None),
+                "stopPrice": getattr(o,"stop_price",None),
+                "quantity": getattr(o,"qty",0),
+                "createdAt": getattr(o,"created_at",datetime.now().isoformat()),
+                "__typename":"Order"
+            })
+        return {"data":{"orders": norm}}
+
+    # Research Hub (Phase 3) - Comprehensive research data
+    if "researchHub" in fields:
+        sym = (variables.get("symbol") or "").upper()
+        if not sym: return {"errors":[{"message":"symbol required"}]}
+        cached = _cache_get(sym)
+        if cached: return {"data": {"researchHub": cached}}
+
+        # Mock data service calls (replace with real services)
+        prof = {
+            "companyName": f"{sym} Inc.",
+            "sector": "Technology",
+            "marketCap": 1000000000000 + hash(sym) % 500000000000,
+            "country": "USA",
+            "website": f"https://{sym.lower()}.com"
+        }
+        quote = {
+            "currentPrice": 150 + hash(sym) % 100,
+            "change": (random.random() - 0.5) * 10,
+            "changePercent": (random.random() - 0.5) * 5,
+            "high": 160 + hash(sym) % 20,
+            "low": 140 + hash(sym) % 20,
+            "volume": 1000000 + hash(sym) % 5000000
+        }
+        tech = {
+            "rsi": 30 + hash(sym) % 40,
+            "macd": (random.random() - 0.5) * 2,
+            "macdhistogram": (random.random() - 0.5) * 1,
+            "movingAverage50": quote["currentPrice"] + (random.random() - 0.5) * 5,
+            "movingAverage200": quote["currentPrice"] + (random.random() - 0.5) * 10,
+            "supportLevel": quote["currentPrice"] * 0.95,
+            "resistanceLevel": quote["currentPrice"] * 1.05,
+            "impliedVolatility": 0.2 + random.random() * 0.3
+        }
+        news = {
+            "sentiment_label": random.choice(["BULLISH", "BEARISH", "NEUTRAL"]),
+            "sentiment_score": (random.random() - 0.5) * 2,
+            "article_count": 10 + hash(sym) % 50,
+            "confidence": 0.6 + random.random() * 0.3
+        }
+        econ = {
+            "vix": 15 + random.random() * 10,
+            "market_sentiment": random.choice(["RISK_ON", "RISK_OFF", "NEUTRAL"]),
+            "risk_appetite": 0.3 + random.random() * 0.4
+        }
+        regime = {
+            "market_regime": random.choice(["BULL", "BEAR", "SIDEWAYS"]),
+            "confidence": 0.7 + random.random() * 0.2,
+            "recommended_strategy": random.choice(["GROWTH", "VALUE", "MOMENTUM", "DEFENSIVE"])
+        }
+        # quick peers (mock)
+        peers = ["MSFT","GOOGL","AMZN"] if sym=="AAPL" else ["AAPL","MSFT","NVDA"]
+
+        payload = {
+          "symbol": sym,
+          "company": {
+            "name": prof.get("companyName",""),
+            "sector": prof.get("sector",""),
+            "marketCap": prof.get("marketCap",0),
+            "country": prof.get("country",""),
+            "website": prof.get("website","")
+          },
+          "quote": quote,
+          "technicals": tech,
+          "sentiment": news,
+          "macro": econ,
+          "marketRegime": regime,
+          "valuation": {
+            "pe": tech.get("pe", None) or None,
+            "pb": None,
+            "dividendYield": None
+          },
+          "optionsSnapshot": {
+            "impliedVolatility": tech.get("impliedVolatility", None),
+            "support": tech.get("supportLevel"),
+            "resistance": tech.get("resistanceLevel")
+          },
+          "peers": peers,
+          "updatedAt": datetime.now().isoformat(),
+          "__typename": "ResearchReport"
+        }
+        _cache_set(sym, payload)
+        return {"data": {"researchHub": payload}}
+
+    # Stock chart data (query) - Enhanced with technical indicators
     if "stockChartData" in fields:
         symbol = variables.get("symbol", "")
         timeframe = variables.get("timeframe", "1D")
+        interval = variables.get("interval") or timeframe
+        limit = int(variables.get("limit") or 120)
+        indicators_req = variables.get("indicators") or []
+        
         if not symbol:
             # Simple string parsing instead of regex
             if 'symbol:' in query:
@@ -2813,9 +3089,12 @@ async def graphql_endpoint(request_data: dict):
         if not symbol:
             return {"errors": [{"message": "Symbol is required for chart data"}]}
 
+        # Guardrails for performance
+        limit = max(30, min(limit, 500))
+        
         now = datetime.now()
         data_points = {'1D': 24, '1W': 7, '1M': 30, '3M': 90, '1Y': 365}
-        points = data_points.get(timeframe, 30)
+        points = min(data_points.get(timeframe, 30), limit)
         base_price = 150 + hash(symbol) % 100
         import math
         chart = []
@@ -2830,9 +3109,30 @@ async def graphql_endpoint(request_data: dict):
             vol = int(100000 + random.random() * 900000)
             chart.append({"timestamp": ts.isoformat(), "open": round(open_p,2), "high": round(high_p,2),
                           "low": round(low_p,2), "close": round(close_p,2), "volume": vol})
+        
+        # Calculate technical indicators
+        closes = [c["close"] for c in chart]
+        inds = {}
+        
+        # Overlays
+        if "SMA20" in indicators_req: inds["SMA20"] = sma(closes, 20)
+        if "SMA50" in indicators_req: inds["SMA50"] = sma(closes, 50)
+        if "EMA12" in indicators_req: inds["EMA12"] = ema(closes, 12)
+        if "EMA26" in indicators_req: inds["EMA26"] = ema(closes, 26)
+        if "BB" in indicators_req:
+            u, m, l = bollinger(closes, 20, 2)
+            inds["BB_upper"], inds["BB_middle"], inds["BB_lower"] = u, m, l
+        
+        # Oscillators
+        if "RSI" in indicators_req: inds["RSI14"] = rsi(closes, 14)
+        if "MACD" in indicators_req:
+            line, signal_line, hist = macd(closes, 12, 26, 9)
+            inds["MACD"], inds["MACD_signal"], inds["MACD_hist"] = line, signal_line, hist
+        
         cp, pp = chart[-1]["close"], chart[0]["close"]
         response_data["stockChartData"] = {
-            "symbol": symbol, "timeframe": timeframe, "data": chart,
+            "symbol": symbol, "timeframe": timeframe, "interval": interval, "limit": limit,
+            "data": chart, "indicators": inds,
             "currentPrice": round(cp,2), "change": round(cp-pp,2),
             "changePercent": round(((cp-pp)/pp)*100, 2), "__typename": "StockChartData"
         }

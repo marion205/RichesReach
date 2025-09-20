@@ -1,0 +1,30 @@
+# macOS
+.DS_Store
+
+# Python / Django
+backend/venv/
+backend/**/__pycache__/
+backend/**/*.pyc
+backend/db.sqlite3
+backend/.env
+backend/.env.*
+backend/env.production
+backend/env.local
+
+# Environment files
+.env
+.env.*
+env.production
+env.local
+*.env
+
+# Node / RN / Expo
+node_modules/
+.expo/
+.expo-shared/
+
+# iOS build junk
+ios/Pods/
+ios/build/
+DerivedData/
+*.xcworkspace/xcuserdata/

@@ -1,0 +1,88 @@
+# Docker ignore file for faster builds
+# Exclude unnecessary files from Docker context
+
+# Python cache and compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+docs/
+README*
+
+# Test files
+tests/
+test_*
+*_test.py
+
+# Development files
+.env
+.env.local
+.env.development
+*.log
+
+# Node modules (if any)
+node_modules/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+
+# Jupyter notebooks
+*.ipynb
+
+# Large data files
+*.csv
+*.json
+*.pkl
+*.joblib
+
+# Docker files
+Dockerfile*
+docker-compose*
+.dockerignore

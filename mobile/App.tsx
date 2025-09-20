@@ -36,6 +36,7 @@ import AIOptionsScreen from './screens/AIOptionsScreen';
 import BankAccountScreen from './screens/BankAccountScreen';
 import NotificationsScreen from './screens/NotificationsScreen';
 import CryptoScreen from './screens/CryptoScreen';
+import ResearchScreen from './screens/ResearchScreen';
 // Components
 import BottomTabBar from './components/BottomTabBar';
 import PersonalizedDashboard from './components/PersonalizedDashboard';
@@ -227,6 +228,8 @@ case 'stock':
 return <StockScreen navigateTo={navigateTo} />;
 case 'crypto':
 return <CryptoScreen navigation={{ navigate: navigateTo }} />;
+case 'research':
+return <ResearchScreen />;
 case 'ai-portfolio':
 return <AIPortfolioScreen navigateTo={navigateTo} />;
 case 'portfolio':

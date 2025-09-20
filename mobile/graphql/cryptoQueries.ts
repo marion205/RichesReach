@@ -351,3 +351,157 @@ export const GET_CRYPTO_RECOMMENDATIONS = gql`
     }
   }
 `;
+
+/* ========= Phase 3 Queries ========= */
+
+// Advanced chart data with technical indicators
+export const GET_ADVANCED_CHART_DATA = gql`
+  query GetAdvancedChartData(
+    $symbol: String!
+    $interval: String = "1D"
+    $limit: Int = 180
+    $indicators: [String!] = ["SMA20", "SMA50", "EMA12", "EMA26", "RSI", "MACD", "BB"]
+  ) {
+    stockChartData(
+      symbol: $symbol
+      timeframe: $interval
+      interval: $interval
+      limit: $limit
+      indicators: $indicators
+    ) {
+      symbol
+      interval
+      limit
+      currentPrice
+      change
+      changePercent
+      data {
+        timestamp
+        open
+        high
+        low
+        close
+        volume
+      }
+      indicators {
+        SMA20
+        SMA50
+        EMA12
+        EMA26
+        BB_upper
+        BB_middle
+        BB_lower
+        RSI14
+        MACD
+        MACD_signal
+        MACD_hist
+      }
+    }
+  }
+`;
+
+// Research hub comprehensive data
+export const GET_RESEARCH_HUB = gql`
+  query GetResearchHub($symbol: String!) {
+    researchHub(symbol: $symbol) {
+      symbol
+      company {
+        name
+        sector
+        marketCap
+        country
+        website
+      }
+      quote {
+        currentPrice
+        change
+        changePercent
+        high
+        low
+        volume
+      }
+      technicals {
+        rsi
+        macd
+        macdhistogram
+        movingAverage50
+        movingAverage200
+        supportLevel
+        resistanceLevel
+        impliedVolatility
+      }
+      sentiment {
+        sentiment_label
+        sentiment_score
+        article_count
+        confidence
+      }
+      macro {
+        vix
+        market_sentiment
+        risk_appetite
+      }
+      marketRegime {
+        market_regime
+        confidence
+        recommended_strategy
+      }
+      peers
+      updatedAt
+    }
+  }
+`;
+
+// Options trading mutations
+export const PLACE_OPTION_ORDER = gql`
+  mutation PlaceOptionOrder($input: PlaceOptionOrderInput!) {
+    placeOptionOrder(input: $input) {
+      success
+      cached
+      order {
+        id
+        status
+        symbol
+        optionType
+        strike
+        expiration
+        side
+        orderType
+        timeInForce
+        limitPrice
+        stopPrice
+        quantity
+        createdAt
+      }
+    }
+  }
+`;
+
+export const CANCEL_ORDER = gql`
+  mutation CancelOrder($orderId: String!) {
+    cancelOrder(orderId: $orderId) {
+      success
+      orderId
+    }
+  }
+`;
+
+export const GET_ORDERS = gql`
+  query GetOrders($status: String) {
+    orders(status: $status) {
+      id
+      status
+      symbol
+      optionType
+      strike
+      expiration
+      side
+      orderType
+      timeInForce
+      limitPrice
+      stopPrice
+      quantity
+      createdAt
+    }
+  }
+`;
