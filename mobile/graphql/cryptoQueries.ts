@@ -505,3 +505,45 @@ export const GET_ORDERS = gql`
     }
   }
 `;
+
+// Batch chart data for multiple symbols
+export const GET_BATCH_CHART_DATA = gql`
+  query GetBatchChartData(
+    $symbols: [String!]!
+    $timeframe: String = "1D"
+    $indicators: [String!] = ["SMA20", "SMA50", "EMA12", "EMA26", "RSI", "MACD", "BB"]
+  ) {
+    batchStockChartData(
+      symbols: $symbols
+      timeframe: $timeframe
+      indicators: $indicators
+    ) {
+      symbol
+      timeframe
+      currentPrice
+      change
+      changePercent
+      data {
+        timestamp
+        open
+        high
+        low
+        close
+        volume
+      }
+      indicators {
+        SMA20
+        SMA50
+        EMA12
+        EMA26
+        BB_upper
+        BB_middle
+        BB_lower
+        RSI14
+        MACD
+        MACD_signal
+        MACD_hist
+      }
+    }
+  }
+`;

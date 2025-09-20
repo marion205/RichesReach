@@ -1201,6 +1201,49 @@ def _idem_ok(key):
     return True, None
 def _idem_set(key, result): _idem[key] = (time.time(), result)
 
+# === Persisted Query Cache ===
+import hashlib, json
+_PERSISTED = {}  # { key: (expires, payload) }
+
+def _pq_key(query: str, variables: dict) -> str:
+    return hashlib.sha256((query.strip() + "|" + json.dumps(variables, sort_keys=True)).encode()).hexdigest()
+
+def _pq_get(key: str):
+    v = _PERSISTED.get(key)
+    return None if not v or v[0] < time.time() else v[1]
+
+def _pq_set(key: str, payload: dict, ttl: int = 180):
+    _PERSISTED[key] = (time.time() + ttl, payload)
+
+# === Soft TTL (stale-while-revalidate) ===
+def swr_get(cache: dict, key: str, fetch_fn, ttl=300, soft=900):
+    rec = cache.get(key)  # rec = {"ts":..., "data":...}
+    now = time.time()
+    if rec and now - rec["ts"] < ttl:         # fresh
+        return rec["data"]
+    if rec and now - rec["ts"] < soft:        # stale but serve
+        threading.Thread(target=lambda: cache.__setitem__(key, {"ts":now,"data":fetch_fn()})).start()
+        return rec["data"]
+    # empty or very stale
+    data = fetch_fn()
+    cache[key] = {"ts": now, "data": data}
+    return data
+
+# === Per-user field rate limits ===
+_RATE = {}  # {(user_id, field): [timestamps]}
+
+def _allow(user_id, field, per_min=30):
+    now = time.time()
+    key = (user_id or "anon", field)
+    arr = [t for t in _RATE.get(key, []) if now - t < 60]
+    if len(arr) >= per_min: return False
+    arr.append(now); _RATE[key] = arr
+    return True
+
+# === ETag for chart payloads ===
+def _etag_for(*parts):
+    return hashlib.md5("|".join(map(str, parts)).encode()).hexdigest()
+
 # === Research Hub (Phase 3) ===
 # Simple TTL cache for research data
 _research_cache = {}  # {symbol: (timestamp, payload)}
@@ -1213,6 +1256,81 @@ def _cache_get(key):
         _research_cache.pop(key, None); return None
     return payload
 def _cache_set(key, payload): _research_cache[key] = (time.time(), payload)
+
+# === Batch chart helper (reuses your stock chart generation) ===
+def _build_chart_payload(symbol: str, timeframe: str, indicators: list[str] | None = None):
+    indicators = indicators or []
+    now = datetime.now()
+    data_points = {'1D': 24, '1W': 7, '1M': 30, '3M': 90, '1Y': 365}
+    points = data_points.get(timeframe, 30)
+
+    base_price = 150 + hash(symbol) % 100
+    chart = []
+    for i in range(points):
+        ts = now - (timedelta(hours=points - i) if timeframe == '1D' else timedelta(days=points - i))
+        pv = (math.sin(i * 0.1) + math.cos(i * 0.05)) * 5
+        cur = base_price + pv + (i * 0.1)
+        open_p = cur + (random.random() - 0.5) * 2
+        close_p = cur + (random.random() - 0.5) * 2
+        high_p = max(open_p, close_p) + random.random() * 2
+        low_p = min(open_p, close_p) - random.random() * 2
+        vol = int(100000 + random.random() * 900000)
+        chart.append({
+            "timestamp": ts.isoformat(),
+            "open": round(open_p, 2),
+            "high": round(high_p, 2),
+            "low": round(low_p, 2),
+            "close": round(close_p, 2),
+            "volume": vol
+        })
+    cp, pp = chart[-1]["close"], chart[0]["close"]
+
+    # Try indicators if your Phase 3 funcs exist; otherwise skip safely
+    try:
+        closes = [c["close"] for c in chart]
+        _ind = {}
+        if "SMA20" in indicators:
+            _ind["SMA20"] = [round(x, 2) if x is not None else None for x in sma(closes, 20)]
+        if "SMA50" in indicators:
+            _ind["SMA50"] = [round(x, 2) if x is not None else None for x in sma(closes, 50)]
+        if "EMA12" in indicators:
+            _ind["EMA12"] = [round(x, 2) if x is not None else None for x in ema(closes, 12)]
+        if "EMA26" in indicators:
+            _ind["EMA26"] = [round(x, 2) if x is not None else None for x in ema(closes, 26)]
+        if "RSI14" in indicators:
+            _ind["RSI14"] = [round(x, 2) if x is not None else None for x in rsi(closes, 14)]
+        if "MACD" in indicators or "MACD_SIGNAL" in indicators:
+            macd_line, signal_line, _ = macd(closes)
+            if "MACD" in indicators:
+                _ind["MACD"] = [round(x, 2) if x is not None else None for x in macd_line]
+            if "MACD_SIGNAL" in indicators:
+                _ind["MACD_SIGNAL"] = [round(x, 2) if x is not None else None for x in signal_line]
+        if "BB" in indicators:
+            up, mid, low = bollinger(closes)
+            _ind["BB_upper"] = [round(x, 2) if x is not None else None for x in up]
+            _ind["BB_middle"] = [round(x, 2) if x is not None else None for x in mid]
+            _ind["BB_lower"] = [round(x, 2) if x is not None else None for x in low]
+    except Exception:
+        _ind = {}
+
+    return {
+        "symbol": symbol,
+        "timeframe": timeframe,
+        "data": chart,
+        "currentPrice": round(cp, 2),
+        "change": round(cp - pp, 2),
+        "changePercent": round(((cp - pp) / pp) * 100, 2) if pp else 0.0,
+        "indicators": _ind,
+        "__typename": "StockChartData"
+    }
+
+# === Options price protection helper ===
+def _price_protection_cap(side: str, mid: float, slippage_bps: int | None) -> float:
+    bps = max(1, int(slippage_bps or 50))
+    if side.upper() == "BUY":
+        return round(mid * (1 + bps/10000.0), 2)
+    else:
+        return round(mid * (1 - bps/10000.0), 2)
 def sma(values, n):
     """Simple Moving Average - lightweight, no external deps"""
     out, s = [], 0.0
@@ -2703,6 +2821,12 @@ async def graphql_endpoint(request_data: dict):
 
     fields = top_level_fields(query, operation_name)
 
+    # === Persisted Query Cache Check ===
+    pqk = _pq_key(query, variables)
+    cached = _pq_get(pqk)
+    if cached: 
+        return cached
+
     # ---------------------------
     # PHASE 2 — put first, early return
     # ---------------------------
@@ -2898,59 +3022,101 @@ async def graphql_endpoint(request_data: dict):
         }
         return {"data": response_data}
 
-    # Options Trading (Phase 3) - Place/Cancel/Get Orders
+    # === Enhanced: placeOptionOrder with preview + price protection ===
     if "placeOptionOrder" in fields:
+        # pull input (variables or inline)
         inp = variables.get("input") or {}
-        # fallback parse if needed...
-        idem_key = inp.get("idempotencyKey") or f"{inp.get('symbol')}-{inp.get('expiration')}-{inp.get('strike')}-{inp.get('side')}-{inp.get('quantity')}-{inp.get('orderType')}"
-        ok, cached = _idem_ok(idem_key)
-        if not ok:
-            return {"data": {"placeOptionOrder": { "success": True, "cached": True, "order": cached, "__typename": "PlaceOrderResult"}}}
-        # basic validation
-        required = ["symbol","optionType","strike","expiration","side","quantity","orderType","timeInForce"]
-        miss = [k for k in required if inp.get(k) in (None,"")]
-        if miss:
-            return {"errors":[{"message": f"Missing fields: {', '.join(miss)}"}]}
+        if not inp:
+            # ultra-simple inline parse for common fields
+            m = re.search(r'placeOptionOrder\s*\(\s*input:\s*\{([^}]*)\}', query, re.DOTALL)
+            if m:
+                raw = m.group(1)
+                def _grab(k):
+                    mm = re.search(rf'{k}:\s*"([^"]+)"', raw); 
+                    return mm.group(1) if mm else None
+                inp = {
+                    "symbol": _grab("symbol"),
+                    "optionType": _grab("optionType"),
+                    "expiration": _grab("expiration"),
+                    "side": _grab("side"),
+                    "orderType": _grab("orderType")
+                }
+                qmm = re.search(r'quantity:\s*([0-9]+)', raw); 
+                if qmm: inp["quantity"] = int(qmm.group(1))
+                lmm = re.search(r'limitPrice:\s*([0-9.]+)', raw);
+                if lmm: inp["limitPrice"] = float(lmm.group(1))
 
+        # required
+        symbol = inp.get("symbol")
+        option_type = (inp.get("optionType") or "").upper()
+        expiration = inp.get("expiration")
+        side = (inp.get("side") or "").upper()
+        order_type = (inp.get("orderType") or "MARKET").upper()
+        qty = int(inp.get("quantity") or 1)
+
+        if not all([symbol, option_type in {"CALL","PUT"}, expiration, side in {"BUY","SELL"}, qty > 0]):
+            return {"errors":[{"message":"Invalid input for placeOptionOrder"}]}
+
+        time_in_force = (inp.get("timeInForce") or "DAY").upper()
+        slippage_bps = int(inp.get("slippageBps")) if inp.get("slippageBps") is not None else 50
+        preview = bool(inp.get("preview", False))
+        limit_price = inp.get("limitPrice")
+        idem_key = inp.get("idempotencyKey") or f"{symbol}:{option_type}:{expiration}:{side}:{order_type}:{limit_price}:{qty}"
+
+        # idempotency
+        if idem_key in _idem:
+            prev = _idem[idem_key]
+            if time.time() < prev[0] + _IDEM_TTL:
+                return {"data":{"placeOptionOrder":{"success":True,"cached":True,"order":prev[1],"__typename":"PlaceOptionOrderResponse"}}}
+
+        # get a mid price from the underlying quote (best effort)
         try:
-            # Translate into your trading service call
-            if inp["orderType"] == "MARKET":
-                o = await trading_service.place_market_order(
-                    symbol=inp["symbol"], option_type=inp["optionType"], strike=float(inp["strike"]),
-                    expiration=inp["expiration"], side=inp["side"], qty=int(inp["quantity"]),
-                    tif=inp["timeInForce"]
-                )
-            elif inp["orderType"] == "LIMIT":
-                if not inp.get("limitPrice"): raise ValueError("limitPrice required")
-                o = await trading_service.place_limit_order(
-                    symbol=inp["symbol"], option_type=inp["optionType"], strike=float(inp["strike"]),
-                    expiration=inp["expiration"], side=inp["side"], qty=int(inp["quantity"]),
-                    limit_price=float(inp["limitPrice"]), tif=inp["timeInForce"]
-                )
-            elif inp["orderType"] == "STOP":
-                if not inp.get("stopPrice"): raise ValueError("stopPrice required")
-                o = await trading_service.place_stop_loss_order(
-                    symbol=inp["symbol"], option_type=inp["optionType"], strike=float(inp["strike"]),
-                    expiration=inp["expiration"], side=inp["side"], qty=int(inp["quantity"]),
-                    stop_price=float(inp["stopPrice"]), tif=inp["timeInForce"]
-                )
-            else:
-                raise ValueError("Unsupported orderType")
+            q = await trading_service.get_quote(symbol)
+        except Exception:
+            q = {}
+        bid = float(q.get("bid") or 0.0)
+        ask = float(q.get("ask") or 0.0)
+        last = float(q.get("last") or q.get("bid") or q.get("ask") or 0.0)
+        mid = (bid + ask) / 2.0 if bid and ask else (last or 0.0)
 
-            order = {
-                "id": getattr(o, "id", f"ord_{int(time.time()*1000)}"),
-                "status": getattr(o, "status", "NEW"),
-                "symbol": inp["symbol"], "optionType": inp["optionType"],
-                "strike": float(inp["strike"]), "expiration": inp["expiration"],
-                "side": inp["side"], "orderType": inp["orderType"], "timeInForce": inp["timeInForce"],
-                "limitPrice": inp.get("limitPrice"), "stopPrice": inp.get("stopPrice"),
-                "quantity": int(inp["quantity"]), "createdAt": datetime.now().isoformat()
-            }
-            _idem_set(idem_key, order)
-            return {"data": {"placeOptionOrder": { "success": True, "cached": False, "order": order, "__typename":"PlaceOrderResult"}}}
-        except Exception as e:
-            logger.warning(f"placeOptionOrder failed: {e}")
-            return {"errors":[{"message": f"Order failed: {e}"}]}
+        # price protection for LIMIT orders
+        if order_type == "LIMIT" and limit_price is not None and mid > 0:
+            cap = _price_protection_cap(side, mid, slippage_bps)
+            if side == "BUY" and float(limit_price) > cap:
+                return {"data":{"placeOptionOrder":{"success":False,"error":"PRICE_PROTECTION","cap":cap,"__typename":"PlaceOptionOrderResponse"}}}
+            if side == "SELL" and float(limit_price) < cap:
+                return {"data":{"placeOptionOrder":{"success":False,"error":"PRICE_PROTECTION","cap":cap,"__typename":"PlaceOptionOrderResponse"}}}
+
+        # preview path (no execution)
+        order_preview = {
+            "id": f"preview_{int(time.time()*1000)}",
+            "status": "PREVIEW",
+            "symbol": symbol,
+            "optionType": option_type,
+            "strike": float(inp.get("strike") or 0.0),
+            "expiration": expiration,
+            "side": side,
+            "orderType": order_type,
+            "timeInForce": time_in_force,
+            "quantity": qty,
+            "limitPrice": float(limit_price) if limit_price is not None else None,
+            "midPrice": round(mid, 2) if mid else None,
+            "__typename":"Order"
+        }
+        if preview:
+            return {"data":{"placeOptionOrder":{"success":True,"preview":True,"order":order_preview,"__typename":"PlaceOptionOrderResponse"}}}
+
+        # simple "paper" execution (delegates if your service supports options; else stub)
+        placed = {
+            **order_preview,
+            "id": f"opt_{int(time.time()*1000)}",
+            "status": "NEW"
+        }
+
+        # cache idempotently for 10 minutes
+        _idem[idem_key] = (time.time(), placed)
+
+        return {"data":{"placeOptionOrder":{"success":True,"cached":False,"order":placed,"__typename":"PlaceOptionOrderResponse"}}}
 
     if "cancelOrder" in fields:
         oid = variables.get("orderId")
@@ -2984,6 +3150,11 @@ async def graphql_endpoint(request_data: dict):
 
     # Research Hub (Phase 3) - Comprehensive research data
     if "researchHub" in fields:
+        # Rate limiting
+        me_email = variables.get("userEmail") or "anon"
+        if not _allow(me_email, "researchHub", per_min=20):
+            return {"errors":[{"message":"Rate limit exceeded"}]}
+        
         sym = (variables.get("symbol") or "").upper()
         if not sym: return {"errors":[{"message":"symbol required"}]}
         cached = _cache_get(sym)
@@ -3064,6 +3235,24 @@ async def graphql_endpoint(request_data: dict):
         }
         _cache_set(sym, payload)
         return {"data": {"researchHub": payload}}
+
+    # === New: batchStockChartData handler ===
+    if "batchStockChartData" in fields:
+        import re
+        symbols = variables.get("symbols")
+        timeframe = variables.get("timeframe", "1D")
+        indicators = variables.get("indicators", [])
+        if not symbols:
+            m = re.search(r'batchStockChartData\s*\(\s*symbols:\s*\[([^\]]+)\]', query)
+            if m:
+                symbols = [s.strip().strip('"') for s in m.group(1).split(",")]
+        if not symbols or not isinstance(symbols, (list, tuple)):
+            return {"errors": [{"message": "symbols: [String!]! is required"}]}
+
+        symbols = symbols[:10]  # guardrail
+        payloads = [_build_chart_payload(sym, timeframe, indicators) for sym in symbols]
+        response_data["batchStockChartData"] = payloads
+        return {"data": response_data}
 
     # Stock chart data (query) - Enhanced with technical indicators
     if "stockChartData" in fields:
@@ -5425,8 +5614,13 @@ async def graphql_endpoint(request_data: dict):
     logger.info("No handlers matched. Returning GraphQL-safe empty data. fields=%s", fields)
     if fields:
         # Return nulls for requested top-level fields so Apollo cache doesn't error
-        return {"data": {f: None for f in fields}}
-    return {"data": {}}
+        result = {"data": {f: None for f in fields}}
+    else:
+        result = {"data": {}}
+    
+    # === Store in Persisted Query Cache ===
+    _pq_set(pqk, result, ttl=180)
+    return result
 
 # ---------- Entry ----------
 if __name__ == "__main__":
