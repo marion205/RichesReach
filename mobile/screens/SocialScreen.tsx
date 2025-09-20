@@ -11,7 +11,6 @@ Modal,
 TextInput,
 KeyboardAvoidingView,
 Platform,
-SafeAreaView,
 Image,
 FlatList,
 Share,
@@ -830,7 +829,7 @@ const renderContent = () => {
   return RedditList;
 };
 return (
-<SafeAreaView style={styles.container}>
+<View style={styles.container}>
 {/* Header */}
 <View style={styles.header}>
 <Text style={styles.headerTitle}>Discussion Hub</Text>
@@ -1432,13 +1431,14 @@ onPress={() => setShowDiscussionDetail(false)}
     setShowPoll(false);
   }}
 />
-</SafeAreaView>
+</View>
 );
 };
 const styles = StyleSheet.create({
 container: {
 flex: 1,
 backgroundColor: '#FFFFFF',
+paddingTop: 0,
 },
 header: {
 flexDirection: 'row',

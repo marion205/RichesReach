@@ -14,26 +14,82 @@ import Icon from 'react-native-vector-icons/Feather';
 import AdvancedChart from '../components/AdvancedChart';
 import { UI } from '../constants';
 
+// Null-safe helper functions
+const safeFixed = (val: any, dp = 2, fallback = '—') =>
+  Number.isFinite(val) ? Number(val).toFixed(dp) : fallback;
+
+const safePct = (val: any, dp = 0, fallback = '—') =>
+  Number.isFinite(val) ? `${Number(val * 100).toFixed(dp)}%` : fallback;
+
+const safeMoney = (val: any, dp = 2, fallback = '—') =>
+  Number.isFinite(val) ? `$${Number(val).toFixed(dp)}` : fallback;
+
+// UI Primitives
+const SectionCard: React.FC<{title?: string; right?: React.ReactNode; children: React.ReactNode}> = ({ title, right, children }) => (
+  <View style={styles.card}>
+    {(title || right) && (
+      <View style={styles.sectionHeader}>
+        {title ? <Text style={styles.sectionTitle}>{title}</Text> : <View />}
+        {right}
+      </View>
+    )}
+    {children}
+  </View>
+);
+
+const Badge: React.FC<{label: string; tone?: 'neutral'|'success'|'danger'|'warn'}> = ({ label, tone='neutral' }) => {
+  const bg = tone==='success' ? '#DCFCE7' : tone==='danger' ? '#FEE2E2' : tone==='warn' ? '#FEF3C7' : '#E5E7EB';
+  const fg = tone==='success' ? '#166534' : tone==='danger' ? '#991B1B' : tone==='warn' ? '#92400E' : '#374151';
+  return (
+    <View style={[styles.badge, { backgroundColor: bg }]}>
+      <Text style={[styles.badgeText, { color: fg }]}>{label}</Text>
+    </View>
+  );
+};
+
+const Segmented: React.FC<{options: string[]; value: string; onChange: (v: string)=>void}> = ({ options, value, onChange }) => (
+  <View style={styles.segmented}>
+    {options.map(opt => {
+      const active = opt === value;
+      return (
+        <TouchableOpacity key={opt} onPress={() => onChange(opt)} style={[styles.segment, active && styles.segmentActive]}>
+          <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{opt}</Text>
+        </TouchableOpacity>
+      );
+    })}
+  </View>
+);
+
+const MetricRow: React.FC<{label: string; value?: string | number; monospace?: boolean}> = ({ label, value='—', monospace }) => (
+  <View style={styles.metricRow}>
+    <Text style={styles.metricLabel}>{label}</Text>
+    <Text style={[styles.metricValue, monospace && { fontVariant: ['tabular-nums'] }]} numberOfLines={1}>{value}</Text>
+  </View>
+);
+
 const RESEARCH_QUERY = gql`
   query Research($s: String!) {
     researchHub(symbol: $s) {
       symbol
-      company {
+
+      company: snapshot {
         name
         sector
         marketCap
         country
         website
       }
+
       quote {
-        currentPrice
-        change
-        changePercent
+        currentPrice: price
+        change: chg
+        changePercent: chgPct
         high
         low
         volume
       }
-      technicals {
+
+      technicals: technical {
         rsi
         macd
         macdhistogram
@@ -43,22 +99,26 @@ const RESEARCH_QUERY = gql`
         resistanceLevel
         impliedVolatility
       }
+
       sentiment {
-        sentiment_label
-        sentiment_score
+        sentiment_label: label
+        sentiment_score: score
         article_count
         confidence
       }
+
       macro {
         vix
-        market_sentiment
-        risk_appetite
+        market_sentiment: marketSentiment
+        risk_appetite: riskAppetite
       }
+
       marketRegime {
         market_regime
         confidence
         recommended_strategy
       }
+
       peers
       updatedAt
     }
@@ -66,8 +126,20 @@ const RESEARCH_QUERY = gql`
 `;
 
 const CHART_QUERY = gql`
-  query Chart($s: String!, $interval: String = "1D", $limit: Int = 180, $inds: [String!] = ["SMA20", "SMA50", "EMA12", "EMA26", "RSI", "MACD", "BB"]) {
-    stockChartData(symbol: $s, timeframe: $interval, interval: $interval, limit: $limit, indicators: $inds) {
+  query Chart(
+    $s: String!,
+    $tf: String = "1D",
+    $iv: String = "1D",
+    $limit: Int = 180,
+    $inds: [String!] = ["SMA20","SMA50","EMA12","EMA26","RSI","MACD","BB"]
+  ) {
+    stockChartData(
+      symbol: $s,
+      timeframe: $tf,
+      interval: $iv,
+      limit: $limit,
+      indicators: $inds
+    ) {
       symbol
       interval
       limit
@@ -108,14 +180,18 @@ const ResearchScreen: React.FC = () => {
     skip: !symbol,
   });
 
-  const { data: chartData, loading: chartLoading, error: chartError } = useQuery(CHART_QUERY, {
-    variables: { 
-      s: symbol, 
-      interval: chartInterval, 
+  const { data: chartData, loading: chartLoading, error: chartError, refetch: refetchChart } = useQuery(CHART_QUERY, {
+    variables: {
+      s: symbol,
+      tf: chartInterval,
+      iv: chartInterval,
       limit: 180,
-      inds: ["SMA20", "SMA50", "EMA12", "EMA26", "RSI", "MACD", "BB"]
+      inds: ["SMA20","SMA50","EMA12","EMA26","RSI","MACD","BB"],
     },
     skip: !symbol,
+    fetchPolicy: 'cache-and-network',
+    nextFetchPolicy: 'cache-first',
+    errorPolicy: 'all',
   });
 
   const research = researchData?.researchHub;
@@ -151,7 +227,7 @@ const ResearchScreen: React.FC = () => {
           <Text style={styles.title}>Research Hub</Text>
         </View>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={UI.accent} />
+          <ActivityIndicator size="large" color={UI.colors.accent} />
           <Text style={styles.loadingText}>Loading research data...</Text>
         </View>
       </View>
@@ -165,10 +241,10 @@ const ResearchScreen: React.FC = () => {
           <Text style={styles.title}>Research Hub</Text>
         </View>
         <View style={styles.errorContainer}>
-          <Icon name="alert-circle" size={48} color={UI.error} />
+          <Icon name="alert-circle" size={48} color={UI.colors.error} />
           <Text style={styles.errorText}>Failed to load research data</Text>
           <TouchableOpacity style={styles.retryButton} onPress={() => refetchResearch()}>
-            <Icon name="refresh-cw" size={16} color={UI.accent} />
+            <Icon name="refresh-cw" size={16} color={UI.colors.accent} />
             <Text style={styles.retryText}>Retry</Text>
           </TouchableOpacity>
         </View>
@@ -184,13 +260,13 @@ const ResearchScreen: React.FC = () => {
           <TextInput
             style={styles.searchInput}
             value={symbol}
-            onChangeText={setSymbol}
+            onChangeText={(t) => setSymbol(t.toUpperCase().trim())}
             placeholder="Enter symbol (e.g., AAPL)"
-            placeholderTextColor={UI.sub}
+            placeholderTextColor={UI.colors.sub}
             autoCapitalize="characters"
           />
           <TouchableOpacity style={styles.searchButton} onPress={() => refetchResearch()}>
-            <Icon name="search" size={20} color={UI.accent} />
+            <Icon name="search" size={20} color={UI.colors.accent} />
           </TouchableOpacity>
         </View>
       </View>
@@ -198,199 +274,138 @@ const ResearchScreen: React.FC = () => {
       {research && (
         <>
           {/* Company Header */}
-          <View style={styles.card}>
+          <SectionCard>
             <View style={styles.companyHeader}>
-              <View>
-                <Text style={styles.companyName}>{research.company.name}</Text>
-                <Text style={styles.sector}>{research.company.sector}</Text>
-                <Text style={styles.marketCap}>{formatMarketCap(research.company.marketCap)}</Text>
+              <View style={{ flex: 1, paddingRight: 12 }}>
+                <Text style={styles.companyName}>
+                  {research?.company?.name ?? 'N/A'} <Text style={styles.symbol}>({research?.symbol ?? 'N/A'})</Text>
+                </Text>
+                <Text style={styles.sector}>
+                  {research?.company?.sector ?? 'N/A'} • {formatMarketCap(research?.company?.marketCap ?? 0)}
+                </Text>
+                {!!research?.company?.website && (
+                  <Text style={styles.website} numberOfLines={1}>{research.company.website}</Text>
+                )}
               </View>
               <View style={styles.priceContainer}>
-                <Text style={styles.currentPrice}>${research.quote.currentPrice.toFixed(2)}</Text>
+                <Text style={styles.currentPrice}>
+                  {safeMoney(research?.quote?.currentPrice, 2)}
+                </Text>
                 <Text style={[
                   styles.change,
-                  { color: research.quote.change >= 0 ? '#22C55E' : '#EF4444' }
+                  { color: (research?.quote?.change ?? 0) >= 0 ? '#22C55E' : '#EF4444' }
                 ]}>
-                  {research.quote.change >= 0 ? '+' : ''}{research.quote.change.toFixed(2)} ({research.quote.changePercent.toFixed(2)}%)
+                  {(research?.quote?.change ?? 0) >= 0 ? '+' : ''}
+                  {safeFixed(research?.quote?.change, 2)} ({safeFixed(research?.quote?.changePercent, 2)}%)
                 </Text>
               </View>
             </View>
-          </View>
+          </SectionCard>
 
           {/* Advanced Chart */}
-          {chart && (
-            <View style={styles.card}>
-              <View style={styles.chartHeader}>
-                <Text style={styles.chartTitle}>Price Chart</Text>
-                <View style={styles.intervalSelector}>
-                  {['1D', '1W', '1M', '3M', '1Y'].map(interval => (
-                    <TouchableOpacity
-                      key={interval}
-                      style={[
-                        styles.intervalButton,
-                        chartInterval === interval && styles.intervalButtonActive
-                      ]}
-                      onPress={() => setChartInterval(interval)}
-                    >
-                      <Text style={[
-                        styles.intervalText,
-                        chartInterval === interval && styles.intervalTextActive
-                      ]}>
-                        {interval}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
+          <SectionCard
+            title="Price Chart"
+            right={
+              <Segmented
+                options={['1D','1W','1M','3M','1Y']}
+                value={chartInterval}
+                onChange={(v) => setChartInterval(v)}
+              />
+            }
+          >
+            {chartLoading ? (
+              <View style={styles.chartLoading}>
+                <ActivityIndicator size="small" color={UI.colors.accent} />
               </View>
-              {chartLoading ? (
-                <View style={styles.chartLoading}>
-                  <ActivityIndicator size="small" color={UI.accent} />
+            ) : chart && chart.data?.length ? (
+              <>
+                <AdvancedChart data={chart.data} indicators={chart.indicators || {}} width={350} height={220} />
+                <View style={styles.legend}>
+                  <View style={styles.legendDot} />
+                  <Text style={styles.legendText}>SMA20</Text>
+                  <View style={styles.legendDot} />
+                  <Text style={styles.legendText}>SMA50</Text>
+                  <View style={styles.legendDot} />
+                  <Text style={styles.legendText}>EMA12</Text>
+                  <View style={styles.legendDot} />
+                  <Text style={styles.legendText}>EMA26</Text>
+                  <View style={styles.legendDot} />
+                  <Text style={styles.legendText}>BB</Text>
                 </View>
-              ) : (
-                <AdvancedChart
-                  data={chart.data}
-                  indicators={chart.indicators}
-                  width={350}
-                  height={200}
-                />
-              )}
-            </View>
-          )}
+              </>
+            ) : (
+              <View style={styles.chartLoading}>
+                <Text style={{ color: UI.colors.sub }}>No chart data</Text>
+              </View>
+            )}
+            {chartError && <Text style={styles.errorInline}>{chartError.message}</Text>}
+          </SectionCard>
 
           {/* Key Metrics Cards */}
           <View style={styles.metricsGrid}>
-            {/* Valuation */}
-            <View style={styles.metricCard}>
-              <Text style={styles.metricTitle}>Valuation</Text>
-              <View style={styles.metricItem}>
-                <Text style={styles.metricLabel}>P/E Ratio</Text>
-                <Text style={styles.metricValue}>N/A</Text>
-              </View>
-              <View style={styles.metricItem}>
-                <Text style={styles.metricLabel}>P/B Ratio</Text>
-                <Text style={styles.metricValue}>N/A</Text>
-              </View>
-            </View>
+            <SectionCard title="Technicals">
+              <MetricRow label="RSI (14)" value={safeFixed(research?.technicals?.rsi, 1)} />
+              <MetricRow label="MACD" value={safeFixed(research?.technicals?.macd, 3)} monospace />
+              <MetricRow label="MA 50" value={safeMoney(research?.technicals?.movingAverage50)} />
+            </SectionCard>
 
-            {/* Technicals */}
-            <View style={styles.metricCard}>
-              <Text style={styles.metricTitle}>Technicals</Text>
-              <View style={styles.metricItem}>
-                <Text style={styles.metricLabel}>RSI (14)</Text>
-                <Text style={styles.metricValue}>{research.technicals.rsi.toFixed(1)}</Text>
-              </View>
-              <View style={styles.metricItem}>
-                <Text style={styles.metricLabel}>MACD</Text>
-                <Text style={styles.metricValue}>{research.technicals.macd.toFixed(3)}</Text>
-              </View>
-              <View style={styles.metricItem}>
-                <Text style={styles.metricLabel}>MA 50</Text>
-                <Text style={styles.metricValue}>${research.technicals.movingAverage50.toFixed(2)}</Text>
-              </View>
-            </View>
+            <SectionCard title="Sentiment" right={
+              <Badge
+                label={research?.sentiment?.sentiment_label || 'NEUTRAL'}
+                tone={research?.sentiment?.sentiment_label === 'BULLISH' ? 'success' : research?.sentiment?.sentiment_label === 'BEARISH' ? 'danger' : 'neutral'}
+              />
+            }>
+              <MetricRow label="Score" value={safeFixed(research?.sentiment?.sentiment_score, 2)} />
+              <MetricRow label="Articles" value={research?.sentiment?.article_count ?? '—'} />
+              <MetricRow label="Confidence" value={safePct(research?.sentiment?.confidence, 0)} />
+            </SectionCard>
 
-            {/* Sentiment */}
-            <View style={styles.metricCard}>
-              <Text style={styles.metricTitle}>Sentiment</Text>
-              <View style={styles.metricItem}>
-                <Text style={styles.metricLabel}>News Sentiment</Text>
-                <Text style={[
-                  styles.metricValue,
-                  { color: getSentimentColor(research.sentiment.sentiment_label) }
-                ]}>
-                  {research.sentiment.sentiment_label}
-                </Text>
-              </View>
-              <View style={styles.metricItem}>
-                <Text style={styles.metricLabel}>Score</Text>
-                <Text style={styles.metricValue}>{research.sentiment.sentiment_score.toFixed(2)}</Text>
-              </View>
-              <View style={styles.metricItem}>
-                <Text style={styles.metricLabel}>Articles</Text>
-                <Text style={styles.metricValue}>{research.sentiment.article_count}</Text>
-              </View>
-            </View>
+            <SectionCard title="Macro">
+              <MetricRow label="VIX" value={safeFixed(research?.macro?.vix, 1)} />
+              <MetricRow label="Market Sentiment" value={research?.macro?.market_sentiment ?? '—'} />
+              <MetricRow label="Risk Appetite" value={safePct(research?.macro?.risk_appetite, 0)} />
+            </SectionCard>
 
-            {/* Macro */}
-            <View style={styles.metricCard}>
-              <Text style={styles.metricTitle}>Macro</Text>
-              <View style={styles.metricItem}>
-                <Text style={styles.metricLabel}>VIX</Text>
-                <Text style={styles.metricValue}>{research.macro.vix.toFixed(1)}</Text>
-              </View>
-              <View style={styles.metricItem}>
-                <Text style={styles.metricLabel}>Market Sentiment</Text>
-                <Text style={styles.metricValue}>{research.macro.market_sentiment}</Text>
-              </View>
-              <View style={styles.metricItem}>
-                <Text style={styles.metricLabel}>Risk Appetite</Text>
-                <Text style={styles.metricValue}>{(research.macro.risk_appetite * 100).toFixed(0)}%</Text>
-              </View>
-            </View>
+            <SectionCard title="Market Regime" right={
+              <Badge
+                label={research?.marketRegime?.market_regime || 'NEUTRAL'}
+                tone={research?.marketRegime?.market_regime === 'BULL' ? 'success' : research?.marketRegime?.market_regime === 'BEAR' ? 'danger' : 'warn'}
+              />
+            }>
+              <MetricRow label="Confidence" value={safePct(research?.marketRegime?.confidence, 0)} />
+              <MetricRow label="Strategy" value={research?.marketRegime?.recommended_strategy ?? '—'} />
+            </SectionCard>
 
-            {/* Market Regime */}
-            <View style={styles.metricCard}>
-              <Text style={styles.metricTitle}>Market Regime</Text>
-              <View style={styles.metricItem}>
-                <Text style={styles.metricLabel}>Current Regime</Text>
-                <Text style={[
-                  styles.metricValue,
-                  { color: getRegimeColor(research.marketRegime.market_regime) }
-                ]}>
-                  {research.marketRegime.market_regime}
-                </Text>
-              </View>
-              <View style={styles.metricItem}>
-                <Text style={styles.metricLabel}>Confidence</Text>
-                <Text style={styles.metricValue}>{(research.marketRegime.confidence * 100).toFixed(0)}%</Text>
-              </View>
-              <View style={styles.metricItem}>
-                <Text style={styles.metricLabel}>Strategy</Text>
-                <Text style={styles.metricValue}>{research.marketRegime.recommended_strategy}</Text>
-              </View>
-            </View>
-
-            {/* Options Snapshot */}
-            <View style={styles.metricCard}>
-              <Text style={styles.metricTitle}>Options</Text>
-              <View style={styles.metricItem}>
-                <Text style={styles.metricLabel}>Implied Vol</Text>
-                <Text style={styles.metricValue}>{(research.technicals.impliedVolatility * 100).toFixed(1)}%</Text>
-              </View>
-              <View style={styles.metricItem}>
-                <Text style={styles.metricLabel}>Support</Text>
-                <Text style={styles.metricValue}>${research.technicals.supportLevel.toFixed(2)}</Text>
-              </View>
-              <View style={styles.metricItem}>
-                <Text style={styles.metricLabel}>Resistance</Text>
-                <Text style={styles.metricValue}>${research.technicals.resistanceLevel.toFixed(2)}</Text>
-              </View>
-            </View>
+            <SectionCard title="Options Snapshot">
+              <MetricRow label="Implied Vol" value={safePct(research?.technicals?.impliedVolatility, 1)} />
+              <MetricRow label="Support" value={safeMoney(research?.technicals?.supportLevel)} />
+              <MetricRow label="Resistance" value={safeMoney(research?.technicals?.resistanceLevel)} />
+            </SectionCard>
           </View>
 
           {/* Peers */}
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Peer Companies</Text>
+          <SectionCard title="Peer Companies">
             <View style={styles.peersContainer}>
-              {research.peers.map((peer: string) => (
+              {(research?.peers || []).map((peer: string) => (
                 <TouchableOpacity
                   key={peer}
                   style={styles.peerChip}
                   onPress={() => {
                     setSymbol(peer);
-                    refetchResearch();
+                    refetchResearch({ s: peer });
+                    refetchChart?.({ s: peer, tf: chartInterval, iv: chartInterval, limit: 180 });
                   }}
                 >
                   <Text style={styles.peerText}>{peer}</Text>
                 </TouchableOpacity>
               ))}
             </View>
-          </View>
+          </SectionCard>
 
           {/* Last Updated */}
           <View style={styles.footer}>
             <Text style={styles.footerText}>
-              Last updated: {new Date(research.updatedAt).toLocaleString()}
+              Last updated: {research?.updatedAt ? new Date(research.updatedAt).toLocaleString() : '—'}
             </Text>
           </View>
         </>
@@ -402,18 +417,18 @@ const ResearchScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: UI.background,
+    backgroundColor: UI.colors.background,
   },
   header: {
     padding: 16,
-    backgroundColor: UI.background,
+    backgroundColor: UI.colors.background,
     borderBottomWidth: 1,
-    borderBottomColor: UI.border,
+    borderBottomColor: UI.colors.border,
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: UI.text,
+    color: UI.colors.text,
     marginBottom: 16,
   },
   searchContainer: {
@@ -424,16 +439,16 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 40,
     borderWidth: 1,
-    borderColor: UI.border,
+    borderColor: UI.colors.border,
     borderRadius: 8,
     paddingHorizontal: 12,
-    color: UI.text,
-    backgroundColor: UI.secondary,
+    color: UI.colors.text,
+    backgroundColor: UI.colors.secondary,
   },
   searchButton: {
     marginLeft: 8,
     padding: 8,
-    backgroundColor: UI.accent,
+    backgroundColor: UI.colors.accent,
     borderRadius: 8,
   },
   loadingContainer: {
@@ -444,7 +459,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 16,
-    color: UI.sub,
+    color: UI.colors.sub,
     fontSize: 16,
   },
   errorContainer: {
@@ -455,7 +470,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     marginTop: 16,
-    color: UI.error,
+    color: UI.colors.error,
     fontSize: 16,
     textAlign: 'center',
   },
@@ -465,16 +480,16 @@ const styles = StyleSheet.create({
     marginTop: 16,
     paddingVertical: 8,
     paddingHorizontal: 16,
-    backgroundColor: UI.secondary,
+    backgroundColor: UI.colors.secondary,
     borderRadius: 8,
   },
   retryText: {
     marginLeft: 8,
-    color: UI.accent,
+    color: UI.colors.accent,
     fontWeight: '600',
   },
   card: {
-    backgroundColor: UI.background,
+    backgroundColor: UI.colors.background,
     margin: 16,
     padding: 16,
     borderRadius: 12,
@@ -492,16 +507,16 @@ const styles = StyleSheet.create({
   companyName: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: UI.text,
+    color: UI.colors.text,
   },
   sector: {
     fontSize: 14,
-    color: UI.sub,
+    color: UI.colors.sub,
     marginTop: 4,
   },
   marketCap: {
     fontSize: 14,
-    color: UI.sub,
+    color: UI.colors.sub,
     marginTop: 2,
   },
   priceContainer: {
@@ -510,7 +525,7 @@ const styles = StyleSheet.create({
   currentPrice: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: UI.text,
+    color: UI.colors.text,
   },
   change: {
     fontSize: 14,
@@ -526,7 +541,7 @@ const styles = StyleSheet.create({
   chartTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: UI.text,
+    color: UI.colors.text,
   },
   intervalSelector: {
     flexDirection: 'row',
@@ -536,18 +551,18 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     marginLeft: 4,
     borderRadius: 6,
-    backgroundColor: UI.secondary,
+    backgroundColor: UI.colors.secondary,
   },
   intervalButtonActive: {
-    backgroundColor: UI.accent,
+    backgroundColor: UI.colors.accent,
   },
   intervalText: {
     fontSize: 12,
-    color: UI.sub,
+    color: UI.colors.sub,
     fontWeight: '600',
   },
   intervalTextActive: {
-    color: UI.background,
+    color: UI.colors.background,
   },
   chartLoading: {
     height: 200,
@@ -561,7 +576,7 @@ const styles = StyleSheet.create({
   },
   metricCard: {
     width: '48%',
-    backgroundColor: UI.background,
+    backgroundColor: UI.colors.background,
     margin: '1%',
     padding: 16,
     borderRadius: 12,
@@ -574,7 +589,7 @@ const styles = StyleSheet.create({
   metricTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: UI.text,
+    color: UI.colors.text,
     marginBottom: 12,
   },
   metricItem: {
@@ -585,17 +600,17 @@ const styles = StyleSheet.create({
   },
   metricLabel: {
     fontSize: 14,
-    color: UI.sub,
+    color: UI.colors.sub,
   },
   metricValue: {
     fontSize: 14,
     fontWeight: '600',
-    color: UI.text,
+    color: UI.colors.text,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: UI.text,
+    color: UI.colors.text,
     marginBottom: 12,
   },
   peersContainer: {
@@ -607,12 +622,12 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     marginRight: 8,
     marginBottom: 8,
-    backgroundColor: UI.secondary,
+    backgroundColor: UI.colors.secondary,
     borderRadius: 16,
   },
   peerText: {
     fontSize: 14,
-    color: UI.accent,
+    color: UI.colors.accent,
     fontWeight: '600',
   },
   footer: {
@@ -621,7 +636,85 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: 12,
-    color: UI.sub,
+    color: UI.colors.sub,
+  },
+  // New UI component styles
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  symbol: { 
+    color: UI.colors.sub, 
+    fontSize: 16, 
+    fontWeight: '600' 
+  },
+  website: { 
+    color: UI.colors.accent, 
+    fontSize: 12, 
+    marginTop: 6 
+  },
+  segmented: {
+    flexDirection: 'row',
+    backgroundColor: UI.colors.secondary,
+    borderRadius: 8,
+    padding: 2,
+  },
+  segment: { 
+    paddingVertical: 6, 
+    paddingHorizontal: 10, 
+    borderRadius: 6 
+  },
+  segmentActive: { 
+    backgroundColor: UI.colors.accent 
+  },
+  segmentText: { 
+    fontSize: 12, 
+    color: UI.colors.sub, 
+    fontWeight: '600' 
+  },
+  segmentTextActive: { 
+    color: UI.colors.background 
+  },
+  legend: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    marginTop: 10, 
+    flexWrap: 'wrap' 
+  },
+  legendDot: { 
+    width: 8, 
+    height: 8, 
+    borderRadius: 4, 
+    backgroundColor: UI.colors.sub, 
+    marginRight: 6, 
+    marginLeft: 12 
+  },
+  legendText: { 
+    color: UI.colors.sub, 
+    fontSize: 12, 
+    marginRight: 6 
+  },
+  badge: { 
+    paddingHorizontal: 8, 
+    paddingVertical: 4, 
+    borderRadius: 999 
+  },
+  badgeText: { 
+    fontSize: 12, 
+    fontWeight: '700' 
+  },
+  metricRow: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    paddingVertical: 6 
+  },
+  errorInline: { 
+    color: UI.colors.error, 
+    marginTop: 8, 
+    fontSize: 12 
   },
 });
 

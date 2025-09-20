@@ -7,15 +7,13 @@ onNavigate: (screen: string) => void;
 }
 const BottomTabBar: React.FC<BottomTabBarProps> = ({ currentScreen, onNavigate }) => {
 const tabs = [
-{ id: 'home', label: 'Home', icon: 'home' },
-{ id: 'stock', label: 'Stocks', icon: 'trending-up' },
-{ id: 'crypto', label: 'Crypto', icon: 'zap' },
-{ id: 'research', label: 'Research', icon: 'search' },
-{ id: 'ai-portfolio', label: 'AI Portfolio', icon: 'cpu' },
-{ id: 'trading', label: 'Trading', icon: 'dollar-sign' },
-{ id: 'portfolio', label: 'Portfolio', icon: 'bar-chart-2' },
-{ id: 'social', label: 'Discuss', icon: 'users' },
-{ id: 'profile', label: 'Profile', icon: 'user' },
+  { id: 'home', label: 'Home', icon: 'home' },
+  { id: 'stock', label: 'Stocks', icon: 'trending-up' },
+  { id: 'crypto', label: 'Crypto', icon: 'zap' },
+  { id: 'ai-portfolio', label: 'AI Portfolio', icon: 'cpu' },
+  { id: 'trading', label: 'Trading', icon: 'dollar-sign' },
+  { id: 'portfolio', label: 'Portfolio', icon: 'bar-chart-2' },
+  { id: 'social', label: 'Discuss', icon: 'users' },
 ];
 return (
 <View style={styles.container}>

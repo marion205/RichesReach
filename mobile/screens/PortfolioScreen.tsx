@@ -3,7 +3,6 @@ import {
 View,
 Text,
 StyleSheet,
-SafeAreaView,
 ScrollView,
 RefreshControl,
 Alert,
@@ -75,7 +74,7 @@ setRefreshing(false);
 };
 if (watchlistLoading) {
 return (
-<SafeAreaView style={styles.container}>
+<View style={styles.container}>
 <View style={styles.header}>
 <Icon name="bar-chart-2" size={24} color="#34C759" />
 <Text style={styles.headerTitle}>Portfolio</Text>
@@ -84,12 +83,12 @@ return (
 <Icon name="refresh-cw" size={32} color="#34C759" />
 <Text style={styles.loadingText}>Loading your portfolio...</Text>
 </View>
-</SafeAreaView>
+</View>
 );
 }
 if (watchlistError) {
 return (
-<SafeAreaView style={styles.container}>
+<View style={styles.container}>
 <View style={styles.header}>
 <Icon name="bar-chart-2" size={24} color="#34C759" />
 <Text style={styles.headerTitle}>Portfolio</Text>
@@ -106,13 +105,13 @@ Tap to retry
 </Text>
 </View>
 </View>
-</SafeAreaView>
+</View>
 );
 }
 const watchlistItems = watchlistData?.myWatchlist || [];
 if (watchlistItems.length === 0) {
 return (
-<SafeAreaView style={styles.container}>
+<View style={styles.container}>
 <View style={styles.header}>
 <Icon name="bar-chart-2" size={24} color="#34C759" />
 <Text style={styles.headerTitle}>Portfolio</Text>
@@ -132,11 +131,11 @@ Go to Home to add stocks
 </Text>
 </View>
 </View>
-</SafeAreaView>
+</View>
 );
 }
 return (
-<SafeAreaView style={styles.container}>
+<View style={styles.container}>
 <View style={styles.header}>
 <Icon name="bar-chart-2" size={24} color="#34C759" />
 <Text style={styles.headerTitle}>Portfolio</Text>
@@ -259,13 +258,14 @@ Advanced options strategies and market sentiment
 </TouchableOpacity>
 </View>
 </ScrollView>
-</SafeAreaView>
+</View>
 );
 };
 const styles = StyleSheet.create({
 container: {
 flex: 1,
 backgroundColor: '#f8f9fa',
+paddingTop: 0,
 },
 header: {
 flexDirection: 'row',

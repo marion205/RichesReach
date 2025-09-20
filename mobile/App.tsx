@@ -36,9 +36,12 @@ import AIOptionsScreen from './screens/AIOptionsScreen';
 import BankAccountScreen from './screens/BankAccountScreen';
 import NotificationsScreen from './screens/NotificationsScreen';
 import CryptoScreen from './screens/CryptoScreen';
-import ResearchScreen from './screens/ResearchScreen';
+import OptionsLearningScreen from './screens/OptionsLearningScreen';
+import SBLOCLearningScreen from './screens/SBLOCLearningScreen';
+import PortfolioLearningScreen from './screens/PortfolioLearningScreen';
 // Components
 import BottomTabBar from './components/BottomTabBar';
+import TopHeader from './components/TopHeader';
 import PersonalizedDashboard from './components/PersonalizedDashboard';
 // Services
 import UserProfileService from './services/UserProfileService';
@@ -228,8 +231,6 @@ case 'stock':
 return <StockScreen navigateTo={navigateTo} />;
 case 'crypto':
 return <CryptoScreen navigation={{ navigate: navigateTo }} />;
-case 'research':
-return <ResearchScreen />;
 case 'ai-portfolio':
 return <AIPortfolioScreen navigateTo={navigateTo} />;
 case 'portfolio':
@@ -286,6 +287,12 @@ case 'bank-accounts':
 return <BankAccountScreen navigateTo={navigateTo} />;
 case 'notifications':
 return <NotificationsScreen navigateTo={navigateTo} />;
+case 'options-learning':
+return <OptionsLearningScreen navigation={{ goBack: () => setCurrentScreen('home') }} />;
+case 'sbloc-learning':
+return <SBLOCLearningScreen navigation={{ goBack: () => setCurrentScreen('home') }} />;
+case 'portfolio-learning':
+return <PortfolioLearningScreen navigation={{ goBack: () => setCurrentScreen('home') }} />;
     default:
       // Handle user-profile and user-portfolios with userId pattern
       if (currentScreen.startsWith('user-profile-')) {
@@ -310,6 +317,9 @@ return <NotificationsScreen navigateTo={navigateTo} />;
 return (
 <ApolloProvider client={client}>
 <View style={styles.container}>
+{isLoggedIn && currentScreen !== 'login' && currentScreen !== 'signup' && currentScreen !== 'onboarding' && (
+<TopHeader currentScreen={currentScreen} onNavigate={navigateTo} />
+)}
 {renderScreen()}
 {isLoggedIn && currentScreen !== 'login' && currentScreen !== 'signup' && (
 <BottomTabBar currentScreen={currentScreen} onNavigate={navigateTo} />

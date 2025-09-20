@@ -44,8 +44,8 @@ title: 'Getting Started with Investing',
 description: 'Learn the basics of investing and how to build your first portfolio',
 icon: 'play-circle',
 color: '#34C759',
-totalModules: 5,
-estimatedTime: '25 minutes',
+totalModules: 6,
+estimatedTime: '35 minutes',
 modules: [
 {
 id: 'what-is-investing',
@@ -338,6 +338,126 @@ content: `**Step 1: Set Your Goals**
 - Check quarterly, not daily
 - Rebalance annually
 - Increase contributions over time`
+}
+]
+}
+}
+]
+},
+PORTFOLIO_MANAGEMENT: {
+id: 'portfolio-management',
+title: 'Portfolio Management',
+description: 'Learn how to manage and optimize your investment portfolio',
+icon: 'bar-chart-2',
+color: '#007AFF',
+totalModules: 4,
+estimatedTime: '20 minutes',
+modules: [
+{
+id: 'rebalancing',
+title: 'Portfolio Rebalancing',
+description: 'Learn when and how to rebalance your portfolio',
+icon: 'refresh-cw',
+color: '#007AFF',
+duration: '5 min read',
+difficulty: 'Intermediate' as const,
+completed: false,
+locked: false,
+content: {
+sections: [
+{
+id: 'what-is-rebalancing',
+title: 'What is Rebalancing?',
+type: 'text' as const,
+content: `**Rebalancing** is the process of adjusting your portfolio back to your target asset allocation.
+**Why Rebalance?**
+- Markets move, changing your allocation
+- Maintains your risk level
+- Forces you to "buy low, sell high"
+- Keeps you on track with your goals
+**When to Rebalance:**
+- **Time-based**: Quarterly or annually
+- **Threshold-based**: When allocation drifts 5-10%
+- **Life changes**: New goals, risk tolerance changes
+**How to Rebalance:**
+1. Check your current allocation
+2. Compare to your target allocation
+3. Sell overweight assets
+4. Buy underweight assets
+5. Use new money to rebalance when possible`
+}
+]
+}
+},
+{
+id: 'options-trading',
+title: 'Options Trading',
+description: 'Master options strategies and advanced trading techniques',
+icon: 'trending-up',
+color: '#00cc99',
+duration: '30 min read',
+difficulty: 'Advanced' as const,
+completed: false,
+locked: true,
+content: {
+sections: [
+{
+id: 'options-basics',
+title: 'Options Basics',
+type: 'text' as const,
+content: `**Options** are financial derivatives that give you the right, but not the obligation, to buy or sell an asset at a specific price.
+
+**Key Terms:**
+- **Call Option**: Right to buy at strike price
+- **Put Option**: Right to sell at strike price  
+- **Strike Price**: Price at which you can exercise
+- **Expiration Date**: When the option expires
+- **Premium**: Cost to buy the option
+
+**Why Trade Options?**
+- Leverage: Control more shares with less money
+- Hedging: Protect your portfolio from losses
+- Income: Generate cash flow by selling options
+- Flexibility: Profit in any market direction`
+}
+]
+}
+},
+{
+id: 'sbloc-guide',
+title: 'SBLOC Guide',
+description: 'Securities-based line of credit for advanced investors',
+icon: 'credit-card',
+color: '#8B5CF6',
+duration: '25 min read',
+difficulty: 'Advanced' as const,
+completed: false,
+locked: true,
+content: {
+sections: [
+{
+id: 'sbloc-basics',
+title: 'SBLOC Basics',
+type: 'text' as const,
+content: `**SBLOC** (Securities-Based Line of Credit) lets you borrow against your investment portfolio.
+
+**Key Benefits:**
+- Access liquidity without selling investments
+- Competitive interest rates
+- No fixed repayment schedule
+- Maintain portfolio control
+
+**How It Works:**
+1. Pledge eligible securities as collateral
+2. Borrow up to 50-70% of portfolio value
+3. Pay interest only on amount borrowed
+4. Repay when convenient
+
+**Important Considerations:**
+- Margin calls if portfolio value drops
+- Variable interest rates
+- Not for purchasing more securities
+- Risk of forced liquidation`
 }
 ]
 }

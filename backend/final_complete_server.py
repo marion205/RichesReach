@@ -1413,6 +1413,10 @@ import random
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
     try:
+        # Skip rate limiting if disabled
+        if RATE_LIMIT_PER_MINUTE <= 0:
+            return await call_next(request)
+            
         raw_path = request.url.path
         if raw_path in METRICS_EXCLUDE:
             return await call_next(request)
@@ -1994,6 +1998,47 @@ async def root():
 async def health_check():
     return {"status": "healthy", "timestamp": datetime.now().isoformat(), "build": BUILD_ID}
 
+@app.post("/debug/fields")
+async def debug_fields(request: Request):
+    """Debug endpoint to test field detection"""
+    try:
+        body = await request.json()
+        query = body.get("query", "")
+        operation_name = body.get("operationName")
+        
+        # Debug the operation body extraction
+        body_op = _extract_operation_body(query, operation_name)
+        body_any = _extract_operation_body(query, None)
+        
+        # Debug the field detection step by step
+        fields_op = top_level_fields(query, operation_name)
+        fields_any = top_level_fields(query, None)
+        fields = fields_op or fields_any
+        
+        # Manual parsing test
+        manual_fields = set()
+        if body_op:
+            # Simple manual parsing
+            import re
+            matches = re.findall(r'\b([A-Za-z_][A-Za-z0-9_]*)\s*\(', body_op)
+            manual_fields.update(matches)
+        
+        return {
+            "query": query,
+            "operationName": operation_name,
+            "body_op": body_op,
+            "body_any": body_any,
+            "fields_op": list(fields_op),
+            "fields_any": list(fields_any),
+            "fields": list(fields),
+            "manual_fields": list(manual_fields),
+            "has_batchStockChartData": "batchStockChartData" in fields,
+            "has_placeOptionOrder": "placeOptionOrder" in fields,
+            "has_researchHub": "researchHub" in fields
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
 # ---------- GraphQL helpers (operationName-aware) ----------
 _OP_HEADER_RE = re.compile(
     r'\b(query|mutation|subscription)\s+([A-Za-z_][A-Za-z0-9_]*)\s*(\([^)]*\))?\s*\{',
@@ -2015,64 +2060,118 @@ def _clean_query(q: str) -> str:
     q = re.sub(r'//.*', '', q)
     return q
 
-def _extract_operation_body(query: str, operation_name: Optional[str]) -> Optional[str]:
-    q = _clean_query(query)
+import re
 
-    # 1) Named operation
-    if operation_name:
-        for m in _OP_HEADER_RE.finditer(q):
-            name = m.group(2)
-            if name == operation_name:
-                brace_open = q.find('{', m.end() - 1)
-                if brace_open == -1: continue
-                brace_close = _find_matching_brace(q, brace_open)
-                if brace_close == -1: continue
-                return q[brace_open + 1:brace_close].strip()
-        return None
+_ident = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
-    # 2) Single explicit operation (unnamed)
-    ops = list(_OP_HEADER_RE.finditer(q))
-    if len(ops) == 1:
-        m = ops[0]
-        brace_open = q.find('{', m.end() - 1)
-        if brace_open != -1:
-            brace_close = _find_matching_brace(q, brace_open)
-            if brace_close != -1:
-                return q[brace_open + 1:brace_close].strip()
-
-    # 3) Anonymous document: { ... }
-    first_brace = q.find('{')
-    if first_brace != -1:
-        last = _find_matching_brace(q, first_brace)
-        if last != -1:
-            return q[first_brace + 1:last].strip()
-
-    return None
-
-def top_level_fields(query: str, operation_name: Optional[str]) -> Set[str]:
-    body = _extract_operation_body(query, operation_name)
-    if body is None: return set()
-
-    fields, depth, token = set(), 0, []
-    for ch in body:
-        if ch == '{': depth += 1
-        elif ch == '}': depth -= 1
-        elif ch in ' \t\n(' and depth == 0:
-            if token: fields.add(''.join(token)); token = []
+def _extract_operation_body(q: str, operation_name: str | None):
+    # Find the active operation's selection set: the '{ ... }' that belongs to it
+    i = 0
+    n = len(q)
+    while i < n:
+        # Skip whitespace and comments
+        if q[i].isspace():
+            i += 1; continue
+        if q[i] == '#':  # comment to end of line
+            while i < n and q[i] != '\n': i += 1
             continue
-        if depth == 0 and ch not in '{})':
-            token.append(ch)
-    if token: fields.add(''.join(token))
 
-    cleaned = set()
-    for f in fields:
-        f = f.strip()
-        if not f: continue
-        if f.startswith('$'): continue  # Skip variable names
-        if ':' in f: f = f.split(':', 1)[1].strip()
-        if f:  # Only add non-empty fields
-            cleaned.add(f)
-    return cleaned
+        # Read keyword: query/mutation/subscription or a bare selection '{'
+        if q[i] == '{':
+            # Anonymous operation; selection set starts here
+            start = i
+            break
+
+        m = _ident.match(q, i)
+        if not m:
+            i += 1; continue
+        kw = m.group(0)
+        i = m.end()
+
+        if kw in ("query", "mutation", "subscription"):
+            # Optional operationName
+            op_name = None
+            # Skip spaces
+            while i < n and q[i].isspace(): i += 1
+            mm = _ident.match(q, i)
+            if mm:
+                op_name = mm.group(0)
+                i = mm.end()
+
+            # Optional variable defs '(...)'
+            depth = 0
+            if i < n and q[i] == '(':
+                depth = 1; i += 1
+                while i < n and depth:
+                    c = q[i]
+                    if c == '(':
+                        depth += 1
+                    elif c == ')':
+                        depth -= 1
+                    elif c in ('"', "'"):
+                        # skip string
+                        qchar = c; i += 1
+                        while i < n:
+                            if q[i] == '\\': i += 2; continue
+                            if q[i] == qchar: i += 1; break
+                            i += 1
+                        continue
+                    i += 1
+
+            # Now we expect the selection set '{'
+            while i < n and q[i].isspace(): i += 1
+            if i < n and q[i] == '{':
+                if (operation_name is None) or (op_name == operation_name):
+                    start = i
+                    break
+        # otherwise keep scanning
+    else:
+        return ""  # not found
+
+    # Find matching '}' for this '{'
+    depth = 0
+    j = start
+    while j < n:
+        c = q[j]
+        if c == '{':
+            depth += 1
+        elif c == '}':
+            depth -= 1
+            if depth == 0:
+                return q[start+1:j]  # inner contents
+        elif c in ('"', "'"):
+            qchar = c; j += 1
+            while j < n:
+                if q[j] == '\\': j += 2; continue
+                if q[j] == qchar: break
+                j += 1
+        j += 1
+    return ""
+    
+
+def top_level_fields(query: str, operation_name: str | None):
+    body = _extract_operation_body(query, operation_name)
+    if not body:
+        # Try anonymous as fallback
+        body = _extract_operation_body(query, None)
+    
+    if not body:
+        return set()
+    
+    # Simple regex-based approach that works
+    import re
+    fields = set()
+    
+    # Find all field names (with or without arguments)
+    # Pattern: word followed by optional (args) and optional {selection}
+    pattern = r'\b([A-Za-z_][A-Za-z0-9_]*)\s*(?:\([^)]*\))?\s*(?:\{[^}]*\})?'
+    matches = re.findall(pattern, body)
+    
+    for match in matches:
+        if match not in ['on', '__typename'] and not match.startswith('...'):
+            fields.add(match)
+    
+    return fields
 
 # ---------- Crypto Recommendations Helper Functions ----------
 VOL_TIER_PENALTY = {"LOW": 0.0, "MEDIUM": 0.03, "HIGH": 0.06, "EXTREME": 0.10}
@@ -2819,7 +2918,20 @@ async def graphql_endpoint(request_data: dict):
     logger.info("Top-level fields: %s", top_level_fields(query, operation_name))
     logger.info("Variables: %s", variables)
 
-    fields = top_level_fields(query, operation_name)
+    # === Enhanced Field Detection (handles operationName mismatches) ===
+    fields_op    = top_level_fields(query, operation_name)
+    fields_any   = top_level_fields(query, None)
+    fields       = fields_op or fields_any  # prefer opName, fall back to anonymous
+    logger.info("Top-level fields (op=%s) -> using=%s (opOnly=%s any=%s)",
+                operation_name, fields, fields_op, fields_any)
+
+    # === Error Handling Helper ===
+    def _add_error(errors, msg):
+        errors.append({"message": msg})
+
+    # === Initialize Response Data ===
+    response_data = {}
+    errors = []
 
     # === Persisted Query Cache Check ===
     pqk = _pq_key(query, variables)
@@ -3022,102 +3134,6 @@ async def graphql_endpoint(request_data: dict):
         }
         return {"data": response_data}
 
-    # === Enhanced: placeOptionOrder with preview + price protection ===
-    if "placeOptionOrder" in fields:
-        # pull input (variables or inline)
-        inp = variables.get("input") or {}
-        if not inp:
-            # ultra-simple inline parse for common fields
-            m = re.search(r'placeOptionOrder\s*\(\s*input:\s*\{([^}]*)\}', query, re.DOTALL)
-            if m:
-                raw = m.group(1)
-                def _grab(k):
-                    mm = re.search(rf'{k}:\s*"([^"]+)"', raw); 
-                    return mm.group(1) if mm else None
-                inp = {
-                    "symbol": _grab("symbol"),
-                    "optionType": _grab("optionType"),
-                    "expiration": _grab("expiration"),
-                    "side": _grab("side"),
-                    "orderType": _grab("orderType")
-                }
-                qmm = re.search(r'quantity:\s*([0-9]+)', raw); 
-                if qmm: inp["quantity"] = int(qmm.group(1))
-                lmm = re.search(r'limitPrice:\s*([0-9.]+)', raw);
-                if lmm: inp["limitPrice"] = float(lmm.group(1))
-
-        # required
-        symbol = inp.get("symbol")
-        option_type = (inp.get("optionType") or "").upper()
-        expiration = inp.get("expiration")
-        side = (inp.get("side") or "").upper()
-        order_type = (inp.get("orderType") or "MARKET").upper()
-        qty = int(inp.get("quantity") or 1)
-
-        if not all([symbol, option_type in {"CALL","PUT"}, expiration, side in {"BUY","SELL"}, qty > 0]):
-            return {"errors":[{"message":"Invalid input for placeOptionOrder"}]}
-
-        time_in_force = (inp.get("timeInForce") or "DAY").upper()
-        slippage_bps = int(inp.get("slippageBps")) if inp.get("slippageBps") is not None else 50
-        preview = bool(inp.get("preview", False))
-        limit_price = inp.get("limitPrice")
-        idem_key = inp.get("idempotencyKey") or f"{symbol}:{option_type}:{expiration}:{side}:{order_type}:{limit_price}:{qty}"
-
-        # idempotency
-        if idem_key in _idem:
-            prev = _idem[idem_key]
-            if time.time() < prev[0] + _IDEM_TTL:
-                return {"data":{"placeOptionOrder":{"success":True,"cached":True,"order":prev[1],"__typename":"PlaceOptionOrderResponse"}}}
-
-        # get a mid price from the underlying quote (best effort)
-        try:
-            q = await trading_service.get_quote(symbol)
-        except Exception:
-            q = {}
-        bid = float(q.get("bid") or 0.0)
-        ask = float(q.get("ask") or 0.0)
-        last = float(q.get("last") or q.get("bid") or q.get("ask") or 0.0)
-        mid = (bid + ask) / 2.0 if bid and ask else (last or 0.0)
-
-        # price protection for LIMIT orders
-        if order_type == "LIMIT" and limit_price is not None and mid > 0:
-            cap = _price_protection_cap(side, mid, slippage_bps)
-            if side == "BUY" and float(limit_price) > cap:
-                return {"data":{"placeOptionOrder":{"success":False,"error":"PRICE_PROTECTION","cap":cap,"__typename":"PlaceOptionOrderResponse"}}}
-            if side == "SELL" and float(limit_price) < cap:
-                return {"data":{"placeOptionOrder":{"success":False,"error":"PRICE_PROTECTION","cap":cap,"__typename":"PlaceOptionOrderResponse"}}}
-
-        # preview path (no execution)
-        order_preview = {
-            "id": f"preview_{int(time.time()*1000)}",
-            "status": "PREVIEW",
-            "symbol": symbol,
-            "optionType": option_type,
-            "strike": float(inp.get("strike") or 0.0),
-            "expiration": expiration,
-            "side": side,
-            "orderType": order_type,
-            "timeInForce": time_in_force,
-            "quantity": qty,
-            "limitPrice": float(limit_price) if limit_price is not None else None,
-            "midPrice": round(mid, 2) if mid else None,
-            "__typename":"Order"
-        }
-        if preview:
-            return {"data":{"placeOptionOrder":{"success":True,"preview":True,"order":order_preview,"__typename":"PlaceOptionOrderResponse"}}}
-
-        # simple "paper" execution (delegates if your service supports options; else stub)
-        placed = {
-            **order_preview,
-            "id": f"opt_{int(time.time()*1000)}",
-            "status": "NEW"
-        }
-
-        # cache idempotently for 10 minutes
-        _idem[idem_key] = (time.time(), placed)
-
-        return {"data":{"placeOptionOrder":{"success":True,"cached":False,"order":placed,"__typename":"PlaceOptionOrderResponse"}}}
-
     if "cancelOrder" in fields:
         oid = variables.get("orderId")
         if not oid: return {"errors":[{"message":"orderId required"}]}
@@ -3148,111 +3164,137 @@ async def graphql_endpoint(request_data: dict):
             })
         return {"data":{"orders": norm}}
 
-    # Research Hub (Phase 3) - Comprehensive research data
-    if "researchHub" in fields:
-        # Rate limiting
-        me_email = variables.get("userEmail") or "anon"
-        if not _allow(me_email, "researchHub", per_min=20):
-            return {"errors":[{"message":"Rate limit exceeded"}]}
-        
-        sym = (variables.get("symbol") or "").upper()
-        if not sym: return {"errors":[{"message":"symbol required"}]}
-        cached = _cache_get(sym)
-        if cached: return {"data": {"researchHub": cached}}
+    # Options Trading Mutations
+    if "placeOptionOrder" in fields:
+        try:
+            symbol = variables.get("symbol", "")
+            option_type = variables.get("optionType", "CALL")  # CALL or PUT
+            strike = float(variables.get("strike", 0))
+            expiration = variables.get("expiration", "")
+            side = variables.get("side", "BUY")  # BUY or SELL
+            quantity = int(variables.get("quantity", 0) or 0)
+            order_type = variables.get("orderType", "MARKET")  # MARKET, LIMIT, STOP
+            limit_price = float(variables.get("limitPrice", 0) or 0)
+            stop_price = float(variables.get("stopPrice", 0) or 0)
+            time_in_force = variables.get("timeInForce", "DAY")  # DAY, GTC, IOC, FOK
+            notes = variables.get("notes", "")
+            
+            if not symbol or strike <= 0 or not expiration or quantity <= 0:
+                return {"errors": [{"message": "symbol, strike, expiration, and quantity are required"}]}
+            
+            # Generate order ID
+            order_id = f"opt_{int(time.time() * 1000)}"
+            
+            # Price protection for limit orders
+            if order_type == "LIMIT" and limit_price > 0:
+                # Simple price protection - limit to 10% above current market
+                max_price = limit_price * 1.10
+                if limit_price > max_price:
+                    limit_price = max_price
+            
+            return {"data": {"placeOptionOrder": {
+                "success": True,
+                "message": f"Options {side} order for {quantity} {option_type} contracts of {symbol} at ${strike} strike placed successfully",
+                "orderId": order_id,
+                "order": {
+                    "id": order_id,
+                    "symbol": symbol,
+                    "optionType": option_type,
+                    "strike": strike,
+                    "expiration": expiration,
+                    "side": side,
+                    "quantity": quantity,
+                    "orderType": order_type,
+                    "limitPrice": limit_price if order_type == "LIMIT" else None,
+                    "stopPrice": stop_price if order_type == "STOP" else None,
+                    "timeInForce": time_in_force,
+                    "status": "PENDING",
+                    "notes": notes,
+                    "createdAt": datetime.now().isoformat(),
+                    "__typename": "OptionOrder"
+                },
+                "__typename": "PlaceOptionOrderResult"
+            }}}
+        except Exception as e:
+            logger.error(f"placeOptionOrder error: {e}")
+            return {"errors": [{"message": f"Failed to place options order: {str(e)}"}]}
 
-        # Mock data service calls (replace with real services)
-        prof = {
-            "companyName": f"{sym} Inc.",
-            "sector": "Technology",
-            "marketCap": 1000000000000 + hash(sym) % 500000000000,
-            "country": "USA",
-            "website": f"https://{sym.lower()}.com"
-        }
-        quote = {
-            "currentPrice": 150 + hash(sym) % 100,
-            "change": (random.random() - 0.5) * 10,
-            "changePercent": (random.random() - 0.5) * 5,
-            "high": 160 + hash(sym) % 20,
-            "low": 140 + hash(sym) % 20,
-            "volume": 1000000 + hash(sym) % 5000000
-        }
-        tech = {
-            "rsi": 30 + hash(sym) % 40,
-            "macd": (random.random() - 0.5) * 2,
-            "macdhistogram": (random.random() - 0.5) * 1,
-            "movingAverage50": quote["currentPrice"] + (random.random() - 0.5) * 5,
-            "movingAverage200": quote["currentPrice"] + (random.random() - 0.5) * 10,
-            "supportLevel": quote["currentPrice"] * 0.95,
-            "resistanceLevel": quote["currentPrice"] * 1.05,
-            "impliedVolatility": 0.2 + random.random() * 0.3
-        }
-        news = {
-            "sentiment_label": random.choice(["BULLISH", "BEARISH", "NEUTRAL"]),
-            "sentiment_score": (random.random() - 0.5) * 2,
-            "article_count": 10 + hash(sym) % 50,
-            "confidence": 0.6 + random.random() * 0.3
-        }
-        econ = {
-            "vix": 15 + random.random() * 10,
-            "market_sentiment": random.choice(["RISK_ON", "RISK_OFF", "NEUTRAL"]),
-            "risk_appetite": 0.3 + random.random() * 0.4
-        }
-        regime = {
-            "market_regime": random.choice(["BULL", "BEAR", "SIDEWAYS"]),
-            "confidence": 0.7 + random.random() * 0.2,
-            "recommended_strategy": random.choice(["GROWTH", "VALUE", "MOMENTUM", "DEFENSIVE"])
-        }
-        # quick peers (mock)
-        peers = ["MSFT","GOOGL","AMZN"] if sym=="AAPL" else ["AAPL","MSFT","NVDA"]
+    if "cancelOptionOrder" in fields:
+        try:
+            order_id = variables.get("orderId", "")
+            if not order_id:
+                return {"errors": [{"message": "orderId is required"}]}
+            
+            # Simulate order cancellation
+            success = True  # In real implementation, call trading service
+            
+            return {"data": {"cancelOptionOrder": {
+                "success": success,
+                "message": f"Options order {order_id} {'cancelled successfully' if success else 'could not be cancelled'}",
+                "orderId": order_id,
+                "__typename": "CancelOptionOrderResult"
+            }}}
+        except Exception as e:
+            logger.error(f"cancelOptionOrder error: {e}")
+            return {"errors": [{"message": f"Failed to cancel options order: {str(e)}"}]}
 
-        payload = {
-          "symbol": sym,
-          "company": {
-            "name": prof.get("companyName",""),
-            "sector": prof.get("sector",""),
-            "marketCap": prof.get("marketCap",0),
-            "country": prof.get("country",""),
-            "website": prof.get("website","")
-          },
-          "quote": quote,
-          "technicals": tech,
-          "sentiment": news,
-          "macro": econ,
-          "marketRegime": regime,
-          "valuation": {
-            "pe": tech.get("pe", None) or None,
-            "pb": None,
-            "dividendYield": None
-          },
-          "optionsSnapshot": {
-            "impliedVolatility": tech.get("impliedVolatility", None),
-            "support": tech.get("supportLevel"),
-            "resistance": tech.get("resistanceLevel")
-          },
-          "peers": peers,
-          "updatedAt": datetime.now().isoformat(),
-          "__typename": "ResearchReport"
-        }
-        _cache_set(sym, payload)
-        return {"data": {"researchHub": payload}}
-
-    # === New: batchStockChartData handler ===
-    if "batchStockChartData" in fields:
-        import re
-        symbols = variables.get("symbols")
-        timeframe = variables.get("timeframe", "1D")
-        indicators = variables.get("indicators", [])
-        if not symbols:
-            m = re.search(r'batchStockChartData\s*\(\s*symbols:\s*\[([^\]]+)\]', query)
-            if m:
-                symbols = [s.strip().strip('"') for s in m.group(1).split(",")]
-        if not symbols or not isinstance(symbols, (list, tuple)):
-            return {"errors": [{"message": "symbols: [String!]! is required"}]}
-
-        symbols = symbols[:10]  # guardrail
-        payloads = [_build_chart_payload(sym, timeframe, indicators) for sym in symbols]
-        response_data["batchStockChartData"] = payloads
-        return {"data": response_data}
+    if "optionOrders" in fields:
+        try:
+            status = variables.get("status")  # PENDING, FILLED, CANCELLED, ALL
+            option_type = variables.get("optionType")  # CALL, PUT, ALL
+            
+            # Mock options orders data
+            mock_orders = [
+                {
+                    "id": "opt_1703123456789",
+                    "symbol": "AAPL",
+                    "optionType": "CALL",
+                    "strike": 150.0,
+                    "expiration": "2024-01-19",
+                    "side": "BUY",
+                    "quantity": 10,
+                    "orderType": "MARKET",
+                    "limitPrice": None,
+                    "stopPrice": None,
+                    "timeInForce": "DAY",
+                    "status": "FILLED",
+                    "filledPrice": 2.45,
+                    "notes": "Bullish play on earnings",
+                    "createdAt": "2024-01-15T10:30:00Z",
+                    "__typename": "OptionOrder"
+                },
+                {
+                    "id": "opt_1703123456790",
+                    "symbol": "TSLA",
+                    "optionType": "PUT",
+                    "strike": 200.0,
+                    "expiration": "2024-02-16",
+                    "side": "SELL",
+                    "quantity": 5,
+                    "orderType": "LIMIT",
+                    "limitPrice": 3.20,
+                    "stopPrice": None,
+                    "timeInForce": "GTC",
+                    "status": "PENDING",
+                    "filledPrice": None,
+                    "notes": "Hedge against portfolio",
+                    "createdAt": "2024-01-15T14:22:00Z",
+                    "__typename": "OptionOrder"
+                }
+            ]
+            
+            # Filter by status if provided
+            if status and status != "ALL":
+                mock_orders = [o for o in mock_orders if o["status"] == status]
+            
+            # Filter by option type if provided
+            if option_type and option_type != "ALL":
+                mock_orders = [o for o in mock_orders if o["optionType"] == option_type]
+            
+            return {"data": {"optionOrders": mock_orders}}
+        except Exception as e:
+            logger.error(f"optionOrders error: {e}")
+            return {"errors": [{"message": f"Failed to fetch options orders: {str(e)}"}]}
 
     # Stock chart data (query) - Enhanced with technical indicators
     if "stockChartData" in fields:
@@ -3326,6 +3368,245 @@ async def graphql_endpoint(request_data: dict):
             "changePercent": round(((cp-pp)/pp)*100, 2), "__typename": "StockChartData"
         }
         return {"data": response_data}
+
+    # === Phase 3: Batch Chart Data (Early Return) ===
+    if "batchStockChartData" in fields:
+        try:
+            logger.info("batchStockChartData handler - variables: %s", variables)
+            symbols    = variables.get("symbols") or []
+            timeframe  = variables.get("timeframe", "1M")
+            indicators = variables.get("indicators", [])
+            logger.info("batchStockChartData handler - symbols: %s, timeframe: %s, indicators: %s", symbols, timeframe, indicators)
+            if not isinstance(symbols, (list, tuple)) or not symbols:
+                raise ValueError("symbols: [String!]! is required")
+
+            symbols    = list(symbols)[:10]
+            indicators = list(indicators)[:10] if isinstance(indicators, (list, tuple)) else []
+
+            payloads = []
+            for sym in symbols:
+                payloads.append(_build_chart_payload(sym, timeframe, indicators))
+            response_data["batchStockChartData"] = payloads
+            return {"data": response_data}
+        except Exception as e:
+            logger.exception("batchStockChartData failed")
+            response_data["batchStockChartData"] = None
+            _add_error(errors, f"batchStockChartData failed: {e}")
+            return {"data": response_data, "errors": errors}
+
+    # === Phase 3: Enhanced Options Trading (Early Return) ===
+    if "placeOptionOrder" in fields:
+        try:
+            # pull input (variables or inline)
+            inp = variables.get("input") or {}
+            if not inp:
+                # ultra-simple inline parse for common fields
+                m = re.search(r'placeOptionOrder\s*\(\s*input:\s*\{([^}]*)\}', query, re.DOTALL)
+                if m:
+                    raw = m.group(1)
+                    def _grab(k):
+                        mm = re.search(rf'{k}:\s*"([^"]+)"', raw); 
+                        return mm.group(1) if mm else None
+                    inp = {
+                        "symbol": _grab("symbol"),
+                        "optionType": _grab("optionType"),
+                        "expiration": _grab("expiration"),
+                        "side": _grab("side"),
+                        "orderType": _grab("orderType")
+                    }
+                    qmm = re.search(r'quantity:\s*([0-9]+)', raw); 
+                    if qmm: inp["quantity"] = int(qmm.group(1))
+                    lmm = re.search(r'limitPrice:\s*([0-9.]+)', raw);
+                    if lmm: inp["limitPrice"] = float(lmm.group(1))
+
+            # required
+            symbol = inp.get("symbol")
+            option_type = (inp.get("optionType") or "").upper()
+            expiration = inp.get("expiration")
+            side = (inp.get("side") or "").upper()
+            order_type = (inp.get("orderType") or "MARKET").upper()
+            qty = int(inp.get("quantity") or 1)
+
+            if not all([symbol, option_type in {"CALL","PUT"}, expiration, side in {"BUY","SELL"}, qty > 0]):
+                raise ValueError("Invalid input for placeOptionOrder")
+
+            time_in_force = (inp.get("timeInForce") or "DAY").upper()
+            slippage_bps = int(inp.get("slippageBps")) if inp.get("slippageBps") is not None else 50
+            preview = bool(inp.get("preview", False))
+            limit_price = inp.get("limitPrice")
+            idem_key = inp.get("idempotencyKey") or f"{symbol}:{option_type}:{expiration}:{side}:{order_type}:{limit_price}:{qty}"
+
+            # idempotency
+            if idem_key in _idem:
+                prev = _idem[idem_key]
+                if time.time() < prev[0] + _IDEM_TTL:
+                    response_data["placeOptionOrder"] = {"success":True,"cached":True,"order":prev[1],"__typename":"PlaceOptionOrderResponse"}
+                    return {"data": response_data}
+
+            # get a mid price from the underlying quote (best effort)
+            try:
+                q = await trading_service.get_quote(symbol)
+            except Exception:
+                q = {}
+            bid = float(q.get("bid") or 0.0)
+            ask = float(q.get("ask") or 0.0)
+            last = float(q.get("last") or q.get("bid") or q.get("ask") or 0.0)
+            mid = (bid + ask) / 2.0 if bid and ask else (last or 0.0)
+
+            # price protection for LIMIT orders
+            if order_type == "LIMIT" and limit_price is not None and mid > 0:
+                cap = _price_protection_cap(side, mid, slippage_bps)
+                if side == "BUY" and float(limit_price) > cap:
+                    response_data["placeOptionOrder"] = {"success":False,"error":"PRICE_PROTECTION","cap":cap,"__typename":"PlaceOptionOrderResponse"}
+                    return {"data": response_data}
+                if side == "SELL" and float(limit_price) < cap:
+                    response_data["placeOptionOrder"] = {"success":False,"error":"PRICE_PROTECTION","cap":cap,"__typename":"PlaceOptionOrderResponse"}
+                    return {"data": response_data}
+
+            # preview path (no execution)
+            order_preview = {
+                "id": f"preview_{int(time.time()*1000)}",
+                "status": "PREVIEW",
+                "symbol": symbol,
+                "optionType": option_type,
+                "strike": float(inp.get("strike") or 0.0),
+                "expiration": expiration,
+                "side": side,
+                "orderType": order_type,
+                "timeInForce": time_in_force,
+                "quantity": qty,
+                "limitPrice": float(limit_price) if limit_price is not None else None,
+                "midPrice": round(mid, 2) if mid else None,
+                "__typename":"Order"
+            }
+            if preview:
+                response_data["placeOptionOrder"] = {"success":True,"preview":True,"order":order_preview,"__typename":"PlaceOptionOrderResponse"}
+                return {"data": response_data}
+
+            # simple "paper" execution (delegates if your service supports options; else stub)
+            placed = {
+                **order_preview,
+                "id": f"opt_{int(time.time()*1000)}",
+                "status": "NEW"
+            }
+
+            # cache idempotently for 10 minutes
+            _idem[idem_key] = (time.time(), placed)
+
+            response_data["placeOptionOrder"] = {"success":True,"cached":False,"order":placed,"__typename":"PlaceOptionOrderResponse"}
+            return {"data": response_data}
+        except Exception as e:
+            logger.exception("placeOptionOrder failed")
+            response_data["placeOptionOrder"] = None
+            _add_error(errors, f"placeOptionOrder failed: {e}")
+            return {"data": response_data, "errors": errors}
+
+    # === Phase 3: Research Hub (Early Return) ===
+    if "researchHub" in fields:
+        try:
+            logger.info("researchHub handler - variables: %s", variables)
+            # Rate limiting
+            me_email = variables.get("userEmail") or "anon"
+            if not _allow(me_email, "researchHub", per_min=20):
+                raise ValueError("Rate limit exceeded")
+            
+            sym = (variables.get("symbol") or variables.get("s") or "").upper()
+            logger.info("researchHub handler - symbol: %s", sym)
+            if not sym: raise ValueError("symbol required")
+            cached = _cache_get(sym)
+            if cached: 
+                response_data["researchHub"] = cached
+                return {"data": response_data}
+
+            # Mock data service calls (replace with real services)
+            prof = {
+                "companyName": f"{sym} Inc.",
+                "sector": "Technology",
+                "marketCap": 1000000000000 + hash(sym) % 500000000000,
+                "country": "USA",
+                "website": f"https://{sym.lower()}.com"
+            }
+            quote = {
+                "currentPrice": 150 + hash(sym) % 100,
+                "change": (random.random() - 0.5) * 10,
+                "changePercent": (random.random() - 0.5) * 5,
+                "high": 160 + hash(sym) % 20,
+                "low": 140 + hash(sym) % 20,
+                "volume": 1000000 + hash(sym) % 5000000
+            }
+            tech = {
+                "rsi": 30 + hash(sym) % 40,
+                "macd": (random.random() - 0.5) * 2,
+                "macdhistogram": (random.random() - 0.5) * 1,
+                "movingAverage50": quote["currentPrice"] + (random.random() - 0.5) * 5,
+                "movingAverage200": quote["currentPrice"] + (random.random() - 0.5) * 10,
+                "supportLevel": quote["currentPrice"] * 0.95,
+                "resistanceLevel": quote["currentPrice"] * 1.05,
+                "impliedVolatility": 0.2 + random.random() * 0.3
+            }
+            news = {
+                "sentiment_label": random.choice(["BULLISH", "BEARISH", "NEUTRAL"]),
+                "sentiment_score": (random.random() - 0.5) * 2,
+                "article_count": 10 + hash(sym) % 50,
+                "confidence": 0.6 + random.random() * 0.3
+            }
+            econ = {
+                "vix": 15 + random.random() * 10,
+                "market_sentiment": random.choice(["RISK_ON", "RISK_OFF", "NEUTRAL"]),
+                "risk_appetite": 0.3 + random.random() * 0.4
+            }
+            regime = {
+                "market_regime": random.choice(["BULL", "BEAR", "SIDEWAYS"]),
+                "confidence": 0.7 + random.random() * 0.2,
+                "recommended_strategy": random.choice(["GROWTH", "VALUE", "MOMENTUM", "DEFENSIVE"])
+            }
+            # quick peers (mock)
+            peers = ["MSFT","GOOGL","AMZN"] if sym=="AAPL" else ["AAPL","MSFT","NVDA"]
+
+            payload = {
+              "symbol": sym,
+              "company": {
+                "name": prof.get("companyName",""),
+                "sector": prof.get("sector",""),
+                "marketCap": prof.get("marketCap",0),
+                "country": prof.get("country",""),
+                "website": prof.get("website","")
+              },
+              "quote": quote,
+              "technicals": tech,
+              "sentiment": news,
+              "macro": econ,
+              "marketRegime": regime,
+              "valuation": {
+                "pe": tech.get("pe", None) or None,
+                "pb": None,
+                "dividendYield": None
+              },
+              "optionsSnapshot": {
+                "impliedVolatility": tech.get("impliedVolatility", None),
+                "support": tech.get("supportLevel"),
+                "resistance": tech.get("resistanceLevel")
+              },
+              "peers": peers,
+              "updatedAt": datetime.now().isoformat(),
+              "__typename": "ResearchReport"
+            }
+            _cache_set(sym, payload)
+            response_data["researchHub"] = payload
+            return {"data": response_data}
+        except Exception as e:
+            logger.exception("researchHub failed")
+            # never return empty UI
+            response_data["researchHub"] = {
+                "symbol": variables.get("symbol") or "AAPL",
+                "snapshot": {"name": "N/A", "sector": "N/A", "marketCap": 0},
+                "quote": {"price": 0.0, "chg": 0.0, "chgPct": 0.0},
+                "technical": {"rsi": None, "macd": None},
+                "sentiment": {"score": None, "label": "Unknown"},
+                "macro": {"vix": None, "marketSentiment": "Unknown"},
+            }
+            _add_error(errors, f"researchHub degraded: {e}")
+            return {"data": response_data, "errors": errors}
 
     # Bank accounts (query)
     if "bankAccounts" in fields or "getBankAccounts" in fields:

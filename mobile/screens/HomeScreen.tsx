@@ -438,7 +438,7 @@ import React, {
   
     /* ===================== Render ===================== */
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
         <ScrollView
           style={styles.content}
           refreshControl={
@@ -555,19 +555,43 @@ import React, {
                 <View style={styles.learningCardContent}>
                   <Text style={styles.learningCardTitle}>Getting Started</Text>
                   <Text style={styles.learningCardDescription}>Learn the basics of investing</Text>
-                  <Text style={styles.learningCardMeta}>5 modules • 25 min</Text>
+                  <Text style={styles.learningCardMeta}>6 modules • 35 min</Text>
                 </View>
                 <Icon name="chevron-right" size={16} color="#8E8E93" />
               </TouchableOpacity>
   
-              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('learning-paths')}>
+              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('portfolio-learning')}>
                 <View style={styles.learningCardIcon}>
                   <Icon name="bar-chart-2" size={24} color="#007AFF" />
                 </View>
                 <View style={styles.learningCardContent}>
                   <Text style={styles.learningCardTitle}>Portfolio Management</Text>
                   <Text style={styles.learningCardDescription}>Optimize your investments</Text>
-                  <Text style={styles.learningCardMeta}>4 modules • 20 min</Text>
+                  <Text style={styles.learningCardMeta}>6 modules • 35 min</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('options-learning')}>
+                <View style={styles.learningCardIcon}>
+                  <Icon name="trending-up" size={24} color="#00cc99" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={styles.learningCardTitle}>Options Trading</Text>
+                  <Text style={styles.learningCardDescription}>Master options strategies</Text>
+                  <Text style={styles.learningCardMeta}>4 modules • 30 min</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('sbloc-learning')}>
+                <View style={styles.learningCardIcon}>
+                  <Icon name="credit-card" size={24} color="#8B5CF6" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={styles.learningCardTitle}>SBLOC Guide</Text>
+                  <Text style={styles.learningCardDescription}>Securities-based lending</Text>
+                  <Text style={styles.learningCardMeta}>5 modules • 25 min</Text>
                 </View>
                 <Icon name="chevron-right" size={16} color="#8E8E93" />
               </TouchableOpacity>
@@ -587,7 +611,7 @@ import React, {
   
         {/* Chat modal */}
         <ChatPanel open={chatOpen} onClose={() => setChatOpen(false)} generateAIResponse={generateAIResponse} />
-      </SafeAreaView>
+      </View>
     );
   };
   
@@ -595,7 +619,7 @@ import React, {
   
   /* ===================== Styles (kept familiar; a few small fixes) ===================== */
   const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#f8f9fa' },
+    container: { flex: 1, backgroundColor: '#f8f9fa', paddingTop: 0 },
     content: { flex: 1 },
   
     /* Welcome */
