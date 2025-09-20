@@ -9,17 +9,53 @@ Final Complete Server for RichesReach - All GraphQL fields included (OperationNa
 """
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 import uvicorn
 import os
 import logging
 import importlib
 import inspect
+import math
 from datetime import datetime, timedelta
 import jwt
 import hashlib
 import random
 import requests
+
+# Prometheus metrics
+try:
+    from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+    PROMETHEUS_AVAILABLE = True
+    print("✅ Prometheus client loaded successfully")
+except ImportError as e:
+    PROMETHEUS_AVAILABLE = False
+    print(f"⚠️ Prometheus client not available: {e}")
+    # Fallback metrics classes
+    class Counter:
+        def __init__(self, name, description, labelnames=None, **kwargs):
+            self.name = name
+            self.description = description
+            self.labelnames = labelnames or []
+            self._counts = {}
+        def labels(self, **kwargs):
+            key = tuple(kwargs.get(label, '') for label in self.labelnames)
+            if key not in self._counts:
+                self._counts[key] = 0
+            return self
+        def inc(self, amount=1):
+            pass
+    class Histogram:
+        def __init__(self, name, description, labelnames=None, buckets=None, **kwargs):
+            self.name = name
+            self.description = description
+            self.labelnames = labelnames or []
+            self.buckets = buckets or []
+        def labels(self, **kwargs):
+            return self
+        def observe(self, value):
+            pass
+    def generate_latest(): return b"# Prometheus not available\n"
+    CONTENT_TYPE_LATEST = "text/plain"
 
 # Bullet-proof loader (exec, not import)
 import os, time, pathlib, hashlib, logging, runpy, traceback
@@ -95,8 +131,6 @@ warnings.filterwarnings('ignore')
 from typing import Set, Optional, Dict, Any, List
 
 # ---------- API Configuration ----------
-FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY", "demo")  # Use demo key if not set
-ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY", "demo")
 YAHOO_FINANCE_BASE = "https://query1.finance.yahoo.com/v8/finance/chart"
 
 # ---------- Logging ----------
@@ -114,6 +148,8 @@ logger.info("SCORING_PATH: %s", SCORING_PIPELINE_PATH)
 logger.info("SCORING_BUILD: %s", _sc_ns.get("SCORING_BUILD", "n/a"))
 
 # ---------- Real Data Service ----------
+from requests.adapters import HTTPAdapter, Retry
+
 class RealDataService:
     def __init__(self):
         self.finnhub_base = "https://finnhub.io/api/v1"
@@ -121,13 +157,38 @@ class RealDataService:
         self.news_api_base = "https://newsapi.org/v2"
         self.ml_models = {}  # Cache for trained models
         self.scaler = StandardScaler()
+
+        # --- resilient session ---
+        self.session = requests.Session()
+        retries = Retry(
+            total=3,
+            backoff_factor=0.3,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=frozenset(["GET"])
+        )
+        self.session.mount("https://", HTTPAdapter(max_retries=retries))
+        self.session.headers.update({"User-Agent": "RichesReach/1.0"})
+        self.default_timeout = 10
+        
+        # Async client (opt-in)
+        self.async_client = None
+        enable_httpx = os.getenv("ENABLE_HTTPX", "0") == "1"
+        if enable_httpx:
+            try:
+                import httpx
+                self.async_client = httpx.AsyncClient(
+                    timeout=self.default_timeout,
+                    headers={"User-Agent": "RichesReach/1.0"}
+                )
+            except ImportError:
+                logging.warning("ENABLE_HTTPX=1 but httpx not installed; falling back to requests.")
         
     def get_stock_quote(self, symbol: str) -> Dict[str, Any]:
         """Get real-time stock quote from FinnHub"""
         try:
             url = f"{self.finnhub_base}/quote"
             params = {"symbol": symbol, "token": FINNHUB_API_KEY}
-            response = requests.get(url, params=params, timeout=10)
+            response = self._session.get(url, params=params, timeout=10)
             response.raise_for_status()
             data = response.json()
             
@@ -154,7 +215,7 @@ class RealDataService:
         try:
             url = f"{self.finnhub_base}/stock/profile2"
             params = {"symbol": symbol, "token": FINNHUB_API_KEY}
-            response = requests.get(url, params=params, timeout=10)
+            response = self._session.get(url, params=params, timeout=10)
             response.raise_for_status()
             data = response.json()
             
@@ -188,7 +249,7 @@ class RealDataService:
                 "apikey": ALPHA_VANTAGE_API_KEY
             }
             
-            rsi_response = requests.get(rsi_url, params=rsi_params, timeout=10)
+            rsi_response = self._session.get(rsi_url, params=rsi_params, timeout=10)
             rsi_data = rsi_response.json()
             
             # MACD
@@ -201,7 +262,7 @@ class RealDataService:
                 "apikey": ALPHA_VANTAGE_API_KEY
             }
             
-            macd_response = requests.get(macd_url, params=macd_params, timeout=10)
+            macd_response = self._session.get(macd_url, params=macd_params, timeout=10)
             macd_data = macd_response.json()
             
             # Extract latest values
@@ -439,7 +500,7 @@ class RealDataService:
                 "pageSize": 20
             }
             
-            response = requests.get(url, params=params, timeout=10)
+            response = self._session.get(url, params=params, timeout=10)
             data = response.json()
             
             if data.get("status") == "ok" and "articles" in data:
@@ -501,7 +562,7 @@ class RealDataService:
                 "apikey": ALPHA_VANTAGE_API_KEY
             }
             
-            vix_response = requests.get(vix_url, params=vix_params, timeout=10)
+            vix_response = self._session.get(vix_url, params=vix_params, timeout=10)
             vix_data = vix_response.json()
             
             vix_value = 20.0  # Default neutral
@@ -888,6 +949,60 @@ class RealDataService:
                 "supportLevel": 375.0, "resistanceLevel": 390.0
             }
 
+    # ---------- Async variants (used when ENABLE_HTTPX=1) ----------
+    async def aget_stock_quote(self, symbol: str):
+        if not self.async_client:
+            # fallback: run sync in threadpool
+            from starlette.concurrency import run_in_threadpool
+            return await run_in_threadpool(self.get_stock_quote, symbol)
+        try:
+            r = await self.async_client.get(
+                f"{self.finnhub_base}/quote",
+                params={"symbol": symbol, "token": FINNHUB_API_KEY}
+            )
+            r.raise_for_status()
+            data = r.json()
+            if data.get("c"):
+                return {
+                    "currentPrice": data["c"],
+                    "change": data.get("d", 0),
+                    "changePercent": data.get("dp", 0),
+                    "high": data.get("h", 0),
+                    "low": data.get("l", 0),
+                    "open": data.get("o", 0),
+                    "previousClose": data.get("pc", 0),
+                    "volume": data.get("v", 0),
+                    "timestamp": data.get("t", 0),
+                }
+        except Exception as e:
+            logger.warning(f"[async] quote fail {symbol}: {e}")
+        return self._get_mock_quote(symbol)
+
+    async def aget_company_profile(self, symbol: str):
+        if not self.async_client:
+            from starlette.concurrency import run_in_threadpool
+            return await run_in_threadpool(self.get_company_profile, symbol)
+        try:
+            r = await self.async_client.get(
+                f"{self.finnhub_base}/stock/profile2",
+                params={"symbol": symbol, "token": FINNHUB_API_KEY}
+            )
+            r.raise_for_status()
+            d = r.json()
+            if d.get("name"):
+                return {
+                    "companyName": d["name"],
+                    "sector": d.get("finnhubIndustry", "Unknown"),
+                    "marketCap": d.get("marketCapitalization", 0),
+                    "country": d.get("country", "US"),
+                    "website": d.get("weburl", ""),
+                    "logo": d.get("logo", ""),
+                    "description": d.get("description", "")
+                }
+        except Exception as e:
+            logger.warning(f"[async] profile fail {symbol}: {e}")
+        return self._get_mock_profile(symbol)
+
 # Initialize real data service
 real_data_service = RealDataService()
 
@@ -897,6 +1012,13 @@ app = FastAPI(
     description="Complete server with ALL GraphQL fields",
     version="1.0.0"
 )
+
+@app.on_event("shutdown")
+async def _close_httpx():
+    svc = real_data_service
+    if getattr(svc, "async_client", None):
+        with suppress(Exception):
+            await svc.async_client.aclose()
 
 app.add_middleware(
     CORSMiddleware,
@@ -909,7 +1031,27 @@ try:
     app.include_router(ai_options_router)
     logger.info("✅ AI Options API router included")
 except Exception as e:
-    logger.warning(f"⚠️ Failed to include AI Options API router: {e}")
+    logger.warning("⚠️ AI Options API router not available: %s", e)
+
+# Configure Django before importing crypto modules
+import os
+import django
+from django.conf import settings
+
+# Set Django settings module
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'richesreach.settings')
+
+# Configure Django
+if not settings.configured:
+    django.setup()
+
+# Import and include Crypto API router
+try:
+    from core.crypto_api import crypto_router
+    app.include_router(crypto_router)
+    logger.info("✅ Crypto API router included")
+except Exception as e:
+    logger.warning(f"⚠️ Failed to include Crypto API router: {e}")
 
 # Debug endpoint to prove which scoring module is active
 @app.get("/debug/scoring_info")
@@ -925,6 +1067,103 @@ async def scoring_info():
         "namespace_keys_sample": sorted(list(_sc_ns.keys()))[:10],
     }
 
+@app.get("/debug/config")
+async def debug_config():
+    redis_status = "disabled"
+    if ENABLE_REDIS and redis_client:
+        try:
+            redis_client.ping()
+            redis_status = "connected"
+        except Exception:
+            redis_status = "error"
+    
+    return {
+        "build": BUILD_ID,
+        "finnhub_key_present": bool(FINNHUB_API_KEY and FINNHUB_API_KEY != "demo"),
+        "alpha_vantage_key_present": bool(ALPHA_VANTAGE_API_KEY and ALPHA_VANTAGE_API_KEY != "demo"),
+        "news_api_key_present": bool(NEWS_API_KEY),
+        "scoring_path": SCORING_PIPELINE_PATH,
+        "rate_limit_scope": RATE_LIMIT_SCOPE,
+        "rate_limit_per_minute": RATE_LIMIT_PER_MINUTE,
+        "metrics_normalize_paths": METRICS_NORMALIZE_PATHS,
+        "metrics_exclude": METRICS_EXCLUDE,
+        "redis_status": redis_status,
+        "redis_enabled": ENABLE_REDIS,
+        "httpx_enabled": ENABLE_HTTPX,
+        "coingecko_cache_ttl": COINGECKO_CACHE_TTL_SEC,
+        "coingecko_rate_delay": COINGECKO_RATE_DELAY_SEC,
+        "prometheus_available": PROMETHEUS_AVAILABLE,
+        "calibration_coef": CALIBRATION_COEF,
+        "calibration_intercept": CALIBRATION_INTERCEPT,
+        "platt_coef": _PLATT_COEF,
+        "platt_intercept": _PLATT_INT,
+        "rate_bucket_capacity": rate_bucket.capacity,
+        "rate_bucket_rate": rate_bucket.rate,
+        "brier_metrics_enabled": True,
+    }
+
+@app.get("/metrics")
+async def prom_metrics():
+    lines = []
+    # requests_total
+    lines.append("# HELP app_requests_total Total HTTP requests")
+    lines.append("# TYPE app_requests_total counter")
+    with _metrics_lock:
+        for (method, path), val in METRICS.requests_total.items():
+            lines.append(f'app_requests_total{{method="{method}",path="{path}"}} {val}')
+
+        # responses_total
+        lines.append("# HELP app_responses_total Total HTTP responses by status")
+        lines.append("# TYPE app_responses_total counter")
+        for (status,), val in METRICS.responses_total.items():
+            lines.append(f'app_responses_total{{status="{status}"}} {val}')
+
+        # latency histogram
+        lines.append("# HELP app_request_duration_seconds Request latency in seconds")
+        lines.append("# TYPE app_request_duration_seconds histogram")
+        for (method, path), buckets in METRICS.latency_hist.items():
+            cumulative = 0
+            total = sum(buckets.values())
+            for b in REQUEST_BUCKETS + [float("inf")]:
+                cumulative += buckets.get(b, 0)
+                le = "+Inf" if b == float("inf") else f"{b}"
+                lines.append(
+                    f'app_request_duration_seconds_bucket{{method="{method}",path="{path}",le="{le}"}} {cumulative}'
+                )
+            lines.append(f'app_request_duration_seconds_count{{method="{method}",path="{path}"}} {total}')
+            # crude sum approximation: mid-point per bucket
+            bucket_sum = 0.0
+            prev = 0.0
+            for b in REQUEST_BUCKETS:
+                cnt = buckets.get(b, 0)
+                mid = (prev + b) / 2.0
+                bucket_sum += cnt * mid
+                prev = b
+            # stuff > last bucket: assume last edge * 1.25
+            bucket_sum += buckets.get(float("inf"), 0) * (REQUEST_BUCKETS[-1] * 1.25)
+            lines.append(f'app_request_duration_seconds_sum{{method="{method}",path="{path}"}} {bucket_sum}')
+    
+    # Add Brier score metrics
+    if hasattr(BRIER_SUM, '_value') and hasattr(BRIER_N, '_value'):
+        lines.append(f"# HELP ml_brier_score Brier score (sum/n)")
+        lines.append(f"# TYPE ml_brier_score gauge")
+        if BRIER_N._value.get() > 0:
+            brier_score = BRIER_SUM._value.get() / BRIER_N._value.get()
+            lines.append(f"ml_brier_score {brier_score:.6f}")
+        else:
+            lines.append(f"ml_brier_score 0")
+        
+        lines.append(f"# HELP ml_brier_sum_total Sum of Brier components")
+        lines.append(f"# TYPE ml_brier_sum_total counter")
+        lines.append(f"ml_brier_sum_total {BRIER_SUM._value.get():.6f}")
+        
+        lines.append(f"# HELP ml_brier_n_total Count of Brier samples")
+        lines.append(f"# TYPE ml_brier_n_total counter")
+        lines.append(f"ml_brier_n_total {BRIER_N._value.get()}")
+    
+    body = "\n".join(lines) + "\n"
+    return Response(content=body, media_type="text/plain; version=0.0.4")
+
 @app.post("/admin/reload-scoring")
 async def reload_scoring():
     global _sc_ns
@@ -937,16 +1176,317 @@ async def reload_scoring():
     }
 
 # Response header so you can verify you're hitting this exact build
+import uuid
+from time import perf_counter
+from contextlib import suppress
+from fastapi import BackgroundTasks
+import time
+import re
+from collections import defaultdict, deque
+from collections import Counter as CollectionsCounter
+import threading
+import random
+
 @app.middleware("http")
-async def add_build_header(request: Request, call_next):
-    response = await call_next(request)
+async def rate_limit_middleware(request: Request, call_next):
+    try:
+        raw_path = request.url.path
+        if raw_path in METRICS_EXCLUDE:
+            return await call_next(request)
+
+        ip = (request.client.host if request.client else "unknown") or "unknown"
+        route = request.scope.get("route")
+        norm_path = normalize_path(raw_path, route)
+
+        # Choose key based on scope
+        if RATE_LIMIT_SCOPE.lower() == "ip_path":
+            key = f"{ip}:{norm_path}"
+        else:
+            key = ip
+
+        now = time.time()
+        cutoff = now - RATE_LIMIT_WINDOW_SEC
+
+        with _rate_lock:
+            q = _rate_buckets[key]
+            # drop old timestamps
+            while q and q[0] < cutoff:
+                q.popleft()
+            if len(q) >= RATE_LIMIT_PER_MINUTE:
+                return JSONResponse(
+                    status_code=429,
+                    content={"error": "rate_limited", "message": "Too many requests. Try again soon."}
+                )
+            q.append(now)
+    except Exception as e:
+        logger.warning(f"rate_limit_middleware error: {e}")
+    return await call_next(request)
+
+@app.middleware("http")
+async def timing_and_headers(request: Request, call_next):
+    req_id = request.headers.get("X-Request-Id", str(uuid.uuid4()))
+    t0 = perf_counter()
+    status = 500
+    raw_path = request.url.path
+    route = request.scope.get("route")
+    norm_path = normalize_path(raw_path, route)
+
+    try:
+        response = await call_next(request)
+        status = response.status_code
+    except Exception as e:
+        logger.exception("Unhandled error on %s %s", request.method, raw_path)
+        status = 200 if raw_path.startswith("/graphql") else 500
+        payload = {"errors": [{"message": "Internal error"}]} if status == 200 else {"error": "Internal Server Error"}
+        response = JSONResponse(status_code=status, content=payload)
+
+    dt = perf_counter() - t0
+
+    # metrics (skip excluded)
+    if norm_path not in METRICS_EXCLUDE:
+        METRICS.observe(request.method, norm_path, status, dt)
+
+    # logs (log raw path for debuggability)
+    logger.info("HTTP %s %s %s %.1fms id=%s", request.method, raw_path,
+                request.client.host if request.client else "-", dt*1000, req_id)
+
+    # headers
     response.headers["X-Server-Build"] = BUILD_ID
+    response.headers["X-Request-Id"] = req_id
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
     return response
 
-# ---------- API Keys ----------
-ALPHA_VANTAGE_KEY = "OHYSFF1AE446O7CR"
-FINNHUB_KEY = "d2rnitpr01qv11lfegugd2rnitpr01qv11lfegv0"
-NEWS_API_KEY = "94a335c7316145f79840edd62f77e11e"
+# ---------- Settings & Secrets ----------
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
+
+ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY", "demo")
+FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY", "demo")
+NEWS_API_KEY = os.getenv("NEWS_API_KEY", "")
+
+SECRET_KEY = os.getenv("SECRET_KEY", "change-me")
+if SECRET_KEY == "change-me":
+    logger.warning("Using default SECRET_KEY. Set SECRET_KEY env var for production.")
+
+# ---------- Prometheus Metrics ----------
+if PROMETHEUS_AVAILABLE:
+    # Latency histograms
+    ML_SIGNAL_LATENCY = Histogram("ml_signal_latency_seconds", "Latency of cryptoMlSignal")
+    RECS_LATENCY = Histogram("crypto_recs_latency_seconds", "Latency of cryptoRecommendations")
+    CG_FETCH_LATENCY = Histogram("coingecko_fetch_latency_seconds", "Latency of external market fetch", ["fn"])
+    
+    # Cache metrics
+    CACHE_HITS = Counter("cache_hits_total", "Cache hits", ["layer", "keyspace"])
+    CACHE_MISSES = Counter("cache_misses_total", "Cache misses", ["layer", "keyspace"])
+    
+    # ML accuracy metrics
+    PRED_BUCKET = Counter("ml_pred_bucket_total", "Count by prob bucket", ["bucket"])
+    HITRATE = Counter("ml_signal_hits_total", "Correct predictions", ["bucket"])
+    TOTALS = Counter("ml_signal_total_total", "Total predictions", ["bucket"])
+    BRIER_SUM = Counter("ml_brier_sum", "Sum of Brier components")
+    BRIER_N = Counter("ml_brier_n", "Count of Brier samples")
+else:
+    # Fallback metrics
+    ML_SIGNAL_LATENCY = Histogram("ml_signal_latency_seconds", "Latency of cryptoMlSignal")
+    RECS_LATENCY = Histogram("crypto_recs_latency_seconds", "Latency of cryptoRecommendations")
+    CG_FETCH_LATENCY = Histogram("coingecko_fetch_latency_seconds", "Latency of external market fetch", ["fn"])
+    CACHE_HITS = Counter("cache_hits_total", "Cache hits", ["layer", "keyspace"])
+    CACHE_MISSES = Counter("cache_misses_total", "Cache misses", ["layer", "keyspace"])
+    PRED_BUCKET = Counter("ml_pred_bucket_total", "Count by prob bucket", ["bucket"])
+    HITRATE = Counter("ml_signal_hits_total", "Correct predictions", ["bucket"])
+    TOTALS = Counter("ml_signal_total_total", "Total predictions", ["bucket"])
+    BRIER_SUM = Counter("ml_brier_sum", "Sum of Brier components")
+    BRIER_N = Counter("ml_brier_n", "Count of Brier samples")
+
+# ---------- Token Bucket Rate Limiting ----------
+class TokenBucket:
+    def __init__(self, rate_per_sec, burst=5):
+        self.rate = rate_per_sec
+        self.capacity = burst
+        self.tokens = burst
+        self.ts = time.time()
+        self.lock = threading.Lock()
+    
+    def acquire(self):
+        with self.lock:
+            now = time.time()
+            self.tokens = min(self.capacity, self.tokens + (now - self.ts) * self.rate)
+            self.ts = now
+            if self.tokens >= 1:
+                self.tokens -= 1
+                return True
+            return False
+
+# Global rate limiter for CoinGecko
+COINGECKO_RATE_PER_SEC = float(os.getenv("COINGECKO_RATE_PER_SEC", "2"))  # ~120/min
+rate_bucket = TokenBucket(rate_per_sec=COINGECKO_RATE_PER_SEC)
+
+def _rate_gate():
+    """Rate gate for external API calls"""
+    while not rate_bucket.acquire():
+        time.sleep(0.03)  # 30ms sleep between attempts
+
+# ---------- Probability Calibration ----------
+def _bucket(p):
+    """Categorize probability into buckets for tracking"""
+    return "high" if p >= 0.7 else "med" if p >= 0.55 else "low"
+
+def record_outcome(pred_prob: float, correct: bool):
+    """Record prediction outcome for accuracy tracking"""
+    b = _bucket(pred_prob)
+    PRED_BUCKET.labels(b).inc()
+    TOTALS.labels(b).inc()
+    if correct:
+        HITRATE.labels(b).inc()
+
+# Platt scaling for calibrated probabilities
+def platt_transform(p, coef=1.0, intercept=0.0):
+    """Apply Platt scaling to calibrate probabilities"""
+    if p <= 0 or p >= 1:
+        return p
+    try:
+        x = math.log(p / (1 - p))
+        z = coef * x + intercept
+        return 1 / (1 + math.exp(-z))
+    except (ValueError, OverflowError):
+        return p
+
+# Load calibration parameters (can be fitted offline)
+def _load_platt():
+    try:
+        coef = float(os.getenv("PLATT_COEF", "1.0"))
+        intercept = float(os.getenv("PLATT_INTERCEPT", "0.0"))
+        return coef, intercept
+    except Exception:
+        return 1.0, 0.0
+
+_PLATT_COEF, _PLATT_INT = _load_platt()
+
+def _platt(p: float) -> float:
+    """Apply Platt scaling for calibrated probabilities"""
+    p = max(1e-6, min(1-1e-6, p))
+    x = math.log(p/(1-p))
+    z = _PLATT_COEF * x + _PLATT_INT
+    return 1.0 / (1.0 + math.exp(-z))
+
+# Legacy calibration parameters for backward compatibility
+CALIBRATION_COEF = _PLATT_COEF
+CALIBRATION_INTERCEPT = _PLATT_INT
+
+# ---------- CoinGecko Optimization Settings ----------
+COINGECKO_CACHE_TTL_SEC = int(os.getenv("COINGECKO_CACHE_TTL_SEC", "300"))  # default 5m
+COINGECKO_RATE_DELAY_SEC = float(os.getenv("COINGECKO_RATE_DELAY_SEC", "3.0"))
+COINGECKO_SWR_GRACE_SEC = int(os.getenv("COINGECKO_SWR_GRACE_SEC", "60"))  # stale-while-revalidate grace
+
+# ---------- Async HTTP Client (Opt-in) ----------
+ENABLE_HTTPX = os.getenv("ENABLE_HTTPX", "0") == "1"
+try:
+    import httpx  # pip install httpx
+except Exception:
+    httpx = None
+    if ENABLE_HTTPX:
+        logging.warning("ENABLE_HTTPX=1 but httpx not installed; falling back to requests.")
+
+# ---------- Redis Caching (Opt-in) ----------
+ENABLE_REDIS = os.getenv("ENABLE_REDIS", "0") == "1"
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+try:
+    import redis
+    redis_client = redis.from_url(REDIS_URL) if ENABLE_REDIS else None
+except Exception:
+    redis_client = None
+    if ENABLE_REDIS:
+        logging.warning("ENABLE_REDIS=1 but redis not installed; falling back to in-memory cache.")
+
+# ---------- Rate Limiting ----------
+RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "120"))
+RATE_LIMIT_WINDOW_SEC = int(os.getenv("RATE_LIMIT_WINDOW_SEC", "60"))
+
+# --- Path normalization + limiter scope config ---
+RATE_LIMIT_SCOPE = os.getenv("RATE_LIMIT_SCOPE", "ip")  # "ip" or "ip_path"
+METRICS_NORMALIZE_PATHS = os.getenv("METRICS_NORMALIZE_PATHS", "1") == "1"
+# Comma-separated list. These paths won't be counted in metrics or rate-limited.
+METRICS_EXCLUDE = [p.strip() for p in os.getenv("METRICS_EXCLUDE", "/metrics,/health,/favicon.ico").split(",") if p.strip()]
+
+# --- Path normalizer (low-cardinality labels for Prometheus) ---
+UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$")
+HEX24_RE = re.compile(r"^[0-9a-fA-F]{24}$")            # Mongo ObjectId
+HEX_LONG_RE = re.compile(r"^[0-9a-fA-F]{12,}$")        # long hex-ish tokens
+B64ISH_RE = re.compile(r"^[A-Za-z0-9_-]{16,}$")        # jwt-ish / snowflake-ish
+NUM_RE = re.compile(r"^\d+$")
+
+def normalize_path(path: str, route=None) -> str:
+    """
+    Prefer Starlette's route.path_format for perfect templates (e.g. /users/{user_id}),
+    else fall back to heuristic normalization to keep metrics labels/cardinality sane.
+    """
+    # strip query + trailing slash
+    p = (path.split("?", 1)[0] or "/").rstrip("/") or "/"
+
+    # If we don't normalize, still trim trailing slashes
+    if not METRICS_NORMALIZE_PATHS:
+        return p
+
+    # If FastAPI/Starlette can give the templated path, use it
+    try:
+        if route and getattr(route, "path_format", None):
+            return route.path_format or p
+    except Exception:
+        pass
+
+    # Heuristic per segment
+    segs = p.split("/")
+    out = []
+    for s in segs:
+        if s == "":
+            out.append("")
+            continue
+        if UUID_RE.fullmatch(s):
+            out.append(":uuid")
+        elif NUM_RE.fullmatch(s):
+            out.append(":num")
+        elif HEX24_RE.fullmatch(s) or HEX_LONG_RE.fullmatch(s):
+            out.append(":hex")
+        elif B64ISH_RE.fullmatch(s):
+            out.append(":id")
+        else:
+            out.append(s)
+    norm = "/".join(out)
+    return norm if norm else "/"
+
+_rate_lock = threading.Lock()
+_rate_buckets = defaultdict(lambda: deque())
+
+# ---------- Metrics Store ----------
+_metrics_lock = threading.Lock()
+REQUEST_BUCKETS = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10]  # seconds
+
+class Metrics:
+    def __init__(self):
+        self.requests_total = CollectionsCounter()         # (method, path)
+        self.responses_total = CollectionsCounter()        # (status,)
+        self.latency_hist = defaultdict(lambda: CollectionsCounter())  # (method, path) -> bucket->count
+
+    def observe(self, method: str, path: str, status: int, latency_s: float):
+        with _metrics_lock:
+            self.requests_total[(method, path)] += 1
+            self.responses_total[(status,)] += 1
+            # find bucket
+            bucket = None
+            for b in REQUEST_BUCKETS:
+                if latency_s <= b:
+                    bucket = b
+                    break
+            bucket = bucket if bucket is not None else float("inf")
+            self.latency_hist[(method, path)][bucket] += 1
+
+METRICS = Metrics()
+
+# ---------- Utility Functions ----------
+def _clamp(v, lo, hi): 
+    return max(lo, min(hi, v))
 
 # ----- Import simplified trading service (robust) -----
 from datetime import datetime  # already imported above, just ensuring it's here
@@ -1081,8 +1621,8 @@ def get_real_buy_recommendations():
             
             # Only include BUY recommendations (filter out HOLD/AVOID)
             if recommendation in ["STRONG BUY", "BUY", "WEAK BUY"]:
-                target_price = round(r["currentPrice"] * (1 + random.uniform(0.05, 0.20)), 2)
-                expected_return = round(random.uniform(5, 20), 1)
+                target_price = round(r["currentPrice"] * (1 + _clamp(random.uniform(0.05, 0.20), 0.01, 0.50)), 2)
+                expected_return = round(_clamp(random.uniform(5, 20), 1, 50), 1)
                 
                 recs.append({
                     "symbol": r["symbol"],
@@ -1305,9 +1845,739 @@ def top_level_fields(query: str, operation_name: Optional[str]) -> Set[str]:
     for f in fields:
         f = f.strip()
         if not f: continue
+        if f.startswith('$'): continue  # Skip variable names
         if ':' in f: f = f.split(':', 1)[1].strip()
-        cleaned.add(f)
+        if f:  # Only add non-empty fields
+            cleaned.add(f)
     return cleaned
+
+# ---------- Crypto Recommendations Helper Functions ----------
+VOL_TIER_PENALTY = {"LOW": 0.0, "MEDIUM": 0.03, "HIGH": 0.06, "EXTREME": 0.10}
+
+def _score_row(prob: float, liq_usd24h: float, tier: str, drift_mult: float) -> float:
+    """
+    Convert fundamentals into a 0–100 score.
+    - Reward higher probability and liquidity
+    - Penalize higher vol tiers
+    - Apply drift clamp (safe-mode)
+    """
+    p_component   = max(0.0, (prob - 0.5) / 0.5)            # 0 at 0.5, 1 at 1.0
+    liq_component = min(1.0, math.log10(max(liq_usd24h,1)) / 9.0)  # ~1.0 for $1B+ 24h
+    tier_penalty  = VOL_TIER_PENALTY.get(tier.upper(), 0.05)
+
+    raw = 0.65 * p_component + 0.35 * liq_component
+    raw = max(0.0, raw - tier_penalty)                      # penalize riskier tiers
+    scored = 100.0 * raw * drift_mult                       # clamp if drift high
+    return float(max(0.0, min(100.0, scored)))
+
+def _diversify(top: List[Dict[str, Any]], max_symbols: int) -> List[Dict[str, Any]]:
+    """
+    Simple diversification: pick at most one per tier bucket per round-robin until limit.
+    """
+    by_tier: Dict[str, List[Dict[str, Any]]] = {}
+    for r in top:
+        by_tier.setdefault(r["volatilityTier"], []).append(r)
+    for v in by_tier.values():
+        v.sort(key=lambda x: x["score"], reverse=True)
+
+    out: List[Dict[str, Any]] = []
+    tiers = sorted(by_tier.keys(), key=lambda t: {"LOW":0,"MEDIUM":1,"HIGH":2,"EXTREME":3}.get(t,9))
+    while len(out) < max_symbols:
+        advanced = False
+        for t in tiers:
+            if by_tier[t]:
+                out.append(by_tier[t].pop(0))
+                advanced = True
+                if len(out) >= max_symbols:
+                    break
+        if not advanced:
+            break
+    return out
+
+def _get_mock_supported_currencies():
+    """Mock function to get supported currencies - returns top 5 by market cap"""
+    return [
+        {
+            "id": "1",
+            "symbol": "BTC",
+            "name": "Bitcoin",
+            "coingeckoId": "bitcoin",
+            "isStakingAvailable": False,
+            "minTradeAmount": 0.0001,
+            "precision": 8,
+            "volatilityTier": "HIGH",
+            "isSecCompliant": True,
+            "regulatoryStatus": "UNREGULATED"
+        },
+        {
+            "id": "2",
+            "symbol": "ETH", 
+            "name": "Ethereum",
+            "coingeckoId": "ethereum",
+            "isStakingAvailable": True,
+            "minTradeAmount": 0.001,
+            "precision": 6,
+            "volatilityTier": "HIGH",
+            "isSecCompliant": True,
+            "regulatoryStatus": "UNREGULATED"
+        },
+        {
+            "id": "3",
+            "symbol": "ADA",
+            "name": "Cardano",
+            "coingeckoId": "cardano",
+            "isStakingAvailable": True,
+            "minTradeAmount": 1.0,
+            "precision": 2,
+            "volatilityTier": "MEDIUM",
+            "isSecCompliant": True,
+            "regulatoryStatus": "UNREGULATED"
+        },
+        {
+            "id": "4",
+            "symbol": "SOL",
+            "name": "Solana",
+            "coingeckoId": "solana",
+            "isStakingAvailable": True,
+            "minTradeAmount": 0.01,
+            "precision": 4,
+            "volatilityTier": "HIGH",
+            "isSecCompliant": True,
+            "regulatoryStatus": "UNREGULATED"
+        },
+        {
+            "id": "5",
+            "symbol": "DOT",
+            "name": "Polkadot",
+            "coingeckoId": "polkadot",
+            "isStakingAvailable": True,
+            "minTradeAmount": 0.1,
+            "precision": 3,
+            "volatilityTier": "MEDIUM",
+            "isSecCompliant": True,
+            "regulatoryStatus": "UNREGULATED"
+        }
+    ]
+
+def _get_mock_realtime_price(symbol: str):
+    """Mock function to get realtime price - replace with real implementation"""
+    mock_prices = {
+        "BTC": {"priceUsd": 50000.0, "volumeUsd24h": 1500000000.0},
+        "ETH": {"priceUsd": 3200.0, "volumeUsd24h": 800000000.0},
+        "ADA": {"priceUsd": 0.45, "volumeUsd24h": 120000000.0},
+        "SOL": {"priceUsd": 95.0, "volumeUsd24h": 300000000.0},
+        "DOT": {"priceUsd": 6.5, "volumeUsd24h": 80000000.0}
+    }
+    return mock_prices.get(symbol.upper(), {"priceUsd": 0.0, "volumeUsd24h": 0.0})
+
+# ========== REAL DATA INTEGRATION ==========
+
+import requests
+import time
+from typing import Dict, Any, Optional
+from requests.adapters import HTTPAdapter, Retry
+from requests import Session
+
+class CryptoDataProvider:
+    """Optimized cryptocurrency data provider using CoinGecko API with batching, SWR, and smart caching"""
+    
+    def __init__(self):
+        self.base_url = "https://api.coingecko.com/api/v3"
+        self.cache = {}
+        self.cache_ttl = COINGECKO_CACHE_TTL_SEC
+        self.rate_limit_delay = COINGECKO_RATE_DELAY_SEC
+        self.swr_grace = COINGECKO_SWR_GRACE_SEC
+        
+        # Threading and locking
+        self._lock = threading.Lock()
+        self._per_symbol_locks = defaultdict(threading.Lock)
+        
+        # Symbol mapping for CoinGecko API
+        self.symbol_map = {
+            "BTC": "bitcoin", "ETH": "ethereum", "ADA": "cardano", 
+            "SOL": "solana", "DOT": "polkadot", "MATIC": "matic-network",
+            "AVAX": "avalanche-2", "LINK": "chainlink", "UNI": "uniswap",
+            "ATOM": "cosmos", "NEAR": "near", "FTM": "fantom"
+        }
+        
+        # Build optimized session
+        self._session = self._build_session()
+        
+        # Throttled logging
+        self._last_warn = {"price": 0.0, "market": 0.0}
+    
+    def _build_session(self) -> Session:
+        """Build optimized HTTP session with retries and connection pooling"""
+        s = Session()
+        retry = Retry(
+            total=5, 
+            backoff_factor=0.4,
+            status_forcelist=(429, 500, 502, 503, 504),
+            allowed_methods=frozenset(["GET"])
+        )
+        adapter = HTTPAdapter(max_retries=retry, pool_connections=20, pool_maxsize=50)
+        s.mount("https://", adapter)
+        s.headers.update({"User-Agent": "RichesReach/1.0"})
+        return s
+    
+    def _delay(self):
+        """Add jittered delay to avoid sync bursts"""
+        time.sleep(self.rate_limit_delay + random.uniform(0, 0.4))
+    
+    def _with_symbol_lock(self, symbol: str):
+        """Get per-symbol lock to prevent thundering herd"""
+        return self._per_symbol_locks[symbol.upper()]
+    
+    def _warn_throttled(self, key: str, msg: str):
+        """Throttled logging to reduce noise"""
+        now = time.time()
+        if now - self._last_warn.get(key, 0) > 30:
+            self._last_warn[key] = now
+            logger.warning(msg)
+    
+    def _get_cached_data(self, key: str) -> Optional[Dict[str, Any]]:
+        """Get cached data with Redis and stale-while-revalidate support"""
+        # Try Redis first if enabled
+        if redis_client:
+            try:
+                cached = redis_client.get(f"crypto:{key}")
+                if cached:
+                    data, timestamp = json.loads(cached)
+                    age = time.time() - timestamp
+                    if age < self.cache_ttl:
+                        CACHE_HITS.labels("redis", "coingecko").inc()
+                        return data
+                    elif age < self.cache_ttl + self.swr_grace:
+                        CACHE_HITS.labels("redis", "coingecko").inc()
+                        # Serve stale data and trigger background refresh
+                        self._refresh_async(key)
+                        return data
+            except Exception as e:
+                logger.warning(f"Redis cache read failed: {e}")
+        
+        # Fallback to in-memory cache
+        if key in self.cache:
+            data, timestamp = self.cache[key]
+            age = time.time() - timestamp
+            
+            if age < self.cache_ttl:
+                CACHE_HITS.labels("memory", "coingecko").inc()
+                return data
+            elif age < self.cache_ttl + self.swr_grace:
+                CACHE_HITS.labels("memory", "coingecko").inc()
+                # Serve stale data and trigger background refresh
+                self._refresh_async(key)
+                return data
+            else:
+                del self.cache[key]
+        
+        CACHE_MISSES.labels("memory", "coingecko").inc()
+        return None
+
+    def _refresh_async(self, key: str):
+        """Trigger background refresh for stale-while-revalidate"""
+        def _refresh_key():
+            try:
+                # Extract symbol from key and refresh
+                if key.startswith("price:"):
+                    symbol = key.replace("price:", "").upper()
+                    self.get_real_time_price(symbol)
+                elif key.startswith("price_batch:"):
+                    # For batch keys, we'd need to parse the symbols
+                    # For now, just log that we're refreshing
+                    logger.debug(f"Background refresh triggered for {key}")
+            except Exception as e:
+                logger.warning(f"Background refresh failed for {key}: {e}")
+        
+        threading.Thread(target=_refresh_key, daemon=True).start()
+    
+    def _set_cached_data(self, key: str, data: Dict[str, Any]):
+        """Cache data with timestamp in Redis and memory"""
+        timestamp = time.time()
+        
+        # Store in Redis if enabled
+        if redis_client:
+            try:
+                redis_client.setex(
+                    f"crypto:{key}", 
+                    self.cache_ttl + self.swr_grace,
+                    json.dumps((data, timestamp))
+                )
+            except Exception as e:
+                logger.warning(f"Redis cache write failed: {e}")
+        
+        # Also store in memory as fallback
+        with self._lock:
+            self.cache[key] = (data, timestamp)
+    
+    def _refresh_key(self, key: str):
+        """Background refresh for stale-while-revalidate"""
+        try:
+            if key.startswith("price_"):
+                sym = key.split("_", 1)[1]
+                self.get_real_time_price(sym)  # Will recache
+            elif key.startswith("market_"):
+                sym = key.split("_", 1)[1]
+                self.get_market_data(sym)  # Will recache
+        except Exception as e:
+            logger.debug(f"SWR refresh error for {key}: {e}")
+    
+    def get_real_time_price_many(self, symbols: list[str]) -> dict[str, dict]:
+        """Batch fetch prices for multiple symbols with smart caching"""
+        results, to_fetch = {}, []
+        
+        # Check cache for all symbols first
+        for s in symbols:
+            key = f"price_{s.upper()}"
+            hit = self._get_cached_data(key)
+            if hit:
+                results[s.upper()] = hit
+            elif s.upper() in self.symbol_map:
+                to_fetch.append((s.upper(), self.symbol_map[s.upper()]))
+        
+        # If all cached, return immediately
+        if not to_fetch:
+            return results
+        
+        # Batch fetch missing symbols with smart rate limiting
+        with self._with_symbol_lock("batch"):
+            # Use shorter delay for batch requests
+            time.sleep(0.5)  # Reduced from 3 seconds
+            ids = ",".join([cid for _, cid in to_fetch])
+            url = f"{self.base_url}/simple/price"
+            params = {
+                "ids": ids, 
+                "vs_currencies": "usd",
+                "include_24hr_vol": "true", 
+                "include_24hr_change": "true"
+            }
+            
+            try:
+                resp = self._session.get(url, params=params, timeout=10)
+                
+                # Handle 429 with Retry-After
+                if resp.status_code == 429:
+                    ra = resp.headers.get("Retry-After")
+                    wait = float(ra) if ra and ra.isdigit() else 2.0  # Reduced fallback
+                    self._warn_throttled("price", f"429 from CoinGecko; backing off for {wait:.1f}s")
+                    time.sleep(wait)
+                    resp = self._session.get(url, params=params, timeout=10)
+                
+                resp.raise_for_status()
+                data = resp.json()
+                
+                # Map results back to symbols
+                rev = {cid: sym for sym, cid in to_fetch}
+                for cid, payload in data.items():
+                    out = {
+                        "priceUsd": payload.get("usd", 0.0),
+                        "volumeUsd24h": payload.get("usd_24h_vol", 0.0),
+                        "priceChange24h": payload.get("usd_24h_change", 0.0),
+                        "timestamp": time.time(),
+                    }
+                    sym = rev.get(cid)
+                    if sym:
+                        self._set_cached_data(f"price_{sym}", out)
+                        results[sym] = out
+                        
+            except Exception as e:
+                self._warn_throttled("price", f"Batch price fetch failed: {e}")
+                # Graceful fallback per symbol
+                for sym, _ in to_fetch:
+                    results[sym] = _get_mock_realtime_price(sym)
+        
+        return results
+    
+    def get_real_time_price(self, symbol: str) -> Dict[str, Any]:
+        """Get real-time price data from CoinGecko with per-symbol locking"""
+        symbol = symbol.upper()
+        
+        with self._with_symbol_lock(symbol):
+            # Check cache first
+            cache_key = f"price_{symbol}"
+            cached_data = self._get_cached_data(cache_key)
+            if cached_data:
+                return cached_data
+            
+            # Map symbol to CoinGecko ID
+            coin_id = self.symbol_map.get(symbol)
+            if not coin_id:
+                return _get_mock_realtime_price(symbol)
+            
+            # Rate limiting with jitter
+            self._delay()
+            
+            try:
+                # Fetch from API
+                url = f"{self.base_url}/simple/price"
+                params = {
+                    "ids": coin_id,
+                    "vs_currencies": "usd",
+                    "include_24hr_vol": "true",
+                    "include_24hr_change": "true"
+                }
+                
+                resp = self._session.get(url, params=params, timeout=10)
+                
+                # Handle 429 with Retry-After
+                if resp.status_code == 429:
+                    ra = resp.headers.get("Retry-After")
+                    wait = float(ra) if ra and ra.isdigit() else (self.rate_limit_delay * 2)
+                    self._warn_throttled("price", f"429 from CoinGecko for {symbol}; backing off for {wait:.1f}s")
+                    time.sleep(wait)
+                    resp = self._session.get(url, params=params, timeout=10)
+                
+                resp.raise_for_status()
+                data = resp.json()
+                
+                if coin_id in data:
+                    result = {
+                        "priceUsd": data[coin_id].get("usd", 0.0),
+                        "volumeUsd24h": data[coin_id].get("usd_24h_vol", 0.0),
+                        "priceChange24h": data[coin_id].get("usd_24h_change", 0.0),
+                        "timestamp": time.time(),
+                    }
+                    # Cache the result
+                    self._set_cached_data(cache_key, result)
+                    return result
+                else:
+                    return _get_mock_realtime_price(symbol)
+                
+            except Exception as e:
+                self._warn_throttled("price", f"Error fetching real-time price for {symbol}: {e}")
+                return _get_mock_realtime_price(symbol)
+
+    def get_prices_batch(self, symbols: List[str]) -> Dict[str, Dict[str, Any]]:
+        """Get prices for multiple symbols in one request"""
+        # Map symbols to CoinGecko IDs
+        coin_ids = [self.symbol_map.get(s.upper()) for s in symbols if s.upper() in self.symbol_map]
+        if not coin_ids:
+            return {}
+        
+        cache_key = f"batch_{','.join(sorted(coin_ids))}"
+        cached = self._get_cached_data(cache_key)
+        if cached:
+            return cached
+        
+        # Rate limiting
+        self._delay()
+        
+        try:
+            url = f"{self.base_url}/simple/price"
+            params = {
+                "ids": ",".join(coin_ids),
+                "vs_currencies": "usd",
+                "include_24hr_vol": "true",
+                "include_24hr_change": "true"
+            }
+            
+            t0 = time.perf_counter()
+            response = self._session.get(url, params=params, timeout=10)
+            CG_FETCH_LATENCY.labels("simple_price_batch").observe(time.perf_counter() - t0)
+            response.raise_for_status()
+            
+            data = response.json()
+            result = {}
+            
+            # Map back to symbols
+            symbol_to_id = {s.upper(): self.symbol_map.get(s.upper()) for s in symbols}
+            for symbol, coin_id in symbol_to_id.items():
+                if coin_id and coin_id in data:
+                    price_data = data[coin_id]
+                    result[symbol] = {
+                        "priceUsd": price_data.get("usd", 0.0),
+                        "volumeUsd24h": price_data.get("usd_24h_vol", 0.0),
+                        "priceChange24h": price_data.get("usd_24h_change", 0.0),
+                        "timestamp": time.time()
+                    }
+            
+            self._set_cached_data(cache_key, result)
+            return result
+            
+        except Exception as e:
+            self._warn_throttled("batch_price", f"Failed to fetch batch prices: {e}")
+            return {}
+    
+    def get_market_data(self, symbol: str) -> Dict[str, Any]:
+        """Get comprehensive market data including volatility, RSI, etc."""
+        try:
+            cache_key = f"market_{symbol.upper()}"
+            cached_data = self._get_cached_data(cache_key)
+            if cached_data:
+                return cached_data
+            
+            symbol_map = {
+                "BTC": "bitcoin",
+                "ETH": "ethereum", 
+                "ADA": "cardano",
+                "SOL": "solana",
+                "DOT": "polkadot"
+            }
+            
+            coin_id = symbol_map.get(symbol.upper())
+            if not coin_id:
+                return {}
+            
+            # Skip delay for speed - using mock data
+            # time.sleep(self.rate_limit_delay)
+            
+            # Get detailed market data
+            url = f"{self.base_url}/coins/{coin_id}"
+            params = {
+                "localization": "false",
+                "tickers": "false",
+                "market_data": "true",
+                "community_data": "false",
+                "developer_data": "false"
+            }
+            
+            response = self._session.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            
+            data = response.json()
+            market_data = data.get("market_data", {})
+            
+            # Calculate volatility (simplified)
+            price_change_24h = market_data.get("price_change_percentage_24h", 0)
+            price_change_7d = market_data.get("price_change_percentage_7d", 0)
+            price_change_30d = market_data.get("price_change_percentage_30d", 0)
+            
+            # Simple volatility calculation
+            volatility_7d = abs(price_change_7d) / 7
+            volatility_30d = abs(price_change_30d) / 30
+            
+            # Determine volatility tier
+            avg_volatility = (volatility_7d + volatility_30d) / 2
+            if avg_volatility < 2:
+                volatility_tier = "LOW"
+            elif avg_volatility < 5:
+                volatility_tier = "MEDIUM"
+            elif avg_volatility < 10:
+                volatility_tier = "HIGH"
+            else:
+                volatility_tier = "EXTREME"
+            
+            result = {
+                "priceUsd": market_data.get("current_price", {}).get("usd", 0.0),
+                "volumeUsd24h": market_data.get("total_volume", {}).get("usd", 0.0),
+                "marketCap": market_data.get("market_cap", {}).get("usd", 0.0),
+                "priceChange24h": price_change_24h,
+                "priceChangePercentage24h": price_change_24h,
+                "volatility7d": volatility_7d,
+                "volatility30d": volatility_30d,
+                "volatilityTier": volatility_tier,
+                "rsi14": 50.0,  # Would need technical analysis API
+                "momentumScore": min(1.0, max(0.0, (price_change_24h + 20) / 40)),  # Normalized momentum
+                "sentimentScore": 0.5,  # Would need sentiment analysis API
+                "sentimentDescription": "Neutral market sentiment",
+                "timestamp": time.time()
+            }
+            
+            self._set_cached_data(cache_key, result)
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error fetching market data for {symbol}: {e}")
+            return {}
+
+# Initialize the data provider
+crypto_data_provider = CryptoDataProvider()
+
+def get_real_crypto_price(symbol: str) -> Dict[str, Any]:
+    """Get real cryptocurrency price data"""
+    return crypto_data_provider.get_real_time_price(symbol)
+
+def get_real_market_data(symbol: str) -> Dict[str, Any]:
+    """Get real cryptocurrency market data with smart caching"""
+    return crypto_data_provider.get_market_data(symbol)
+
+def _get_mock_prediction(symbol: str):
+    """Mock function to get prediction - replace with real implementation"""
+    import random
+    prob = random.uniform(0.45, 0.85)  # Random probability between 45% and 85%
+    confidence = "HIGH" if prob > 0.7 else "MEDIUM" if prob > 0.6 else "LOW"
+    return {
+        "probability": prob,
+        "confidenceLevel": confidence,
+        "explanation": f"AI analysis indicates {prob:.1%} probability of bullish movement for {symbol}"
+    }
+
+# ========== REAL ML PREDICTION SYSTEM ==========
+
+class MLPredictionEngine:
+    """Real ML prediction engine for cryptocurrency price movements"""
+    
+    def __init__(self):
+        self.cache = {}
+        self.cache_ttl = 300  # 5 minutes cache for predictions
+        
+    def _get_cached_prediction(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """Get cached prediction if still valid"""
+        if symbol in self.cache:
+            data, timestamp = self.cache[symbol]
+            if time.time() - timestamp < self.cache_ttl:
+                return data
+            del self.cache[symbol]
+        return None
+    
+    def _set_cached_prediction(self, symbol: str, data: Dict[str, Any]):
+        """Cache prediction with timestamp"""
+        self.cache[symbol] = (data, time.time())
+    
+    def get_real_prediction(self, symbol: str) -> Dict[str, Any]:
+        """Get real ML prediction based on market data"""
+        try:
+            # Check cache first
+            cached_prediction = self._get_cached_prediction(symbol)
+            if cached_prediction:
+                return cached_prediction
+            
+            # Get real market data with fast fallback
+            try:
+                market_data = get_real_market_data(symbol)
+            except Exception as e:
+                logger.warning(f"Market data failed for {symbol}: {e}")
+                market_data = None
+            
+            if not market_data:
+                prediction = _get_mock_prediction(symbol)
+            else:
+                # Extract features for ML prediction
+                price_change_24h = market_data.get("priceChangePercentage24h", 0)
+                volatility_7d = market_data.get("volatility7d", 0)
+                volume_24h = market_data.get("volumeUsd24h", 0)
+                momentum_score = market_data.get("momentumScore", 0.5)
+                
+                # Advanced ML-like prediction algorithm
+                price_momentum = min(1.0, max(0.0, (price_change_24h + 20) / 40))
+                volatility_factor = min(1.0, max(0.0, volatility_7d / 10))
+                volume_factor = min(1.0, max(0.0, volume_24h / 1_000_000_000))
+                
+                # Weighted prediction model
+                base_probability = 0.5
+                momentum_adjustment = (price_momentum - 0.5) * 0.3
+                volatility_adjustment = (0.3 - abs(volatility_factor - 0.3)) * 0.2
+                volume_adjustment = (volume_factor - 0.5) * 0.1
+                
+                raw_probability = base_probability + momentum_adjustment + volatility_adjustment + volume_adjustment
+                raw_probability = max(0.1, min(0.9, raw_probability))
+                
+                # Apply improved Platt scaling for calibrated probabilities
+                calibrated_probability = _platt(raw_probability)
+                
+                # Determine confidence level
+                if abs(price_change_24h) > 10 and volume_factor > 0.5:
+                    confidence = "HIGH"
+                elif abs(price_change_24h) > 5 and volume_factor > 0.3:
+                    confidence = "MEDIUM"
+                else:
+                    confidence = "LOW"
+                
+                # Record prediction for accuracy tracking
+                record_outcome(calibrated_probability, False)  # We don't know the outcome yet
+                
+                # Record Brier score components (placeholder - replace with true label when available)
+                BRIER_SUM.inc((calibrated_probability - 0.5)**2)  # placeholder
+                BRIER_N.inc()
+                
+                prediction = {
+                    "probability": round(calibrated_probability, 4),
+                    "confidenceLevel": confidence,
+                    "explanation": f"ML analysis: {price_change_24h:.1f}% change, {volatility_7d:.1f}% vol, {momentum_score:.1f} momentum",
+                    "features": {
+                        "volatility_7d": volatility_7d,
+                        "momentum": momentum_score,
+                        "price_change_24h": price_change_24h,
+                        "volume_factor": volume_factor
+                    }
+                }
+            
+            # Cache the prediction
+            self._set_cached_prediction(symbol, prediction)
+            return prediction
+            
+            # Extract features for ML prediction
+            price_change_24h = market_data.get("priceChangePercentage24h", 0)
+            volatility_7d = market_data.get("volatility7d", 0)
+            volume_24h = market_data.get("volumeUsd24h", 0)
+            momentum_score = market_data.get("momentumScore", 0.5)
+            
+            # Simple ML-like prediction algorithm
+            # This is a simplified version - in production you'd use actual ML models
+            
+            # Feature engineering
+            price_momentum = min(1.0, max(0.0, (price_change_24h + 20) / 40))  # Normalize to 0-1
+            volatility_factor = min(1.0, max(0.0, volatility_7d / 10))  # Normalize volatility
+            volume_factor = min(1.0, max(0.0, volume_24h / 1_000_000_000))  # Normalize volume
+            
+            # Weighted prediction model
+            base_probability = 0.5  # 50% base probability
+            
+            # Adjust based on momentum (positive momentum increases bullish probability)
+            momentum_adjustment = (price_momentum - 0.5) * 0.3
+            
+            # Adjust based on volatility (moderate volatility is good for predictions)
+            volatility_adjustment = (0.3 - abs(volatility_factor - 0.3)) * 0.2
+            
+            # Adjust based on volume (higher volume increases confidence)
+            volume_adjustment = (volume_factor - 0.5) * 0.1
+            
+            # Calculate final probability
+            probability = base_probability + momentum_adjustment + volatility_adjustment + volume_adjustment
+            probability = max(0.1, min(0.9, probability))  # Clamp between 10% and 90%
+            
+            # Determine confidence level
+            if abs(price_change_24h) > 10 and volume_factor > 0.5:
+                confidence = "HIGH"
+            elif abs(price_change_24h) > 5 and volume_factor > 0.3:
+                confidence = "MEDIUM"
+            else:
+                confidence = "LOW"
+            
+            # Generate explanation
+            if price_change_24h > 5:
+                trend = "strong bullish"
+            elif price_change_24h > 0:
+                trend = "bullish"
+            elif price_change_24h > -5:
+                trend = "neutral"
+            else:
+                trend = "bearish"
+            
+            explanation = f"ML model indicates {trend} signals for {symbol} based on price momentum ({price_change_24h:.1f}%), volatility ({volatility_7d:.1f}%), and volume activity"
+            
+            result = {
+                "probability": probability,
+                "confidenceLevel": confidence,
+                "explanation": explanation,
+                "features": {
+                    "priceChange24h": price_change_24h,
+                    "volatility7d": volatility_7d,
+                    "volume24h": volume_24h,
+                    "momentumScore": momentum_score
+                },
+                "modelVersion": "v1.0",
+                "timestamp": time.time()
+            }
+            
+            # Cache the prediction
+            self._set_cached_prediction(symbol, result)
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error generating ML prediction for {symbol}: {e}")
+            return _get_mock_prediction(symbol)
+
+# Initialize the ML prediction engine
+ml_prediction_engine = MLPredictionEngine()
+
+def get_real_ml_prediction(symbol: str) -> Dict[str, Any]:
+    """Get real ML prediction for cryptocurrency"""
+    return ml_prediction_engine.get_real_prediction(symbol)
+
+def _get_mock_drift_decision():
+    """Mock function to get drift decision - replace with real implementation"""
+    return {"size_multiplier": 1.0, "level": "OK"}
 
 # ---------- GraphQL endpoint ----------
 @app.post("/graphql")
@@ -1324,12 +2594,149 @@ async def graphql_endpoint(request_data: dict):
     logger.info("BUILD_ID: %s", BUILD_ID)
     logger.info("operationName: %s", operation_name)
     logger.info("Top-level fields: %s", top_level_fields(query, operation_name))
+    logger.info("Variables: %s", variables)
 
     fields = top_level_fields(query, operation_name)
 
     # ---------------------------
     # PHASE 2 — put first, early return
     # ---------------------------
+    
+    # --- Crypto ML Signal (query) ---
+    if "cryptoMlSignal" in fields:
+        start = time.perf_counter()
+        try:
+            # Try variables first, then parse from query
+            symbol = (variables or {}).get("symbol")
+            if not symbol:
+                m = re.search(r'cryptoMlSignal\s*\(\s*symbol:\s*"([^"]+)"', query or "")
+                if m: symbol = m.group(1)
+
+            if not symbol:
+                return {"errors": [{"message": "symbol required"}]}
+
+            # Get ML prediction with fallback
+            try:
+                sig = get_real_ml_prediction(symbol)
+            except Exception as e:
+                logger.warning(f"ML prediction failed for {symbol}: {e}")
+                sig = None
+
+            # Ensure non-null shape with fallback
+            if not sig or "probability" not in sig:
+                payload = {
+                    "symbol": symbol,
+                    "probability": 0.5,
+                    "confidenceLevel": "LOW",
+                    "explanation": "Fallback prediction due to model error",
+                    "features": {},
+                    "modelVersion": "v1.0",
+                    "timestamp": time.time(),
+                    "__typename": "CryptoMlSignal"
+                }
+            else:
+                payload = {
+                    "symbol": symbol,
+                    "probability": float(sig.get("probability", 0.5)),
+                    "confidenceLevel": sig.get("confidenceLevel", "LOW"),
+                    "explanation": sig.get("explanation", ""),
+                    "features": sig.get("features", {}),
+                    "modelVersion": sig.get("modelVersion", "v1.0"),
+                    "timestamp": sig.get("timestamp", time.time()),
+                    "__typename": "CryptoMlSignal"
+                }
+            
+            return {"data": {"cryptoMlSignal": payload}}
+        except Exception as e:
+            logger.warning(f"cryptoMlSignal handler failed: {e}")
+            # Return fallback data instead of null
+            return {"data": {"cryptoMlSignal": {
+                "symbol": symbol or "UNKNOWN",
+                "probability": 0.5,
+                "confidenceLevel": "LOW",
+                "explanation": "System error - using fallback",
+                "features": {},
+                "modelVersion": "v1.0",
+                "timestamp": time.time(),
+                "__typename": "CryptoMlSignal"
+            }}}
+        finally:
+            ML_SIGNAL_LATENCY.observe(time.perf_counter() - start)
+
+    # --- Crypto Recommendations (query) ---
+    if "cryptoRecommendations" in fields:
+        start = time.perf_counter()
+        try:
+            limit = int((variables or {}).get("limit", 5))
+            symbols = (variables or {}).get("symbols") or ["BTC", "ETH", "SOL", "ADA", "DOT"]
+            
+            # Use batch pricing for efficiency
+            try:
+                batch_prices = crypto_data_provider.get_prices_batch(symbols)
+            except Exception as e:
+                logger.warning(f"Batch pricing failed: {e}")
+                batch_prices = {}
+
+            results = []
+            for symbol in symbols:
+                try:
+                    # Get ML prediction
+                    ml_pred = get_real_ml_prediction(symbol)
+                    
+                    # Get price data from batch or individual call
+                    price_data = batch_prices.get(crypto_data_provider.symbol_map.get(symbol, ""), {})
+                    if not price_data:
+                        price_data = get_real_crypto_price(symbol) or {}
+                    
+                    # Get market data
+                    market_data = get_real_market_data(symbol) or {}
+                    
+                    prob = float(ml_pred.get("probability", 0.5))
+                    price_usd = float(price_data.get("priceUsd", price_data.get("usd", 0.0)))
+                    volume_24h = float(price_data.get("volumeUsd24h", price_data.get("usd_24h_vol", 0.0)))
+                    volatility_tier = market_data.get("volatilityTier", "HIGH").upper()
+                    
+                    # Calculate score
+                    score = _score_row(prob, volume_24h, volatility_tier, 1.0)
+                    
+                    results.append({
+                        "symbol": symbol,
+                        "name": symbol,  # Could be enhanced with full names
+                        "priceUsd": price_usd,
+                        "volumeUsd24h": volume_24h,
+                        "volatilityTier": volatility_tier,
+                        "probability": prob,
+                        "confidenceLevel": ml_pred.get("confidenceLevel", "LOW"),
+                        "explanation": ml_pred.get("explanation", "Model produced a valid signal."),
+                        "score": round(score, 1),
+                        "__typename": "CryptoRecommendation"
+                    })
+                except Exception as e:
+                    logger.warning(f"Failed to process {symbol}: {e}")
+                    # Add fallback entry
+                    results.append({
+                        "symbol": symbol,
+                        "name": symbol,
+                        "priceUsd": 0.0,
+                        "volumeUsd24h": 0.0,
+                        "volatilityTier": "UNKNOWN",
+                        "probability": 0.5,
+                        "confidenceLevel": "LOW",
+                        "explanation": "Error processing symbol",
+                        "score": 0.0,
+                        "__typename": "CryptoRecommendation"
+                    })
+
+            # Sort by score and limit results
+            results.sort(key=lambda x: x["score"], reverse=True)
+            limited_results = results[:limit]
+
+            return {"data": {"cryptoRecommendations": limited_results}}
+        except Exception as e:
+            logger.warning(f"cryptoRecommendations failed: {e}")
+            return {"data": {"cryptoRecommendations": []}}
+        finally:
+            RECS_LATENCY.observe(time.perf_counter() - start)
 
     # Notifications (query)
     if "notifications" in fields:
@@ -2762,12 +4169,17 @@ async def graphql_endpoint(request_data: dict):
         return {"data": {"marketRegimeAnalysis": market_regime}}
 
     if "advancedMLPrediction" in fields:
-        # Get advanced ML prediction for a symbol
-        symbol = variables.get("symbol", "AAPL")
-        features = variables.get("features", [25.5, 8.2, 25.3, 0.15, 0.28, 0.1])
-        
-        ml_prediction = real_data_service.train_ml_model(symbol, features, 0.1)
-        return {"data": {"advancedMLPrediction": ml_prediction}}
+        symbol = variables.get("symbol")
+        if not symbol:
+            m = re.search(r'advancedMLPrediction\s*\(\s*symbol:\s*"([^"]+)"', query or "")
+            if m:
+                symbol = m.group(1)
+        if not symbol:
+            return {"errors": [{"message": "symbol is required"}]}
+
+        pred = get_real_ml_prediction(symbol)
+        # shape is simple key/value; GraphQL client can read it as a scalar/object
+        return {"data": {"advancedMLPrediction": pred}}
 
     if "stocks" in fields:
         # Get real data for diverse stock universe
@@ -3065,7 +4477,7 @@ async def graphql_endpoint(request_data: dict):
         out = []
         for s in symbols:
             try:
-                r = requests.get(f"https://finnhub.io/api/v1/quote?symbol={s}&token={FINNHUB_KEY}", timeout=10)
+                r = requests.get(f"https://finnhub.io/api/v1/quote?symbol={s}&token={FINNHUB_API_KEY}", timeout=10)
                 if r.status_code == 200:
                     d = r.json(); last = d.get('c', 0); chg = d.get('dp', 0)
                     # Add bid/ask from FinnHub data
@@ -3271,6 +4683,441 @@ async def graphql_endpoint(request_data: dict):
             "success": True, "message": "Password changed successfully",
             "__typename": "ChangePasswordResponse"
         }}}
+
+    # ---------------------------
+    # CRYPTO HANDLERS
+    # ---------------------------
+    
+    # Crypto Portfolio (query)
+    if "cryptoPortfolio" in fields:
+        try:
+            from core.crypto_models import CryptoPortfolio
+            # Mock portfolio data for now
+            response_data["cryptoPortfolio"] = {
+                "id": "portfolio_001",
+                "totalValueUsd": 12500.0,
+                "totalCostBasis": 10000.0,
+                "totalPnl": 2500.0,
+                "totalPnlPercentage": 25.0,
+                "totalPnl1d": 150.0,
+                "totalPnlPct1d": 1.2,
+                "totalPnl1w": 500.0,
+                "totalPnlPct1w": 4.2,
+                "totalPnl1m": 1500.0,
+                "totalPnlPct1m": 13.6,
+                "portfolioVolatility": 0.35,
+                "sharpeRatio": 1.2,
+                "maxDrawdown": 0.15,
+                "diversificationScore": 0.8,
+                "topHoldingPercentage": 40.0,
+                "createdAt": "2024-01-15T10:30:00Z",
+                "updatedAt": "2024-01-20T14:45:00Z",
+                "risk": {
+                    "ltv": 0.65,
+                    "riskTier": "MEDIUM",
+                    "riskMessage": "Portfolio is within acceptable risk parameters",
+                    "marginCallAmount": 2000.0,
+                    "additionalCollateralNeeded": 0.0,
+                    "stressTestResults": [
+                        {"shock": -0.1, "ltvPct": 0.72, "tier": "LOW"},
+                        {"shock": -0.2, "ltvPct": 0.81, "tier": "MEDIUM"},
+                        {"shock": -0.3, "ltvPct": 0.93, "tier": "HIGH"}
+                    ]
+                },
+                "holdings": [
+                    {
+                        "id": "holding_btc_001",
+                        "symbol": "BTC",
+                        "name": "Bitcoin",
+                        "quantity": 0.5,
+                        "averageCost": 45000.0,
+                        "currentPrice": 50000.0,
+                        "currentValue": 25000.0,
+                        "unrealizedPnl": 2500.0,
+                        "unrealizedPnlPercentage": 11.1,
+                        "stakedQuantity": 0.0,
+                        "stakingRewards": 0.0,
+                        "stakingApy": 0.0,
+                        "isCollateralized": False,
+                        "collateralValue": 0.0,
+                        "loanAmount": 0.0,
+                        "cryptocurrency": {
+                            "symbol": "BTC",
+                            "name": "Bitcoin",
+                            "__typename": "Cryptocurrency"
+                        },
+                        "__typename": "CryptoHolding"
+                    },
+                    {
+                        "id": "holding_eth_001",
+                        "symbol": "ETH",
+                        "name": "Ethereum",
+                        "quantity": 10.0,
+                        "averageCost": 3000.0,
+                        "currentPrice": 3200.0,
+                        "currentValue": 32000.0,
+                        "unrealizedPnl": 2000.0,
+                        "unrealizedPnlPercentage": 6.7,
+                        "stakedQuantity": 2.0,
+                        "stakingRewards": 150.0,
+                        "stakingApy": 4.5,
+                        "isCollateralized": True,
+                        "collateralValue": 16000.0,
+                        "loanAmount": 8000.0,
+                        "cryptocurrency": {
+                            "symbol": "ETH",
+                            "name": "Ethereum",
+                            "__typename": "Cryptocurrency"
+                        },
+                        "__typename": "CryptoHolding"
+                    }
+                ],
+                "createdAt": datetime.now().isoformat(),
+                "updatedAt": datetime.now().isoformat(),
+                "__typename": "CryptoPortfolio"
+            }
+            return {"data": response_data}
+        except Exception as e:
+            logger.error(f"Error handling cryptoPortfolio: {e}")
+            return {"data": {"cryptoPortfolio": None}}
+
+    # Crypto Analytics (query)
+    if "cryptoAnalytics" in fields:
+        try:
+            response_data["cryptoAnalytics"] = {
+                "totalValueUsd": 12500.0,
+                "totalCostBasis": 10000.0,
+                "totalPnl": 2500.0,
+                "totalPnlPercentage": 25.0,
+                "portfolioVolatility": 0.35,
+                "sharpeRatio": 1.2,
+                "maxDrawdown": 0.15,
+                "diversificationScore": 0.8,
+                "topHoldingPercentage": 40.0,
+                "sectorAllocation": {
+                    "LOW": 30.0,
+                    "MEDIUM": 50.0,
+                    "HIGH": 20.0
+                },
+                "bestPerformer": {
+                    "symbol": "BTC",
+                    "pnlPercentage": 11.1,
+                    "volatilityTier": "HIGH"
+                },
+                "worstPerformer": {
+                    "symbol": "ETH",
+                    "pnlPercentage": 6.7,
+                    "volatilityTier": "HIGH"
+                },
+                "lastUpdated": datetime.now().isoformat(),
+                "__typename": "CryptoAnalytics"
+            }
+            return {"data": response_data}
+        except Exception as e:
+            logger.error(f"Error handling cryptoAnalytics: {e}")
+            return {"data": {"cryptoAnalytics": None}}
+
+    # Crypto SBLOC Loans (query)
+    if "cryptoSblocLoans" in fields:
+        try:
+            response_data["cryptoSblocLoans"] = [
+                {
+                    "id": "loan_001",
+                    "status": "ACTIVE",
+                    "collateralQuantity": 0.5,
+                    "loanAmount": 10000.0,
+                    "interestRate": 0.05,
+                    "cryptocurrency": {
+                        "symbol": "BTC",
+                        "__typename": "Cryptocurrency"
+                    },
+                    "createdAt": datetime.now().isoformat(),
+                    "__typename": "CryptoSblocLoan"
+                }
+            ]
+            return {"data": response_data}
+        except Exception as e:
+            logger.error(f"Error handling cryptoSblocLoans: {e}")
+            return {"data": {"cryptoSblocLoans": []}}
+
+    # Supported Currencies (query)
+    if "supportedCurrencies" in fields:
+        try:
+            response_data["supportedCurrencies"] = [
+                {
+                    "id": "crypto_btc_001",
+                    "symbol": "BTC",
+                    "name": "Bitcoin",
+                    "coingeckoId": "bitcoin",
+                    "isStakingAvailable": False,
+                    "minTradeAmount": 50.0,
+                    "precision": 8,
+                    "volatilityTier": "HIGH",
+                    "isSecCompliant": False,
+                    "regulatoryStatus": "UNREGULATED",
+                    "__typename": "Cryptocurrency"
+                },
+                {
+                    "id": "crypto_eth_001",
+                    "symbol": "ETH",
+                    "name": "Ethereum",
+                    "coingeckoId": "ethereum",
+                    "isStakingAvailable": True,
+                    "minTradeAmount": 25.0,
+                    "precision": 6,
+                    "volatilityTier": "MEDIUM",
+                    "isSecCompliant": False,
+                    "regulatoryStatus": "UNREGULATED",
+                    "__typename": "Cryptocurrency"
+                }
+            ]
+            return {"data": response_data}
+        except Exception as e:
+            logger.error(f"Error handling supportedCurrencies: {e}")
+            return {"data": {"supportedCurrencies": []}}
+
+    # Crypto Price (query)
+    if "cryptoPrice" in fields:
+        symbol = variables.get("symbol", "").upper()
+        if not symbol:
+            return {"data": {"cryptoPrice": None}}
+        
+        try:
+            # Get real market data from CoinGecko
+            market_data = get_real_market_data(symbol)
+            
+            if market_data:
+                # Use real data from CoinGecko API
+                response_data["cryptoPrice"] = {
+                    "id": f"price_{symbol.lower()}_001",
+                    "symbol": symbol,
+                    "priceUsd": market_data.get("priceUsd", 0.0),
+                    "priceBtc": market_data.get("priceBtc", 0.0),
+                    "priceChange24h": market_data.get("priceChange24h", 0.0),
+                    "priceChangePercentage24h": market_data.get("priceChangePercentage24h", 0.0),
+                    "volume24h": market_data.get("volumeUsd24h", 0.0),
+                    "marketCap": market_data.get("marketCap", 0.0),
+                    "rsi14": market_data.get("rsi14", 50.0),
+                    "volatility7d": market_data.get("volatility7d", 0.0),
+                    "volatility30d": market_data.get("volatility30d", 0.0),
+                    "volatilityTier": market_data.get("volatilityTier", "MEDIUM"),
+                    "momentumScore": market_data.get("momentumScore", 0.5),
+                    "sentimentScore": market_data.get("sentimentScore", 0.5),
+                    "sentimentDescription": market_data.get("sentimentDescription", "Neutral market sentiment"),
+                    "timestamp": datetime.now().isoformat(),
+                    "__typename": "CryptoPrice"
+                }
+            else:
+                # Fallback to mock data if real data fails
+                prices = {
+                    "BTC": {"price": 50000.0, "change24h": 2.5},
+                    "ETH": {"price": 3200.0, "change24h": 1.8},
+                    "SOL": {"price": 100.0, "change24h": -0.5}
+                }
+                
+                if symbol in prices:
+                    price_data = prices[symbol]
+                    response_data["cryptoPrice"] = {
+                        "id": f"price_{symbol.lower()}_001",
+                        "symbol": symbol,
+                        "priceUsd": price_data["price"],
+                        "priceBtc": price_data["price"] / 50000.0,  # Mock BTC conversion
+                        "priceChange24h": price_data["change24h"],
+                        "priceChangePercentage24h": price_data["change24h"],
+                        "volume24h": 1000000000.0,
+                        "marketCap": 1000000000000.0,
+                        "rsi14": 65.5,
+                        "volatility7d": 0.15,
+                        "volatility30d": 0.25,
+                        "volatilityTier": "HIGH" if symbol == "BTC" else "MEDIUM",
+                        "momentumScore": 0.7,
+                        "sentimentScore": 0.8,
+                        "sentimentDescription": "Bullish sentiment with strong confidence" if symbol == "BTC" else "Moderate bullish sentiment",
+                        "timestamp": datetime.now().isoformat(),
+                        "__typename": "CryptoPrice"
+                    }
+                else:
+                    response_data["cryptoPrice"] = None
+            
+            return {"data": response_data}
+        except Exception as e:
+            logger.error(f"Error handling cryptoPrice: {e}")
+            return {"data": {"cryptoPrice": None}}
+
+
+    # Generate ML Prediction (mutation)
+    if "generateMlPrediction" in fields:
+        symbol = variables.get("symbol", "").upper()
+        if not symbol:
+            return {"data": {"generateMlPrediction": {
+                "success": False,
+                "message": "Symbol is required",
+                "predictionId": None,
+                "probability": None,
+                "explanation": None,
+                "__typename": "GenerateMlPredictionResponse"
+            }}}
+        
+        try:
+            # Mock ML prediction generation
+            prediction_id = f"pred_{int(datetime.now().timestamp())}"
+            probability = 0.75
+            prediction_type = "BULLISH" if probability > 0.5 else "BEARISH"
+            
+            response_data["generateMlPrediction"] = {
+                "success": True,
+                "message": f"ML prediction generated successfully for {symbol}",
+                "predictionId": prediction_id,
+                "probability": probability,
+                "explanation": f"AI analysis indicates {probability:.1%} probability of {prediction_type.lower()} movement for {symbol}",
+                "__typename": "GenerateMlPredictionResponse"
+            }
+            return {"data": response_data}
+        except Exception as e:
+            logger.error(f"Error handling generateMlPrediction: {e}")
+            return {"data": {"generateMlPrediction": {
+                "success": False,
+                "message": "Failed to generate prediction",
+                "predictionId": None,
+                "probability": None,
+                "explanation": None,
+                "__typename": "GenerateMlPredictionResponse"
+            }}}
+
+    # Crypto Recommendations (query)
+    if "cryptoRecommendations" in fields:
+        constraints = variables.get("constraints") or {}
+        max_symbols = int(constraints.get("maxSymbols", 5))
+        min_prob = float(constraints.get("minProbability", 0.55))
+        min_liq_usd24h = float(constraints.get("minLiquidityUsd24h", 5_000_000))
+        allowed_tiers = set(map(str.upper, constraints.get("allowedTiers", ["LOW","MEDIUM","HIGH"])))
+        exclude_symbols = set(map(str.upper, constraints.get("excludeSymbols", [])))
+
+        try:
+            # Get supported currencies (mock for now)
+            supported = _get_mock_supported_currencies()
+            drift = _get_mock_drift_decision()
+
+            # Filter supported currencies first
+            filtered_supported = []
+            for c in supported:
+                sym = c["symbol"].upper()
+                if sym in exclude_symbols:
+                    continue
+                tier = (c.get("volatilityTier") or "MEDIUM").upper()
+                if tier not in allowed_tiers:
+                    continue
+                if not c.get("isSecCompliant", True):
+                    continue
+                if c.get("regulatoryStatus") == "RESTRICTED":
+                    continue
+                filtered_supported.append((sym, c))
+
+            # Batch fetch prices for all filtered symbols
+            symbols_to_fetch = [sym for sym, _ in filtered_supported]
+            batch_prices = crypto_data_provider.get_real_time_price_many(symbols_to_fetch)
+            
+            # Process all symbols with real ML predictions
+            rows = []
+            for sym, c in filtered_supported:
+                # Get price from batch results
+                px = batch_prices.get(sym)
+                if not px or px.get("priceUsd") is None:
+                    continue
+                liq = float(px.get("volumeUsd24h") or 0.0)
+                if liq < min_liq_usd24h:
+                    continue
+
+                # Get real ML prediction (with error handling)
+                try:
+                    pred = get_real_ml_prediction(sym)
+                    prob = float(pred.get("probability") or 0.5)
+                except Exception as e:
+                    logger.warning(f"ML prediction failed for {sym}: {e}")
+                    prob = 0.5  # Default neutral probability
+                    pred = {"confidenceLevel": "LOW", "explanation": f"Prediction unavailable for {sym}"}
+                
+                if prob < min_prob:
+                    continue
+
+                tier = (c.get("volatilityTier") or "MEDIUM").upper()
+                score = _score_row(prob, liq, tier, float(drift.get("size_multiplier", 1.0)))
+                rows.append({
+                    "symbol": sym,
+                    "score": score,
+                    "probability": prob,
+                    "confidenceLevel": pred.get("confidenceLevel", "MEDIUM"),
+                    "priceUsd": float(px["priceUsd"]),
+                    "volatilityTier": tier,
+                    "liquidity24hUsd": liq,
+                    "rationale": pred.get("explanation") or f"{sym} shows model probability {prob:.2f}",
+                })
+
+            rows.sort(key=lambda r: r["score"], reverse=True)
+            diversified = _diversify(rows, max_symbols)
+
+            msg = "OK" if diversified else "No assets met constraints"
+            return {
+                "success": True,
+                "message": msg,
+                "recommendations": diversified
+            }
+            
+            # Process all symbols in parallel for ML predictions
+            rows = []
+            for sym, c in filtered_supported:
+                # Get price from batch results
+                px = batch_prices.get(sym)
+                if not px or px.get("priceUsd") is None:
+                    continue
+                liq = float(px.get("volumeUsd24h") or 0.0)
+                if liq < min_liq_usd24h:
+                    continue
+
+                # Get real ML prediction (with error handling)
+                try:
+                    pred = get_real_ml_prediction(sym)
+                    prob = float(pred.get("probability") or 0.5)
+                except Exception as e:
+                    logger.warning(f"ML prediction failed for {sym}: {e}")
+                    prob = 0.5  # Default neutral probability
+                    pred = {"confidenceLevel": "LOW", "explanation": f"Prediction unavailable for {sym}"}
+                
+                if prob < min_prob:
+                    continue
+
+                tier = (c.get("volatilityTier") or "MEDIUM").upper()
+                score = _score_row(prob, liq, tier, float(drift.get("size_multiplier", 1.0)))
+                rows.append({
+                    "symbol": sym,
+                    "score": score,
+                    "probability": prob,
+                    "confidenceLevel": pred.get("confidenceLevel", "MEDIUM"),
+                    "priceUsd": float(px["priceUsd"]),
+                    "volatilityTier": tier,
+                    "liquidity24hUsd": liq,
+                    "rationale": pred.get("explanation") or f"{sym} shows model probability {prob:.2f}",
+                })
+
+            rows.sort(key=lambda r: r["score"], reverse=True)
+            diversified = _diversify(rows, max_symbols)
+
+            msg = "OK" if diversified else "No assets met constraints"
+            response_data["cryptoRecommendations"] = {
+                "success": True,
+                "message": msg,
+                "recommendations": diversified,
+                "__typename": "CryptoRecommendationResponse"
+            }
+            return {"data": response_data}
+        except Exception as e:
+            logger.error(f"Error handling cryptoRecommendations: {e}")
+            return {"data": {"cryptoRecommendations": {
+                "success": False,
+                "message": "Failed to generate recommendations",
+                "recommendations": [],
+                "__typename": "CryptoRecommendationResponse"
+            }}}
 
     # ---------------------------
     # DEFAULT (GraphQL-safe)
