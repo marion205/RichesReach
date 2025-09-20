@@ -98,7 +98,7 @@ style={styles.avatar}
 ) : (
 <View style={styles.avatarFallback}>
 <Text style={styles.avatarText}>
-{discussion.user.name.charAt(0).toUpperCase()}
+{(discussion.user.name || 'U').charAt(0).toUpperCase()}
 </Text>
 </View>
 )}
@@ -125,7 +125,7 @@ color={getDiscussionColor(discussion.discussionType)}
 styles.typeLabel,
 { color: getDiscussionColor(discussion.discussionType) }
 ]}>
-{discussion.discussionType.charAt(0).toUpperCase() + discussion.discussionType.slice(1)}
+{(discussion.discussionType || 'unknown').charAt(0).toUpperCase() + (discussion.discussionType || 'unknown').slice(1)}
 </Text>
 </View>
 {/* Content */}

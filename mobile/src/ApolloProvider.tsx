@@ -12,9 +12,8 @@ import JWTAuthService from '../services/JWTAuthService';
 // Determine the correct URL based on the environment
 const getGraphQLURL = () => {
   if (__DEV__) {
-    // In development, try to detect if we're on a physical device
-    // For now, use localhost - if this doesn't work, the user can manually change it
-    return 'http://localhost:8000/graphql/';
+    // In development, use the local IP address for device connectivity
+    return 'http://192.168.1.151:8123/graphql/';
   }
   // In production, use the production URL
   return 'https://your-production-url.com/graphql/';
@@ -97,8 +96,80 @@ merge: true,
 },
 },
 },
-},
-}),
+        OptionsRecommendation: {
+          fields: {
+            sentimentDescription: {
+              read(existing, { readField }) {
+                if (existing) return existing;
+                const raw = readField<string>('sentiment');
+                if (!raw) return 'Neutral outlook';
+                const upperRaw = raw.toUpperCase();
+                const confidence = readField<number>('confidence');
+                const map: Record<string, string> = {
+                  BULLISH: 'Bullish — model expects upside',
+                  BEARISH: 'Bearish — model expects downside',
+                  NEUTRAL: 'Neutral — limited directional edge',
+                };
+                const base = map[upperRaw] || 'Unknown';
+                return typeof confidence === 'number'
+                  ? `${base} (confidence ${Math.round(confidence * 100)}%)`
+                  : base;
+              }
+            },
+            daysToExpiration: {
+              read(existing) {
+                // Provide a default value if the field is missing
+                return existing ?? 30; // Default to 30 days if missing
+              }
+            }
+          }
+        },
+        Option: {
+          fields: {
+            timeValue: {
+              read(existing) {
+                // Provide a default value if the field is missing
+                return existing ?? 0.0;
+              }
+            },
+            intrinsicValue: {
+              read(existing) {
+                // Provide a default value if the field is missing
+                return existing ?? 0.0;
+              }
+            },
+            daysToExpiration: {
+              read(existing) {
+                // Provide a default value if the field is missing
+                return existing ?? 30;
+              }
+            }
+          }
+        },
+        RecommendedStrategy: {
+          fields: {
+            daysToExpiration: {
+              read(existing) {
+                // Provide a default value if the field is missing
+                return existing ?? 30; // Default to 30 days if missing
+              }
+            },
+            marketOutlook: {
+              read(existing) {
+                // Handle both string and object formats for marketOutlook
+                if (typeof existing === 'string') {
+                  return {
+                    sentiment: existing.toUpperCase(),
+                    sentimentDescription: `Market outlook: ${existing}`
+                  };
+                }
+                return existing ?? { sentiment: 'NEUTRAL', sentimentDescription: 'Neutral outlook' };
+              }
+            }
+          }
+        },
+      },
+    }),
 // Add default options for better performance
 defaultOptions: {
 watchQuery: {

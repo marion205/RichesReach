@@ -36,6 +36,7 @@ from .models import (
 )
 from .financial_tools import debt_snowball_plan, credit_utilization_optimizer, should_buy_luxury_item
 from .simple_stock_search import SimpleStockSearchService
+from .ai_options_engine import _sentiment_desc
 
 User = get_user_model()
 
@@ -608,7 +609,7 @@ class Query(graphene.ObjectType):
         cursor = connection.cursor()
         
         cursor.execute('''
-            SELECT s.symbol, s.company_name, s.current_price, p.shares, p.average_price, p.notes
+            SELECT s.symbol, s.company_name, s.current_price, s.sector, p.shares, p.average_price, p.notes
             FROM core_portfolio p 
             JOIN core_stock s ON p.stock_id = s.id 
             WHERE p.user_id = ?
@@ -632,8 +633,9 @@ class Query(graphene.ObjectType):
         
         for pos in positions:
             current_price = float(pos[2]) if pos[2] else 0.0
-            shares = float(pos[3]) if pos[3] else 0.0
-            avg_price = float(pos[4]) if pos[4] else 0.0
+            sector = pos[3] if pos[3] else 'Other'
+            shares = float(pos[4]) if pos[4] else 0.0
+            avg_price = float(pos[5]) if pos[5] else 0.0
             
             current_value = shares * current_price
             cost_basis = shares * avg_price
@@ -651,14 +653,28 @@ class Query(graphene.ObjectType):
         beta = 1.2  # Mock beta
         alpha = 0.02  # Mock alpha
         
-        # Create sector allocation
-        sector_allocation = {
-            'Technology': 0.35,
-            'Healthcare': 0.20,
-            'Financial': 0.15,
-            'Consumer': 0.15,
-            'Other': 0.15
-        }
+        # Calculate actual sector allocation from positions
+        sector_allocation = {}
+        for pos in positions:
+            current_price = float(pos[2]) if pos[2] else 0.0
+            sector = pos[3] if pos[3] else 'Other'
+            shares = float(pos[4]) if pos[4] else 0.0
+            avg_price = float(pos[5]) if pos[5] else 0.0
+            
+            current_value = shares * current_price
+            weight = (current_value / total_value) if total_value > 0 else 0.0
+            
+            if sector not in sector_allocation:
+                sector_allocation[sector] = 0.0
+            sector_allocation[sector] += weight
+        
+        # Calculate diversification score using Herfindahl-Hirschman Index
+        diversification_score = 0.0
+        if len(sector_allocation) > 0:
+            # HHI = sum of squared weights
+            hhi = sum(weight ** 2 for weight in sector_allocation.values())
+            # Convert to diversification score (0-100, higher is more diversified)
+            diversification_score = max(0, min(100, (1 - hhi) * 100))
         
         # Create risk metrics
         risk_metrics = {
@@ -673,8 +689,9 @@ class Query(graphene.ObjectType):
         holdings = []
         for pos in positions:
             current_price = float(pos[2]) if pos[2] else 0.0
-            shares = float(pos[3]) if pos[3] else 0.0
-            avg_price = float(pos[4]) if pos[4] else 0.0
+            sector = pos[3] if pos[3] else 'Other'
+            shares = float(pos[4]) if pos[4] else 0.0
+            avg_price = float(pos[5]) if pos[5] else 0.0
             
             current_value = shares * current_price
             cost_basis = shares * avg_price
@@ -694,7 +711,7 @@ class Query(graphene.ObjectType):
                 'totalReturn': holding_return,
                 'totalReturnPercent': holding_return_percent,
                 'weight': weight,
-                'sector': 'Technology',  # Mock sector
+                'sector': sector,
                 'costBasis': cost_basis,
                 'returnAmount': holding_return,
                 'returnPercent': holding_return_percent
@@ -715,7 +732,8 @@ class Query(graphene.ObjectType):
             'alpha': alpha,
             'sectorAllocation': sector_allocation,
             'riskMetrics': risk_metrics,
-            'holdings': holdings
+            'holdings': holdings,
+            'diversificationScore': diversification_score
         }
 
     def resolve_aiRecommendations(self, info, riskTolerance='medium'):
@@ -993,7 +1011,10 @@ class Query(graphene.ObjectType):
                 'strategyType': 'Vertical Spread',
                 'description': 'Buy lower strike call, sell higher strike call. Profits if stock rises moderately.',
                 'riskLevel': 'Medium',
-                'marketOutlook': 'Bullish',
+                'marketOutlook': {
+                    'sentiment': 'BULLISH',
+                    'sentimentDescription': 'Bullish — model expects upside (confidence 65%)'
+                },
                 'maxProfit': 2.50,
                 'maxLoss': 2.50,
                 'breakevenPoints': [152.50],
@@ -1008,7 +1029,10 @@ class Query(graphene.ObjectType):
                 'strategyType': 'Multi-Leg',
                 'description': 'Sell call spread and put spread. Profits if stock stays in range.',
                 'riskLevel': 'Low',
-                'marketOutlook': 'Neutral',
+                'marketOutlook': {
+                    'sentiment': 'NEUTRAL',
+                    'sentimentDescription': 'Neutral — limited directional edge (confidence 50%)'
+                },
                 'maxProfit': 1.25,
                 'maxLoss': 3.75,
                 'breakevenPoints': [146.25, 153.75],
@@ -1062,7 +1086,7 @@ class Query(graphene.ObjectType):
                 'impliedVolatilityRank': 0.6,  # 60% rank means moderate volatility
                 'skew': 0.15,  # Positive skew means puts are more expensive
                 'sentimentScore': 72.0,  # 72/100 bullish sentiment
-                'sentimentDescription': 'Moderately Bullish'
+                'sentimentDescription': _sentiment_desc('BULLISH', 0.72)
             }
         }
 
@@ -1177,7 +1201,10 @@ class Query(graphene.ObjectType):
                 'strategyType': 'Vertical Spread',
                 'description': 'Buy lower strike call, sell higher strike call. Profits if stock rises moderately.',
                 'riskLevel': 'Medium',
-                'marketOutlook': 'Bullish',
+                'marketOutlook': {
+                    'sentiment': 'BULLISH',
+                    'sentimentDescription': 'Bullish — model expects upside (confidence 65%)'
+                },
                 'maxProfit': 2.50,
                 'maxLoss': 2.50,
                 'breakevenPoints': [152.50],
@@ -1192,7 +1219,10 @@ class Query(graphene.ObjectType):
                 'strategyType': 'Multi-Leg',
                 'description': 'Sell call spread and put spread. Profits if stock stays in range.',
                 'riskLevel': 'Low',
-                'marketOutlook': 'Neutral',
+                'marketOutlook': {
+                    'sentiment': 'NEUTRAL',
+                    'sentimentDescription': 'Neutral — limited directional edge (confidence 50%)'
+                },
                 'maxProfit': 1.25,
                 'maxLoss': 3.75,
                 'breakevenPoints': [146.25, 153.75],
@@ -1246,7 +1276,7 @@ class Query(graphene.ObjectType):
                 'impliedVolatilityRank': 0.6,  # 60% rank means moderate volatility
                 'skew': 0.15,  # Positive skew means puts are more expensive
                 'sentimentScore': 72.0,  # 72/100 bullish sentiment
-                'sentimentDescription': 'Moderately Bullish'
+                'sentimentDescription': _sentiment_desc('BULLISH', 0.72)
             }
         }
 
@@ -1302,7 +1332,13 @@ class Query(graphene.ObjectType):
 
     def resolve_market_sentiment(self, info):
         # Simple stub; replace with your sentiment service
-        return {"sentiment": "neutral", "confidence": 0.5}
+        sentiment = "neutral"
+        confidence = 0.5
+        return {
+            "sentiment": sentiment, 
+            "confidence": confidence,
+            "sentimentDescription": _sentiment_desc(sentiment.upper(), confidence)
+        }
 
     # --- Financial tools ---
     debt_snowball = graphene.Field(

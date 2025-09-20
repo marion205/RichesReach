@@ -1,21 +1,25 @@
 import React, { useState } from 'react';
 import {
-View,
-Text,
-StyleSheet,
-TouchableOpacity,
-ScrollView,
-Alert,
-RefreshControl,
-Image,
-SafeAreaView,
-Dimensions,
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  Alert,
+  RefreshControl,
+  Image,
+  SafeAreaView,
+  Dimensions,
+  Modal,
 } from 'react-native';
 import { gql, useQuery, useMutation, useApolloClient } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import JWTAuthService from '../services/JWTAuthService';
 import { GET_MY_PORTFOLIOS } from '../graphql/portfolioQueries';
+import SBLOCCalculator from '../components/SBLOCCalculator';
+import SblocWidget from '../components/SblocWidget';
+import SblocCalculatorModal from '../components/SblocCalculatorModal';
 
 // --- Design tokens (light theme) ---
 const UI = {
@@ -131,7 +135,9 @@ onLogout?: () => void;
 }
 const { width } = Dimensions.get('window');
 const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigateTo, onLogout }) => {
-const { data: meData, loading: meLoading, error: meError } = useQuery(GET_ME);
+  const [showSBLOCModal, setShowSBLOCModal] = useState(false);
+  const [showSblocCalculator, setShowSblocCalculator] = useState(false);
+  const { data: meData, loading: meLoading, error: meError } = useQuery(GET_ME);
 const { data: portfoliosData, loading: portfoliosLoading, refetch: refetchPortfolios } = useQuery(GET_MY_PORTFOLIOS, {
   notifyOnNetworkStatusChange: true,
   fetchPolicy: 'network-only',  // Force network request to bypass cache
@@ -367,50 +373,138 @@ showsVerticalScrollIndicator={false}
 <Text style={[styles.rowText, { color: '#B8860B' }]}>Premium Analytics</Text>
 <Icon name="chevron-right" size={18} color={UI.gold} />
 </TouchableOpacity>
+
+<TouchableOpacity style={styles.rowItem} onPress={() => navigateTo?.('bank-accounts')}>
+<View style={[styles.rowIcon, { backgroundColor: '#F0F8FF', borderColor: '#BAE6FD' }]}>
+<Icon name="credit-card" size={16} color={UI.accent} />
 </View>
-{/* Key Metrics */}
+<Text style={styles.rowText}>Bank Accounts</Text>
+<Icon name="chevron-right" size={18} color="#CBD5E1" />
+</TouchableOpacity>
+
+<TouchableOpacity style={styles.rowItem} onPress={() => navigateTo?.('notifications')}>
+<View style={[styles.rowIcon, { backgroundColor: '#FFF7ED', borderColor: '#FED7AA' }]}>
+<Icon name="bell" size={16} color={UI.warn} />
+</View>
+<Text style={styles.rowText}>Notifications</Text>
+<Icon name="chevron-right" size={18} color="#CBD5E1" />
+</TouchableOpacity>
+
+<TouchableOpacity style={styles.rowItem} onPress={() => navigateTo?.('trading')}>
+<View style={[styles.rowIcon, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}>
+<Icon name="trending-up" size={16} color={UI.success} />
+</View>
+<Text style={styles.rowText}>Trading</Text>
+<Icon name="chevron-right" size={18} color="#CBD5E1" />
+</TouchableOpacity>
+</View>
+{/* ---- Overview card ---- */}
 <View style={styles.sectionCard}>
-<Text style={styles.sectionTitle}>Overview</Text>
+  <View style={styles.sectionHeader}>
+    <View style={styles.sectionHeaderLeft}>
+      <Text style={styles.sectionEyebrow}>Profile</Text>
+      <Text style={styles.sectionTitle}>Overview</Text>
+    </View>
 
-<View style={styles.tileRow}>
-<TouchableOpacity
-style={[styles.tile, shadow]}
-onPress={() => navigateTo?.('portfolio-management')}
-disabled={portfoliosLoading}
-activeOpacity={0.9}
->
-<View style={[styles.tileIcon, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}>
-<Icon name="trending-up" size={18} color={UI.success} />
-</View>
-<Text style={styles.tileLabel}>Portfolio Value</Text>
-{portfoliosLoading || watchlistLoading ? (
-<Text style={styles.tileValueMuted}>Loading…</Text>
-) : (
-<Text style={[styles.tileValue, { color: UI.success }]}>
-${portfolioValue && portfolioValue > 0 ? portfolioValue.toLocaleString() : '0.00'}
-</Text>
-)}
-<Icon style={styles.tileChevron} name="chevron-right" size={16} color="#CBD5E1" />
-</TouchableOpacity>
+    {/* tiny helper action; swap handler if you like */}
+    <TouchableOpacity onPress={() => navigateTo?.('portfolio-management')} hitSlop={{top:8,bottom:8,left:8,right:8}}>
+      <View style={styles.sectionAction}>
+        <Icon name="arrow-right" size={14} color="#007AFF" />
+        <Text style={styles.sectionActionText}>Manage</Text>
+      </View>
+    </TouchableOpacity>
+  </View>
 
-<TouchableOpacity
-style={[styles.tile, shadow]}
-onPress={() => navigateTo?.('portfolio-management')}
-disabled={portfoliosLoading}
-activeOpacity={0.9}
->
-<View style={[styles.tileIcon, { backgroundColor: '#EEF2FF', borderColor: '#C7D2FE' }]}>
-<Icon name="crosshair" size={18} color={UI.violet} />
-</View>
-<Text style={styles.tileLabel}>Portfolios</Text>
-{portfoliosLoading ? (
-<Text style={styles.tileValueMuted}>Loading…</Text>
-) : (
-<Text style={[styles.tileValue, { color: UI.violet }]}>{investmentGoals}</Text>
-)}
-<Icon style={styles.tileChevron} name="chevron-right" size={16} color="#CBD5E1" />
-</TouchableOpacity>
-</View>
+  {/* SBLOC Borrowing Power */}
+  <View style={{ marginBottom: 12 }}>
+    <SblocWidget
+      equity={portfolioValue || 0}
+      apr={8.5}
+      ltv={50}
+      eligibleEquity={portfolioValue || 0}
+      loading={portfoliosLoading}
+      onOpenCalculator={() => setShowSblocCalculator(true)}
+      onLearnMore={() => {
+        Alert.alert(
+          'SBLOC Information',
+          'A Securities-Based Line of Credit lets you borrow against your investment portfolio without selling stocks. You can typically borrow up to 50% of your eligible securities value at competitive rates.\n\nThis provides liquidity while keeping your investments growing and potentially avoiding capital gains taxes.',
+          [
+            { text: 'Learn More', onPress: () => navigateTo?.('learning-paths') },
+            { text: 'OK' }
+          ]
+        );
+      }}
+    />
+  </View>
+
+  {/* Tiles (snap-scrolling) */}
+  <ScrollView
+    horizontal
+    showsHorizontalScrollIndicator={false}
+    contentContainerStyle={styles.tileScrollContent}
+    snapToAlignment="start"
+    decelerationRate="fast"
+    snapToInterval={168}               // tile width + gap (adjust if you change width)
+  >
+    {/* Portfolio Value */}
+    <TouchableOpacity
+      onPress={() => navigateTo?.('portfolio-management')}
+      activeOpacity={0.85}
+      style={[styles.tile, styles.shadow]}
+      disabled={portfoliosLoading || watchlistLoading}
+    >
+      <View style={[styles.tileIcon, { backgroundColor:'#ECFDF5', borderColor:'#A7F3D0' }]}>
+        <Icon name="trending-up" size={18} color="#10B981" />
+      </View>
+
+      <Text style={styles.tileLabel}>Portfolio Value</Text>
+
+      {(portfoliosLoading || watchlistLoading) ? (
+        <View style={styles.skeletonLine} />
+      ) : (
+        <Text style={[styles.tileValue, { color:'#0F766E' }]}>
+          ${portfolioValue && portfolioValue > 0 ? portfolioValue.toLocaleString() : '0.00'}
+        </Text>
+      )}
+
+      <View style={styles.tileFooterRow}>
+        <Text style={styles.tileHint}>Updated today</Text>
+        <Icon name="chevron-right" size={16} color="#C7CED6" />
+      </View>
+    </TouchableOpacity>
+
+    {/* Portfolios count / goals */}
+    <TouchableOpacity
+      onPress={() => navigateTo?.('portfolio-management')}
+      activeOpacity={0.85}
+      style={[styles.tile, styles.shadow]}
+      disabled={portfoliosLoading}
+    >
+      <View style={[styles.tileIcon, { backgroundColor:'#EEF2FF', borderColor:'#C7D2FE' }]}>
+        <Icon name="crosshair" size={18} color="#6366F1" />
+      </View>
+
+      <Text style={styles.tileLabel}>Portfolios</Text>
+
+      {portfoliosLoading ? (
+        <View style={styles.skeletonLine} />
+      ) : (
+        <View style={styles.badgeRow}>
+          <View style={[styles.badge, { backgroundColor:'#EEF2FF' }]}>
+            <Text style={[styles.badgeText, { color:'#6366F1' }]}>
+              {typeof investmentGoals === 'number' ? `${investmentGoals}` : `${investmentGoals}`}
+            </Text>
+          </View>
+          <Text style={styles.tileHint}>active</Text>
+        </View>
+      )}
+
+      <View style={styles.tileFooterRow}>
+        <Text style={styles.tileHint}>Configure targets</Text>
+        <Icon name="chevron-right" size={16} color="#C7CED6" />
+      </View>
+    </TouchableOpacity>
+  </ScrollView>
 </View>
 {/* My Portfolios */}
 <View style={styles.sectionCard}>
@@ -538,9 +632,42 @@ onPress={() => navigateTo?.('ai-portfolio')}
   <Text style={styles.quickActionText}>News Feed</Text>
 </TouchableOpacity>
 </View>
-</View>
-</ScrollView>
-</SafeAreaView>
+      </View>
+    </ScrollView>
+
+    {/* SBLOC Calculator */}
+    <SBLOCCalculator
+      visible={showSBLOCModal}
+      onClose={() => setShowSBLOCModal(false)}
+      portfolioValue={portfolioValue}
+      onApply={() => {
+        setShowSBLOCModal(false);
+        Alert.alert(
+          'SBLOC Application',
+          'This would open the SBLOC application flow with our partner banks.',
+          [{ text: 'OK' }]
+        );
+      }}
+    />
+
+    {/* New SBLOC Calculator Modal */}
+    <SblocCalculatorModal
+      visible={showSblocCalculator}
+      onClose={() => setShowSblocCalculator(false)}
+      apr={8.5}
+      eligibleEquity={portfolioValue || 0}
+      maxLtvPct={50}
+      currentDebt={0}
+      onApply={(amount) => {
+        setShowSblocCalculator(false);
+        Alert.alert(
+          'SBLOC Application',
+          `This would open the SBLOC application flow for $${amount.toLocaleString()}.`,
+          [{ text: 'OK' }]
+        );
+      }}
+    />
+  </SafeAreaView>
 );
 };
 const styles = StyleSheet.create({
@@ -616,29 +743,69 @@ backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: UI.border,
 pillTxt: { marginLeft: 6, fontSize: 12, fontWeight: '700', color: UI.text },
 
 /* --- SECTION CARD WRAPPER --- */
-sectionCard: {
-backgroundColor: UI.card,
-marginTop: 16,
-marginHorizontal: 16,
-borderRadius: UI.radius,
-borderWidth: 1,
-borderColor: UI.border,
-padding: 16,
-},
-sectionTitle: { fontSize: 16, fontWeight: '800', color: UI.text, marginBottom: 12 },
 
 /* --- TILES --- */
 tileRow: { flexDirection: 'row', gap: 12 },
-tile: {
-flex: 1, backgroundColor: '#F9FAFB', borderRadius: 14, borderWidth: 1, borderColor: UI.border,
-padding: 14, position: 'relative',
+tileScrollView: {
+  marginTop: 16,
 },
-tileIcon: {
-position: 'absolute', top: 10, right: 10, padding: 8, borderRadius: 10,
-borderWidth: 1,
+
+// New UI styles for polished overview
+sectionCard:{
+  backgroundColor:'#fff',
+  borderRadius:16,
+  padding:16,
+  marginHorizontal:20,
+  marginTop:12,
+  marginBottom:8,
+  shadowColor:'#000',
+  shadowOffset:{ width:0, height:2 },
+  shadowOpacity:0.06,
+  shadowRadius:6,
+  elevation:2,
 },
-tileLabel: { marginTop: 8, fontSize: 12, color: UI.sub, fontWeight: '600' },
-tileValue: { marginTop: 2, fontSize: 22, fontWeight: '800' },
+sectionHeader:{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom:8 },
+sectionHeaderLeft:{},
+sectionEyebrow:{ fontSize:12, color:'#8E8E93', fontWeight:'600', letterSpacing:0.2 },
+sectionTitle:{ fontSize:20, fontWeight:'800', color:'#1C1C1E', marginTop:2 },
+sectionAction:{
+  flexDirection:'row', alignItems:'center', gap:6,
+  backgroundColor:'#E7F1FF', paddingHorizontal:10, paddingVertical:6, borderRadius:999
+},
+sectionActionText:{ color:'#007AFF', fontWeight:'700', fontSize:12 },
+
+tileScrollContent:{ paddingVertical:4, paddingRight:6 },
+tile:{
+  width:160,                   // keeps snap tidy
+  borderRadius:14,
+  padding:14,
+  backgroundColor:'#fff',
+  marginRight:8,
+},
+shadow:{
+  shadowColor:'#000',
+  shadowOffset:{ width:0, height:2 },
+  shadowOpacity:0.06,
+  shadowRadius:4,
+  elevation:2,
+},
+tileIcon:{
+  width:32, height:32, borderRadius:8, borderWidth:1,
+  alignItems:'center', justifyContent:'center', marginBottom:10
+},
+tileLabel:{ fontSize:12, color:'#6B7280', fontWeight:'700', letterSpacing:0.3 },
+tileValue:{ fontSize:20, fontWeight:'800', marginTop:6 },
+tileHint:{ fontSize:12, color:'#94A3B8' },
+tileFooterRow:{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginTop:10 },
+
+badgeRow:{ flexDirection:'row', alignItems:'center', gap:8, marginTop:6 },
+badge:{ borderRadius:999, paddingHorizontal:10, paddingVertical:4 },
+badgeText:{ fontSize:12, fontWeight:'800' },
+
+skeletonLine:{
+  height:22, borderRadius:6, marginTop:6,
+  backgroundColor:'#EEF2F6',
+},
 tileValueMuted: { marginTop: 2, fontSize: 16, color: '#9CA3AF', fontWeight: '700' },
 tileChevron: { position: 'absolute', bottom: 10, right: 10 },
 
@@ -762,6 +929,273 @@ debugButtonText: {
   fontSize: 14,
   fontWeight: '600',
   textAlign: 'center',
+},
+
+// SBLOC Widget Styles
+sblocBadge: {
+  position: 'absolute',
+  top: 8,
+  left: 8,
+  backgroundColor: '#FEF3C7',
+  paddingHorizontal: 6,
+  paddingVertical: 2,
+  borderRadius: 8,
+  borderWidth: 1,
+  borderColor: '#FDE68A',
+},
+sblocBadgeText: {
+  fontSize: 10,
+  fontWeight: '800',
+  color: '#F59E0B',
+},
+
+// SBLOC Modal Styles
+modalContainer: {
+  flex: 1,
+  backgroundColor: '#F6F7FB',
+},
+modalHeader: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  paddingHorizontal: 20,
+  paddingVertical: 16,
+  backgroundColor: '#FFFFFF',
+  borderBottomWidth: 1,
+  borderBottomColor: '#E5E7EB',
+},
+modalCloseButton: {
+  padding: 8,
+  borderRadius: 20,
+  backgroundColor: '#F2F2F7',
+},
+modalTitle: {
+  fontSize: 18,
+  fontWeight: '700',
+  color: '#111827',
+  flex: 1,
+  textAlign: 'center',
+  marginRight: 40, // Compensate for close button
+},
+modalContent: {
+  flex: 1,
+  paddingHorizontal: 20,
+},
+modalFooter: {
+  flexDirection: 'row',
+  gap: 12,
+  padding: 20,
+  backgroundColor: '#FFFFFF',
+  borderTopWidth: 1,
+  borderTopColor: '#E5E7EB',
+},
+
+// SBLOC Hero Section
+sblocHero: {
+  alignItems: 'center',
+  paddingVertical: 32,
+  paddingHorizontal: 20,
+  backgroundColor: '#FFFFFF',
+  borderRadius: 16,
+  marginVertical: 16,
+  borderWidth: 1,
+  borderColor: '#E5E7EB',
+},
+sblocIcon: {
+  width: 64,
+  height: 64,
+  borderRadius: 32,
+  backgroundColor: '#FEF3C7',
+  alignItems: 'center',
+  justifyContent: 'center',
+  marginBottom: 16,
+  borderWidth: 1,
+  borderColor: '#FDE68A',
+},
+sblocTitle: {
+  fontSize: 24,
+  fontWeight: '800',
+  color: '#111827',
+  textAlign: 'center',
+  marginBottom: 8,
+},
+sblocSubtitle: {
+  fontSize: 16,
+  color: '#6B7280',
+  textAlign: 'center',
+  lineHeight: 24,
+},
+
+// SBLOC Cards
+sblocCard: {
+  backgroundColor: '#FFFFFF',
+  borderRadius: 16,
+  padding: 20,
+  marginBottom: 16,
+  borderWidth: 1,
+  borderColor: '#E5E7EB',
+},
+sblocCardTitle: {
+  fontSize: 18,
+  fontWeight: '700',
+  color: '#111827',
+  marginBottom: 12,
+},
+sblocDescription: {
+  fontSize: 15,
+  color: '#6B7280',
+  lineHeight: 22,
+  marginBottom: 16,
+},
+
+// Borrowing Power
+borrowingPowerRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  marginBottom: 8,
+},
+borrowingPowerItem: {
+  alignItems: 'center',
+  flex: 1,
+},
+borrowingPowerLabel: {
+  fontSize: 14,
+  color: '#6B7280',
+  fontWeight: '600',
+  marginBottom: 4,
+},
+borrowingPowerValue: {
+  fontSize: 20,
+  fontWeight: '800',
+  color: '#111827',
+},
+borrowingPowerNote: {
+  fontSize: 12,
+  color: '#9CA3AF',
+  textAlign: 'center',
+  fontStyle: 'italic',
+},
+
+// Benefits List
+benefitsList: {
+  marginTop: 8,
+},
+benefitItem: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  marginBottom: 12,
+},
+benefitText: {
+  fontSize: 15,
+  color: '#111827',
+  marginLeft: 12,
+  fontWeight: '500',
+},
+
+// Rate Comparison
+rateComparison: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+},
+rateItem: {
+  alignItems: 'center',
+  flex: 1,
+},
+rateType: {
+  fontSize: 14,
+  color: '#6B7280',
+  fontWeight: '600',
+  marginBottom: 8,
+},
+rateValue: {
+  fontSize: 18,
+  fontWeight: '800',
+},
+
+// Steps List
+stepsList: {
+  marginTop: 8,
+},
+stepItem: {
+  flexDirection: 'row',
+  alignItems: 'flex-start',
+  marginBottom: 20,
+},
+stepNumber: {
+  width: 32,
+  height: 32,
+  borderRadius: 16,
+  backgroundColor: '#F59E0B',
+  alignItems: 'center',
+  justifyContent: 'center',
+  marginRight: 16,
+},
+stepNumberText: {
+  fontSize: 16,
+  fontWeight: '800',
+  color: '#FFFFFF',
+},
+stepContent: {
+  flex: 1,
+},
+stepTitle: {
+  fontSize: 16,
+  fontWeight: '700',
+  color: '#111827',
+  marginBottom: 4,
+},
+stepDescription: {
+  fontSize: 14,
+  color: '#6B7280',
+  lineHeight: 20,
+},
+
+// Considerations List
+considerationsList: {
+  marginTop: 8,
+},
+considerationItem: {
+  flexDirection: 'row',
+  alignItems: 'flex-start',
+  marginBottom: 12,
+},
+considerationText: {
+  fontSize: 14,
+  color: '#6B7280',
+  marginLeft: 12,
+  flex: 1,
+  lineHeight: 20,
+},
+
+// Modal Footer Buttons
+sblocCalculatorBtn: {
+  flex: 1,
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 8,
+  backgroundColor: '#F59E0B',
+  paddingVertical: 16,
+  borderRadius: 12,
+},
+sblocCalculatorBtnText: {
+  fontSize: 16,
+  fontWeight: '700',
+  color: '#FFFFFF',
+},
+sblocApplyBtn: {
+  flex: 1,
+  alignItems: 'center',
+  justifyContent: 'center',
+  backgroundColor: '#10B981',
+  paddingVertical: 16,
+  borderRadius: 12,
+},
+sblocApplyBtnText: {
+  fontSize: 16,
+  fontWeight: '700',
+  color: '#FFFFFF',
 },
 });
 export default ProfileScreen;

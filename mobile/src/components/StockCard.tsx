@@ -15,13 +15,19 @@ export type StockCardProps = {
   onPressAdd: () => void;
   onPressAnalysis: () => void;
   onPressMetric: (k: 'marketCap' | 'peRatio' | 'dividendYield') => void;
+  onPress?: () => void;
+  isSelected?: boolean;
 };
 
 function StockCard(props: StockCardProps) {
   const rec = getBuyRecommendation(props.beginnerFriendlyScore);
 
   return (
-    <TouchableOpacity style={styles.card} onPress={props.onPressAdd} activeOpacity={0.9}>
+    <TouchableOpacity 
+      style={[styles.card, props.isSelected && styles.selectedCard]} 
+      onPress={props.onPress || props.onPressAdd} 
+      activeOpacity={0.9}
+    >
       <View style={styles.header}>
         <View style={styles.row}>
           <Text style={styles.symbol}>{props.symbol}</Text>
@@ -97,4 +103,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 3,
   },
   analysisText: { fontSize: 14, fontWeight: '600', color: '#fff' },
+  selectedCard: {
+    borderColor: '#007AFF',
+    borderWidth: 2,
+    backgroundColor: '#F0F8FF',
+  },
 });

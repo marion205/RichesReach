@@ -602,6 +602,7 @@ class PortfolioMetricsType(graphene.ObjectType):
     sectorAllocation = graphene.JSONString()
     riskMetrics = graphene.JSONString()
     holdings = graphene.List('core.types.PortfolioHoldingType')
+    diversificationScore = graphene.Float()
 
 
 class StockRecommendationType(graphene.ObjectType):

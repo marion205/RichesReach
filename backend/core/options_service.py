@@ -210,7 +210,7 @@ sentiment = 'Neutral'
 stock_info = {
 'price': current_price,
 'volatility': volatility,
-'sentiment': sentiment
+'sentimentDescription': sentiment
 }
 else:
 # Fallback to dynamic data generation
@@ -223,7 +223,7 @@ sentiment = sentiments[hash_value % len(sentiments)]
 stock_info = {
 'price': float(base_price),
 'volatility': volatility,
-'sentiment': sentiment
+'sentimentDescription': sentiment
 }
 except Exception as e:
 logger.error(f"Error getting real stock data for {symbol}: {e}")
@@ -236,7 +236,7 @@ sentiment = 'Neutral'
 stock_info = {
 'price': float(base_price),
 'volatility': volatility,
-'sentiment': sentiment
+'sentimentDescription': sentiment
 }
 logger.info(f"Generated dynamic data for {symbol}: ${stock_info['price']}, {stock_info['sentiment']}")
 current_price = stock_info['price']

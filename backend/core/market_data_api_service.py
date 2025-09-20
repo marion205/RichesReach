@@ -431,7 +431,7 @@ else:
 sentiment = 'neutral'
 return {
 'indices': market_data,
-'sentiment': sentiment,
+'sentimentDescription': sentiment,
 'average_change': avg_change,
 'timestamp': datetime.now().isoformat()
 }
