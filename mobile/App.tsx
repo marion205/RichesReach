@@ -35,6 +35,7 @@ import TradingScreen from './screens/TradingScreen';
 import AIOptionsScreen from './screens/AIOptionsScreen';
 import BankAccountScreen from './screens/BankAccountScreen';
 import NotificationsScreen from './screens/NotificationsScreen';
+import CryptoScreen from './screens/CryptoScreen';
 // Components
 import BottomTabBar from './components/BottomTabBar';
 import PersonalizedDashboard from './components/PersonalizedDashboard';
@@ -224,6 +225,8 @@ case 'profile':
 return <ProfileScreen navigateTo={navigateTo} onLogout={handleLogout} />;
 case 'stock':
 return <StockScreen navigateTo={navigateTo} />;
+case 'crypto':
+return <CryptoScreen navigation={{ navigate: navigateTo }} />;
 case 'ai-portfolio':
 return <AIPortfolioScreen navigateTo={navigateTo} />;
 case 'portfolio':
