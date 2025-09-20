@@ -75,3 +75,7 @@ db.sqlite3
 *.tar.gz
 deployment/*.tar.gz
 infrastructure/archives/*.tar.gz
+
+# local junk
+temp_repo/
+
