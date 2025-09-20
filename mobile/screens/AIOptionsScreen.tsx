@@ -125,11 +125,11 @@ onPress={() => handleRecommendationPress(rec)}
 styles.strategyTypeBadge,
 { backgroundColor: aiOptionsService.getStrategyTypeColor(rec.strategy_type) }
 ]}>
-<Text style={styles.strategyTypeText}>{rec.strategy_type.toUpperCase()}</Text>
+<Text style={styles.strategyTypeText}>{(rec.strategy_type || 'unknown').toUpperCase()}</Text>
 </View>
 </View>
 <View style={styles.confidenceContainer}>
-<Text style={styles.confidenceScore}>{rec.confidence_score.toFixed(0)}%</Text>
+<Text style={styles.confidenceScore}>{(rec.confidence_score || 0).toFixed(0)}%</Text>
 <Text style={styles.confidenceLabel}>Confidence</Text>
 </View>
 </View>
@@ -137,17 +137,17 @@ styles.strategyTypeBadge,
 <Text style={styles.strategyRationale}>{rec.reasoning.strategy_rationale}</Text>
 <View style={styles.metricsRow}>
 <View style={styles.metric}>
-<Text style={styles.metricValue}>${rec.analytics.max_profit.toFixed(0)}</Text>
+<Text style={styles.metricValue}>${(rec.analytics?.max_profit || 0).toFixed(0)}</Text>
 <Text style={styles.metricLabel}>Max Profit</Text>
 </View>
 <View style={styles.metric}>
-<Text style={[styles.metricValue, { color: rec.analytics.max_loss > 0 ? '#FF3B30' : '#34C759' }]}>
-${Math.abs(rec.analytics.max_loss).toFixed(0)}
+<Text style={[styles.metricValue, { color: (rec.analytics?.max_loss || 0) > 0 ? '#FF3B30' : '#34C759' }]}>
+${Math.abs(rec.analytics?.max_loss || 0).toFixed(0)}
 </Text>
 <Text style={styles.metricLabel}>Max Loss</Text>
 </View>
 <View style={styles.metric}>
-<Text style={styles.metricValue}>{(rec.analytics.probability_of_profit * 100).toFixed(0)}%</Text>
+<Text style={styles.metricValue}>{((rec.analytics?.probability_of_profit || 0) * 100).toFixed(0)}%</Text>
 <Text style={styles.metricLabel}>Prob. Profit</Text>
 </View>
 </View>
@@ -156,23 +156,23 @@ ${Math.abs(rec.analytics.max_loss).toFixed(0)}
 <Text style={styles.riskLabel}>Risk: </Text>
 <Text style={[
 styles.riskValue,
-{ color: rec.risk_score <= 30 ? '#34C759' : rec.risk_score <= 60 ? '#FF9500' : '#FF3B30' }
+{ color: (rec.risk_score || 0) <= 30 ? '#34C759' : (rec.risk_score || 0) <= 60 ? '#FF9500' : '#FF3B30' }
 ]}>
-{aiOptionsService.getRiskLevelDescription(rec.risk_score)}
+{aiOptionsService.getRiskLevelDescription(rec.risk_score || 0)}
 </Text>
 </View>
 <Text style={styles.expectedReturn}>
-Expected Return: {(rec.analytics.expected_return * 100).toFixed(1)}%
+Expected Return: {((rec.analytics?.expected_return || 0) * 100).toFixed(1)}%
 </Text>
 </View>
 </View>
 <View style={styles.cardFooter}>
 <Text style={styles.expirationText}>
-Expires in {rec.days_to_expiration} days
+Expires in {rec.days_to_expiration || 0} days
 </Text>
 <TouchableOpacity
 style={styles.optimizeButton}
-onPress={() => handleOptimizeStrategy(rec.strategy_name.toLowerCase().replace(' ', '_'))}
+onPress={() => handleOptimizeStrategy((rec.strategy_name || 'unknown').toLowerCase().replace(' ', '_'))}
 >
 <Icon name="tune" size={16} color="#007AFF" />
 <Text style={styles.optimizeButtonText}>Optimize</Text>
@@ -187,22 +187,22 @@ return (
 <Text style={styles.sectionTitle}>Market Analysis</Text>
 <View style={styles.analysisRow}>
 <Text style={styles.analysisLabel}>Current Price:</Text>
-<Text style={styles.analysisValue}>${Number(marketAnalysis?.current_price ?? 0).toFixed(2)}</Text>
+<Text style={styles.analysisValue}>${Number(marketAnalysis?.current_price || 0).toFixed(2)}</Text>
 </View>
 <View style={styles.analysisRow}>
 <Text style={styles.analysisLabel}>Volatility:</Text>
-<Text style={styles.analysisValue}>{(marketAnalysis.volatility * 100).toFixed(1)}%</Text>
+<Text style={styles.analysisValue}>{((marketAnalysis?.volatility || 0) * 100).toFixed(1)}%</Text>
 </View>
 <View style={styles.analysisRow}>
 <Text style={styles.analysisLabel}>Trend:</Text>
 <Text style={[
 styles.analysisValue,
 { 
-color: marketAnalysis.trend_direction === 'bullish' ? '#34C759' : 
-marketAnalysis.trend_direction === 'bearish' ? '#FF3B30' : '#8E8E93'
+color: (marketAnalysis?.trend_direction || 'neutral') === 'bullish' ? '#34C759' : 
+(marketAnalysis?.trend_direction || 'neutral') === 'bearish' ? '#FF3B30' : '#8E8E93'
 }
 ]}>
-{marketAnalysis.trend_direction.toUpperCase()}
+{(marketAnalysis.trend_direction || 'neutral').toUpperCase()}
 </Text>
 </View>
 <View style={styles.analysisRow}>
@@ -210,11 +210,11 @@ marketAnalysis.trend_direction === 'bearish' ? '#FF3B30' : '#8E8E93'
 <Text style={[
 styles.analysisValue,
 { 
-color: marketAnalysis.sentiment_score > 0 ? '#34C759' : 
-marketAnalysis.sentiment_score < 0 ? '#FF3B30' : '#8E8E93'
+color: (marketAnalysis?.sentiment_score || 0) > 0 ? '#34C759' : 
+(marketAnalysis?.sentiment_score || 0) < 0 ? '#FF3B30' : '#8E8E93'
 }
 ]}>
-{marketAnalysis.sentiment_score > 0 ? '+' : ''}{marketAnalysis.sentiment_score.toFixed(1)}
+{(marketAnalysis?.sentiment_score || 0) > 0 ? '+' : ''}{(marketAnalysis?.sentiment_score || 0).toFixed(1)}
 </Text>
 </View>
 </View>
@@ -226,7 +226,7 @@ const rec = selectedRecommendation;
 return (
 <View style={styles.detailedView}>
 <View style={styles.detailedHeader}>
-<Text style={styles.detailedTitle}>{rec.strategy_name}</Text>
+<Text style={styles.detailedTitle}>{rec.strategy_name || 'Unknown Strategy'}</Text>
 <TouchableOpacity
 style={styles.closeButton}
 onPress={() => setSelectedRecommendation(null)}
@@ -237,36 +237,36 @@ onPress={() => setSelectedRecommendation(null)}
 <ScrollView style={styles.detailedContent}>
 <View style={styles.detailedSection}>
 <Text style={styles.detailedSectionTitle}>Strategy Details</Text>
-<Text style={styles.detailedText}>{rec.reasoning.strategy_rationale}</Text>
+<Text style={styles.detailedText}>{rec.reasoning?.strategy_rationale || 'No rationale available'}</Text>
 </View>
 <View style={styles.detailedSection}>
 <Text style={styles.detailedSectionTitle}>Market Outlook</Text>
-<Text style={styles.detailedText}>{rec.reasoning.market_outlook}</Text>
+<Text style={styles.detailedText}>{rec.reasoning?.market_outlook || 'No outlook available'}</Text>
 </View>
 <View style={styles.detailedSection}>
 <Text style={styles.detailedSectionTitle}>Key Benefits</Text>
-{rec.reasoning.key_benefits.map((benefit, index) => (
+{(rec.reasoning?.key_benefits || []).map((benefit, index) => (
 <Text key={index} style={styles.benefitItem}>• {benefit}</Text>
 ))}
 </View>
 <View style={styles.detailedSection}>
 <Text style={styles.detailedSectionTitle}>Risk Factors</Text>
-{rec.reasoning.risk_factors.map((risk, index) => (
+{(rec.reasoning?.risk_factors || []).map((risk, index) => (
 <Text key={index} style={styles.riskItem}>• {risk}</Text>
 ))}
 </View>
 <View style={styles.detailedSection}>
 <Text style={styles.detailedSectionTitle}>Options Details</Text>
-{rec.options.map((option, index) => (
+{(rec.options || []).map((option, index) => (
 <View key={index} style={styles.optionDetail}>
 <Text style={styles.optionText}>
-{option.action.toUpperCase()} {option.quantity} {option.type.toUpperCase()}(s)
+{(option.action || 'unknown').toUpperCase()} {option.quantity} {(option.type || 'unknown').toUpperCase()}(s)
 </Text>
 <Text style={styles.optionText}>
-Strike: ${option.strike} | Premium: ${Number(option?.premium ?? 0).toFixed(2)}
+Strike: ${option.strike || 0} | Premium: ${Number(option?.premium || 0).toFixed(2)}
 </Text>
 <Text style={styles.optionText}>
-Expiration: {option.expiration}
+Expiration: {option.expiration || 'Unknown'}
 </Text>
 </View>
 ))}
@@ -345,7 +345,7 @@ setRiskTolerance(risk);
 styles.riskButtonText,
 riskTolerance === risk && styles.riskButtonTextActive
 ]}>
-{risk.toUpperCase()}
+{(risk || 'unknown').toUpperCase()}
 </Text>
 </TouchableOpacity>
 ))}

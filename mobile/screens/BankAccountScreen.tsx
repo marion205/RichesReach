@@ -10,12 +10,56 @@ import {
   Modal,
   ActivityIndicator,
   Dimensions,
+  SafeAreaView,
 } from 'react-native';
 import { useQuery, useMutation } from '@apollo/client';
 import { gql } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
+import SBLOCCalculator from '../components/SBLOCCalculator';
+import SblocFundingCard from '../components/SblocFundingCard';
+import SblocCalculatorModal from '../components/SblocCalculatorModal';
+import { GET_SBLOC_OFFER } from '../graphql/sboclGql';
 
 const { width } = Dimensions.get('window');
+
+// Utils
+const fmtMoney = (n?: number) =>
+  typeof n === 'number' ? n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00';
+const fmtDate = (iso?: string) => (iso ? new Date(iso).toLocaleDateString() : '');
+
+// Mini components
+const Chip = ({ label, tone = 'neutral', icon }: { label: string; tone?: 'neutral'|'success'|'warning'|'danger'|'info'; icon?: string }) => {
+  const map = {
+    neutral: { bg:'#EEF2F7', fg:'#445063' },
+    success: { bg:'#E8F8EF', fg:'#1F9254' },
+    warning: { bg:'#FFF5E5', fg:'#A45B00' },
+    danger:  { bg:'#FDECEC', fg:'#C0352B' },
+    info:    { bg:'#E8F2FF', fg:'#2457D6' },
+  } as const;
+  const { bg, fg } = map[tone];
+  return (
+    <View style={[styles.chip, { backgroundColor: bg }]}>
+      {icon ? <Icon name={icon as any} size={12} color={fg} style={{ marginRight:6 }} /> : null}
+      <Text style={[styles.chipText, { color: fg }]} numberOfLines={1}>{label}</Text>
+    </View>
+  );
+};
+
+const BankAvatar = ({ name }: { name: string }) => {
+  const initials = name?.split(' ').map(s=>s[0]).slice(0,2).join('').toUpperCase() || 'BK';
+  return (
+    <View style={styles.bankAvatar}>
+      <Text style={styles.bankAvatarText}>{initials}</Text>
+    </View>
+  );
+};
+
+const SectionHeader = ({ title, right }: { title: string; right?: React.ReactNode }) => (
+  <View style={styles.sectionHeader}>
+    <Text style={styles.sectionTitle}>{title}</Text>
+    {right}
+  </View>
+);
 
 // GraphQL Queries
 const GET_BANK_ACCOUNTS = gql`
@@ -79,6 +123,8 @@ const INITIATE_FUNDING = gql`
 const BankAccountScreen = ({ navigateTo }: { navigateTo?: (screen: string) => void }) => {
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [showFundingModal, setShowFundingModal] = useState(false);
+  const [showSBLOCModal, setShowSBLOCModal] = useState(false);
+  const [showSblocCalculator, setShowSblocCalculator] = useState(false);
   const [selectedBankId, setSelectedBankId] = useState('');
   const [fundingAmount, setFundingAmount] = useState('');
 
@@ -97,6 +143,8 @@ const BankAccountScreen = ({ navigateTo }: { navigateTo?: (screen: string) => vo
     GET_FUNDING_HISTORY,
     { errorPolicy: 'all' }
   );
+
+  const { data: sblocData } = useQuery(GET_SBLOC_OFFER, { errorPolicy: 'all' });
 
   // Mutations
   const [linkBankAccount, { loading: linkingBank }] = useMutation(LINK_BANK_ACCOUNT, {
@@ -165,52 +213,62 @@ const BankAccountScreen = ({ navigateTo }: { navigateTo?: (screen: string) => vo
     });
   };
 
-  const renderBankAccount = (account: any) => (
-    <View key={account.id} style={styles.bankCard}>
-      <View style={styles.bankHeader}>
-        <View style={styles.bankIcon}>
-          <Icon name="credit-card" size={24} color="#007AFF" />
-        </View>
-        <View style={styles.bankInfo}>
-          <Text style={styles.bankName}>{account.bankName}</Text>
-          <Text style={styles.accountType}>
-            {account.accountType.charAt(0).toUpperCase() + account.accountType.slice(1)} •••• {account.lastFour}
-          </Text>
-        </View>
-        <View style={styles.bankStatus}>
-          {account.isVerified ? (
-            <Icon name="check-circle" size={20} color="#34C759" />
-          ) : (
-            <Icon name="clock" size={20} color="#FF9500" />
-          )}
-        </View>
-      </View>
-      <View style={styles.bankFooter}>
-        <Text style={styles.linkedDate}>
-          Linked {new Date(account.linkedAt).toLocaleDateString()}
-        </Text>
-        {account.isPrimary && (
-          <View style={styles.primaryBadge}>
-            <Text style={styles.primaryText}>Primary</Text>
-          </View>
-        )}
-      </View>
-    </View>
-  );
+  const renderBankAccount = (account: any) => {
+    const accent = account.isPrimary ? '#1D4ED8' : account.isVerified ? '#16A34A' : '#9CA3AF';
+    return (
+      <View key={account.id} style={styles.bankCard}>
+        <View style={[styles.leftAccent, { backgroundColor: accent }]} />
+        <View style={{ flex:1 }}>
+          <View style={styles.bankHeader}>
+            <BankAvatar name={account.bankName} />
+            <View style={styles.bankInfo}>
+              <Text style={styles.bankName}>{account.bankName}</Text>
+              <Text style={styles.accountType}>
+                {account.accountType.charAt(0).toUpperCase() + account.accountType.slice(1)} •••• {account.lastFour}
+              </Text>
+            </View>
 
-  const renderFundingHistory = (funding: any) => (
-    <View key={funding.id} style={styles.fundingCard}>
-      <View style={styles.fundingHeader}>
-        <Text style={styles.fundingAmount}>${funding.amount.toLocaleString()}</Text>
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(funding.status) }]}>
-          <Text style={styles.statusText}>{funding.status.toUpperCase()}</Text>
+            <Chip
+              label={account.isVerified ? 'Verified' : 'Pending'}
+              tone={account.isVerified ? 'success' : 'warning'}
+              icon={account.isVerified ? 'check-circle' : 'clock'}
+            />
+          </View>
+
+          <View style={styles.bankFooter}>
+            <Text style={styles.meta}>Linked {fmtDate(account.linkedAt)}</Text>
+            {account.isPrimary ? <Chip label="Primary" tone="info" icon="star" /> : null}
+          </View>
         </View>
       </View>
-      <Text style={styles.fundingDate}>
-        {new Date(funding.initiatedAt).toLocaleString()}
-      </Text>
-    </View>
-  );
+    );
+  };
+
+  const renderFundingHistory = (f: any) => {
+    const tone =
+      f.status === 'completed' ? 'success' :
+      f.status === 'pending'   ? 'warning' :
+      f.status === 'failed'    ? 'danger'  : 'neutral';
+
+    return (
+      <View key={f.id} style={styles.fundingRow}>
+        <View style={styles.fundingLeft}>
+          <View style={[styles.dot, tone==='success' && { backgroundColor:'#16A34A' },
+                             tone==='warning' && { backgroundColor:'#F59E0B' },
+                             tone==='danger'  && { backgroundColor:'#EF4444' }]} />
+          <View style={{ marginLeft:10 }}>
+            <Text style={styles.fundingAmount}>${fmtMoney(f.amount)}</Text>
+            <Text style={styles.meta}>{fmtDate(f.initiatedAt)}</Text>
+          </View>
+        </View>
+        <Chip
+          label={String(f.status).toUpperCase()}
+          tone={tone as any}
+          icon={tone==='success' ? 'check' : tone==='warning' ? 'clock' : tone==='danger' ? 'x' : undefined}
+        />
+      </View>
+    );
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -222,7 +280,7 @@ const BankAccountScreen = ({ navigateTo }: { navigateTo?: (screen: string) => vo
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigateTo?.('profile')} style={styles.backButton}>
@@ -235,42 +293,104 @@ const BankAccountScreen = ({ navigateTo }: { navigateTo?: (screen: string) => vo
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Bank Accounts Section */}
+        {/* Linked Accounts */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Linked Accounts</Text>
+          <SectionHeader
+            title="Linked Accounts"
+            right={
+              <View style={styles.actionRow}>
+                <TouchableOpacity style={styles.ghostBtn} onPress={() => setShowLinkModal(true)}>
+                  <Icon name="credit-card" size={16} color="#2457D6" />
+                  <Text style={styles.ghostBtnText}>Link Bank</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.ghostBtn} onPress={() => setShowFundingModal(true)}>
+                  <Icon name="plus-circle" size={16} color="#2457D6" />
+                  <Text style={styles.ghostBtnText}>Add Funds</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.ghostBtn} onPress={() => setShowSBLOCModal(true)}>
+                  <Icon name="trending-up" size={16} color="#F59E0B" />
+                  <Text style={[styles.ghostBtnText, { color: '#F59E0B' }]}>SBLOC</Text>
+                </TouchableOpacity>
+              </View>
+            }
+          />
+
           {bankLoading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#007AFF" />
-              <Text style={styles.loadingText}>Loading bank accounts...</Text>
+            <View style={styles.skeletonBlock}>
+              {[...Array(2)].map((_,i)=>(
+                <View key={i} style={styles.bankCard}>
+                  <View style={[styles.leftAccent, { backgroundColor:'#E5E7EB' }]} />
+                  <View style={{ flex:1, paddingVertical:4 }}>
+                    <View style={styles.skelLineWide} />
+                    <View style={styles.skelLine} />
+                    <View style={styles.skelLineShort} />
+                  </View>
+                </View>
+              ))}
             </View>
-          ) : bankData?.bankAccounts?.length > 0 ? (
-            bankData.bankAccounts.map(renderBankAccount)
+          ) : bankData?.bankAccounts?.length ? (
+            bankData.bankAccounts.map((account: any) => (
+              <View key={account.id}>
+                {renderBankAccount(account)}
+              </View>
+            ))
           ) : (
             <View style={styles.emptyState}>
               <Icon name="credit-card" size={48} color="#C7C7CC" />
               <Text style={styles.emptyTitle}>No Bank Accounts</Text>
-              <Text style={styles.emptySubtitle}>Link your first bank account to start funding</Text>
+              <Text style={styles.emptySubtitle}>Link a bank to start funding your account.</Text>
+              <TouchableOpacity style={styles.primaryBtn} onPress={() => setShowLinkModal(true)}>
+                <Text style={styles.primaryBtnText}>Link Bank</Text>
+              </TouchableOpacity>
             </View>
           )}
         </View>
 
-        {/* Funding Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Quick Funding</Text>
-            <TouchableOpacity 
-              onPress={() => setShowFundingModal(true)}
-              style={styles.fundingButton}
-            >
-              <Icon name="plus" size={16} color="#007AFF" />
-              <Text style={styles.fundingButtonText}>Add Funds</Text>
-            </TouchableOpacity>
-          </View>
+        {/* SBLOC Funding Option */}
+        {(() => {
+          const ltv = sblocData?.sblocOffer?.ltv ?? 0.5;
+          const apr = sblocData?.sblocOffer?.apr ?? 0.085;
+          const eligibleEquity = sblocData?.sblocOffer?.eligibleEquity ?? 50000; // Mock equity
+          const maxBorrow = Math.floor(eligibleEquity * ltv);
+          
+          return (
+            <View style={styles.section}>
+              <SectionHeader title="Quick Funding" />
+              <SblocFundingCard
+                maxBorrow={maxBorrow}
+                aprPct={apr * 100}
+                onPress={() => setShowSblocCalculator(true)}
+              />
+            </View>
+          );
+        })()}
 
-          {fundingData?.fundingHistory?.length > 0 && (
-            <View style={styles.fundingHistory}>
-              <Text style={styles.historyTitle}>Recent Funding</Text>
-              {fundingData.fundingHistory.slice(0, 3).map(renderFundingHistory)}
+        {/* Funding */}
+        <View style={styles.section}>
+          <SectionHeader title="Recent Funding" />
+          {fundingLoading ? (
+            <View style={styles.skeletonBlock}>
+              {[...Array(3)].map((_,i)=>(
+                <View key={i} style={styles.fundingRow}>
+                  <View style={[styles.dot, { backgroundColor:'#E5E7EB' }]} />
+                  <View style={{ flex:1, marginLeft:10 }}>
+                    <View style={styles.skelLineWide} />
+                    <View style={styles.skelLineShort} />
+                  </View>
+                  <View style={[styles.chip, { backgroundColor:'#EEF2F7', width:88 }]} />
+                </View>
+              ))}
+            </View>
+          ) : fundingData?.fundingHistory?.length ? (
+            fundingData.fundingHistory.slice(0, 5).map((funding: any) => (
+              <View key={funding.id}>
+                {renderFundingHistory(funding)}
+              </View>
+            ))
+          ) : (
+            <View style={styles.emptyRow}>
+              <Icon name="activity" size={18} color="#9CA3AF" />
+              <Text style={styles.meta}>No funding yet</Text>
             </View>
           )}
         </View>
@@ -379,7 +499,29 @@ const BankAccountScreen = ({ navigateTo }: { navigateTo?: (screen: string) => vo
           </ScrollView>
         </View>
       </Modal>
-    </View>
+
+      {/* SBLOC Calculator */}
+      <SBLOCCalculator
+        visible={showSBLOCModal}
+        onClose={() => setShowSBLOCModal(false)}
+        portfolioValue={0} // BankAccountScreen doesn't have portfolio value
+        onApply={() => {
+          setShowSBLOCModal(false);
+          Alert.alert(
+            'SBLOC Application',
+            'This would open the SBLOC application flow with our partner banks.',
+            [{ text: 'OK' }]
+          );
+        }}
+      />
+
+      {/* New SBLOC Calculator Modal */}
+      <SblocCalculatorModal
+        visible={showSblocCalculator}
+        onClose={() => setShowSblocCalculator(false)}
+        equity={sblocData?.sblocOffer?.eligibleEquity ?? 50000}
+      />
+    </SafeAreaView>
   );
 };
 
@@ -420,12 +562,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   sectionTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#000000',
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#0F172A',
   },
   bankCard: {
     backgroundColor: '#FFFFFF',
@@ -434,14 +576,16 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+    overflow: 'hidden',
+    paddingLeft: 20,
   },
   bankHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   bankIcon: {
     width: 40,
@@ -639,6 +783,212 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#000000',
   },
+
+  // New styles for upgraded UI
+  // Badges / chips
+  chip: { flexDirection:'row', alignItems:'center', paddingHorizontal:10, paddingVertical:4, borderRadius:999 },
+  chipText: { fontSize:11, fontWeight:'700' },
+
+  // Avatars
+  bankAvatar: { width:40, height:40, borderRadius:20, backgroundColor:'#E8F2FF', alignItems:'center', justifyContent:'center', marginRight:12 },
+  bankAvatarText: { color:'#2457D6', fontWeight:'800' },
+
+  // Cards
+  leftAccent: { position:'absolute', left:0, top:0, bottom:0, width:4, borderTopLeftRadius:12, borderBottomLeftRadius:12 },
+  meta: { fontSize:12, color:'#8E8E93' },
+
+  // Funding rows
+  fundingRow: { flexDirection:'row', alignItems:'center', justifyContent:'space-between', backgroundColor:'#FFFFFF', borderRadius:10, padding:12, marginBottom:10 },
+  fundingLeft: { flexDirection:'row', alignItems:'center' },
+  dot: { width:10, height:10, borderRadius:5, backgroundColor:'#9CA3AF' },
+
+  // Actions
+  actionRow: { flexDirection:'row', gap:8 },
+  ghostBtn: { flexDirection:'row', alignItems:'center', gap:6, backgroundColor:'#EFF6FF', paddingHorizontal:10, paddingVertical:6, borderRadius:8, minWidth: 80 },
+  ghostBtnText: { color:'#2457D6', fontWeight:'700', fontSize: 12 },
+
+  // Skeletons
+  skeletonBlock: { marginTop:6 },
+  skelLineWide: { height:12, backgroundColor:'#E5E7EB', borderRadius:6, marginBottom:8, width:'60%' },
+  skelLine: { height:10, backgroundColor:'#E5E7EB', borderRadius:6, marginBottom:8, width:'40%' },
+  skelLineShort: { height:10, backgroundColor:'#E5E7EB', borderRadius:6, width:'28%' },
+
+  // Primary button (reuse in empty state)
+  primaryBtn: { backgroundColor:'#2457D6', paddingVertical:12, paddingHorizontal:18, borderRadius:10, marginTop:14 },
+  primaryBtnText: { color:'#fff', fontWeight:'700' },
+
+  // Additional missing styles
+  emptyRow: { flexDirection:'row', alignItems:'center', gap:8, paddingVertical:8 },
+
+  // SBLOC Modal Styles
+  sblocHero: {
+    alignItems: 'center',
+    paddingVertical: 32,
+    paddingHorizontal: 20,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    marginVertical: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  sblocIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  sblocTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#111827',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  sblocSubtitle: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  sblocCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  sblocCardTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 12,
+  },
+  benefitsList: {
+    marginTop: 8,
+  },
+  benefitItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  benefitText: {
+    fontSize: 15,
+    color: '#111827',
+    marginLeft: 12,
+    fontWeight: '500',
+  },
+  stepsList: {
+    marginTop: 8,
+  },
+  stepItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 20,
+  },
+  stepNumber: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F59E0B',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  stepNumberText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  stepContent: {
+    flex: 1,
+  },
+  stepTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  stepDescription: {
+    fontSize: 14,
+    color: '#6B7280',
+    lineHeight: 20,
+  },
+  rateComparison: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  rateItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  rateType: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  rateValue: {
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  considerationsList: {
+    marginTop: 8,
+  },
+  considerationItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  considerationText: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginLeft: 12,
+    flex: 1,
+    lineHeight: 20,
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    gap: 12,
+    padding: 20,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  sblocCalculatorBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#F59E0B',
+    paddingVertical: 16,
+    borderRadius: 12,
+  },
+  sblocCalculatorBtnText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  sblocApplyBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#10B981',
+    paddingVertical: 16,
+    borderRadius: 12,
+  },
+  sblocApplyBtnText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+
 });
 
 export default BankAccountScreen;

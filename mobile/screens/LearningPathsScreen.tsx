@@ -13,6 +13,21 @@ import Icon from 'react-native-vector-icons/Feather';
 import { LEARNING_PATHS, LearningModule } from '../data/learningPaths';
 import EducationalTooltip from '../components/EducationalTooltip';
 import { getTermExplanation } from '../data/financialTerms';
+
+// Lightweight badge
+const Badge = ({ text, bg = '#F2F2F7', color = '#1C1C1E' }) => (
+  <View style={[styles.badge, { backgroundColor: bg }]}>
+    <Text style={[styles.badgeText, { color }]} numberOfLines={1}>{text}</Text>
+  </View>
+);
+
+// Progress bar (0..1)
+const ProgressBar = ({ value = 0, tint = '#007AFF' }) => (
+  <View style={styles.progressBarThin}>
+    <View style={[styles.progressBarFillThin, { width: `${Math.max(0, Math.min(1, value)) * 100}%`, backgroundColor: tint }]} />
+  </View>
+);
+
 const { width } = Dimensions.get('window');
 const LearningPathsScreen: React.FC = () => {
 const [selectedPath, setSelectedPath] = useState<string | null>(null);
@@ -64,91 +79,88 @@ setUserAnswers(prev => ({
 [questionId]: answerIndex
 }));
 };
-const renderPathCard = (path: any) => (
-<TouchableOpacity
-key={path?.id}
-style={styles.pathCard}
-onPress={() => handlePathSelect(path?.id || '')}
->
-<View style={styles.pathHeader}>
-<View style={[styles.pathIcon, { backgroundColor: path?.color || '#007AFF' }]}>
-<Icon name={path?.icon || 'book'} size={24} color="#FFFFFF" />
-</View>
-<View style={styles.pathInfo}>
-<Text style={styles.pathTitle}>{path?.title || 'Untitled Path'}</Text>
-<Text style={styles.pathDescription}>{path?.description || 'No description available'}</Text>
-<View style={styles.pathMeta}>
-<Text style={styles.pathModules}>{path?.totalModules || 0} modules</Text>
-<Text style={styles.pathTime}>{path?.estimatedTime || 'Unknown duration'}</Text>
-</View>
-</View>
-<Icon name="chevron-right" size={20} color="#8E8E93" />
-</View>
-<View style={styles.progressContainer}>
-<View style={styles.progressBar}>
-<View 
-style={[
-styles.progressFill, 
-{ 
-width: `${(path?.modules?.filter((m: any) => m.completed).length || 0) / (path?.totalModules || 1) * 100}%`,
-backgroundColor: path?.color || '#007AFF' 
-}
-]} 
-/>
-</View>
-<Text style={styles.progressText}>
-{path?.modules?.filter((m: any) => m.completed).length || 0}/{path?.totalModules || 0} completed
-</Text>
-</View>
-</TouchableOpacity>
-);
-const renderModuleCard = (module: LearningModule) => (
-<TouchableOpacity
-key={module?.id}
-style={[
-styles.moduleCard,
-module?.locked && styles.moduleCardLocked
-]}
-onPress={() => handleModuleSelect(module)}
->
-<View style={styles.moduleHeader}>
-<View style={[
-styles.moduleIcon, 
-{ backgroundColor: module?.color || '#007AFF' },
-module?.locked && styles.moduleIconLocked
-]}>
-<Icon 
-name={module?.locked ? 'lock' : (module?.icon || 'book')} 
-size={20} 
-color={module?.locked ? '#8E8E93' : '#FFFFFF'} 
-/>
-</View>
-<View style={styles.moduleInfo}>
-<Text style={[
-styles.moduleTitle,
-module?.locked && styles.moduleTitleLocked
-]}>
-{module?.title || 'Untitled Module'}
-</Text>
-<Text style={styles.moduleDescription}>{module?.description || 'No description available'}</Text>
-<View style={styles.moduleMeta}>
-<Text style={styles.moduleDuration}>{module?.duration || 'Unknown duration'}</Text>
-<View style={[
-styles.difficultyBadge,
-{ backgroundColor: getDifficultyColor(module?.difficulty || 'Beginner') }
-]}>
-<Text style={styles.difficultyText}>{module?.difficulty || 'Beginner'}</Text>
-</View>
-</View>
-</View>
-{module?.completed && (
-<View style={styles.completedBadge}>
-<Icon name="check" size={16} color="#34C759" />
-</View>
-)}
-</View>
-</TouchableOpacity>
-);
+const renderPathCard = (path: any) => {
+  const completed = (path?.modules?.filter((m: any) => m.completed).length || 0);
+  const total = path?.totalModules || 0;
+  const pct = total ? completed / total : 0;
+  const color = path?.color || '#007AFF';
+
+  return (
+    <TouchableOpacity
+      key={path?.id}
+      style={styles.pathCard}
+      onPress={() => handlePathSelect(path?.id || '')}
+      activeOpacity={0.9}
+    >
+      <View style={[styles.pathAccent, { backgroundColor: color }]} />
+      <View style={styles.pathHeader}>
+        <View style={[styles.pathIcon, { backgroundColor: `${color}22` }]}>
+          <Icon name={path?.icon || 'book'} size={22} color={color} />
+        </View>
+        <View style={styles.pathInfo}>
+          <Text style={styles.pathTitle}>{path?.title || 'Untitled Path'}</Text>
+          <Text style={styles.pathDescription} numberOfLines={2}>
+            {path?.description || 'No description available'}
+          </Text>
+          <View style={styles.pathMetaRow}>
+            <Badge text={`${total} modules`} />
+            <Badge text={path?.estimatedTime || '—'} />
+          </View>
+        </View>
+        <Icon name="chevron-right" size={20} color="#8E8E93" />
+      </View>
+
+      <View style={styles.progressRow}>
+        <ProgressBar value={pct} tint={color} />
+        <Text style={styles.progressPct}>{Math.round(pct * 100)}%</Text>
+      </View>
+      <Text style={styles.progressCaption}>{completed}/{total} completed</Text>
+    </TouchableOpacity>
+  );
+};
+const renderModuleCard = (module: LearningModule) => {
+  const color = module?.color || '#007AFF';
+  const locked = !!module?.locked;
+  const difficulty = module?.difficulty || 'Beginner';
+  const diffColor =
+    difficulty === 'Beginner' ? '#34C759' :
+    difficulty === 'Intermediate' ? '#FF9500' : '#FF3B30';
+
+  return (
+    <TouchableOpacity
+      key={module?.id}
+      style={[styles.moduleCard, locked && styles.moduleCardLocked]}
+      onPress={() => handleModuleSelect(module)}
+      activeOpacity={locked ? 1 : 0.9}
+    >
+      <View style={styles.moduleRow}>
+        <View style={[styles.moduleIcon, { backgroundColor: locked ? '#E5E5EA' : `${color}22` }]}>
+          <Icon name={locked ? 'lock' : (module?.icon || 'book')} size={18} color={locked ? '#8E8E93' : color} />
+        </View>
+        <View style={styles.moduleInfo}>
+          <View style={styles.moduleTopRow}>
+            <Text style={[styles.moduleTitle, locked && styles.moduleTitleLocked]} numberOfLines={1}>
+              {module?.title || 'Untitled Module'}
+            </Text>
+            {module?.completed && (
+              <View style={styles.donePill}>
+                <Icon name="check" size={12} color="#34C759" />
+                <Text style={styles.doneText}>Done</Text>
+              </View>
+            )}
+          </View>
+          <Text style={styles.moduleDescription} numberOfLines={2}>
+            {module?.description || 'No description available'}
+          </Text>
+          <View style={styles.moduleMetaRow}>
+            <Badge text={module?.duration || '—'} />
+            <Badge text={difficulty} bg={`${diffColor}1A`} color={diffColor} />
+          </View>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+};
 const renderSection = (section: any) => {
 switch (section.type) {
 case 'text':
@@ -165,23 +177,30 @@ return (
 {section?.quizData?.map((question: any) => (
 <View key={question?.id} style={styles.quizContainer}>
 <Text style={styles.questionText}>{question?.question || 'No question available'}</Text>
-{question?.options?.map((option: string, index: number) => (
-<TouchableOpacity
-key={index}
-style={[
-styles.optionButton,
-userAnswers[question?.id] === index && styles.optionButtonSelected
-]}
-onPress={() => handleQuizAnswer(question?.id || '', index)}
->
-<Text style={[
-styles.optionText,
-userAnswers[question?.id] === index && styles.optionTextSelected
-]}>
-{option}
-</Text>
-</TouchableOpacity>
-))}
+        {question?.options?.map((option: string, index: number) => (
+          <TouchableOpacity
+            key={index}
+            style={[
+              styles.optionButton,
+              userAnswers[question?.id] === index && styles.optionButtonSelected
+            ]}
+            onPress={() => handleQuizAnswer(question?.id || '', index)}
+            activeOpacity={0.9}
+          >
+            <View style={styles.optionRow}>
+              <View style={[
+                styles.radio,
+                userAnswers[question?.id] === index && styles.radioOn
+              ]}/>
+              <Text style={[
+                styles.optionText,
+                userAnswers[question?.id] === index && styles.optionTextSelected
+              ]}>
+                {option}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        ))}
 {userAnswers[question?.id] !== undefined && (
 <View style={styles.explanationContainer}>
 <Text style={[
@@ -287,7 +306,11 @@ Complete each module in order to unlock the next one.
 </View>
 <View style={styles.modulesContainer}>
 <Text style={styles.modulesTitle}>Modules</Text>
-{path.modules?.map(renderModuleCard) || []}
+{path.modules?.map((module: any) => (
+  <View key={module.id}>
+    {renderModuleCard(module)}
+  </View>
+)) || []}
 </View>
 </ScrollView>
 {/* Module Modal */}
@@ -305,16 +328,64 @@ onPress={() => setShowModuleModal(false)}
 <Icon name="x" size={24} color="#8E8E93" />
 </TouchableOpacity>
 <Text style={styles.modalTitle}>{selectedModule?.title || 'Learning Module'}</Text>
-<TouchableOpacity
-style={styles.modalCompleteButton}
-onPress={handleModuleComplete}
->
-<Text style={styles.completeButtonText}>Complete</Text>
-</TouchableOpacity>
-</View>
-<ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
-{selectedModule?.content?.sections?.map(renderSection) || []}
-</ScrollView>
+        <TouchableOpacity
+          style={styles.modalCompleteButton}
+          onPress={handleModuleComplete}
+        >
+          <Text style={styles.completeButtonText}>Complete</Text>
+        </TouchableOpacity>
+      </View>
+      
+      {/* Section progress */}
+      {selectedModule?.content?.sections?.length ? (
+        <View style={styles.sectionProgressWrap}>
+          <ProgressBar
+            value={
+              Math.min(
+                1,
+                (currentSectionIndex + 1) / selectedModule.content.sections.length
+              )
+            }
+            tint="#007AFF"
+          />
+          <Text style={styles.sectionProgressText}>
+            Section {currentSectionIndex + 1} of {selectedModule.content.sections.length}
+          </Text>
+        </View>
+      ) : null}
+      
+      <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+        {(selectedModule?.content?.sections?.[currentSectionIndex]) ? (
+          renderSection(selectedModule.content.sections[currentSectionIndex])
+        ) : null}
+      </ScrollView>
+      
+      {/* Pager footer */}
+      {selectedModule?.content?.sections?.length ? (
+        <View style={styles.pagerBar}>
+          <TouchableOpacity
+            disabled={currentSectionIndex === 0}
+            onPress={() => setCurrentSectionIndex(i => Math.max(0, i - 1))}
+            style={[styles.pagerBtn, currentSectionIndex === 0 && styles.pagerBtnDisabled]}
+          >
+            <Icon name="arrow-left" size={16} color={currentSectionIndex === 0 ? '#C7C7CC' : '#007AFF'} />
+            <Text style={[styles.pagerText, currentSectionIndex === 0 && styles.pagerTextDisabled]}>Prev</Text>
+          </TouchableOpacity>
+
+          {currentSectionIndex < (selectedModule.content.sections.length - 1) ? (
+            <TouchableOpacity
+              onPress={() => setCurrentSectionIndex(i => i + 1)}
+              style={styles.pagerPrimary}
+            >
+              <Text style={styles.pagerPrimaryText}>Next</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity onPress={handleModuleComplete} style={styles.pagerPrimary}>
+              <Text style={styles.pagerPrimaryText}>Complete Module</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      ) : null}
 </View>
 </Modal>
 </View>
@@ -332,7 +403,11 @@ Master investing with structured, beginner-friendly courses
 </View>
 <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
 <View style={styles.pathsContainer}>
-{Object.values(LEARNING_PATHS).map(renderPathCard)}
+{Object.values(LEARNING_PATHS).map((path: any) => (
+  <View key={path.id}>
+    {renderPathCard(path)}
+  </View>
+))}
 </View>
 </ScrollView>
 </View>
@@ -722,10 +797,205 @@ fontSize: 14,
 color: '#1C1C1E',
 lineHeight: 20,
 },
-exampleExplanation: {
-fontSize: 13,
-color: '#8E8E93',
-lineHeight: 18,
-},
+  exampleExplanation: {
+    fontSize: 13,
+    color: '#8E8E93',
+    lineHeight: 18,
+  },
+  // --- helpers ---
+  badge: { 
+    paddingHorizontal: 8, 
+    paddingVertical: 4, 
+    borderRadius: 12, 
+    alignSelf: 'flex-start' 
+  },
+  badgeText: { 
+    fontSize: 12, 
+    fontWeight: '700' 
+  },
+  progressBarThin: { 
+    height: 6, 
+    backgroundColor: '#E5E5EA', 
+    borderRadius: 3, 
+    overflow: 'hidden' 
+  },
+  progressBarFillThin: { 
+    height: '100%', 
+    borderRadius: 3 
+  },
+  // --- path card polish ---
+  pathCard: { 
+    position: 'relative', 
+    backgroundColor: '#FFFFFF', 
+    borderRadius: 16, 
+    padding: 16, 
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 2 }, 
+    shadowOpacity: 0.08, 
+    shadowRadius: 6, 
+    elevation: 2 
+  },
+  pathAccent: { 
+    position: 'absolute', 
+    left: 0, 
+    top: 0, 
+    bottom: 0, 
+    width: 4, 
+    borderTopLeftRadius: 16, 
+    borderBottomLeftRadius: 16 
+  },
+  pathMetaRow: { 
+    flexDirection: 'row', 
+    gap: 8, 
+    marginTop: 6 
+  },
+  pathHeader: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    marginBottom: 12 
+  },
+  progressRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 8, 
+    marginTop: 4 
+  },
+  progressPct: { 
+    fontSize: 12, 
+    fontWeight: '700', 
+    color: '#1C1C1E' 
+  },
+  progressCaption: { 
+    marginTop: 4, 
+    fontSize: 12, 
+    color: '#8E8E93' 
+  },
+  // --- module card polish ---
+  moduleRow: { 
+    flexDirection: 'row', 
+    alignItems: 'flex-start' 
+  },
+  moduleTopRow: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center' 
+  },
+  moduleMetaRow: { 
+    flexDirection: 'row', 
+    gap: 8, 
+    marginTop: 6 
+  },
+  donePill: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 6, 
+    backgroundColor: '#F0FFF4', 
+    paddingHorizontal: 8, 
+    paddingVertical: 4, 
+    borderRadius: 999 
+  },
+  doneText: { 
+    color: '#34C759', 
+    fontSize: 12, 
+    fontWeight: '700' 
+  },
+  // --- modal: section progress + pager ---
+  sectionProgressWrap: { 
+    paddingHorizontal: 20, 
+    paddingTop: 10, 
+    paddingBottom: 8, 
+    backgroundColor: '#FFFFFF', 
+    borderBottomWidth: 1, 
+    borderBottomColor: '#E5E5EA' 
+  },
+  sectionProgressText: { 
+    marginTop: 6, 
+    fontSize: 12, 
+    color: '#8E8E93', 
+    fontWeight: '600' 
+  },
+  pagerBar: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between', 
+    gap: 12, 
+    padding: 16, 
+    backgroundColor: '#FFFFFF', 
+    borderTopWidth: 1, 
+    borderTopColor: '#E5E5EA' 
+  },
+  pagerBtn: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 8, 
+    paddingHorizontal: 12, 
+    paddingVertical: 10, 
+    borderRadius: 10, 
+    backgroundColor: '#F2F2F7' 
+  },
+  pagerBtnDisabled: { 
+    backgroundColor: '#F4F4F4' 
+  },
+  pagerText: { 
+    color: '#007AFF', 
+    fontSize: 14, 
+    fontWeight: '600' 
+  },
+  pagerTextDisabled: { 
+    color: '#C7C7CC' 
+  },
+  pagerPrimary: { 
+    paddingHorizontal: 16, 
+    paddingVertical: 12, 
+    borderRadius: 10, 
+    backgroundColor: '#007AFF', 
+    flex: 1, 
+    alignItems: 'center' 
+  },
+  pagerPrimaryText: { 
+    color: '#fff', 
+    fontSize: 14, 
+    fontWeight: '700' 
+  },
+  // --- quiz radio ---
+  optionRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 12 
+  },
+  radio: { 
+    width: 18, 
+    height: 18, 
+    borderRadius: 9, 
+    borderWidth: 2, 
+    borderColor: '#C7C7CC' 
+  },
+  radioOn: { 
+    borderColor: '#007AFF', 
+    backgroundColor: '#007AFF' 
+  },
+  optionButton: { 
+    backgroundColor: '#F2F2F7', 
+    borderRadius: 10, 
+    padding: 14, 
+    marginBottom: 10 
+  },
+  optionButtonSelected: { 
+    backgroundColor: '#E6F0FF', 
+    borderWidth: 1, 
+    borderColor: '#B3D4FF' 
+  },
+  // --- subtle tweaks ---
+  pathInfo: { 
+    flex: 1 
+  },
+  moduleIcon: { 
+    width: 40, 
+    height: 40, 
+    borderRadius: 10, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginRight: 12 
+  },
 });
 export default LearningPathsScreen;

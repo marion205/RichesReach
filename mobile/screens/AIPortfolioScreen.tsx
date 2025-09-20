@@ -505,7 +505,7 @@ async function optimizeWeights(
     prevWeights: prevWeights || {},
   };
 
-  const res = await fetch("http://localhost:8123/optimize", {
+  const res = await fetch("http://192.168.1.151:8123/optimize", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),

@@ -316,4 +316,11 @@ class Query(graphene.ObjectType):
 
     def resolve_market_sentiment(self, info):
         """Get market sentiment data"""
-        return {"sentiment": "neutral", "confidence": 0.5}  # Placeholder
+        from .ai_options_engine import _sentiment_desc
+        sentiment = "neutral"
+        confidence = 0.5
+        return {
+            "sentiment": sentiment, 
+            "confidence": confidence,
+            "sentimentDescription": _sentiment_desc(sentiment.upper(), confidence)
+        }

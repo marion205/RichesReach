@@ -45,7 +45,7 @@ const PostRow: React.FC<PostRowProps> = ({
   followedTickerSet,
 }) => {
   const name = discussion?.user?.name ?? 'User';
-  const initial = name?.[0]?.toUpperCase?.() ?? 'U';
+  const initial = (name?.[0] || 'U').toUpperCase();
   const created = discussion?.createdAt ? new Date(discussion.createdAt) : null;
 
   return (
@@ -88,7 +88,7 @@ const PostRow: React.FC<PostRowProps> = ({
           {!!discussion?.discussionType && (
             <View style={[styles.stockChip, { backgroundColor: COLORS.chip }]}>
               <Text style={[styles.stockChipText, { color: COLORS.sub }]}>
-                {String(discussion.discussionType).toUpperCase()}
+                {String(discussion.discussionType || 'unknown').toUpperCase()}
               </Text>
             </View>
           )}

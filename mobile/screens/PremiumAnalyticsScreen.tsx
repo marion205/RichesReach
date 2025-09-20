@@ -205,16 +205,26 @@ const GET_OPTIONS_ANALYSIS = gql`
       }
       unusualFlow {
         symbol
-        contractSymbol
-        optionType
-        strike
-        expirationDate
-        volume
-        openInterest
-        premium
-        impliedVolatility
-        unusualActivityScore
-        activityType
+        totalVolume
+        unusualVolume
+        unusualVolumePercent
+        topTrades {
+          symbol
+          contractSymbol
+          optionType
+          strike
+          expirationDate
+          volume
+          openInterest
+          premium
+          impliedVolatility
+          unusualActivityScore
+          activityType
+          type
+        }
+        sweepTrades
+        blockTrades
+        lastUpdated
       }
       recommendedStrategies {
         strategyName
@@ -232,12 +242,14 @@ const GET_OPTIONS_ANALYSIS = gql`
         totalCredit
       }
       marketSentiment {
-        putCallRatio
-        impliedVolatilityRank
-        skew
-        sentimentScore
+        sentiment
         sentimentDescription
       }
+      putCallRatio
+      impliedVolatilityRank
+      skew
+      sentimentScore
+      sentimentDescription
     }
   }
 `;
@@ -248,23 +260,36 @@ const GET_OPTIONS_ANALYSIS_TEST = gql`
       underlyingSymbol
       underlyingPrice
       marketSentiment {
+        sentiment
         sentimentDescription
-        sentimentScore
-        putCallRatio
-        impliedVolatilityRank
       }
+      putCallRatio
+      impliedVolatilityRank
+      skew
+      sentimentScore
+      sentimentDescription
       unusualFlow {
         symbol
-        contractSymbol
-        optionType
-        strike
-        expirationDate
-        volume
-        openInterest
-        premium
-        impliedVolatility
-        unusualActivityScore
-        activityType
+        totalVolume
+        unusualVolume
+        unusualVolumePercent
+        topTrades {
+          symbol
+          contractSymbol
+          optionType
+          strike
+          expirationDate
+          volume
+          openInterest
+          premium
+          impliedVolatility
+          unusualActivityScore
+          activityType
+          type
+        }
+        sweepTrades
+        blockTrades
+        lastUpdated
       }
       recommendedStrategies {
         strategyName
@@ -1949,15 +1974,15 @@ onPress={() => setShowTooltip(showTooltip === 'putCallRatio' ? null : 'putCallRa
 <Icon name="help-circle" size={16} color="#8E8E93" />
 </TouchableOpacity>
 </View>
-<Text style={styles.metricValue}>
-{options?.marketSentiment?.putCallRatio?.toFixed(2) || 'N/A'}
-</Text>
-<Text style={styles.metricExplanation}>
-{options?.marketSentiment?.putCallRatio ? 
-(options.marketSentiment.putCallRatio > 0.8 ? 'Bearish sentiment - more puts' :
-options.marketSentiment.putCallRatio < 0.6 ? 'Bullish sentiment - more calls' :
-'Neutral sentiment') : 'N/A'}
-</Text>
+        <Text style={styles.metricValue}>
+          {options?.putCallRatio?.toFixed(2) || 'N/A'}
+        </Text>
+        <Text style={styles.metricExplanation}>
+          {options?.putCallRatio ? 
+            (options.putCallRatio > 0.8 ? 'Bearish sentiment - more puts' :
+             options.putCallRatio < 0.6 ? 'Bullish sentiment - more calls' :
+             'Neutral sentiment') : 'N/A'}
+        </Text>
 </View>
 <View style={styles.metricCard}>
 <View style={styles.metricHeader}>
@@ -1969,15 +1994,15 @@ onPress={() => setShowTooltip(showTooltip === 'ivRank' ? null : 'ivRank')}
 <Icon name="help-circle" size={16} color="#8E8E93" />
 </TouchableOpacity>
 </View>
-<Text style={styles.metricValue}>
-{options?.marketSentiment?.impliedVolatilityRank?.toFixed(1) || 'N/A'}%
-</Text>
-<Text style={styles.metricExplanation}>
-{options?.marketSentiment?.impliedVolatilityRank ? 
-(options.marketSentiment.impliedVolatilityRank > 70 ? 'High volatility - expensive options' :
-options.marketSentiment.impliedVolatilityRank < 30 ? 'Low volatility - cheap options' :
-'Moderate volatility') : 'N/A'}
-</Text>
+        <Text style={styles.metricValue}>
+          {options?.impliedVolatilityRank?.toFixed(1) || 'N/A'}%
+        </Text>
+        <Text style={styles.metricExplanation}>
+          {options?.impliedVolatilityRank ? 
+            (options.impliedVolatilityRank > 70 ? 'High volatility - expensive options' :
+             options.impliedVolatilityRank < 30 ? 'Low volatility - cheap options' :
+             'Moderate volatility') : 'N/A'}
+        </Text>
 </View>
 <View style={styles.metricCard}>
 <View style={styles.metricHeader}>
@@ -1989,20 +2014,20 @@ onPress={() => setShowTooltip(showTooltip === 'sentiment' ? null : 'sentiment')}
 <Icon name="help-circle" size={16} color="#8E8E93" />
 </TouchableOpacity>
 </View>
-<Text 
-style={[
-styles.metricValue,
-{ color: (options?.marketSentiment?.sentimentScore || 50) > 50 ? '#34C759' : '#FF3B30' }
-]}
-numberOfLines={2}
-ellipsizeMode="tail"
->
-{options?.marketSentiment?.sentimentDescription || 'Neutral'}
-</Text>
-<Text style={styles.metricExplanation}>
-{options?.marketSentiment?.sentimentScore ? 
-`Score: ${options.marketSentiment.sentimentScore.toFixed(0)}/100` : 'N/A'}
-</Text>
+        <Text 
+          style={[
+            styles.metricValue,
+            { color: (options?.sentimentScore || 50) > 50 ? '#34C759' : '#FF3B30' }
+          ]}
+          numberOfLines={2}
+          ellipsizeMode="tail"
+        >
+          {options?.sentimentDescription || 'Neutral'}
+        </Text>
+        <Text style={styles.metricExplanation}>
+          {options?.sentimentScore ? 
+            `Score: ${options.sentimentScore.toFixed(0)}/100` : 'N/A'}
+        </Text>
 </View>
 </View>
 </View>
@@ -2055,16 +2080,16 @@ onPress={() => setShowTooltip(null)}
 </View>
 </TouchableOpacity>
 </Modal>
-{/* Unusual Options Flow */}
-{options?.unusualFlow && options.unusualFlow.length > 0 && (
-<View style={styles.section}>
-<Text style={styles.sectionTitle}>
-Unusual Options Activity
-{(optionsLoading || testOptionsLoading) && (
-<Icon name="loader" size={16} color="#007AFF" style={{ marginLeft: 8 }} />
-)}
-</Text>
-{options?.unusualFlow?.slice(0, 3).map((flow, index) => (
+        {/* Unusual Options Flow */}
+        {options?.unusualFlow?.topTrades && options.unusualFlow.topTrades.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>
+              Unusual Options Activity
+              {(optionsLoading || testOptionsLoading) && (
+                <Icon name="loader" size={16} color="#007AFF" style={{ marginLeft: 8 }} />
+              )}
+            </Text>
+            {options?.unusualFlow?.topTrades?.slice(0, 3).map((flow, index) => (
 <View key={index} style={styles.flowCard}>
 <View style={styles.flowHeader}>
 <Text style={styles.flowSymbol}>{flow.symbol}</Text>
@@ -2130,7 +2155,12 @@ strategy.riskLevel === 'Medium' ? '#856404' : '#721C24'
 <Text style={styles.strategyDescription}>{strategy.description}</Text>
 <View style={styles.strategyOutlook}>
 <Text style={styles.outlookLabel}>Market Outlook:</Text>
-<Text style={styles.outlookValue}>{strategy.marketOutlook}</Text>
+                <Text style={styles.outlookValue}>
+                  {typeof strategy.marketOutlook === 'object' 
+                    ? strategy.marketOutlook?.sentiment || 'Unknown'
+                    : strategy.marketOutlook || 'Unknown'
+                  }
+                </Text>
 </View>
 <View style={styles.strategyMetrics}>
 <View style={styles.strategyMetric}>
