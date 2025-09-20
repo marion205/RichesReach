@@ -65,6 +65,7 @@ class Account:
 
 @dataclass
 class Position:
+    id: str
     symbol: str
     quantity: int
     market_value: float
@@ -151,6 +152,7 @@ class SimpleTradingService:
             position_list = []
             for pos in positions_data:
                 position = Position(
+                    id=pos.get('asset_id', f"pos_{pos.get('symbol', 'unknown')}"),
                     symbol=pos.get('symbol', ''),
                     quantity=int(pos.get('qty', 0)),
                     market_value=float(pos.get('market_value', 0)),
@@ -494,22 +496,26 @@ class SimpleTradingService:
         """Get mock positions data"""
         return [
             Position(
+                id="pos_aapl_001",
                 symbol="AAPL",
                 quantity=50,
                 market_value=11894.0,
                 cost_basis=7500.0,
                 unrealized_pl=4394.0,
                 unrealized_plpc=58.59,
-                current_price=237.88
+                current_price=237.88,
+                side="long"
             ),
             Position(
+                id="pos_msft_001",
                 symbol="MSFT",
                 quantity=30,
                 market_value=15253.5,
                 cost_basis=10000.0,
                 unrealized_pl=5253.5,
                 unrealized_plpc=52.54,
-                current_price=508.45
+                current_price=508.45,
+                side="long"
             )
         ]
     

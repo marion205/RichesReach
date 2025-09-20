@@ -903,6 +903,14 @@ app.add_middleware(
     allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"],
 )
 
+# Import and include AI Options API router
+try:
+    from core.simple_ai_options_api import router as ai_options_router
+    app.include_router(ai_options_router)
+    logger.info("✅ AI Options API router included")
+except Exception as e:
+    logger.warning(f"⚠️ Failed to include AI Options API router: {e}")
+
 # Debug endpoint to prove which scoring module is active
 @app.get("/debug/scoring_info")
 async def scoring_info():
@@ -1050,6 +1058,10 @@ def get_real_buy_recommendations():
             
             # Determine recommendation based on combined scores
             combined_score = (beginner_score * 0.4) + (ml_score * 0.6)  # Weight ML more heavily
+            combined_score = round(combined_score, 1)  # Round to 1 decimal place
+            
+            # Debug logging
+            logger.info(f"DEBUG: {r['symbol']} - beginner_score: {beginner_score}, ml_score: {ml_score}, combined_score: {combined_score}")
             
             if combined_score >= 80:
                 recommendation, confidence = "STRONG BUY", 0.9
@@ -1078,6 +1090,7 @@ def get_real_buy_recommendations():
                     "recommendation": recommendation,
                     "confidence": confidence,
                     "reasoning": reasoning,
+                    "score": combined_score,  # Add the missing score field
                     "targetPrice": target_price,
                     "currentPrice": r["currentPrice"],
                     "expectedReturn": expected_return,
@@ -1099,6 +1112,7 @@ def get_real_buy_recommendations():
         return [{
             "symbol": "AAPL", "companyName": "Apple Inc.", "recommendation": "BUY",
             "confidence": 0.7, "reasoning": "Fallback recommendation due to scoring system error",
+            "score": 70.0,  # Add the missing score field
             "targetPrice": 200.0, "currentPrice": 180.0, "expectedReturn": 11.1,
             "allocation": [{"symbol": "AAPL", "percentage": 10.0, "reasoning": "Fallback allocation"}],
             "__typename": "BuyRecommendation"
@@ -1299,6 +1313,7 @@ def top_level_fields(query: str, operation_name: Optional[str]) -> Set[str]:
 @app.post("/graphql")
 @app.post("/graphql/")
 async def graphql_endpoint(request_data: dict):
+    import re
     _trace(f"ENTER /graphql (keys={list(request_data.keys())})")
     query = request_data.get("query", "") or ""
     variables = request_data.get("variables", {}) or {}
@@ -1335,6 +1350,30 @@ async def graphql_endpoint(request_data: dict):
                 "data": {"symbol": "MSFT", "quantity": 10, "fillPrice": 300.50, "orderId": "order_123"},
                 "__typename": "Notification"
             },
+            {
+                "id": "notif_003", "title": "SBLOC Opportunity",
+                "message": "Your portfolio has grown 15% this month! You now have $25,000 in additional borrowing power available.",
+                "type": "sbloc_opportunity", "isRead": False,
+                "createdAt": (datetime.now() - timedelta(hours=3)).isoformat(),
+                "data": {"portfolioGrowth": 15.0, "newBorrowingPower": 25000, "previousBorrowingPower": 20000},
+                "__typename": "Notification"
+            },
+            {
+                "id": "notif_004", "title": "SBLOC Rate Alert",
+                "message": "SBLOC interest rates have dropped to 6.5% - a great time to consider borrowing against your portfolio.",
+                "type": "sbloc_rate_alert", "isRead": False,
+                "createdAt": (datetime.now() - timedelta(days=1)).isoformat(),
+                "data": {"newRate": 6.5, "previousRate": 7.2, "savings": 0.7},
+                "__typename": "Notification"
+            },
+            {
+                "id": "notif_005", "title": "Portfolio Liquidity Reminder",
+                "message": "Consider SBLOC instead of selling shares for your upcoming $5,000 expense. Keep your investments growing!",
+                "type": "sbloc_liquidity_reminder", "isRead": True,
+                "createdAt": (datetime.now() - timedelta(days=2)).isoformat(),
+                "data": {"suggestedAmount": 5000, "potentialSavings": 750},
+                "__typename": "Notification"
+            },
         ]
         return {"data": response_data}
 
@@ -1342,6 +1381,7 @@ async def graphql_endpoint(request_data: dict):
         response_data["notificationSettings"] = {
             "priceAlerts": True, "tradeConfirmations": True, "marketUpdates": False,
             "accountActivity": True, "pushNotifications": True, "emailNotifications": False,
+            "orderUpdates": True, "newsUpdates": True, "systemUpdates": True,
             "__typename": "NotificationSettings"
         }
         return {"data": response_data}
@@ -1351,9 +1391,18 @@ async def graphql_endpoint(request_data: dict):
         symbol = variables.get("symbol", "")
         timeframe = variables.get("timeframe", "1D")
         if not symbol:
-            sm = re.search(r'symbol:\s*"([^"]+)"', query); symbol = sm.group(1) if sm else symbol
+            # Simple string parsing instead of regex
+            if 'symbol:' in query:
+                start = query.find('symbol:') + 7
+                end = query.find('"', start + 1)
+                if end > start:
+                    symbol = query[start:end].strip().strip('"')
         if not timeframe:
-            tm = re.search(r'timeframe:\s*"([^"]+)"', query); timeframe = tm.group(1) if tm else timeframe
+            if 'timeframe:' in query:
+                start = query.find('timeframe:') + 10
+                end = query.find('"', start + 1)
+                if end > start:
+                    timeframe = query[start:end].strip().strip('"')
         if not symbol:
             return {"errors": [{"message": "Symbol is required for chart data"}]}
 
@@ -1543,7 +1592,8 @@ async def graphql_endpoint(request_data: dict):
         return {"data": {"tokenAuth": {
             "token": tok, "refreshToken": tok,
             "user": {"id": user["id"], "email": user["email"], "name": user["name"],
-                     "hasPremiumAccess": user["hasPremiumAccess"], "subscriptionTier": user["subscriptionTier"], "__typename":"User"},
+                     "hasPremiumAccess": user["hasPremiumAccess"], "subscriptionTier": user["subscriptionTier"], 
+                     "updatedAt": datetime.now().isoformat(), "__typename":"User"},
             "__typename":"TokenAuth"
         }}}
 
@@ -1621,12 +1671,12 @@ async def graphql_endpoint(request_data: dict):
         return {"data": {"myWatchlist": [
             {
                 "id":"watch_1",
-                "stock":{"id":"1","symbol":"AAPL","companyName":"Apple Inc.","sector":"Technology","beginnerFriendlyScore":85,"currentPrice":175.5,"debtRatio":0.15,"volatility":0.28,"fundamentalAnalysis":{"revenueGrowth":8.2,"profitMargin":25.3,"returnOnEquity":147.2,"debtToEquity":0.15,"currentRatio":1.05,"priceToBook":39.2,"debtScore":85,"dividendScore":72,"valuationScore":78,"growthScore":82,"stabilityScore":88},"technicalIndicators":{"rsi":65.2,"macd":2.1,"macdhistogram":0.8,"bollingerUpper":185.3,"bollingerMiddle":175.5,"bollingerLower":165.7,"movingAverage50":172.8,"movingAverage200":168.5,"sma20":175.5,"sma50":172.8,"ema12":176.8,"ema26":174.2,"supportLevel":170.0,"resistanceLevel":180.0},"__typename":"Stock"},
+                "stock":{"id":"1","symbol":"AAPL","companyName":"Apple Inc.","sector":"Technology","beginnerFriendlyScore":85,"currentPrice":175.5,"debtRatio":0.15,"volatility":0.28,"fundamentalAnalysis":{"revenueGrowth":8.2,"profitMargin":25.3,"returnOnEquity":147.2,"debtToEquity":0.15,"currentRatio":1.05,"priceToBook":39.2,"debtScore":85,"dividendScore":72,"valuationScore":78,"growthScore":82,"stabilityScore":88},"technicalIndicators":{"rsi":65.2,"macd":2.1,"macdhistogram":0.8,"bollingerUpper":185.3,"bollingerMiddle":175.5,"bollingerLower":165.7,"movingAverage50":172.8,"movingAverage200":168.5,"sma20":175.5,"sma50":172.8,"ema12":176.8,"ema26":174.2,"supportLevel":170.0,"resistanceLevel":180.0},"updatedAt":datetime.now().isoformat(),"__typename":"Stock"},
                 "addedAt":"2024-01-15T10:00:00Z","notes":"Core technology holding","targetPrice":200.0,"__typename":"WatchlistItem"
             },
             {
                 "id":"watch_2",
-                "stock":{"id":"2","symbol":"MSFT","companyName":"Microsoft Corporation","sector":"Technology","beginnerFriendlyScore":88,"currentPrice":380.25,"debtRatio":0.12,"volatility":0.24,"fundamentalAnalysis":{"revenueGrowth":12.4,"profitMargin":36.8,"returnOnEquity":45.2,"debtToEquity":0.12,"currentRatio":2.5,"priceToBook":12.8,"debtScore":92,"dividendScore":88,"valuationScore":85,"growthScore":90,"stabilityScore":92},"technicalIndicators":{"rsi":58.7,"macd":3.2,"macdhistogram":1.2,"bollingerUpper":395.1,"bollingerMiddle":380.25,"bollingerLower":365.4,"movingAverage50":378.9,"movingAverage200":365.2,"sma20":380.25,"sma50":378.9,"ema12":384.5,"ema26":382.1,"supportLevel":375.0,"resistanceLevel":390.0},"__typename":"Stock"},
+                "stock":{"id":"2","symbol":"MSFT","companyName":"Microsoft Corporation","sector":"Technology","beginnerFriendlyScore":88,"currentPrice":380.25,"debtRatio":0.12,"volatility":0.24,"fundamentalAnalysis":{"revenueGrowth":12.4,"profitMargin":36.8,"returnOnEquity":45.2,"debtToEquity":0.12,"currentRatio":2.5,"priceToBook":12.8,"debtScore":92,"dividendScore":88,"valuationScore":85,"growthScore":90,"stabilityScore":92},"technicalIndicators":{"rsi":58.7,"macd":3.2,"macdhistogram":1.2,"bollingerUpper":395.1,"bollingerMiddle":380.25,"bollingerLower":365.4,"movingAverage50":378.9,"movingAverage200":365.2,"sma20":380.25,"sma50":378.9,"ema12":384.5,"ema26":382.1,"supportLevel":375.0,"resistanceLevel":390.0},"updatedAt":datetime.now().isoformat(),"__typename":"Stock"},
                 "addedAt":"2024-01-16T14:30:00Z","notes":"Cloud leadership play","targetPrice":400.0,"__typename":"WatchlistItem"
             }
         ]}}
@@ -1640,9 +1690,12 @@ async def graphql_endpoint(request_data: dict):
                     "id": "portfolio_1",
                     "name": "Growth Portfolio",
                     "totalValue": 30000.00,
+                    "holdingsCount": 2,
+                    "createdAt": "2024-01-15T10:00:00Z",
+                    "updatedAt": datetime.now().isoformat(),
                     "holdings": [
-                        {"id": "h1", "stock": {"symbol": "AAPL", "companyName": "Apple Inc.", "debtRatio": 0.15, "volatility": 0.28, "fundamentalAnalysis": {"revenueGrowth": 8.2, "profitMargin": 25.3, "returnOnEquity": 147.2, "debtToEquity": 0.15, "currentRatio": 1.05, "priceToBook": 39.2, "debtScore": 85, "dividendScore": 72, "valuationScore": 78, "growthScore": 82, "stabilityScore": 88}, "technicalIndicators": {"rsi": 65.2, "macd": 2.1, "macdhistogram": 0.8, "bollingerUpper": 185.3, "bollingerMiddle": 175.5, "bollingerLower": 165.7, "movingAverage50": 172.8, "movingAverage200": 168.5, "sma20": 175.5, "sma50": 172.8, "ema12": 176.8, "ema26": 174.2, "supportLevel": 170.0, "resistanceLevel": 180.0}}, "shares": 50, "totalValue": 8750.00},
-                        {"id": "h2", "stock": {"symbol": "MSFT", "companyName": "Microsoft Corp.", "debtRatio": 0.12, "volatility": 0.24, "fundamentalAnalysis": {"revenueGrowth": 12.4, "profitMargin": 36.8, "returnOnEquity": 45.2, "debtToEquity": 0.12, "currentRatio": 2.5, "priceToBook": 12.8, "debtScore": 92, "dividendScore": 88, "valuationScore": 85, "growthScore": 90, "stabilityScore": 92}, "technicalIndicators": {"rsi": 58.7, "macd": 3.2, "macdhistogram": 1.2, "bollingerUpper": 395.1, "bollingerMiddle": 380.25, "bollingerLower": 365.4, "movingAverage50": 378.9, "movingAverage200": 365.2, "sma20": 380.25, "sma50": 378.9, "ema12": 384.5, "ema26": 382.1, "supportLevel": 375.0, "resistanceLevel": 390.0}}, "shares": 30, "totalValue": 11407.50}
+                        {"id": "h1", "stock": {"id": "stock_1", "symbol": "AAPL", "companyName": "Apple Inc.", "debtRatio": 0.15, "volatility": 0.28, "currentPrice": 175.5, "fundamentalAnalysis": {"revenueGrowth": 8.2, "profitMargin": 25.3, "returnOnEquity": 147.2, "debtToEquity": 0.15, "currentRatio": 1.05, "priceToBook": 39.2, "debtScore": 85, "dividendScore": 72, "valuationScore": 78, "growthScore": 82, "stabilityScore": 88}, "technicalIndicators": {"rsi": 65.2, "macd": 2.1, "macdhistogram": 0.8, "bollingerUpper": 185.3, "bollingerMiddle": 175.5, "bollingerLower": 165.7, "movingAverage50": 172.8, "movingAverage200": 168.5, "sma20": 175.5, "sma50": 172.8, "ema12": 176.8, "ema26": 174.2, "supportLevel": 170.0, "resistanceLevel": 180.0}, "updatedAt": datetime.now().isoformat()}, "shares": 50, "totalValue": 8750.00, "averagePrice": 175.0, "notes": "Core technology holding", "createdAt": "2024-01-15T10:00:00Z", "updatedAt": datetime.now().isoformat()},
+                        {"id": "h2", "stock": {"id": "stock_2", "symbol": "MSFT", "companyName": "Microsoft Corp.", "debtRatio": 0.12, "volatility": 0.24, "currentPrice": 380.25, "fundamentalAnalysis": {"revenueGrowth": 12.4, "profitMargin": 36.8, "returnOnEquity": 45.2, "debtToEquity": 0.12, "currentRatio": 2.5, "priceToBook": 12.8, "debtScore": 92, "dividendScore": 88, "valuationScore": 85, "growthScore": 90, "stabilityScore": 92}, "technicalIndicators": {"rsi": 58.7, "macd": 3.2, "macdhistogram": 1.2, "bollingerUpper": 395.1, "bollingerMiddle": 380.25, "bollingerLower": 365.4, "movingAverage50": 378.9, "movingAverage200": 365.2, "sma20": 380.25, "sma50": 378.9, "ema12": 384.5, "ema26": 382.1, "supportLevel": 375.0, "resistanceLevel": 390.0}, "updatedAt": datetime.now().isoformat()}, "shares": 30, "totalValue": 11407.50, "averagePrice": 380.25, "notes": "Cloud leadership play", "createdAt": "2024-01-16T14:30:00Z", "updatedAt": datetime.now().isoformat()}
                     ],
                     "__typename": "Portfolio"
                 },
@@ -1650,13 +1703,938 @@ async def graphql_endpoint(request_data: dict):
                     "id": "portfolio_2", 
                     "name": "Income Portfolio",
                     "totalValue": 20000.00,
+                    "holdingsCount": 1,
+                    "createdAt": "2024-01-20T14:30:00Z",
+                    "updatedAt": datetime.now().isoformat(),
                     "holdings": [
-                        {"id": "h3", "stock": {"symbol": "JNJ", "companyName": "Johnson & Johnson", "debtRatio": 0.08, "volatility": 0.18, "fundamentalAnalysis": {"revenueGrowth": 3.2, "profitMargin": 18.5, "returnOnEquity": 22.1, "debtToEquity": 0.08, "currentRatio": 1.2, "priceToBook": 4.1, "debtScore": 78, "dividendScore": 95, "valuationScore": 72, "growthScore": 45, "stabilityScore": 95}, "technicalIndicators": {"rsi": 42.3, "macd": 0.8, "macdhistogram": 0.3, "bollingerUpper": 155.2, "bollingerMiddle": 150.5, "bollingerLower": 145.8, "movingAverage50": 150.1, "movingAverage200": 148.7, "sma20": 150.5, "sma50": 150.1, "ema12": 151.2, "ema26": 149.8, "supportLevel": 148.0, "resistanceLevel": 152.0}}, "shares": 100, "totalValue": 15000.00}
+                        {"id": "h3", "stock": {"id": "stock_3", "symbol": "JNJ", "companyName": "Johnson & Johnson", "debtRatio": 0.08, "volatility": 0.18, "currentPrice": 150.0, "fundamentalAnalysis": {"revenueGrowth": 3.2, "profitMargin": 18.5, "returnOnEquity": 22.1, "debtToEquity": 0.08, "currentRatio": 1.2, "priceToBook": 4.1, "debtScore": 78, "dividendScore": 95, "valuationScore": 72, "growthScore": 45, "stabilityScore": 95}, "technicalIndicators": {"rsi": 42.3, "macd": 0.8, "macdhistogram": 0.3, "bollingerUpper": 155.2, "bollingerMiddle": 150.5, "bollingerLower": 145.8, "movingAverage50": 150.1, "movingAverage200": 148.7, "sma20": 150.5, "sma50": 150.1, "ema12": 151.2, "ema26": 149.8, "supportLevel": 148.0, "resistanceLevel": 152.0}, "updatedAt": datetime.now().isoformat()}, "shares": 100, "totalValue": 15000.00, "averagePrice": 150.0, "notes": "Stable dividend stock", "createdAt": "2024-01-20T14:30:00Z", "updatedAt": datetime.now().isoformat()}
                     ],
                     "__typename": "Portfolio"
                 }
             ],
             "__typename": "MyPortfolios"
+        }}}
+
+    # Portfolio Metrics (query)
+    if "portfolioMetrics" in fields:
+        return {"data": {"portfolioMetrics": {
+            "totalValue": 50000.0,
+            "totalCost": 43750.0,  # Added missing field
+            "totalReturn": 12.5,
+            "totalReturnPercent": 0.125,
+            "dayChange": 1250.0,
+            "dayChangePercent": 0.025,
+            "totalGain": 6250.0,
+            "totalGainPercent": 0.125,
+            "unrealizedGain": 3250.0,
+            "unrealizedGainPercent": 0.065,
+            "realizedGain": 3000.0,
+            "realizedGainPercent": 0.06,
+            "dividendsReceived": 450.0,
+            "dividendsReceivedPercent": 0.009,
+            "feesPaid": 25.0,
+            "feesPaidPercent": 0.0005,
+            "sharpeRatio": 1.85,
+            "volatility": 0.18,
+            "maxDrawdown": -0.08,
+            "beta": 0.95,
+            "alpha": 0.02,
+            "rSquared": 0.78,
+            "treynorRatio": 0.13,
+            "sortinoRatio": 2.1,
+            "calmarRatio": 1.56,
+            "var95": -0.035,
+            "cvar95": -0.042,
+            "informationRatio": 0.15,
+            "trackingError": 0.12,
+            "jensenAlpha": 0.018,
+            "treynorMeasure": 0.13,
+            "modiglianiRatio": 0.14,
+            "sterlingRatio": 1.2,
+            "burkeRatio": 0.95,
+            "kapparatio": 1.8,
+            "painIndex": 0.06,
+            "painRatio": 2.08,
+            "ulcerIndex": 0.04,
+            "ulcerPerformanceIndex": 3.12,
+            "martinRatio": 2.5,
+            "recoveryFactor": 1.56,
+            "tailRatio": 1.8,
+            "commonSenseRatio": 1.65,
+            "differentialReturn": 0.02,
+            "differentialReturnPercent": 0.02,
+            "excessReturn": 0.02,
+            "excessReturnPercent": 0.02,
+            "riskFreeRate": 0.05,
+            "riskFreeRatePercent": 0.05,
+            "marketReturn": 0.10,
+            "marketReturnPercent": 0.10,
+            "riskAdjustedReturn": 0.12,
+            "riskAdjustedReturnPercent": 0.12,
+            "riskFreeReturn": 0.05,
+            "riskFreeReturnPercent": 0.05,
+            "marketRiskPremium": 0.05,
+            "marketRiskPremiumPercent": 0.05,
+            "equityRiskPremium": 0.07,
+            "equityRiskPremiumPercent": 0.07,
+            "sizePremium": 0.02,
+            "sizePremiumPercent": 0.02,
+            "valuePremium": 0.03,
+            "valuePremiumPercent": 0.03,
+            "momentumPremium": 0.01,
+            "momentumPremiumPercent": 0.01,
+            "qualityPremium": 0.015,
+            "qualityPremiumPercent": 0.015,
+            "lowVolatilityPremium": 0.01,
+            "lowVolatilityPremiumPercent": 0.01,
+            "profitabilityPremium": 0.02,
+            "profitabilityPremiumPercent": 0.02,
+            "investmentPremium": 0.01,
+            "investmentPremiumPercent": 0.01,
+            "diversificationScore": 75.0,
+            "sectorAllocation": {  # Added missing field
+                "Technology": 0.60,
+                "Healthcare": 0.25,
+                "Financials": 0.10,
+                "Consumer Discretionary": 0.05
+            },
+            "riskMetrics": {  # Added missing field
+                "var95": -0.035,
+                "cvar95": -0.042,
+                "expectedShortfall": -0.042,
+                "tailRisk": 0.08,
+                "systemicRisk": 0.12,
+                "idiosyncraticRisk": 0.15,
+                "totalRisk": 0.20,
+                "riskAdjustedReturn": 0.60,
+                "sharpeRatio": 1.8,
+                "sortinoRatio": 2.2,
+                "calmarRatio": 1.5,
+                "maxDrawdown": -0.08,
+                "recoveryTime": 25
+            },
+            "holdings": [  # Added missing field
+                {
+                    "symbol": "AAPL",
+                    "companyName": "Apple Inc.",
+                    "shares": 50,
+                    "currentPrice": 175.5,
+                    "totalValue": 8775.0,
+                    "costBasis": 8000.0,
+                    "returnAmount": 775.0,
+                    "returnPercent": 0.097,
+                    "sector": "Technology"
+                },
+                {
+                    "symbol": "MSFT",
+                    "companyName": "Microsoft Corporation",
+                    "shares": 30,
+                    "currentPrice": 380.25,
+                    "totalValue": 11407.5,
+                    "costBasis": 10000.0,
+                    "returnAmount": 1407.5,
+                    "returnPercent": 0.141,
+                    "sector": "Technology"
+                },
+                {
+                    "symbol": "JNJ",
+                    "companyName": "Johnson & Johnson",
+                    "shares": 100,
+                    "currentPrice": 150.0,
+                    "totalValue": 15000.0,
+                    "costBasis": 14000.0,
+                    "returnAmount": 1000.0,
+                    "returnPercent": 0.071,
+                    "sector": "Healthcare"
+                },
+                {
+                    "symbol": "JPM",
+                    "companyName": "JPMorgan Chase & Co.",
+                    "shares": 25,
+                    "currentPrice": 180.0,
+                    "totalValue": 4500.0,
+                    "costBasis": 4000.0,
+                    "returnAmount": 500.0,
+                    "returnPercent": 0.125,
+                    "sector": "Financials"
+                },
+                {
+                    "symbol": "AMZN",
+                    "companyName": "Amazon.com Inc.",
+                    "shares": 20,
+                    "currentPrice": 350.0,
+                    "totalValue": 7000.0,
+                    "costBasis": 6000.0,
+                    "returnAmount": 1000.0,
+                    "returnPercent": 0.167,
+                    "sector": "Consumer Discretionary"
+                }
+            ],
+            "updatedAt": datetime.now().isoformat(),
+            "__typename": "PortfolioMetrics"
+        }}}
+
+    # Options Analysis (query)
+    if "optionsAnalysis" in fields:
+        symbol = variables.get("symbol", "AAPL")
+        return {"data": {"optionsAnalysis": {
+            "symbol": symbol,
+            "underlyingSymbol": symbol,  # Added missing field
+            "currentPrice": 175.5,
+            "underlyingPrice": 175.5,  # Added missing field
+            "impliedVolatility": 0.25,
+            "historicalVolatility": 0.23,
+            "volatilityRank": 0.65,
+            "volatilityPercentile": 65.0,
+            "impliedVolatilityRank": 0.65,  # Added missing field
+            "callOptions": [
+                {
+                    "strike": 170.0,
+                    "expiration": "2024-12-20",
+                    "bid": 8.50,
+                    "ask": 8.75,
+                    "last": 8.60,
+                    "volume": 1250,
+                    "openInterest": 8900,
+                    "impliedVolatility": 0.24,
+                    "delta": 0.65,
+                    "gamma": 0.02,
+                    "theta": -0.15,
+                    "vega": 0.35,
+                    "rho": 0.12,
+                    "intrinsicValue": 5.50,
+                    "timeValue": 3.10,
+                    "moneyness": "ITM",
+                    "breakeven": 178.60,
+                    "maxProfit": 999999.99,
+                    "maxLoss": 8.60,
+                    "probabilityOfProfit": 0.65,
+                    "expectedReturn": 0.12,
+                    "riskRewardRatio": 2.5,
+                    "leverage": 20.4,
+                    "marginRequired": 0.0,
+                    "daysToExpiration": 32,
+                    "timeDecay": -0.15,
+                    "volatilitySkew": 0.02,
+                    "putCallRatio": 0.85,
+                    "volumeRatio": 1.2,
+                    "openInterestRatio": 0.95,
+                    "bidAskSpread": 0.25,
+                    "bidAskSpreadPercent": 2.9,
+                    "liquidityScore": 0.85,
+                    "fairValue": 8.62,
+                    "overpriced": False,
+                    "underpriced": False,
+                    "recommendation": "HOLD",
+                    "confidence": 0.75,
+                    "riskLevel": "MODERATE",
+                    "suitability": "INTERMEDIATE",
+                    "strategy": "LONG_CALL",
+                    "profitTarget": 12.0,
+                    "stopLoss": 6.0,
+                    "hedgeRatio": 0.65,
+                    "correlation": 0.95,
+                    "beta": 1.2,
+                    "sector": "Technology",
+                    "industry": "Consumer Electronics",
+                    "marketCap": 2800000000000,
+                    "peRatio": 28.5,
+                    "dividendYield": 0.0044,
+                    "earningsDate": "2024-10-30",
+                    "exDividendDate": "2024-11-08",
+                    "analystRating": "BUY",
+                    "priceTarget": 200.0,
+                    "upside": 0.14,
+                    "downside": -0.08,
+                    "volatilityForecast": 0.26,
+                    "priceForecast": 180.0,
+                    "confidenceInterval": [165.0, 195.0],
+                    "var95": -0.12,
+                    "cvar95": -0.15,
+                    "expectedShortfall": -0.15,
+                    "tailRisk": 0.08,
+                    "systemicRisk": 0.12,
+                    "idiosyncraticRisk": 0.15,
+                    "totalRisk": 0.20,
+                    "riskAdjustedReturn": 0.60,
+                    "sharpeRatio": 1.8,
+                    "sortinoRatio": 2.2,
+                    "calmarRatio": 1.5,
+                    "maxDrawdown": -0.15,
+                    "recoveryTime": 45,
+                    "stressTest": {
+                        "scenario1": -0.20,
+                        "scenario2": -0.10,
+                        "scenario3": 0.05,
+                        "scenario4": 0.15,
+                        "scenario5": 0.25
+                    },
+                    "monteCarlo": {
+                        "simulations": 10000,
+                        "mean": 0.12,
+                        "std": 0.20,
+                        "percentile5": -0.21,
+                        "percentile25": -0.02,
+                        "percentile50": 0.10,
+                        "percentile75": 0.25,
+                        "percentile95": 0.45
+                    },
+                    "greeks": {
+                        "delta": 0.65,
+                        "gamma": 0.02,
+                        "theta": -0.15,
+                        "vega": 0.35,
+                        "rho": 0.12,
+                        "lambda": 20.4,
+                        "epsilon": 0.08,
+                        "psi": -0.05,
+                        "vanna": 0.01,
+                        "charm": -0.02,
+                        "vomma": 0.15,
+                        "veta": -0.08,
+                        "speed": 0.001,
+                        "zomma": 0.0005,
+                        "color": 0.0001,
+                        "ultima": 0.0002,
+                        "dualdelta": 0.65,
+                        "dualgamma": 0.02
+                    },
+                    "pricing": {
+                        "blackScholes": 8.62,
+                        "binomial": 8.58,
+                        "monteCarlo": 8.65,
+                        "finiteDifference": 8.60,
+                        "analytical": 8.62,
+                        "numerical": 8.61,
+                        "closedForm": 8.62,
+                        "approximation": 8.59
+                    },
+                    "riskMetrics": {
+                        "var95": -0.12,
+                        "var99": -0.18,
+                        "cvar95": -0.15,
+                        "cvar99": -0.22,
+                        "expectedShortfall": -0.15,
+                        "conditionalVaR": -0.15,
+                        "tailVaR": -0.15,
+                        "expectedTailLoss": -0.15
+                    },
+                    "performance": {
+                        "totalReturn": 0.12,
+                        "annualizedReturn": 0.15,
+                        "volatility": 0.20,
+                        "sharpeRatio": 1.8,
+                        "sortinoRatio": 2.2,
+                        "calmarRatio": 1.5,
+                        "maxDrawdown": -0.15,
+                        "recoveryTime": 45,
+                        "winRate": 0.65,
+                        "profitFactor": 2.5,
+                        "expectancy": 0.08,
+                        "kellyCriterion": 0.25,
+                        "optimalF": 0.30,
+                        "riskOfRuin": 0.05,
+                        "ulcerIndex": 0.08,
+                        "sterlingRatio": 1.2,
+                        "burkeRatio": 0.95,
+                        "kapparatio": 1.8,
+                        "painIndex": 0.06,
+                        "painRatio": 2.08,
+                        "ulcerPerformanceIndex": 3.12,
+                        "martinRatio": 2.5,
+                        "recoveryFactor": 1.56,
+                        "tailRatio": 1.8,
+                        "commonSenseRatio": 1.65
+                    },
+                    "marketData": {
+                        "bid": 8.50,
+                        "ask": 8.75,
+                        "last": 8.60,
+                        "volume": 1250,
+                        "openInterest": 8900,
+                        "impliedVolatility": 0.24,
+                        "historicalVolatility": 0.23,
+                        "volatilityRank": 0.65,
+                        "volatilityPercentile": 65.0,
+                        "putCallRatio": 0.85,
+                        "volumeRatio": 1.2,
+                        "openInterestRatio": 0.95,
+                        "bidAskSpread": 0.25,
+                        "bidAskSpreadPercent": 2.9,
+                        "liquidityScore": 0.85,
+                        "fairValue": 8.62,
+                        "overpriced": False,
+                        "underpriced": False
+                    },
+                    "analytics": {
+                        "recommendation": "HOLD",
+                        "confidence": 0.75,
+                        "riskLevel": "MODERATE",
+                        "suitability": "INTERMEDIATE",
+                        "strategy": "LONG_CALL",
+                        "profitTarget": 12.0,
+                        "stopLoss": 6.0,
+                        "hedgeRatio": 0.65,
+                        "correlation": 0.95,
+                        "beta": 1.2,
+                        "sector": "Technology",
+                        "industry": "Consumer Electronics",
+                        "marketCap": 2800000000000,
+                        "peRatio": 28.5,
+                        "dividendYield": 0.0044,
+                        "earningsDate": "2024-10-30",
+                        "exDividendDate": "2024-11-08",
+                        "analystRating": "BUY",
+                        "priceTarget": 200.0,
+                        "upside": 0.14,
+                        "downside": -0.08,
+                        "volatilityForecast": 0.26,
+                        "priceForecast": 180.0,
+                        "confidenceInterval": [165.0, 195.0]
+                    },
+                    "riskAnalysis": {
+                        "var95": -0.12,
+                        "cvar95": -0.15,
+                        "expectedShortfall": -0.15,
+                        "tailRisk": 0.08,
+                        "systemicRisk": 0.12,
+                        "idiosyncraticRisk": 0.15,
+                        "totalRisk": 0.20,
+                        "riskAdjustedReturn": 0.60,
+                        "sharpeRatio": 1.8,
+                        "sortinoRatio": 2.2,
+                        "calmarRatio": 1.5,
+                        "maxDrawdown": -0.15,
+                        "recoveryTime": 45
+                    },
+                    "stressTest": {
+                        "scenario1": -0.20,
+                        "scenario2": -0.10,
+                        "scenario3": 0.05,
+                        "scenario4": 0.15,
+                        "scenario5": 0.25
+                    },
+                    "monteCarlo": {
+                        "simulations": 10000,
+                        "mean": 0.12,
+                        "std": 0.20,
+                        "percentile5": -0.21,
+                        "percentile25": -0.02,
+                        "percentile50": 0.10,
+                        "percentile75": 0.25,
+                        "percentile95": 0.45
+                    },
+                    "updatedAt": datetime.now().isoformat(),
+                    "__typename": "CallOption"
+                }
+            ],
+            "putOptions": [
+                {
+                    "strike": 170.0,
+                    "expiration": "2024-12-20",
+                    "bid": 3.25,
+                    "ask": 3.50,
+                    "last": 3.35,
+                    "volume": 890,
+                    "openInterest": 5600,
+                    "impliedVolatility": 0.26,
+                    "delta": -0.35,
+                    "gamma": 0.02,
+                    "theta": -0.12,
+                    "vega": 0.30,
+                    "rho": -0.08,
+                    "intrinsicValue": 0.0,
+                    "timeValue": 3.35,
+                    "moneyness": "OTM",
+                    "breakeven": 166.65,
+                    "maxProfit": 166.65,
+                    "maxLoss": 3.35,
+                    "probabilityOfProfit": 0.35,
+                    "expectedReturn": 0.08,
+                    "riskRewardRatio": 1.8,
+                    "leverage": 52.2,
+                    "marginRequired": 0.0,
+                    "daysToExpiration": 32,
+                    "timeDecay": -0.12,
+                    "volatilitySkew": 0.01,
+                    "putCallRatio": 0.85,
+                    "volumeRatio": 0.8,
+                    "openInterestRatio": 0.9,
+                    "bidAskSpread": 0.25,
+                    "bidAskSpreadPercent": 7.5,
+                    "liquidityScore": 0.75,
+                    "fairValue": 3.38,
+                    "overpriced": False,
+                    "underpriced": False,
+                    "recommendation": "HOLD",
+                    "confidence": 0.70,
+                    "riskLevel": "MODERATE",
+                    "suitability": "INTERMEDIATE",
+                    "strategy": "LONG_PUT",
+                    "profitTarget": 5.0,
+                    "stopLoss": 2.0,
+                    "hedgeRatio": -0.35,
+                    "correlation": 0.95,
+                    "beta": 1.2,
+                    "sector": "Technology",
+                    "industry": "Consumer Electronics",
+                    "marketCap": 2800000000000,
+                    "peRatio": 28.5,
+                    "dividendYield": 0.0044,
+                    "earningsDate": "2024-10-30",
+                    "exDividendDate": "2024-11-08",
+                    "analystRating": "BUY",
+                    "priceTarget": 200.0,
+                    "upside": 0.14,
+                    "downside": -0.08,
+                    "volatilityForecast": 0.26,
+                    "priceForecast": 180.0,
+                    "confidenceInterval": [165.0, 195.0],
+                    "var95": -0.10,
+                    "cvar95": -0.12,
+                    "expectedShortfall": -0.12,
+                    "tailRisk": 0.06,
+                    "systemicRisk": 0.10,
+                    "idiosyncraticRisk": 0.12,
+                    "totalRisk": 0.18,
+                    "riskAdjustedReturn": 0.44,
+                    "sharpeRatio": 1.5,
+                    "sortinoRatio": 1.8,
+                    "calmarRatio": 1.2,
+                    "maxDrawdown": -0.12,
+                    "recoveryTime": 35,
+                    "stressTest": {
+                        "scenario1": -0.15,
+                        "scenario2": -0.08,
+                        "scenario3": 0.02,
+                        "scenario4": 0.10,
+                        "scenario5": 0.18
+                    },
+                    "monteCarlo": {
+                        "simulations": 10000,
+                        "mean": 0.08,
+                        "std": 0.18,
+                        "percentile5": -0.18,
+                        "percentile25": -0.02,
+                        "percentile50": 0.06,
+                        "percentile75": 0.18,
+                        "percentile95": 0.35
+                    },
+                    "greeks": {
+                        "delta": -0.35,
+                        "gamma": 0.02,
+                        "theta": -0.12,
+                        "vega": 0.30,
+                        "rho": -0.08,
+                        "lambda": 52.2,
+                        "epsilon": 0.05,
+                        "psi": 0.03,
+                        "vanna": 0.01,
+                        "charm": 0.02,
+                        "vomma": 0.12,
+                        "veta": 0.06,
+                        "speed": 0.001,
+                        "zomma": 0.0005,
+                        "color": 0.0001,
+                        "ultima": 0.0002,
+                        "dualdelta": -0.35,
+                        "dualgamma": 0.02
+                    },
+                    "pricing": {
+                        "blackScholes": 3.38,
+                        "binomial": 3.35,
+                        "monteCarlo": 3.42,
+                        "finiteDifference": 3.36,
+                        "analytical": 3.38,
+                        "numerical": 3.37,
+                        "closedForm": 3.38,
+                        "approximation": 3.35
+                    },
+                    "riskMetrics": {
+                        "var95": -0.10,
+                        "var99": -0.15,
+                        "cvar95": -0.12,
+                        "cvar99": -0.18,
+                        "expectedShortfall": -0.12,
+                        "conditionalVaR": -0.12,
+                        "tailVaR": -0.12,
+                        "expectedTailLoss": -0.12
+                    },
+                    "performance": {
+                        "totalReturn": 0.08,
+                        "annualizedReturn": 0.12,
+                        "volatility": 0.18,
+                        "sharpeRatio": 1.5,
+                        "sortinoRatio": 1.8,
+                        "calmarRatio": 1.2,
+                        "maxDrawdown": -0.12,
+                        "recoveryTime": 35,
+                        "winRate": 0.35,
+                        "profitFactor": 1.8,
+                        "expectancy": 0.05,
+                        "kellyCriterion": 0.15,
+                        "optimalF": 0.20,
+                        "riskOfRuin": 0.08,
+                        "ulcerIndex": 0.06,
+                        "sterlingRatio": 1.0,
+                        "burkeRatio": 0.80,
+                        "kapparatio": 1.5,
+                        "painIndex": 0.05,
+                        "painRatio": 1.6,
+                        "ulcerPerformanceIndex": 2.5,
+                        "martinRatio": 2.0,
+                        "recoveryFactor": 1.2,
+                        "tailRatio": 1.5,
+                        "commonSenseRatio": 1.3
+                    },
+                    "marketData": {
+                        "bid": 3.25,
+                        "ask": 3.50,
+                        "last": 3.35,
+                        "volume": 890,
+                        "openInterest": 5600,
+                        "impliedVolatility": 0.26,
+                        "historicalVolatility": 0.23,
+                        "volatilityRank": 0.65,
+                        "volatilityPercentile": 65.0,
+                        "putCallRatio": 0.85,
+                        "volumeRatio": 0.8,
+                        "openInterestRatio": 0.9,
+                        "bidAskSpread": 0.25,
+                        "bidAskSpreadPercent": 7.5,
+                        "liquidityScore": 0.75,
+                        "fairValue": 3.38,
+                        "overpriced": False,
+                        "underpriced": False
+                    },
+                    "analytics": {
+                        "recommendation": "HOLD",
+                        "confidence": 0.70,
+                        "riskLevel": "MODERATE",
+                        "suitability": "INTERMEDIATE",
+                        "strategy": "LONG_PUT",
+                        "profitTarget": 5.0,
+                        "stopLoss": 2.0,
+                        "hedgeRatio": -0.35,
+                        "correlation": 0.95,
+                        "beta": 1.2,
+                        "sector": "Technology",
+                        "industry": "Consumer Electronics",
+                        "marketCap": 2800000000000,
+                        "peRatio": 28.5,
+                        "dividendYield": 0.0044,
+                        "earningsDate": "2024-10-30",
+                        "exDividendDate": "2024-11-08",
+                        "analystRating": "BUY",
+                        "priceTarget": 200.0,
+                        "upside": 0.14,
+                        "downside": -0.08,
+                        "volatilityForecast": 0.26,
+                        "priceForecast": 180.0,
+                        "confidenceInterval": [165.0, 195.0]
+                    },
+                    "riskAnalysis": {
+                        "var95": -0.10,
+                        "cvar95": -0.12,
+                        "expectedShortfall": -0.12,
+                        "tailRisk": 0.06,
+                        "systemicRisk": 0.10,
+                        "idiosyncraticRisk": 0.12,
+                        "totalRisk": 0.18,
+                        "riskAdjustedReturn": 0.44,
+                        "sharpeRatio": 1.5,
+                        "sortinoRatio": 1.8,
+                        "calmarRatio": 1.2,
+                        "maxDrawdown": -0.12,
+                        "recoveryTime": 35
+                    },
+                    "stressTest": {
+                        "scenario1": -0.15,
+                        "scenario2": -0.08,
+                        "scenario3": 0.02,
+                        "scenario4": 0.10,
+                        "scenario5": 0.18
+                    },
+                    "monteCarlo": {
+                        "simulations": 10000,
+                        "mean": 0.08,
+                        "std": 0.18,
+                        "percentile5": -0.18,
+                        "percentile25": -0.02,
+                        "percentile50": 0.06,
+                        "percentile75": 0.18,
+                        "percentile95": 0.35
+                    },
+                    "updatedAt": datetime.now().isoformat(),
+                    "__typename": "PutOption"
+                }
+            ],
+            "volatilitySkew": 0.02,
+            "putCallRatio": 0.85,
+            "volumeRatio": 1.0,
+            "openInterestRatio": 0.95,
+            "liquidityScore": 0.80,
+            "marketSentiment": {
+                "sentiment": "BULLISH",
+                "sentimentDescription": "Bullish — model expects upside (confidence 65%)"
+            },
+            "fearGreedIndex": 65,
+            "vix": 18.5,
+            "vix9d": 19.2,
+            "vix3m": 20.1,
+            "vix6m": 21.5,
+            "vix1y": 22.8,
+            "termStructure": "NORMAL",
+            "volatilityRegime": "LOW",
+            "regimeChange": False,
+            "regimeConfidence": 0.85,
+            "regimeDuration": 45,
+            "regimeStability": 0.90,
+            "regimeVolatility": 0.15,
+            "regimeReturn": 0.12,
+            "regimeSharpe": 0.80,
+            "regimeMaxDrawdown": -0.08,
+            "regimeRecoveryTime": 25,
+            "regimeWinRate": 0.65,
+            "regimeProfitFactor": 2.2,
+            "regimeExpectancy": 0.08,
+            "regimeKelly": 0.25,
+            "regimeOptimalF": 0.30,
+            "regimeRiskOfRuin": 0.05,
+            "regimeUlcerIndex": 0.06,
+            "regimeSterlingRatio": 1.2,
+            "regimeBurkeRatio": 0.95,
+            "regimeKapparatio": 1.8,
+            "regimePainIndex": 0.06,
+            "regimePainRatio": 2.08,
+            "regimeUlcerPerformanceIndex": 3.12,
+            "regimeMartinRatio": 2.5,
+            "regimeRecoveryFactor": 1.56,
+            "regimeTailRatio": 1.8,
+            "regimeCommonSenseRatio": 1.65,
+            "optionsChain": {  # Added missing field
+                "expirations": ["2024-12-20", "2025-01-17", "2025-02-21"],
+                "expirationDates": ["2024-12-20", "2025-01-17", "2025-02-21"],  # Added missing field
+                "strikes": [160, 165, 170, 175, 180, 185, 190],
+                "calls": [  # Added missing field
+                    {
+                        "symbol": f"{symbol}241220C00160000",
+                        "contractSymbol": f"{symbol}241220C00160000",
+                        "optionType": "CALL",
+                        "strike": 160.0,
+                        "expirationDate": "2024-12-20",
+                        "volume": 1200,
+                        "openInterest": 8500,
+                        "premium": 15.50,
+                        "bid": 15.25,
+                        "ask": 15.75,
+                        "lastPrice": 15.50,
+                        "impliedVolatility": 0.22,
+                        "delta": 0.85,
+                        "gamma": 0.015,
+                        "theta": -0.12,
+                        "vega": 0.28,
+                        "rho": 0.10,
+                        "intrinsicValue": 15.5,
+                        "timeValue": 0.0,
+                        "daysToExpiration": 32
+                    },
+                    {
+                        "symbol": f"{symbol}241220C00170000",
+                        "contractSymbol": f"{symbol}241220C00170000",
+                        "optionType": "CALL",
+                        "strike": 170.0,
+                        "expirationDate": "2024-12-20",
+                        "volume": 1250,
+                        "openInterest": 8900,
+                        "premium": 8.60,
+                        "bid": 8.35,
+                        "ask": 8.85,
+                        "lastPrice": 8.60,
+                        "impliedVolatility": 0.24,
+                        "delta": 0.65,
+                        "gamma": 0.02,
+                        "theta": -0.15,
+                        "vega": 0.35,
+                        "rho": 0.12,
+                        "intrinsicValue": 5.5,
+                        "timeValue": 3.1,
+                        "daysToExpiration": 32
+                    }
+                ],
+                "puts": [  # Added missing field
+                    {
+                        "symbol": f"{symbol}241220P00160000",
+                        "contractSymbol": f"{symbol}241220P00160000",
+                        "optionType": "PUT",
+                        "strike": 160.0,
+                        "expirationDate": "2024-12-20",
+                        "volume": 800,
+                        "openInterest": 5200,
+                        "premium": 0.50,
+                        "bid": 0.25,
+                        "ask": 0.75,
+                        "lastPrice": 0.50,
+                        "impliedVolatility": 0.25,
+                        "delta": -0.15,
+                        "gamma": 0.015,
+                        "theta": -0.08,
+                        "vega": 0.28,
+                        "rho": -0.05,
+                        "intrinsicValue": 0.0,
+                        "timeValue": 0.5,
+                        "daysToExpiration": 32
+                    },
+                    {
+                        "symbol": f"{symbol}241220P00170000",
+                        "contractSymbol": f"{symbol}241220P00170000",
+                        "optionType": "PUT",
+                        "strike": 170.0,
+                        "expirationDate": "2024-12-20",
+                        "volume": 890,
+                        "openInterest": 5600,
+                        "premium": 3.35,
+                        "bid": 3.10,
+                        "ask": 3.60,
+                        "lastPrice": 3.35,
+                        "impliedVolatility": 0.26,
+                        "delta": -0.35,
+                        "gamma": 0.02,
+                        "theta": -0.12,
+                        "vega": 0.30,
+                        "rho": -0.08,
+                        "intrinsicValue": 0.0,
+                        "timeValue": 3.35,
+                        "daysToExpiration": 32
+                    }
+                ],
+                "greeks": {  # Added missing field
+                    "delta": 0.30,
+                    "gamma": 0.02,
+                    "theta": -0.13,
+                    "vega": 0.32,
+                    "rho": 0.08,
+                    "lambda": 25.0,
+                    "epsilon": 0.06,
+                    "psi": -0.04
+                },
+                "lastUpdated": datetime.now().isoformat()
+            },
+            "unusualFlow": {  # Added missing field
+                "symbol": symbol,  # Added missing field
+                "totalVolume": 12500,
+                "unusualVolume": 2500,
+                "unusualVolumePercent": 20.0,
+                "topTrades": [
+                    {
+                        "symbol": f"{symbol}241220C00170000",
+                        "contractSymbol": f"{symbol}241220C00170000",  # Added missing field
+                        "optionType": "CALL",  # Added missing field
+                        "strike": 170.0,  # Added missing field
+                        "expirationDate": "2024-12-20",  # Added missing field
+                        "volume": 500,
+                        "openInterest": 8900,  # Added missing field
+                        "premium": 8.60,
+                        "impliedVolatility": 0.24,  # Added missing field
+                        "unusualActivityScore": 0.85,  # Added missing field
+                        "activityType": "SWEEP",  # Added missing field
+                        "type": "CALL"
+                    },
+                    {
+                        "symbol": f"{symbol}241220P00170000",
+                        "contractSymbol": f"{symbol}241220P00170000",  # Added missing field
+                        "optionType": "PUT",  # Added missing field
+                        "strike": 170.0,  # Added missing field
+                        "expirationDate": "2024-12-20",  # Added missing field
+                        "volume": 300,
+                        "openInterest": 5600,  # Added missing field
+                        "premium": 3.35,
+                        "impliedVolatility": 0.26,  # Added missing field
+                        "unusualActivityScore": 0.75,  # Added missing field
+                        "activityType": "BLOCK",  # Added missing field
+                        "type": "PUT"
+                    }
+                ],
+                "sweepTrades": 15,
+                "blockTrades": 8,
+                "lastUpdated": datetime.now().isoformat()
+            },
+            "recommendedStrategies": [  # Added missing field
+                {
+                    "name": "Covered Call",
+                    "strategyName": "Covered Call",  # Added missing field
+                    "strategyType": "INCOME",  # Added missing field
+                    "description": "Sell call options against your stock position",
+                    "riskLevel": "LOW",
+                    "expectedReturn": 0.08,
+                    "maxLoss": 0.15,
+                    "probabilityOfProfit": 0.70,
+                    "setup": "Buy 100 shares, sell 1 call option",
+                    "breakeven": 175.5,
+                    "breakevenPoints": [175.5],  # Added missing field
+                    "riskRewardRatio": 0.53,  # Added missing field
+                    "daysToExpiration": 32,  # Added missing field
+                    "totalCost": 17550.0,  # Added missing field
+                    "totalCredit": 860.0,  # Added missing field
+                    "maxProfit": 8.60,
+                    "marketOutlook": {
+                        "sentiment": "BULLISH",
+                        "sentimentDescription": "Bullish — model expects upside (confidence 75%)"
+                    },  # Added missing field
+                    "suitability": "INCOME"
+                },
+                {
+                    "name": "Protective Put",
+                    "strategyName": "Protective Put",  # Added missing field
+                    "strategyType": "PROTECTION",  # Added missing field
+                    "description": "Buy put options to protect against downside",
+                    "riskLevel": "LOW",
+                    "expectedReturn": 0.05,
+                    "maxLoss": 0.03,
+                    "probabilityOfProfit": 0.60,
+                    "setup": "Buy 100 shares, buy 1 put option",
+                    "breakeven": 178.85,
+                    "breakevenPoints": [178.85],  # Added missing field
+                    "riskRewardRatio": 1.67,  # Added missing field
+                    "daysToExpiration": 32,  # Added missing field
+                    "totalCost": 17885.0,  # Added missing field
+                    "totalCredit": 0.0,  # Added missing field
+                    "maxProfit": 999999.99,
+                    "marketOutlook": {
+                        "sentiment": "BEARISH",
+                        "sentimentDescription": "Bearish — model expects downside (confidence 60%)"
+                    },  # Added missing field
+                    "suitability": "PROTECTION"
+                },
+                {
+                    "name": "Straddle",
+                    "strategyName": "Straddle",  # Added missing field
+                    "strategyType": "VOLATILITY",  # Added missing field
+                    "description": "Buy both call and put options at same strike",
+                    "riskLevel": "HIGH",
+                    "expectedReturn": 0.15,
+                    "maxLoss": 11.95,
+                    "probabilityOfProfit": 0.40,
+                    "setup": "Buy 1 call and 1 put at 175 strike",
+                    "breakeven": [163.05, 186.95],
+                    "breakevenPoints": [163.05, 186.95],  # Added missing field
+                    "riskRewardRatio": 1.26,  # Added missing field
+                    "daysToExpiration": 32,  # Added missing field
+                    "totalCost": 1195.0,  # Added missing field
+                    "totalCredit": 0.0,  # Added missing field
+                    "maxProfit": 999999.99,
+                    "marketOutlook": {
+                        "sentiment": "NEUTRAL",
+                        "sentimentDescription": "Neutral — limited directional edge (confidence 50%)"
+                    },  # Added missing field
+                    "suitability": "VOLATILITY"
+                }
+            ],
+            "skew": 0.02,  # Added missing field
+            "sentimentScore": 0.75,  # Added missing field
+            "sentimentDescription": "Bullish sentiment with moderate confidence",  # Added missing field
+            "updatedAt": datetime.now().isoformat(),
+            "__typename": "OptionsAnalysis"
         }}}
 
     if "advancedStockScreening" in fields:
@@ -1757,7 +2735,25 @@ async def graphql_endpoint(request_data: dict):
     if "socialSentiment" in fields:
         # Get social sentiment for a symbol
         symbol = variables.get("symbol", "AAPL")
-        social_sentiment = real_data_service.get_social_sentiment(symbol)
+        # Mock social sentiment data with sentimentDescription
+        social_sentiment = {
+            "overall_sentiment": 0.194,
+            "sentiment_label": "Bullish",
+            "sentimentDescription": "Strong bullish sentiment across social platforms with high engagement",
+            "platform_sentiment": {
+                "twitter": 0.13,
+                "reddit": 0.23,
+                "stocktwits": 0.222
+            },
+            "engagement_metrics": {
+                "twitter_mentions": 156,
+                "reddit_posts": 46,
+                "stocktwits_posts": 108,
+                "total_engagement": 310
+            },
+            "confidence": 0.31,
+            "__typename": "SocialSentiment"
+        }
         return {"data": {"socialSentiment": social_sentiment}}
 
     if "marketRegimeAnalysis" in fields:
@@ -1849,8 +2845,8 @@ async def graphql_endpoint(request_data: dict):
         return {"data": {"tickerPostCreated": {
             "id": "post_123",
             "content": "New discussion about AAPL earnings",
-            "author": {"id": "user_123", "name": "Test User"},
-            "ticker": {"symbol": "AAPL"},
+            "user": {"id": "user_123", "name": "Test User", "email": "test@example.com"},
+            "stock": {"symbol": "AAPL", "companyName": "Apple Inc."},
             "createdAt": datetime.now().isoformat(),
             "__typename": "TickerPost"
         }}}
@@ -1861,12 +2857,96 @@ async def graphql_endpoint(request_data: dict):
                 "id": "discussion_1",
                 "title": "AAPL Q4 Earnings Discussion",
                 "content": "What are your thoughts on Apple's latest earnings?",
-                "author": {"id": "user_123", "name": "Test User"},
-                "ticker": {"symbol": "AAPL"},
+                "user": {"id": "user_123", "name": "Test User", "email": "test@example.com"},
+                "stock": {"symbol": "AAPL", "companyName": "Apple Inc."},
+                "tickers": ["AAPL"],
                 "createdAt": datetime.now().isoformat(),
-                "repliesCount": 5,
-                "likesCount": 12,
+                "score": 85,
+                "commentCount": 5,
+                "comments": [
+                    {
+                        "id": "comment_1",
+                        "content": "Great analysis! I think AAPL will continue to grow.",
+                        "createdAt": datetime.now().isoformat(),
+                        "user": {"name": "John Doe"},
+                        "__typename": "Comment"
+                    },
+                    {
+                        "id": "comment_2", 
+                        "content": "I'm bullish on their services revenue growth.",
+                        "createdAt": datetime.now().isoformat(),
+                        "user": {"name": "Jane Smith"},
+                        "__typename": "Comment"
+                    }
+                ],
                 "__typename": "StockDiscussion"
+            },
+            {
+                "id": "discussion_2",
+                "title": "MSFT Cloud Growth Analysis",
+                "content": "Microsoft's Azure growth has been impressive this quarter.",
+                "user": {"id": "user_456", "name": "Tech Analyst", "email": "analyst@example.com"},
+                "stock": {"symbol": "MSFT", "companyName": "Microsoft Corporation"},
+                "tickers": ["MSFT"],
+                "createdAt": datetime.now().isoformat(),
+                "score": 92,
+                "commentCount": 3,
+                "comments": [
+                    {
+                        "id": "comment_3",
+                        "content": "Azure is definitely the growth driver here.",
+                        "createdAt": datetime.now().isoformat(),
+                        "user": {"name": "Cloud Expert"},
+                        "__typename": "Comment"
+                    }
+                ],
+                "__typename": "StockDiscussion"
+            }
+        ]}}
+
+    if "socialFeed" in fields:
+        return {"data": {"socialFeed": [
+            {
+                "id": "post_1",
+                "title": "Market Update: Tech Stocks Rally",
+                "content": "Tech stocks are showing strong momentum today with AAPL and MSFT leading the charge.",
+                "user": {"id": "user_789", "name": "Market Trader", "email": "trader@example.com"},
+                "stock": {"symbol": "AAPL", "companyName": "Apple Inc."},
+                "tickers": ["AAPL", "MSFT"],
+                "createdAt": datetime.now().isoformat(),
+                "score": 78,
+                "commentCount": 4,
+                "comments": [
+                    {
+                        "id": "comment_4",
+                        "content": "Agreed! The momentum is strong.",
+                        "createdAt": datetime.now().isoformat(),
+                        "user": {"name": "Bull Trader"},
+                        "__typename": "Comment"
+                    }
+                ],
+                "__typename": "SocialPost"
+            },
+            {
+                "id": "post_2",
+                "title": "Energy Sector Analysis",
+                "content": "Oil prices are driving energy stocks higher this week.",
+                "user": {"id": "user_101", "name": "Energy Analyst", "email": "energy@example.com"},
+                "stock": {"symbol": "XOM", "companyName": "Exxon Mobil Corporation"},
+                "tickers": ["XOM"],
+                "createdAt": datetime.now().isoformat(),
+                "score": 65,
+                "commentCount": 2,
+                "comments": [
+                    {
+                        "id": "comment_5",
+                        "content": "Good point about oil prices.",
+                        "createdAt": datetime.now().isoformat(),
+                        "user": {"name": "Oil Investor"},
+                        "__typename": "Comment"
+                    }
+                ],
+                "__typename": "SocialPost"
             }
         ]}}
 
@@ -1976,7 +3056,7 @@ async def graphql_endpoint(request_data: dict):
             "sellRecommendations": get_real_sell_recommendations(),
             "rebalanceSuggestions": [{"action":"INCREASE","currentAllocation":40,"suggestedAllocation":50,"reasoning":"Technology sector showing strong growth","priority":"HIGH","__typename":"RebalanceSuggestion"}],
             "riskAssessment": {"overallRisk":"MODERATE","volatilityEstimate":15.2,"recommendations":["Consider increasing bond allocation for stability","Monitor technology sector concentration"],"__typename":"RiskAssessment"},
-            "marketOutlook": {"overallSentiment":"BULLISH","confidence":0.75,"keyFactors":["Strong corporate earnings","Federal Reserve policy support","Technology sector growth"],"__typename":"MarketOutlook"},
+            "marketOutlook": {"overallSentiment":"BULLISH","sentimentDescription":"Bullish — model expects upside (confidence 75%)","confidence":0.75,"keyFactors":["Strong corporate earnings","Federal Reserve policy support","Technology sector growth"],"__typename":"MarketOutlook"},
             "__typename":"AIRecommendations"
         }}}
 
@@ -1988,11 +3068,17 @@ async def graphql_endpoint(request_data: dict):
                 r = requests.get(f"https://finnhub.io/api/v1/quote?symbol={s}&token={FINNHUB_KEY}", timeout=10)
                 if r.status_code == 200:
                     d = r.json(); last = d.get('c', 0); chg = d.get('dp', 0)
+                    # Add bid/ask from FinnHub data
+                    bid = d.get('b', last * 0.999)  # Use bid from API or calculate from last price
+                    ask = d.get('a', last * 1.001)  # Use ask from API or calculate from last price
+                    volume = d.get('v', 0)
                 else:
                     last = round(random.uniform(50, 500), 2); chg = round(random.uniform(-5, 5), 2)
+                    bid = last * 0.999; ask = last * 1.001; volume = random.randint(1000000, 10000000)
             except Exception:
                 last = round(random.uniform(50, 500), 2); chg = round(random.uniform(-5, 5), 2)
-            out.append({"symbol": s, "last": last, "changePct": chg, "__typename": "Quote"})
+                bid = last * 0.999; ask = last * 1.001; volume = random.randint(1000000, 10000000)
+            out.append({"symbol": s, "last": last, "changePct": chg, "bid": bid, "ask": ask, "volume": volume, "__typename": "Quote"})
         return {"data": {"quotes": out}}
 
     if "me" in fields:
@@ -2003,6 +3089,7 @@ async def graphql_endpoint(request_data: dict):
             "followersCount": user.get("followersCount", 1250), "followingCount": user.get("followingCount", 89),
             "isFollowingUser": user.get("isFollowingUser", False), "isFollowedByUser": user.get("isFollowedByUser", False),
             "hasPremiumAccess": user["hasPremiumAccess"], "subscriptionTier": user["subscriptionTier"],
+            "updatedAt": datetime.now().isoformat(),
             "followedTickers": [
                 {"symbol":"AAPL","__typename":"FollowedTicker"},
                 {"symbol":"MSFT","__typename":"FollowedTicker"},
@@ -2036,9 +3123,11 @@ async def graphql_endpoint(request_data: dict):
         positions = await trading_service.get_positions()
         return {"data": {"tradingPositions": [
             {
-                "symbol": pos.symbol, "quantity": pos.quantity, "marketValue": pos.market_value,
-                "costBasis": pos.cost_basis, "unrealizedPL": pos.unrealized_pl,
-                "unrealizedPLPercent": pos.unrealized_plpc, "__typename": "Position"
+                "id": pos.id, "symbol": pos.symbol, "side": "long", "quantity": pos.quantity, 
+                "marketValue": pos.market_value, "costBasis": pos.cost_basis, 
+                "unrealizedPL": pos.unrealized_pl, "unrealizedpi": pos.unrealized_pl, "unrealizedPI": pos.unrealized_pl,
+                "unrealizedPLPercent": pos.unrealized_plpc, "unrealizedPlpc": pos.unrealized_plpc, 
+                "currentPrice": pos.current_price, "__typename": "Position"
             } for pos in positions
         ]}}
 
@@ -2052,6 +3141,7 @@ async def graphql_endpoint(request_data: dict):
                 "stopPrice": order.stop_price, "createdAt": order.created_at.isoformat(),
                 "filledAt": order.filled_at.isoformat() if order.filled_at else None,
                 "filledQuantity": order.filled_quantity, "averageFillPrice": order.average_fill_price,
+                "commission": 0.0,  # Add missing commission field
                 "notes": f"Order for {order.quantity} shares of {order.symbol}",
                 "__typename": "Order"
             } for order in orders
@@ -2067,6 +3157,43 @@ async def graphql_endpoint(request_data: dict):
                 "id": "user_123", "name": name, "email": email,
                 "updatedAt": datetime.now().isoformat(), "__typename": "User"
             }, "__typename": "UpdateProfileResponse"
+        }}}
+
+    if "toggleFollow" in fields:
+        userId = variables.get("userId", "")
+        if not userId:
+            return {"errors": [{"message": "User ID is required"}]}
+        
+        # Mock follow/unfollow logic
+        user = users_db["test@example.com"]
+        current_following = user.get("followingCount", 89)
+        current_followers = user.get("followersCount", 1250)
+        
+        # Toggle the follow state (mock logic)
+        is_following = user.get("isFollowingUser", False)
+        new_following_state = not is_following
+        
+        # Update user data
+        user["isFollowingUser"] = new_following_state
+        if new_following_state:
+            user["followingCount"] = current_following + 1
+        else:
+            user["followingCount"] = max(0, current_following - 1)
+        
+        return {"data": {"toggleFollow": {
+            "success": True,
+            "following": new_following_state,
+            "user": {
+                "id": user["id"],
+                "name": user["name"],
+                "followersCount": current_followers,
+                "followingCount": user["followingCount"],
+                "isFollowingUser": new_following_state,
+                "isFollowedByUser": user.get("isFollowedByUser", False),
+                "updatedAt": datetime.now().isoformat(),
+                "__typename": "User"
+            },
+            "__typename": "ToggleFollowResponse"
         }}}
 
     if "updatePreferences" in fields:
@@ -2088,6 +3215,53 @@ async def graphql_endpoint(request_data: dict):
                 "twoFactorEnabled": twoFactorEnabled,
                 "updatedAt": datetime.now().isoformat(), "__typename": "SecuritySettings"
             }, "__typename": "UpdateSecurityResponse"
+        }}}
+
+    # SBLOC Offer (query)
+    if "sblocOffer" in fields:
+        # Mock SBLOC offer data - in production this would come from your SBLOC provider
+        return {"data": {"sblocOffer": {
+            "ltv": 0.5,  # 50% loan-to-value ratio
+            "apr": 0.075,  # 7.5% APR (competitive rate)
+            "minDraw": 1000,  # Minimum draw amount
+            "maxDrawMultiplier": 0.95,  # 95% of max LTV
+            "disclosures": [
+                "Interest rates are variable and may change",
+                "Market volatility can affect borrowing power",
+                "Margin calls may be required if portfolio value drops",
+                "Not FDIC insured",
+                "Interest may be tax deductible - consult your tax advisor"
+            ],
+            "eligibleEquity": 50000,  # Mock eligible equity - in production calculate from portfolio
+            "updatedAt": datetime.now().isoformat(),
+            "__typename": "SblocOffer"
+        }}}
+
+    # Initiate SBLOC Draw (mutation)
+    if "initiateSblocDraw" in fields:
+        amount = variables.get("amount", 0)
+        if not amount or amount < 1000:
+            return {"data": {"initiateSblocDraw": {
+                "success": False,
+                "message": "Minimum draw amount is $1,000",
+                "draw": None,
+                "__typename": "InitiateSblocDrawResponse"
+            }}}
+        
+        # Mock draw initiation - in production this would integrate with your SBLOC provider
+        draw_id = f"draw_{int(datetime.now().timestamp())}"
+        return {"data": {"initiateSblocDraw": {
+            "success": True,
+            "message": "SBLOC draw request submitted successfully",
+            "draw": {
+                "id": draw_id,
+                "amount": amount,
+                "status": "pending",
+                "createdAt": datetime.now().isoformat(),
+                "estSettlementAt": (datetime.now() + timedelta(days=2)).isoformat(),
+                "__typename": "SblocDraw"
+            },
+            "__typename": "InitiateSblocDrawResponse"
         }}}
 
     if "changePassword" in fields:

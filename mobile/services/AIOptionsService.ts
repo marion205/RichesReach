@@ -96,14 +96,14 @@ maxRecommendations: number = 5
 ): Promise<AIOptionsResponse> {
 try {
 console.log({
-  symbol: symbol.toUpperCase(),
+  symbol: (symbol || 'UNKNOWN').toUpperCase(),
   user_risk_tolerance: userRiskTolerance,
   portfolio_value: portfolioValue,
   time_horizon: timeHorizon,
   max_recommendations: maxRecommendations,
 });
 const requestBody = {
-symbol: symbol.toUpperCase(),
+symbol: (symbol || 'UNKNOWN').toUpperCase(),
 user_risk_tolerance: userRiskTolerance,
 portfolio_value: portfolioValue,
 time_horizon: timeHorizon,
@@ -177,7 +177,7 @@ headers: {
 'Content-Type': 'application/json',
 },
 body: JSON.stringify({
-symbol: symbol.toUpperCase(),
+symbol: (symbol || 'UNKNOWN').toUpperCase(),
 analysis_type: analysisType,
 }),
 });
@@ -201,7 +201,7 @@ method: 'POST',
 headers: {
 'Content-Type': 'application/json',
 },
-body: JSON.stringify({ symbol: symbol.toUpperCase() }),
+body: JSON.stringify({ symbol: (symbol || 'UNKNOWN').toUpperCase() }),
 });
 if (!response.ok) {
 throw new Error(`HTTP error! status: ${response.status}`);
@@ -218,7 +218,7 @@ throw new Error('Failed to train models');
 */
 async getModelStatus(symbol: string): Promise<any> {
 try {
-const response = await fetch(`${this.baseUrl}/model-status/${symbol.toUpperCase()}`);
+const response = await fetch(`${this.baseUrl}/model-status/${(symbol || 'UNKNOWN').toUpperCase()}`);
 if (!response.ok) {
 throw new Error(`HTTP error! status: ${response.status}`);
 }
@@ -249,14 +249,14 @@ throw new Error('Failed to check AI options health');
 * Format recommendation for display
 */
 formatRecommendation(rec: OptionsRecommendation): string {
-const profitLoss = rec.analytics.max_loss > 0 ? 
-`Max Profit: $${rec.analytics.max_profit.toFixed(2)} | Max Loss: $${rec.analytics.max_loss.toFixed(2)}` :
-`Max Profit: $${rec.analytics.max_profit.toFixed(2)} | Max Loss: $${Math.abs(rec.analytics.max_loss).toFixed(2)}`;
-return `${rec.strategy_name} (${rec.confidence_score.toFixed(0)}% confidence)
-${rec.reasoning.strategy_rationale}
+const profitLoss = (rec.analytics?.max_loss || 0) > 0 ? 
+`Max Profit: $${(rec.analytics?.max_profit || 0).toFixed(2)} | Max Loss: $${(rec.analytics?.max_loss || 0).toFixed(2)}` :
+`Max Profit: $${(rec.analytics?.max_profit || 0).toFixed(2)} | Max Loss: $${Math.abs(rec.analytics?.max_loss || 0).toFixed(2)}`;
+return `${rec.strategy_name || 'Unknown Strategy'} (${(rec.confidence_score || 0).toFixed(0)}% confidence)
+${rec.reasoning?.strategy_rationale || 'No rationale available'}
 ${profitLoss}
-Probability of Profit: ${(rec.analytics.probability_of_profit * 100).toFixed(0)}%
-Expected Return: ${(rec.analytics.expected_return * 100).toFixed(1)}%`;
+Probability of Profit: ${((rec.analytics?.probability_of_profit || 0) * 100).toFixed(0)}%
+Expected Return: ${((rec.analytics?.expected_return || 0) * 100).toFixed(1)}%`;
 }
 /**
 * Get strategy type color

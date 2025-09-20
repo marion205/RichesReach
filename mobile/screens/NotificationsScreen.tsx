@@ -8,10 +8,42 @@ import {
   RefreshControl,
   ActivityIndicator,
   Alert,
+  SafeAreaView,
 } from 'react-native';
 import { useQuery, useMutation } from '@apollo/client';
 import { gql } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
+
+// Utils
+const timeAgo = (iso?: string) => {
+  if (!iso) return '';
+  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  const m = Math.floor(s/60), h = Math.floor(m/60), d = Math.floor(h/24);
+  if (d > 0) return `${d}d ago`;
+  if (h > 0) return `${h}h ago`;
+  if (m > 0) return `${m}m ago`;
+  return `${s}s ago`;
+};
+
+const TYPE_MAP: Record<string, { color: string; icon: string; label: string }> = {
+  price_alert:   { color:'#F59E0B', icon:'trending-up',  label:'Price'   },
+  order_filled:  { color:'#16A34A', icon:'check-circle', label:'Filled'  },
+  order_cancelled:{color:'#EF4444', icon:'x-circle',     label:'Canceled'},
+  news_update:   { color:'#2563EB', icon:'book-open',    label:'News'    },
+  system_update: { color:'#6B7280', icon:'settings',     label:'System'  },
+  sbloc_opportunity: { color:'#10B981', icon:'trending-up', label:'SBLOC' },
+  sbloc_rate_alert: { color:'#3B82F6', icon:'percent', label:'Rate' },
+  sbloc_liquidity_reminder: { color:'#8B5CF6', icon:'credit-card', label:'Liquidity' },
+  default:       { color:'#2563EB', icon:'bell',         label:'Alert'   },
+};
+
+const Chip = ({ text, tint = '#EEF2F7', color = '#111' }:{
+  text: string; tint?: string; color?: string
+}) => (
+  <View style={[styles.chip, { backgroundColor: tint }]}>
+    <Text style={[styles.chipText, { color }]} numberOfLines={1}>{text}</Text>
+  </View>
+);
 
 // GraphQL Queries
 const GET_NOTIFICATIONS = gql`
@@ -76,6 +108,7 @@ const UPDATE_NOTIFICATION_SETTINGS = gql`
 const NotificationsScreen = ({ navigateTo }: { navigateTo?: (screen: string) => void }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [filter, setFilter] = useState<'all'|'unread'|'system'|'sbloc'>('all');
 
   // Queries
   const { 
@@ -195,46 +228,53 @@ const NotificationsScreen = ({ navigateTo }: { navigateTo?: (screen: string) => 
     }
   };
 
-  const renderNotification = (notification: any) => (
-    <TouchableOpacity
-      key={notification.id}
-      style={[
-        styles.notificationCard,
-        !notification.isRead && styles.unreadNotification
-      ]}
-      onPress={() => handleMarkAsRead(notification.id)}
-    >
-      <View style={styles.notificationHeader}>
-        <View style={[
-          styles.notificationIcon,
-          { backgroundColor: getNotificationColor(notification.type) + '20' }
-        ]}>
-          <Icon 
-            name={getNotificationIcon(notification.type)} 
-            size={20} 
-            color={getNotificationColor(notification.type)} 
-          />
-        </View>
-        <View style={styles.notificationContent}>
-          <Text style={[
-            styles.notificationTitle,
-            !notification.isRead && styles.unreadText
-          ]}>
-            {notification.title}
-          </Text>
-          <Text style={styles.notificationMessage}>
-            {notification.message}
-          </Text>
-          <Text style={styles.notificationTime}>
-            {new Date(notification.createdAt).toLocaleString()}
-          </Text>
-        </View>
-        {!notification.isRead && (
-          <View style={styles.unreadDot} />
-        )}
+  const renderNotification = (n: any) => {
+    const meta = TYPE_MAP[n.type] || TYPE_MAP.default;
+    const bgTint = `${meta.color}22`; // subtle bg for icon
+    const leftAccent = meta.color;
+
+    return (
+      <View key={n.id} style={styles.cardWrap}>
+        <View style={[styles.cardAccent, { backgroundColor: leftAccent }]} />
+        <TouchableOpacity
+          activeOpacity={0.9}
+          style={[styles.notificationCard, !n.isRead && styles.unreadNotification]}
+          onPress={() => handleMarkAsRead(n.id)}
+        >
+          <View style={styles.rowStart}>
+            <View style={[styles.notificationIcon, { backgroundColor: bgTint }]}>
+              <Icon name={meta.icon as any} size={18} color={meta.color} />
+            </View>
+            <View style={{ flex:1 }}>
+              <View style={styles.rowBetween}>
+                <Text style={[styles.notificationTitle, !n.isRead && styles.unreadText]} numberOfLines={2}>
+                  {n.title}
+                </Text>
+                <Chip text={meta.label} tint="#F3F4F6" color="#6B7280" />
+              </View>
+
+              <Text style={styles.notificationMessage} numberOfLines={3}>
+                {n.message}
+              </Text>
+
+              <View style={styles.rowBetween}>
+                <Text style={styles.notificationTime}>{timeAgo(n.createdAt)}</Text>
+
+                {!n.isRead ? (
+                  <TouchableOpacity style={styles.markBtn} onPress={() => handleMarkAsRead(n.id)}>
+                    <Icon name="check" size={14} color="#fff" />
+                    <Text style={styles.markBtnText}>Mark read</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            </View>
+          </View>
+
+          {!n.isRead && <View style={styles.unreadDot} />}
+        </TouchableOpacity>
       </View>
-    </TouchableOpacity>
-  );
+    );
+  };
 
   const renderSettings = () => {
     if (settingsLoading) {
@@ -282,10 +322,10 @@ const NotificationsScreen = ({ navigateTo }: { navigateTo?: (screen: string) => 
     );
   };
 
-  const unreadCount = notificationsData?.notifications?.filter(n => !n.isRead).length || 0;
+  const unreadCount = notificationsData?.notifications?.filter((n: any) => !n.isRead).length || 0;
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigateTo?.('profile')} style={styles.backButton}>
@@ -318,32 +358,72 @@ const NotificationsScreen = ({ navigateTo }: { navigateTo?: (screen: string) => 
           renderSettings()
         ) : (
           <>
-            {/* Notifications Count */}
-            <View style={styles.countContainer}>
-              <Text style={styles.countText}>
-                {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up!'}
+            {/* Filter / count bar */}
+            <View style={styles.filterBar}>
+            <View style={styles.filterRow}>
+              {(['all','unread','system','sbloc'] as const).map(f => {
+                const active = filter === f;
+                return (
+                  <TouchableOpacity key={f} onPress={() => setFilter(f)}
+                    style={[styles.filterPill, active && styles.filterPillActive]}>
+                    <Text style={[styles.filterPillText, active && styles.filterPillTextActive]}>
+                      {f === 'all' ? 'All' : f === 'unread' ? `Unread (${unreadCount})` : f === 'system' ? 'System' : 'SBLOC'}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+              <Text style={styles.countHint}>
+                {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
               </Text>
             </View>
 
             {/* Notifications List */}
-            {notificationsLoading ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#007AFF" />
-                <Text style={styles.loadingText}>Loading notifications...</Text>
-              </View>
-            ) : notificationsData?.notifications?.length > 0 ? (
-              notificationsData.notifications.map(renderNotification)
-            ) : (
-              <View style={styles.emptyState}>
-                <Icon name="bell" size={48} color="#C7C7CC" />
-                <Text style={styles.emptyTitle}>No Notifications</Text>
-                <Text style={styles.emptySubtitle}>You're all caught up! New notifications will appear here.</Text>
-              </View>
-            )}
+            {(() => {
+              const allNotifs = notificationsData?.notifications ?? [];
+              const filtered = allNotifs.filter((n: any) => {
+                if (filter === 'unread') return !n.isRead;
+                if (filter === 'system') return n.type === 'system_update';
+                if (filter === 'sbloc') return n.type.startsWith('sbloc_');
+                return true;
+              });
+
+              if (notificationsLoading) {
+                return (
+                  <View style={styles.skeletonWrap}>
+                    {[...Array(4)].map((_,i)=>(
+                      <View key={i} style={styles.skelCard}>
+                        <View style={styles.skelIcon} />
+                        <View style={{ flex:1 }}>
+                          <View style={styles.skelLineWide} />
+                          <View style={styles.skelLine} />
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                );
+              }
+
+              if (filtered.length > 0) {
+                return filtered.map((n: any) => (
+                  <View key={n.id}>
+                    {renderNotification(n)}
+                  </View>
+                ));
+              }
+
+              return (
+                <View style={styles.emptyState}>
+                  <Icon name="bell" size={48} color="#C7C7CC" />
+                  <Text style={styles.emptyTitle}>No Notifications</Text>
+                  <Text style={styles.emptySubtitle}>You're all set. New alerts will show up here.</Text>
+                </View>
+              );
+            })()}
           </>
         )}
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 };
 
@@ -357,7 +437,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 12,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5EA',
@@ -375,10 +455,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   markAllButton: {
-    marginRight: 16,
+    marginRight: 12,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
   },
   markAllText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     color: '#007AFF',
   },
@@ -404,6 +486,17 @@ const styles = StyleSheet.create({
     padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5EA',
+  },
+  rowStart: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  rowBetween: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
   },
   unreadNotification: {
     backgroundColor: '#F0F8FF',
@@ -532,6 +625,111 @@ const styles = StyleSheet.create({
   },
   toggleThumbActive: {
     transform: [{ translateX: 20 }],
+  },
+  // Filter bar
+  filterBar: { 
+    backgroundColor:'#FFF', 
+    borderBottomWidth:1, 
+    borderBottomColor:'#E5E5EA', 
+    paddingHorizontal:20, 
+    paddingTop:10, 
+    paddingBottom:12 
+  },
+  filterRow: { 
+    flexDirection:'row', 
+    gap:8 
+  },
+  filterPill: { 
+    paddingVertical:8, 
+    paddingHorizontal:12, 
+    borderRadius:18, 
+    backgroundColor:'#F2F2F7' 
+  },
+  filterPillActive: { 
+    backgroundColor:'#007AFF' 
+  },
+  filterPillText: { 
+    fontSize:13, 
+    color:'#6B7280', 
+    fontWeight:'600' 
+  },
+  filterPillTextActive: { 
+    color:'#fff' 
+  },
+  countHint: { 
+    marginTop:8, 
+    fontSize:12, 
+    color:'#8E8E93', 
+    fontWeight:'500' 
+  },
+  // Card chrome
+  cardWrap: { 
+    position:'relative' 
+  },
+  cardAccent: { 
+    position:'absolute', 
+    left:0, 
+    top:0, 
+    bottom:0, 
+    width:3, 
+    borderTopLeftRadius:12, 
+    borderBottomLeftRadius:12 
+  },
+  // Inline action
+  markBtn: { 
+    flexDirection:'row', 
+    alignItems:'center', 
+    gap:6, 
+    backgroundColor:'#007AFF', 
+    paddingHorizontal:10, 
+    paddingVertical:6, 
+    borderRadius:8 
+  },
+  markBtnText: { 
+    color:'#fff', 
+    fontSize:12, 
+    fontWeight:'700' 
+  },
+  // Chip
+  chip: { 
+    paddingHorizontal:8, 
+    paddingVertical:4, 
+    borderRadius:999 
+  },
+  chipText: { 
+    fontSize:11, 
+    fontWeight:'700' 
+  },
+  // Skeletons
+  skeletonWrap: { 
+    padding:16 
+  },
+  skelCard: { 
+    flexDirection:'row', 
+    gap:12, 
+    padding:14, 
+    backgroundColor:'#FFF', 
+    borderRadius:12, 
+    marginBottom:10 
+  },
+  skelIcon: { 
+    width:36, 
+    height:36, 
+    borderRadius:18, 
+    backgroundColor:'#E5E5EA' 
+  },
+  skelLineWide: { 
+    height:12, 
+    backgroundColor:'#E5E5EA', 
+    borderRadius:6, 
+    width:'60%', 
+    marginBottom:8 
+  },
+  skelLine: { 
+    height:10, 
+    backgroundColor:'#E5E5EA', 
+    borderRadius:6, 
+    width:'40%' 
   },
 });
 
