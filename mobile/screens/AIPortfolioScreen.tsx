@@ -17,6 +17,7 @@ import {
 import Icon from 'react-native-vector-icons/Feather';
 import { useMutation, useQuery, gql, useApolloClient } from '@apollo/client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import TradingButton from '../components/TradingButton';
 
 /* -------------------------------- THEME ---------------------------------- */
 const COLORS = {
@@ -504,7 +505,7 @@ async function optimizeWeights(
     prevWeights: prevWeights || {},
   };
 
-  const res = await fetch("http://localhost:8088/optimize", {
+  const res = await fetch("http://192.168.1.151:8123/optimize", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -764,6 +765,28 @@ const StockCard = React.memo(({ item, showPersonalized, optResult }: { item: any
       <View style={[styles.tag, { backgroundColor: '#6366F1' }]}>
         <Text style={styles.tagText}>{showPersonalized ? 'Personalized' : 'Quantitative'}</Text>
       </View>
+    </View>
+    
+    {/* Trading Buttons */}
+    <View style={styles.tradingButtons}>
+      <TradingButton
+        symbol={item.symbol}
+        currentPrice={item.currentPrice}
+        side="buy"
+        style={styles.tradingButton}
+        onOrderPlaced={(order) => {
+          console.log('Buy order placed:', order);
+        }}
+      />
+      <TradingButton
+        symbol={item.symbol}
+        currentPrice={item.currentPrice}
+        side="sell"
+        style={styles.tradingButton}
+        onOrderPlaced={(order) => {
+          console.log('Sell order placed:', order);
+        }}
+      />
     </View>
   </View>
   );
@@ -1963,6 +1986,19 @@ const styles = StyleSheet.create({
   stockTags: { flexDirection: 'row', gap: 8 },
   tag: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
   tagText: { fontSize: 12, color: '#fff', fontWeight: '600' },
+  
+  tradingButtons: { 
+    flexDirection: 'row', 
+    gap: 8, 
+    marginTop: 12,
+    justifyContent: 'space-between'
+  },
+  tradingButton: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+  },
 
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.bg },
   loadingText: { fontSize: 16, color: COLORS.subtext, marginTop: 8 },

@@ -370,6 +370,13 @@ class FinancialChatbotService {
       'value',
       'capital gains',
       'tax loss harvesting',
+      'sbloc',
+      'securities based line of credit',
+      'portfolio lending',
+      'borrow against portfolio',
+      'margin loan',
+      'liquidity',
+      'borrowing power',
       // Spending / purchases
       'purchase',
       'spend',
@@ -819,12 +826,14 @@ For example: “I make **$600** every two weeks and want to save **$5000** by De
   /* -------------------------- GENERAL RESPONSES ----------------------------- */
 
   private generateNonFinancialResponse(): string {
-    return `I'm focused on **personal finance**: investing, budgeting, debt, credit, retirement, and savings plans.
+    return `I'm focused on **personal finance**: investing, budgeting, debt, credit, retirement, savings plans, and portfolio lending.
 Ask me things like:
-• “How much should I save from my paycheck?”  
-• “Roth vs Traditional IRA?”  
-• “Should I buy this?”  
-• “How do index funds work?”`;
+• "How much should I save from my paycheck?"  
+• "Roth vs Traditional IRA?"  
+• "Should I buy this?"  
+• "How do index funds work?"
+• "What is SBLOC?"
+• "How can I access liquidity without selling stocks?"`;
   }
 
   /** Comparative questions & education topics are handled here (trimmed for brevity). */
@@ -874,6 +883,68 @@ Short-term needs → safer; long-term goals → take calculated risk.
     return `**Retirement:** Get the 401(k) match → Max IRA → Back to 401(k). Aim 15%+ of income, stock-heavy when young, rebalance yearly.`;
   }
 
+  private generateSBLOCResponse(): string {
+    return `**SBLOC (Securities-Based Line of Credit)** lets you borrow against your investment portfolio without selling stocks.
+
+**How it works:**
+• Borrow up to 50% of eligible securities value
+• Interest-only payments (typically 6.5-8.5% APR)
+• No monthly principal payments required
+• Variable rates tied to market benchmarks
+
+**When to consider:**
+• Need liquidity but want to keep investments growing
+• Lower rates than credit cards (18-25% APR)
+• Tax advantages (interest may be deductible)
+• Avoid capital gains from selling appreciated stocks
+
+**Important risks:**
+• Market volatility can reduce borrowing power
+• Margin calls if portfolio value drops significantly
+• Variable interest rates can increase
+• Not FDIC insured
+
+**Best practices:**
+• Only borrow what you can comfortably repay
+• Keep loan-to-value ratio well below 50%
+• Have a plan for market downturns
+• Consider alternatives like home equity loans
+
+*Educational information only; not financial advice.*`;
+  }
+
+  private generateLiquidityResponse(): string {
+    return `**Portfolio Liquidity Options:**
+
+**1. SBLOC (Securities-Based Line of Credit)**
+• Borrow against investments without selling
+• 6.5-8.5% interest rates
+• Keep your investments growing
+• Best for: Large expenses, avoiding capital gains
+
+**2. Margin Trading**
+• Similar to SBLOC but for active trading
+• Higher risk, stricter rules
+• Best for: Experienced traders only
+
+**3. Selling Securities**
+• Immediate cash but triggers capital gains/losses
+• May miss future appreciation
+• Best for: One-time needs, rebalancing
+
+**4. Emergency Fund**
+• 3-6 months expenses in HYSA
+• 4-5% APY, FDIC insured
+• Best for: True emergencies
+
+**5. Home Equity**
+• HELOC or home equity loan
+• Often lower rates than SBLOC
+• Best for: Homeowners with equity
+
+*Educational information only; not financial advice.*`;
+  }
+
   private generateGeneralFinancialResponse(userInput: string): string {
     const input = userInput.toLowerCase();
 
@@ -898,6 +969,10 @@ Short-term needs → safer; long-term goals → take calculated risk.
     if (input.includes('emergency fund')) return this.generateEmergencyFundResponse();
     if (input.includes('credit score') || input.includes('credit card')) return this.generateCreditResponse();
     if (input.includes('retirement')) return this.generateRetirementResponse();
+    if (input.includes('sbloc') || input.includes('securities based line of credit') || input.includes('portfolio lending'))
+      return this.generateSBLOCResponse();
+    if (input.includes('liquidity') || input.includes('borrow against portfolio') || input.includes('borrowing power'))
+      return this.generateLiquidityResponse();
     if (/(dca|dollar cost averaging)/.test(input))
       return `**DCA:** invest a fixed amount on a schedule; reduces timing risk and builds habit. Lump sum often wins statistically, but DCA feels safer.`;
     if (/(options?)/.test(input))
@@ -912,8 +987,8 @@ Short-term needs → safer; long-term goals → take calculated risk.
       return `**Volatility & beta:** higher = bigger swings (risk). Manage with diversification and allocation; keep long-term view.`;
 
     // Default gentle prompt
-    return `I can help with saving, budgeting, credit, debt, investing, and retirement.  
-Ask me: “How much should I save from my paycheck?”, “Roth vs Traditional IRA?”, or “Should I buy ___?”`;
+    return `I can help with saving, budgeting, credit, debt, investing, retirement, and portfolio lending.  
+Ask me: "How much should I save from my paycheck?", "Roth vs Traditional IRA?", "Should I buy ___?", or "What is SBLOC?"`;
   }
 }
 
