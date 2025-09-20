@@ -1,81 +1,36 @@
-# macOS
-.DS_Store
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.build/
+.dist/
+.python-version
+.mypy_cache/
+.pytest_cache/
+.coverage
+htmlcov/
 
-# Python / Django
-backend/venv/
-backend/**/__pycache__/
-backend/**/*.pyc
-backend/db.sqlite3
-backend/.env
-backend/.env.*
-backend/env.production
-backend/env.local
+# Virtual envs
+venv/
+.venv/
 
-# Environment files
-.env
-.env.*
-env.production
-env.local
-*.env
-
-# Node / RN / Expo
+# Node
 node_modules/
-.expo/
-.expo-shared/
+npm-debug.log*
+yarn-error.log*
 
-# iOS build junk
-ios/Pods/
-ios/build/
-DerivedData/
-*.xcworkspace/xcuserdata/
-
-# Deployment archives
-infrastructure/archives/*.tar.gz
-
-# Temporary files
-*.tmp
-*.temp
-*.log
-
-# IDE files
-.vscode/
+# OS/editor
+.DS_Store
 .idea/
-*.swp
-*.swo
+.vscode/
 
-# OS files
-Thumbs.db
+# Models & artifacts (prefer LFS)
+*.pkl
+*.pt
+*.onnx
+*.h5
 
-# Deployment archives
-deployment/*.tar.gz
-deployment/richesreach-*.tar.gz
-infrastructure/archives/*.tar.gz
-
-# Large build artifacts
-mobile/dist/
-mobile/_expo/
-deployment/richesreach-production/mobile-dist/
-deployment/richesreach-production/_expo/
-
-# ML model files (too large for git)
-backend/ml_models/*.pkl
-backend/ml_models/*.joblib
-
-
-# Large build artifacts and compiled files
-mobile/dist/_expo/
-deployment/richesreach-production/mobile-dist/_expo/
-**/*.hbc
-**/*.pkl
-**/*.joblib
-db.sqlite3
-
-
-# Large deployment files
-*.tar.gz
-deployment/*.tar.gz
-infrastructure/archives/*.tar.gz
-
-# local junk
-temp_repo/
-
+# Images/logs you don't want in git (tune as needed)
+*.log
