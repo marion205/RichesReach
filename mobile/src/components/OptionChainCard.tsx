@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, FlatList, Pressable, Modal, TouchableOpacity, Dimensions } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import { UI } from '../../constants';
+import { UI } from '../shared/constants';
 
 /* ===================== Types ===================== */
 

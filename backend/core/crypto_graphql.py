@@ -22,6 +22,30 @@ class CryptocurrencyType(DjangoObjectType):
     class Meta:
         model = Cryptocurrency
         fields = "__all__"
+    
+    def resolve_volatilityTier(self, info):
+        """Resolve volatilityTier field from volatility_tier model field"""
+        return self.volatility_tier
+    
+    def resolve_coingeckoId(self, info):
+        """Resolve coingeckoId field from coingecko_id model field"""
+        return self.coingecko_id
+    
+    def resolve_isStakingAvailable(self, info):
+        """Resolve isStakingAvailable field from is_staking_available model field"""
+        return self.is_staking_available
+    
+    def resolve_minTradeAmount(self, info):
+        """Resolve minTradeAmount field from min_trade_amount model field"""
+        return float(self.min_trade_amount)
+    
+    def resolve_isSecCompliant(self, info):
+        """Resolve isSecCompliant field from is_sec_compliant model field"""
+        return self.is_sec_compliant
+    
+    def resolve_regulatoryStatus(self, info):
+        """Resolve regulatoryStatus field from regulatory_status model field"""
+        return self.regulatory_status
 
 
 class CryptoPriceType(DjangoObjectType):
@@ -46,6 +70,42 @@ class CryptoMLPredictionType(DjangoObjectType):
     class Meta:
         model = CryptoMLPrediction
         fields = "__all__"
+    
+    def resolve_expiresAt(self, info):
+        """Resolve expiresAt field from expires_at model field"""
+        return self.expires_at
+    
+    def resolve_createdAt(self, info):
+        """Resolve createdAt field from created_at model field"""
+        return self.created_at
+    
+    def resolve_predictionType(self, info):
+        """Resolve predictionType field from prediction_type model field"""
+        return self.prediction_type
+    
+    def resolve_confidenceLevel(self, info):
+        """Resolve confidenceLevel field from confidence_level model field"""
+        return self.confidence_level
+    
+    def resolve_featuresUsed(self, info):
+        """Resolve featuresUsed field from features_used model field"""
+        return self.features_used
+    
+    def resolve_modelVersion(self, info):
+        """Resolve modelVersion field from model_version model field"""
+        return self.model_version
+    
+    def resolve_predictionHorizonHours(self, info):
+        """Resolve predictionHorizonHours field from prediction_horizon_hours model field"""
+        return self.prediction_horizon_hours
+    
+    def resolve_wasCorrect(self, info):
+        """Resolve wasCorrect field from was_correct model field"""
+        return self.was_correct
+    
+    def resolve_actualReturn(self, info):
+        """Resolve actualReturn field from actual_return model field"""
+        return self.actual_return
 
 
 class CryptoSBLOCLoanType(DjangoObjectType):
@@ -98,6 +158,26 @@ class CryptoMLSignalType(graphene.ObjectType):
     features_used = graphene.JSONString()
     created_at = graphene.DateTime()
     expires_at = graphene.DateTime()
+    
+    def resolve_expiresAt(self, info):
+        """Resolve expiresAt field from expires_at model field"""
+        return self.expires_at
+    
+    def resolve_createdAt(self, info):
+        """Resolve createdAt field from created_at model field"""
+        return self.created_at
+    
+    def resolve_predictionType(self, info):
+        """Resolve predictionType field from prediction_type model field"""
+        return self.prediction_type
+    
+    def resolve_confidenceLevel(self, info):
+        """Resolve confidenceLevel field from confidence_level model field"""
+        return self.confidence_level
+    
+    def resolve_featuresUsed(self, info):
+        """Resolve featuresUsed field from features_used model field"""
+        return self.features_used
 
 
 # Queries

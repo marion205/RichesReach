@@ -11,8 +11,8 @@ import {
 } from 'react-native';
 import { useQuery, gql } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
-import AdvancedChart from '../components/AdvancedChart';
-import { UI } from '../constants';
+import { AdvancedChart } from '../src/components';
+import { UI } from '../src/shared/constants';
 
 // Null-safe helper functions
 const safeFixed = (val: any, dp = 2, fallback = '—') =>
@@ -719,3 +719,4 @@ const styles = StyleSheet.create({
 });
 
 export default ResearchScreen;
+

@@ -1299,12 +1299,14 @@ def _build_chart_payload(symbol: str, timeframe: str, indicators: list[str] | No
             _ind["EMA26"] = [round(x, 2) if x is not None else None for x in ema(closes, 26)]
         if "RSI14" in indicators:
             _ind["RSI14"] = [round(x, 2) if x is not None else None for x in rsi(closes, 14)]
-        if "MACD" in indicators or "MACD_SIGNAL" in indicators:
-            macd_line, signal_line, _ = macd(closes)
+        if "MACD" in indicators or "MACD_SIGNAL" in indicators or "MACD_hist" in indicators:
+            macd_line, signal_line, histogram = macd(closes)
             if "MACD" in indicators:
                 _ind["MACD"] = [round(x, 2) if x is not None else None for x in macd_line]
             if "MACD_SIGNAL" in indicators:
                 _ind["MACD_SIGNAL"] = [round(x, 2) if x is not None else None for x in signal_line]
+            if "MACD_hist" in indicators:
+                _ind["MACD_hist"] = [round(x, 2) if x is not None else None for x in histogram]
         if "BB" in indicators:
             up, mid, low = bollinger(closes)
             _ind["BB_upper"] = [round(x, 2) if x is not None else None for x in up]

@@ -461,7 +461,11 @@ class Query(graphene.ObjectType):
                 'riskAssessment': {
                     'overallRisk': latest_recommendation.risk_profile,
                     'volatilityEstimate': risk_data.get('volatility_estimate', 12.5),
-                    'recommendations': [latest_recommendation.risk_assessment]
+                    'recommendations': [
+                        latest_recommendation.risk_assessment or "Diversify your portfolio across sectors",
+                        "Consider rebalancing quarterly",
+                        "Monitor market volatility closely"
+                    ]
                 },
                 'marketOutlook': {
                     'overallSentiment': 'Bullish',

@@ -5,8 +5,8 @@ import {
 import Icon from 'react-native-vector-icons/Feather';
 import { useApolloClient, gql, useQuery, useMutation } from '@apollo/client';
 
-import StockCard from '../src/components/StockCard';
-import WatchlistCard, { WatchlistItem } from '../src/components/WatchlistCard';
+import { StockCard, WatchlistCard } from '../src/components';
+import { WatchlistItem } from '../src/components/common/WatchlistCard';
 import StockChart from '../components/StockChart';
 import AdvancedChart from '../components/AdvancedChart';
 import OptionChainCard from '../src/components/OptionChainCard';

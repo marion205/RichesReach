@@ -5,7 +5,7 @@ import { setContext } from '@apollo/client/link/context';
 import { onError } from '@apollo/client/link/error';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getMainDefinition } from '@apollo/client/utilities';
-import JWTAuthService from '../services/JWTAuthService';
+import JWTAuthService from './features/auth/services/JWTAuthService';
 // If you’ll add subscriptions later:
 // import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
 // import { createClient } from 'graphql-ws';
