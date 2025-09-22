@@ -4955,6 +4955,7 @@ async def graphql_endpoint(request_data: dict):
                 "debtRatio": r["debtToEquity"],
                 "beginnerFriendlyScore": int(float(s.get("beginner_score", 0))),
                 "mlScore": float(s.get("ml_score", 0.0)),
+                "score": float(s.get("ml_score", 0.0)),  # Add score field (same as mlScore for now)
                 "__typename": "AdvancedStock",
             })
 
