@@ -149,29 +149,35 @@ npx expo start
 ./quick_deploy_latest.sh
 ```
 
-### Local Development
+### 🚀 **Local Development (Recommended Setup)**
+
+For the complete setup guide with all configuration details, see **[DEVELOPMENT_SETUP.md](./DEVELOPMENT_SETUP.md)**.
+
 ```bash
-# Backend (if running locally)
+# 1. Start Production Backend (Full Features)
 cd backend
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-python final_complete_server.py
+source .venv/bin/activate
+PORT=8000 python3 final_complete_server.py
 
-# Rust Engine (High-Performance Analysis)
+# 2. Start Rust Engine (Crypto Analysis)
 cd rust_crypto_engine
-cargo build --release
-cargo run --release
+cargo run --release -- --port 3002
 
-# Mobile
+# 3. Start Mobile App
 cd mobile
-npm install
-npx expo start
-
-# DeFi Testing (Sepolia Testnet)
-cd mobile
-npm run test:sepolia
+npm start
 ```
+
+### 🔑 **Test Credentials**
+- **Email**: `test@example.com`
+- **Password**: `password123`
+
+### 🌐 **Service URLs**
+- **Backend**: `http://127.0.0.1:8000` (Full production server)
+- **Rust Engine**: `http://127.0.0.1:3002` (Crypto analysis)
+- **GraphQL**: `http://127.0.0.1:8000/graphql`
+
+> **📚 For complete setup instructions, troubleshooting, and development workflow, see [DEVELOPMENT_SETUP.md](./DEVELOPMENT_SETUP.md)**
 
 ## Project Structure
 
