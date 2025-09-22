@@ -1,8 +1,9 @@
 // ApolloProvider.tsx
 import React from 'react';
-import { ApolloClient, InMemoryCache, ApolloProvider as Provider, createHttpLink, split } from '@apollo/client';
+import { ApolloClient, InMemoryCache, ApolloProvider as Provider, createHttpLink, split, ApolloLink, from } from '@apollo/client';
 import { setContext } from '@apollo/client/link/context';
 import { onError } from '@apollo/client/link/error';
+// import { RetryLink } from '@apollo/client/link/retry';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getMainDefinition } from '@apollo/client/utilities';
 import JWTAuthService from './features/auth/services/JWTAuthService';
@@ -11,33 +12,46 @@ import JWTAuthService from './features/auth/services/JWTAuthService';
 // import { createClient } from 'graphql-ws';
 // Determine the correct URL based on the environment
 const getGraphQLURL = () => {
-  if (__DEV__) {
-    // In development, use localhost since backend is running on same machine
-    return 'http://127.0.0.1:8000/graphql/';
-  }
-  // In production, use the production URL
-  return 'https://your-production-url.com/graphql/';
+  // Use local server for development (force local for now)
+  return 'http://127.0.0.1:8000/graphql';
+  
+  // Alternative: Use production server
+  // return 'https://54.226.87.216/graphql/';
 };
 
 const HTTP_URL = getGraphQLURL();
 
+const httpLink = createHttpLink({ 
+  uri: HTTP_URL,
+  fetch,
+  credentials: "omit" 
+});
 
-const httpLink = createHttpLink({ uri: HTTP_URL });
+// Simple retry link that skips auth operations
+const retryLink = new ApolloLink((operation, forward) => {
+  const isAuth = operation.operationName === "TokenAuth" || operation.getContext()?.noRetry;
+  if (isAuth) {
+    // No retry for auth operations
+    return forward(operation);
+  }
+  // For other operations, just forward (no retry logic for now)
+  return forward(operation);
+});
 
 const authLink = setContext(async (_, { headers }) => {
-try {
-const jwtService = JWTAuthService.getInstance();
-const token = await jwtService.getValidToken();
-return {
-headers: {
-...headers,
-...(token ? { Authorization: `JWT ${token}` } : {}),
-},
-};
-} catch (error) {
-console.error('Error getting token for request:', error);
-return { headers };
-}
+  try {
+    const jwtService = JWTAuthService.getInstance();
+    const token = await jwtService.getValidToken();
+    return {
+      headers: {
+        ...headers,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    };
+  } catch (error) {
+    console.error('Error getting token for request:', error);
+    return { headers };
+  }
 });
 
 // Error link to handle token expiration
@@ -84,7 +98,7 @@ console.error(`Network error: ${networkError}`);
 // authLink.concat(httpLink)
 // );
 const client = new ApolloClient({
-link: errorLink.concat(authLink).concat(httpLink), // Add error handling
+link: from([retryLink, errorLink, authLink, httpLink]), // Production-safe link chain
 cache: new InMemoryCache({
 // Optimize cache for better performance
 typePolicies: {
@@ -170,19 +184,19 @@ merge: true,
         },
       },
     }),
-// Add default options for better performance
+// Production-safe default options
 defaultOptions: {
-watchQuery: {
-errorPolicy: 'all',
-fetchPolicy: 'network-only',
-},
-    query: {
-      errorPolicy: 'all',
-      fetchPolicy: 'network-only',
-    },
-mutate: {
-errorPolicy: 'all',
-},
+  watchQuery: {
+    errorPolicy: 'all',
+    fetchPolicy: 'cache-and-network',
+  },
+  query: {
+    errorPolicy: 'all',
+    fetchPolicy: 'network-only',
+  },
+  mutate: {
+    errorPolicy: 'all',
+  },
 },
 });
 

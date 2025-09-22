@@ -138,7 +138,8 @@ const navigateTo = (screen: string, params?: any) => {
 setCurrentScreen(screen);
 }
 };
-const handleLogin = () => {
+const handleLogin = (token?: string) => {
+console.log('🎉 App handleLogin called with token:', token);
 setIsLoggedIn(true);
 // Check if user needs onboarding after login
 checkOnboardingStatus();

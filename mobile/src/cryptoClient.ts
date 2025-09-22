@@ -6,12 +6,12 @@ import { relayStylePagination } from '@apollo/client/utilities';
 
 // HTTP Link for crypto API
 const cryptoHttpLink = createHttpLink({
-  uri: 'http://localhost:8127/graphql',
+  uri: 'https://54.226.87.216/graphql',
 });
 
 // HTTP Link for repay API
 const repayHttpLink = createHttpLink({
-  uri: 'http://localhost:8128/graphql',
+  uri: 'https://54.226.87.216/graphql',
 });
 
 // Auth context

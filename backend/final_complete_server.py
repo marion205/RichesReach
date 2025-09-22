@@ -1981,7 +1981,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60
 users_db = {
     "test@example.com": {
         "id": "user_123", "name": "Test User", "email": "test@example.com",
-        "password": hashlib.sha256("testpass123".encode()).hexdigest(),
+        "password": hashlib.sha256("password123".encode()).hexdigest(),
         "hasPremiumAccess": True, "subscriptionTier": "premium"
     }
 }
