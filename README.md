@@ -42,6 +42,36 @@ RichesReach is a comprehensive AI-powered investment platform featuring advanced
 - **Multi-Asset Support**: Stocks, ETFs, and crypto as collateral
 - **Educational Modules**: Complete SBLOC learning and strategy guides
 
+### 📈 Day Trading System
+- **Daily Top-3 Picks**: AI-powered intraday trading opportunities
+- **SAFE & AGGRESSIVE Modes**: Risk-adjusted trading strategies
+- **Intraday Features**: Momentum, volume, VWAP, breakout analysis
+- **Risk Parameters**: ATR-based stops, position sizing, time stops
+- **Universe Filtering**: Liquid stocks with quality thresholds
+- **Real-time Updates**: Auto-refresh during market hours
+- **Outcome Tracking**: Log trading results for ML improvement
+- **Deterministic Logic**: Consistent entry/exit calculations
+
+### 🤖 ML Learning System
+- **Outcome Tracking**: SQLite database for trading results
+- **Model Training**: XGBoost with ONNX export and pickle fallback
+- **Contextual Bandits**: Thompson Sampling for strategy selection
+- **Drift Detection**: Population Stability Index (PSI) monitoring
+- **Model Promotion**: Performance-based model selection
+- **Real Precision@3**: Day-level precision calculation
+- **Chronological Validation**: Time-based data splitting
+- **Equity Curve Metrics**: Sharpe ratio and Max Drawdown tracking
+
+### ⚖️ Risk Management System
+- **Position Limits**: Max position size, daily loss, concurrent trades
+- **Stop Losses**: Fixed percentage and ATR-based dynamic stops
+- **Time-based Exits**: Maximum hold time enforcement
+- **Risk Levels**: SAFE, MODERATE, AGGRESSIVE configurations
+- **Sector Exposure**: Maximum sector concentration limits
+- **Correlation Limits**: Portfolio correlation risk management
+- **Real-time Monitoring**: Live risk exposure tracking
+- **Automated Alerts**: Risk threshold breach notifications
+
 ### Advanced Options Trading
 - **Professional Options Chain**: Interactive options chain with Market/Greeks toggle
 - **Real-time Market Data**: Live options chains, volatility analysis, and Greeks
@@ -86,6 +116,15 @@ RichesReach is a comprehensive AI-powered investment platform featuring advanced
 - **Crypto Market Data**: Real-time cryptocurrency prices and analysis
 - **DeFi Analytics**: Aave protocol health factors and yield farming data
 - **Cross-Asset Analysis**: Stocks, options, crypto, and DeFi in one platform
+
+### Enhanced Trading Interface
+- **Improved Order Flow**: Input sanitization, validation, and error handling
+- **SBLOC Integration**: Inline nudges for tax-aware selling strategies
+- **Real-time Quotes**: Debounced quote fetching with live updates
+- **Order Management**: Enhanced order grouping, status tracking, and cancellation
+- **Position Monitoring**: Real-time P&L tracking with spark charts
+- **Accessibility**: Screen reader support and semantic labels
+- **Performance**: Memoized components and optimized rendering
 
 ### Mobile-First Design
 - **Cross-Platform**: React Native app for iOS and Android
@@ -179,6 +218,32 @@ npm start
 
 > **📚 For complete setup instructions, troubleshooting, and development workflow, see [DEVELOPMENT_SETUP.md](./DEVELOPMENT_SETUP.md)**
 
+## 🚀 **New Features Navigation Guide**
+
+### **How to Access New Features**
+
+1. **Day Trading System**:
+   - Navigate: `Home → Trading → Daily Top-3 Picks` (blue button)
+   - Features: SAFE/AGGRESSIVE modes, AI picks, risk parameters
+
+2. **ML Learning System**:
+   - Navigate: `Home → Trading → Daily Top-3 Picks → ML` (purple button)
+   - Features: Model training, bandit strategies, outcome tracking
+
+3. **Risk Management**:
+   - Navigate: `Home → Trading → Daily Top-3 Picks → Risk` (red button)
+   - Features: Position limits, stop losses, risk monitoring
+
+4. **Enhanced Trading**:
+   - Navigate: `Home → Trading` (enhanced interface)
+   - Features: Better order flow, SBLOC integration, real-time quotes
+
+### **Feature Requirements**
+- **Day Trading**: Requires `isDayTradingEnabled: true` in account settings
+- **ML System**: Works with or without ML libraries (graceful fallback)
+- **Risk Management**: Automatic position size calculations and risk checks
+- **Enhanced Trading**: Available for all trading accounts
+
 ## Project Structure
 
 ```
@@ -190,6 +255,11 @@ RichesReach/
 │   │   ├── SBLOCLearningScreen.tsx
 │   │   ├── PortfolioLearningScreen.tsx
 │   │   └── ProductionAaveCard.tsx  # DeFi integration
+│   ├── src/features/         # Feature-based organization
+│   │   ├── stocks/screens/TradingScreen.tsx  # Enhanced trading interface
+│   │   ├── trading/screens/DayTradingScreen.tsx  # Day trading system
+│   │   ├── ml/screens/MLSystemScreen.tsx  # ML learning system
+│   │   └── risk/screens/RiskManagementScreen.tsx  # Risk management
 │   ├── src/components/       # Reusable components
 │   │   ├── OptionChainCard.tsx
 │   │   └── crypto/           # Crypto-specific components
@@ -197,11 +267,18 @@ RichesReach/
 │   │   ├── web3Service.ts    # Web3 connection management
 │   │   ├── aaveResolver.ts   # Aave protocol integration
 │   │   └── hybridTransactionService.ts
+│   ├── src/graphql/          # GraphQL queries and mutations
+│   │   ├── dayTrading.ts     # Day trading operations
+│   │   ├── mlLearning.ts     # ML system operations
+│   │   └── riskManagement.ts # Risk management operations
 │   ├── data/                 # Static data
 │   │   └── learningPaths.ts  # Learning module definitions
 │   └── App.tsx              # Main app component
 ├── backend/                  # FastAPI/Django backend
-│   ├── final_complete_server.py
+│   ├── final_complete_server.py  # Main production server
+│   ├── ml_learning_system.py     # ML learning system
+│   ├── risk_management.py        # Risk management system
+│   ├── ml_api_router.py          # ML API endpoints
 │   ├── core/                # Core business logic
 │   │   ├── crypto_models.py  # Crypto database models
 │   │   └── crypto_graphql.py # Crypto GraphQL schema
@@ -315,6 +392,30 @@ RichesReach/
 - `POST /graphql` - Request SBLOC application
 - `POST /graphql` - Monitor collateral requirements
 - `POST /graphql` - Get SBLOC educational content
+
+### Day Trading System
+- `POST /graphql` - Get daily top-3 trading picks
+- `POST /graphql` - Log trading outcomes for ML training
+- `POST /graphql` - Get trading account and positions
+- `POST /graphql` - Place market, limit, and stop-loss orders
+- `POST /graphql` - Cancel orders and manage positions
+
+### ML Learning System
+- `POST /graphql` - Get ML system status and metrics
+- `POST /graphql` - Train ML models (SAFE/AGGRESSIVE modes)
+- `POST /graphql` - Get bandit strategy recommendations
+- `POST /graphql` - Update bandit rewards and outcomes
+- `POST /ml/status` - REST endpoint for ML system status
+- `POST /ml/outcome` - REST endpoint for logging outcomes
+- `POST /ml/bandit/select` - REST endpoint for strategy selection
+- `POST /ml/train` - REST endpoint for model training
+
+### Risk Management System
+- `POST /graphql` - Get risk summary and exposure
+- `POST /graphql` - Create positions with risk checks
+- `POST /graphql` - Check position exits and stop losses
+- `POST /graphql` - Update risk settings and limits
+- `POST /graphql` - Get active positions and monitoring
 
 ### Learning System
 - `GET /learning-paths` - Get available learning paths
