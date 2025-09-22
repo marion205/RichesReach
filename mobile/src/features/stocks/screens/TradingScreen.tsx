@@ -1,19 +1,9 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  Alert,
-  Modal,
-  ActivityIndicator,
-  RefreshControl,
-  SafeAreaView,
-  Dimensions,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Modal,
+  ActivityIndicator, RefreshControl, SafeAreaView, Dimensions,
 } from 'react-native';
-import { useQuery, useMutation } from '@apollo/client';
+import { useQuery, useMutation, NetworkStatus } from '@apollo/client';
 import { gql } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
 import SparkMini from '../../../components/charts/SparkMini';
@@ -166,10 +156,11 @@ const C = {
   shadow: 'rgba(16,24,40,0.08)',
 };
 
-const Money = ({ children }: { children: number | undefined }) => (
-  <Text style={styles.value}>
-    {typeof children === 'number' ? `$${children.toLocaleString()}` : '$0.00'}
-  </Text>
+const formatMoney = (v?: number, digits = 2) =>
+  `$${(Number(v) || 0).toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
+
+const Money = ({ children }: { children?: number }) => (
+  <Text style={styles.value}>{formatMoney(children)}</Text>
 );
 
 const Chip = ({ label, tone = 'neutral' }: { label: string; tone?: 'neutral'|'success'|'danger'|'warning'|'info' }) => {
@@ -188,44 +179,25 @@ const Chip = ({ label, tone = 'neutral' }: { label: string; tone?: 'neutral'|'su
   );
 };
 
-const FieldRow = ({ label, value, hint, tone }:{
-  label: string; value: React.ReactNode; hint?: string; tone?: 'neutral'|'success'|'danger'
-}) => (
-  <View style={styles.row}>
-    <Text style={styles.label}>{label}</Text>
-    <View style={{ flexDirection:'row', alignItems:'center', gap:8 }}>
-      {hint ? <Chip label={hint} tone={tone || 'neutral'} /> : null}
-      <Text style={styles.value}>{value}</Text>
-    </View>
-  </View>
-);
-
-/* ------------------------------ Component ------------------------------ */
-
-/* ----------------------------- Helpers ------------------------------ */
-
-// Status meta (color + icon)
 const getStatusMeta = (status: string) => {
   const s = status?.toLowerCase();
-  if (s === 'filled')   return { color: '#22C55E', icon: 'check-circle' };
-  if (s === 'pending')  return { color: '#F59E0B', icon: 'clock' };
-  if (s === 'rejected') return { color: '#EF4444', icon: 'x-circle' };
-  if (s === 'cancelled')return { color: '#9CA3AF', icon: 'slash' };
+  if (s === 'filled')   return { color: C.green, icon: 'check-circle' };
+  if (s === 'pending' || s === 'new' || s === 'accepted' || s === 'open')  return { color: C.amber, icon: 'clock' };
+  if (s === 'rejected') return { color: C.red, icon: 'x-circle' };
+  if (s === 'cancelled' || s === 'canceled')return { color: '#9CA3AF', icon: 'slash' };
   return { color: '#9CA3AF', icon: 'more-horizontal' };
 };
 
-// "open" = actionable
 const isOpen = (s: string) => ['pending','accepted','new','open'].includes(String(s).toLowerCase());
 
-// Groups: Today / This Week / Earlier
 const groupOrders = (orders: any[]) => {
   const today = new Date();
   const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-  const startOfWeek = (d => {
-    const day = d.getDay(); // 0..6
-    const diff = d.getDate() - day; // Sunday week
-    return new Date(d.getFullYear(), d.getMonth(), diff).getTime();
-  })(today);
+  const startOfWeek = (() => {
+    const day = today.getDay(); // 0..6
+    const diffDate = today.getDate() - day;
+    return new Date(today.getFullYear(), today.getMonth(), diffDate).getTime();
+  })();
 
   const buckets: Record<string, any[]> = { 'Today': [], 'This Week': [], 'Earlier': [] };
   for (const o of orders) {
@@ -237,7 +209,6 @@ const groupOrders = (orders: any[]) => {
   return buckets;
 };
 
-// Nicely formatted timestamp (short)
 const fmtTime = (iso: string) => {
   try {
     const d = new Date(iso);
@@ -245,7 +216,21 @@ const fmtTime = (iso: string) => {
   } catch { return iso; }
 };
 
-const TradingScreen = ({ navigateTo }: any) => {
+const sanitizeInt = (s: string) => {
+  const n = parseInt(String(s).replace(/[^\d]/g, ''), 10);
+  return Number.isFinite(n) ? n : NaN;
+};
+const sanitizeFloat = (s: string) => {
+  const n = parseFloat(String(s).replace(/[^0-9.]/g, ''));
+  return Number.isFinite(n) ? n : NaN;
+};
+const upper = (s: string) => String(s).trim().toUpperCase();
+
+
+
+/* -------------------------------- Screen -------------------------------- */
+
+const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void }) => {
   const [activeTab, setActiveTab] = useState<'overview'|'orders'>('overview');
   const [refreshing, setRefreshing] = useState(false);
   const [showOrderModal, setShowOrderModal] = useState(false);
@@ -260,88 +245,159 @@ const TradingScreen = ({ navigateTo }: any) => {
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [orderFilter, setOrderFilter] = useState<'all'|'open'|'filled'|'cancelled'>('all');
 
-  const { data: accountData, loading: accountLoading, refetch: refetchAccount } = useQuery(GET_TRADING_ACCOUNT, { errorPolicy: 'all' });
-  const { data: positionsData, loading: positionsLoading, refetch: refetchPositions } = useQuery(GET_TRADING_POSITIONS, { errorPolicy: 'all' });
-  const { data: ordersData, loading: ordersLoading, refetch: refetchOrders } = useQuery(GET_TRADING_ORDERS, { variables: { limit: 20 }, errorPolicy: 'all' });
-  const { data: quoteData, refetch: refetchQuote } = useQuery(GET_TRADING_QUOTE, { variables: { symbol: symbol || 'AAPL' }, skip: !symbol, errorPolicy: 'all' });
+  const { data: accountData, loading: accountLoading, refetch: refetchAccount } =
+    useQuery(GET_TRADING_ACCOUNT, { errorPolicy: 'all' });
 
-  const [placeMarketOrder]   = useMutation(PLACE_MARKET_ORDER);
-  const [placeLimitOrder]    = useMutation(PLACE_LIMIT_ORDER);
-  const [placeStopLossOrder] = useMutation(PLACE_STOP_LOSS_ORDER);
-  const [cancelOrder]        = useMutation(CANCEL_ORDER);
+  const { data: positionsData, loading: positionsLoading, refetch: refetchPositions } =
+    useQuery(GET_TRADING_POSITIONS, { errorPolicy: 'all' });
 
-  const onRefresh = async () => {
+  const {
+    data: ordersData,
+    loading: ordersLoading,
+    networkStatus: ordersStatus,
+    refetch: refetchOrders,
+    startPolling: startOrdersPolling,
+    stopPolling: stopOrdersPolling,
+  } = useQuery(GET_TRADING_ORDERS, { variables: { limit: 20 }, errorPolicy: 'all', notifyOnNetworkStatusChange: true });
+
+  // Debounced quote fetch when typing a symbol
+  const {
+    data: quoteData,
+    refetch: refetchQuote,
+  } = useQuery(GET_TRADING_QUOTE, { variables: { symbol: upper(symbol) || 'AAPL' }, skip: !symbol, errorPolicy: 'all' });
+  const quoteTimerRef = useRef<NodeJS.Timeout | null>(null);
+  useEffect(() => {
+    if (!symbol) return;
+    if (quoteTimerRef.current) clearTimeout(quoteTimerRef.current);
+    quoteTimerRef.current = setTimeout(() => {
+      refetchQuote?.({ symbol: upper(symbol) });
+    }, 400);
+    return () => { if (quoteTimerRef.current) clearTimeout(quoteTimerRef.current); };
+  }, [symbol, refetchQuote]);
+
+  const [placeMarketOrder]   = useMutation(PLACE_MARKET_ORDER, { errorPolicy: 'all' });
+  const [placeLimitOrder]    = useMutation(PLACE_LIMIT_ORDER, { errorPolicy: 'all' });
+  const [placeStopLossOrder] = useMutation(PLACE_STOP_LOSS_ORDER, { errorPolicy: 'all' });
+  const [cancelOrder]        = useMutation(CANCEL_ORDER, { errorPolicy: 'all' });
+
+  const account = accountData?.tradingAccount;
+  const positions = useMemo(() => positionsData?.tradingPositions ?? [], [positionsData]);
+  const orders = useMemo(() => ordersData?.tradingOrders ?? [], [ordersData]);
+
+  // Optional: light polling on orders while Orders tab is visible
+  useEffect(() => {
+    if (activeTab === 'orders') startOrdersPolling?.(30_000);
+    else stopOrdersPolling?.();
+    return () => stopOrdersPolling?.();
+  }, [activeTab, startOrdersPolling, stopOrdersPolling]);
+
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await Promise.all([refetchAccount(), refetchPositions(), refetchOrders(), refetchQuote()]);
+      await Promise.all([
+        refetchAccount?.(),
+        refetchPositions?.(),
+        refetchOrders?.(),
+        symbol ? refetchQuote?.({ symbol: upper(symbol) }) : Promise.resolve(null),
+      ]);
     } finally { setRefreshing(false); }
+  }, [refetchAccount, refetchPositions, refetchOrders, refetchQuote, symbol]);
+
+  /* ----------------------------- Place Order ---------------------------- */
+
+  const validateOrder = () => {
+    const sym = upper(symbol);
+    const qty = sanitizeInt(quantity);
+    if (!sym) return 'Please enter a symbol';
+    if (!qty || qty <= 0) return 'Quantity must be a positive integer';
+    if (orderType === 'limit') {
+      const p = sanitizeFloat(price);
+      if (!Number.isFinite(p) || p <= 0) return 'Enter a valid limit price';
+    }
+    if (orderType === 'stop_loss') {
+      const sp = sanitizeFloat(stopPrice);
+      if (!Number.isFinite(sp) || sp <= 0) return 'Enter a valid stop price';
+    }
+    return null;
   };
 
   const handlePlaceOrder = async () => {
-    if (!symbol || !quantity) return Alert.alert('Error', 'Please enter symbol and quantity');
-    
-    // SBLOC nudge for sell orders with unrealized gains
+    const err = validateOrder();
+    if (err) return Alert.alert('Invalid Order', err);
+
+    // Inline SBLOC nudge for tax-aware flow (only for sells with gains)
     if (orderSide === 'sell') {
-      const position = positionsData?.tradingPositions?.find((p: any) => p.symbol === symbol.toUpperCase());
-      if (position && position.unrealizedPl > 0) {
+      const pos = positions.find((p: any) => p.symbol === upper(symbol));
+      const unrealized = Number(pos?.unrealizedPl ?? pos?.unrealizedpl ?? pos?.unrealizedPL ?? 0);
+      if (unrealized > 0) {
         Alert.alert(
           'Need cash without selling?',
-          'You may be eligible to borrow against your portfolio via an SBLOC, avoiding a taxable sale.',
+          'You may be eligible to borrow against your portfolio via an SBLOC and avoid a taxable sale.',
           [
-            { text: 'Keep Selling', style: 'destructive', onPress: proceedWithSell },
-            { text: 'Learn / Borrow', onPress: () => setShowSBLOCModal(true) }
-          ]
+            { text: 'Keep Selling', style: 'destructive', onPress: proceedWithOrder },
+            { text: 'Learn / Borrow', onPress: () => setShowSBLOCModal(true) },
+          ],
         );
         return;
       }
     }
-    
-    proceedWithSell();
+    proceedWithOrder();
   };
 
-  const proceedWithSell = async () => {
+  const proceedWithOrder = async () => {
     setIsPlacingOrder(true);
     try {
+      const sym = upper(symbol);
+      const qty = sanitizeInt(quantity);
       const orderNotes = notes || 'Placed via RichesReach app';
-      let result: any;
+      let res: any;
 
       if (orderType === 'market') {
-        result = await placeMarketOrder({ variables:{ symbol: symbol.toUpperCase(), quantity: parseInt(quantity), side: orderSide, notes: orderNotes } });
+        res = await placeMarketOrder({ variables: { symbol: sym, quantity: qty, side: orderSide, notes: orderNotes } });
       } else if (orderType === 'limit') {
-        if (!price) return Alert.alert('Error','Please enter limit price');
-        result = await placeLimitOrder({ variables:{ symbol: symbol.toUpperCase(), quantity: parseInt(quantity), side: orderSide, limitPrice: parseFloat(price), notes: orderNotes } });
+        const lim = sanitizeFloat(price);
+        res = await placeLimitOrder({ variables: { symbol: sym, quantity: qty, side: orderSide, limitPrice: lim, notes: orderNotes } });
       } else {
-        if (!stopPrice) return Alert.alert('Error','Please enter stop price');
-        result = await placeStopLossOrder({ variables:{ symbol: symbol.toUpperCase(), quantity: parseInt(quantity), side: orderSide, stopPrice: parseFloat(stopPrice), notes: orderNotes } });
+        const stp = sanitizeFloat(stopPrice);
+        res = await placeStopLossOrder({ variables: { symbol: sym, quantity: qty, side: orderSide, stopPrice: stp, notes: orderNotes } });
       }
 
       const key = `place${orderType.replace('_','').replace(/^./, c=>c.toUpperCase())}Order`;
-      if (result?.data?.[key]?.success) {
-        Alert.alert('Order Placed', `Your ${orderType.replace('_',' ')} order for ${quantity} ${symbol.toUpperCase()} is in.`);
-        setShowOrderModal(false); resetOrderForm(); refetchOrders();
+      const success = res?.data?.[key]?.success;
+      const errorMsg = res?.data?.[key]?.error;
+
+      if (success) {
+        Alert.alert('Order Placed', `Your ${orderType.replace('_',' ')} order for ${quantity} ${upper(symbol)} is in.`);
+        setShowOrderModal(false);
+        resetOrderForm();
+        refetchOrders?.();
+        refetchAccount?.();
       } else {
-        Alert.alert('Error','Failed to place order');
+        Alert.alert('Order Failed', errorMsg || 'Could not place order. Please try again.');
       }
-    } catch (e) {
-      Alert.alert('Error','Failed to place order. Please try again.');
-    } finally { setIsPlacingOrder(false); }
+    } catch (e: any) {
+      Alert.alert('Order Failed', e?.message || 'Could not place order. Please try again.');
+    } finally {
+      setIsPlacingOrder(false);
+    }
   };
 
   const resetOrderForm = () => {
-    setSymbol(''); setQuantity(''); setPrice(''); setStopPrice(''); setNotes(''); setOrderType('market'); setOrderSide('buy');
+    setSymbol(''); setQuantity(''); setPrice(''); setStopPrice(''); setNotes('');
+    setOrderType('market'); setOrderSide('buy');
   };
 
   const handleCancelOrder = async (orderId: string) => {
     try {
-      const result = await cancelOrder({ variables: { orderId } });
-      if (result?.data?.cancelOrder?.success) {
-        Alert.alert('Order Cancelled', 'Your order has been cancelled successfully.');
-        refetchOrders();
+      const res = await cancelOrder({ variables: { orderId } });
+      if (res?.data?.cancelOrder?.success) {
+        Alert.alert('Order Cancelled', 'Your order has been cancelled.');
+        refetchOrders?.();
       } else {
-        Alert.alert('Error', 'Failed to cancel order. Please try again.');
+        Alert.alert('Cancel Failed', res?.data?.cancelOrder?.message || 'Please try again.');
       }
-    } catch (e) {
-      Alert.alert('Error', 'Failed to cancel order. Please try again.');
+    } catch (e: any) {
+      Alert.alert('Cancel Failed', e?.message || 'Please try again.');
     }
   };
 
@@ -356,10 +412,6 @@ const TradingScreen = ({ navigateTo }: any) => {
   };
 
   /* ------------------------------- TABS -------------------------------- */
-
-  const account = accountData?.tradingAccount;
-  const positions = positionsData?.tradingPositions || [];
-  const orders = ordersData?.tradingOrders || [];
 
   const renderOverview = () => (
     <ScrollView
@@ -422,6 +474,23 @@ const TradingScreen = ({ navigateTo }: any) => {
                 <Icon name="alert-triangle" size={16} color={C.amber} />
                 <Text style={[styles.sub, { marginLeft: 8 }]}>Trading is currently blocked</Text>
               </View>
+            )}
+
+            {/* Day Trading Button */}
+            {account.isDayTradingEnabled && (
+              <TouchableOpacity 
+                style={styles.dayTradingButton}
+                onPress={() => navigateTo('day-trading')}
+              >
+                <View style={styles.dayTradingButtonContent}>
+                  <Icon name="trending-up" size={20} color="#fff" />
+                  <View style={styles.dayTradingButtonText}>
+                    <Text style={styles.dayTradingButtonTitle}>Daily Top-3 Picks</Text>
+                    <Text style={styles.dayTradingButtonSubtitle}>AI-powered intraday opportunities</Text>
+                  </View>
+                  <Icon name="chevron-right" size={20} color="#fff" />
+                </View>
+              </TouchableOpacity>
             )}
           </>
         )}
@@ -606,7 +675,11 @@ const TradingScreen = ({ navigateTo }: any) => {
 
   /* ------------------------------- Modal -------------------------------- */
 
-  const renderOrderModal = () => (
+  const renderOrderModal = () => {
+    const validationError = validateOrder();
+    const disabled = Boolean(validationError) || isPlacingOrder;
+
+    return (
     <Modal visible={showOrderModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowOrderModal(false)}>
       <SafeAreaView style={styles.modal}>
         <View style={styles.modalBar} />
@@ -661,12 +734,25 @@ const TradingScreen = ({ navigateTo }: any) => {
           {/* Inputs */}
           <View style={{ marginTop:16 }}>
             <Text style={styles.inputLabel}>Symbol</Text>
-            <TextInput style={styles.input} value={symbol} onChangeText={setSymbol} placeholder="e.g., AAPL" autoCapitalize="characters" />
+            <TextInput
+              style={styles.input}
+              value={symbol}
+              onChangeText={(t) => setSymbol(upper(t))}
+              placeholder="e.g., AAPL"
+              autoCapitalize="characters"
+              autoCorrect={false}
+            />
           </View>
 
           <View style={{ marginTop:12 }}>
             <Text style={styles.inputLabel}>Quantity</Text>
-            <TextInput style={styles.input} value={quantity} onChangeText={setQuantity} placeholder="Number of shares" keyboardType="numeric" />
+            <TextInput 
+              style={styles.input} 
+              value={quantity} 
+              onChangeText={setQuantity} 
+              placeholder="Number of shares" 
+              keyboardType="numeric" 
+            />
           </View>
 
           {orderType==='limit' && (
@@ -697,7 +783,11 @@ const TradingScreen = ({ navigateTo }: any) => {
             </View>
           )}
 
-          <TouchableOpacity style={[styles.primaryBtn, isPlacingOrder && { opacity:0.7 }]} onPress={handlePlaceOrder} disabled={isPlacingOrder}>
+          <TouchableOpacity
+            style={[styles.primaryBtn, disabled && { opacity:0.6 }]}
+            onPress={handlePlaceOrder}
+            disabled={disabled}
+          >
             {isPlacingOrder ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryBtnText}>Place Order</Text>}
           </TouchableOpacity>
 
@@ -705,7 +795,8 @@ const TradingScreen = ({ navigateTo }: any) => {
         </ScrollView>
       </SafeAreaView>
     </Modal>
-  );
+    );
+  };
 
   /* ------------------------------ RENDER -------------------------------- */
 
@@ -1078,6 +1169,32 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff',
     marginLeft: 6,
+  },
+
+  // Day Trading Button
+  dayTradingButton: {
+    marginTop: 16,
+    backgroundColor: '#2196F3',
+    borderRadius: 12,
+    padding: 16,
+  },
+  dayTradingButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  dayTradingButtonText: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  dayTradingButtonTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+    marginBottom: 2,
+  },
+  dayTradingButtonSubtitle: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.8)',
   },
 });
 

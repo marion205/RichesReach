@@ -36,6 +36,9 @@ import UserPortfoliosScreen from './features/portfolio/screens/UserPortfoliosScr
 import UserActivityScreen from './features/social/screens/UserActivityScreen';
 import MessageScreen from './features/social/screens/MessageScreen';
 import TradingScreen from './features/stocks/screens/TradingScreen';
+import DayTradingScreen from './features/trading/screens/DayTradingScreen';
+import MLSystemScreen from './features/ml/screens/MLSystemScreen';
+import RiskManagementScreen from './features/risk/screens/RiskManagementScreen';
 import AIOptionsScreen from './features/options/screens/AIOptionsScreen';
 import BankAccountScreen from './features/user/screens/BankAccountScreen';
 import NotificationsScreen from './features/notifications/screens/NotificationsScreen';
@@ -286,7 +289,13 @@ case 'ai-options':
 return <AIOptionsScreen navigation={{ goBack: () => setCurrentScreen('home') }} />;
 case 'trading':
 return <TradingScreen navigateTo={navigateTo} />;
-case 'bank-accounts':
+case 'day-trading':
+return <DayTradingScreen navigateTo={navigateTo} />;
+        case 'ml-system':
+          return <MLSystemScreen navigateTo={navigateTo} />;
+        case 'risk-management':
+          return <RiskManagementScreen navigateTo={navigateTo} />;
+        case 'bank-accounts':
 return <BankAccountScreen navigateTo={navigateTo} />;
 case 'notifications':
 return <NotificationsScreen navigateTo={navigateTo} />;

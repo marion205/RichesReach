@@ -1053,6 +1053,14 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Failed to include Crypto API router: {e}")
 
+# Import and include ML API router
+try:
+    from ml_api_router import ml_router
+    app.include_router(ml_router)
+    logger.info("✅ ML API router included")
+except Exception as e:
+    logger.warning(f"⚠️ Failed to include ML API router: {e}")
+
 # Debug endpoint to prove which scoring module is active
 @app.get("/debug/scoring_info")
 async def scoring_info():
@@ -2908,6 +2916,7 @@ def _get_mock_drift_decision():
 @app.post("/graphql/")
 async def graphql_endpoint(request_data: dict):
     import re
+    from datetime import datetime, timedelta
     _trace(f"ENTER /graphql (keys={list(request_data.keys())})")
     query = request_data.get("query", "") or ""
     variables = request_data.get("variables", {}) or {}
@@ -4962,6 +4971,431 @@ async def graphql_endpoint(request_data: dict):
         response_data["advancedStockScreening"] = records
         return {"data": response_data}
 
+    # === DAY TRADING RESOLVERS ===
+    if "dayTradingPicks" in fields:
+        _trace("enter dayTradingPicks handler")
+        print("🎯 DETECTED dayTradingPicks query!")
+        
+        try:
+            import numpy as np
+            import pandas as pd
+            from datetime import datetime, timedelta
+            
+            # Get mode (SAFE or AGGRESSIVE)
+            mode = variables.get("mode", "SAFE").upper()
+            max_positions = variables.get("maxPositions", 3)
+            min_score = variables.get("minScore", None)
+            
+            # Mode configurations
+            mode_configs = {
+                "SAFE": {
+                    "min_price": 5.0,
+                    "min_addv": 50_000_000,  # $50M
+                    "max_spread_bps": 6.0,
+                    "allow_gappers": False,
+                    "max_positions": 2,
+                    "per_trade_risk_pct": 0.005,  # 0.5%
+                    "time_stop_min": 45,
+                    "atr_mult": 0.75,
+                    "score_weights": {
+                        "momentum": 0.25,
+                        "rvol": 0.25,
+                        "vwap": 0.20,
+                        "breakout": 0.15,
+                        "spread_pen": -0.10,
+                        "catalyst": 0.05
+                    },
+                    "min_score": 1.25
+                },
+                "AGGRESSIVE": {
+                    "min_price": 2.0,
+                    "min_addv": 15_000_000,  # $15M
+                    "max_spread_bps": 15.0,
+                    "allow_gappers": True,
+                    "max_positions": 3,
+                    "per_trade_risk_pct": 0.012,  # 1.2%
+                    "time_stop_min": 25,
+                    "atr_mult": 1.2,
+                    "score_weights": {
+                        "momentum": 0.40,
+                        "rvol": 0.25,
+                        "vwap": 0.10,
+                        "breakout": 0.20,
+                        "spread_pen": -0.05,
+                        "catalyst": 0.10
+                    },
+                    "min_score": 0.75
+                }
+            }
+            
+            config = mode_configs.get(mode, mode_configs["SAFE"])
+            if min_score is None:
+                min_score = config["min_score"]
+            
+            # Universe of liquid stocks (mock data for now - replace with real data)
+            universe = [
+                {"symbol": "AAPL", "price": 175.50, "addv": 8_000_000_000, "spread_bps": 2.5, "sector": "Technology"},
+                {"symbol": "MSFT", "price": 380.25, "addv": 6_500_000_000, "spread_bps": 2.8, "sector": "Technology"},
+                {"symbol": "GOOGL", "price": 142.80, "addv": 4_200_000_000, "spread_bps": 3.2, "sector": "Technology"},
+                {"symbol": "AMZN", "price": 155.30, "addv": 3_800_000_000, "spread_bps": 3.5, "sector": "Consumer Discretionary"},
+                {"symbol": "TSLA", "price": 248.50, "addv": 5_100_000_000, "spread_bps": 4.2, "sector": "Consumer Discretionary"},
+                {"symbol": "NVDA", "price": 875.20, "addv": 7_200_000_000, "spread_bps": 2.1, "sector": "Technology"},
+                {"symbol": "META", "price": 485.60, "addv": 3_900_000_000, "spread_bps": 2.9, "sector": "Technology"},
+                {"symbol": "SPY", "price": 445.80, "addv": 12_000_000_000, "spread_bps": 1.2, "sector": "ETF"},
+                {"symbol": "QQQ", "price": 378.40, "addv": 4_500_000_000, "spread_bps": 1.5, "sector": "ETF"},
+                {"symbol": "IWM", "price": 198.70, "addv": 2_800_000_000, "spread_bps": 2.0, "sector": "ETF"}
+            ]
+            
+            # Filter universe by mode criteria
+            filtered_universe = []
+            for stock in universe:
+                if (stock["price"] >= config["min_price"] and 
+                    stock["addv"] >= config["min_addv"] and 
+                    stock["spread_bps"] <= config["max_spread_bps"]):
+                    filtered_universe.append(stock)
+            
+            # Generate intraday features (mock data - replace with real calculations)
+            picks_data = []
+            for stock in filtered_universe:
+                # Mock intraday features with more realistic ranges
+                momentum_15m = np.random.normal(0.01, 0.03)  # Slightly positive bias
+                rvol_10m = np.random.uniform(1.2, 4.0)       # Higher relative volume
+                vwap_dist = np.random.normal(0.005, 0.02)    # Slightly above VWAP bias
+                breakout_pct = np.random.normal(0.01, 0.025) # Slightly positive breakout
+                spread_bps = stock["spread_bps"]
+                catalyst_score = np.random.uniform(-0.3, 0.7)  # Slightly positive catalyst bias
+                
+                above_vwap = vwap_dist > 0
+                
+                # Calculate scores
+                weights = config["score_weights"]
+                
+                # Z-score normalization (simplified) - adjusted for higher scores
+                long_score = (
+                    weights["momentum"] * momentum_15m * 10 +
+                    weights["rvol"] * (rvol_10m - 1.0) * 2 +
+                    weights["vwap"] * vwap_dist * 200 +
+                    weights["breakout"] * breakout_pct * 100 +
+                    weights["spread_pen"] * (spread_bps - 3.0) * -0.2 +
+                    weights["catalyst"] * catalyst_score * 5
+                )
+                
+                short_score = (
+                    weights["momentum"] * (-momentum_15m) * 10 +
+                    weights["rvol"] * (rvol_10m - 1.0) * 2 +
+                    weights["vwap"] * (-vwap_dist) * 200 +
+                    weights["breakout"] * (-breakout_pct) * 100 +
+                    weights["spread_pen"] * (spread_bps - 3.0) * -0.2 +
+                    weights["catalyst"] * catalyst_score * 5
+                )
+                
+                # Determine side and final score
+                if above_vwap and momentum_15m > 0:
+                    side = "LONG"
+                    final_score = long_score
+                else:
+                    side = "SHORT"
+                    final_score = short_score
+                
+                # Risk calculations
+                atr_5m = stock["price"] * 0.008  # Mock ATR
+                stop_distance = atr_5m * config["atr_mult"]
+                
+                if side == "LONG":
+                    stop_price = stock["price"] - stop_distance
+                    target_1 = stock["price"] + stop_distance
+                    target_2 = stock["price"] + stop_distance * 2
+                else:
+                    stop_price = stock["price"] + stop_distance
+                    target_1 = stock["price"] - stop_distance
+                    target_2 = stock["price"] - stop_distance * 2
+                
+                # Position sizing (mock equity = $100k)
+                equity = 100_000
+                risk_amount = equity * config["per_trade_risk_pct"]
+                size_shares = int(risk_amount / stop_distance)
+                
+                picks_data.append({
+                    "symbol": stock["symbol"],
+                    "side": side,
+                    "score": round(final_score, 2),
+                    "features": {
+                        "momentum_15m": round(momentum_15m, 3),
+                        "rvol_10m": round(rvol_10m, 2),
+                        "vwap_dist": round(vwap_dist, 3),
+                        "breakout_pct": round(breakout_pct, 3),
+                        "spread_bps": round(spread_bps, 1),
+                        "catalyst_score": round(catalyst_score, 2)
+                    },
+                    "risk": {
+                        "atr_5m": round(atr_5m, 2),
+                        "size_shares": size_shares,
+                        "stop": round(stop_price, 2),
+                        "targets": [round(target_1, 2), round(target_2, 2)],
+                        "time_stop_min": config["time_stop_min"]
+                    },
+                    "notes": f"{side} - {stock['sector']} sector, {'above' if above_vwap else 'below'} VWAP, {'high' if rvol_10m > 2.0 else 'normal'} volume"
+                })
+            
+            # Sort by score and apply diversification
+            picks_data.sort(key=lambda x: x["score"], reverse=True)
+            
+            # Apply sector diversification and quality threshold
+            final_picks = []
+            used_sectors = set()
+            
+            for pick in picks_data:
+                if pick["score"] < min_score:
+                    break
+                
+                # Get sector from universe
+                stock_sector = next((s["sector"] for s in filtered_universe if s["symbol"] == pick["symbol"]), "Unknown")
+                
+                # Sector diversification (max 1 per sector, except ETFs)
+                if stock_sector != "ETF" and stock_sector in used_sectors:
+                    continue
+                
+                final_picks.append(pick)
+                used_sectors.add(stock_sector)
+                
+                if len(final_picks) >= config["max_positions"]:
+                    break
+            
+            # Format response
+            response_data["dayTradingPicks"] = {
+                "as_of": datetime.now().isoformat() + "Z",
+                "mode": mode,
+                "picks": final_picks,
+                "universe_size": len(filtered_universe),
+                "quality_threshold": min_score
+            }
+            
+            return {"data": response_data}
+            
+        except Exception as e:
+            logger.error(f"Error in dayTradingPicks: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return {"data": {"dayTradingPicks": {"error": str(e)}}}
+
+    if "dayTradingOutcome" in fields:
+        _trace("enter dayTradingOutcome handler")
+        print("🎯 DETECTED dayTradingOutcome mutation!")
+        
+        try:
+            # Import ML learning system
+            from ml_learning_system import ml_system
+            
+            # Handle both old and new input formats
+            input_data = variables.get("input", {})
+            if input_data:
+                # New format with input object
+                symbol = input_data.get("symbol")
+                side = input_data.get("side")  # LONG or SHORT
+                entry_price = input_data.get("entryPrice")
+                exit_price = input_data.get("exitPrice") or input_data.get("entryPrice")  # Use entry as exit for provisional
+                entry_time = input_data.get("executedAt") or input_data.get("entryTime")
+                exit_time = input_data.get("exitTime") or datetime.utcnow().isoformat()
+                mode = input_data.get("mode", "SAFE")  # SAFE or AGGRESSIVE
+                outcome = input_data.get("outcome") or "+1R"  # Default to +1R for provisional
+                features = input_data.get("features", {})
+                score = input_data.get("score", 1.0)
+            else:
+                # Old format with direct parameters
+                symbol = variables.get("symbol")
+                side = variables.get("side")  # LONG or SHORT
+                entry_price = variables.get("entryPrice")
+                exit_price = variables.get("exitPrice")
+                entry_time = variables.get("entryTime")
+                exit_time = variables.get("exitTime")
+                mode = variables.get("mode", "SAFE")
+                outcome = variables.get("outcome")  # +1R, -1R, time_stop, etc.
+                features = variables.get("features", {})  # Original features
+                score = variables.get("score", 0.0)  # Original prediction score
+            
+            # Create outcome record
+            outcome_data = {
+                "symbol": symbol,
+                "side": side,
+                "entry_price": entry_price,
+                "exit_price": exit_price,
+                "entry_time": entry_time,
+                "exit_time": exit_time,
+                "mode": mode,
+                "outcome": outcome,
+                "features": features,
+                "score": score,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            # Log to ML system
+            success = ml_system.log_trading_outcome(outcome_data)
+            
+            if success:
+                # Check if we should retrain models
+                training_results = ml_system.train_if_needed()
+                
+                response_data["dayTradingOutcome"] = {
+                    "success": True,
+                    "message": "Outcome logged successfully",
+                    "record": outcome_data,
+                    "training_triggered": any(training_results.values())
+                }
+            else:
+                response_data["dayTradingOutcome"] = {
+                    "success": False,
+                    "message": "Failed to log outcome",
+                    "record": outcome_data
+                }
+            
+            return {"data": response_data}
+            
+        except Exception as e:
+            logger.error(f"Error in dayTradingOutcome: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return {"data": {"dayTradingOutcome": {"error": str(e)}}}
+
+    # === ML LEARNING SYSTEM ENDPOINTS ===
+    if "mlSystemStatus" in fields:
+        _trace("enter mlSystemStatus handler")
+        print("🎯 DETECTED mlSystemStatus query!")
+        
+        try:
+            from ml_learning_system import ml_system
+            status = ml_system.get_system_status()
+            response_data["mlSystemStatus"] = status
+            return {"data": response_data}
+            
+        except Exception as e:
+            logger.error(f"Error in mlSystemStatus: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            response_data["mlSystemStatus"] = {
+                "error": str(e),
+                "ml_available": False,
+                "outcome_tracking": {"total_outcomes": 0, "recent_outcomes": 0},
+                "models": {"safe_model": None, "aggressive_model": None},
+                "bandit": {},
+                "last_training": {"SAFE": None, "AGGRESSIVE": None}
+            }
+            return {"data": response_data}
+
+    if "trainModels" in fields:
+        _trace("enter trainModels handler")
+        print("🎯 DETECTED trainModels mutation!")
+        
+        try:
+            from ml_learning_system import ml_system
+            modes = variables.get("modes", ["SAFE", "AGGRESSIVE"])
+            
+            if not ml_system.ml_available or not ml_system.model_trainer:
+                response_data["trainModels"] = {
+                    "success": False,
+                    "message": "ML system not available. Cannot train models.",
+                    "results": {mode: None for mode in modes}
+                }
+                return {"data": response_data}
+            
+            results = {}
+            for mode in modes:
+                if mode in ["SAFE", "AGGRESSIVE"]:
+                    logger.info(f"Training {mode} model...")
+                    metrics = ml_system.model_trainer.train_model(mode)
+                    results[mode] = metrics
+            
+            response_data["trainModels"] = {
+                "success": True,
+                "message": "Model training completed",
+                "results": results
+            }
+            
+            return {"data": response_data}
+            
+        except Exception as e:
+            logger.error(f"Error in trainModels: {e}")
+            return {"data": {"trainModels": {"error": str(e)}}}
+
+    if "banditStrategy" in fields:
+        _trace("enter banditStrategy handler")
+        print("🎯 DETECTED banditStrategy query!")
+        
+        try:
+            from ml_learning_system import ml_system
+            context = variables.get("context", {})
+            
+            # Get market context (mock for now)
+            market_context = {
+                "vix_level": 20.0,  # Mock VIX
+                "market_trend": 0.1,  # Mock trend
+                "volatility_regime": 0.5,  # Mock volatility
+                "time_of_day": 0.4  # Mock time (0-1)
+            }
+            
+            if not ml_system.ml_available or not ml_system.bandit:
+                # Fallback to simple strategy selection
+                strategies = ["breakout", "mean_reversion", "momentum", "etf_rotation"]
+                selected_strategy = strategies[0]  # Default to breakout
+                performance = {
+                    strategy: {
+                        "win_rate": 0.5,
+                        "confidence": 1.0,
+                        "alpha": 1.0,
+                        "beta": 1.0
+                    } for strategy in strategies
+                }
+            else:
+                selected_strategy = ml_system.bandit.select_strategy(market_context)
+                performance = ml_system.bandit.get_strategy_performance()
+            
+            response_data["banditStrategy"] = {
+                "selected_strategy": selected_strategy,
+                "context": market_context,
+                "performance": performance
+            }
+            
+            return {"data": response_data}
+            
+        except Exception as e:
+            logger.error(f"Error in banditStrategy: {e}")
+            return {"data": {"banditStrategy": {"error": str(e)}}}
+
+    if "updateBanditReward" in fields:
+        _trace("enter updateBanditReward handler")
+        print("🎯 DETECTED updateBanditReward mutation!")
+        
+        try:
+            from ml_learning_system import ml_system
+            strategy = variables.get("strategy")
+            reward = variables.get("reward", 0.0)  # 1.0 for success, 0.0 for failure
+            
+            if not ml_system.ml_available or not ml_system.bandit:
+                # Fallback response
+                strategies = ["breakout", "mean_reversion", "momentum", "etf_rotation"]
+                performance = {
+                    s: {
+                        "win_rate": 0.5,
+                        "confidence": 1.0,
+                        "alpha": 1.0,
+                        "beta": 1.0
+                    } for s in strategies
+                }
+            else:
+                ml_system.bandit.update_reward(strategy, reward)
+                performance = ml_system.bandit.get_strategy_performance()
+            
+            response_data["updateBanditReward"] = {
+                "success": True,
+                "message": f"Updated {strategy} with reward {reward}",
+                "performance": performance
+            }
+            
+            return {"data": response_data}
+            
+        except Exception as e:
+            logger.error(f"Error in updateBanditReward: {e}")
+            return {"data": {"updateBanditReward": {"error": str(e)}}}
+
     if "portfolioOptimization" in fields:
         # Get portfolio optimization for a list of symbols
         symbols = variables.get("symbols", ["AAPL", "MSFT", "GOOGL"])
@@ -5084,12 +5518,40 @@ async def graphql_endpoint(request_data: dict):
         
         return {"data": {"stocks": stocks_data}}
 
+    if "feedByTickers" in fields:
+        symbols = variables.get("symbols", ["AAPL", "MSFT"])
+        limit = variables.get("limit", 50)
+        
+        # Generate mock feed data for the requested tickers
+        feed_data = []
+        for i in range(min(limit, 10)):  # Generate up to 10 posts
+            symbol = symbols[i % len(symbols)]
+            feed_data.append({
+                "id": f"feed_post_{i+1}",
+                "kind": "DISCUSSION" if i % 3 == 0 else "PREDICTION" if i % 3 == 1 else "POLL",
+                "title": f"Discussion about {symbol}",
+                "content": f"This is a discussion about {symbol} and its recent performance.",
+                "tickers": [symbol],
+                "score": 85 + (i * 2),
+                "commentCount": 5 + i,
+                "user": {
+                    "id": f"user_{i+1}",
+                    "name": f"User {i+1}",
+                    "profilePic": None
+                },
+                "createdAt": (datetime.now() - timedelta(hours=i)).isoformat(),
+                "__typename": "FeedPost"
+            })
+        
+        return {"data": {"feedByTickers": feed_data}}
+
     if "tickerPostCreated" in fields:
         return {"data": {"tickerPostCreated": {
             "id": "post_123",
-            "content": "New discussion about AAPL earnings",
-            "user": {"id": "user_123", "name": "Test User", "email": "test@example.com"},
-            "stock": {"symbol": "AAPL", "companyName": "Apple Inc."},
+            "kind": "DISCUSSION",
+            "title": "New discussion about AAPL earnings",
+            "tickers": ["AAPL"],
+            "user": {"id": "user_123", "name": "Test User"},
             "createdAt": datetime.now().isoformat(),
             "__typename": "TickerPost"
         }}}
@@ -6079,6 +6541,168 @@ async def graphql_endpoint(request_data: dict):
                 "recommendations": [],
                 "__typename": "CryptoRecommendationResponse"
             }}}
+
+    # === RISK MANAGEMENT ENDPOINTS ===
+    if "riskSummary" in fields:
+        _trace("enter riskSummary handler")
+        print("🎯 DETECTED riskSummary query!")
+        
+        try:
+            from risk_management import get_risk_manager
+            risk_manager = get_risk_manager()
+            summary = risk_manager.get_risk_summary()
+            response_data["riskSummary"] = summary
+            return {"data": response_data}
+            
+        except Exception as e:
+            logger.error(f"Error in riskSummary: {e}")
+            return {"data": {"riskSummary": {"error": str(e)}}}
+    
+    if "createPosition" in fields:
+        _trace("enter createPosition handler")
+        print("🎯 DETECTED createPosition mutation!")
+        
+        try:
+            from risk_management import get_risk_manager
+            risk_manager = get_risk_manager()
+            
+            symbol = variables.get("symbol", "AAPL")
+            side = variables.get("side", "LONG")
+            price = float(variables.get("price", 150.0))
+            quantity = int(variables.get("quantity", 0))
+            atr = float(variables.get("atr", 2.0))
+            sector = variables.get("sector", "Technology")
+            confidence = float(variables.get("confidence", 1.0))
+            
+            # Calculate optimal position size if not provided
+            if quantity == 0:
+                quantity = risk_manager.calculate_position_size(symbol, price, atr, confidence)
+            
+            position, error_reason = risk_manager.create_position(symbol, side, price, quantity, atr, sector)
+            
+            if position:
+                response_data["createPosition"] = {
+                    "success": True,
+                    "message": "Position created successfully",
+                    "position": {
+                        "symbol": position.symbol,
+                        "side": position.side,
+                        "entry_price": position.entry_price,
+                        "quantity": position.quantity,
+                        "entry_time": position.entry_time.isoformat(),
+                        "stop_loss_price": position.stop_loss_price,
+                        "take_profit_price": position.take_profit_price,
+                        "max_hold_until": position.max_hold_until.isoformat(),
+                        "atr_stop_price": position.atr_stop_price
+                    }
+                }
+            else:
+                response_data["createPosition"] = {
+                    "success": False,
+                    "message": f"Position creation failed: {error_reason}",
+                    "position": None
+                }
+            
+            return {"data": response_data}
+            
+        except Exception as e:
+            logger.error(f"Error in createPosition: {e}")
+            return {"data": {"createPosition": {"error": str(e)}}}
+    
+    if "checkPositionExits" in fields:
+        _trace("enter checkPositionExits handler")
+        print("🎯 DETECTED checkPositionExits mutation!")
+        
+        try:
+            from risk_management import get_risk_manager
+            risk_manager = get_risk_manager()
+            
+            current_prices = variables.get("currentPrices", {})
+            exited_positions = risk_manager.check_position_exits(current_prices)
+            
+            response_data["checkPositionExits"] = {
+                "success": True,
+                "message": f"Checked {len(risk_manager.positions)} positions",
+                "exited_positions": [
+                    {
+                        "symbol": pos.symbol,
+                        "side": pos.side,
+                        "entry_price": pos.entry_price,
+                        "exit_price": pos.exit_price,
+                        "quantity": pos.quantity,
+                        "pnl": pos.pnl,
+                        "exit_reason": pos.risk_reason,
+                        "exit_time": pos.exit_time.isoformat() if pos.exit_time else None
+                    } for pos in exited_positions
+                ]
+            }
+            
+            return {"data": response_data}
+            
+        except Exception as e:
+            logger.error(f"Error in checkPositionExits: {e}")
+            return {"data": {"checkPositionExits": {"error": str(e)}}}
+    
+    if "updateRiskSettings" in fields:
+        _trace("enter updateRiskSettings handler")
+        print("🎯 DETECTED updateRiskSettings mutation!")
+        
+        try:
+            from risk_management import get_risk_manager, set_risk_level, update_account_value, RiskLevel
+            
+            account_value = variables.get("accountValue")
+            risk_level = variables.get("riskLevel")
+            
+            if account_value:
+                update_account_value(float(account_value))
+            
+            if risk_level:
+                risk_level_enum = RiskLevel(risk_level.upper())
+                set_risk_level(risk_level_enum)
+            
+            response_data["updateRiskSettings"] = {
+                "success": True,
+                "message": "Risk settings updated successfully",
+                "current_settings": get_risk_manager().get_risk_summary()
+            }
+            
+            return {"data": response_data}
+            
+        except Exception as e:
+            logger.error(f"Error in updateRiskSettings: {e}")
+            return {"data": {"updateRiskSettings": {"error": str(e)}}}
+    
+    if "getActivePositions" in fields:
+        _trace("enter getActivePositions handler")
+        print("🎯 DETECTED getActivePositions query!")
+        
+        try:
+            from risk_management import get_risk_manager, PositionStatus
+            risk_manager = get_risk_manager()
+            
+            active_positions = [p for p in risk_manager.positions.values() if p.status == PositionStatus.ACTIVE]
+            
+            response_data["getActivePositions"] = [
+                {
+                    "symbol": pos.symbol,
+                    "side": pos.side,
+                    "entry_price": pos.entry_price,
+                    "quantity": pos.quantity,
+                    "entry_time": pos.entry_time.isoformat(),
+                    "stop_loss_price": pos.stop_loss_price,
+                    "take_profit_price": pos.take_profit_price,
+                    "max_hold_until": pos.max_hold_until.isoformat(),
+                    "atr_stop_price": pos.atr_stop_price,
+                    "current_pnl": None,  # Would need current price to calculate
+                    "time_remaining_minutes": int((pos.max_hold_until - datetime.now()).total_seconds() / 60)
+                } for pos in active_positions
+            ]
+            
+            return {"data": response_data}
+            
+        except Exception as e:
+            logger.error(f"Error in getActivePositions: {e}")
+            return {"data": {"getActivePositions": []}}
 
     # ---------------------------
     # DEFAULT (GraphQL-safe)
