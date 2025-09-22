@@ -12,8 +12,8 @@ import JWTAuthService from './features/auth/services/JWTAuthService';
 // Determine the correct URL based on the environment
 const getGraphQLURL = () => {
   if (__DEV__) {
-    // In development, use the local IP address for device connectivity
-    return 'http://192.168.1.151:8123/graphql/';
+    // In development, use localhost since backend is running on same machine
+    return 'http://127.0.0.1:8000/graphql/';
   }
   // In production, use the production URL
   return 'https://your-production-url.com/graphql/';

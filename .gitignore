@@ -36,3 +36,6 @@ yarn-error.log*
 *.log
 node_modules/
 deployment/
+rust_crypto_engine/target/
+*.pyc
+__pycache__/

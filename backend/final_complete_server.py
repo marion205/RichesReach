@@ -1981,7 +1981,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60
 users_db = {
     "test@example.com": {
         "id": "user_123", "name": "Test User", "email": "test@example.com",
-        "password": hashlib.sha256("testpass".encode()).hexdigest(),
+        "password": hashlib.sha256("testpass123".encode()).hexdigest(),
         "hasPremiumAccess": True, "subscriptionTier": "premium"
     }
 }
@@ -2951,6 +2951,7 @@ async def graphql_endpoint(request_data: dict):
         try:
             # Try variables first, then parse from query
             symbol = (variables or {}).get("symbol")
+            timeframe = (variables or {}).get("timeframe", "ALL")
             if not symbol:
                 m = re.search(r'cryptoMlSignal\s*\(\s*symbol:\s*"([^"]+)"', query or "")
                 if m: symbol = m.group(1)
@@ -2958,12 +2959,38 @@ async def graphql_endpoint(request_data: dict):
             if not symbol:
                 return {"errors": [{"message": "symbol required"}]}
 
-            # Get ML prediction with fallback
+            # Try Rust service first for high performance
+            sig = None
             try:
-                sig = get_real_ml_prediction(symbol)
-            except Exception as e:
-                logger.warning(f"ML prediction failed for {symbol}: {e}")
-                sig = None
+                from core.rust_crypto_service import rust_crypto_service
+                logger.info(f"🔍 Checking Rust service availability for {symbol}")
+                if rust_crypto_service.is_available():
+                    logger.info(f"✅ Rust service is available, attempting analysis for {symbol}")
+                    # Use the async method directly since we're already in an async context
+                    rust_result = await rust_crypto_service.analyze_crypto(symbol, timeframe)
+                    if rust_result:
+                        # Map Rust response to GraphQL schema
+                        sig = {
+                            "symbol": rust_result.get("symbol", symbol),
+                            "probability": rust_result.get("probability", 0.5),
+                            "confidenceLevel": rust_result.get("confidence_level", "LOW"),
+                            "explanation": rust_result.get("explanation", "Rust analysis completed"),
+                            "features": rust_result.get("features", {}),
+                            "modelVersion": rust_result.get("model_version", "rust-v1.0.0"),
+                            "timestamp": rust_result.get("timestamp", time.time())
+                        }
+                        logger.info(f"✅ Used Rust service for {symbol} analysis")
+            except Exception as rust_error:
+                logger.warning(f"Rust service error: {rust_error}")
+
+            # Fallback to Python ML prediction if Rust not available
+            if not sig:
+                try:
+                    sig = get_real_ml_prediction(symbol)
+                    logger.info(f"✅ Used Python ML for {symbol} analysis")
+                except Exception as e:
+                    logger.warning(f"ML prediction failed for {symbol}: {e}")
+                    sig = None
 
             # Ensure non-null shape with fallback
             if not sig or "probability" not in sig:
@@ -3013,6 +3040,36 @@ async def graphql_endpoint(request_data: dict):
             limit = int((variables or {}).get("limit", 5))
             symbols = (variables or {}).get("symbols") or ["BTC", "ETH", "SOL", "ADA", "DOT"]
             
+            # Try Rust service first for high performance
+            try:
+                from core.rust_crypto_service import rust_crypto_service
+                if rust_crypto_service.is_available():
+                    # Use the async method directly since we're already in an async context
+                    rust_recommendations = await rust_crypto_service.get_crypto_recommendations(limit, symbols)
+                    if rust_recommendations:
+                        # Extract items from Rust response (it returns {"items": [...]})
+                        items = rust_recommendations.get("items", []) if isinstance(rust_recommendations, dict) else rust_recommendations
+                        # Map Rust response to GraphQL schema
+                        results = []
+                        for rec in items:
+                            results.append({
+                                "symbol": rec.get("symbol", ""),
+                                "name": rec.get("symbol", ""),
+                                "priceUsd": float(rec.get("price_usd", 0.0)),
+                                "volumeUsd24h": float(rec.get("liquidity_24h_usd", 0.0)),
+                                "volatilityTier": rec.get("volatility_tier", "MEDIUM"),
+                                "probability": rec.get("probability", 0.5),
+                                "confidenceLevel": rec.get("confidence_level", "LOW"),
+                                "explanation": rec.get("rationale", "Rust analysis completed"),
+                                "score": rec.get("score", 0.0),
+                                "__typename": "CryptoRecommendation"
+                            })
+                        logger.info(f"✅ Used Rust service for recommendations")
+                        return {"data": {"cryptoRecommendations": results}}
+            except Exception as rust_error:
+                logger.warning(f"Rust service error: {rust_error}")
+            
+            # Fallback to Python implementation
             # Use batch pricing for efficiency
             try:
                 batch_prices = crypto_data_provider.get_prices_batch(symbols)
@@ -3770,6 +3827,7 @@ async def graphql_endpoint(request_data: dict):
         tok = create_access_token({"sub": email.lower()}, timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
         return {"data": {"tokenAuth": {
             "token": tok, "refreshToken": tok,
+            "payload": {"sub": email.lower(), "exp": datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)},
             "user": {"id": user["id"], "email": user["email"], "name": user["name"],
                      "hasPremiumAccess": user["hasPremiumAccess"], "subscriptionTier": user["subscriptionTier"], 
                      "updatedAt": datetime.now().isoformat(), "__typename":"User"},
@@ -5637,6 +5695,136 @@ async def graphql_endpoint(request_data: dict):
                     "isStakingAvailable": True,
                     "minTradeAmount": 25.0,
                     "precision": 6,
+                    "volatilityTier": "MEDIUM",
+                    "isSecCompliant": False,
+                    "regulatoryStatus": "UNREGULATED",
+                    "__typename": "Cryptocurrency"
+                },
+                {
+                    "id": "crypto_xrp_001",
+                    "symbol": "XRP",
+                    "name": "XRP",
+                    "coingeckoId": "ripple",
+                    "isStakingAvailable": False,
+                    "minTradeAmount": 10.0,
+                    "precision": 6,
+                    "volatilityTier": "MEDIUM",
+                    "isSecCompliant": True,
+                    "regulatoryStatus": "REGULATED",
+                    "__typename": "Cryptocurrency"
+                },
+                {
+                    "id": "crypto_sol_001",
+                    "symbol": "SOL",
+                    "name": "Solana",
+                    "coingeckoId": "solana",
+                    "isStakingAvailable": True,
+                    "minTradeAmount": 5.0,
+                    "precision": 6,
+                    "volatilityTier": "HIGH",
+                    "isSecCompliant": False,
+                    "regulatoryStatus": "UNREGULATED",
+                    "__typename": "Cryptocurrency"
+                },
+                {
+                    "id": "crypto_usdt_001",
+                    "symbol": "USDT",
+                    "name": "Tether",
+                    "coingeckoId": "tether",
+                    "isStakingAvailable": False,
+                    "minTradeAmount": 1.0,
+                    "precision": 2,
+                    "volatilityTier": "LOW",
+                    "isSecCompliant": True,
+                    "regulatoryStatus": "REGULATED",
+                    "__typename": "Cryptocurrency"
+                },
+                {
+                    "id": "crypto_usdc_001",
+                    "symbol": "USDC",
+                    "name": "USD Coin",
+                    "coingeckoId": "usd-coin",
+                    "isStakingAvailable": False,
+                    "minTradeAmount": 1.0,
+                    "precision": 2,
+                    "volatilityTier": "LOW",
+                    "isSecCompliant": True,
+                    "regulatoryStatus": "REGULATED",
+                    "__typename": "Cryptocurrency"
+                },
+                {
+                    "id": "crypto_ada_001",
+                    "symbol": "ADA",
+                    "name": "Cardano",
+                    "coingeckoId": "cardano",
+                    "isStakingAvailable": True,
+                    "minTradeAmount": 10.0,
+                    "precision": 6,
+                    "volatilityTier": "MEDIUM",
+                    "isSecCompliant": False,
+                    "regulatoryStatus": "UNREGULATED",
+                    "__typename": "Cryptocurrency"
+                },
+                {
+                    "id": "crypto_doge_001",
+                    "symbol": "DOGE",
+                    "name": "Dogecoin",
+                    "coingeckoId": "dogecoin",
+                    "isStakingAvailable": False,
+                    "minTradeAmount": 5.0,
+                    "precision": 8,
+                    "volatilityTier": "HIGH",
+                    "isSecCompliant": False,
+                    "regulatoryStatus": "UNREGULATED",
+                    "__typename": "Cryptocurrency"
+                },
+                {
+                    "id": "crypto_avax_001",
+                    "symbol": "AVAX",
+                    "name": "Avalanche",
+                    "coingeckoId": "avalanche-2",
+                    "isStakingAvailable": True,
+                    "minTradeAmount": 5.0,
+                    "precision": 6,
+                    "volatilityTier": "HIGH",
+                    "isSecCompliant": False,
+                    "regulatoryStatus": "UNREGULATED",
+                    "__typename": "Cryptocurrency"
+                },
+                {
+                    "id": "crypto_bnb_001",
+                    "symbol": "BNB",
+                    "name": "BNB",
+                    "coingeckoId": "binancecoin",
+                    "isStakingAvailable": True,
+                    "minTradeAmount": 5.0,
+                    "precision": 6,
+                    "volatilityTier": "MEDIUM",
+                    "isSecCompliant": False,
+                    "regulatoryStatus": "UNREGULATED",
+                    "__typename": "Cryptocurrency"
+                },
+                {
+                    "id": "crypto_matic_001",
+                    "symbol": "MATIC",
+                    "name": "Polygon",
+                    "coingeckoId": "matic-network",
+                    "isStakingAvailable": True,
+                    "minTradeAmount": 5.0,
+                    "precision": 6,
+                    "volatilityTier": "MEDIUM",
+                    "isSecCompliant": False,
+                    "regulatoryStatus": "UNREGULATED",
+                    "__typename": "Cryptocurrency"
+                },
+                {
+                    "id": "crypto_ltc_001",
+                    "symbol": "LTC",
+                    "name": "Litecoin",
+                    "coingeckoId": "litecoin",
+                    "isStakingAvailable": False,
+                    "minTradeAmount": 10.0,
+                    "precision": 8,
                     "volatilityTier": "MEDIUM",
                     "isSecCompliant": False,
                     "regulatoryStatus": "UNREGULATED",

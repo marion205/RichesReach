@@ -3,7 +3,7 @@
  * Main screen for crypto trading functionality
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -11,52 +11,14 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
-  Alert,
-  ActivityIndicator,
 } from 'react-native';
-import { useQuery, useMutation } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
 
-// Helper function for formatting
-const fmt = (n: number) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
-
-// GraphQL queries
-import { GET_CRYPTO_PORTFOLIO, GET_CRYPTO_ANALYTICS, REPAY_SBLOC_LOAN } from '../cryptoQueries';
-import { gql } from '@apollo/client';
-
-const GET_CRYPTO_SBLOC_LOANS = gql`
-  query GetCryptoSblocLoans {
-    cryptoSblocLoans {
-      id
-      status
-      collateralQuantity
-      loanAmount
-      interestRate
-      cryptocurrency {
-        symbol
-      }
-    }
-  }
-`;
-
-const GET_CRYPTO_PRICES = gql`
-  query GetCryptoPrices($symbols: [String!]!) {
-    cryptoPrices(symbols: $symbols) {
-      symbol
-      priceUsd
-    }
-  }
-`;
-
 // Components
+import ProAaveCard from '../components/forms/ProAaveCard';
 import CryptoPortfolioCard from '../components/crypto/CryptoPortfolioCard';
+import CryptoTradingCardPro from '../components/crypto/CryptoTradingCardPro';
 import CryptoMLSignalsCard from '../components/crypto/CryptoMLSignalsCard';
-import CryptoRecommendationsCard from '../components/crypto/CryptoRecommendationsCard';
-import CryptoTradingCard from '../components/crypto/CryptoTradingCard';
-import CryptoSBLOCCard from '../components/crypto/CryptoSBLOCCard';
-import CollateralHealthCard from '../components/crypto/CollateralHealthCard';
-import LoanManagementModal from '../components/crypto/LoanManagementModal';
 
 interface CryptoScreenProps {
   navigation: any;
@@ -64,248 +26,185 @@ interface CryptoScreenProps {
 
 const CryptoScreen: React.FC<CryptoScreenProps> = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'portfolio' | 'trading' | 'sbloc' | 'signals'>('portfolio');
+  const [activeTab, setActiveTab] = useState<'portfolio' | 'trading' | 'aave' | 'signals'>('aave');
   const [hideBalances, setHideBalances] = useState(false);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [selectedAsset, setSelectedAsset] = useState<string | null>(null);
-
-  // GraphQL queries
-  const { 
-    data: portfolioData, 
-    loading: portfolioLoading, 
-    refetch: refetchPortfolio 
-  } = useQuery(GET_CRYPTO_PORTFOLIO);
-
-  const { 
-    data: analyticsData, 
-    loading: analyticsLoading, 
-    refetch: refetchAnalytics 
-  } = useQuery(GET_CRYPTO_ANALYTICS);
-
-  const { data: loansData } = useQuery(GET_CRYPTO_SBLOC_LOANS);
-  
-  // Get unique symbols from loans for price lookup
-  const loanSymbols = loansData?.cryptoSblocLoans?.map((loan: any) => loan.cryptocurrency.symbol) || [];
-  const { data: pricesData } = useQuery(GET_CRYPTO_PRICES, {
-    variables: { symbols: loanSymbols },
-    skip: loanSymbols.length === 0,
-  });
-
-  // Repay SBLOC loan mutation
-  const [repaySblocLoan, { loading: repaying }] = useMutation(REPAY_SBLOC_LOAN, {
-    onError: (e) => console.error('Repay error:', e),
-  });
 
   const onRefresh = async () => {
     setRefreshing(true);
-    try {
-      await Promise.all([
-        refetchPortfolio(),
-        refetchAnalytics(),
-      ]);
-    } catch (error) {
-      console.error('Error refreshing crypto data:', error);
-    } finally {
+    // Simulate refresh delay
+    setTimeout(() => {
       setRefreshing(false);
-    }
-  };
-
-  const handleAssetPress = (symbol: string) => {
-    setSelectedAsset(symbol);
-    setModalVisible(true);
-  };
-
-  const handleAddCollateral = (loanId: string, symbol: string) => {
-    setModalVisible(false);
-    setActiveTab('sbloc');
-    Alert.alert('Add Collateral', `Navigate to SBLOC tab to add more ${symbol} as collateral for loan ${loanId}`);
-  };
-
-  const handleRepayConfirm = async (loanId: string, symbol: string, amountUsd: number) => {
-    try {
-      const { data } = await repaySblocLoan({
-        variables: { loanId, amountUsd },
-        // Make sure the loan list & portfolio refresh
-        refetchQueries: ['GetCryptoSblocLoans', 'GetCryptoPortfolio', 'GetCryptoAnalytics'],
-        awaitRefetchQueries: true,
-      });
-
-      const res = data?.repaySblocLoan;
-      if (!res?.success) {
-        Alert.alert('Repay Failed', res?.message ?? 'Please try again.');
-        return;
-      }
-
-      Alert.alert(
-        'Repayment Successful',
-        `Paid ${fmt(res.interestPaid + res.principalPaid)}\n` +
-        `• Interest: ${fmt(res.interestPaid)}\n` +
-        `• Principal: ${fmt(res.principalPaid)}\n` +
-        `New Outstanding: ${fmt(res.newOutstanding)}`
-      );
-      
-      setModalVisible(false);
-    } catch (err) {
-      console.error('Repay error:', err);
-      Alert.alert('Error', 'Could not process repayment.');
-    }
+    }, 1000);
   };
 
   const renderTabContent = () => {
     switch (activeTab) {
       case 'portfolio':
-        // Build priceMap for collateral health
-        const priceMap = Object.fromEntries(
-          (pricesData?.cryptoPrices ?? []).map((p: any) => [p.symbol, p.priceUsd])
-        );
-
-        // Compute portfolio LTV state for portfolio card
-        const { portfolioLtv, ltvState } = (() => {
-          const active = (loansData?.cryptoSblocLoans ?? []).filter((l:any) => ['ACTIVE','WARNING'].includes(l.status));
-          let collat = 0, loans = 0;
-          active.forEach((l:any) => {
-            const px = priceMap[l.cryptocurrency.symbol] || 0;
-            collat += parseFloat(l.collateralQuantity || 0) * px;
-            loans  += parseFloat(l.loanAmount || 0);
-          });
-          const ltv = collat > 0 ? (loans / collat) * 100 : 0;
-          const state = ltv <= 35 ? 'SAFE' : ltv <= 40 ? 'CAUTION' : ltv <= 50 ? 'AT_RISK' : 'DANGER';
-          return { portfolioLtv: ltv, ltvState: state as 'SAFE'|'CAUTION'|'AT_RISK'|'DANGER' };
-        })();
-
         return (
-          <View>
-            <CryptoPortfolioCard
-              portfolio={portfolioData?.cryptoPortfolio}
-              analytics={analyticsData?.cryptoAnalytics}
-              loading={portfolioLoading || analyticsLoading}
-              onRefresh={onRefresh}
-              onPressHolding={(symbol) => {
-                // Navigate to holding details or show modal
-                Alert.alert('Holding Details', `View details for ${symbol}`);
-              }}
-              onStartTrading={() => setActiveTab('trading')}
-              hideBalances={hideBalances}
-              onToggleHideBalances={setHideBalances}
-              ltvState={ltvState}
-            />
-            <CollateralHealthCard 
-              loans={loansData?.cryptoSblocLoans ?? []} 
-              priceMap={priceMap}
-              onAssetPress={handleAssetPress}
-            />
-          </View>
+          <CryptoPortfolioCard 
+            portfolio={{
+              total_value_usd: 12547.50,
+              total_pnl: 1247.50,
+              total_pnl_percentage: 11.05,
+              total_pnl_1d: 125.30,
+              total_pnl_pct_1d: 1.01,
+              total_pnl_1w: 847.20,
+              total_pnl_pct_1w: 7.25,
+              total_pnl_1m: 1247.50,
+              total_pnl_pct_1m: 11.05,
+              holdings: [
+                {
+                  cryptocurrency: { symbol: 'BTC' },
+                  quantity: 0.25,
+                  current_value: 8750.00,
+                  unrealized_pnl_percentage: 8.5
+                },
+                {
+                  cryptocurrency: { symbol: 'ETH' },
+                  quantity: 2.5,
+                  current_value: 2897.50,
+                  unrealized_pnl_percentage: 12.3
+                },
+                {
+                  cryptocurrency: { symbol: 'SOL' },
+                  quantity: 15.0,
+                  current_value: 900.00,
+                  unrealized_pnl_percentage: -2.1
+                }
+              ]
+            }}
+            analytics={{
+              portfolio_volatility: 0.15,
+              sharpe_ratio: 1.8,
+              max_drawdown: 8.2,
+              diversification_score: 75,
+              sector_allocation: {
+                'LOW': 25,
+                'MEDIUM': 40,
+                'HIGH': 35
+              },
+              best_performer: { symbol: 'ETH', pnl_percentage: 12.3 },
+              worst_performer: { symbol: 'SOL', pnl_percentage: -2.1 }
+            }}
+            loading={false}
+            onRefresh={onRefresh}
+            onPressHolding={(symbol) => console.log('Pressed holding:', symbol)}
+            onStartTrading={() => setActiveTab('trading')}
+            hideBalances={hideBalances}
+            onToggleHideBalances={setHideBalances}
+            ltvState="CAUTION"
+            supportedCurrencies={[
+              { symbol: 'BTC', name: 'Bitcoin', iconUrl: 'https://cryptologos.cc/logos/bitcoin-btc-logo.png' },
+              { symbol: 'ETH', name: 'Ethereum', iconUrl: 'https://cryptologos.cc/logos/ethereum-eth-logo.png' },
+              { symbol: 'SOL', name: 'Solana', iconUrl: 'https://cryptologos.cc/logos/solana-sol-logo.png' }
+            ]}
+          />
         );
       case 'trading':
         return (
-          <CryptoTradingCard
+          <CryptoTradingCardPro 
             onTradeSuccess={() => {
-              refetchPortfolio();
-              refetchAnalytics();
+              console.log('Trade completed successfully');
             }}
+            balances={{
+              'BTC': 0.5,
+              'ETH': 2.0,
+              'USDC': 1000,
+            }}
+            usdAvailable={5000}
           />
         );
-      case 'sbloc':
+      case 'aave':
         return (
-          <CryptoSBLOCCard
-            onLoanSuccess={() => {
-              refetchPortfolio();
-              refetchAnalytics();
+          <ProAaveCard
+            brand="RichesReach"
+            networkName="Sepolia"
+            walletAddress={null} // TODO: Connect to wallet address when available
+            backendBaseUrl="http://127.0.0.1:8000" // Your backend URL
+            explorerTxUrl={(hash) => `https://sepolia.etherscan.io/tx/${hash}`}
+            getBalance={async (symbol) => {
+              // Mock balance - in production, read from wallet
+              return symbol === 'USDC' ? '150.00' : '0.05';
             }}
-            onTopUpCollateral={(symbol) => {
-              // Navigate to trading tab with pre-selected symbol
-              setActiveTab('trading');
-              Alert.alert('Top-up Collateral', `Navigate to trading to buy more ${symbol}`);
+            getAllowance={async (symbol) => {
+              // Mock allowance - in production, read from ERC20 contract
+              return '0.00';
+            }}
+            toFiat={async (symbol, amount) => {
+              // Mock USD pricing - in production, use price oracle
+              return Number(amount) * (symbol === 'USDC' ? 1 : 2500);
+            }}
+            onApprove={async ({ symbol, amount }) => {
+              // Mock approval - in production, call HybridTransactionService
+              return { hash: '0xAPPROVE_' + Date.now() };
+            }}
+            onSupply={async ({ symbol, amount }) => {
+              // Mock supply - in production, call HybridTransactionService
+              return { hash: '0xSUPPLY_' + Date.now() };
+            }}
+            onBorrow={async ({ symbol, amount, rateMode }) => {
+              // Mock borrow - in production, call HybridTransactionService
+              return { hash: '0xBORROW_' + Date.now() };
+            }}
+            onSuccess={() => {
+              // Refresh data when transactions complete
+              console.log('Transaction completed');
             }}
           />
         );
       case 'signals':
-        return (
-          <View>
-            <CryptoMLSignalsCard pollInterval={60_000} />
-            <CryptoRecommendationsCard 
-              onRecommendationPress={(symbol) => {
-                setActiveTab('trading');
-                Alert.alert('Trading', `Navigate to trading to buy ${symbol}`);
-              }}
-              maxRecommendations={5}
-            />
-          </View>
-        );
+        return <CryptoMLSignalsCard initialSymbol="BTC" />;
       default:
         return null;
     }
   };
 
-  const renderTabButton = (tab: string, label: string, icon: string) => (
-    <TouchableOpacity
-      key={tab}
-      style={[
-        styles.tabButton,
-        activeTab === tab && styles.activeTabButton
-      ]}
-      onPress={() => setActiveTab(tab as any)}
-    >
-      <Icon 
-        name={icon} 
-        size={20} 
-        color={activeTab === tab ? '#007AFF' : '#8E8E93'} 
-      />
-      <Text style={[
-        styles.tabButtonText,
-        activeTab === tab && styles.activeTabButtonText
-      ]}>
-        {label}
-      </Text>
-    </TouchableOpacity>
-  );
-
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Crypto Trading</Text>
-        <TouchableOpacity
-          style={styles.headerButton}
-          onPress={() => navigation.navigate('CryptoEducation')}
-        >
-          <Icon name="book-open" size={24} color="#007AFF" />
+        <Text style={styles.headerTitle}>Crypto DeFi</Text>
+        <TouchableOpacity onPress={() => setHideBalances(!hideBalances)} style={styles.hideButton}>
+          <Icon name={hideBalances ? 'eye-off' : 'eye'} size={20} color="#fff" />
         </TouchableOpacity>
       </View>
 
-      {/* Tab Navigation */}
       <View style={styles.tabContainer}>
-        {renderTabButton('portfolio', 'Portfolio', 'pie-chart')}
-        {renderTabButton('trading', 'Trade', 'trending-up')}
-        {renderTabButton('sbloc', 'SBLOC', 'credit-card')}
-        {renderTabButton('signals', 'Signals', 'zap')}
+        <TouchableOpacity
+          style={[styles.tabButton, activeTab === 'portfolio' && styles.activeTab]}
+          onPress={() => setActiveTab('portfolio')}
+        >
+          <Icon name="pie-chart" size={16} color={activeTab === 'portfolio' ? '#007bff' : '#6c757d'} />
+          <Text style={[styles.tabText, activeTab === 'portfolio' && styles.activeTabText]}>Portfolio</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tabButton, activeTab === 'trading' && styles.activeTab]}
+          onPress={() => setActiveTab('trading')}
+        >
+          <Icon name="trending-up" size={16} color={activeTab === 'trading' ? '#007bff' : '#6c757d'} />
+          <Text style={[styles.tabText, activeTab === 'trading' && styles.activeTabText]}>Trading</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tabButton, activeTab === 'aave' && styles.activeTab]}
+          onPress={() => setActiveTab('aave')}
+        >
+          <Icon name="activity" size={16} color={activeTab === 'aave' ? '#007bff' : '#6c757d'} />
+          <Text style={[styles.tabText, activeTab === 'aave' && styles.activeTabText]}>AAVE</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tabButton, activeTab === 'signals' && styles.activeTab]}
+          onPress={() => setActiveTab('signals')}
+        >
+          <Icon name="activity" size={16} color={activeTab === 'signals' ? '#007bff' : '#6c757d'} />
+          <Text style={[styles.tabText, activeTab === 'signals' && styles.activeTabText]}>Signals</Text>
+        </TouchableOpacity>
       </View>
 
-      {/* Content */}
       <ScrollView
-        style={styles.content}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor="#007AFF"
-          />
-        }
-        showsVerticalScrollIndicator={false}
+        style={styles.contentContainer}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         {renderTabContent()}
       </ScrollView>
-
-      {/* Loan Management Modal */}
-      <LoanManagementModal
-        visible={modalVisible}
-        onClose={() => setModalVisible(false)}
-        symbol={selectedAsset}
-        loans={loansData?.cryptoSblocLoans ?? []}
-        onAddCollateral={handleAddCollateral}
-        onRepayConfirm={handleRepayConfirm}
-        isRepaying={repaying}
-      />
     </View>
   );
 };
@@ -313,60 +212,64 @@ const CryptoScreen: React.FC<CryptoScreenProps> = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#f8f9fa',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 20,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    padding: 15,
+    backgroundColor: '#343a40',
   },
   headerTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#111827',
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#fff',
   },
-  headerButton: {
-    padding: 8,
+  hideButton: {
+    padding: 5,
   },
   tabContainer: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+    justifyContent: 'space-around',
+    backgroundColor: '#e9ecef',
+    paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: '#dee2e6',
   },
   tabButton: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    borderRadius: 8,
-    marginHorizontal: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 15,
+    borderRadius: 20,
   },
-  activeTabButton: {
-    backgroundColor: '#EFF6FF',
+  activeTab: {
+    backgroundColor: '#e7f1ff',
   },
-  tabButtonText: {
+  tabText: {
+    marginLeft: 5,
     fontSize: 14,
     fontWeight: '600',
-    color: '#8E8E93',
-    marginLeft: 6,
+    color: '#6c757d',
   },
-  activeTabButtonText: {
-    color: '#007AFF',
+  activeTabText: {
+    color: '#007bff',
   },
-  content: {
+  contentContainer: {
     flex: 1,
-    paddingHorizontal: 20,
+    padding: 10,
+  },
+  placeholder: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  placeholderText: {
+    fontSize: 16,
+    color: '#6c757d',
+    textAlign: 'center',
   },
 });
 

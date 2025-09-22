@@ -194,15 +194,12 @@ export const GET_CRYPTO_ML_SIGNAL = gql`
   query GetCryptoMLSignal($symbol: String!) {
     cryptoMlSignal(symbol: $symbol) {
       symbol
-      predictionType
       probability
       confidenceLevel
-      sentiment
-      sentimentDescription
       explanation
-      featuresUsed
-      createdAt
-      expiresAt
+      features
+      modelVersion
+      timestamp
     }
   }
 `;
@@ -334,20 +331,18 @@ export const REPAY_SBLOC_LOAN = gql`
 `;
 
 export const GET_CRYPTO_RECOMMENDATIONS = gql`
-  query GetCryptoRecommendations($constraints: RecommendationConstraints) {
-    cryptoRecommendations(constraints: $constraints) {
-      success
-      message
-      recommendations {
-        symbol
-        score
-        probability
-        confidenceLevel
-        priceUsd
-        volatilityTier
-        liquidity24hUsd
-        rationale
-      }
+  query GetCryptoRecommendations($limit: Int, $symbols: [String!]) {
+    cryptoRecommendations(limit: $limit, symbols: $symbols) {
+      symbol
+      score
+      probability
+      confidenceLevel
+      priceUsd
+      volatilityTier
+      liquidity24hUsd
+      rationale
+      recommendation
+      riskLevel
     }
   }
 `;

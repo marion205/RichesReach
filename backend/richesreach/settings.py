@@ -20,7 +20,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-wk_qy339*l)1xg=(f6_e@9+d7sgi7%#0t!e17a3nkeu&p#@zq9'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '127.0.0.1,localhost,10.0.0.64,192.168.1.151,0.0.0.0').split(',')
+ALLOWED_HOSTS = ["*"]  # dev only
 # Frontend URL for email links
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
 # Application definition
@@ -31,10 +31,12 @@ INSTALLED_APPS = [
 'django.contrib.sessions',
 'django.contrib.messages',
 'django.contrib.staticfiles',
+'rest_framework',
+'corsheaders',
 'channels',
 'core',
+'defi',
 'graphene_django',
-'corsheaders',
 'django_celery_results',
 ]
 MIDDLEWARE = [
@@ -121,13 +123,18 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ALLOW_ALL_ORIGINS = True # For dev only
+
+# AAVE/DeFi Configuration
+RPC_URL = "https://eth-sepolia.g.alchemy.com/v2/demo"  # Demo RPC for testing
+AAVE_POOL_ADDRESS = "0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951"  # Sepolia AAVE Pool
+CHAINLINK_USDC_USD_FEED = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419"  # Mainnet feed for demo
 GRAPHENE = {
-"SCHEMA": "core.schema.schema",
-"MIDDLEWARE": [
-"graphql_jwt.middleware.JSONWebTokenMiddleware"
-],
-"SCHEMA_INDEPTH_LIMIT": 20,
-"SCHEMA_OUTPUT": "schema.json",
+    "SCHEMA": "core.schema.schema",
+    "MIDDLEWARE": [
+        "graphql_jwt.middleware.JSONWebTokenMiddleware"
+    ],
+    "SCHEMA_INDEPTH_LIMIT": 20,
+    "SCHEMA_OUTPUT": "schema.json",
 }
 AUTH_USER_MODEL = "core.User"
 # Authentication backends
@@ -284,3 +291,10 @@ CHANNEL_LAYERS = {
 'BACKEND': 'channels.layers.InMemoryChannelLayer',
 },
 }
+
+# CORS Configuration (dev only)
+CORS_ALLOW_ALL_ORIGINS = True  # dev only
+
+# Environment-driven RPC + AAVE Pool
+RPC_SEPOLIA = os.getenv("RPC_SEPOLIA", "https://eth-sepolia.g.alchemy.com/v2/<KEY>")
+AAVE_POOL_ADDRESS = os.getenv("AAVE_POOL_ADDRESS", "0x0000000000000000000000000000000000000000")

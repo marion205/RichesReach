@@ -1449,4 +1449,280 @@ class Query(graphene.ObjectType):
         }
 
 
+# --- AAVE-style Lending Queries --------------------------------------------
+
+class LendingQuery(graphene.ObjectType):
+    """AAVE-style lending queries"""
+    
+    def resolve_lending_reserves(self, info):
+        """Get all active lending reserves"""
+        from .crypto_models import LendingReserve
+        return LendingReserve.objects.filter(is_active=True)
+    
+    def resolve_my_lending_account(self, info):
+        """Get user's complete lending account data"""
+        user = _require_auth(info)
+        if not user:
+            return None
+        
+        from .crypto_models import SupplyPosition, BorrowPosition, CryptoPrice
+        from .aave_risk import calculate_lending_account_data
+        
+        # Get user's positions
+        supplies = SupplyPosition.objects.filter(user=user)
+        borrows = BorrowPosition.objects.filter(user=user, is_active=True)
+        
+        # Get current prices for all assets
+        symbols = set()
+        for sp in supplies:
+            symbols.add(sp.reserve.cryptocurrency.symbol)
+        for bp in borrows:
+            symbols.add(bp.reserve.cryptocurrency.symbol)
+        
+        prices = {}
+        for symbol in symbols:
+            try:
+                from .crypto_models import Cryptocurrency
+                currency = Cryptocurrency.objects.get(symbol=symbol)
+                latest_price = CryptoPrice.objects.filter(cryptocurrency=currency).first()
+                if latest_price:
+                    prices[symbol] = latest_price.price_usd
+            except:
+                continue
+        
+        # Calculate account data
+        supplies_data = [(sp.reserve, sp.quantity, sp.use_as_collateral) for sp in supplies]
+        borrows_data = [(bp.reserve, bp.amount) for bp in borrows]
+        
+        return calculate_lending_account_data(supplies_data, borrows_data, prices)
+    
+    def resolve_my_supply_positions(self, info):
+        """Get user's supply positions"""
+        user = _require_auth(info)
+        if not user:
+            return []
+        
+        from .crypto_models import SupplyPosition
+        return SupplyPosition.objects.filter(user=user)
+    
+    def resolve_my_borrow_positions(self, info):
+        """Get user's borrow positions"""
+        user = _require_auth(info)
+        if not user:
+            return []
+        
+        from .crypto_models import BorrowPosition
+        return BorrowPosition.objects.filter(user=user, is_active=True)
+
+
+# Add AAVE queries to main Query class
+class Query(graphene.ObjectType):
+    """Main GraphQL query class"""
+    
+    # Existing queries...
+    users = graphene.List(UserType)
+    user = graphene.Field(UserType, id=graphene.Int())
+    posts = graphene.List(PostType)
+    post = graphene.Field(PostType, id=graphene.Int())
+    chat_sessions = graphene.List(ChatSessionType)
+    chat_session = graphene.Field(ChatSessionType, id=graphene.Int())
+    chat_messages = graphene.List(ChatMessageType, session_id=graphene.Int())
+    comments = graphene.List(CommentType, post_id=graphene.Int())
+    stocks = graphene.List(StockType)
+    stock = graphene.Field(StockType, symbol=graphene.String())
+    stock_data = graphene.List(StockDataType, symbol=graphene.String(), limit=graphene.Int())
+    watchlists = graphene.List(WatchlistType)
+    watchlist = graphene.Field(WatchlistType, id=graphene.Int())
+    my_watchlist = graphene.List(WatchlistItemType)
+    ai_recommendations = graphene.List(AIPortfolioRecommendationType)
+    stock_discussions = graphene.List(StockDiscussionType, symbol=graphene.String())
+    stock_discussion = graphene.Field(StockDiscussionType, id=graphene.Int())
+    debt_snowball = graphene.Field(DebtSnowballResultType, debts=graphene.List(graphene.Float))
+    credit_utilization = graphene.Field(CreditUtilResultType, current_balance=graphene.Float(), credit_limit=graphene.Float())
+    purchase_advice = graphene.Field(PurchaseAdviceType, item_cost=graphene.Float(), monthly_income=graphene.Float(), monthly_expenses=graphene.Float())
+    
+    # AAVE-style lending queries
+    lending_reserves = graphene.List('core.crypto_graphql.LendingReserveType')
+    my_lending_account = graphene.Field('core.crypto_graphql.LendingAccountDataType')
+    my_supply_positions = graphene.List('core.crypto_graphql.SupplyPositionType')
+    my_borrow_positions = graphene.List('core.crypto_graphql.BorrowPositionType')
+    
+    # Existing resolvers...
+    def resolve_users(self, info):
+        return User.objects.all()
+    
+    def resolve_user(self, info, id):
+        try:
+            return User.objects.get(id=id)
+        except User.DoesNotExist:
+            return None
+    
+    def resolve_posts(self, info):
+        return Post.objects.all().order_by('-created_at')
+    
+    def resolve_post(self, info, id):
+        try:
+            return Post.objects.get(id=id)
+        except Post.DoesNotExist:
+            return None
+    
+    def resolve_chat_sessions(self, info):
+        user = _require_auth(info)
+        if not user:
+            return []
+        return ChatSession.objects.filter(user=user).order_by('-created_at')
+    
+    def resolve_chat_session(self, info, id):
+        user = _require_auth(info)
+        if not user:
+            return None
+        try:
+            return ChatSession.objects.get(id=id, user=user)
+        except ChatSession.DoesNotExist:
+            return None
+    
+    def resolve_chat_messages(self, info, session_id):
+        user = _require_auth(info)
+        if not user:
+            return []
+        try:
+            session = ChatSession.objects.get(id=session_id, user=user)
+            return ChatMessage.objects.filter(session=session).order_by('created_at')
+        except ChatSession.DoesNotExist:
+            return []
+    
+    def resolve_comments(self, info, post_id):
+        try:
+            post = Post.objects.get(id=post_id)
+            return Comment.objects.filter(post=post).order_by('created_at')
+        except Post.DoesNotExist:
+            return []
+    
+    def resolve_stocks(self, info):
+        return Stock.objects.all()
+    
+    def resolve_stock(self, info, symbol):
+        try:
+            return Stock.objects.get(symbol=symbol.upper())
+        except Stock.DoesNotExist:
+            return None
+    
+    def resolve_stock_data(self, info, symbol, limit=100):
+        try:
+            stock = Stock.objects.get(symbol=symbol.upper())
+            return StockData.objects.filter(stock=stock).order_by('-date')[:limit]
+        except Stock.DoesNotExist:
+            return []
+    
+    def resolve_watchlists(self, info):
+        user = _require_auth(info)
+        if not user:
+            return []
+        return Watchlist.objects.filter(user=user)
+    
+    def resolve_watchlist(self, info, id):
+        user = _require_auth(info)
+        if not user:
+            return None
+        try:
+            return Watchlist.objects.get(id=id, user=user)
+        except Watchlist.DoesNotExist:
+            return None
+    
+    def resolve_my_watchlist(self, info):
+        user = _require_auth(info)
+        if not user:
+            return []
+        try:
+            watchlist = Watchlist.objects.get(user=user)
+            return watchlist.items.all()
+        except Watchlist.DoesNotExist:
+            return []
+    
+    def resolve_ai_recommendations(self, info):
+        user = _require_auth(info)
+        if not user:
+            return []
+        return AIPortfolioRecommendation.objects.filter(user=user).order_by('-created_at')
+    
+    def resolve_stock_discussions(self, info, symbol):
+        try:
+            stock = Stock.objects.get(symbol=symbol.upper())
+            return StockDiscussion.objects.filter(stock=stock).order_by('-created_at')
+        except Stock.DoesNotExist:
+            return []
+    
+    def resolve_stock_discussion(self, info, id):
+        try:
+            return StockDiscussion.objects.get(id=id)
+        except StockDiscussion.DoesNotExist:
+            return None
+    
+    def resolve_debt_snowball(self, info, debts):
+        return debt_snowball_plan(debts)
+    
+    def resolve_credit_utilization(self, info, current_balance, credit_limit):
+        return credit_utilization_optimizer(current_balance, credit_limit)
+    
+    def resolve_purchase_advice(self, info, item_cost, monthly_income, monthly_expenses):
+        return should_buy_luxury_item(item_cost, monthly_income, monthly_expenses)
+    
+    # AAVE lending resolvers
+    def resolve_lending_reserves(self, info):
+        from .crypto_models import LendingReserve
+        return LendingReserve.objects.filter(is_active=True)
+    
+    def resolve_my_lending_account(self, info):
+        user = _require_auth(info)
+        if not user:
+            return None
+        
+        from .crypto_models import SupplyPosition, BorrowPosition, CryptoPrice
+        from .aave_risk import calculate_lending_account_data
+        
+        # Get user's positions
+        supplies = SupplyPosition.objects.filter(user=user)
+        borrows = BorrowPosition.objects.filter(user=user, is_active=True)
+        
+        # Get current prices for all assets
+        symbols = set()
+        for sp in supplies:
+            symbols.add(sp.reserve.cryptocurrency.symbol)
+        for bp in borrows:
+            symbols.add(bp.reserve.cryptocurrency.symbol)
+        
+        prices = {}
+        for symbol in symbols:
+            try:
+                from .crypto_models import Cryptocurrency
+                currency = Cryptocurrency.objects.get(symbol=symbol)
+                latest_price = CryptoPrice.objects.filter(cryptocurrency=currency).first()
+                if latest_price:
+                    prices[symbol] = latest_price.price_usd
+            except:
+                continue
+        
+        # Calculate account data
+        supplies_data = [(sp.reserve, sp.quantity, sp.use_as_collateral) for sp in supplies]
+        borrows_data = [(bp.reserve, bp.amount) for bp in borrows]
+        
+        return calculate_lending_account_data(supplies_data, borrows_data, prices)
+    
+    def resolve_my_supply_positions(self, info):
+        user = _require_auth(info)
+        if not user:
+            return []
+        
+        from .crypto_models import SupplyPosition
+        return SupplyPosition.objects.filter(user=user)
+    
+    def resolve_my_borrow_positions(self, info):
+        user = _require_auth(info)
+        if not user:
+            return []
+        
+        from .crypto_models import BorrowPosition
+        return BorrowPosition.objects.filter(user=user, is_active=True)
+
+
 schema = graphene.Schema(query=Query)

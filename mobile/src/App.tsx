@@ -7,6 +7,7 @@ import { ApolloProvider } from '@apollo/client';
 import { client } from './ApolloProvider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import JWTAuthService from './features/auth/services/JWTAuthService';
+import Toast from 'react-native-toast-message';
 // Use only Expo Go compatible services to avoid "Exception in HostFunction" errors
 import expoGoCompatibleNotificationService from './features/notifications/services/ExpoGoCompatibleNotificationService';
 import expoGoCompatiblePriceAlertService from './features/stocks/services/ExpoGoCompatiblePriceAlertService';
@@ -326,6 +327,7 @@ return (
 <BottomTabBar currentScreen={currentScreen} onNavigate={navigateTo} />
 )}
 </View>
+<Toast />
 </ApolloProvider>
 );
 }

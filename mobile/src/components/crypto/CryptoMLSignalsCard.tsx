@@ -12,7 +12,8 @@ import Icon from 'react-native-vector-icons/Feather';
 import {
   GET_SUPPORTED_CURRENCIES,
   GET_CRYPTO_ML_SIGNAL,
-  GENERATE_ML_PREDICTION
+  GENERATE_ML_PREDICTION,
+  GET_CRYPTO_RECOMMENDATIONS
 } from '../../cryptoQueries';
 import { gql } from '@apollo/client';
 
@@ -54,6 +55,79 @@ const probTone = (p?: number) => {
   return '#EF4444';
 };
 
+/* ------------------------------- Recommendation Card ------------------------------ */
+
+const RecommendationCard: React.FC<{ recommendation: any }> = ({ recommendation }) => {
+  const getRecommendationColor = (rec: string) => {
+    switch (rec?.toUpperCase()) {
+      case 'BUY': return '#10B981';
+      case 'SELL': return '#EF4444';
+      case 'HOLD': return '#6B7280';
+      default: return '#6B7280';
+    }
+  };
+
+  const getRecommendationIcon = (rec: string) => {
+    switch (rec?.toUpperCase()) {
+      case 'BUY': return 'trending-up';
+      case 'SELL': return 'trending-down';
+      case 'HOLD': return 'pause';
+      default: return 'help-circle';
+    }
+  };
+
+  const getVolatilityColor = (tier: string) => {
+    switch (tier?.toUpperCase()) {
+      case 'LOW': return '#10B981';
+      case 'MEDIUM': return '#F59E0B';
+      case 'HIGH': return '#EF4444';
+      default: return '#6B7280';
+    }
+  };
+
+  const rec = recommendation.recommendation || 'HOLD';
+  const recColor = getRecommendationColor(rec);
+  const recIcon = getRecommendationIcon(rec);
+  const volColor = getVolatilityColor(recommendation.volatilityTier);
+
+  return (
+    <TouchableOpacity style={styles.recCard} activeOpacity={0.9}>
+      <View style={styles.recHeader}>
+        <View style={styles.recLeft}>
+          <View style={styles.recSymbol}>
+            <Text style={styles.recSymbolText}>{recommendation.symbol}</Text>
+          </View>
+          <View style={styles.recInfo}>
+            <Text style={styles.recPrice}>${(recommendation.priceUsd || 0).toFixed(2)}</Text>
+            <Text style={styles.recScore}>Score: {(recommendation.score || 0).toFixed(1)}</Text>
+          </View>
+        </View>
+        
+        <View style={styles.recRight}>
+          <View style={[styles.recBadge, { backgroundColor: recColor + '15', borderColor: recColor + '40' }]}>
+            <Icon name={recIcon} size={14} color={recColor} />
+            <Text style={[styles.recBadgeText, { color: recColor }]}>{rec}</Text>
+          </View>
+          <View style={styles.recMeta}>
+            <Text style={[styles.recVolatility, { color: volColor }]}>
+              {recommendation.volatilityTier || 'UNKNOWN'}
+            </Text>
+            <Text style={styles.recConfidence}>
+              {(recommendation.probability || 0).toFixed(0)}% confidence
+            </Text>
+          </View>
+        </View>
+      </View>
+      
+      {recommendation.rationale && (
+        <Text style={styles.recRationale} numberOfLines={2}>
+          {recommendation.rationale}
+        </Text>
+      )}
+    </TouchableOpacity>
+  );
+};
+
 /* ------------------------------- Component ------------------------------ */
 
 const CryptoMLSignalsCard: React.FC<Props> = ({ initialSymbol = 'BTC', pollInterval }) => {
@@ -88,15 +162,27 @@ const CryptoMLSignalsCard: React.FC<Props> = ({ initialSymbol = 'BTC', pollInter
   } = useQuery(GET_CRYPTO_ML_SIGNAL, {
     variables: { symbol: selectedSymbol },
     skip: !selectedSymbol,
-    fetchPolicy: 'cache-and-network',
-    notifyOnNetworkStatusChange: true,
+    fetchPolicy: 'cache-first', // Use cache first for better performance
+    notifyOnNetworkStatusChange: false, // Reduce unnecessary re-renders
     errorPolicy: 'all',
-    pollInterval,
+    // Remove polling - let user manually refresh
   });
 
   const [generatePrediction] = useMutation(GENERATE_ML_PREDICTION, {
     errorPolicy: 'all',
   });
+
+  // Get crypto recommendations - only when user explicitly requests them
+  const [showRecommendations, setShowRecommendations] = useState(false);
+  const { data: recommendationsData, loading: recommendationsLoading, refetch: refetchRecommendations } = useQuery(
+    GET_CRYPTO_RECOMMENDATIONS,
+    { 
+      variables: { limit: 6, symbols: (finalSymbols || []).slice(0, 10) },
+      skip: !showRecommendations, // Only fetch when user wants to see recommendations
+      fetchPolicy: 'cache-first',
+      errorPolicy: 'ignore' // Don't show errors for recommendations
+    }
+  );
 
   // Derive owned + top 5 cryptocurrencies
   const ownedRows = holdingsData?.cryptoPortfolio?.holdings ?? [];
@@ -116,7 +202,8 @@ const CryptoMLSignalsCard: React.FC<Props> = ({ initialSymbol = 'BTC', pollInter
     ? ownedSymbols 
     : Array.from(new Set([...top5Symbols, ...ownedSymbols]));
   
-  const finalSymbols = mergedSymbols;
+  const finalSymbols = mergedSymbols.length > 0 ? mergedSymbols : top5Symbols;
+
 
   // quick qty lookup
   const qtyBySymbol: Record<string, number> = ownedRows.reduce((acc: any, h: any) => {
@@ -154,19 +241,21 @@ const CryptoMLSignalsCard: React.FC<Props> = ({ initialSymbol = 'BTC', pollInter
 
   const signal = useMemo(() => {
     const s = signalData?.cryptoMlSignal ?? {};
+    
+    
     // safe defaults to avoid client crashes
     return {
-      predictionType: (s.predictionType || 'NEUTRAL').replace('_', ' '),
+      predictionType: s.probability > 0.6 ? 'BULLISH' : s.probability < 0.4 ? 'BEARISH' : 'NEUTRAL',
       probability: clamp01(s.probability),
       confidenceLevel: (s.confidenceLevel || 'LOW').toUpperCase(),
-      sentiment: s.sentiment || 'Neutral',
-      sentimentDescription: s.sentimentDescription || 'Neutral market conditions.',
-      featuresUsed: s.featuresUsed || {},
-      createdAt: s.createdAt || new Date().toISOString(),
-      expiresAt: s.expiresAt || new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(), // +6h
+      sentiment: s.probability > 0.6 ? 'Bullish' : s.probability < 0.4 ? 'Bearish' : 'Neutral',
+      sentimentDescription: s.probability > 0.6 ? 'Positive market sentiment detected.' : s.probability < 0.4 ? 'Negative market sentiment detected.' : 'Neutral market conditions.',
+      featuresUsed: s.features || {},
+      createdAt: s.timestamp ? new Date(s.timestamp * 1000).toISOString() : new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(), // +6h
       explanation: s.explanation || 'Model output available. Awaiting more data for richer rationale.',
     };
-  }, [signalData]);
+  }, [signalData, signalLoading, signalError]);
 
   /* ------------------------------- Auto-refresh ------------------------------ */
 
@@ -207,7 +296,7 @@ const CryptoMLSignalsCard: React.FC<Props> = ({ initialSymbol = 'BTC', pollInter
     }
   };
 
-  const symList = finalSymbols.slice(0, 12);
+  const symList = (finalSymbols && finalSymbols.length > 0) ? finalSymbols.slice(0, 12) : ['BTC', 'ETH', 'ADA', 'SOL', 'DOT'];
 
   const bigDay = useMemo(() => {
     // Showcase badge if probability of a move is high (tune threshold as you like)
@@ -235,7 +324,12 @@ const CryptoMLSignalsCard: React.FC<Props> = ({ initialSymbol = 'BTC', pollInter
             </Text>
           </TouchableOpacity>
         </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.symbolRow}>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false} 
+          style={styles.symbolRow}
+          contentContainerStyle={{ paddingRight: 20 }}
+        >
           {symList.map((sym: string) => {
             const active = selectedSymbol === sym;
             const qty = qtyBySymbol[sym] || 0;
@@ -355,7 +449,7 @@ const CryptoMLSignalsCard: React.FC<Props> = ({ initialSymbol = 'BTC', pollInter
             <View style={{ marginTop: 12 }}>
               <Text style={styles.h6}>Key Factors</Text>
               <View style={styles.tagsWrap}>
-                {Object.entries(signal.featuresUsed).slice(0, 4).map(([k, v]) => (
+                {Object.entries(signal.featuresUsed || {}).slice(0, 4).map(([k, v]) => (
                   <View key={k} style={styles.tag}>
                     <Text style={styles.tagKey}>{k.replace(/_/g, ' ').toUpperCase()}</Text>
                     <Text style={styles.tagVal}>{typeof v === 'number' ? v.toFixed(3) : String(v)}</Text>
@@ -372,12 +466,94 @@ const CryptoMLSignalsCard: React.FC<Props> = ({ initialSymbol = 'BTC', pollInter
           </View>
         </View>
       ) : (
-        <View style={styles.empty}>
-          <Icon name="zap" size={42} color="#9CA3AF" />
-          <Text style={styles.emptyTitle}>No Signal Yet</Text>
-          <Text style={styles.emptySub}>Generate an AI prediction for {selectedSymbol} to see insights.</Text>
+        <View style={styles.card}>
+          <View style={styles.rowBetween}>
+            <View style={styles.rowCenter}>
+              <Icon name="help-circle" size={22} color="#6B7280" />
+              <Text style={styles.title}>No Signal Data</Text>
+            </View>
+            <TouchableOpacity onPress={onRefresh} activeOpacity={0.7} accessibilityLabel="Refresh">
+              <Animated.View style={spinStyle}>
+                <Icon name="refresh-cw" size={20} color="#007AFF" />
+              </Animated.View>
+            </TouchableOpacity>
+          </View>
+          
+          <View style={styles.rowSplit}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.sub}>Status</Text>
+              <Text style={[styles.prob, { color: '#6B7280' }]}>Waiting...</Text>
+            </View>
+            <View style={{ flex: 1, alignItems: 'flex-end' }}>
+              <Text style={styles.sub}>Action</Text>
+              <Text style={styles.sentiment}>Generate prediction above</Text>
+            </View>
+          </View>
+          
+          <View style={{ marginTop: 12 }}>
+            <Text style={styles.h6}>Debug Info</Text>
+            <Text style={styles.body}>
+              Signal Loading: {signalLoading ? 'Yes' : 'No'}{'\n'}
+              Has Signal Data: {signalData ? 'Yes' : 'No'}{'\n'}
+              Error: {signalError?.message || 'None'}
+            </Text>
+          </View>
         </View>
       )}
+
+      {/* Crypto Recommendations Section - On Demand */}
+      <View style={styles.section}>
+        <View style={styles.rowBetween}>
+          <Text style={styles.sectionTitle}>AI Recommendations</Text>
+          {!showRecommendations ? (
+            <TouchableOpacity 
+              onPress={() => setShowRecommendations(true)} 
+              style={styles.loadRecommendationsBtn}
+              activeOpacity={0.7}
+            >
+              <Icon name="zap" size={16} color="#007AFF" />
+              <Text style={styles.loadRecommendationsText}>Load AI Picks</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity onPress={() => refetchRecommendations()} activeOpacity={0.7}>
+              <Animated.View style={spinStyle}>
+                <Icon name="refresh-cw" size={18} color="#007AFF" />
+              </Animated.View>
+            </TouchableOpacity>
+          )}
+        </View>
+        
+        {!showRecommendations ? (
+          <View style={styles.card}>
+            <View style={styles.empty}>
+              <Icon name="zap" size={32} color="#6B7280" />
+              <Text style={styles.emptyTitle}>AI-Powered Recommendations</Text>
+              <Text style={styles.emptySub}>Tap "Load AI Picks" to get personalized crypto recommendations</Text>
+            </View>
+          </View>
+        ) : recommendationsLoading ? (
+          <View style={styles.card}>
+            <View style={styles.rowCenter}>
+              <ActivityIndicator size="small" color="#007AFF" />
+              <Text style={[styles.body, { marginLeft: 8 }]}>Loading AI recommendations...</Text>
+            </View>
+          </View>
+        ) : recommendationsData?.cryptoRecommendations?.length > 0 ? (
+          <View style={styles.recommendationsList}>
+            {recommendationsData.cryptoRecommendations.map((rec: any, index: number) => (
+              <RecommendationCard key={`${rec.symbol}-${index}`} recommendation={rec} />
+            ))}
+          </View>
+        ) : (
+          <View style={styles.card}>
+            <View style={styles.empty}>
+              <Icon name="trending-up" size={32} color="#6B7280" />
+              <Text style={styles.emptyTitle}>No Recommendations</Text>
+              <Text style={styles.emptySub}>Check back later for AI-powered crypto recommendations</Text>
+            </View>
+          </View>
+        )}
+      </View>
 
       {/* Risk note */}
       <View style={styles.notice}>
@@ -449,6 +625,42 @@ const styles = StyleSheet.create({
   skelDot: { backgroundColor: '#F3F4F6', borderRadius: 8 },
   badgeBigDay: { marginLeft: 8, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, backgroundColor: '#F5F3FF' },
   badgeText: { fontSize: 10, fontWeight: '800', color: '#7C3AED' },
+
+  // Recommendations
+  recommendationsList: { gap: 12 },
+  recCard: { backgroundColor: '#fff', borderRadius: 12, padding: 16, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 1 },
+  recHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
+  recLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  recSymbol: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  recSymbolText: { fontSize: 14, fontWeight: '800', color: '#1D4ED8' },
+  recInfo: { flex: 1 },
+  recPrice: { fontSize: 16, fontWeight: '700', color: '#111827' },
+  recScore: { fontSize: 12, color: '#6B7280', marginTop: 2 },
+  recRight: { alignItems: 'flex-end' },
+  recBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 1, marginBottom: 6 },
+  recBadgeText: { fontSize: 12, fontWeight: '700' },
+  recMeta: { alignItems: 'flex-end' },
+  recVolatility: { fontSize: 11, fontWeight: '600', marginBottom: 2 },
+  recConfidence: { fontSize: 10, color: '#6B7280' },
+  recRationale: { fontSize: 13, color: '#6B7280', lineHeight: 18, marginTop: 4 },
+
+  // Load recommendations button
+  loadRecommendationsBtn: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 6, 
+    paddingHorizontal: 12, 
+    paddingVertical: 8, 
+    backgroundColor: '#EFF6FF', 
+    borderRadius: 8, 
+    borderWidth: 1, 
+    borderColor: '#DBEAFE' 
+  },
+  loadRecommendationsText: { 
+    fontSize: 14, 
+    fontWeight: '600', 
+    color: '#007AFF' 
+  },
 
   // Error states
   errorContainer: { alignItems: 'center', paddingVertical: 24, paddingHorizontal: 16 },
