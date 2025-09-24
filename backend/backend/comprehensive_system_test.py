@@ -243,7 +243,6 @@ class GraphQLSystemTester:
                     validationTimestamp
                     createdBy {
                         id
-                        username
                         name
                     }
                 }
@@ -260,7 +259,6 @@ class GraphQLSystemTester:
             query GetLeaderboard {
                 leaderboard {
                     id
-                    username
                     name
                     totalSignals
                     winRate

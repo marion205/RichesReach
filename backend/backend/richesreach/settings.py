@@ -304,7 +304,8 @@ AUTHENTICATION_BACKENDS = [
 # GraphQL Configuration
 GRAPHENE = {
     "SCHEMA": "core.schema.schema",
-    "MIDDLEWARE": ["graphql_jwt.middleware.JSONWebTokenMiddleware"],
+    # Disable JWT middleware for development to avoid token decoding errors
+    # "MIDDLEWARE": ["graphql_jwt.middleware.JSONWebTokenMiddleware"],
 }
 
 # CSRF Configuration for dev

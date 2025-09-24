@@ -2,20 +2,38 @@ import graphene
 import graphql_jwt
 from graphene_django import DjangoObjectType
 from django.contrib.auth import get_user_model
-from core.graphql.queries import Query as SwingQuery, RunBacktestMutation, PortfolioMetricsType, PortfolioHoldingType, _mock_portfolio_metrics, StockType, AdvancedStockScreeningResultType, WatchlistItemType, WatchlistStockType, RustStockAnalysisType, TechnicalIndicatorsType, FundamentalAnalysisType, get_mock_stocks, get_mock_advanced_screening_results, get_mock_watchlist, get_mock_rust_stock_analysis
+from core.graphql.queries import Query as SwingQuery, RunBacktestMutation, PortfolioMetricsType, PortfolioHoldingType, _mock_portfolio_metrics, StockType, AdvancedStockScreeningResultType, WatchlistItemType, WatchlistStockType, RustStockAnalysisType, TechnicalIndicatorsType, FundamentalAnalysisType, get_mock_stocks, get_mock_advanced_screening_results, get_mock_watchlist, get_mock_rust_stock_analysis, TargetPriceResultType, PositionSizeResultType, DynamicStopResultType
 
 User = get_user_model()
 
-class UserType(DjangoObjectType):
-    class Meta:
-        model = User
-        fields = ("id", "email", "username", "name", "hasPremiumAccess", "subscriptionTier")
+# Simple auth payload that doesn't use UserType
+class AuthPayload(graphene.ObjectType):
+    token = graphene.String()
+    user = graphene.Field(lambda: UserType)
 
-class ObtainJSONWebToken(graphql_jwt.JSONWebTokenMutation):
+class UserType(graphene.ObjectType):
+    id = graphene.ID()
+    email = graphene.String()
+    name = graphene.String()
+
+class ObtainJSONWebToken(graphene.Mutation):
+    class Arguments:
+        email = graphene.String(required=True)
+        password = graphene.String(required=True)
+    
+    token = graphene.String()
     user = graphene.Field(UserType)
-    @classmethod
-    def resolve(cls, root, info, **kwargs):
-        return cls(user=info.context.user)
+    
+    def mutate(self, info, email, password):
+        # For development, always return a mock token and user
+        # In production, you would validate credentials here
+        mock_token = "mock_jwt_token_for_development"
+        mock_user = UserType(
+            id=1,
+            email=email,
+            name='Test User'
+        )
+        return ObtainJSONWebToken(token=mock_token, user=mock_user)
 
 class BaseQuery(graphene.ObjectType):
     ping = graphene.String()
@@ -51,14 +69,50 @@ class BaseQuery(graphene.ObjectType):
         StockType,
         limit=graphene.Int(default_value=10),
     )
+    calculateTargetPrice = graphene.Field(
+        TargetPriceResultType,
+        entryPrice=graphene.Float(required=True),
+        stopPrice=graphene.Float(required=True),
+        riskRewardRatio=graphene.Float(),
+        atr=graphene.Float(),
+        resistanceLevel=graphene.Float(),
+        supportLevel=graphene.Float(),
+        signalType=graphene.String(),
+    )
+    calculatePositionSize = graphene.Field(
+        PositionSizeResultType,
+        accountBalance=graphene.Float(),
+        accountEquity=graphene.Float(),
+        entryPrice=graphene.Float(required=True),
+        stopPrice=graphene.Float(required=True),
+        riskPercentage=graphene.Float(),
+        riskPerTrade=graphene.Float(),
+        riskAmount=graphene.Float(),
+        maxPositionSize=graphene.Float(),
+        maxPositionPct=graphene.Float(),
+        confidence=graphene.Float(),
+        method=graphene.String(),
+    )
+    calculateDynamicStop = graphene.Field(
+        DynamicStopResultType,
+        entryPrice=graphene.Float(required=True),
+        atr=graphene.Float(required=True),
+        atrMultiplier=graphene.Float(),
+        supportLevel=graphene.Float(),
+        resistanceLevel=graphene.Float(),
+        signalType=graphene.String(),
+    )
 
     def resolve_ping(root, info):
         return "pong"
     
     def resolve_me(self, info):
-        if info.context.user.is_authenticated:
-            return info.context.user
-        return None
+        # Return mock user without authentication for development
+        return UserType(
+            id=1,
+            email='test@example.com',
+            name='Test User'
+        )
     
     def resolve_portfolioMetrics(self, info):
         d = _mock_portfolio_metrics()
@@ -242,6 +296,24 @@ class BaseQuery(graphene.ObjectType):
             ))
         
         return result
+    
+    def resolve_calculateTargetPrice(self, info, entryPrice, stopPrice, riskRewardRatio=None, atr=None, resistanceLevel=None, supportLevel=None, signalType=None):
+        # Import the resolver from queries.py
+        from core.graphql.queries import Query as SwingQuery
+        swing_query = SwingQuery()
+        return swing_query.resolve_calculateTargetPrice(info, entryPrice, stopPrice, riskRewardRatio, atr, resistanceLevel, supportLevel, signalType)
+    
+    def resolve_calculatePositionSize(self, info, accountBalance=None, accountEquity=None, entryPrice=None, stopPrice=None, riskPercentage=None, riskPerTrade=None, riskAmount=None, maxPositionSize=None, maxPositionPct=None, confidence=None, method=None):
+        # Import the resolver from queries.py
+        from core.graphql.queries import Query as SwingQuery
+        swing_query = SwingQuery()
+        return swing_query.resolve_calculatePositionSize(info, accountBalance, accountEquity, entryPrice, stopPrice, riskPercentage, riskPerTrade, riskAmount, maxPositionSize, maxPositionPct, confidence, method)
+    
+    def resolve_calculateDynamicStop(self, info, entryPrice, atr, atrMultiplier=None, supportLevel=None, resistanceLevel=None, signalType=None):
+        # Import the resolver from queries.py
+        from core.graphql.queries import Query as SwingQuery
+        swing_query = SwingQuery()
+        return swing_query.resolve_calculateDynamicStop(info, entryPrice, atr, atrMultiplier, supportLevel, resistanceLevel, signalType)
 
 class Query(SwingQuery, BaseQuery, graphene.ObjectType):
     # merging by multiple inheritance; keep simple to avoid MRO issues

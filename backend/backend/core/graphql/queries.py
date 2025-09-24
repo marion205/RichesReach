@@ -9,7 +9,6 @@ def get_mock_signals():
     # Create a mock user without database access
     mock_user = MockUser(
         id=1,
-        username='ai_system',
         name='AI Trading System',
         email='ai@richesreach.com'
     )
@@ -61,11 +60,11 @@ def get_mock_signals():
 def get_mock_leaderboard():
     # Create mock users
     users = [
-        MockUser(id=1, username='trader_pro', name='Trader Pro', email='pro@example.com'),
-        MockUser(id=2, username='swing_master', name='Swing Master', email='swing@example.com'),
-        MockUser(id=3, username='chart_king', name='Chart King', email='chart@example.com'),
-        MockUser(id=4, username='signal_hunter', name='Signal Hunter', email='hunter@example.com'),
-        MockUser(id=5, username='market_wizard', name='Market Wizard', email='wizard@example.com'),
+        MockUser(id=1, name='Trader Pro', email='pro@example.com'),
+        MockUser(id=2, name='Swing Master', email='swing@example.com'),
+        MockUser(id=3, name='Chart King', email='chart@example.com'),
+        MockUser(id=4, name='Signal Hunter', email='hunter@example.com'),
+        MockUser(id=5, name='Market Wizard', email='wizard@example.com'),
     ]
     
     # Create mock trader scores
@@ -133,10 +132,10 @@ def get_mock_leaderboard():
 def get_mock_backtest_strategies():
     # Create mock users
     users = [
-        MockUser(id=1, username='strategy_master', name='Strategy Master', email='master@example.com'),
-        MockUser(id=2, username='quant_trader', name='Quant Trader', email='quant@example.com'),
-        MockUser(id=3, username='swing_expert', name='Swing Expert', email='swing@example.com'),
-        MockUser(id=4, username='momentum_hunter', name='Momentum Hunter', email='momentum@example.com'),
+        MockUser(id=1, name='Strategy Master', email='master@example.com'),
+        MockUser(id=2, name='Quant Trader', email='quant@example.com'),
+        MockUser(id=3, name='Swing Expert', email='swing@example.com'),
+        MockUser(id=4, name='Momentum Hunter', email='momentum@example.com'),
     ]
     
     # Create mock backtest strategies
@@ -391,7 +390,6 @@ class Query(graphene.ObjectType):
             id=1,
             name='Test User',
             email='test@example.com',
-            username='testuser',
             hasPremiumAccess=True,
             subscriptionTier='PREMIUM'
         )
@@ -430,6 +428,270 @@ class Query(graphene.ObjectType):
         
         # Apply limit
         return results[:min(limit or 50, 200)]
+    
+    def resolve_calculateTargetPrice(self, info, entryPrice, stopPrice, riskRewardRatio=None, atr=None, resistanceLevel=None, supportLevel=None, signalType=None):
+        # Calculate risk distance
+        risk_distance = abs(entryPrice - stopPrice)
+        
+        # Default risk-reward ratio if not provided
+        if riskRewardRatio is None:
+            riskRewardRatio = 2.0
+        
+        # Calculate different target price methods
+        rr_target = None
+        atr_target = None
+        sr_target = None
+        method = "risk_reward"
+        
+        # Risk-Reward Ratio method
+        if signalType == "BUY":
+            rr_target = entryPrice + (risk_distance * riskRewardRatio)
+        else:  # SELL
+            rr_target = entryPrice - (risk_distance * riskRewardRatio)
+        
+        # ATR-based method
+        if atr is not None:
+            if signalType == "BUY":
+                atr_target = entryPrice + (atr * riskRewardRatio)
+            else:  # SELL
+                atr_target = entryPrice - (atr * riskRewardRatio)
+        
+        # Support/Resistance method
+        if signalType == "BUY" and resistanceLevel is not None:
+            sr_target = resistanceLevel
+            method = "resistance"
+        elif signalType == "SELL" and supportLevel is not None:
+            sr_target = supportLevel
+            method = "support"
+        
+        # Choose the best target price
+        target_price = rr_target  # Default to risk-reward
+        
+        if sr_target is not None:
+            # Prefer support/resistance if it's closer to entry (more conservative)
+            if signalType == "BUY":
+                if sr_target < rr_target:
+                    target_price = sr_target
+                    method = "resistance"
+            else:  # SELL
+                if sr_target > rr_target:
+                    target_price = sr_target
+                    method = "support"
+        
+        if atr_target is not None:
+            # Use ATR if it's more conservative than current target
+            if signalType == "BUY":
+                if atr_target < target_price:
+                    target_price = atr_target
+                    method = "atr"
+            else:  # SELL
+                if atr_target > target_price:
+                    target_price = atr_target
+                    method = "atr"
+        
+        # Calculate reward distance
+        reward_distance = abs(target_price - entryPrice)
+        
+        # Recalculate actual risk-reward ratio
+        actual_risk_reward_ratio = reward_distance / risk_distance if risk_distance > 0 else 0
+        
+        return TargetPriceResultType(
+            targetPrice=round(target_price, 2),
+            rewardDistance=round(reward_distance, 2),
+            riskRewardRatio=round(actual_risk_reward_ratio, 2),
+            method=method,
+            rrTarget=round(rr_target, 2) if rr_target else None,
+            atrTarget=round(atr_target, 2) if atr_target else None,
+            srTarget=round(sr_target, 2) if sr_target else None
+        )
+    
+    def resolve_calculatePositionSize(self, info, accountBalance=None, accountEquity=None, entryPrice=None, stopPrice=None, riskPercentage=None, riskPerTrade=None, riskAmount=None, maxPositionSize=None, maxPositionPct=None, confidence=None, method=None):
+        # Use accountEquity if provided, otherwise accountBalance, otherwise default
+        if accountEquity is not None:
+            accountBalance = accountEquity
+        elif accountBalance is None:
+            accountBalance = 10000.0
+        
+        # Use riskPerTrade if provided, otherwise riskPercentage
+        if riskPerTrade is not None:
+            # riskPerTrade is typically passed as decimal (0.01 = 1%), convert to percentage
+            riskPercentage = riskPerTrade * 100
+        
+        # Calculate risk per share
+        risk_per_share = abs(entryPrice - stopPrice)
+        
+        if risk_per_share <= 0:
+            # Invalid stop price
+            return PositionSizeResultType(
+                positionSize=0,
+                shares=0,
+                dollarAmount=0,
+                riskAmount=0,
+                riskPercentage=0,
+                method="invalid",
+                maxPositionSize=maxPositionSize or 0,
+                recommendedSize=0,
+                dollarRisk=0,
+                positionValue=0,
+                positionPct=0,
+                riskPerTradePct=0,
+                riskPerShare=0,
+                maxSharesFixedRisk=0,
+                maxSharesPosition=0
+            )
+        
+        # Determine calculation method
+        if method is None:
+            if riskAmount is not None:
+                method = "fixed_risk"
+            elif riskPercentage is not None:
+                method = "percentage_risk"
+            else:
+                method = "percentage_risk"
+                riskPercentage = 1.0  # Default to 1% risk
+        
+        # Calculate position size based on method
+        if method == "fixed_risk" and riskAmount is not None:
+            # Fixed dollar risk amount
+            shares = int(riskAmount / risk_per_share)
+            dollar_amount = shares * entryPrice
+            actual_risk_amount = shares * risk_per_share
+            actual_risk_percentage = (actual_risk_amount / accountBalance) * 100
+            
+        elif method == "percentage_risk" and riskPercentage is not None:
+            # Percentage of account balance risk
+            risk_amount = (riskPercentage / 100) * accountBalance
+            shares = int(risk_amount / risk_per_share)
+            dollar_amount = shares * entryPrice
+            actual_risk_amount = shares * risk_per_share
+            actual_risk_percentage = (actual_risk_amount / accountBalance) * 100
+            
+        else:
+            # Default to 1% risk
+            risk_amount = 0.01 * accountBalance
+            shares = int(risk_amount / risk_per_share)
+            dollar_amount = shares * entryPrice
+            actual_risk_amount = shares * risk_per_share
+            actual_risk_percentage = (actual_risk_amount / accountBalance) * 100
+        
+        # Apply maximum position size constraints
+        if maxPositionSize is not None and dollar_amount > maxPositionSize:
+            shares = int(maxPositionSize / entryPrice)
+            dollar_amount = shares * entryPrice
+            actual_risk_amount = shares * risk_per_share
+            actual_risk_percentage = (actual_risk_amount / accountBalance) * 100
+            method = "max_position_constraint"
+        
+        if maxPositionPct is not None:
+            # maxPositionPct is passed as decimal (0.1 = 10%), not percentage
+            max_position_dollar = maxPositionPct * accountBalance
+            if dollar_amount > max_position_dollar:
+                shares = int(max_position_dollar / entryPrice)
+                dollar_amount = shares * entryPrice
+                actual_risk_amount = shares * risk_per_share
+                actual_risk_percentage = (actual_risk_amount / accountBalance) * 100
+                method = "max_position_pct_constraint"
+        
+        # Calculate position size as percentage of account
+        position_size_percentage = (dollar_amount / accountBalance) * 100
+        
+        # Calculate recommended size (conservative approach)
+        recommended_risk_percentage = min(actual_risk_percentage, 2.0)  # Cap at 2%
+        recommended_risk_amount = (recommended_risk_percentage / 100) * accountBalance
+        recommended_shares = int(recommended_risk_amount / risk_per_share)
+        recommended_size = recommended_shares * entryPrice
+        
+        # Calculate additional fields expected by mobile app
+        max_shares_fixed_risk = int(riskAmount / risk_per_share) if riskAmount else 0
+        max_shares_position = int(maxPositionSize / entryPrice) if maxPositionSize else 0
+        
+        return PositionSizeResultType(
+            positionSize=round(position_size_percentage, 2),
+            shares=shares,
+            dollarAmount=round(dollar_amount, 2),
+            riskAmount=round(actual_risk_amount, 2),
+            riskPercentage=round(actual_risk_percentage, 2),
+            method=method,
+            maxPositionSize=maxPositionSize or 0,
+            recommendedSize=round(recommended_size, 2),
+            dollarRisk=round(actual_risk_amount, 2),
+            positionValue=round(dollar_amount, 2),
+            positionPct=round(position_size_percentage, 2),
+            riskPerTradePct=round(actual_risk_percentage, 2),
+            riskPerShare=round(risk_per_share, 2),
+            maxSharesFixedRisk=max_shares_fixed_risk,
+            maxSharesPosition=max_shares_position
+        )
+    
+    def resolve_calculateDynamicStop(self, info, entryPrice, atr, atrMultiplier=None, supportLevel=None, resistanceLevel=None, signalType=None):
+        # Default ATR multiplier if not provided
+        if atrMultiplier is None:
+            atrMultiplier = 2.0
+        
+        # Calculate different stop loss methods
+        atr_stop = None
+        sr_stop = None
+        pct_stop = None
+        method = "atr"
+        
+        # ATR-based stop loss
+        if signalType == "BUY":
+            atr_stop = entryPrice - (atr * atrMultiplier)
+        else:  # SELL
+            atr_stop = entryPrice + (atr * atrMultiplier)
+        
+        # Support/Resistance based stop loss
+        if signalType == "BUY" and supportLevel is not None:
+            sr_stop = supportLevel
+            method = "support_resistance"
+        elif signalType == "SELL" and resistanceLevel is not None:
+            sr_stop = resistanceLevel
+            method = "support_resistance"
+        
+        # Percentage-based stop loss (default 2%)
+        pct_stop_distance = entryPrice * 0.02  # 2% stop
+        if signalType == "BUY":
+            pct_stop = entryPrice - pct_stop_distance
+        else:  # SELL
+            pct_stop = entryPrice + pct_stop_distance
+        
+        # Choose the best stop loss
+        stop_price = atr_stop  # Default to ATR
+        
+        if sr_stop is not None:
+            # Prefer support/resistance if it's more conservative (closer to entry)
+            if signalType == "BUY":
+                if sr_stop > atr_stop:  # Support is higher (more conservative)
+                    stop_price = sr_stop
+                    method = "support_resistance"
+            else:  # SELL
+                if sr_stop < atr_stop:  # Resistance is lower (more conservative)
+                    stop_price = sr_stop
+                    method = "support_resistance"
+        
+        # Use percentage stop if it's more conservative than current choice
+        if signalType == "BUY":
+            if pct_stop > stop_price:  # Percentage stop is higher (more conservative)
+                stop_price = pct_stop
+                method = "percentage"
+        else:  # SELL
+            if pct_stop < stop_price:  # Percentage stop is lower (more conservative)
+                stop_price = pct_stop
+                method = "percentage"
+        
+        # Calculate stop distance and risk percentage
+        stop_distance = abs(entryPrice - stop_price)
+        risk_percentage = (stop_distance / entryPrice) * 100
+        
+        return DynamicStopResultType(
+            stopPrice=round(stop_price, 2),
+            stopDistance=round(stop_distance, 2),
+            riskPercentage=round(risk_percentage, 2),
+            method=method,
+            atrStop=round(atr_stop, 2) if atr_stop else None,
+            srStop=round(sr_stop, 2) if sr_stop else None,
+            pctStop=round(pct_stop, 2) if pct_stop else None
+        )
 
 # Mock data for portfolio metrics - completely database-free
 def _mock_portfolio_metrics():
@@ -904,269 +1166,125 @@ def get_mock_rust_stock_analysis(symbol):
     # Return analysis for the requested symbol, or default to AAPL
     return analysis_data.get(symbol.upper(), analysis_data['AAPL'])
 
-    def resolve_calculateTargetPrice(self, info, entryPrice, stopPrice, riskRewardRatio=None, atr=None, resistanceLevel=None, supportLevel=None, signalType=None):
-        # Calculate risk distance
-        risk_distance = abs(entryPrice - stopPrice)
-        
-        # Default risk-reward ratio if not provided
-        if riskRewardRatio is None:
-            riskRewardRatio = 2.0
-        
-        # Calculate different target price methods
-        rr_target = None
-        atr_target = None
-        sr_target = None
-        method = "risk_reward"
-        
-        # Risk-Reward Ratio method
-        if signalType == "BUY":
-            rr_target = entryPrice + (risk_distance * riskRewardRatio)
-        else:  # SELL
-            rr_target = entryPrice - (risk_distance * riskRewardRatio)
-        
-        # ATR-based method
-        if atr is not None:
-            if signalType == "BUY":
-                atr_target = entryPrice + (atr * riskRewardRatio)
-            else:  # SELL
-                atr_target = entryPrice - (atr * riskRewardRatio)
-        
-        # Support/Resistance method
-        if signalType == "BUY" and resistanceLevel is not None:
-            sr_target = resistanceLevel
-            method = "resistance"
-        elif signalType == "SELL" and supportLevel is not None:
-            sr_target = supportLevel
-            method = "support"
-        
-        # Choose the best target price
-        target_price = rr_target  # Default to risk-reward
-        
-        if sr_target is not None:
-            # Prefer support/resistance if it's closer to entry (more conservative)
-            if signalType == "BUY":
-                if sr_target < rr_target:
-                    target_price = sr_target
-                    method = "resistance"
-            else:  # SELL
-                if sr_target > rr_target:
-                    target_price = sr_target
-                    method = "support"
-        
-        if atr_target is not None:
-            # Use ATR if it's more conservative than current target
-            if signalType == "BUY":
-                if atr_target < target_price:
-                    target_price = atr_target
-                    method = "atr"
-            else:  # SELL
-                if atr_target > target_price:
-                    target_price = atr_target
-                    method = "atr"
-        
-        # Calculate reward distance
-        reward_distance = abs(target_price - entryPrice)
-        
-        # Recalculate actual risk-reward ratio
-        actual_risk_reward_ratio = reward_distance / risk_distance if risk_distance > 0 else 0
-        
-        return TargetPriceResultType(
-            targetPrice=round(target_price, 2),
-            rewardDistance=round(reward_distance, 2),
-            riskRewardRatio=round(actual_risk_reward_ratio, 2),
-            method=method,
-            rrTarget=round(rr_target, 2) if rr_target else None,
-            atrTarget=round(atr_target, 2) if atr_target else None,
-            srTarget=round(sr_target, 2) if sr_target else None
-        )
-    
-    def resolve_calculatePositionSize(self, info, accountBalance=None, accountEquity=None, entryPrice=None, stopPrice=None, riskPercentage=None, riskPerTrade=None, riskAmount=None, maxPositionSize=None, maxPositionPct=None, confidence=None, method=None):
-        # Use accountEquity if provided, otherwise accountBalance, otherwise default
-        if accountEquity is not None:
-            accountBalance = accountEquity
-        elif accountBalance is None:
-            accountBalance = 10000.0
-        
-        # Use riskPerTrade if provided, otherwise riskPercentage
-        if riskPerTrade is not None:
-            # riskPerTrade is typically passed as decimal (0.01 = 1%), convert to percentage
-            riskPercentage = riskPerTrade * 100
-        
-        # Calculate risk per share
-        risk_per_share = abs(entryPrice - stopPrice)
-        
-        if risk_per_share <= 0:
-            # Invalid stop price
-            return PositionSizeResultType(
-                positionSize=0,
-                shares=0,
-                dollarAmount=0,
-                riskAmount=0,
-                riskPercentage=0,
-                method="invalid",
-                maxPositionSize=maxPositionSize or 0,
-                recommendedSize=0,
-                dollarRisk=0,
-                positionValue=0,
-                positionPct=0,
-                riskPerTradePct=0,
-                riskPerShare=0,
-                maxSharesFixedRisk=0,
-                maxSharesPosition=0
+# RunBacktest mutation
+class RunBacktestMutation(graphene.Mutation):
+    class Arguments:
+        config = BacktestConfigType(required=True)
+
+    Output = RunBacktestResultType
+
+    def mutate(self, info, config):
+        try:
+            # Extract values from config
+            strategy_id = getattr(config, 'strategyId', '1')
+            start_date = getattr(config, 'startDate', timezone.now() - timedelta(days=365))
+            end_date = getattr(config, 'endDate', timezone.now())
+            initial_capital = getattr(config, 'initialCapital', 10000.0)
+            commission_per_trade = getattr(config, 'commissionPerTrade', 1.0)
+            slippage_pct = getattr(config, 'slippagePct', 0.001)
+            max_position_size = getattr(config, 'maxPositionSize', 0.1)
+            risk_per_trade = getattr(config, 'riskPerTrade', 0.02)
+            max_trades_per_day = getattr(config, 'maxTradesPerDay', 5)
+            max_open_positions = getattr(config, 'maxOpenPositions', 3)
+            parameters = getattr(config, 'parameters', {})
+            
+            # Set default params based on strategy
+            if not parameters:
+                if strategy_id == '1':
+                    parameters = {
+                        'ema_fast': 12,
+                        'ema_slow': 26,
+                        'stop_loss': 0.05,
+                        'take_profit': 0.10
+                    }
+                elif strategy_id == '2':
+                    parameters = {
+                        'rsi_period': 14,
+                        'oversold_threshold': 30,
+                        'overbought_threshold': 70,
+                        'stop_loss': 0.03,
+                        'take_profit': 0.08
+                    }
+                else:
+                    parameters = {
+                        'stop_loss': 0.05,
+                        'take_profit': 0.10
+                    }
+            
+            # Simulate backtest execution with realistic results
+            
+            # Generate realistic performance based on strategy and symbol
+            base_return = 0.15 + random.uniform(-0.05, 0.1)  # 10-25% base return
+            symbol_multiplier = {
+                'AAPL': 1.0, 'TSLA': 1.2, 'MSFT': 0.9, 'GOOGL': 1.1,
+                'AMZN': 1.15, 'NVDA': 1.3, 'META': 1.05, 'NFLX': 0.95
+            }.get('AAPL', 1.0)  # Default to AAPL
+            
+            total_return = base_return * symbol_multiplier
+            final_capital = initial_capital * (1 + total_return)
+            
+            # Calculate other metrics
+            days = (end_date - start_date).days
+            annualized_return = (1 + total_return) ** (365 / days) - 1 if days > 0 else total_return
+            
+            max_drawdown = 0.05 + random.uniform(0, 0.1)  # 5-15% drawdown
+            sharpe_ratio = 1.2 + random.uniform(-0.3, 0.8)  # 0.9-2.0 Sharpe
+            sortino_ratio = sharpe_ratio * 1.1
+            calmar_ratio = annualized_return / max_drawdown if max_drawdown > 0 else 0
+            
+            win_rate = 0.6 + random.uniform(-0.1, 0.2)  # 50-80% win rate
+            total_trades = 30 + random.randint(0, 50)  # 30-80 trades
+            winning_trades = int(total_trades * win_rate)
+            losing_trades = total_trades - winning_trades
+            
+            profit_factor = 1.5 + random.uniform(-0.3, 0.8)  # 1.2-2.3 profit factor
+            avg_win = (total_return * initial_capital * 0.6) / winning_trades if winning_trades > 0 else 0
+            avg_loss = (total_return * initial_capital * 0.4) / losing_trades if losing_trades > 0 else 0
+            
+            # Generate mock equity curve (daily values)
+            equity_curve = []
+            daily_returns = []
+            current_equity = initial_capital
+            
+            for i in range(min(days, 252)):  # Max 1 year of daily data
+                daily_return = random.uniform(-0.05, 0.05)  # ±5% daily volatility
+                current_equity *= (1 + daily_return)
+                equity_curve.append(round(current_equity, 2))
+                daily_returns.append(round(daily_return, 4))
+            
+            # Create result
+            result = BacktestResultOutputType(
+                totalReturn=round(total_return, 4),
+                annualizedReturn=round(annualized_return, 4),
+                maxDrawdown=round(max_drawdown, 4),
+                sharpeRatio=round(sharpe_ratio, 3),
+                sortinoRatio=round(sortino_ratio, 3),
+                calmarRatio=round(calmar_ratio, 3),
+                winRate=round(win_rate, 3),
+                profitFactor=round(profit_factor, 3),
+                totalTrades=total_trades,
+                winningTrades=winning_trades,
+                losingTrades=losing_trades,
+                avgWin=round(avg_win, 2),
+                avgLoss=round(avg_loss, 2),
+                initialCapital=initial_capital,
+                finalCapital=round(final_capital, 2),
+                equityCurve=equity_curve,
+                dailyReturns=daily_returns
             )
-        
-        # Determine calculation method
-        if method is None:
-            if riskAmount is not None:
-                method = "fixed_risk"
-            elif riskPercentage is not None:
-                method = "percentage_risk"
-            else:
-                method = "percentage_risk"
-                riskPercentage = 1.0  # Default to 1% risk
-        
-        # Calculate position size based on method
-        if method == "fixed_risk" and riskAmount is not None:
-            # Fixed dollar risk amount
-            shares = int(riskAmount / risk_per_share)
-            dollar_amount = shares * entryPrice
-            actual_risk_amount = shares * risk_per_share
-            actual_risk_percentage = (actual_risk_amount / accountBalance) * 100
             
-        elif method == "percentage_risk" and riskPercentage is not None:
-            # Percentage of account balance risk
-            risk_amount = (riskPercentage / 100) * accountBalance
-            shares = int(risk_amount / risk_per_share)
-            dollar_amount = shares * entryPrice
-            actual_risk_amount = shares * risk_per_share
-            actual_risk_percentage = (actual_risk_amount / accountBalance) * 100
+            return RunBacktestResultType(
+                success=True,
+                result=result,
+                errors=[]
+            )
             
-        else:
-            # Default to 1% risk
-            risk_amount = 0.01 * accountBalance
-            shares = int(risk_amount / risk_per_share)
-            dollar_amount = shares * entryPrice
-            actual_risk_amount = shares * risk_per_share
-            actual_risk_percentage = (actual_risk_amount / accountBalance) * 100
-        
-        # Apply maximum position size constraints
-        if maxPositionSize is not None and dollar_amount > maxPositionSize:
-            shares = int(maxPositionSize / entryPrice)
-            dollar_amount = shares * entryPrice
-            actual_risk_amount = shares * risk_per_share
-            actual_risk_percentage = (actual_risk_amount / accountBalance) * 100
-            method = "max_position_constraint"
-        
-        if maxPositionPct is not None:
-            # maxPositionPct is passed as decimal (0.1 = 10%), not percentage
-            max_position_dollar = maxPositionPct * accountBalance
-            if dollar_amount > max_position_dollar:
-                shares = int(max_position_dollar / entryPrice)
-                dollar_amount = shares * entryPrice
-                actual_risk_amount = shares * risk_per_share
-                actual_risk_percentage = (actual_risk_amount / accountBalance) * 100
-                method = "max_position_pct_constraint"
-        
-        # Calculate position size as percentage of account
-        position_size_percentage = (dollar_amount / accountBalance) * 100
-        
-        # Calculate recommended size (conservative approach)
-        recommended_risk_percentage = min(actual_risk_percentage, 2.0)  # Cap at 2%
-        recommended_risk_amount = (recommended_risk_percentage / 100) * accountBalance
-        recommended_shares = int(recommended_risk_amount / risk_per_share)
-        recommended_size = recommended_shares * entryPrice
-        
-        # Calculate additional fields expected by mobile app
-        max_shares_fixed_risk = int(riskAmount / risk_per_share) if riskAmount else 0
-        max_shares_position = int(maxPositionSize / entryPrice) if maxPositionSize else 0
-        
-        return PositionSizeResultType(
-            positionSize=round(position_size_percentage, 2),
-            shares=shares,
-            dollarAmount=round(dollar_amount, 2),
-            riskAmount=round(actual_risk_amount, 2),
-            riskPercentage=round(actual_risk_percentage, 2),
-            method=method,
-            maxPositionSize=maxPositionSize or 0,
-            recommendedSize=round(recommended_size, 2),
-            dollarRisk=round(actual_risk_amount, 2),
-            positionValue=round(dollar_amount, 2),
-            positionPct=round(position_size_percentage, 2),
-            riskPerTradePct=round(actual_risk_percentage, 2),
-            riskPerShare=round(risk_per_share, 2),
-            maxSharesFixedRisk=max_shares_fixed_risk,
-            maxSharesPosition=max_shares_position
-        )
-    
-    def resolve_calculateDynamicStop(self, info, entryPrice, atr, atrMultiplier=None, supportLevel=None, resistanceLevel=None, signalType=None):
-        # Default ATR multiplier if not provided
-        if atrMultiplier is None:
-            atrMultiplier = 2.0
-        
-        # Calculate different stop loss methods
-        atr_stop = None
-        sr_stop = None
-        pct_stop = None
-        method = "atr"
-        
-        # ATR-based stop loss
-        if signalType == "BUY":
-            atr_stop = entryPrice - (atr * atrMultiplier)
-        else:  # SELL
-            atr_stop = entryPrice + (atr * atrMultiplier)
-        
-        # Support/Resistance based stop loss
-        if signalType == "BUY" and supportLevel is not None:
-            sr_stop = supportLevel
-            method = "support_resistance"
-        elif signalType == "SELL" and resistanceLevel is not None:
-            sr_stop = resistanceLevel
-            method = "support_resistance"
-        
-        # Percentage-based stop loss (default 2%)
-        pct_stop_distance = entryPrice * 0.02  # 2% stop
-        if signalType == "BUY":
-            pct_stop = entryPrice - pct_stop_distance
-        else:  # SELL
-            pct_stop = entryPrice + pct_stop_distance
-        
-        # Choose the best stop loss
-        stop_price = atr_stop  # Default to ATR
-        
-        if sr_stop is not None:
-            # Prefer support/resistance if it's more conservative (closer to entry)
-            if signalType == "BUY":
-                if sr_stop > atr_stop:  # Support is higher (more conservative)
-                    stop_price = sr_stop
-                    method = "support_resistance"
-            else:  # SELL
-                if sr_stop < atr_stop:  # Resistance is lower (more conservative)
-                    stop_price = sr_stop
-                    method = "support_resistance"
-        
-        # Use percentage stop if it's more conservative than current choice
-        if signalType == "BUY":
-            if pct_stop > stop_price:  # Percentage stop is higher (more conservative)
-                stop_price = pct_stop
-                method = "percentage"
-        else:  # SELL
-            if pct_stop < stop_price:  # Percentage stop is lower (more conservative)
-                stop_price = pct_stop
-                method = "percentage"
-        
-        # Calculate stop distance and risk percentage
-        stop_distance = abs(entryPrice - stop_price)
-        risk_percentage = (stop_distance / entryPrice) * 100
-        
-        return DynamicStopResultType(
-            stopPrice=round(stop_price, 2),
-            stopDistance=round(stop_distance, 2),
-            riskPercentage=round(risk_percentage, 2),
-            method=method,
-            atrStop=round(atr_stop, 2) if atr_stop else None,
-            srStop=round(sr_stop, 2) if sr_stop else None,
-            pctStop=round(pct_stop, 2) if pct_stop else None
-        )
+        except Exception as e:
+            return RunBacktestResultType(
+                success=False,
+                result=None,
+                errors=[str(e)]
+            )
     
 
 # RunBacktest mutation

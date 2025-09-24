@@ -6,7 +6,6 @@ from django.utils import timezone
 # Create a simple ObjectType instead of DjangoObjectType for User (database-free)
 class UserType(graphene.ObjectType):
     id = graphene.ID()
-    username = graphene.String()
     name = graphene.String()
     email = graphene.String()
     hasPremiumAccess = graphene.Boolean()
@@ -79,7 +78,6 @@ class TraderScoreType(graphene.ObjectType):
 # LeaderboardEntry type
 class LeaderboardEntryType(graphene.ObjectType):
     id = graphene.ID()
-    username = graphene.String()
     name = graphene.String()
     rank = graphene.Int()
     category = graphene.String()
