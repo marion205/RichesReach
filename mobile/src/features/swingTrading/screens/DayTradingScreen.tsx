@@ -4,6 +4,7 @@ import {
 } from 'react-native';
 import { useQuery, useMutation } from '@apollo/client';
 import { GET_DAY_TRADING_PICKS, LOG_DAY_TRADING_OUTCOME } from '../../../graphql/dayTrading';
+import Icon from 'react-native-vector-icons/Feather';
 
 type Side = 'LONG' | 'SHORT';
 type TradingMode = 'SAFE' | 'AGGRESSIVE';
@@ -185,7 +186,7 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (s: stri
             <Text style={{ color: C.sub, fontSize: 12, marginTop: 6 }}>Quality threshold not met or market not suitable</Text>
           </View>
         }
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 12, paddingTop: 8 }}
         refreshControl={<RefreshControl refreshing={refreshing || networkStatus === 4} onRefresh={onRefresh} />}
         removeClippedSubviews
         windowSize={7}
@@ -210,7 +211,7 @@ const KV = ({ k, v }: { k: string; v: string }) => (
 );
 
 const s = StyleSheet.create({
-  header: { backgroundColor: C.card, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.line, padding: 16, marginBottom: 12 },
+  header: { backgroundColor: C.card, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.line, padding: 12, marginBottom: 8 },
   hLeft: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   back: { padding: 8, marginRight: 8 },
   title: { fontSize: 20, fontWeight: '800', color: C.text },
@@ -218,16 +219,16 @@ const s = StyleSheet.create({
   hBtns: { flexDirection: 'row', gap: 8, marginTop: 8 },
   badgeBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 },
   badgeTxt: { fontWeight: '700' },
-  modeInfo: { marginTop: 12, borderRadius: 10, padding: 12 },
+  modeInfo: { marginTop: 8, borderRadius: 10, padding: 10 },
   rowSpace: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   modeTitle: { fontSize: 12, fontWeight: '800' },
   modeRow: { flexDirection: 'row', gap: 8 },
   modePill: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, backgroundColor: '#E8ECF6' },
   modePillTxt: { fontWeight: '700', color: '#5B6473' },
   modeSub: { fontSize: 12, marginTop: 6 },
-  metaBar: { marginTop: 10, alignItems: 'center', gap: 2 },
+  metaBar: { marginTop: 6, alignItems: 'center', gap: 2 },
   meta: { fontSize: 12, color: C.sub },
-  card: { backgroundColor: C.card, borderRadius: 12, padding: 14, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
+  card: { backgroundColor: C.card, borderRadius: 12, padding: 14, marginBottom: 8, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   symRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   sym: { fontSize: 18, fontWeight: '800', color: C.text },
@@ -242,6 +243,6 @@ const s = StyleSheet.create({
   notes: { color: C.sub, fontStyle: 'italic', marginTop: 4 },
   primary: { marginTop: 12, paddingVertical: 12, borderRadius: 10, alignItems: 'center' },
   primaryTxt: { color: '#fff', fontWeight: '800' },
-  disclaimer: { paddingHorizontal: 16, paddingBottom: 12 },
+  disclaimer: { paddingHorizontal: 16, paddingBottom: 8 },
   disclaimerTxt: { fontSize: 11, color: C.sub, lineHeight: 16, textAlign: 'center' },
 });

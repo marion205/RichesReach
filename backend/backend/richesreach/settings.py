@@ -295,6 +295,41 @@ CHANNEL_LAYERS = {
 # CORS Configuration (dev only)
 CORS_ALLOW_ALL_ORIGINS = True  # dev only
 
+# Authentication backends
+AUTHENTICATION_BACKENDS = [
+    "graphql_jwt.backends.JSONWebTokenBackend",
+    "django.contrib.auth.backends.ModelBackend",
+]
+
+# GraphQL Configuration
+GRAPHENE = {
+    "SCHEMA": "core.schema.schema",
+    "MIDDLEWARE": ["graphql_jwt.middleware.JSONWebTokenMiddleware"],
+}
+
+# CSRF Configuration for dev
+CSRF_TRUSTED_ORIGINS = ["http://localhost:8000", "http://127.0.0.1:8000"]
+
 # Environment-driven RPC + AAVE Pool
 RPC_SEPOLIA = os.getenv("RPC_SEPOLIA", "https://eth-sepolia.g.alchemy.com/v2/<KEY>")
 AAVE_POOL_ADDRESS = os.getenv("AAVE_POOL_ADDRESS", "0x0000000000000000000000000000000000000000")
+
+# Celery Configuration for Real-Time Data Updates
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'America/New_York'
+
+# Real-Time Data Update Settings
+REALTIME_UPDATE_ENABLED = os.getenv('REALTIME_UPDATE_ENABLED', 'True').lower() == 'true'
+REALTIME_UPDATE_INTERVAL = int(os.getenv('REALTIME_UPDATE_INTERVAL', '300'))  # 5 minutes
+PRIORITY_UPDATE_INTERVAL = int(os.getenv('PRIORITY_UPDATE_INTERVAL', '60'))   # 1 minute
+
+# API Rate Limiting Settings
+API_RATE_LIMITS = {
+    'ALPHA_VANTAGE': {'limit': 5, 'window': 60},   # 5 requests per minute
+    'FINNHUB': {'limit': 60, 'window': 60},        # 60 requests per minute
+    'YAHOO_FINANCE': {'limit': 100, 'window': 60}, # 100 requests per minute
+}

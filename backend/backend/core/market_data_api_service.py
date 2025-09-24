@@ -56,115 +56,124 @@ class MarketDataAPIService:
         # Alpha Vantage
         alpha_key = os.getenv('ALPHA_VANTAGE_API_KEY')
         if alpha_key:
-api_keys[DataProvider.ALPHA_VANTAGE] = APIKey(
-provider=DataProvider.ALPHA_VANTAGE,
-key=alpha_key,
-rate_limit=self.rate_limits[DataProvider.ALPHA_VANTAGE]
-)
-# Finnhub
-finnhub_key = os.getenv('FINNHUB_API_KEY')
-if finnhub_key:
-api_keys[DataProvider.FINNHUB] = APIKey(
-provider=DataProvider.FINNHUB,
-key=finnhub_key,
-rate_limit=self.rate_limits[DataProvider.FINNHUB]
-)
-# Quandl
-quandl_key = os.getenv('QUANDL_API_KEY')
-if quandl_key:
-api_keys[DataProvider.QUANDL] = APIKey(
-provider=DataProvider.QUANDL,
-key=quandl_key,
-rate_limit=self.rate_limits[DataProvider.QUANDL]
-)
-# Polygon
-polygon_key = os.getenv('POLYGON_API_KEY')
-if polygon_key:
-api_keys[DataProvider.POLYGON] = APIKey(
-provider=DataProvider.POLYGON,
-key=polygon_key,
-rate_limit=self.rate_limits[DataProvider.POLYGON]
-)
-# IEX Cloud
-iex_key = os.getenv('IEX_CLOUD_API_KEY')
-if iex_key:
-api_keys[DataProvider.IEX_CLOUD] = APIKey(
-provider=DataProvider.IEX_CLOUD,
-key=iex_key,
-rate_limit=self.rate_limits[DataProvider.IEX_CLOUD]
-)
-logger.info(f"Loaded {len(api_keys)} API keys")
-return api_keys
-async def __aenter__(self):
-"""Async context manager entry"""
-self.session = aiohttp.ClientSession()
-return self
-async def __aexit__(self, exc_type, exc_val, exc_tb):
-"""Async context manager exit"""
-if self.session:
-await self.session.close()
-def _check_rate_limit(self, provider: DataProvider) -> bool:
-"""Check if we can make a request to the provider"""
-if provider not in self.api_keys:
-return False
-api_key = self.api_keys[provider]
-current_time = time.time()
-# Reset counter if a minute has passed
-if current_time - api_key.last_request >= 60:
-api_key.request_count = 0
-api_key.last_request = current_time
-# Check if we're under the rate limit
-if api_key.request_count >= api_key.rate_limit:
-return False
-api_key.request_count += 1
-return True
-def _get_cache_key(self, provider: str, symbol: str, data_type: str) -> str:
-"""Generate cache key for data"""
-return f"{provider}_{symbol}_{data_type}_{datetime.now().strftime('%Y%m%d_%H')}"
-def _is_cache_valid(self, cache_key: str) -> bool:
-"""Check if cached data is still valid"""
-if cache_key not in self.cache:
-return False
-cache_time, _ = self.cache[cache_key]
-return time.time() - cache_time < self.cache_duration
-async def get_stock_quote(self, symbol: str, provider: Optional[DataProvider] = None) -> Optional[Dict[str, Any]]:
-"""
-Get real-time stock quote
-Args:
-symbol: Stock symbol (e.g., 'AAPL')
-provider: Preferred data provider
-Returns:
-Stock quote data or None if error
-"""
-try:
-# Initialize session if not already done
-if not self.session:
-import aiohttp
-self.session = aiohttp.ClientSession()
-# Try preferred provider first
-if provider and self._check_rate_limit(provider):
-quote = await self._fetch_quote_from_provider(symbol, provider)
-if quote:
-return quote
-# Try other available providers (only implemented ones)
-implemented_providers = [DataProvider.ALPHA_VANTAGE, DataProvider.FINNHUB, DataProvider.YAHOO_FINANCE, DataProvider.IEX_CLOUD]
-for available_provider in self.api_keys.keys():
-if (available_provider != provider and 
-available_provider in implemented_providers and 
-self._check_rate_limit(available_provider)):
-quote = await self._fetch_quote_from_provider(symbol, available_provider)
-if quote:
-return quote
-logger.warning(f"No available providers for stock quote: {symbol}")
-return None
-except Exception as e:
-logger.error(f"Error fetching stock quote for {symbol}: {e}")
-return None
-async def _fetch_quote_from_provider(self, symbol: str, provider: DataProvider) -> Optional[Dict[str, Any]]:
-"""Fetch quote from specific provider"""
-try:
-if provider == DataProvider.ALPHA_VANTAGE:
-return await self._fetch_alpha_vantage_quote(symbol)
+            api_keys[DataProvider.ALPHA_VANTAGE] = APIKey(
+                provider=DataProvider.ALPHA_VANTAGE,
+                key=alpha_key,
+                rate_limit=self.rate_limits[DataProvider.ALPHA_VANTAGE]
+            )
+        # Finnhub
+        finnhub_key = os.getenv('FINNHUB_API_KEY')
+        if finnhub_key:
+            api_keys[DataProvider.FINNHUB] = APIKey(
+                provider=DataProvider.FINNHUB,
+                key=finnhub_key,
+                rate_limit=self.rate_limits[DataProvider.FINNHUB]
+            )
+        # Quandl
+        quandl_key = os.getenv('QUANDL_API_KEY')
+        if quandl_key:
+            api_keys[DataProvider.QUANDL] = APIKey(
+                provider=DataProvider.QUANDL,
+                key=quandl_key,
+                rate_limit=self.rate_limits[DataProvider.QUANDL]
+            )
+        # Polygon
+        polygon_key = os.getenv('POLYGON_API_KEY')
+        if polygon_key:
+            api_keys[DataProvider.POLYGON] = APIKey(
+                provider=DataProvider.POLYGON,
+                key=polygon_key,
+                rate_limit=self.rate_limits[DataProvider.POLYGON]
+            )
+        # IEX Cloud
+        iex_key = os.getenv('IEX_CLOUD_API_KEY')
+        if iex_key:
+            api_keys[DataProvider.IEX_CLOUD] = APIKey(
+                provider=DataProvider.IEX_CLOUD,
+                key=iex_key,
+                rate_limit=self.rate_limits[DataProvider.IEX_CLOUD]
+            )
+        logger.info(f"Loaded {len(api_keys)} API keys")
+        return api_keys
+    async def __aenter__(self):
+        """Async context manager entry"""
+        self.session = aiohttp.ClientSession()
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit"""
+        if self.session:
+            await self.session.close()
+    
+    def _check_rate_limit(self, provider: DataProvider) -> bool:
+        """Check if we can make a request to the provider"""
+        if provider not in self.api_keys:
+            return False
+        api_key = self.api_keys[provider]
+        current_time = time.time()
+        # Reset counter if a minute has passed
+        if current_time - api_key.last_request >= 60:
+            api_key.request_count = 0
+            api_key.last_request = current_time
+        # Check if we're under the rate limit
+        if api_key.request_count >= api_key.rate_limit:
+            return False
+        api_key.request_count += 1
+        return True
+    
+    def _get_cache_key(self, provider: str, symbol: str, data_type: str) -> str:
+        """Generate cache key for data"""
+        return f"{provider}_{symbol}_{data_type}_{datetime.now().strftime('%Y%m%d_%H')}"
+    
+    def _is_cache_valid(self, cache_key: str) -> bool:
+        """Check if cached data is still valid"""
+        if cache_key not in self.cache:
+            return False
+        cache_time, _ = self.cache[cache_key]
+        return time.time() - cache_time < self.cache_duration
+    
+    async def get_stock_quote(self, symbol: str, provider: Optional[DataProvider] = None) -> Optional[Dict[str, Any]]:
+        """
+        Get real-time stock quote
+        Args:
+            symbol: Stock symbol (e.g., 'AAPL')
+            provider: Preferred data provider
+        Returns:
+            Stock quote data or None if error
+        """
+        try:
+            # Initialize session if not already done
+            if not self.session:
+                import aiohttp
+                self.session = aiohttp.ClientSession()
+            
+            # Try preferred provider first
+            if provider and self._check_rate_limit(provider):
+                quote = await self._fetch_quote_from_provider(symbol, provider)
+                if quote:
+                    return quote
+            
+            # Try other available providers (only implemented ones)
+            implemented_providers = [DataProvider.ALPHA_VANTAGE, DataProvider.FINNHUB, DataProvider.YAHOO_FINANCE, DataProvider.IEX_CLOUD]
+            for available_provider in self.api_keys.keys():
+                if (available_provider != provider and 
+                    available_provider in implemented_providers and 
+                    self._check_rate_limit(available_provider)):
+                    quote = await self._fetch_quote_from_provider(symbol, available_provider)
+                    if quote:
+                        return quote
+            
+            logger.warning(f"No available providers for stock quote: {symbol}")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error fetching stock quote for {symbol}: {e}")
+            return None
+    async def _fetch_quote_from_provider(self, symbol: str, provider: DataProvider) -> Optional[Dict[str, Any]]:
+        """Fetch quote from specific provider"""
+        try:
+            if provider == DataProvider.ALPHA_VANTAGE:
+                return await self._fetch_alpha_vantage_quote(symbol)
 elif provider == DataProvider.FINNHUB:
 return await self._fetch_finnhub_quote(symbol)
 elif provider == DataProvider.YAHOO_FINANCE:

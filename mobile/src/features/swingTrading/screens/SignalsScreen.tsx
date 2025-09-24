@@ -15,7 +15,7 @@ import {
 import { useQuery, useMutation } from '@apollo/client';
 import { gql } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
-import { useNavigation } from '@react-navigation/native';
+// import { useNavigation } from '@react-navigation/native'; // Removed - using custom navigation
 import { mockSignals } from '../../../mockData/swingTradingMockData';
 
 const { width } = Dimensions.get('window');
@@ -110,10 +110,10 @@ interface Signal {
 }
 
 interface SignalsScreenProps {
-  navigation: any;
+  navigateTo: (screen: string) => void;
 }
 
-const SignalsScreen: React.FC<SignalsScreenProps> = ({ navigation }) => {
+const SignalsScreen: React.FC<SignalsScreenProps> = ({ navigateTo }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedSignal, setSelectedSignal] = useState<Signal | null>(null);
   const [commentModalVisible, setCommentModalVisible] = useState(false);
@@ -355,7 +355,7 @@ const SignalsScreen: React.FC<SignalsScreenProps> = ({ navigation }) => {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => navigation.goBack()}
+          onPress={() => navigateTo('swing-trading-test')}
         >
           <Icon name="arrow-left" size={24} color="#6B7280" />
         </TouchableOpacity>

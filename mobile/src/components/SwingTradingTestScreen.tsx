@@ -1,53 +1,173 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  SafeAreaView,
-  Alert,
-} from 'react-native';
+import React from 'react';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, FlatList } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { mockSignals, mockBacktestStrategies, mockBacktestResults, mockDayTradingPicks, mockRiskCalculation } from '../mockData/swingTradingMockData';
+import SwingTradingMarketOverview from './SwingTradingMarketOverview';
+import SwingTradingSignalAnalysis from './SwingTradingSignalAnalysis';
+import SwingTradingEducation from './SwingTradingEducation';
+import SwingTradingPerformance from './SwingTradingPerformance';
+import SwingTradingMarketSentiment from './SwingTradingMarketSentiment';
+import SwingTradingAdvancedAnalytics from './SwingTradingAdvancedAnalytics';
 
 interface SwingTradingTestScreenProps {
   navigateTo?: (screen: string) => void;
 }
 
 const SwingTradingTestScreen: React.FC<SwingTradingTestScreenProps> = ({ navigateTo }) => {
-  const [activeTab, setActiveTab] = useState<'signals' | 'backtest' | 'daytrading' | 'risk'>('signals');
+  const [tab, setTab] = React.useState<'signals' | 'market' | 'analysis' | 'education' | 'performance' | 'sentiment' | 'analytics' | 'backtest' | 'daytrading' | 'risk'>('signals');
 
-  const renderSignals = () => (
-    <ScrollView style={styles.tabContent}>
-      <Text style={styles.sectionTitle}>📊 Live Trading Signals</Text>
-      {mockSignals.map((signal) => (
-        <View key={signal.id} style={styles.signalCard}>
-          <View style={styles.signalHeader}>
-            <Text style={styles.symbol}>{signal.symbol}</Text>
-            <Text style={[styles.score, { color: signal.mlScore > 0.7 ? '#22C55E' : '#F59E0B' }]}>
-              {(signal.mlScore * 100).toFixed(0)}%
-            </Text>
-          </View>
-          <Text style={styles.signalType}>{signal.signalType.replace(/_/g, ' ').toUpperCase()}</Text>
-          <Text style={styles.thesis}>{signal.thesis}</Text>
-          <View style={styles.signalMetrics}>
-            <Text style={styles.metric}>Entry: ${signal.entryPrice}</Text>
-            <Text style={styles.metric}>Stop: ${signal.stopPrice}</Text>
-            <Text style={styles.metric}>Target: ${signal.targetPrice}</Text>
-            <Text style={styles.metric}>R:R: {signal.riskRewardRatio}</Text>
-          </View>
-          <View style={styles.signalFooter}>
-            <Text style={styles.author}>by {signal.createdBy.name}</Text>
-            <Text style={styles.likes}>❤️ {signal.userLikeCount}</Text>
-          </View>
+  // Tab components will be defined below
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Header (fixed) */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigateTo?.('home')}
+        >
+          <Icon name="arrow-left" size={24} color="#6B7280" />
+        </TouchableOpacity>
+        <View style={styles.headerTitleContainer}>
+          <Text style={styles.title}>Swing Trading Test</Text>
         </View>
-      ))}
-    </ScrollView>
+        <View style={styles.headerSpacer} />
+      </View>
+
+      {/* Tab bar (fixed) */}
+      <View>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          style={styles.tabBar}
+          contentContainerStyle={styles.tabBarContent}
+        >
+          {[
+            { key: 'signals', label: 'Signals' },
+            { key: 'market', label: 'Market' },
+            { key: 'analysis', label: 'Analysis' },
+            { key: 'education', label: 'Education' },
+            { key: 'performance', label: 'Performance' },
+            { key: 'sentiment', label: 'Sentiment' },
+            { key: 'analytics', label: 'Analytics' },
+            { key: 'backtest', label: 'Backtest' },
+            { key: 'daytrading', label: 'Day Trading' },
+            { key: 'risk', label: 'Risk' }
+          ].map((tabItem) => (
+            <TouchableOpacity
+              key={tabItem.key}
+              style={[styles.tab, tab === tabItem.key && styles.tabActive]}
+              onPress={() => setTab(tabItem.key as any)}
+            >
+              <Text style={[styles.tabText, tab === tabItem.key && styles.tabTextActive]}>
+                {tabItem.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+        <View style={styles.underline} />
+      </View>
+
+      {/* 👇 the only flexible area on the page */}
+      <View style={styles.tabSlot}>
+        {tab === 'signals' && <SignalsTab />}
+        {tab === 'market' && <MarketTab />}
+        {tab === 'analysis' && <AnalysisTab />}
+        {tab === 'education' && <EducationTab />}
+        {tab === 'performance' && <PerformanceTab />}
+        {tab === 'sentiment' && <SentimentTab />}
+        {tab === 'analytics' && <AnalyticsTab />}
+        {tab === 'backtest' && <BacktestTab />}
+        {tab === 'daytrading' && <DayTradingTab />}
+        {tab === 'risk' && <RiskTab />}
+      </View>
+    </SafeAreaView>
+  );
+};
+
+// Individual Tab Components
+function SignalsTab() {
+  const renderSignalCard = ({ item: signal }) => (
+    <View style={styles.signalCard}>
+      <View style={styles.signalHeader}>
+        <Text style={styles.symbol}>{signal.symbol}</Text>
+        <Text style={[styles.score, { color: signal.mlScore > 0.7 ? '#22C55E' : '#F59E0B' }]}>
+          {(signal.mlScore * 100).toFixed(0)}%
+        </Text>
+      </View>
+      <Text style={styles.signalType}>{signal.signalType.replace(/_/g, ' ').toUpperCase()}</Text>
+      <Text style={styles.thesis}>{signal.thesis}</Text>
+      <View style={styles.signalMetrics}>
+        <Text style={styles.metric}>Entry: ${signal.entryPrice}</Text>
+        <Text style={styles.metric}>Stop: ${signal.stopPrice}</Text>
+        <Text style={styles.metric}>Target: ${signal.targetPrice}</Text>
+        <Text style={styles.metric}>R:R: {signal.riskRewardRatio}</Text>
+      </View>
+      <View style={styles.signalFooter}>
+        <Text style={styles.author}>by {signal.createdBy.name}</Text>
+        <Text style={styles.likes}>❤️ {signal.userLikeCount}</Text>
+      </View>
+    </View>
   );
 
-  const renderBacktest = () => (
-    <ScrollView style={styles.tabContent}>
+  return (
+    <FlatList
+      style={{ flex: 1 }}                        // occupies the whole tab slot
+      contentInsetAdjustmentBehavior="never"     // no auto top inset
+      contentContainerStyle={{
+        paddingTop: 0,                           // 👈 zero space under the tab bar
+        paddingBottom: 24,
+        paddingHorizontal: 16,
+      }}
+      data={mockSignals}
+      keyExtractor={(item) => item.id}
+      ListHeaderComponent={
+        <View style={{ paddingTop: 0, marginTop: 0 }}>
+          <Text style={styles.sectionTitle}>📊 Live Trading Signals</Text>
+        </View>
+      }
+      renderItem={renderSignalCard}
+      removeClippedSubviews                    // perf + prevents odd sizing
+      initialNumToRender={8}
+      windowSize={5}
+    />
+  );
+}
+
+function MarketTab() {
+  return <SwingTradingMarketOverview />;
+}
+
+function AnalysisTab() {
+  return <SwingTradingSignalAnalysis />;
+}
+
+function EducationTab() {
+  return <SwingTradingEducation />;
+}
+
+function PerformanceTab() {
+  return <SwingTradingPerformance />;
+}
+
+function SentimentTab() {
+  return <SwingTradingMarketSentiment />;
+}
+
+function AnalyticsTab() {
+  return <SwingTradingAdvancedAnalytics />;
+}
+
+function BacktestTab() {
+  return (
+    <ScrollView
+      style={{ flex: 1 }}
+      contentInsetAdjustmentBehavior="never"
+      contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-start', paddingHorizontal: 16, paddingTop: 0, paddingBottom: 24 }}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+    >
       <Text style={styles.sectionTitle}>📈 Backtesting Results</Text>
       {mockBacktestStrategies.map((strategy) => (
         <View key={strategy.id} style={styles.strategyCard}>
@@ -67,9 +187,17 @@ const SwingTradingTestScreen: React.FC<SwingTradingTestScreenProps> = ({ navigat
       ))}
     </ScrollView>
   );
+}
 
-  const renderDayTrading = () => (
-    <ScrollView style={styles.tabContent}>
+function DayTradingTab() {
+  return (
+    <ScrollView
+      style={{ flex: 1 }}
+      contentInsetAdjustmentBehavior="never"
+      contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-start', paddingHorizontal: 16, paddingTop: 0, paddingBottom: 24 }}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+    >
       <Text style={styles.sectionTitle}>⚡ Day Trading Picks</Text>
       <View style={styles.modeInfo}>
         <Text style={styles.modeText}>Mode: {mockDayTradingPicks.mode}</Text>
@@ -96,9 +224,17 @@ const SwingTradingTestScreen: React.FC<SwingTradingTestScreenProps> = ({ navigat
       ))}
     </ScrollView>
   );
+}
 
-  const renderRisk = () => (
-    <ScrollView style={styles.tabContent}>
+function RiskTab() {
+  return (
+    <ScrollView
+      style={{ flex: 1 }}
+      contentInsetAdjustmentBehavior="never"
+      contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-start', paddingHorizontal: 16, paddingTop: 0, paddingBottom: 24 }}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+    >
       <Text style={styles.sectionTitle}>🛡️ Risk Management</Text>
       <View style={styles.riskCard}>
         <Text style={styles.riskTitle}>Position Sizing Calculator</Text>
@@ -119,61 +255,22 @@ const SwingTradingTestScreen: React.FC<SwingTradingTestScreenProps> = ({ navigat
       </View>
     </ScrollView>
   );
-
-  return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigateTo?.('home')}
-        >
-          <Icon name="arrow-left" size={24} color="#6B7280" />
-        </TouchableOpacity>
-        <View style={styles.headerTitleContainer}>
-          <Text style={styles.title}>Swing Trading Test</Text>
-        </View>
-        <View style={styles.headerSpacer} />
-      </View>
-      
-      <View style={styles.tabBar}>
-        {[
-          { key: 'signals', label: 'Signals' },
-          { key: 'backtest', label: 'Backtest' },
-          { key: 'daytrading', label: 'Day Trading' },
-          { key: 'risk', label: 'Risk' }
-        ].map((tab) => (
-          <TouchableOpacity
-            key={tab.key}
-            style={[styles.tab, activeTab === tab.key && styles.activeTab]}
-            onPress={() => setActiveTab(tab.key as any)}
-          >
-            <Text style={[styles.tabText, activeTab === tab.key && styles.activeTabText]}>
-              {tab.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {activeTab === 'signals' && renderSignals()}
-      {activeTab === 'backtest' && renderBacktest()}
-      {activeTab === 'daytrading' && renderDayTrading()}
-      {activeTab === 'risk' && renderRisk()}
-    </SafeAreaView>
-  );
-};
+}
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
+  container: { 
+    flex: 1, 
+    backgroundColor: '#fff' 
   },
+
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    padding: 20,
-    borderBottomWidth: 1,
+    paddingHorizontal: 16, 
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth, 
     borderBottomColor: '#E5E7EB',
+    backgroundColor: '#fff',
   },
   backButton: {
     padding: 8,
@@ -186,44 +283,79 @@ const styles = StyleSheet.create({
   headerSpacer: {
     width: 40, // Same width as back button to center the title
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#111827',
+  title: { 
+    fontSize: 20, 
+    fontWeight: '700', 
+    color: '#111827' 
   },
+
   tabBar: {
-    flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    height: 42,           // keep this lean (40–44)
+    paddingTop: 0,
+    paddingBottom: 0,     // 🔧 remove hidden vertical padding
+    marginBottom: 0,      // 🔧 remove bottom margin
+    paddingHorizontal: 12,
+    backgroundColor: '#fff',
   },
-  tab: {
-    flex: 1,
-    paddingVertical: 12,
+  tabBarContent: {
+    flexDirection: 'row',
     alignItems: 'center',
   },
-  activeTab: {
-    borderBottomWidth: 2,
-    borderBottomColor: '#3B82F6',
+  tab: { 
+    paddingVertical: 10,  // keep touch target here instead
+    paddingHorizontal: 8, 
+    alignItems: 'center',
+    minWidth: 80,
   },
-  tabText: {
-    fontSize: 14,
-    color: '#6B7280',
-    fontWeight: '500',
+  tabActive: { 
+    borderBottomWidth: 2, 
+    borderBottomColor: '#3B82F6' 
   },
-  activeTabText: {
-    color: '#3B82F6',
-    fontWeight: '600',
+  tabText: { 
+    color: '#6B7280', 
+    fontWeight: '600' 
   },
-  tabContent: {
+  tabTextActive: { 
+    color: '#3B82F6' 
+  },
+  underline: {
+    position: 'absolute',
+    left: 0, right: 0, bottom: 0,
+    height: 1,
+    backgroundColor: '#E5E7EB',
+  },
+
+  // 👇 the only flexible area on the page
+  tabSlot: { 
+    flex: 1, 
+    minHeight: 0  // ← critical for iOS nested scroll
+  },
+
+  // ScrollView style
+  scroll: {
     flex: 1,
-    padding: 16,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#111827',
-    marginBottom: 16,
+
+  // Ensures content can stretch to fill even when short
+  scrollGrow: { 
+    // fills remaining height but keeps content at the TOP
+    flexGrow: 1,
+    justifyContent: 'flex-start',
+    paddingBottom: 0,
+  },
+
+  section: { 
+    // No gap - content starts immediately
+  },
+  sectionHeader: { 
+    // No margin - title starts immediately
+  },
+  sectionTitle: { 
+    marginTop: 0, 
+    marginBottom: 8, 
+    fontSize: 16, 
+    fontWeight: '700', 
+    color: '#111827' 
   },
   signalCard: {
     backgroundColor: '#FFFFFF',

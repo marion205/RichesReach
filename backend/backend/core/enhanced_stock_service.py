@@ -13,16 +13,17 @@ from .models import Stock
 from .market_data_api_service import MarketDataAPIService, DataProvider
 logger = logging.getLogger(__name__)
 class EnhancedStockService:
-"""
-Enhanced stock service with real-time price updates
-Uses multiple data sources for reliability and accuracy
-"""
-def __init__(self):
-self.market_data_service = MarketDataAPIService()
-self.cache_timeout = 300 # 5 minutes cache
-# No hardcoded fallback prices - always use real data from database
-self.fallback_prices = {}
-async def get_real_time_price(self, symbol: str) -> Optional[Dict[str, Any]]:
+    """
+    Enhanced stock service with real-time price updates
+    Uses multiple data sources for reliability and accuracy
+    """
+    def __init__(self):
+        self.market_data_service = MarketDataAPIService()
+        self.cache_timeout = 300  # 5 minutes cache
+        # No hardcoded fallback prices - always use real data from database
+        self.fallback_prices = {}
+    
+    async def get_real_time_price(self, symbol: str) -> Optional[Dict[str, Any]]:
 """
 Get real-time stock price with fallback mechanisms
 Args:

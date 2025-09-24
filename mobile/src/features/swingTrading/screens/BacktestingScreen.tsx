@@ -899,8 +899,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     marginBottom: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: C.line,
   },
-  selectedStrategyName: { fontSize: 20, fontWeight: '700', color: C.text },
-  runBacktestButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.primary, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 6 },
+  selectedStrategyName: { 
+    fontSize: 20, 
+    fontWeight: '700', 
+    color: C.text, 
+    flex: 1, 
+    marginRight: 12,
+    flexWrap: 'wrap'
+  },
+  runBacktestButton: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: C.primary, 
+    paddingHorizontal: 12, 
+    paddingVertical: 8, 
+    borderRadius: 6,
+    flexShrink: 0
+  },
   runBacktestButtonText: { fontSize: 14, fontWeight: '600', color: '#FFFFFF', marginLeft: 4 },
   loadMoreButton: { backgroundColor: C.primary, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 },
   loadMoreButtonText: { fontSize: 14, fontWeight: '600', color: '#FFFFFF' },

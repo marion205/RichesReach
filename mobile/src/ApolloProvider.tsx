@@ -15,8 +15,8 @@ import JWTAuthService from './features/auth/services/JWTAuthService';
 // Determine the correct URL based on the platform
 const getGraphQLURL = () => {
   const BASE_URL = Platform.OS === 'ios'
-    ? 'http://localhost:8000'   // iOS Simulator -> host Mac
-    : 'http://10.0.2.2:8000';   // Android emulator -> host Mac/PC
+    ? 'http://127.0.0.1:8001'   // iOS Simulator -> host Mac (updated to port 8001)
+    : 'http://10.0.2.2:8001';   // Android emulator -> host Mac/PC (updated to port 8001)
   
   return `${BASE_URL}/graphql/`;
 };
@@ -56,32 +56,39 @@ const authLink = setContext(async (_, { headers }) => {
   }
 });
 
-// Error link to handle token expiration
+// Error link to handle token expiration and network errors
 const errorLink = onError(({ graphQLErrors, networkError, operation, forward }) => {
-if (graphQLErrors) {
-graphQLErrors.forEach(({ message, locations, path }) => {
-console.error(`GraphQL error: Message: ${message}, Location: ${locations}, Path: ${path}`);
-if (message.includes('Signature has expired') || message.includes('Token is invalid')) {
-console.log('Token expired, attempting refresh...');
-// Try to refresh the token
-JWTAuthService.getInstance().refreshToken().then((newToken) => {
-if (newToken) {
-console.log('Token refreshed successfully');
-// Retry the operation
-return forward(operation);
-} else {
-console.log('Token refresh failed, user needs to login again');
-// Clear the token and redirect to login
-JWTAuthService.getInstance().logout();
-}
-});
-}
-});
-}
+  if (graphQLErrors) {
+    graphQLErrors.forEach(({ message, locations, path }) => {
+      console.error(`GraphQL error: Message: ${message}, Location: ${locations}, Path: ${path}`);
+      if (message.includes('Signature has expired') || message.includes('Token is invalid')) {
+        console.log('Token expired, attempting refresh...');
+        // Try to refresh the token
+        JWTAuthService.getInstance().refreshToken().then((newToken) => {
+          if (newToken) {
+            console.log('Token refreshed successfully');
+            // Retry the operation
+            return forward(operation);
+          } else {
+            console.log('Token refresh failed, user needs to login again');
+            // Clear the token and redirect to login
+            JWTAuthService.getInstance().logout();
+          }
+        });
+      }
+    });
+  }
 
-if (networkError) {
-console.error(`Network error: ${networkError}`);
-}
+  if (networkError) {
+    console.error(`Network error: ${networkError}`);
+    
+    // Handle 404 errors gracefully
+    if (networkError.statusCode === 404) {
+      console.warn('GraphQL endpoint not found (404) - this is expected if using REST fallback');
+      // Don't throw the error, just log it
+      return;
+    }
+  }
 });
 // (optional) subscriptions—leave commented out if not using yet
 // const wsLink = new GraphQLWsLink(createClient({

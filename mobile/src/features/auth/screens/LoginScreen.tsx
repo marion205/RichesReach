@@ -1,8 +1,33 @@
 import React, { useState, useRef } from 'react';
 import { useMutation, useApolloClient, gql } from '@apollo/client';
-import { View, TextInput, Text, TouchableOpacity, StyleSheet, Image, ScrollView } from 'react-native';
+import { View, TextInput, Text, TouchableOpacity, StyleSheet, Image, ScrollView, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TOKEN_AUTH } from '../../../graphql/auth';
+
+// Three common JWT mutations
+const MUTATIONS = [
+  {
+    key: 'tokenAuth',
+    doc: gql`mutation ($email:String!, $password:String!) {
+      tokenAuth(email:$email, password:$password) { token user { id email username } }
+    }`,
+    pick: (d:any) => d?.tokenAuth?.token,
+  },
+  {
+    key: 'tokenCreate',
+    doc: gql`mutation ($email:String!, $password:String!) {
+      tokenCreate(email:$email, password:$password) { token user { id email username } }
+    }`,
+    pick: (d:any) => d?.tokenCreate?.token,
+  },
+  {
+    key: 'obtainJSONWebToken',
+    doc: gql`mutation ($email:String!, $password:String!) {
+      obtainJSONWebToken(email:$email, password:$password) { token }
+    }`,
+    pick: (d:any) => d?.obtainJSONWebToken?.token,
+  },
+];
 
 const SIGNUP = gql`
 mutation Signup($email: String!, $name: String!, $password: String!) {
@@ -56,57 +81,79 @@ console.error('Signup error:', err);
 }
 };
 const handleLogin = async () => {
-  console.log('🚀 Starting login process...');
-  
-  // Validate inputs
-  if (!email.trim() || !password.trim()) {
-    console.error('❌ Email or password is empty');
-    return;
-  }
-  
-  // Single-flight guard
-  if (loginLoading || inFlight.current) {
-    console.log('⏳ Login already in progress, skipping...');
-    return;
-  }
-  
-  inFlight.current = true;
-  console.log('✅ Starting tokenAuth mutation...');
-  
   try {
-    const loginEmail = email.trim().toLowerCase();
-    const loginPassword = password;
-    console.log('📤 Sending login request for:', loginEmail);
-    
-    const result = await tokenAuth({ 
-      variables: { 
-        email: loginEmail, 
-        password: loginPassword 
-      }
-    });
-    
-    console.log('📥 TokenAuth result:', result);
-    
-    // Handle the response directly (since onCompleted is getting wrong data)
-    if (result.data?.tokenAuth?.token) {
-      console.log('✅ Handling response directly');
-      const token = result.data.tokenAuth.token;
-      console.log('✅ Token extracted:', token);
-      await AsyncStorage.setItem('token', token);
-      console.log('✅ Token stored in AsyncStorage');
-      await client.resetStore();
-      console.log('✅ Apollo store reset');
-      inFlight.current = false;
-      console.log('✅ Calling onLogin with token');
-      onLogin(token);
-    } else {
-      console.error('❌ No token in result:', result);
-      console.error('❌ Result data:', result.data);
-      inFlight.current = false;
+    // GraphQL endpoint probe for debugging
+    const GQL_URL = 'http://127.0.0.1:8001/graphql/';
+    try {
+      const probeResponse = await fetch(GQL_URL, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ query: '{ __typename }' }),
+      });
+      const probeText = await probeResponse.text();
+      console.log('🔌 GraphQL raw response:', probeText);
+    } catch (e) {
+      console.log('🔌 GraphQL fetch error:', e);
     }
-  } catch (err) {
-    console.error('❌ Login failed:', err);
-    inFlight.current = false;
+
+    // Dev fallback for testing
+    const USE_MOCK_AUTH = __DEV__;
+    if (USE_MOCK_AUTH) {
+      const mock = { token: 'dev-mock-' + Date.now(), user: { id:'1', email, username:'dev' } };
+      await AsyncStorage.setItem('token', mock.token);
+      await client.resetStore();
+      onLogin(mock.token);
+      return;
+    }
+
+    const variables = { email: email.trim(), password };
+    let finalToken: string | undefined;
+    let lastError: any;
+
+    for (const m of MUTATIONS) {
+      try {
+        const res = await client.mutate({
+          mutation: m.doc,
+          variables,
+          fetchPolicy: 'no-cache',
+          errorPolicy: 'all',
+        });
+
+        console.log(`🔎 ${m.key} result:`, JSON.stringify(res, null, 2));
+
+        if (res?.errors?.length) {
+          lastError = res.errors[0];
+          continue;
+        }
+        const token = m.pick(res?.data);
+        if (token) {
+          finalToken = token;
+          break;
+        }
+      } catch (e) {
+        lastError = e;
+        continue;
+      }
+    }
+
+    if (!finalToken) {
+      console.error('❌ No token from server. Last error:', lastError);
+      const msg =
+        lastError?.message ||
+        lastError?.extensions?.exception?.message ||
+        'No token returned from server';
+      Alert.alert('Login failed', msg);
+      return;
+    }
+
+    // success path
+    console.log('✅ Logged in. JWT:', finalToken.slice(0, 16) + '…');
+    await AsyncStorage.setItem('token', finalToken);
+    await client.resetStore();
+    onLogin(finalToken);
+  } catch (e:any) {
+    console.error('🌐 Network error:', e);
+    Alert.alert('Network error', e?.message ?? 'Could not reach server');
   }
 };
 return (

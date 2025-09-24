@@ -1,7 +1,7 @@
 // API endpoint configuration
 // This file centralizes all API endpoints to avoid URL mutation issues
 
-const DEV_API_BASE = 'http://127.0.0.1:8000';
+const DEV_API_BASE = 'http://127.0.0.1:8001';
 const PROD_API_BASE = 'https://api.richesreach.com';
 
 // Determine if we're in development mode

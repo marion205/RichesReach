@@ -64,11 +64,11 @@ class FollowAdmin(admin.ModelAdmin):
 
 @admin.register(Stock)
 class StockAdmin(admin.ModelAdmin):
-    list_display = ('symbol', 'company_name', 'sector', 'market_cap', 'pe_ratio', 'beginner_friendly_score', 'updated_at')
-    list_filter = ('sector', 'beginner_friendly_score', 'updated_at')
+    list_display = ('symbol', 'company_name', 'sector', 'market_cap', 'pe_ratio', 'beginner_friendly_score', 'dividend_score', 'last_updated')
+    list_filter = ('sector', 'beginner_friendly_score', 'dividend_score', 'last_updated')
     search_fields = ('symbol', 'company_name', 'sector')
     ordering = ('symbol',)
-    readonly_fields = ('updated_at',)
+    readonly_fields = ('last_updated',)
 
 @admin.register(StockData)
 class StockDataAdmin(admin.ModelAdmin):
