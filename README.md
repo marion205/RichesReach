@@ -52,6 +52,18 @@ RichesReach is a comprehensive AI-powered investment platform featuring advanced
 - **Outcome Tracking**: Log trading results for ML improvement
 - **Deterministic Logic**: Consistent entry/exit calculations
 
+### 🎯 Swing Trading System
+- **AI-Powered Signals**: ML-generated swing trading opportunities with confidence scores
+- **Technical Analysis**: 35+ indicators including RSI, EMA crossovers, volume surges, support/resistance
+- **Pattern Recognition**: Automated detection of chart patterns and breakout setups
+- **Risk Management**: Dynamic stop-losses, position sizing, and risk-reward calculations
+- **Backtesting Engine**: Historical strategy testing with equity curves and performance metrics
+- **Social Features**: Like, comment, and share signals with community validation
+- **Leaderboard System**: Trader performance rankings based on accuracy and risk-adjusted returns
+- **Educational Integration**: "Why this fired" explanations for each signal
+- **Real-time Subscriptions**: WebSocket updates for new signals and market changes
+- **Event-Driven Trading**: NLP-powered news sentiment analysis for event-based plays
+
 ### 🤖 ML Learning System
 - **Outcome Tracking**: SQLite database for trading results
 - **Model Training**: XGBoost with ONNX export and pickle fallback
@@ -222,23 +234,29 @@ npm start
 
 ### **How to Access New Features**
 
-1. **Day Trading System**:
+1. **Swing Trading System**:
+   - Navigate: `Home → Swing Trading` (new section)
+   - Features: AI signals, backtesting, risk coach, leaderboard
+   - Screens: Signals, Backtesting, Risk Coach, Day Trading, Leaderboard
+
+2. **Day Trading System**:
    - Navigate: `Home → Trading → Daily Top-3 Picks` (blue button)
    - Features: SAFE/AGGRESSIVE modes, AI picks, risk parameters
 
-2. **ML Learning System**:
+3. **ML Learning System**:
    - Navigate: `Home → Trading → Daily Top-3 Picks → ML` (purple button)
    - Features: Model training, bandit strategies, outcome tracking
 
-3. **Risk Management**:
+4. **Risk Management**:
    - Navigate: `Home → Trading → Daily Top-3 Picks → Risk` (red button)
    - Features: Position limits, stop losses, risk monitoring
 
-4. **Enhanced Trading**:
+5. **Enhanced Trading**:
    - Navigate: `Home → Trading` (enhanced interface)
    - Features: Better order flow, SBLOC integration, real-time quotes
 
 ### **Feature Requirements**
+- **Swing Trading**: Available for all users with real-time market data access
 - **Day Trading**: Requires `isDayTradingEnabled: true` in account settings
 - **ML System**: Works with or without ML libraries (graceful fallback)
 - **Risk Management**: Automatic position size calculations and risk checks
@@ -258,6 +276,12 @@ RichesReach/
 │   ├── src/features/         # Feature-based organization
 │   │   ├── stocks/screens/TradingScreen.tsx  # Enhanced trading interface
 │   │   ├── trading/screens/DayTradingScreen.tsx  # Day trading system
+│   │   ├── swingTrading/screens/  # Swing trading system
+│   │   │   ├── SignalsScreen.tsx  # AI-generated signals
+│   │   │   ├── BacktestingScreen.tsx  # Strategy backtesting
+│   │   │   ├── RiskCoachScreen.tsx  # Risk management tools
+│   │   │   ├── DayTradingScreen.tsx  # Day trading picks
+│   │   │   └── LeaderboardScreen.tsx  # Trader rankings
 │   │   ├── ml/screens/MLSystemScreen.tsx  # ML learning system
 │   │   └── risk/screens/RiskManagementScreen.tsx  # Risk management
 │   ├── src/components/       # Reusable components
@@ -281,7 +305,16 @@ RichesReach/
 │   ├── ml_api_router.py          # ML API endpoints
 │   ├── core/                # Core business logic
 │   │   ├── crypto_models.py  # Crypto database models
-│   │   └── crypto_graphql.py # Crypto GraphQL schema
+│   │   ├── crypto_graphql.py # Crypto GraphQL schema
+│   │   └── swing_trading/    # Swing trading system
+│   │       ├── ml_scoring.py     # ML signal generation
+│   │       ├── backtesting.py    # Strategy backtesting engine
+│   │       ├── risk_management.py # Risk calculations
+│   │       ├── indicators.py     # Technical indicators
+│   │       ├── tasks.py          # Celery background tasks
+│   │       ├── graphql_types.py  # GraphQL type definitions
+│   │       ├── graphql_queries.py # GraphQL query resolvers
+│   │       └── graphql_mutations.py # GraphQL mutation resolvers
 │   ├── defi/                # DeFi integration
 │   │   ├── serializers.py   # Aave protocol serializers
 │   │   └── views.py         # DeFi API endpoints
@@ -400,6 +433,16 @@ RichesReach/
 - `POST /graphql` - Place market, limit, and stop-loss orders
 - `POST /graphql` - Cancel orders and manage positions
 
+### Swing Trading System
+- `POST /graphql` - Get AI-generated swing trading signals
+- `POST /graphql` - Like and comment on trading signals
+- `POST /graphql` - Get backtesting strategies and results
+- `POST /graphql` - Run custom strategy backtests
+- `POST /graphql` - Calculate position sizes and risk metrics
+- `POST /graphql` - Get trader leaderboard and rankings
+- `POST /graphql` - Get day trading picks and outcomes
+- `WebSocket /ws` - Real-time signal updates and notifications
+
 ### ML Learning System
 - `POST /graphql` - Get ML system status and metrics
 - `POST /graphql` - Train ML models (SAFE/AGGRESSIVE modes)
@@ -517,12 +560,19 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Roadmap
 
-### Phase 4 (Planned)
+### Phase 4 (Completed)
+- ✅ **Swing Trading System**: AI-powered signals, backtesting, and social features
+- ✅ **Advanced ML Models**: Production-ready ML scoring with 35+ technical indicators
+- ✅ **Social Trading Features**: Community validation, leaderboards, and signal sharing
+- ✅ **Real-time Subscriptions**: WebSocket updates for live market data
+- ✅ **Comprehensive Backtesting**: Historical strategy testing with performance metrics
+
+### Phase 5 (Planned)
 - Advanced AI trading algorithms
-- Cryptocurrency integration
-- Social trading features
+- Enhanced cryptocurrency integration
 - Advanced analytics dashboard
 - Mobile app store deployment
+- Institutional-grade features
 
 ### Future Enhancements
 - Machine learning model improvements
