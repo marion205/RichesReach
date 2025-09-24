@@ -271,6 +271,103 @@ class CryptoSBLOCLoan(models.Model):
         return f"SBLOC Loan: {self.loan_amount} backed by {self.collateral_quantity} {self.cryptocurrency.symbol}"
 
 
+# --- AAVE-style lending models ---------------------------------------------
+
+class LendingReserve(models.Model):
+    """
+    Per-asset risk parameters & dynamic APYs (AAVE-ish)
+    """
+    cryptocurrency = models.OneToOneField(
+        Cryptocurrency, on_delete=models.CASCADE, related_name="reserve"
+    )
+    # Risk params (fractions: 0.80 = 80%)
+    ltv = models.DecimalField(max_digits=5, decimal_places=4, default=Decimal("0.70"))
+    liquidation_threshold = models.DecimalField(max_digits=5, decimal_places=4, default=Decimal("0.75"))
+    liquidation_bonus = models.DecimalField(max_digits=5, decimal_places=4, default=Decimal("0.0500"))
+    reserve_factor = models.DecimalField(max_digits=5, decimal_places=4, default=Decimal("0.1000"))
+
+    # Capabilities
+    can_borrow = models.BooleanField(default=True)
+    can_be_collateral = models.BooleanField(default=True)
+    is_active = models.BooleanField(default=True)
+
+    # Live rates (optional; you can refresh from oracle/adapter)
+    supply_apy = models.DecimalField(max_digits=10, decimal_places=6, null=True, blank=True)
+    variable_borrow_apy = models.DecimalField(max_digits=10, decimal_places=6, null=True, blank=True)
+    stable_borrow_apy = models.DecimalField(max_digits=10, decimal_places=6, null=True, blank=True)
+
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "defi_lending_reserves"
+        verbose_name = "Lending Reserve"
+        indexes = [
+            models.Index(fields=["is_active"]),
+        ]
+
+    def __str__(self):
+        return f"Reserve({self.cryptocurrency.symbol})"
+
+
+class SupplyPosition(models.Model):
+    """
+    User supplies asset into the reserve; may toggle 'use_as_collateral'.
+    Denominated in ASSET UNITS.
+    """
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="defi_supplies")
+    reserve = models.ForeignKey(LendingReserve, on_delete=models.CASCADE, related_name="supplies")
+    quantity = models.DecimalField(max_digits=28, decimal_places=10, default=0)
+    use_as_collateral = models.BooleanField(default=True)
+
+    # snapshot fields for convenience (optional)
+    usd_value_cached = models.DecimalField(max_digits=20, decimal_places=2, default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "defi_supply_positions"
+        unique_together = ["user", "reserve"]
+        indexes = [
+            models.Index(fields=["user", "reserve"]),
+        ]
+
+    def __str__(self):
+        return f"{self.user_id} supplies {self.quantity} {self.reserve.cryptocurrency.symbol}"
+
+
+class BorrowPosition(models.Model):
+    """
+    User borrows an asset (variable or stable). Denominated in ASSET UNITS.
+    """
+    RATE_MODE_CHOICES = [
+        ("VARIABLE", "Variable"),
+        ("STABLE", "Stable"),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="defi_borrows")
+    reserve = models.ForeignKey(LendingReserve, on_delete=models.CASCADE, related_name="borrows")
+    amount = models.DecimalField(max_digits=28, decimal_places=10, default=0)  # in asset units
+    rate_mode = models.CharField(max_length=10, choices=RATE_MODE_CHOICES, default="VARIABLE")
+    apy_at_open = models.DecimalField(max_digits=10, decimal_places=6, null=True, blank=True)
+
+    usd_value_cached = models.DecimalField(max_digits=20, decimal_places=2, default=0)
+
+    opened_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "defi_borrow_positions"
+        indexes = [
+            models.Index(fields=["user", "reserve", "is_active"]),
+            models.Index(fields=["opened_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.user_id} borrows {self.amount} {self.reserve.cryptocurrency.symbol} ({self.rate_mode})"
+
+
 class CryptoEducationProgress(models.Model):
     """Track user's crypto education progress"""
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='crypto_education')
@@ -282,7 +379,7 @@ class CryptoEducationProgress(models.Model):
             ('TRADING', 'Trading Strategies'),
             ('DEFI', 'DeFi Protocols'),
             ('RISK', 'Risk Management'),
-            ('SBLOC', 'SBLOC Integration'),
+            ('DEFI_LENDING', 'DeFi Lending'),
         ]
     )
     

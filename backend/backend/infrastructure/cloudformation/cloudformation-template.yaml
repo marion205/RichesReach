@@ -1,0 +1,370 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: RichesReach AI - Live Market Intelligence Infrastructure
+Parameters:
+Environment:
+Type: String
+Default: production
+AllowedValues:
+- production
+- staging
+- development
+InstanceType:
+Type: String
+Default: t3.medium
+Description: EC2 instance type for AI services
+DatabaseInstanceClass:
+Type: String
+Default: db.t3.micro
+Description: RDS instance class
+Resources:
+VPC:
+Type: AWS::EC2::VPC
+Properties:
+CidrBlock: 10.0.0.0/16
+EnableDnsHostnames: true
+EnableDnsSupport: true
+Tags:
+- Key: Name
+Value: riches-reach-ai-vpc
+PublicSubnet1:
+Type: AWS::EC2::Subnet
+Properties:
+VpcId:
+Ref: VPC
+CidrBlock: 10.0.1.0/24
+AvailabilityZone:
+Fn::Select:
+- '0'
+- Fn::GetAZs: ''
+Tags:
+- Key: Name
+Value: riches-reach-ai-public-subnet-1
+PublicSubnet2:
+Type: AWS::EC2::Subnet
+Properties:
+VpcId:
+Ref: VPC
+CidrBlock: 10.0.2.0/24
+AvailabilityZone:
+Fn::Select:
+- '1'
+- Fn::GetAZs: ''
+Tags:
+- Key: Name
+Value: riches-reach-ai-public-subnet-2
+PrivateSubnet1:
+Type: AWS::EC2::Subnet
+Properties:
+VpcId:
+Ref: VPC
+CidrBlock: 10.0.3.0/24
+AvailabilityZone:
+Fn::Select:
+- '0'
+- Fn::GetAZs: ''
+Tags:
+- Key: Name
+Value: riches-reach-ai-private-subnet-1
+PrivateSubnet2:
+Type: AWS::EC2::Subnet
+Properties:
+VpcId:
+Ref: VPC
+CidrBlock: 10.0.4.0/24
+AvailabilityZone:
+Fn::Select:
+- '1'
+- Fn::GetAZs: ''
+Tags:
+- Key: Name
+Value: riches-reach-ai-private-subnet-2
+ALBSecurityGroup:
+Type: AWS::EC2::SecurityGroup
+Properties:
+GroupDescription: Security group for Application Load Balancer
+VpcId:
+Ref: VPC
+SecurityGroupIngress:
+- IpProtocol: tcp
+FromPort: 80
+ToPort: 80
+CidrIp: 0.0.0.0/0
+- IpProtocol: tcp
+FromPort: 443
+ToPort: 443
+CidrIp: 0.0.0.0/0
+ECSSecurityGroup:
+Type: AWS::EC2::SecurityGroup
+Properties:
+GroupDescription: Security group for ECS tasks
+VpcId:
+Ref: VPC
+SecurityGroupIngress:
+- IpProtocol: tcp
+FromPort: 8000
+ToPort: 8000
+SourceSecurityGroupId:
+Ref: ALBSecurityGroup
+DBSubnetGroup:
+Type: AWS::RDS::DBSubnetGroup
+Properties:
+DBSubnetGroupDescription: Subnet group for RDS
+SubnetIds:
+- Ref: PrivateSubnet1
+- Ref: PrivateSubnet2
+Database:
+Type: AWS::RDS::DBInstance
+Properties:
+DBInstanceIdentifier: riches-reach-ai-db
+DBInstanceClass:
+Ref: DatabaseInstanceClass
+Engine: postgres
+EngineVersion: '13.7'
+DBName: richesreach
+MasterUsername: admin
+MasterUserPassword:
+Fn::Sub: '{{resolve:secretsmanager:riches-reach-ai-db-password:SecretString:password}}'
+DBSubnetGroupName:
+Ref: DBSubnetGroup
+VPCSecurityGroups:
+- Ref: DBSecurityGroup
+AllocatedStorage: 20
+StorageType: gp2
+BackupRetentionPeriod: 7
+MultiAZ: true
+PubliclyAccessible: false
+DBSecurityGroup:
+Type: AWS::EC2::SecurityGroup
+Properties:
+GroupDescription: Security group for RDS
+VpcId:
+Ref: VPC
+SecurityGroupIngress:
+- IpProtocol: tcp
+FromPort: 5432
+ToPort: 5432
+SourceSecurityGroupId:
+Ref: ECSSecurityGroup
+RedisSubnetGroup:
+Type: AWS::ElastiCache::SubnetGroup
+Properties:
+Description: Subnet group for Redis
+SubnetIds:
+- Ref: PrivateSubnet1
+- Ref: PrivateSubnet2
+RedisCluster:
+Type: AWS::ElastiCache::ReplicationGroup
+Properties:
+ReplicationGroupId: riches-reach-ai-redis
+Description: Redis cluster for caching
+NodeType: cache.t3.micro
+NumCacheClusters: 2
+SubnetGroupName:
+Ref: RedisSubnetGroup
+SecurityGroupIds:
+- Ref: RedisSecurityGroup
+Port: 6379
+Engine: redis
+EngineVersion: 6.x
+RedisSecurityGroup:
+Type: AWS::EC2::SecurityGroup
+Properties:
+GroupDescription: Security group for Redis
+VpcId:
+Ref: VPC
+SecurityGroupIngress:
+- IpProtocol: tcp
+FromPort: 6379
+ToPort: 6379
+SourceSecurityGroupId:
+Ref: ECSSecurityGroup
+ModelBucket:
+Type: AWS::S3::Bucket
+Properties:
+BucketName: riches-reach-ai-models-us-east-1
+VersioningConfiguration:
+Status: Enabled
+LifecycleConfiguration:
+Rules:
+- Id: DeleteOldVersions
+Status: Enabled
+NoncurrentVersionExpiration:
+NoncurrentDays: 30
+ECSCluster:
+Type: AWS::ECS::Cluster
+DependsOn: ECSTaskExecutionRole
+Properties:
+ClusterName: riches-reach-ai-cluster
+CapacityProviders:
+- FARGATE
+DefaultCapacityProviderStrategy:
+- CapacityProvider: FARGATE
+Weight: 1
+ALB:
+Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+Properties:
+Name: riches-reach-ai-alb
+Scheme: internet-facing
+Type: application
+Subnets:
+- Ref: PublicSubnet1
+- Ref: PublicSubnet2
+SecurityGroups:
+- Ref: ALBSecurityGroup
+ALBListener:
+Type: AWS::ElasticLoadBalancingV2::Listener
+Properties:
+LoadBalancerArn:
+Ref: ALB
+Port: 80
+Protocol: HTTP
+DefaultActions:
+- Type: forward
+TargetGroupArn:
+Ref: ALBTargetGroup
+ALBTargetGroup:
+Type: AWS::ElasticLoadBalancingV2::TargetGroup
+Properties:
+Name: riches-reach-ai-tg
+Port: 8000
+Protocol: HTTP
+VpcId:
+Ref: VPC
+TargetType: ip
+HealthCheckPath: /health
+HealthCheckIntervalSeconds: 30
+HealthCheckTimeoutSeconds: 5
+HealthyThresholdCount: 2
+UnhealthyThresholdCount: 3
+TaskDefinition:
+Type: AWS::ECS::TaskDefinition
+Properties:
+Family: riches-reach-ai-task
+NetworkMode: awsvpc
+RequiresCompatibilities:
+- FARGATE
+Cpu: '512'
+Memory: '1024'
+ExecutionRoleArn:
+Fn::GetAtt:
+- ECSTaskExecutionRole
+- Arn
+TaskRoleArn:
+Fn::GetAtt:
+- ECSTaskRole
+- Arn
+ContainerDefinitions:
+- Name: ai-service
+Image: riches-reach-ai-ai-service:latest
+PortMappings:
+- ContainerPort: 8000
+Protocol: tcp
+Environment:
+- Name: ENVIRONMENT
+Value: production
+- Name: AWS_REGION
+Value: us-east-1
+LogConfiguration:
+LogDriver: awslogs
+Options:
+awslogs-group:
+Ref: LogGroup
+awslogs-region: us-east-1
+awslogs-stream-prefix: ecs
+ECSService:
+Type: AWS::ECS::Service
+Properties:
+ServiceName: riches-reach-ai-service
+Cluster:
+Ref: ECSCluster
+TaskDefinition:
+Ref: TaskDefinition
+DesiredCount: 2
+LaunchType: FARGATE
+NetworkConfiguration:
+AwsvpcConfiguration:
+Subnets:
+- Ref: PrivateSubnet1
+- Ref: PrivateSubnet2
+SecurityGroups:
+- Ref: ECSSecurityGroup
+AssignPublicIp: DISABLED
+LoadBalancers:
+- TargetGroupArn:
+Ref: ALBTargetGroup
+ContainerName: ai-service
+ContainerPort: 8000
+ECSTaskExecutionRole:
+Type: AWS::IAM::Role
+Properties:
+RoleName: riches-reach-ai-ecs-execution-role
+AssumeRolePolicyDocument:
+Version: '2012-10-17'
+Statement:
+- Effect: Allow
+Principal:
+Service: ecs-tasks.amazonaws.com
+Action: sts:AssumeRole
+ManagedPolicyArns:
+- arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+ECSTaskRole:
+Type: AWS::IAM::Role
+Properties:
+RoleName: riches-reach-ai-ecs-task-role
+AssumeRolePolicyDocument:
+Version: '2012-10-17'
+Statement:
+- Effect: Allow
+Principal:
+Service: ecs-tasks.amazonaws.com
+Action: sts:AssumeRole
+Policies:
+- PolicyName: AI-Service-Policy
+PolicyDocument:
+Version: '2012-10-17'
+Statement:
+- Effect: Allow
+Action:
+- s3:GetObject
+- s3:PutObject
+- s3:DeleteObject
+Resource:
+- !Sub "${ModelBucket}/*"
+- Effect: Allow
+Action:
+- cloudwatch:PutMetricData
+Resource: '*'
+LogGroup:
+Type: AWS::Logs::LogGroup
+Properties:
+LogGroupName: /ecs/riches-reach-ai
+RetentionInDays: 30
+# Dashboard:
+# Type: AWS::CloudWatch::Dashboard
+# Properties:
+# DashboardName: riches-reach-ai-dashboard
+# DashboardBody: '{"widgets": [{"type": "metric", "x": 0, "y": 0, "width": 12, "height": 6, "properties": {"metrics": [["AWS/ECS", "CPUUtilization", "ServiceName", "riches-reach-ai-service"]], "period": 300, "stat": "Average", "region": "us-east-1", "title": "ECS Service Metrics"}}]}'
+Outputs:
+LoadBalancerDNS:
+Description: DNS name of the load balancer
+Value:
+Fn::GetAtt:
+- ALB
+- DNSName
+ECSClusterName:
+Description: Name of the ECS cluster
+Value:
+Ref: ECSCluster
+DatabaseEndpoint:
+Description: RDS database endpoint
+Value:
+Fn::GetAtt:
+- Database
+- Endpoint
+# RedisEndpoint:
+# Description: Redis cluster endpoint
+# Value: !Sub "${RedisCluster.PrimaryEndPoint}"
+ModelBucketName:
+Description: S3 bucket for ML models
+Value:
+Ref: ModelBucket

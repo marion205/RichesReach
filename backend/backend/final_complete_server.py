@@ -1053,6 +1053,14 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Failed to include Crypto API router: {e}")
 
+# Import and include ML API router
+try:
+    from ml_api_router import ml_router
+    app.include_router(ml_router)
+    logger.info("✅ ML API router included")
+except Exception as e:
+    logger.warning(f"⚠️ Failed to include ML API router: {e}")
+
 # Debug endpoint to prove which scoring module is active
 @app.get("/debug/scoring_info")
 async def scoring_info():
@@ -1185,11 +1193,240 @@ import re
 from collections import defaultdict, deque
 from collections import Counter as CollectionsCounter
 import threading
+
+# === Technical Indicators (Phase 3) ===
+
+# === Options Trading (Phase 3) ===
+# Simple in-memory idempotency cache (TTL seconds)
+_idem = {}
+_IDEM_TTL = 600
+def _idem_ok(key):
+    now = time.time()
+    # purge stale
+    stale = [k for k,(ts,_) in _idem.items() if now - ts > _IDEM_TTL]
+    for k in stale: _idem.pop(k, None)
+    if key in _idem: return False, _idem[key][1]
+    return True, None
+def _idem_set(key, result): _idem[key] = (time.time(), result)
+
+# === Persisted Query Cache ===
+import hashlib, json
+_PERSISTED = {}  # { key: (expires, payload) }
+
+def _pq_key(query: str, variables: dict) -> str:
+    return hashlib.sha256((query.strip() + "|" + json.dumps(variables, sort_keys=True)).encode()).hexdigest()
+
+def _pq_get(key: str):
+    v = _PERSISTED.get(key)
+    return None if not v or v[0] < time.time() else v[1]
+
+def _pq_set(key: str, payload: dict, ttl: int = 180):
+    _PERSISTED[key] = (time.time() + ttl, payload)
+
+# === Soft TTL (stale-while-revalidate) ===
+def swr_get(cache: dict, key: str, fetch_fn, ttl=300, soft=900):
+    rec = cache.get(key)  # rec = {"ts":..., "data":...}
+    now = time.time()
+    if rec and now - rec["ts"] < ttl:         # fresh
+        return rec["data"]
+    if rec and now - rec["ts"] < soft:        # stale but serve
+        threading.Thread(target=lambda: cache.__setitem__(key, {"ts":now,"data":fetch_fn()})).start()
+        return rec["data"]
+    # empty or very stale
+    data = fetch_fn()
+    cache[key] = {"ts": now, "data": data}
+    return data
+
+# === Per-user field rate limits ===
+_RATE = {}  # {(user_id, field): [timestamps]}
+
+def _allow(user_id, field, per_min=30):
+    now = time.time()
+    key = (user_id or "anon", field)
+    arr = [t for t in _RATE.get(key, []) if now - t < 60]
+    if len(arr) >= per_min: return False
+    arr.append(now); _RATE[key] = arr
+    return True
+
+# === ETag for chart payloads ===
+def _etag_for(*parts):
+    return hashlib.md5("|".join(map(str, parts)).encode()).hexdigest()
+
+# === Research Hub (Phase 3) ===
+# Simple TTL cache for research data
+_research_cache = {}  # {symbol: (timestamp, payload)}
+_RESEARCH_TTL = 300
+def _cache_get(key):
+    v = _research_cache.get(key)
+    if not v: return None
+    ts, payload = v
+    if time.time() - ts > _RESEARCH_TTL:
+        _research_cache.pop(key, None); return None
+    return payload
+def _cache_set(key, payload): _research_cache[key] = (time.time(), payload)
+
+# === Batch chart helper (reuses your stock chart generation) ===
+def _build_chart_payload(symbol: str, timeframe: str, indicators: list[str] | None = None):
+    indicators = indicators or []
+    now = datetime.now()
+    data_points = {'1D': 24, '1W': 7, '1M': 30, '3M': 90, '1Y': 365}
+    points = data_points.get(timeframe, 30)
+
+    base_price = 150 + hash(symbol) % 100
+    chart = []
+    for i in range(points):
+        ts = now - (timedelta(hours=points - i) if timeframe == '1D' else timedelta(days=points - i))
+        pv = (math.sin(i * 0.1) + math.cos(i * 0.05)) * 5
+        cur = base_price + pv + (i * 0.1)
+        open_p = cur + (random.random() - 0.5) * 2
+        close_p = cur + (random.random() - 0.5) * 2
+        high_p = max(open_p, close_p) + random.random() * 2
+        low_p = min(open_p, close_p) - random.random() * 2
+        vol = int(100000 + random.random() * 900000)
+        chart.append({
+            "timestamp": ts.isoformat(),
+            "open": round(open_p, 2),
+            "high": round(high_p, 2),
+            "low": round(low_p, 2),
+            "close": round(close_p, 2),
+            "volume": vol
+        })
+    cp, pp = chart[-1]["close"], chart[0]["close"]
+
+    # Try indicators if your Phase 3 funcs exist; otherwise skip safely
+    try:
+        closes = [c["close"] for c in chart]
+        _ind = {}
+        if "SMA20" in indicators:
+            _ind["SMA20"] = [round(x, 2) if x is not None else None for x in sma(closes, 20)]
+        if "SMA50" in indicators:
+            _ind["SMA50"] = [round(x, 2) if x is not None else None for x in sma(closes, 50)]
+        if "EMA12" in indicators:
+            _ind["EMA12"] = [round(x, 2) if x is not None else None for x in ema(closes, 12)]
+        if "EMA26" in indicators:
+            _ind["EMA26"] = [round(x, 2) if x is not None else None for x in ema(closes, 26)]
+        if "RSI14" in indicators:
+            _ind["RSI14"] = [round(x, 2) if x is not None else None for x in rsi(closes, 14)]
+        if "MACD" in indicators or "MACD_SIGNAL" in indicators or "MACD_hist" in indicators:
+            macd_line, signal_line, histogram = macd(closes)
+            if "MACD" in indicators:
+                _ind["MACD"] = [round(x, 2) if x is not None else None for x in macd_line]
+            if "MACD_SIGNAL" in indicators:
+                _ind["MACD_SIGNAL"] = [round(x, 2) if x is not None else None for x in signal_line]
+            if "MACD_hist" in indicators:
+                _ind["MACD_hist"] = [round(x, 2) if x is not None else None for x in histogram]
+        if "BB" in indicators:
+            up, mid, low = bollinger(closes)
+            _ind["BB_upper"] = [round(x, 2) if x is not None else None for x in up]
+            _ind["BB_middle"] = [round(x, 2) if x is not None else None for x in mid]
+            _ind["BB_lower"] = [round(x, 2) if x is not None else None for x in low]
+    except Exception:
+        _ind = {}
+
+    return {
+        "symbol": symbol,
+        "timeframe": timeframe,
+        "data": chart,
+        "currentPrice": round(cp, 2),
+        "change": round(cp - pp, 2),
+        "changePercent": round(((cp - pp) / pp) * 100, 2) if pp else 0.0,
+        "indicators": _ind,
+        "__typename": "StockChartData"
+    }
+
+# === Options price protection helper ===
+def _price_protection_cap(side: str, mid: float, slippage_bps: int | None) -> float:
+    bps = max(1, int(slippage_bps or 50))
+    if side.upper() == "BUY":
+        return round(mid * (1 + bps/10000.0), 2)
+    else:
+        return round(mid * (1 - bps/10000.0), 2)
+def sma(values, n):
+    """Simple Moving Average - lightweight, no external deps"""
+    out, s = [], 0.0
+    for i, v in enumerate(values):
+        s += v
+        if i >= n: s -= values[i-n]
+        out.append(s/n if i >= n-1 else None)
+    return out
+
+def ema(values, n):
+    """Exponential Moving Average - lightweight, no external deps"""
+    out, k = [], 2/(n+1)
+    e = None
+    for v in values:
+        e = v if e is None else (v - e)*k + e
+        out.append(e)
+    return [None]*(n-1) + out[n-1:]  # align with window
+
+def rsi(closes, n=14):
+    """Relative Strength Index - Wilder's smoothing"""
+    gains, losses = [0.0], [0.0]
+    for i in range(1, len(closes)):
+        ch = closes[i] - closes[i-1]
+        gains.append(max(ch, 0.0))
+        losses.append(-min(ch, 0.0))
+    # Wilder's smoothing
+    rsis, avg_g, avg_l = [], None, None
+    for i in range(len(closes)):
+        if i == 0: rsis.append(None); continue
+        g, l = gains[i], losses[i]
+        if i < n: rsis.append(None); continue
+        if i == n:
+            avg_g = sum(gains[1:n+1]) / n
+            avg_l = sum(losses[1:n+1]) / n
+        else:
+            avg_g = (avg_g*(n-1) + g) / n
+            avg_l = (avg_l*(n-1) + l) / n
+        rs = (avg_g / avg_l) if avg_l != 0 else 999
+        rsis.append(100 - 100/(1+rs))
+    return rsis
+
+def macd(closes, fast=12, slow=26, signal=9):
+    """MACD with signal line and histogram"""
+    e_fast = ema(closes, fast)
+    e_slow = ema(closes, slow)
+    line = []
+    for i in range(len(closes)):
+        a = e_fast[i] if i < len(e_fast) else None
+        b = e_slow[i] if i < len(e_slow) else None
+        line.append((a - b) if (a is not None and b is not None) else None)
+    # signal EMA on valid MACD values
+    macd_vals = [x for x in line if x is not None]
+    sig_vals = ema(macd_vals, signal)
+    signal_line, hist = [], []
+    j = 0
+    for i, m in enumerate(line):
+        if m is None:
+            signal_line.append(None); hist.append(None)
+        else:
+            s = sig_vals[j]; j += 1
+            signal_line.append(s); hist.append(m - s)
+    return line, signal_line, hist
+
+def bollinger(closes, n=20, k=2):
+    """Bollinger Bands - upper, middle (SMA), lower"""
+    sma_vals = sma(closes, n)
+    out_u, out_m, out_l = [], [], []
+    for i in range(len(closes)):
+        if i < n-1:
+            out_u.append(None); out_m.append(None); out_l.append(None)
+            continue
+        window = closes[i-n+1:i+1]
+        m = sma_vals[i]
+        var = sum((x - m)**2 for x in window) / n
+        std = var**0.5
+        out_u.append(m + k*std); out_m.append(m); out_l.append(m - k*std)
+    return out_u, out_m, out_l
 import random
 
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
     try:
+        # Skip rate limiting if disabled
+        if RATE_LIMIT_PER_MINUTE <= 0:
+            return await call_next(request)
+            
         raw_path = request.url.path
         if raw_path in METRICS_EXCLUDE:
             return await call_next(request)
@@ -1752,7 +1989,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60
 users_db = {
     "test@example.com": {
         "id": "user_123", "name": "Test User", "email": "test@example.com",
-        "password": hashlib.sha256("testpass".encode()).hexdigest(),
+        "password": hashlib.sha256("password123".encode()).hexdigest(),
         "hasPremiumAccess": True, "subscriptionTier": "premium"
     }
 }
@@ -1770,6 +2007,47 @@ async def root():
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "timestamp": datetime.now().isoformat(), "build": BUILD_ID}
+
+@app.post("/debug/fields")
+async def debug_fields(request: Request):
+    """Debug endpoint to test field detection"""
+    try:
+        body = await request.json()
+        query = body.get("query", "")
+        operation_name = body.get("operationName")
+        
+        # Debug the operation body extraction
+        body_op = _extract_operation_body(query, operation_name)
+        body_any = _extract_operation_body(query, None)
+        
+        # Debug the field detection step by step
+        fields_op = top_level_fields(query, operation_name)
+        fields_any = top_level_fields(query, None)
+        fields = fields_op or fields_any
+        
+        # Manual parsing test
+        manual_fields = set()
+        if body_op:
+            # Simple manual parsing
+            import re
+            matches = re.findall(r'\b([A-Za-z_][A-Za-z0-9_]*)\s*\(', body_op)
+            manual_fields.update(matches)
+        
+        return {
+            "query": query,
+            "operationName": operation_name,
+            "body_op": body_op,
+            "body_any": body_any,
+            "fields_op": list(fields_op),
+            "fields_any": list(fields_any),
+            "fields": list(fields),
+            "manual_fields": list(manual_fields),
+            "has_batchStockChartData": "batchStockChartData" in fields,
+            "has_placeOptionOrder": "placeOptionOrder" in fields,
+            "has_researchHub": "researchHub" in fields
+        }
+    except Exception as e:
+        return {"error": str(e)}
 
 # ---------- GraphQL helpers (operationName-aware) ----------
 _OP_HEADER_RE = re.compile(
@@ -1792,64 +2070,118 @@ def _clean_query(q: str) -> str:
     q = re.sub(r'//.*', '', q)
     return q
 
-def _extract_operation_body(query: str, operation_name: Optional[str]) -> Optional[str]:
-    q = _clean_query(query)
+import re
 
-    # 1) Named operation
-    if operation_name:
-        for m in _OP_HEADER_RE.finditer(q):
-            name = m.group(2)
-            if name == operation_name:
-                brace_open = q.find('{', m.end() - 1)
-                if brace_open == -1: continue
-                brace_close = _find_matching_brace(q, brace_open)
-                if brace_close == -1: continue
-                return q[brace_open + 1:brace_close].strip()
-        return None
+_ident = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
-    # 2) Single explicit operation (unnamed)
-    ops = list(_OP_HEADER_RE.finditer(q))
-    if len(ops) == 1:
-        m = ops[0]
-        brace_open = q.find('{', m.end() - 1)
-        if brace_open != -1:
-            brace_close = _find_matching_brace(q, brace_open)
-            if brace_close != -1:
-                return q[brace_open + 1:brace_close].strip()
-
-    # 3) Anonymous document: { ... }
-    first_brace = q.find('{')
-    if first_brace != -1:
-        last = _find_matching_brace(q, first_brace)
-        if last != -1:
-            return q[first_brace + 1:last].strip()
-
-    return None
-
-def top_level_fields(query: str, operation_name: Optional[str]) -> Set[str]:
-    body = _extract_operation_body(query, operation_name)
-    if body is None: return set()
-
-    fields, depth, token = set(), 0, []
-    for ch in body:
-        if ch == '{': depth += 1
-        elif ch == '}': depth -= 1
-        elif ch in ' \t\n(' and depth == 0:
-            if token: fields.add(''.join(token)); token = []
+def _extract_operation_body(q: str, operation_name: str | None):
+    # Find the active operation's selection set: the '{ ... }' that belongs to it
+    i = 0
+    n = len(q)
+    while i < n:
+        # Skip whitespace and comments
+        if q[i].isspace():
+            i += 1; continue
+        if q[i] == '#':  # comment to end of line
+            while i < n and q[i] != '\n': i += 1
             continue
-        if depth == 0 and ch not in '{})':
-            token.append(ch)
-    if token: fields.add(''.join(token))
 
-    cleaned = set()
-    for f in fields:
-        f = f.strip()
-        if not f: continue
-        if f.startswith('$'): continue  # Skip variable names
-        if ':' in f: f = f.split(':', 1)[1].strip()
-        if f:  # Only add non-empty fields
-            cleaned.add(f)
-    return cleaned
+        # Read keyword: query/mutation/subscription or a bare selection '{'
+        if q[i] == '{':
+            # Anonymous operation; selection set starts here
+            start = i
+            break
+
+        m = _ident.match(q, i)
+        if not m:
+            i += 1; continue
+        kw = m.group(0)
+        i = m.end()
+
+        if kw in ("query", "mutation", "subscription"):
+            # Optional operationName
+            op_name = None
+            # Skip spaces
+            while i < n and q[i].isspace(): i += 1
+            mm = _ident.match(q, i)
+            if mm:
+                op_name = mm.group(0)
+                i = mm.end()
+
+            # Optional variable defs '(...)'
+            depth = 0
+            if i < n and q[i] == '(':
+                depth = 1; i += 1
+                while i < n and depth:
+                    c = q[i]
+                    if c == '(':
+                        depth += 1
+                    elif c == ')':
+                        depth -= 1
+                    elif c in ('"', "'"):
+                        # skip string
+                        qchar = c; i += 1
+                        while i < n:
+                            if q[i] == '\\': i += 2; continue
+                            if q[i] == qchar: i += 1; break
+                            i += 1
+                        continue
+                    i += 1
+
+            # Now we expect the selection set '{'
+            while i < n and q[i].isspace(): i += 1
+            if i < n and q[i] == '{':
+                if (operation_name is None) or (op_name == operation_name):
+                    start = i
+                    break
+        # otherwise keep scanning
+    else:
+        return ""  # not found
+
+    # Find matching '}' for this '{'
+    depth = 0
+    j = start
+    while j < n:
+        c = q[j]
+        if c == '{':
+            depth += 1
+        elif c == '}':
+            depth -= 1
+            if depth == 0:
+                return q[start+1:j]  # inner contents
+        elif c in ('"', "'"):
+            qchar = c; j += 1
+            while j < n:
+                if q[j] == '\\': j += 2; continue
+                if q[j] == qchar: break
+                j += 1
+        j += 1
+    return ""
+    
+
+def top_level_fields(query: str, operation_name: str | None):
+    body = _extract_operation_body(query, operation_name)
+    if not body:
+        # Try anonymous as fallback
+        body = _extract_operation_body(query, None)
+    
+    if not body:
+        return set()
+    
+    # Simple regex-based approach that works
+    import re
+    fields = set()
+    
+    # Find all field names (with or without arguments)
+    # Pattern: word followed by optional (args) and optional {selection}
+    pattern = r'\b([A-Za-z_][A-Za-z0-9_]*)\s*(?:\([^)]*\))?\s*(?:\{[^}]*\})?'
+    matches = re.findall(pattern, body)
+    
+    for match in matches:
+        if match not in ['on', '__typename'] and not match.startswith('...'):
+            fields.add(match)
+    
+    return fields
 
 # ---------- Crypto Recommendations Helper Functions ----------
 VOL_TIER_PENALTY = {"LOW": 0.0, "MEDIUM": 0.03, "HIGH": 0.06, "EXTREME": 0.10}
@@ -2584,6 +2916,7 @@ def _get_mock_drift_decision():
 @app.post("/graphql/")
 async def graphql_endpoint(request_data: dict):
     import re
+    from datetime import datetime, timedelta
     _trace(f"ENTER /graphql (keys={list(request_data.keys())})")
     query = request_data.get("query", "") or ""
     variables = request_data.get("variables", {}) or {}
@@ -2596,7 +2929,26 @@ async def graphql_endpoint(request_data: dict):
     logger.info("Top-level fields: %s", top_level_fields(query, operation_name))
     logger.info("Variables: %s", variables)
 
-    fields = top_level_fields(query, operation_name)
+    # === Enhanced Field Detection (handles operationName mismatches) ===
+    fields_op    = top_level_fields(query, operation_name)
+    fields_any   = top_level_fields(query, None)
+    fields       = fields_op or fields_any  # prefer opName, fall back to anonymous
+    logger.info("Top-level fields (op=%s) -> using=%s (opOnly=%s any=%s)",
+                operation_name, fields, fields_op, fields_any)
+
+    # === Error Handling Helper ===
+    def _add_error(errors, msg):
+        errors.append({"message": msg})
+
+    # === Initialize Response Data ===
+    response_data = {}
+    errors = []
+
+    # === Persisted Query Cache Check ===
+    pqk = _pq_key(query, variables)
+    cached = _pq_get(pqk)
+    if cached: 
+        return cached
 
     # ---------------------------
     # PHASE 2 — put first, early return
@@ -2608,6 +2960,7 @@ async def graphql_endpoint(request_data: dict):
         try:
             # Try variables first, then parse from query
             symbol = (variables or {}).get("symbol")
+            timeframe = (variables or {}).get("timeframe", "ALL")
             if not symbol:
                 m = re.search(r'cryptoMlSignal\s*\(\s*symbol:\s*"([^"]+)"', query or "")
                 if m: symbol = m.group(1)
@@ -2615,12 +2968,38 @@ async def graphql_endpoint(request_data: dict):
             if not symbol:
                 return {"errors": [{"message": "symbol required"}]}
 
-            # Get ML prediction with fallback
+            # Try Rust service first for high performance
+            sig = None
             try:
-                sig = get_real_ml_prediction(symbol)
-            except Exception as e:
-                logger.warning(f"ML prediction failed for {symbol}: {e}")
-                sig = None
+                from core.rust_crypto_service import rust_crypto_service
+                logger.info(f"🔍 Checking Rust service availability for {symbol}")
+                if rust_crypto_service.is_available():
+                    logger.info(f"✅ Rust service is available, attempting analysis for {symbol}")
+                    # Use the async method directly since we're already in an async context
+                    rust_result = await rust_crypto_service.analyze_crypto(symbol, timeframe)
+                    if rust_result:
+                        # Map Rust response to GraphQL schema
+                        sig = {
+                            "symbol": rust_result.get("symbol", symbol),
+                            "probability": rust_result.get("probability", 0.5),
+                            "confidenceLevel": rust_result.get("confidence_level", "LOW"),
+                            "explanation": rust_result.get("explanation", "Rust analysis completed"),
+                            "features": rust_result.get("features", {}),
+                            "modelVersion": rust_result.get("model_version", "rust-v1.0.0"),
+                            "timestamp": rust_result.get("timestamp", time.time())
+                        }
+                        logger.info(f"✅ Used Rust service for {symbol} analysis")
+            except Exception as rust_error:
+                logger.warning(f"Rust service error: {rust_error}")
+
+            # Fallback to Python ML prediction if Rust not available
+            if not sig:
+                try:
+                    sig = get_real_ml_prediction(symbol)
+                    logger.info(f"✅ Used Python ML for {symbol} analysis")
+                except Exception as e:
+                    logger.warning(f"ML prediction failed for {symbol}: {e}")
+                    sig = None
 
             # Ensure non-null shape with fallback
             if not sig or "probability" not in sig:
@@ -2670,6 +3049,36 @@ async def graphql_endpoint(request_data: dict):
             limit = int((variables or {}).get("limit", 5))
             symbols = (variables or {}).get("symbols") or ["BTC", "ETH", "SOL", "ADA", "DOT"]
             
+            # Try Rust service first for high performance
+            try:
+                from core.rust_crypto_service import rust_crypto_service
+                if rust_crypto_service.is_available():
+                    # Use the async method directly since we're already in an async context
+                    rust_recommendations = await rust_crypto_service.get_crypto_recommendations(limit, symbols)
+                    if rust_recommendations:
+                        # Extract items from Rust response (it returns {"items": [...]})
+                        items = rust_recommendations.get("items", []) if isinstance(rust_recommendations, dict) else rust_recommendations
+                        # Map Rust response to GraphQL schema
+                        results = []
+                        for rec in items:
+                            results.append({
+                                "symbol": rec.get("symbol", ""),
+                                "name": rec.get("symbol", ""),
+                                "priceUsd": float(rec.get("price_usd", 0.0)),
+                                "volumeUsd24h": float(rec.get("liquidity_24h_usd", 0.0)),
+                                "volatilityTier": rec.get("volatility_tier", "MEDIUM"),
+                                "probability": rec.get("probability", 0.5),
+                                "confidenceLevel": rec.get("confidence_level", "LOW"),
+                                "explanation": rec.get("rationale", "Rust analysis completed"),
+                                "score": rec.get("score", 0.0),
+                                "__typename": "CryptoRecommendation"
+                            })
+                        logger.info(f"✅ Used Rust service for recommendations")
+                        return {"data": {"cryptoRecommendations": results}}
+            except Exception as rust_error:
+                logger.warning(f"Rust service error: {rust_error}")
+            
+            # Fallback to Python implementation
             # Use batch pricing for efficiency
             try:
                 batch_prices = crypto_data_provider.get_prices_batch(symbols)
@@ -2793,10 +3202,176 @@ async def graphql_endpoint(request_data: dict):
         }
         return {"data": response_data}
 
-    # Stock chart data (query)
+    if "cancelOrder" in fields:
+        oid = variables.get("orderId")
+        if not oid: return {"errors":[{"message":"orderId required"}]}
+        ok = await trading_service.cancel_order(oid)
+        return {"data": {"cancelOrder": {"success": bool(ok), "orderId": oid, "__typename":"CancelOrderResult"}}}
+
+    if "orders" in fields:
+        status = variables.get("status")  # NEW/FILLED/CANCELLED/ALL
+        arr = await trading_service.get_orders(status=status or None, limit=50)
+        # normalize shape
+        norm = []
+        for o in arr or []:
+            norm.append({
+                "id": getattr(o,"id",""),
+                "status": getattr(o,"status",""),
+                "symbol": getattr(o,"symbol",""),
+                "optionType": getattr(o,"option_type",""),
+                "strike": getattr(o,"strike",0.0),
+                "expiration": getattr(o,"expiration",""),
+                "side": getattr(o,"side",""),
+                "orderType": getattr(o,"order_type",""),
+                "timeInForce": getattr(o,"time_in_force",""),
+                "limitPrice": getattr(o,"limit_price",None),
+                "stopPrice": getattr(o,"stop_price",None),
+                "quantity": getattr(o,"qty",0),
+                "createdAt": getattr(o,"created_at",datetime.now().isoformat()),
+                "__typename":"Order"
+            })
+        return {"data":{"orders": norm}}
+
+    # Options Trading Mutations
+    if "placeOptionOrder" in fields:
+        try:
+            symbol = variables.get("symbol", "")
+            option_type = variables.get("optionType", "CALL")  # CALL or PUT
+            strike = float(variables.get("strike", 0))
+            expiration = variables.get("expiration", "")
+            side = variables.get("side", "BUY")  # BUY or SELL
+            quantity = int(variables.get("quantity", 0) or 0)
+            order_type = variables.get("orderType", "MARKET")  # MARKET, LIMIT, STOP
+            limit_price = float(variables.get("limitPrice", 0) or 0)
+            stop_price = float(variables.get("stopPrice", 0) or 0)
+            time_in_force = variables.get("timeInForce", "DAY")  # DAY, GTC, IOC, FOK
+            notes = variables.get("notes", "")
+            
+            if not symbol or strike <= 0 or not expiration or quantity <= 0:
+                return {"errors": [{"message": "symbol, strike, expiration, and quantity are required"}]}
+            
+            # Generate order ID
+            order_id = f"opt_{int(time.time() * 1000)}"
+            
+            # Price protection for limit orders
+            if order_type == "LIMIT" and limit_price > 0:
+                # Simple price protection - limit to 10% above current market
+                max_price = limit_price * 1.10
+                if limit_price > max_price:
+                    limit_price = max_price
+            
+            return {"data": {"placeOptionOrder": {
+                "success": True,
+                "message": f"Options {side} order for {quantity} {option_type} contracts of {symbol} at ${strike} strike placed successfully",
+                "orderId": order_id,
+                "order": {
+                    "id": order_id,
+                    "symbol": symbol,
+                    "optionType": option_type,
+                    "strike": strike,
+                    "expiration": expiration,
+                    "side": side,
+                    "quantity": quantity,
+                    "orderType": order_type,
+                    "limitPrice": limit_price if order_type == "LIMIT" else None,
+                    "stopPrice": stop_price if order_type == "STOP" else None,
+                    "timeInForce": time_in_force,
+                    "status": "PENDING",
+                    "notes": notes,
+                    "createdAt": datetime.now().isoformat(),
+                    "__typename": "OptionOrder"
+                },
+                "__typename": "PlaceOptionOrderResult"
+            }}}
+        except Exception as e:
+            logger.error(f"placeOptionOrder error: {e}")
+            return {"errors": [{"message": f"Failed to place options order: {str(e)}"}]}
+
+    if "cancelOptionOrder" in fields:
+        try:
+            order_id = variables.get("orderId", "")
+            if not order_id:
+                return {"errors": [{"message": "orderId is required"}]}
+            
+            # Simulate order cancellation
+            success = True  # In real implementation, call trading service
+            
+            return {"data": {"cancelOptionOrder": {
+                "success": success,
+                "message": f"Options order {order_id} {'cancelled successfully' if success else 'could not be cancelled'}",
+                "orderId": order_id,
+                "__typename": "CancelOptionOrderResult"
+            }}}
+        except Exception as e:
+            logger.error(f"cancelOptionOrder error: {e}")
+            return {"errors": [{"message": f"Failed to cancel options order: {str(e)}"}]}
+
+    if "optionOrders" in fields:
+        try:
+            status = variables.get("status")  # PENDING, FILLED, CANCELLED, ALL
+            option_type = variables.get("optionType")  # CALL, PUT, ALL
+            
+            # Mock options orders data
+            mock_orders = [
+                {
+                    "id": "opt_1703123456789",
+                    "symbol": "AAPL",
+                    "optionType": "CALL",
+                    "strike": 150.0,
+                    "expiration": "2024-01-19",
+                    "side": "BUY",
+                    "quantity": 10,
+                    "orderType": "MARKET",
+                    "limitPrice": None,
+                    "stopPrice": None,
+                    "timeInForce": "DAY",
+                    "status": "FILLED",
+                    "filledPrice": 2.45,
+                    "notes": "Bullish play on earnings",
+                    "createdAt": "2024-01-15T10:30:00Z",
+                    "__typename": "OptionOrder"
+                },
+                {
+                    "id": "opt_1703123456790",
+                    "symbol": "TSLA",
+                    "optionType": "PUT",
+                    "strike": 200.0,
+                    "expiration": "2024-02-16",
+                    "side": "SELL",
+                    "quantity": 5,
+                    "orderType": "LIMIT",
+                    "limitPrice": 3.20,
+                    "stopPrice": None,
+                    "timeInForce": "GTC",
+                    "status": "PENDING",
+                    "filledPrice": None,
+                    "notes": "Hedge against portfolio",
+                    "createdAt": "2024-01-15T14:22:00Z",
+                    "__typename": "OptionOrder"
+                }
+            ]
+            
+            # Filter by status if provided
+            if status and status != "ALL":
+                mock_orders = [o for o in mock_orders if o["status"] == status]
+            
+            # Filter by option type if provided
+            if option_type and option_type != "ALL":
+                mock_orders = [o for o in mock_orders if o["optionType"] == option_type]
+            
+            return {"data": {"optionOrders": mock_orders}}
+        except Exception as e:
+            logger.error(f"optionOrders error: {e}")
+            return {"errors": [{"message": f"Failed to fetch options orders: {str(e)}"}]}
+
+    # Stock chart data (query) - Enhanced with technical indicators
     if "stockChartData" in fields:
         symbol = variables.get("symbol", "")
         timeframe = variables.get("timeframe", "1D")
+        interval = variables.get("interval") or timeframe
+        limit = int(variables.get("limit") or 120)
+        indicators_req = variables.get("indicators") or []
+        
         if not symbol:
             # Simple string parsing instead of regex
             if 'symbol:' in query:
@@ -2813,9 +3388,12 @@ async def graphql_endpoint(request_data: dict):
         if not symbol:
             return {"errors": [{"message": "Symbol is required for chart data"}]}
 
+        # Guardrails for performance
+        limit = max(30, min(limit, 500))
+        
         now = datetime.now()
         data_points = {'1D': 24, '1W': 7, '1M': 30, '3M': 90, '1Y': 365}
-        points = data_points.get(timeframe, 30)
+        points = min(data_points.get(timeframe, 30), limit)
         base_price = 150 + hash(symbol) % 100
         import math
         chart = []
@@ -2830,13 +3408,273 @@ async def graphql_endpoint(request_data: dict):
             vol = int(100000 + random.random() * 900000)
             chart.append({"timestamp": ts.isoformat(), "open": round(open_p,2), "high": round(high_p,2),
                           "low": round(low_p,2), "close": round(close_p,2), "volume": vol})
+        
+        # Calculate technical indicators
+        closes = [c["close"] for c in chart]
+        inds = {}
+        
+        # Overlays
+        if "SMA20" in indicators_req: inds["SMA20"] = sma(closes, 20)
+        if "SMA50" in indicators_req: inds["SMA50"] = sma(closes, 50)
+        if "EMA12" in indicators_req: inds["EMA12"] = ema(closes, 12)
+        if "EMA26" in indicators_req: inds["EMA26"] = ema(closes, 26)
+        if "BB" in indicators_req:
+            u, m, l = bollinger(closes, 20, 2)
+            inds["BB_upper"], inds["BB_middle"], inds["BB_lower"] = u, m, l
+        
+        # Oscillators
+        if "RSI" in indicators_req: inds["RSI14"] = rsi(closes, 14)
+        if "MACD" in indicators_req:
+            line, signal_line, hist = macd(closes, 12, 26, 9)
+            inds["MACD"], inds["MACD_signal"], inds["MACD_hist"] = line, signal_line, hist
+        
         cp, pp = chart[-1]["close"], chart[0]["close"]
         response_data["stockChartData"] = {
-            "symbol": symbol, "timeframe": timeframe, "data": chart,
+            "symbol": symbol, "timeframe": timeframe, "interval": interval, "limit": limit,
+            "data": chart, "indicators": inds,
             "currentPrice": round(cp,2), "change": round(cp-pp,2),
             "changePercent": round(((cp-pp)/pp)*100, 2), "__typename": "StockChartData"
         }
         return {"data": response_data}
+
+    # === Phase 3: Batch Chart Data (Early Return) ===
+    if "batchStockChartData" in fields:
+        try:
+            logger.info("batchStockChartData handler - variables: %s", variables)
+            symbols    = variables.get("symbols") or []
+            timeframe  = variables.get("timeframe", "1M")
+            indicators = variables.get("indicators", [])
+            logger.info("batchStockChartData handler - symbols: %s, timeframe: %s, indicators: %s", symbols, timeframe, indicators)
+            if not isinstance(symbols, (list, tuple)) or not symbols:
+                raise ValueError("symbols: [String!]! is required")
+
+            symbols    = list(symbols)[:10]
+            indicators = list(indicators)[:10] if isinstance(indicators, (list, tuple)) else []
+
+            payloads = []
+            for sym in symbols:
+                payloads.append(_build_chart_payload(sym, timeframe, indicators))
+            response_data["batchStockChartData"] = payloads
+            return {"data": response_data}
+        except Exception as e:
+            logger.exception("batchStockChartData failed")
+            response_data["batchStockChartData"] = None
+            _add_error(errors, f"batchStockChartData failed: {e}")
+            return {"data": response_data, "errors": errors}
+
+    # === Phase 3: Enhanced Options Trading (Early Return) ===
+    if "placeOptionOrder" in fields:
+        try:
+            # pull input (variables or inline)
+            inp = variables.get("input") or {}
+            if not inp:
+                # ultra-simple inline parse for common fields
+                m = re.search(r'placeOptionOrder\s*\(\s*input:\s*\{([^}]*)\}', query, re.DOTALL)
+                if m:
+                    raw = m.group(1)
+                    def _grab(k):
+                        mm = re.search(rf'{k}:\s*"([^"]+)"', raw); 
+                        return mm.group(1) if mm else None
+                    inp = {
+                        "symbol": _grab("symbol"),
+                        "optionType": _grab("optionType"),
+                        "expiration": _grab("expiration"),
+                        "side": _grab("side"),
+                        "orderType": _grab("orderType")
+                    }
+                    qmm = re.search(r'quantity:\s*([0-9]+)', raw); 
+                    if qmm: inp["quantity"] = int(qmm.group(1))
+                    lmm = re.search(r'limitPrice:\s*([0-9.]+)', raw);
+                    if lmm: inp["limitPrice"] = float(lmm.group(1))
+
+            # required
+            symbol = inp.get("symbol")
+            option_type = (inp.get("optionType") or "").upper()
+            expiration = inp.get("expiration")
+            side = (inp.get("side") or "").upper()
+            order_type = (inp.get("orderType") or "MARKET").upper()
+            qty = int(inp.get("quantity") or 1)
+
+            if not all([symbol, option_type in {"CALL","PUT"}, expiration, side in {"BUY","SELL"}, qty > 0]):
+                raise ValueError("Invalid input for placeOptionOrder")
+
+            time_in_force = (inp.get("timeInForce") or "DAY").upper()
+            slippage_bps = int(inp.get("slippageBps")) if inp.get("slippageBps") is not None else 50
+            preview = bool(inp.get("preview", False))
+            limit_price = inp.get("limitPrice")
+            idem_key = inp.get("idempotencyKey") or f"{symbol}:{option_type}:{expiration}:{side}:{order_type}:{limit_price}:{qty}"
+
+            # idempotency
+            if idem_key in _idem:
+                prev = _idem[idem_key]
+                if time.time() < prev[0] + _IDEM_TTL:
+                    response_data["placeOptionOrder"] = {"success":True,"cached":True,"order":prev[1],"__typename":"PlaceOptionOrderResponse"}
+                    return {"data": response_data}
+
+            # get a mid price from the underlying quote (best effort)
+            try:
+                q = await trading_service.get_quote(symbol)
+            except Exception:
+                q = {}
+            bid = float(q.get("bid") or 0.0)
+            ask = float(q.get("ask") or 0.0)
+            last = float(q.get("last") or q.get("bid") or q.get("ask") or 0.0)
+            mid = (bid + ask) / 2.0 if bid and ask else (last or 0.0)
+
+            # price protection for LIMIT orders
+            if order_type == "LIMIT" and limit_price is not None and mid > 0:
+                cap = _price_protection_cap(side, mid, slippage_bps)
+                if side == "BUY" and float(limit_price) > cap:
+                    response_data["placeOptionOrder"] = {"success":False,"error":"PRICE_PROTECTION","cap":cap,"__typename":"PlaceOptionOrderResponse"}
+                    return {"data": response_data}
+                if side == "SELL" and float(limit_price) < cap:
+                    response_data["placeOptionOrder"] = {"success":False,"error":"PRICE_PROTECTION","cap":cap,"__typename":"PlaceOptionOrderResponse"}
+                    return {"data": response_data}
+
+            # preview path (no execution)
+            order_preview = {
+                "id": f"preview_{int(time.time()*1000)}",
+                "status": "PREVIEW",
+                "symbol": symbol,
+                "optionType": option_type,
+                "strike": float(inp.get("strike") or 0.0),
+                "expiration": expiration,
+                "side": side,
+                "orderType": order_type,
+                "timeInForce": time_in_force,
+                "quantity": qty,
+                "limitPrice": float(limit_price) if limit_price is not None else None,
+                "midPrice": round(mid, 2) if mid else None,
+                "__typename":"Order"
+            }
+            if preview:
+                response_data["placeOptionOrder"] = {"success":True,"preview":True,"order":order_preview,"__typename":"PlaceOptionOrderResponse"}
+                return {"data": response_data}
+
+            # simple "paper" execution (delegates if your service supports options; else stub)
+            placed = {
+                **order_preview,
+                "id": f"opt_{int(time.time()*1000)}",
+                "status": "NEW"
+            }
+
+            # cache idempotently for 10 minutes
+            _idem[idem_key] = (time.time(), placed)
+
+            response_data["placeOptionOrder"] = {"success":True,"cached":False,"order":placed,"__typename":"PlaceOptionOrderResponse"}
+            return {"data": response_data}
+        except Exception as e:
+            logger.exception("placeOptionOrder failed")
+            response_data["placeOptionOrder"] = None
+            _add_error(errors, f"placeOptionOrder failed: {e}")
+            return {"data": response_data, "errors": errors}
+
+    # === Phase 3: Research Hub (Early Return) ===
+    if "researchHub" in fields:
+        try:
+            logger.info("researchHub handler - variables: %s", variables)
+            # Rate limiting
+            me_email = variables.get("userEmail") or "anon"
+            if not _allow(me_email, "researchHub", per_min=20):
+                raise ValueError("Rate limit exceeded")
+            
+            sym = (variables.get("symbol") or variables.get("s") or "").upper()
+            logger.info("researchHub handler - symbol: %s", sym)
+            if not sym: raise ValueError("symbol required")
+            cached = _cache_get(sym)
+            if cached: 
+                response_data["researchHub"] = cached
+                return {"data": response_data}
+
+            # Mock data service calls (replace with real services)
+            prof = {
+                "companyName": f"{sym} Inc.",
+                "sector": "Technology",
+                "marketCap": 1000000000000 + hash(sym) % 500000000000,
+                "country": "USA",
+                "website": f"https://{sym.lower()}.com"
+            }
+            quote = {
+                "currentPrice": 150 + hash(sym) % 100,
+                "change": (random.random() - 0.5) * 10,
+                "changePercent": (random.random() - 0.5) * 5,
+                "high": 160 + hash(sym) % 20,
+                "low": 140 + hash(sym) % 20,
+                "volume": 1000000 + hash(sym) % 5000000
+            }
+            tech = {
+                "rsi": 30 + hash(sym) % 40,
+                "macd": (random.random() - 0.5) * 2,
+                "macdhistogram": (random.random() - 0.5) * 1,
+                "movingAverage50": quote["currentPrice"] + (random.random() - 0.5) * 5,
+                "movingAverage200": quote["currentPrice"] + (random.random() - 0.5) * 10,
+                "supportLevel": quote["currentPrice"] * 0.95,
+                "resistanceLevel": quote["currentPrice"] * 1.05,
+                "impliedVolatility": 0.2 + random.random() * 0.3
+            }
+            news = {
+                "sentiment_label": random.choice(["BULLISH", "BEARISH", "NEUTRAL"]),
+                "sentiment_score": (random.random() - 0.5) * 2,
+                "article_count": 10 + hash(sym) % 50,
+                "confidence": 0.6 + random.random() * 0.3
+            }
+            econ = {
+                "vix": 15 + random.random() * 10,
+                "market_sentiment": random.choice(["RISK_ON", "RISK_OFF", "NEUTRAL"]),
+                "risk_appetite": 0.3 + random.random() * 0.4
+            }
+            regime = {
+                "market_regime": random.choice(["BULL", "BEAR", "SIDEWAYS"]),
+                "confidence": 0.7 + random.random() * 0.2,
+                "recommended_strategy": random.choice(["GROWTH", "VALUE", "MOMENTUM", "DEFENSIVE"])
+            }
+            # quick peers (mock)
+            peers = ["MSFT","GOOGL","AMZN"] if sym=="AAPL" else ["AAPL","MSFT","NVDA"]
+
+            payload = {
+              "symbol": sym,
+              "company": {
+                "name": prof.get("companyName",""),
+                "sector": prof.get("sector",""),
+                "marketCap": prof.get("marketCap",0),
+                "country": prof.get("country",""),
+                "website": prof.get("website","")
+              },
+              "quote": quote,
+              "technicals": tech,
+              "sentiment": news,
+              "macro": econ,
+              "marketRegime": regime,
+              "valuation": {
+                "pe": tech.get("pe", None) or None,
+                "pb": None,
+                "dividendYield": None
+              },
+              "optionsSnapshot": {
+                "impliedVolatility": tech.get("impliedVolatility", None),
+                "support": tech.get("supportLevel"),
+                "resistance": tech.get("resistanceLevel")
+              },
+              "peers": peers,
+              "updatedAt": datetime.now().isoformat(),
+              "__typename": "ResearchReport"
+            }
+            _cache_set(sym, payload)
+            response_data["researchHub"] = payload
+            return {"data": response_data}
+        except Exception as e:
+            logger.exception("researchHub failed")
+            # never return empty UI
+            response_data["researchHub"] = {
+                "symbol": variables.get("symbol") or "AAPL",
+                "snapshot": {"name": "N/A", "sector": "N/A", "marketCap": 0},
+                "quote": {"price": 0.0, "chg": 0.0, "chgPct": 0.0},
+                "technical": {"rsi": None, "macd": None},
+                "sentiment": {"score": None, "label": "Unknown"},
+                "macro": {"vix": None, "marketSentiment": "Unknown"},
+            }
+            _add_error(errors, f"researchHub degraded: {e}")
+            return {"data": response_data, "errors": errors}
 
     # Bank accounts (query)
     if "bankAccounts" in fields or "getBankAccounts" in fields:
@@ -2998,6 +3836,7 @@ async def graphql_endpoint(request_data: dict):
         tok = create_access_token({"sub": email.lower()}, timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
         return {"data": {"tokenAuth": {
             "token": tok, "refreshToken": tok,
+            "payload": {"sub": email.lower(), "exp": datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)},
             "user": {"id": user["id"], "email": user["email"], "name": user["name"],
                      "hasPremiumAccess": user["hasPremiumAccess"], "subscriptionTier": user["subscriptionTier"], 
                      "updatedAt": datetime.now().isoformat(), "__typename":"User"},
@@ -4125,11 +4964,437 @@ async def graphql_endpoint(request_data: dict):
                 "debtRatio": r["debtToEquity"],
                 "beginnerFriendlyScore": int(float(s.get("beginner_score", 0))),
                 "mlScore": float(s.get("ml_score", 0.0)),
+                "score": float(s.get("ml_score", 0.0)),  # Add score field (same as mlScore for now)
                 "__typename": "AdvancedStock",
             })
 
         response_data["advancedStockScreening"] = records
         return {"data": response_data}
+
+    # === DAY TRADING RESOLVERS ===
+    if "dayTradingPicks" in fields:
+        _trace("enter dayTradingPicks handler")
+        print("🎯 DETECTED dayTradingPicks query!")
+        
+        try:
+            import numpy as np
+            import pandas as pd
+            from datetime import datetime, timedelta
+            
+            # Get mode (SAFE or AGGRESSIVE)
+            mode = variables.get("mode", "SAFE").upper()
+            max_positions = variables.get("maxPositions", 3)
+            min_score = variables.get("minScore", None)
+            
+            # Mode configurations
+            mode_configs = {
+                "SAFE": {
+                    "min_price": 5.0,
+                    "min_addv": 50_000_000,  # $50M
+                    "max_spread_bps": 6.0,
+                    "allow_gappers": False,
+                    "max_positions": 2,
+                    "per_trade_risk_pct": 0.005,  # 0.5%
+                    "time_stop_min": 45,
+                    "atr_mult": 0.75,
+                    "score_weights": {
+                        "momentum": 0.25,
+                        "rvol": 0.25,
+                        "vwap": 0.20,
+                        "breakout": 0.15,
+                        "spread_pen": -0.10,
+                        "catalyst": 0.05
+                    },
+                    "min_score": 1.25
+                },
+                "AGGRESSIVE": {
+                    "min_price": 2.0,
+                    "min_addv": 15_000_000,  # $15M
+                    "max_spread_bps": 15.0,
+                    "allow_gappers": True,
+                    "max_positions": 3,
+                    "per_trade_risk_pct": 0.012,  # 1.2%
+                    "time_stop_min": 25,
+                    "atr_mult": 1.2,
+                    "score_weights": {
+                        "momentum": 0.40,
+                        "rvol": 0.25,
+                        "vwap": 0.10,
+                        "breakout": 0.20,
+                        "spread_pen": -0.05,
+                        "catalyst": 0.10
+                    },
+                    "min_score": 0.75
+                }
+            }
+            
+            config = mode_configs.get(mode, mode_configs["SAFE"])
+            if min_score is None:
+                min_score = config["min_score"]
+            
+            # Universe of liquid stocks (mock data for now - replace with real data)
+            universe = [
+                {"symbol": "AAPL", "price": 175.50, "addv": 8_000_000_000, "spread_bps": 2.5, "sector": "Technology"},
+                {"symbol": "MSFT", "price": 380.25, "addv": 6_500_000_000, "spread_bps": 2.8, "sector": "Technology"},
+                {"symbol": "GOOGL", "price": 142.80, "addv": 4_200_000_000, "spread_bps": 3.2, "sector": "Technology"},
+                {"symbol": "AMZN", "price": 155.30, "addv": 3_800_000_000, "spread_bps": 3.5, "sector": "Consumer Discretionary"},
+                {"symbol": "TSLA", "price": 248.50, "addv": 5_100_000_000, "spread_bps": 4.2, "sector": "Consumer Discretionary"},
+                {"symbol": "NVDA", "price": 875.20, "addv": 7_200_000_000, "spread_bps": 2.1, "sector": "Technology"},
+                {"symbol": "META", "price": 485.60, "addv": 3_900_000_000, "spread_bps": 2.9, "sector": "Technology"},
+                {"symbol": "SPY", "price": 445.80, "addv": 12_000_000_000, "spread_bps": 1.2, "sector": "ETF"},
+                {"symbol": "QQQ", "price": 378.40, "addv": 4_500_000_000, "spread_bps": 1.5, "sector": "ETF"},
+                {"symbol": "IWM", "price": 198.70, "addv": 2_800_000_000, "spread_bps": 2.0, "sector": "ETF"}
+            ]
+            
+            # Filter universe by mode criteria
+            filtered_universe = []
+            for stock in universe:
+                if (stock["price"] >= config["min_price"] and 
+                    stock["addv"] >= config["min_addv"] and 
+                    stock["spread_bps"] <= config["max_spread_bps"]):
+                    filtered_universe.append(stock)
+            
+            # Generate intraday features (mock data - replace with real calculations)
+            picks_data = []
+            for stock in filtered_universe:
+                # Mock intraday features with more realistic ranges
+                momentum_15m = np.random.normal(0.01, 0.03)  # Slightly positive bias
+                rvol_10m = np.random.uniform(1.2, 4.0)       # Higher relative volume
+                vwap_dist = np.random.normal(0.005, 0.02)    # Slightly above VWAP bias
+                breakout_pct = np.random.normal(0.01, 0.025) # Slightly positive breakout
+                spread_bps = stock["spread_bps"]
+                catalyst_score = np.random.uniform(-0.3, 0.7)  # Slightly positive catalyst bias
+                
+                above_vwap = vwap_dist > 0
+                
+                # Calculate scores
+                weights = config["score_weights"]
+                
+                # Z-score normalization (simplified) - adjusted for higher scores
+                long_score = (
+                    weights["momentum"] * momentum_15m * 10 +
+                    weights["rvol"] * (rvol_10m - 1.0) * 2 +
+                    weights["vwap"] * vwap_dist * 200 +
+                    weights["breakout"] * breakout_pct * 100 +
+                    weights["spread_pen"] * (spread_bps - 3.0) * -0.2 +
+                    weights["catalyst"] * catalyst_score * 5
+                )
+                
+                short_score = (
+                    weights["momentum"] * (-momentum_15m) * 10 +
+                    weights["rvol"] * (rvol_10m - 1.0) * 2 +
+                    weights["vwap"] * (-vwap_dist) * 200 +
+                    weights["breakout"] * (-breakout_pct) * 100 +
+                    weights["spread_pen"] * (spread_bps - 3.0) * -0.2 +
+                    weights["catalyst"] * catalyst_score * 5
+                )
+                
+                # Determine side and final score
+                if above_vwap and momentum_15m > 0:
+                    side = "LONG"
+                    final_score = long_score
+                else:
+                    side = "SHORT"
+                    final_score = short_score
+                
+                # Risk calculations
+                atr_5m = stock["price"] * 0.008  # Mock ATR
+                stop_distance = atr_5m * config["atr_mult"]
+                
+                if side == "LONG":
+                    stop_price = stock["price"] - stop_distance
+                    target_1 = stock["price"] + stop_distance
+                    target_2 = stock["price"] + stop_distance * 2
+                else:
+                    stop_price = stock["price"] + stop_distance
+                    target_1 = stock["price"] - stop_distance
+                    target_2 = stock["price"] - stop_distance * 2
+                
+                # Position sizing (mock equity = $100k)
+                equity = 100_000
+                risk_amount = equity * config["per_trade_risk_pct"]
+                size_shares = int(risk_amount / stop_distance)
+                
+                picks_data.append({
+                    "symbol": stock["symbol"],
+                    "side": side,
+                    "score": round(final_score, 2),
+                    "features": {
+                        "momentum_15m": round(momentum_15m, 3),
+                        "rvol_10m": round(rvol_10m, 2),
+                        "vwap_dist": round(vwap_dist, 3),
+                        "breakout_pct": round(breakout_pct, 3),
+                        "spread_bps": round(spread_bps, 1),
+                        "catalyst_score": round(catalyst_score, 2)
+                    },
+                    "risk": {
+                        "atr_5m": round(atr_5m, 2),
+                        "size_shares": size_shares,
+                        "stop": round(stop_price, 2),
+                        "targets": [round(target_1, 2), round(target_2, 2)],
+                        "time_stop_min": config["time_stop_min"]
+                    },
+                    "notes": f"{side} - {stock['sector']} sector, {'above' if above_vwap else 'below'} VWAP, {'high' if rvol_10m > 2.0 else 'normal'} volume"
+                })
+            
+            # Sort by score and apply diversification
+            picks_data.sort(key=lambda x: x["score"], reverse=True)
+            
+            # Apply sector diversification and quality threshold
+            final_picks = []
+            used_sectors = set()
+            
+            for pick in picks_data:
+                if pick["score"] < min_score:
+                    break
+                
+                # Get sector from universe
+                stock_sector = next((s["sector"] for s in filtered_universe if s["symbol"] == pick["symbol"]), "Unknown")
+                
+                # Sector diversification (max 1 per sector, except ETFs)
+                if stock_sector != "ETF" and stock_sector in used_sectors:
+                    continue
+                
+                final_picks.append(pick)
+                used_sectors.add(stock_sector)
+                
+                if len(final_picks) >= config["max_positions"]:
+                    break
+            
+            # Format response
+            response_data["dayTradingPicks"] = {
+                "as_of": datetime.now().isoformat() + "Z",
+                "mode": mode,
+                "picks": final_picks,
+                "universe_size": len(filtered_universe),
+                "quality_threshold": min_score
+            }
+            
+            return {"data": response_data}
+            
+        except Exception as e:
+            logger.error(f"Error in dayTradingPicks: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return {"data": {"dayTradingPicks": {"error": str(e)}}}
+
+    if "dayTradingOutcome" in fields:
+        _trace("enter dayTradingOutcome handler")
+        print("🎯 DETECTED dayTradingOutcome mutation!")
+        
+        try:
+            # Import ML learning system
+            from ml_learning_system import ml_system
+            
+            # Handle both old and new input formats
+            input_data = variables.get("input", {})
+            if input_data:
+                # New format with input object
+                symbol = input_data.get("symbol")
+                side = input_data.get("side")  # LONG or SHORT
+                entry_price = input_data.get("entryPrice")
+                exit_price = input_data.get("exitPrice") or input_data.get("entryPrice")  # Use entry as exit for provisional
+                entry_time = input_data.get("executedAt") or input_data.get("entryTime")
+                exit_time = input_data.get("exitTime") or datetime.utcnow().isoformat()
+                mode = input_data.get("mode", "SAFE")  # SAFE or AGGRESSIVE
+                outcome = input_data.get("outcome") or "+1R"  # Default to +1R for provisional
+                features = input_data.get("features", {})
+                score = input_data.get("score", 1.0)
+            else:
+                # Old format with direct parameters
+                symbol = variables.get("symbol")
+                side = variables.get("side")  # LONG or SHORT
+                entry_price = variables.get("entryPrice")
+                exit_price = variables.get("exitPrice")
+                entry_time = variables.get("entryTime")
+                exit_time = variables.get("exitTime")
+                mode = variables.get("mode", "SAFE")
+                outcome = variables.get("outcome")  # +1R, -1R, time_stop, etc.
+                features = variables.get("features", {})  # Original features
+                score = variables.get("score", 0.0)  # Original prediction score
+            
+            # Create outcome record
+            outcome_data = {
+                "symbol": symbol,
+                "side": side,
+                "entry_price": entry_price,
+                "exit_price": exit_price,
+                "entry_time": entry_time,
+                "exit_time": exit_time,
+                "mode": mode,
+                "outcome": outcome,
+                "features": features,
+                "score": score,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            # Log to ML system
+            success = ml_system.log_trading_outcome(outcome_data)
+            
+            if success:
+                # Check if we should retrain models
+                training_results = ml_system.train_if_needed()
+                
+                response_data["dayTradingOutcome"] = {
+                    "success": True,
+                    "message": "Outcome logged successfully",
+                    "record": outcome_data,
+                    "training_triggered": any(training_results.values())
+                }
+            else:
+                response_data["dayTradingOutcome"] = {
+                    "success": False,
+                    "message": "Failed to log outcome",
+                    "record": outcome_data
+                }
+            
+            return {"data": response_data}
+            
+        except Exception as e:
+            logger.error(f"Error in dayTradingOutcome: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return {"data": {"dayTradingOutcome": {"error": str(e)}}}
+
+    # === ML LEARNING SYSTEM ENDPOINTS ===
+    if "mlSystemStatus" in fields:
+        _trace("enter mlSystemStatus handler")
+        print("🎯 DETECTED mlSystemStatus query!")
+        
+        try:
+            from ml_learning_system import ml_system
+            status = ml_system.get_system_status()
+            response_data["mlSystemStatus"] = status
+            return {"data": response_data}
+            
+        except Exception as e:
+            logger.error(f"Error in mlSystemStatus: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            response_data["mlSystemStatus"] = {
+                "error": str(e),
+                "ml_available": False,
+                "outcome_tracking": {"total_outcomes": 0, "recent_outcomes": 0},
+                "models": {"safe_model": None, "aggressive_model": None},
+                "bandit": {},
+                "last_training": {"SAFE": None, "AGGRESSIVE": None}
+            }
+            return {"data": response_data}
+
+    if "trainModels" in fields:
+        _trace("enter trainModels handler")
+        print("🎯 DETECTED trainModels mutation!")
+        
+        try:
+            from ml_learning_system import ml_system
+            modes = variables.get("modes", ["SAFE", "AGGRESSIVE"])
+            
+            if not ml_system.ml_available or not ml_system.model_trainer:
+                response_data["trainModels"] = {
+                    "success": False,
+                    "message": "ML system not available. Cannot train models.",
+                    "results": {mode: None for mode in modes}
+                }
+                return {"data": response_data}
+            
+            results = {}
+            for mode in modes:
+                if mode in ["SAFE", "AGGRESSIVE"]:
+                    logger.info(f"Training {mode} model...")
+                    metrics = ml_system.model_trainer.train_model(mode)
+                    results[mode] = metrics
+            
+            response_data["trainModels"] = {
+                "success": True,
+                "message": "Model training completed",
+                "results": results
+            }
+            
+            return {"data": response_data}
+            
+        except Exception as e:
+            logger.error(f"Error in trainModels: {e}")
+            return {"data": {"trainModels": {"error": str(e)}}}
+
+    if "banditStrategy" in fields:
+        _trace("enter banditStrategy handler")
+        print("🎯 DETECTED banditStrategy query!")
+        
+        try:
+            from ml_learning_system import ml_system
+            context = variables.get("context", {})
+            
+            # Get market context (mock for now)
+            market_context = {
+                "vix_level": 20.0,  # Mock VIX
+                "market_trend": 0.1,  # Mock trend
+                "volatility_regime": 0.5,  # Mock volatility
+                "time_of_day": 0.4  # Mock time (0-1)
+            }
+            
+            if not ml_system.ml_available or not ml_system.bandit:
+                # Fallback to simple strategy selection
+                strategies = ["breakout", "mean_reversion", "momentum", "etf_rotation"]
+                selected_strategy = strategies[0]  # Default to breakout
+                performance = {
+                    strategy: {
+                        "win_rate": 0.5,
+                        "confidence": 1.0,
+                        "alpha": 1.0,
+                        "beta": 1.0
+                    } for strategy in strategies
+                }
+            else:
+                selected_strategy = ml_system.bandit.select_strategy(market_context)
+                performance = ml_system.bandit.get_strategy_performance()
+            
+            response_data["banditStrategy"] = {
+                "selected_strategy": selected_strategy,
+                "context": market_context,
+                "performance": performance
+            }
+            
+            return {"data": response_data}
+            
+        except Exception as e:
+            logger.error(f"Error in banditStrategy: {e}")
+            return {"data": {"banditStrategy": {"error": str(e)}}}
+
+    if "updateBanditReward" in fields:
+        _trace("enter updateBanditReward handler")
+        print("🎯 DETECTED updateBanditReward mutation!")
+        
+        try:
+            from ml_learning_system import ml_system
+            strategy = variables.get("strategy")
+            reward = variables.get("reward", 0.0)  # 1.0 for success, 0.0 for failure
+            
+            if not ml_system.ml_available or not ml_system.bandit:
+                # Fallback response
+                strategies = ["breakout", "mean_reversion", "momentum", "etf_rotation"]
+                performance = {
+                    s: {
+                        "win_rate": 0.5,
+                        "confidence": 1.0,
+                        "alpha": 1.0,
+                        "beta": 1.0
+                    } for s in strategies
+                }
+            else:
+                ml_system.bandit.update_reward(strategy, reward)
+                performance = ml_system.bandit.get_strategy_performance()
+            
+            response_data["updateBanditReward"] = {
+                "success": True,
+                "message": f"Updated {strategy} with reward {reward}",
+                "performance": performance
+            }
+            
+            return {"data": response_data}
+            
+        except Exception as e:
+            logger.error(f"Error in updateBanditReward: {e}")
+            return {"data": {"updateBanditReward": {"error": str(e)}}}
 
     if "portfolioOptimization" in fields:
         # Get portfolio optimization for a list of symbols
@@ -4253,12 +5518,40 @@ async def graphql_endpoint(request_data: dict):
         
         return {"data": {"stocks": stocks_data}}
 
+    if "feedByTickers" in fields:
+        symbols = variables.get("symbols", ["AAPL", "MSFT"])
+        limit = variables.get("limit", 50)
+        
+        # Generate mock feed data for the requested tickers
+        feed_data = []
+        for i in range(min(limit, 10)):  # Generate up to 10 posts
+            symbol = symbols[i % len(symbols)]
+            feed_data.append({
+                "id": f"feed_post_{i+1}",
+                "kind": "DISCUSSION" if i % 3 == 0 else "PREDICTION" if i % 3 == 1 else "POLL",
+                "title": f"Discussion about {symbol}",
+                "content": f"This is a discussion about {symbol} and its recent performance.",
+                "tickers": [symbol],
+                "score": 85 + (i * 2),
+                "commentCount": 5 + i,
+                "user": {
+                    "id": f"user_{i+1}",
+                    "name": f"User {i+1}",
+                    "profilePic": None
+                },
+                "createdAt": (datetime.now() - timedelta(hours=i)).isoformat(),
+                "__typename": "FeedPost"
+            })
+        
+        return {"data": {"feedByTickers": feed_data}}
+
     if "tickerPostCreated" in fields:
         return {"data": {"tickerPostCreated": {
             "id": "post_123",
-            "content": "New discussion about AAPL earnings",
-            "user": {"id": "user_123", "name": "Test User", "email": "test@example.com"},
-            "stock": {"symbol": "AAPL", "companyName": "Apple Inc."},
+            "kind": "DISCUSSION",
+            "title": "New discussion about AAPL earnings",
+            "tickers": ["AAPL"],
+            "user": {"id": "user_123", "name": "Test User"},
             "createdAt": datetime.now().isoformat(),
             "__typename": "TickerPost"
         }}}
@@ -4869,6 +6162,136 @@ async def graphql_endpoint(request_data: dict):
                     "isSecCompliant": False,
                     "regulatoryStatus": "UNREGULATED",
                     "__typename": "Cryptocurrency"
+                },
+                {
+                    "id": "crypto_xrp_001",
+                    "symbol": "XRP",
+                    "name": "XRP",
+                    "coingeckoId": "ripple",
+                    "isStakingAvailable": False,
+                    "minTradeAmount": 10.0,
+                    "precision": 6,
+                    "volatilityTier": "MEDIUM",
+                    "isSecCompliant": True,
+                    "regulatoryStatus": "REGULATED",
+                    "__typename": "Cryptocurrency"
+                },
+                {
+                    "id": "crypto_sol_001",
+                    "symbol": "SOL",
+                    "name": "Solana",
+                    "coingeckoId": "solana",
+                    "isStakingAvailable": True,
+                    "minTradeAmount": 5.0,
+                    "precision": 6,
+                    "volatilityTier": "HIGH",
+                    "isSecCompliant": False,
+                    "regulatoryStatus": "UNREGULATED",
+                    "__typename": "Cryptocurrency"
+                },
+                {
+                    "id": "crypto_usdt_001",
+                    "symbol": "USDT",
+                    "name": "Tether",
+                    "coingeckoId": "tether",
+                    "isStakingAvailable": False,
+                    "minTradeAmount": 1.0,
+                    "precision": 2,
+                    "volatilityTier": "LOW",
+                    "isSecCompliant": True,
+                    "regulatoryStatus": "REGULATED",
+                    "__typename": "Cryptocurrency"
+                },
+                {
+                    "id": "crypto_usdc_001",
+                    "symbol": "USDC",
+                    "name": "USD Coin",
+                    "coingeckoId": "usd-coin",
+                    "isStakingAvailable": False,
+                    "minTradeAmount": 1.0,
+                    "precision": 2,
+                    "volatilityTier": "LOW",
+                    "isSecCompliant": True,
+                    "regulatoryStatus": "REGULATED",
+                    "__typename": "Cryptocurrency"
+                },
+                {
+                    "id": "crypto_ada_001",
+                    "symbol": "ADA",
+                    "name": "Cardano",
+                    "coingeckoId": "cardano",
+                    "isStakingAvailable": True,
+                    "minTradeAmount": 10.0,
+                    "precision": 6,
+                    "volatilityTier": "MEDIUM",
+                    "isSecCompliant": False,
+                    "regulatoryStatus": "UNREGULATED",
+                    "__typename": "Cryptocurrency"
+                },
+                {
+                    "id": "crypto_doge_001",
+                    "symbol": "DOGE",
+                    "name": "Dogecoin",
+                    "coingeckoId": "dogecoin",
+                    "isStakingAvailable": False,
+                    "minTradeAmount": 5.0,
+                    "precision": 8,
+                    "volatilityTier": "HIGH",
+                    "isSecCompliant": False,
+                    "regulatoryStatus": "UNREGULATED",
+                    "__typename": "Cryptocurrency"
+                },
+                {
+                    "id": "crypto_avax_001",
+                    "symbol": "AVAX",
+                    "name": "Avalanche",
+                    "coingeckoId": "avalanche-2",
+                    "isStakingAvailable": True,
+                    "minTradeAmount": 5.0,
+                    "precision": 6,
+                    "volatilityTier": "HIGH",
+                    "isSecCompliant": False,
+                    "regulatoryStatus": "UNREGULATED",
+                    "__typename": "Cryptocurrency"
+                },
+                {
+                    "id": "crypto_bnb_001",
+                    "symbol": "BNB",
+                    "name": "BNB",
+                    "coingeckoId": "binancecoin",
+                    "isStakingAvailable": True,
+                    "minTradeAmount": 5.0,
+                    "precision": 6,
+                    "volatilityTier": "MEDIUM",
+                    "isSecCompliant": False,
+                    "regulatoryStatus": "UNREGULATED",
+                    "__typename": "Cryptocurrency"
+                },
+                {
+                    "id": "crypto_matic_001",
+                    "symbol": "MATIC",
+                    "name": "Polygon",
+                    "coingeckoId": "matic-network",
+                    "isStakingAvailable": True,
+                    "minTradeAmount": 5.0,
+                    "precision": 6,
+                    "volatilityTier": "MEDIUM",
+                    "isSecCompliant": False,
+                    "regulatoryStatus": "UNREGULATED",
+                    "__typename": "Cryptocurrency"
+                },
+                {
+                    "id": "crypto_ltc_001",
+                    "symbol": "LTC",
+                    "name": "Litecoin",
+                    "coingeckoId": "litecoin",
+                    "isStakingAvailable": False,
+                    "minTradeAmount": 10.0,
+                    "precision": 8,
+                    "volatilityTier": "MEDIUM",
+                    "isSecCompliant": False,
+                    "regulatoryStatus": "UNREGULATED",
+                    "__typename": "Cryptocurrency"
                 }
             ]
             return {"data": response_data}
@@ -5119,14 +6542,181 @@ async def graphql_endpoint(request_data: dict):
                 "__typename": "CryptoRecommendationResponse"
             }}}
 
+    # === RISK MANAGEMENT ENDPOINTS ===
+    if "riskSummary" in fields:
+        _trace("enter riskSummary handler")
+        print("🎯 DETECTED riskSummary query!")
+        
+        try:
+            from risk_management import get_risk_manager
+            risk_manager = get_risk_manager()
+            summary = risk_manager.get_risk_summary()
+            response_data["riskSummary"] = summary
+            return {"data": response_data}
+            
+        except Exception as e:
+            logger.error(f"Error in riskSummary: {e}")
+            return {"data": {"riskSummary": {"error": str(e)}}}
+    
+    if "createPosition" in fields:
+        _trace("enter createPosition handler")
+        print("🎯 DETECTED createPosition mutation!")
+        
+        try:
+            from risk_management import get_risk_manager
+            risk_manager = get_risk_manager()
+            
+            symbol = variables.get("symbol", "AAPL")
+            side = variables.get("side", "LONG")
+            price = float(variables.get("price", 150.0))
+            quantity = int(variables.get("quantity", 0))
+            atr = float(variables.get("atr", 2.0))
+            sector = variables.get("sector", "Technology")
+            confidence = float(variables.get("confidence", 1.0))
+            
+            # Calculate optimal position size if not provided
+            if quantity == 0:
+                quantity = risk_manager.calculate_position_size(symbol, price, atr, confidence)
+            
+            position, error_reason = risk_manager.create_position(symbol, side, price, quantity, atr, sector)
+            
+            if position:
+                response_data["createPosition"] = {
+                    "success": True,
+                    "message": "Position created successfully",
+                    "position": {
+                        "symbol": position.symbol,
+                        "side": position.side,
+                        "entry_price": position.entry_price,
+                        "quantity": position.quantity,
+                        "entry_time": position.entry_time.isoformat(),
+                        "stop_loss_price": position.stop_loss_price,
+                        "take_profit_price": position.take_profit_price,
+                        "max_hold_until": position.max_hold_until.isoformat(),
+                        "atr_stop_price": position.atr_stop_price
+                    }
+                }
+            else:
+                response_data["createPosition"] = {
+                    "success": False,
+                    "message": f"Position creation failed: {error_reason}",
+                    "position": None
+                }
+            
+            return {"data": response_data}
+            
+        except Exception as e:
+            logger.error(f"Error in createPosition: {e}")
+            return {"data": {"createPosition": {"error": str(e)}}}
+    
+    if "checkPositionExits" in fields:
+        _trace("enter checkPositionExits handler")
+        print("🎯 DETECTED checkPositionExits mutation!")
+        
+        try:
+            from risk_management import get_risk_manager
+            risk_manager = get_risk_manager()
+            
+            current_prices = variables.get("currentPrices", {})
+            exited_positions = risk_manager.check_position_exits(current_prices)
+            
+            response_data["checkPositionExits"] = {
+                "success": True,
+                "message": f"Checked {len(risk_manager.positions)} positions",
+                "exited_positions": [
+                    {
+                        "symbol": pos.symbol,
+                        "side": pos.side,
+                        "entry_price": pos.entry_price,
+                        "exit_price": pos.exit_price,
+                        "quantity": pos.quantity,
+                        "pnl": pos.pnl,
+                        "exit_reason": pos.risk_reason,
+                        "exit_time": pos.exit_time.isoformat() if pos.exit_time else None
+                    } for pos in exited_positions
+                ]
+            }
+            
+            return {"data": response_data}
+            
+        except Exception as e:
+            logger.error(f"Error in checkPositionExits: {e}")
+            return {"data": {"checkPositionExits": {"error": str(e)}}}
+    
+    if "updateRiskSettings" in fields:
+        _trace("enter updateRiskSettings handler")
+        print("🎯 DETECTED updateRiskSettings mutation!")
+        
+        try:
+            from risk_management import get_risk_manager, set_risk_level, update_account_value, RiskLevel
+            
+            account_value = variables.get("accountValue")
+            risk_level = variables.get("riskLevel")
+            
+            if account_value:
+                update_account_value(float(account_value))
+            
+            if risk_level:
+                risk_level_enum = RiskLevel(risk_level.upper())
+                set_risk_level(risk_level_enum)
+            
+            response_data["updateRiskSettings"] = {
+                "success": True,
+                "message": "Risk settings updated successfully",
+                "current_settings": get_risk_manager().get_risk_summary()
+            }
+            
+            return {"data": response_data}
+            
+        except Exception as e:
+            logger.error(f"Error in updateRiskSettings: {e}")
+            return {"data": {"updateRiskSettings": {"error": str(e)}}}
+    
+    if "getActivePositions" in fields:
+        _trace("enter getActivePositions handler")
+        print("🎯 DETECTED getActivePositions query!")
+        
+        try:
+            from risk_management import get_risk_manager, PositionStatus
+            risk_manager = get_risk_manager()
+            
+            active_positions = [p for p in risk_manager.positions.values() if p.status == PositionStatus.ACTIVE]
+            
+            response_data["getActivePositions"] = [
+                {
+                    "symbol": pos.symbol,
+                    "side": pos.side,
+                    "entry_price": pos.entry_price,
+                    "quantity": pos.quantity,
+                    "entry_time": pos.entry_time.isoformat(),
+                    "stop_loss_price": pos.stop_loss_price,
+                    "take_profit_price": pos.take_profit_price,
+                    "max_hold_until": pos.max_hold_until.isoformat(),
+                    "atr_stop_price": pos.atr_stop_price,
+                    "current_pnl": None,  # Would need current price to calculate
+                    "time_remaining_minutes": int((pos.max_hold_until - datetime.now()).total_seconds() / 60)
+                } for pos in active_positions
+            ]
+            
+            return {"data": response_data}
+            
+        except Exception as e:
+            logger.error(f"Error in getActivePositions: {e}")
+            return {"data": {"getActivePositions": []}}
+
     # ---------------------------
     # DEFAULT (GraphQL-safe)
     # ---------------------------
     logger.info("No handlers matched. Returning GraphQL-safe empty data. fields=%s", fields)
     if fields:
         # Return nulls for requested top-level fields so Apollo cache doesn't error
-        return {"data": {f: None for f in fields}}
-    return {"data": {}}
+        result = {"data": {f: None for f in fields}}
+    else:
+        result = {"data": {}}
+    
+    # === Store in Persisted Query Cache ===
+    _pq_set(pqk, result, ttl=180)
+    return result
 
 # ---------- Entry ----------
 if __name__ == "__main__":

@@ -3,20 +3,22 @@ import React from 'react';
 import { ApolloClient, InMemoryCache, ApolloProvider as Provider, createHttpLink, split, ApolloLink, from } from '@apollo/client';
 import { setContext } from '@apollo/client/link/context';
 import { onError } from '@apollo/client/link/error';
+import { Platform } from 'react-native';
 // import { RetryLink } from '@apollo/client/link/retry';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getMainDefinition } from '@apollo/client/utilities';
 import JWTAuthService from './features/auth/services/JWTAuthService';
-// If you’ll add subscriptions later:
+// If you'll add subscriptions later:
 // import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
 // import { createClient } from 'graphql-ws';
-// Determine the correct URL based on the environment
+
+// Determine the correct URL based on the platform
 const getGraphQLURL = () => {
-  // Use local server for development (force local for now)
-  return 'http://127.0.0.1:8000/graphql';
+  const BASE_URL = Platform.OS === 'ios'
+    ? 'http://localhost:8000'   // iOS Simulator -> host Mac
+    : 'http://10.0.2.2:8000';   // Android emulator -> host Mac/PC
   
-  // Alternative: Use production server
-  // return 'https://54.226.87.216/graphql/';
+  return `${BASE_URL}/graphql/`;
 };
 
 const HTTP_URL = getGraphQLURL();

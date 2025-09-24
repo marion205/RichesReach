@@ -534,6 +534,70 @@ import FinancialChatbotService, { AlphaVantageRecommendationProvider } from '../
             />
           )}
   
+          {/* Swing Trading Section */}
+          <View style={styles.learningSection}>
+            <View style={styles.learningHeader}>
+              <View style={styles.learningHeaderLeft}>
+                <Icon name="trending-up" size={20} color="#FF6B35" />
+                <Text style={styles.learningTitle}>Swing Trading</Text>
+              </View>
+              <TouchableOpacity style={styles.learningButton} onPress={() => navigateTo('swing-trading-test')}>
+                <Text style={styles.learningButtonText}>Test All</Text>
+                <Icon name="chevron-right" size={16} color="#AF52DE" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.learningCards}>
+              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('swing-signals')}>
+                <View style={styles.learningCardIcon}>
+                  <Icon name="activity" size={24} color="#FF6B35" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={styles.learningCardTitle}>Live Signals</Text>
+                  <Text style={styles.learningCardDescription}>AI-powered trading signals</Text>
+                  <Text style={styles.learningCardMeta}>ML scores • Real-time</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('swing-risk-coach')}>
+                <View style={styles.learningCardIcon}>
+                  <Icon name="shield" size={24} color="#10B981" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={styles.learningCardTitle}>Risk Coach</Text>
+                  <Text style={styles.learningCardDescription}>Position sizing & risk management</Text>
+                  <Text style={styles.learningCardMeta}>Calculator • Analysis</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('swing-backtesting')}>
+                <View style={styles.learningCardIcon}>
+                  <Icon name="bar-chart-2" size={24} color="#3B82F6" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={styles.learningCardTitle}>Backtesting</Text>
+                  <Text style={styles.learningCardDescription}>Test strategies with historical data</Text>
+                  <Text style={styles.learningCardMeta}>Performance • Analytics</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('swing-leaderboard')}>
+                <View style={styles.learningCardIcon}>
+                  <Icon name="award" size={24} color="#F59E0B" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={styles.learningCardTitle}>Leaderboard</Text>
+                  <Text style={styles.learningCardDescription}>Top traders & performance rankings</Text>
+                  <Text style={styles.learningCardMeta}>Community • Competition</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
           {/* Learn section (unchanged aside from tiny spacing tweaks) */}
           <View style={styles.learningSection}>
             <View style={styles.learningHeader}>

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Modal,
-  ActivityIndicator, RefreshControl, SafeAreaView, Dimensions,
+  ActivityIndicator, RefreshControl, SafeAreaView, Dimensions, FlatList,
 } from 'react-native';
 import { useQuery, useMutation, NetworkStatus } from '@apollo/client';
 import { gql } from '@apollo/client';
@@ -521,12 +521,17 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
           </View>
         )}
 
-        {!positionsLoading && positions.map((p: any, idx: number) => {
-          const up = p.unrealizedPl >= 0;
-          return (
-            <PositionRow key={p.id || p.symbol || `position-${idx}`} position={p} isUp={up} />
-          );
-        })}
+        {!positionsLoading && (
+          <FlatList
+            data={positions}
+            keyExtractor={(p) => p.id || p.symbol}
+            renderItem={({ item }) => <MemoPositionRow position={item} />}
+            ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: C.line }} />}
+            initialNumToRender={6}
+            windowSize={7}
+            removeClippedSubviews
+          />
+        )}
       </View>
 
       <View style={{ height: 16 }} />
@@ -852,7 +857,8 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
 
 /* ----------------------------- Position Row Component ----------------------------- */
 
-const PositionRow = ({ position, isUp }: { position: any; isUp: boolean }) => {
+const PositionRow = ({ position }: { position: any }) => {
+  const isUp = (Number(position?.unrealizedPl) ?? 0) >= 0;
   const { data: chartData } = useQuery(GET_STOCK_CHART_DATA, {
     variables: { symbol: position.symbol, timeframe: '1D' },
     errorPolicy: 'all',
@@ -860,6 +866,9 @@ const PositionRow = ({ position, isUp }: { position: any; isUp: boolean }) => {
   });
 
   const chartPrices = chartData?.stockChartData?.data?.map((d: any) => d.close) || [];
+  
+  // Normalize inconsistent server fields
+  const plPct = Number(position.unrealizedPlpc ?? position.unrealizedPLPercent ?? 0);
 
   return (
     <View style={styles.positionRow}>
@@ -880,7 +889,7 @@ const PositionRow = ({ position, isUp }: { position: any; isUp: boolean }) => {
               neutralColor={C.sub}
             />
             <Chip 
-              label={`${isUp?'+':''}${position.unrealizedPlpc?.toFixed(2)}%`} 
+              label={`${isUp?'+':''}${plPct.toFixed(2)}%`} 
               tone={isUp ? 'success' : 'danger'} 
             />
           </View>
@@ -1197,5 +1206,8 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.8)',
   },
 });
+
+// Memoized version for performance
+const MemoPositionRow = React.memo(PositionRow);
 
 export default TradingScreen;

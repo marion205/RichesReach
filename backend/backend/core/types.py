@@ -1103,3 +1103,17 @@ class StockDiscussionType(DjangoObjectType):
     def resolve_commentCount(self, info):
         """Return the number of comments"""
         return self.comments.count()
+
+    def resolve_kind(self, info):
+        """Return the post type/kind"""
+        return "discussion"  # Default to discussion for now
+
+    def resolve_tickers(self, info):
+        """Return list of ticker symbols from the stock"""
+        if self.stock:
+            return [self.stock.symbol]
+        return []
+
+    def resolve_createdAt(self, info):
+        """Return the creation timestamp"""
+        return self.created_at

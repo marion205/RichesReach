@@ -39,6 +39,10 @@ import TradingScreen from './features/stocks/screens/TradingScreen';
 import DayTradingScreen from './features/trading/screens/DayTradingScreen';
 import MLSystemScreen from './features/ml/screens/MLSystemScreen';
 import RiskManagementScreen from './features/risk/screens/RiskManagementScreen';
+// Swing Trading Screens
+import { SignalsScreen, RiskCoachScreen, BacktestingScreen } from './features/swingTrading';
+import LeaderboardScreen from './features/swingTrading/screens/LeaderboardScreen';
+import SwingTradingTestScreen from './components/SwingTradingTestScreen';
 import AIOptionsScreen from './features/options/screens/AIOptionsScreen';
 import BankAccountScreen from './features/user/screens/BankAccountScreen';
 import NotificationsScreen from './features/notifications/screens/NotificationsScreen';
@@ -295,6 +299,16 @@ return <DayTradingScreen navigateTo={navigateTo} />;
           return <MLSystemScreen navigateTo={navigateTo} />;
         case 'risk-management':
           return <RiskManagementScreen navigateTo={navigateTo} />;
+        case 'swing-trading-test':
+          return <SwingTradingTestScreen navigateTo={navigateTo} />;
+        case 'swing-signals':
+          return <SignalsScreen navigateTo={navigateTo} />;
+        case 'swing-risk-coach':
+          return <RiskCoachScreen navigateTo={navigateTo} />;
+        case 'swing-backtesting':
+          return <BacktestingScreen navigateTo={navigateTo} />;
+        case 'swing-leaderboard':
+          return <LeaderboardScreen navigateTo={navigateTo} />;
         case 'bank-accounts':
 return <BankAccountScreen navigateTo={navigateTo} />;
 case 'notifications':
