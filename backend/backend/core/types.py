@@ -1117,3 +1117,26 @@ class StockDiscussionType(DjangoObjectType):
     def resolve_createdAt(self, info):
         """Return the creation timestamp"""
         return self.created_at
+
+# SignalType for swing trading signals
+class SignalType(graphene.ObjectType):
+    id = graphene.ID()
+    symbol = graphene.String()
+    timeframe = graphene.String()
+    triggeredAt = graphene.String()
+    signalType = graphene.String()
+    entryPrice = graphene.Float()
+    stopPrice = graphene.Float()
+    targetPrice = graphene.Float()
+    mlScore = graphene.Float()
+    thesis = graphene.String()
+    riskRewardRatio = graphene.Float()
+    daysSinceTriggered = graphene.Int()
+    isLikedByUser = graphene.Boolean()
+    userLikeCount = graphene.Int()
+    features = graphene.List(graphene.String)
+    isActive = graphene.Boolean()
+    isValidated = graphene.Boolean()
+    validationPrice = graphene.Float()
+    validationTimestamp = graphene.String()
+    createdBy = graphene.Field(UserType)

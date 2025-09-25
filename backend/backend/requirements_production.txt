@@ -9,7 +9,7 @@ django-environ==0.11.2
 graphene-django==3.1.5
 graphql-core==3.2.3
 graphql-relay==3.2.0
-graphql-jwt==0.3.4
+django-graphql-jwt==0.4.0
 
 # Database
 psycopg2-binary==2.9.7

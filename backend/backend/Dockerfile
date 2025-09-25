@@ -1,47 +1,28 @@
-# Production Dockerfile for RichesReach Backend
+# syntax=docker/dockerfile:1
 FROM python:3.11-slim
 
-# Set environment variables
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-ENV DJANGO_SETTINGS_MODULE=richesreach.settings_production
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
 
-# Set work directory
 WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential curl && rm -rf /var/lib/apt/lists/*
 
-# Install system dependencies
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        postgresql-client \
-        build-essential \
-        libpq-dev \
-        curl \
-    && rm -rf /var/lib/apt/lists/*
+# Install deps first for better caching
+COPY requirements.txt /app/requirements.txt
+RUN pip install --upgrade pip && pip install -r requirements.txt
 
-# Install Python dependencies
-COPY requirements_production.txt /app/
-RUN pip install --no-cache-dir -r requirements_production.txt
+# Copy app
+COPY . /app
 
-# Copy project
-COPY . /app/
+# Static dir (even if not using yet)
+RUN mkdir -p /app/static
 
-# Create directories for logs and media
-RUN mkdir -p /app/logs /app/media /app/staticfiles
+# Collect static without touching DB (skip if you don't have static yet)
+# RUN python manage.py collectstatic --noinput || true
 
-# Collect static files
-RUN python manage.py collectstatic --noinput --settings=richesreach.settings_production
+# Healthcheck endpoint friendly port
+EXPOSE 8001
 
-# Create a non-root user
-RUN adduser --disabled-password --gecos '' appuser
-RUN chown -R appuser:appuser /app
-USER appuser
-
-# Expose port
-EXPOSE 8000
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
-
-# Run the application
-CMD ["python", "production_server.py"]
+# Start via Daphne (ASGI)
+CMD ["sh", "-c", "python manage.py migrate && daphne -b 0.0.0.0 -p 8001 richesreach.asgi:application"]

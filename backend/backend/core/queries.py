@@ -20,6 +20,7 @@ from .types import (
     DebtSnowballResultType,
     CreditUtilResultType,
     PurchaseAdviceType,
+    SignalType,
 )
 from .models import (
     Post,
@@ -1723,6 +1724,80 @@ class Query(graphene.ObjectType):
         
         from .crypto_models import BorrowPosition
         return BorrowPosition.objects.filter(user=user, is_active=True)
+
+    # Swing Trading Signals Query
+    signals = graphene.List(
+        SignalType,
+        symbol=graphene.String(),
+        signalType=graphene.String(),
+        minMlScore=graphene.Float(),
+        isActive=graphene.Boolean(),
+        limit=graphene.Int()
+    )
+    
+    def resolve_signals(self, info, symbol=None, signalType=None, minMlScore=None, isActive=None, limit=50):
+        # Mock signals data for now
+        mock_signals = [
+            {
+                'id': '1',
+                'symbol': 'AAPL',
+                'timeframe': '1D',
+                'triggeredAt': '2024-01-15T10:30:00Z',
+                'signalType': 'BUY',
+                'entryPrice': 175.50,
+                'stopPrice': 170.00,
+                'targetPrice': 185.00,
+                'mlScore': 0.85,
+                'thesis': 'Strong technical breakout with high volume confirmation',
+                'riskRewardRatio': 2.0,
+                'daysSinceTriggered': 5,
+                'isLikedByUser': False,
+                'userLikeCount': 12,
+                'features': ['RSI_OVERSOLD', 'VOLUME_SPIKE', 'BREAKOUT'],
+                'isActive': True,
+                'isValidated': False,
+                'validationPrice': None,
+                'validationTimestamp': None,
+                'createdBy': {'id': '1', 'name': 'AI Trading System', 'email': 'ai@richesreach.com'}
+            },
+            {
+                'id': '2',
+                'symbol': 'MSFT',
+                'timeframe': '1D',
+                'triggeredAt': '2024-01-14T14:20:00Z',
+                'signalType': 'SELL',
+                'entryPrice': 495.00,
+                'stopPrice': 500.00,
+                'targetPrice': 480.00,
+                'mlScore': 0.72,
+                'thesis': 'Resistance level rejection with bearish divergence',
+                'riskRewardRatio': 3.0,
+                'daysSinceTriggered': 6,
+                'isLikedByUser': True,
+                'userLikeCount': 8,
+                'features': ['RESISTANCE_REJECTION', 'BEARISH_DIVERGENCE'],
+                'isActive': True,
+                'isValidated': False,
+                'validationPrice': None,
+                'validationTimestamp': None,
+                'createdBy': {'id': '1', 'name': 'AI Trading System', 'email': 'ai@richesreach.com'}
+            }
+        ]
+        
+        # Apply filters
+        data = mock_signals
+        if symbol:
+            data = [x for x in data if x['symbol'] == symbol.upper()]
+        if signalType:
+            data = [x for x in data if x['signalType'] == signalType.upper()]
+        if minMlScore is not None:
+            data = [x for x in data if x['mlScore'] >= float(minMlScore)]
+        if isActive is not None:
+            data = [x for x in data if x['isActive'] == bool(isActive)]
+        if limit:
+            data = data[:int(limit)]
+        
+        return data
 
 
 schema = graphene.Schema(query=Query)
