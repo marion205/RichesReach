@@ -10,6 +10,9 @@ import json
 def healthz(_):
     return JsonResponse({"ok": True, "app": "richesreach"}, status=200)
 
+def health(_):
+    return JsonResponse({"ok": True}, status=200)
+
 @csrf_exempt
 def auth_view(request):
     if request.method == 'POST':
@@ -151,6 +154,7 @@ def signals_view(request):
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("healthz", healthz),  # <-- ALB target health
+    path("health/", health),   # <-- Docker health check
     # IMPORTANT: keep the trailing slash and csrf_exempt for mobile POSTs
     path("graphql/", csrf_exempt(GraphQLView.as_view(schema=schema, graphiql=False))),
     path("auth/", auth_view),
