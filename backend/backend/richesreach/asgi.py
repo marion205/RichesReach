@@ -5,19 +5,8 @@ For more information on this file, see
 https://docs.djangoproject.com/en/4.2/howto/deployment/asgi/
 """
 import os
-import django
 from django.core.asgi import get_asgi_application
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'richesreach.settings')
-django.setup()
-from channels.routing import ProtocolTypeRouter, URLRouter
-from channels.auth import AuthMiddlewareStack
-from core.routing import websocket_urlpatterns
-from core.websocket_auth import JWTAuthMiddlewareStack
-application = ProtocolTypeRouter({
-"http": get_asgi_application(),
-"websocket": JWTAuthMiddlewareStack(
-URLRouter(
-websocket_urlpatterns
-)
-),
-})
+
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "richesreach.settings")
+application = get_asgi_application()
+# Later: restore Channels routing + JWTAuthMiddlewareStack when ready
