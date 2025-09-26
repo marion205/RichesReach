@@ -15,6 +15,166 @@ class UserType(graphene.ObjectType):
     id = graphene.ID()
     email = graphene.String()
     name = graphene.String()
+    username = graphene.String()  # Add username field for signals
+    # Add missing fields that mobile app expects
+    incomeProfile = graphene.String()
+    followedTickers = graphene.List(graphene.String)
+
+# Research-related types
+class CompanySnapshotType(graphene.ObjectType):
+    name = graphene.String()
+    sector = graphene.String()
+    marketCap = graphene.Float()
+    country = graphene.String()
+    website = graphene.String()
+
+class QuoteType(graphene.ObjectType):
+    price = graphene.Float()
+    chg = graphene.Float()
+    chgPct = graphene.Float()
+    high = graphene.Float()
+    low = graphene.Float()
+    volume = graphene.Float()
+
+class TechnicalType(graphene.ObjectType):
+    rsi = graphene.Float()
+    macd = graphene.Float()
+    macdhistogram = graphene.Float()
+    movingAverage50 = graphene.Float()
+    movingAverage200 = graphene.Float()
+    supportLevel = graphene.Float()
+    resistanceLevel = graphene.Float()
+    impliedVolatility = graphene.Float()
+
+class SentimentType(graphene.ObjectType):
+    label = graphene.String()
+    score = graphene.Float()
+    confidence = graphene.Float()
+    # Use a field name that won't be auto-converted
+    article_count = graphene.Int(name='article_count')
+    articleCount = graphene.Int()
+    
+    def resolve_article_count(self, info):
+        return getattr(self, 'article_count', 15)
+    
+    def resolve_articleCount(self, info):
+        return getattr(self, 'article_count', 15)
+
+class MacroType(graphene.ObjectType):
+    vix = graphene.Float()
+    marketSentiment = graphene.String()
+    riskAppetite = graphene.String()
+
+class MarketRegimeType(graphene.ObjectType):
+    confidence = graphene.Float()
+    # Use field names that won't be auto-converted
+    market_regime = graphene.String(name='market_regime')
+    marketRegime = graphene.String()
+    recommended_strategy = graphene.String(name='recommended_strategy')
+    recommendedStrategy = graphene.String()
+    
+    def resolve_market_regime(self, info):
+        return getattr(self, 'market_regime', 'bull_market')
+    
+    def resolve_marketRegime(self, info):
+        return getattr(self, 'market_regime', 'bull_market')
+    
+    def resolve_recommended_strategy(self, info):
+        return getattr(self, 'recommended_strategy', 'momentum_trading')
+    
+    def resolve_recommendedStrategy(self, info):
+        return getattr(self, 'recommended_strategy', 'momentum_trading')
+
+class ResearchHubType(graphene.ObjectType):
+    symbol = graphene.String()
+    snapshot = graphene.Field(CompanySnapshotType)
+    quote = graphene.Field(QuoteType)
+    technical = graphene.Field(TechnicalType)
+    sentiment = graphene.Field(SentimentType)
+    macro = graphene.Field(MacroType)
+    marketRegime = graphene.Field(MarketRegimeType)
+    peers = graphene.List(graphene.String)
+    updatedAt = graphene.String()
+
+class ChartDataType(graphene.ObjectType):
+    timestamp = graphene.String()
+    open = graphene.Float()
+    high = graphene.Float()
+    low = graphene.Float()
+    close = graphene.Float()
+    volume = graphene.Float()
+
+class IndicatorsType(graphene.ObjectType):
+    SMA20 = graphene.Float()
+    SMA50 = graphene.Float()
+    EMA12 = graphene.Float()
+    EMA26 = graphene.Float()
+    BB_upper = graphene.Float()
+    BB_middle = graphene.Float()
+    BB_lower = graphene.Float()
+    RSI14 = graphene.Float()
+    MACD = graphene.Float()
+    MACD_signal = graphene.Float()
+    MACD_hist = graphene.Float()
+    # camelCase aliases
+    BBUpper = graphene.Float()
+    BBMiddle = graphene.Float()
+    BBLower = graphene.Float()
+    MACDSignal = graphene.Float()
+    MACDHist = graphene.Float()
+
+class StockChartDataType(graphene.ObjectType):
+    symbol = graphene.String()
+    interval = graphene.String()
+    limit = graphene.Int()
+    currentPrice = graphene.Float()
+    change = graphene.Float()
+    changePercent = graphene.Float()
+    data = graphene.List(ChartDataType)
+    indicators = graphene.Field(IndicatorsType)
+
+class CryptoMLSignalType(graphene.ObjectType):
+    symbol = graphene.String()
+    probability = graphene.Float()
+    confidenceLevel = graphene.String()  # Changed from Float to String
+    explanation = graphene.String()
+    features = graphene.List(graphene.String)
+    modelVersion = graphene.String()
+    timestamp = graphene.String()
+
+class CryptocurrencyType(graphene.ObjectType):
+    symbol = graphene.String()
+    name = graphene.String()
+    priceUsd = graphene.Float()
+    marketCap = graphene.Float()
+    volume24h = graphene.Float()
+    change24h = graphene.Float()
+    changePercent24h = graphene.Float()
+
+class CryptoRecommendationType(graphene.ObjectType):
+    symbol = graphene.String()
+    score = graphene.Float()
+    probability = graphene.Float()
+    confidenceLevel = graphene.String()
+    priceUsd = graphene.Float()
+    volatilityTier = graphene.String()
+    liquidity24hUsd = graphene.Float()
+    rationale = graphene.String()
+    recommendation = graphene.String()
+    riskLevel = graphene.String()
+
+class CryptoHoldingType(graphene.ObjectType):
+    cryptocurrency = graphene.Field(CryptocurrencyType)
+    quantity = graphene.Float()
+    valueUsd = graphene.Float()
+    gainLoss = graphene.Float()
+    gainLossPercent = graphene.Float()
+
+class CryptoPortfolioType(graphene.ObjectType):
+    totalValueUsd = graphene.Float()
+    totalGainLoss = graphene.Float()
+    totalGainLossPercent = graphene.Float()
+    holdings = graphene.List(CryptoHoldingType)
 
 class ObtainJSONWebToken(graphene.Mutation):
     class Arguments:
@@ -102,6 +262,24 @@ class BaseQuery(graphene.ObjectType):
         resistanceLevel=graphene.Float(),
         signalType=graphene.String(),
     )
+    # Add missing queries that mobile app expects
+    stockDiscussions = graphene.List(graphene.String)
+    researchHub = graphene.Field(ResearchHubType, symbol=graphene.String(required=True))
+    stockChartData = graphene.Field(StockChartDataType, 
+        symbol=graphene.String(required=True),
+        timeframe=graphene.String(),
+        interval=graphene.String(),
+        limit=graphene.Int(),
+        indicators=graphene.List(graphene.String)
+    )
+    cryptoMlSignal = graphene.Field(CryptoMLSignalType, symbol=graphene.String(required=True))
+    cryptoRecommendations = graphene.List(
+        CryptoRecommendationType,
+        limit=graphene.Int(),
+        symbols=graphene.List(graphene.String)
+    )
+    supportedCurrencies = graphene.List(CryptocurrencyType)
+    cryptoPortfolio = graphene.Field(lambda: CryptoPortfolioType)
 
     def resolve_ping(root, info):
         return "pong"
@@ -111,7 +289,10 @@ class BaseQuery(graphene.ObjectType):
         return UserType(
             id=1,
             email='test@example.com',
-            name='Test User'
+            name='Test User',
+            username='testuser',  # Add username for signals
+            incomeProfile='premium',
+            followedTickers=['AAPL', 'TSLA', 'NVDA']
         )
     
     def resolve_portfolioMetrics(self, info):
@@ -155,7 +336,14 @@ class BaseQuery(graphene.ObjectType):
                 pe_ratio=stock.pe_ratio,
                 dividend_yield=stock.dividend_yield,
                 beginner_friendly_score=float(stock.beginner_friendly_score) if stock.beginner_friendly_score else None,
-                dividend_score=getattr(stock, 'dividend_score', None)
+                dividend_score=getattr(stock, 'dividend_score', None),
+                # camelCase aliases
+                companyName=stock.company_name,
+                currentPrice=float(stock.current_price) if stock.current_price else None,
+                marketCap=float(stock.market_cap) if stock.market_cap else None,
+                peRatio=stock.pe_ratio,
+                dividendYield=stock.dividend_yield,
+                beginnerFriendlyScore=float(stock.beginner_friendly_score) if stock.beginner_friendly_score else None
             ))
         
         return result
@@ -217,7 +405,18 @@ class BaseQuery(graphene.ObjectType):
         for item in watchlist[:limit]:
             # Create the nested stock object
             stock_data = item['stock']
-            stock = WatchlistStockType(**stock_data)
+            stock = WatchlistStockType(
+                id=stock_data['id'],
+                symbol=stock_data['symbol'],
+                company_name=stock_data['company_name'],
+                companyName=stock_data['companyName'],
+                sector=stock_data['sector'],
+                current_price=stock_data['current_price'],
+                currentPrice=stock_data['currentPrice'],
+                beginner_friendly_score=stock_data['beginner_friendly_score'],
+                change=stock_data['change'],
+                changePercent=stock_data['changePercent']
+            )
             
             # Create the watchlist item with the nested stock
             watchlist_item = WatchlistItemType(
@@ -225,7 +424,13 @@ class BaseQuery(graphene.ObjectType):
                 stock=stock,
                 added_at=item['added_at'],
                 notes=item['notes'],
-                target_price=item['target_price']
+                target_price=item['target_price'],
+                # Direct fields for mobile app compatibility
+                symbol=stock_data['symbol'],
+                companyName=stock_data['companyName'],
+                currentPrice=stock_data['currentPrice'],
+                change=stock_data['change'],
+                changePercent=stock_data['changePercent']
             )
             result.append(watchlist_item)
         
@@ -292,7 +497,14 @@ class BaseQuery(graphene.ObjectType):
                 pe_ratio=stock.pe_ratio,
                 dividend_yield=stock.dividend_yield,
                 beginner_friendly_score=float(stock.beginner_friendly_score) if stock.beginner_friendly_score else None,
-                dividend_score=getattr(stock, 'dividend_score', None)
+                dividend_score=getattr(stock, 'dividend_score', None),
+                # camelCase aliases
+                companyName=stock.company_name,
+                currentPrice=float(stock.current_price) if stock.current_price else None,
+                marketCap=float(stock.market_cap) if stock.market_cap else None,
+                peRatio=stock.pe_ratio,
+                dividendYield=stock.dividend_yield,
+                beginnerFriendlyScore=float(stock.beginner_friendly_score) if stock.beginner_friendly_score else None
             ))
         
         return result
@@ -314,6 +526,348 @@ class BaseQuery(graphene.ObjectType):
         from core.graphql.queries import Query as SwingQuery
         swing_query = SwingQuery()
         return swing_query.resolve_calculateDynamicStop(info, entryPrice, atr, atrMultiplier, supportLevel, resistanceLevel, signalType)
+    
+    def resolve_stockDiscussions(self, info):
+        # Mock stock discussions for demo
+        return [
+            "AAPL showing strong technical breakout",
+            "TSLA volatility expected to continue",
+            "NVDA AI chip demand remains high"
+        ]
+    
+    def resolve_researchHub(self, info, symbol):
+        # Mock research hub data for demo
+        return ResearchHubType(
+            symbol=symbol,
+            snapshot=CompanySnapshotType(
+                name=f"{symbol} Inc.",
+                sector="Technology",
+                marketCap=2000000000000.0,
+                country="USA",
+                website=f"https://{symbol.lower()}.com"
+            ),
+            quote=QuoteType(
+                price=150.0,
+                chg=2.5,
+                chgPct=1.69,
+                high=152.0,
+                low=148.0,
+                volume=50000000.0
+            ),
+            technical=TechnicalType(
+                rsi=65.0,
+                macd=1.2,
+                macdhistogram=0.3,
+                movingAverage50=145.0,
+                movingAverage200=140.0,
+                supportLevel=145.0,
+                resistanceLevel=155.0,
+                impliedVolatility=0.25
+            ),
+            sentiment=SentimentType(
+                label="Bullish",
+                score=0.75,
+                article_count=25,
+                confidence=0.8,
+                articleCount=25
+            ),
+            macro=MacroType(
+                vix=18.5,
+                marketSentiment="Risk On",
+                riskAppetite="High"
+            ),
+            marketRegime=MarketRegimeType(
+                market_regime="Bull Market",
+                confidence=0.85,
+                recommended_strategy="Growth",
+                marketRegime="Bull Market",
+                recommendedStrategy="Growth"
+            ),
+            peers=["MSFT", "GOOGL", "AMZN"],
+            updatedAt="2025-09-25T16:45:00Z"
+        )
+    
+    def resolve_stockChartData(self, info, symbol, timeframe="1D", interval="1D", limit=180, indicators=None):
+        # Mock chart data for demo
+        import time
+        current_time = int(time.time())
+        
+        # Generate mock chart data
+        chart_data = []
+        base_price = 150.0
+        for i in range(min(limit, 30)):  # Limit to 30 data points for demo
+            timestamp = current_time - (i * 3600)  # Hourly data
+            price = base_price + (i * 0.5) + (i % 3 - 1) * 2  # Some variation
+            chart_data.append(ChartDataType(
+                timestamp=str(timestamp),
+                open=price,
+                high=price + 1.0,
+                low=price - 1.0,
+                close=price + 0.5,
+                volume=1000000.0
+            ))
+        
+        return StockChartDataType(
+            symbol=symbol,
+            interval=interval,
+            limit=limit,
+            currentPrice=base_price,
+            change=2.5,
+            changePercent=1.69,
+            data=chart_data,
+            indicators=IndicatorsType(
+                SMA20=148.0,
+                SMA50=145.0,
+                EMA12=149.0,
+                EMA26=146.0,
+                BB_upper=155.0,
+                BB_middle=150.0,
+                BB_lower=145.0,
+                RSI14=65.0,
+                MACD=1.2,
+                MACD_signal=1.0,
+                MACD_hist=0.2,
+                # camelCase aliases
+                BBUpper=155.0,
+                BBMiddle=150.0,
+                BBLower=145.0,
+                MACDSignal=1.0,
+                MACDHist=0.2
+            )
+        )
+
+    def resolve_cryptoMlSignal(self, info, symbol):
+        # Mock crypto ML signal data for demo
+        import time
+        current_time = int(time.time())
+        
+        # Mock probability based on symbol
+        if symbol.upper() == 'BTC':
+            probability = 0.75
+            confidence_level = 0.85
+            confidence_level_str = "HIGH"
+            explanation = "Strong bullish momentum detected with high volume and positive sentiment indicators"
+            features = ["price_momentum", "volume_spike", "sentiment_score", "technical_breakout"]
+        elif symbol.upper() == 'ETH':
+            probability = 0.68
+            confidence_level = 0.78
+            confidence_level_str = "HIGH"
+            explanation = "Moderate bullish signal with improving technical indicators"
+            features = ["rsi_oversold_recovery", "moving_average_crossover", "volume_trend"]
+        else:
+            probability = 0.55
+            confidence_level = 0.65
+            confidence_level_str = "MEDIUM"
+            explanation = "Neutral to slightly bullish signal with mixed indicators"
+            features = ["price_action", "market_sentiment", "volatility_analysis"]
+        
+        return CryptoMLSignalType(
+            symbol=symbol.upper(),
+            probability=probability,
+            confidenceLevel=confidence_level_str,  # Return string instead of number
+            explanation=explanation,
+            features=features,
+            modelVersion="v2.1.0",
+            timestamp=str(current_time)
+        )
+
+    def resolve_cryptoRecommendations(self, info, limit=10, symbols=None):
+        # Mock crypto recommendations data
+        recommendations = [
+            {
+                'symbol': 'BTC',
+                'score': 0.85,
+                'probability': 0.75,
+                'confidenceLevel': 'HIGH',
+                'priceUsd': 45000.0,
+                'volatilityTier': 'MEDIUM',
+                'liquidity24hUsd': 25000000000.0,
+                'rationale': 'Strong institutional adoption and limited supply',
+                'recommendation': 'BUY',
+                'riskLevel': 'MEDIUM'
+            },
+            {
+                'symbol': 'ETH',
+                'score': 0.78,
+                'probability': 0.68,
+                'confidenceLevel': 'HIGH',
+                'priceUsd': 3000.0,
+                'volatilityTier': 'HIGH',
+                'liquidity24hUsd': 15000000000.0,
+                'rationale': 'Ethereum 2.0 upgrades and DeFi growth',
+                'recommendation': 'BUY',
+                'riskLevel': 'HIGH'
+            },
+            {
+                'symbol': 'ADA',
+                'score': 0.65,
+                'probability': 0.55,
+                'confidenceLevel': 'MEDIUM',
+                'priceUsd': 0.45,
+                'volatilityTier': 'HIGH',
+                'liquidity24hUsd': 500000000.0,
+                'rationale': 'Smart contract platform with strong fundamentals',
+                'recommendation': 'HOLD',
+                'riskLevel': 'HIGH'
+            },
+            {
+                'symbol': 'SOL',
+                'score': 0.72,
+                'probability': 0.62,
+                'confidenceLevel': 'MEDIUM',
+                'priceUsd': 95.0,
+                'volatilityTier': 'HIGH',
+                'liquidity24hUsd': 2000000000.0,
+                'rationale': 'Fast blockchain with growing ecosystem',
+                'recommendation': 'BUY',
+                'riskLevel': 'HIGH'
+            },
+            {
+                'symbol': 'DOT',
+                'score': 0.68,
+                'probability': 0.58,
+                'confidenceLevel': 'MEDIUM',
+                'priceUsd': 6.5,
+                'volatilityTier': 'MEDIUM',
+                'liquidity24hUsd': 800000000.0,
+                'rationale': 'Interoperability protocol with strong development',
+                'recommendation': 'HOLD',
+                'riskLevel': 'MEDIUM'
+            },
+            {
+                'symbol': 'MATIC',
+                'score': 0.70,
+                'probability': 0.60,
+                'confidenceLevel': 'MEDIUM',
+                'priceUsd': 0.85,
+                'volatilityTier': 'HIGH',
+                'liquidity24hUsd': 600000000.0,
+                'rationale': 'Layer 2 scaling solution for Ethereum',
+                'recommendation': 'BUY',
+                'riskLevel': 'MEDIUM'
+            }
+        ]
+        
+        # Filter by symbols if provided
+        if symbols:
+            recommendations = [r for r in recommendations if r['symbol'] in symbols]
+        
+        # Limit results
+        recommendations = recommendations[:limit]
+        
+        return [CryptoRecommendationType(**rec) for rec in recommendations]
+
+    def resolve_supportedCurrencies(self, info):
+        # Mock supported currencies data
+        currencies = [
+            CryptocurrencyType(
+                symbol='BTC',
+                name='Bitcoin',
+                priceUsd=45000.0,
+                marketCap=850000000000.0,
+                volume24h=25000000000.0,
+                change24h=1200.0,
+                changePercent24h=2.74
+            ),
+            CryptocurrencyType(
+                symbol='ETH',
+                name='Ethereum',
+                priceUsd=3000.0,
+                marketCap=360000000000.0,
+                volume24h=15000000000.0,
+                change24h=85.0,
+                changePercent24h=2.91
+            ),
+            CryptocurrencyType(
+                symbol='USDC',
+                name='USD Coin',
+                priceUsd=1.0,
+                marketCap=32000000000.0,
+                volume24h=5000000000.0,
+                change24h=0.0,
+                changePercent24h=0.0
+            ),
+            CryptocurrencyType(
+                symbol='ADA',
+                name='Cardano',
+                priceUsd=0.45,
+                marketCap=15000000000.0,
+                volume24h=500000000.0,
+                change24h=0.02,
+                changePercent24h=4.65
+            ),
+            CryptocurrencyType(
+                symbol='SOL',
+                name='Solana',
+                priceUsd=95.0,
+                marketCap=40000000000.0,
+                volume24h=2000000000.0,
+                change24h=3.5,
+                changePercent24h=3.82
+            )
+        ]
+        return currencies
+
+    def resolve_cryptoPortfolio(self, info):
+        # Mock crypto portfolio data
+        holdings = [
+            CryptoHoldingType(
+                cryptocurrency=CryptocurrencyType(
+                    symbol='BTC',
+                    name='Bitcoin',
+                    priceUsd=45000.0,
+                    marketCap=850000000000.0,
+                    volume24h=25000000000.0,
+                    change24h=1200.0,
+                    changePercent24h=2.74
+                ),
+                quantity=0.5,
+                valueUsd=22500.0,
+                gainLoss=2500.0,
+                gainLossPercent=12.5
+            ),
+            CryptoHoldingType(
+                cryptocurrency=CryptocurrencyType(
+                    symbol='ETH',
+                    name='Ethereum',
+                    priceUsd=3000.0,
+                    marketCap=360000000000.0,
+                    volume24h=15000000000.0,
+                    change24h=85.0,
+                    changePercent24h=2.91
+                ),
+                quantity=2.0,
+                valueUsd=6000.0,
+                gainLoss=800.0,
+                gainLossPercent=15.38
+            ),
+            CryptoHoldingType(
+                cryptocurrency=CryptocurrencyType(
+                    symbol='USDC',
+                    name='USD Coin',
+                    priceUsd=1.0,
+                    marketCap=32000000000.0,
+                    volume24h=5000000000.0,
+                    change24h=0.0,
+                    changePercent24h=0.0
+                ),
+                quantity=1000.0,
+                valueUsd=1000.0,
+                gainLoss=0.0,
+                gainLossPercent=0.0
+            )
+        ]
+        
+        total_value = sum(h.valueUsd for h in holdings)
+        total_gain_loss = sum(h.gainLoss for h in holdings)
+        total_gain_loss_percent = (total_gain_loss / (total_value - total_gain_loss)) * 100 if total_value > total_gain_loss else 0
+        
+        return CryptoPortfolioType(
+            totalValueUsd=total_value,
+            totalGainLoss=total_gain_loss,
+            totalGainLossPercent=total_gain_loss_percent,
+            holdings=holdings
+        )
 
 class Query(SwingQuery, BaseQuery, graphene.ObjectType):
     # merging by multiple inheritance; keep simple to avoid MRO issues
@@ -324,5 +878,27 @@ class Mutation(graphene.ObjectType):
     verify_token = graphql_jwt.Verify.Field()
     refresh_token = graphql_jwt.Refresh.Field()
     runBacktest = RunBacktestMutation.Field()
+    
+    # Signal mutations
+    likeSignal = graphene.Field(
+        graphene.NonNull(graphene.Boolean),
+        signalId=graphene.ID(required=True),
+        description="Like or unlike a signal"
+    )
+    
+    commentSignal = graphene.Field(
+        graphene.NonNull(graphene.Boolean),
+        signalId=graphene.ID(required=True),
+        content=graphene.String(required=True),
+        description="Add a comment to a signal"
+    )
+    
+    def resolve_likeSignal(self, info, signalId):
+        # Mock implementation - always return success
+        return True
+    
+    def resolve_commentSignal(self, info, signalId, content):
+        # Mock implementation - always return success
+        return True
 
 schema = graphene.Schema(query=Query, mutation=Mutation, auto_camelcase=True)

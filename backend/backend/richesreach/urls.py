@@ -13,6 +13,9 @@ def healthz(_):
 def health(_):
     return JsonResponse({"ok": True}, status=200)
 
+def home(_):
+    return JsonResponse({"message": "Hello from RichesReach!", "status": "running"}, status=200)
+
 @csrf_exempt
 def auth_view(request):
     if request.method == 'POST':
@@ -151,10 +154,66 @@ def signals_view(request):
         }
     })
 
+@csrf_exempt
+def prices_view(request):
+    """Mock prices endpoint for crypto/stocks"""
+    symbols = request.GET.get('symbols', '')
+    if not symbols:
+        return JsonResponse({'error': 'No symbols provided'}, status=400)
+    
+    # Mock price data for demo
+    price_data = {}
+    for symbol in symbols.split(','):
+        if symbol.upper() == 'USDC':
+            price_data[symbol.upper()] = {'price': 1.00, 'change_24h': 0.00}
+        elif symbol.upper() == 'BTC':
+            price_data[symbol.upper()] = {'price': 45000.00, 'change_24h': 2.5}
+        elif symbol.upper() == 'ETH':
+            price_data[symbol.upper()] = {'price': 3000.00, 'change_24h': 1.8}
+        else:
+            price_data[symbol.upper()] = {'price': 100.00, 'change_24h': 0.5}
+    
+    return JsonResponse(price_data)
+
+@csrf_exempt
+def user_profile_view(request):
+    """Mock user profile endpoint"""
+    return JsonResponse({
+        'data': {
+            'me': {
+                'id': '1',
+                'name': 'Test User',
+                'email': 'test@example.com',
+                'incomeProfile': 'premium',
+                'followedTickers': ['AAPL', 'TSLA', 'NVDA'],
+                'hasPremiumAccess': True,
+                'subscriptionTier': 'PREMIUM',
+                '__typename': 'User'
+            }
+        }
+    })
+
+@csrf_exempt
+def discussions_view(request):
+    """Mock stock discussions endpoint"""
+    return JsonResponse({
+        'data': {
+            'stockDiscussions': [
+                "AAPL showing strong technical breakout",
+                "TSLA volatility expected to continue", 
+                "NVDA AI chip demand remains high"
+            ]
+        }
+    })
+
 urlpatterns = [
+    path("", home),  # <-- Root endpoint
     path("admin/", admin.site.urls),
     path("healthz", healthz),  # <-- ALB target health
     path("health/", health),   # <-- Docker health check
+    path("prices/", prices_view),  # <-- Prices endpoint for crypto/stocks
+    path("user-profile/", user_profile_view),  # <-- User profile endpoint
+    path("discussions/", discussions_view),  # <-- Stock discussions endpoint
     # IMPORTANT: keep the trailing slash and csrf_exempt for mobile POSTs
     path("graphql/", csrf_exempt(GraphQLView.as_view(schema=schema, graphiql=False))),
     path("auth/", auth_view),

@@ -107,12 +107,14 @@ EMAIL_USE_TLS = True
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 
-# API Keys for production
-ALPHA_VANTAGE_API_KEY = os.getenv('ALPHA_VANTAGE_API_KEY', 'OHYSFF1AE446O7CR')
-FINNHUB_API_KEY = os.getenv('FINNHUB_API_KEY', 'd2rnitpr01qv11lfegugd2rnitpr01qv11lfegv0')
+# API Keys for production - use environment variables only
+ALPHA_VANTAGE_API_KEY = os.getenv('ALPHA_VANTAGE_API_KEY')
+FINNHUB_API_KEY = os.getenv('FINNHUB_API_KEY')
+NEWS_API_KEY = os.getenv('NEWS_API_KEY')
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
-# Real-time data update settings
-REALTIME_UPDATE_ENABLED = True
+# Real-time data update settings - disable during startup to prevent 403 errors
+REALTIME_UPDATE_ENABLED = os.getenv('REALTIME_UPDATE_ENABLED', 'False').lower() == 'true'
 REALTIME_UPDATE_INTERVAL = 300  # 5 minutes
 PRIORITY_UPDATE_INTERVAL = 60   # 1 minute
 

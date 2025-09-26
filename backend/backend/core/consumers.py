@@ -11,35 +11,38 @@ import jwt
 from django.conf import settings
 logger = logging.getLogger(__name__)
 class StockPriceConsumer(AsyncWebsocketConsumer):
-"""WebSocket consumer for real-time stock price updates"""
-async def connect(self):
-"""Handle WebSocket connection"""
-self.user = self.scope["user"]
-self.room_group_name = f"stock_prices_{self.user.id if not isinstance(self.user, AnonymousUser) else 'anonymous'}"
-# Join room group
-await self.channel_layer.group_add(
-self.room_group_name,
-self.channel_name
-)
-await self.accept()
-logger.info(f"WebSocket connected for user: {self.user}")
-# Start sending initial stock prices
-await self.send_initial_prices()
-async def disconnect(self, close_code):
-"""Handle WebSocket disconnection"""
-# Leave room group
-await self.channel_layer.group_discard(
-self.room_group_name,
-self.channel_name
-)
-logger.info(f"WebSocket disconnected for user: {self.user}")
-async def receive(self, text_data):
-"""Handle messages from WebSocket client"""
-try:
-data = json.loads(text_data)
-message_type = data.get('type')
-if message_type == 'subscribe_stocks':
-# Client wants to subscribe to specific stocks
+    """WebSocket consumer for real-time stock price updates"""
+    
+    async def connect(self):
+        """Handle WebSocket connection"""
+        self.user = self.scope["user"]
+        self.room_group_name = f"stock_prices_{self.user.id if not isinstance(self.user, AnonymousUser) else 'anonymous'}"
+        # Join room group
+        await self.channel_layer.group_add(
+            self.room_group_name,
+            self.channel_name
+        )
+        await self.accept()
+        logger.info(f"WebSocket connected for user: {self.user}")
+        # Start sending initial stock prices
+        await self.send_initial_prices()
+    
+    async def disconnect(self, close_code):
+        """Handle WebSocket disconnection"""
+        # Leave room group
+        await self.channel_layer.group_discard(
+            self.room_group_name,
+            self.channel_name
+        )
+        logger.info(f"WebSocket disconnected for user: {self.user}")
+    
+    async def receive(self, text_data):
+        """Handle messages from WebSocket client"""
+        try:
+            data = json.loads(text_data)
+            message_type = data.get('type')
+            if message_type == 'subscribe_stocks':
+                # Client wants to subscribe to specific stocks
 stock_symbols = data.get('symbols', [])
 await self.subscribe_to_stocks(stock_symbols)
 elif message_type == 'get_watchlist_prices':

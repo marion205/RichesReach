@@ -9,7 +9,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile.production
     container_name: richesreach-backend
-    restart: unless-stopped
+    restart: unless-
+    stopped:
     environment:
       # Django
       - DEBUG=False

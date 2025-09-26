@@ -106,25 +106,28 @@ EOF
 # Create a production Dockerfile
 print_status "Creating production Dockerfile..."
 cat > Dockerfile.aws << EOF
-FROM python:3.10-slim
+FROM python:3.10-slim-bookworm
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-ENV DJANGO_SETTINGS_MODULE=richesreach.production_settings
+ENV DJANGO_SETTINGS_MODULE=richesreach.settings
 
 # Set work directory
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \\
-    postgresql-client \\
-    build-essential \\
-    && rm -rf /var/lib/apt/lists/*
+# Install system dependencies with caching and retries
+RUN --mount=type=cache,target=/var/cache/apt \\
+    --mount=type=cache,target=/var/lib/apt \\
+    apt-get update -o Acquire::Retries=5 -o Acquire::http::Timeout="10" \\
+ && apt-get install -y --no-install-recommends \\
+      postgresql-client \\
+ && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
 COPY requirements_aws.txt /app/
-RUN pip install --no-cache-dir -r requirements_aws.txt
+RUN --mount=type=cache,target=/root/.cache/pip \\
+    pip install --no-cache-dir --prefer-binary -r requirements_aws.txt
 
 # Copy project
 COPY . /app/
@@ -136,10 +139,10 @@ RUN mkdir -p /app/logs /app/static
 RUN python manage.py collectstatic --noinput || true
 
 # Expose port
-EXPOSE 8001
+EXPOSE 8000
 
 # Run the application
-CMD ["gunicorn", "--bind", "0.0.0.0:8001", "--workers", "3", "richesreach.wsgi:application"]
+CMD ["/bin/sh", "-c", "python manage.py migrate --run-syncdb && python manage.py runserver 0.0.0.0:8000"]
 EOF
 
 # Build Docker image with latest signals API changes

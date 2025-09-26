@@ -1,4 +1,5 @@
 Django>=4.2,<5
+djangorestframework>=3.14.0
 graphene-django>=3.0.0b7
 django-cors-headers>=4
 django-celery-results>=2
@@ -9,3 +10,7 @@ django-graphql-jwt>=0.4.0
 psycopg2-binary>=2.9.7
 redis>=4.6.0
 requests>=2.31.0
+django-environ>=0.11.0
+gunicorn>=21
+uvicorn[standard]>=0.30
+whitenoise>=6

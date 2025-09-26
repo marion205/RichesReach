@@ -1,0 +1,14 @@
+FROM python:3.10-slim-bookworm
+
+# Test the optimized apt install
+RUN --mount=type=cache,target=/var/cache/apt \
+    --mount=type=cache,target=/var/lib/apt \
+    apt-get update -o Acquire::Retries=5 -o Acquire::http::Timeout="10" \
+ && apt-get install -y --no-install-recommends \
+      postgresql-client \
+ && rm -rf /var/lib/apt/lists/*
+
+# Test pip install
+RUN pip install --no-cache-dir --prefer-binary psycopg2-binary
+
+CMD ["echo", "Test build completed successfully"]

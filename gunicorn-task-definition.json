@@ -1,0 +1,43 @@
+{
+  "family": "riches-reach-ai-task",
+  "taskRoleArn": "arn:aws:iam::498606688292:role/ecsTaskRole",
+  "executionRoleArn": "arn:aws:iam::498606688292:role/ecsTaskExecutionRole",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "containerDefinitions": [
+    {
+      "name": "riches-reach-ai",
+      "image": "498606688292.dkr.ecr.us-east-1.amazonaws.com/riches-reach-ai-ai-service:no-websocket-20250925224433",
+      "essential": true,
+      "portMappings": [{ "containerPort": 8000, "hostPort": 8000, "protocol": "tcp" }],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/riches-reach-ai",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "environment": [
+        { "name": "DJANGO_SETTINGS_MODULE", "value": "richesreach.settings" },
+        { "name": "SECRET_KEY", "value": "django-insecure-production-key-change-in-production" },
+        { "name": "DEBUG", "value": "False" },
+        { "name": "ALLOWED_HOSTS", "value": "app.richesreach.com,localhost,127.0.0.1,98.81.210.223" },
+        { "name": "CSRF_TRUSTED_ORIGINS", "value": "https://app.richesreach.com,http://98.81.210.223:8000" }
+      ],
+      "healthCheck": {
+        "command": ["CMD-SHELL", "curl -f http://localhost:8000/health/ || exit 1"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 60
+      },
+      "command": [
+        "/bin/sh","-c",
+        "echo 'Installing Gunicorn...' && pip install gunicorn uvicorn[standard] && echo 'Migrating...' && python manage.py migrate --noinput && echo 'Collecting static...' && python manage.py collectstatic --noinput || true && echo 'Starting Gunicorn...' && gunicorn richesreach.asgi:application -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000 --workers 3 --timeout 60"
+      ]
+    }
+  ]
+}

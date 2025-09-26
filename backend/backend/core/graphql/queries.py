@@ -10,7 +10,8 @@ def get_mock_signals():
     mock_user = MockUser(
         id=1,
         name='AI Trading System',
-        email='ai@richesreach.com'
+        email='ai@richesreach.com',
+        username='ai_trading_system'
     )
     
     return [
@@ -390,8 +391,11 @@ class Query(graphene.ObjectType):
             id=1,
             name='Test User',
             email='test@example.com',
+            username='testuser',
             hasPremiumAccess=True,
-            subscriptionTier='PREMIUM'
+            subscriptionTier='PREMIUM',
+            incomeProfile='premium',
+            followedTickers=['AAPL', 'TSLA', 'NVDA']
         )
     
     def resolve_leaderboard(self, info, category=None, limit=50):
@@ -698,19 +702,24 @@ def _mock_portfolio_metrics():
     holdings = [
         dict(symbol="AAPL", company_name="Apple Inc.", shares=20,
              current_price=175.50, total_value=3510.00, cost_basis=3000.00,
-             return_amount=510.00, return_percent=0.17, sector="Technology"),
+             return_amount=510.00, return_percent=0.17, sector="Technology",
+             quantity=20, marketValue=3510.00, gainLoss=510.00, gainLossPercent=0.17),
         dict(symbol="TSLA", company_name="Tesla, Inc.", shares=10,
              current_price=260.00, total_value=2600.00, cost_basis=2200.00,
-             return_amount=400.00, return_percent=0.1818, sector="Automotive"),
+             return_amount=400.00, return_percent=0.1818, sector="Automotive",
+             quantity=10, marketValue=2600.00, gainLoss=400.00, gainLossPercent=0.1818),
         dict(symbol="MSFT", company_name="Microsoft Corp.", shares=12,
              current_price=410.00, total_value=4920.00, cost_basis=4200.00,
-             return_amount=720.00, return_percent=0.1714, sector="Technology"),
+             return_amount=720.00, return_percent=0.1714, sector="Technology",
+             quantity=12, marketValue=4920.00, gainLoss=720.00, gainLossPercent=0.1714),
         dict(symbol="GOOGL", company_name="Alphabet Class A", shares=8,
              current_price=155.00, total_value=1240.00, cost_basis=1000.00,
-             return_amount=240.00, return_percent=0.24, sector="Communication Services"),
+             return_amount=240.00, return_percent=0.24, sector="Communication Services",
+             quantity=8, marketValue=1240.00, gainLoss=240.00, gainLossPercent=0.24),
         dict(symbol="AMZN", company_name="Amazon.com, Inc.", shares=6,
              current_price=135.00, total_value=810.00, cost_basis=720.00,
-             return_amount=90.00, return_percent=0.125, sector="Consumer Discretionary"),
+             return_amount=90.00, return_percent=0.125, sector="Consumer Discretionary",
+             quantity=6, marketValue=810.00, gainLoss=90.00, gainLossPercent=0.125),
     ]
     total_value = sum(h["total_value"] for h in holdings)
     total_cost  = sum(h["cost_basis"] for h in holdings)
@@ -955,9 +964,13 @@ def get_mock_watchlist():
                 'id': '1',
                 'symbol': 'AAPL',
                 'company_name': 'Apple Inc.',
+                'companyName': 'Apple Inc.',
                 'sector': 'Technology',
                 'beginner_friendly_score': 0.85,
-                'current_price': 175.50
+                'current_price': 175.50,
+                'currentPrice': 175.50,
+                'change': 2.5,
+                'changePercent': 1.45
             },
             'added_at': datetime.now() - timedelta(days=5),
             'notes': 'Strong fundamentals, good for long-term hold',
@@ -969,9 +982,13 @@ def get_mock_watchlist():
                 'id': '2',
                 'symbol': 'TSLA',
                 'company_name': 'Tesla, Inc.',
+                'companyName': 'Tesla, Inc.',
                 'sector': 'Automotive',
                 'beginner_friendly_score': 0.65,
-                'current_price': 245.80
+                'current_price': 245.80,
+                'currentPrice': 245.80,
+                'change': -5.2,
+                'changePercent': -2.07
             },
             'added_at': datetime.now() - timedelta(days=3),
             'notes': 'High volatility, watch for entry point',
@@ -983,9 +1000,13 @@ def get_mock_watchlist():
                 'id': '3',
                 'symbol': 'MSFT',
                 'company_name': 'Microsoft Corporation',
+                'companyName': 'Microsoft Corporation',
                 'sector': 'Technology',
                 'beginner_friendly_score': 0.82,
-                'current_price': 380.25
+                'current_price': 380.25,
+                'currentPrice': 380.25,
+                'change': 3.1,
+                'changePercent': 0.82
             },
             'added_at': datetime.now() - timedelta(days=7),
             'notes': 'Cloud growth story, solid dividend',
@@ -997,9 +1018,13 @@ def get_mock_watchlist():
                 'id': '4',
                 'symbol': 'GOOGL',
                 'company_name': 'Alphabet Inc.',
+                'companyName': 'Alphabet Inc.',
                 'sector': 'Communication Services',
                 'beginner_friendly_score': 0.78,
-                'current_price': 142.30
+                'current_price': 142.30,
+                'currentPrice': 142.30,
+                'change': 1.8,
+                'changePercent': 1.28
             },
             'added_at': datetime.now() - timedelta(days=2),
             'notes': 'AI leadership and search dominance',
@@ -1011,9 +1036,13 @@ def get_mock_watchlist():
                 'id': '5',
                 'symbol': 'NVDA',
                 'company_name': 'NVIDIA Corporation',
+                'companyName': 'NVIDIA Corporation',
                 'sector': 'Technology',
                 'beginner_friendly_score': 0.58,
-                'current_price': 485.20
+                'current_price': 485.20,
+                'currentPrice': 485.20,
+                'change': 12.5,
+                'changePercent': 2.64
             },
             'added_at': datetime.now() - timedelta(days=1),
             'notes': 'AI chip leader, high growth potential',

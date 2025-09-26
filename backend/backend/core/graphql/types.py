@@ -8,8 +8,11 @@ class UserType(graphene.ObjectType):
     id = graphene.ID()
     name = graphene.String()
     email = graphene.String()
+    username = graphene.String()  # Add username field for signals
     hasPremiumAccess = graphene.Boolean()
     subscriptionTier = graphene.String()
+    incomeProfile = graphene.String()  # Add incomeProfile field
+    followedTickers = graphene.List(graphene.String)  # Add followedTickers field
 
 # Create a simple ObjectType instead of DjangoObjectType for Signal
 class SignalType(graphene.ObjectType):
@@ -29,6 +32,7 @@ class SignalType(graphene.ObjectType):
     validation_price = graphene.Float()
     validation_timestamp = graphene.DateTime()
     created_by = graphene.Field(UserType)
+    user = graphene.Field(UserType)  # Alias for created_by
     features = GenericScalar()  # JSONField
     
     # computed/exposed extras your query asks for
@@ -52,6 +56,10 @@ class SignalType(graphene.ObjectType):
     def resolve_user_like_count(self, info):
         # Mock implementation - return a random count
         return getattr(self, "user_like_count", 15)
+    
+    def resolve_user(self, info):
+        # Return the same data as created_by
+        return self.created_by
 
 # Mock Signal class for data
 class MockSignal:
@@ -278,6 +286,11 @@ class PortfolioHoldingType(graphene.ObjectType):
     return_amount = graphene.Float(required=True)
     return_percent = graphene.Float(required=True)
     sector = graphene.String()
+    # Additional fields for mobile app compatibility
+    quantity = graphene.Int()
+    marketValue = graphene.Float()
+    gainLoss = graphene.Float()
+    gainLossPercent = graphene.Float()
 
 # Portfolio Metrics type
 class PortfolioMetricsType(graphene.ObjectType):
@@ -286,6 +299,23 @@ class PortfolioMetricsType(graphene.ObjectType):
     total_return = graphene.Float(required=True)
     total_return_percent = graphene.Float(required=True)
     holdings = graphene.List(PortfolioHoldingType, required=True)
+    # camelCase aliases
+    totalValue = graphene.Float(required=True)
+    totalCost = graphene.Float(required=True)
+    totalGainLoss = graphene.Float(required=True)
+    totalGainLossPercent = graphene.Float(required=True)
+    
+    def resolve_totalValue(self, info):
+        return self.total_value
+    
+    def resolve_totalCost(self, info):
+        return self.total_cost
+    
+    def resolve_totalGainLoss(self, info):
+        return self.total_return
+    
+    def resolve_totalGainLossPercent(self, info):
+        return self.total_return_percent
 
 # Stock type for stock browsing
 class StockType(graphene.ObjectType):
@@ -299,6 +329,14 @@ class StockType(graphene.ObjectType):
     dividend_yield = graphene.Float()
     beginner_friendly_score = graphene.Float()
     dividend_score = graphene.Int()
+    
+    # camelCase aliases for mobile app
+    companyName = graphene.String()
+    currentPrice = graphene.Float()
+    marketCap = graphene.Float()
+    peRatio = graphene.Float()
+    dividendYield = graphene.Float()
+    beginnerFriendlyScore = graphene.Float()
 
 # Advanced Stock Screening Result type
 class AdvancedStockScreeningResultType(graphene.ObjectType):
@@ -334,6 +372,15 @@ class WatchlistStockType(graphene.ObjectType):
     dividend_yield = graphene.Float()
     beginner_friendly_score = graphene.Float()
     dividend_score = graphene.Int()
+    # camelCase aliases
+    companyName = graphene.String()
+    currentPrice = graphene.Float()
+    marketCap = graphene.Float()
+    peRatio = graphene.Float()
+    dividendYield = graphene.Float()
+    beginnerFriendlyScore = graphene.Float()
+    change = graphene.Float()
+    changePercent = graphene.Float()
 
 # Watchlist Item type
 class WatchlistItemType(graphene.ObjectType):
@@ -342,6 +389,12 @@ class WatchlistItemType(graphene.ObjectType):
     added_at = graphene.DateTime()
     notes = graphene.String()
     target_price = graphene.Float()
+    # Direct fields for mobile app compatibility
+    symbol = graphene.String()
+    companyName = graphene.String()
+    currentPrice = graphene.Float()
+    change = graphene.Float()
+    changePercent = graphene.Float()
 
 # Technical Indicators type
 class TechnicalIndicatorsType(graphene.ObjectType):
