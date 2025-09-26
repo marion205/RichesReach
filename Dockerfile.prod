@@ -1,21 +1,29 @@
 # syntax=docker/dockerfile:1.6
 FROM python:3.11-slim-bookworm
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_DISABLE_PIP_VERSION_CHECK=1
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
 WORKDIR /app
 
-# tiny base tools (curl used by container healthcheck)
+# curl for healthcheck
 RUN --mount=type=cache,target=/var/cache/apt \
     --mount=type=cache,target=/var/lib/apt \
     apt-get update && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
-# deps first for layer caching
 COPY requirements.txt .
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install -U pip && pip install --prefer-binary -r requirements.txt
+    python -m pip install -U pip \
+ && pip install --prefer-binary -r requirements.txt \
+ && pip install --prefer-binary "gunicorn>=21" "uvicorn[standard]>=0.30" "whitenoise>=6"
 
-# app
+# copy source
 COPY . .
 
-# Use ASGI (swap to richesreach.wsgi:application if you're WSGI-only)
+# ensure no baked DB sneaks in even if present in repo history
+RUN rm -f db.sqlite3
+
+# ASGI server
 CMD ["gunicorn","richesreach.asgi:application","-k","uvicorn.workers.UvicornWorker","-b","0.0.0.0:8000","--workers","3","--timeout","60"]
