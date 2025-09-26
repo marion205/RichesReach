@@ -1,0 +1,76 @@
+{
+  "containerDefinitions": [
+    {
+      "name": "riches-reach-ai",
+      "image": "498606688292.dkr.ecr.us-east-1.amazonaws.com/riches-reach-ai-ai-service@sha256:0d10866df2415c7d6f5e52d5061eb1c1ff28feed40416048fd15dbb90b4b19af",
+      "cpu": 0,
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "hostPort": 8000,
+          "protocol": "tcp"
+        }
+      ],
+      "essential": true,
+      "command": [
+        "/bin/sh",
+        "-c",
+        "echo \"Installing deps...\" && pip install -q gunicorn uvicorn[standard] channels daphne && echo \"Bypassing websocket_auth...\" && sed -i \"s/from core.websocket_auth import JWTAuthMiddleware/# from core.websocket_auth import JWTAuthMiddleware/\" /app/richesreach/asgi.py && sed -i \"s/JWTAuthMiddlewareStack(application)/application/\" /app/richesreach/asgi.py && echo \"DB migrate...\" && python manage.py migrate --noinput || python manage.py migrate --fake-initial --noinput && echo \"Collect static...\" && python manage.py collectstatic --noinput || true && echo \"Starting Gunicorn...\" && gunicorn richesreach.asgi:application -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000 --workers 3 --timeout 60"
+      ],
+      "environment": [
+        {
+          "name": "DJANGO_SETTINGS_MODULE",
+          "value": "richesreach.settings"
+        },
+        {
+          "name": "SECRET_KEY",
+          "value": "django-insecure-production-key-change-in-production"
+        },
+        {
+          "name": "DEBUG",
+          "value": "False"
+        },
+        {
+          "name": "ALLOWED_HOSTS",
+          "value": "app.richesreach.com,localhost,127.0.0.1,98.81.210.223"
+        },
+        {
+          "name": "CSRF_TRUSTED_ORIGINS",
+          "value": "https://app.richesreach.com,http://98.81.210.223:8000"
+        }
+      ],
+      "mountPoints": [],
+      "volumesFrom": [],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/riches-reach-ai",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "curl -f http://localhost:8000/health/ || exit 1"
+        ],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 60
+      },
+      "systemControls": []
+    }
+  ],
+  "family": "riches-reach-ai-task",
+  "taskRoleArn": "arn:aws:iam::498606688292:role/ecsTaskRole",
+  "executionRoleArn": "arn:aws:iam::498606688292:role/ecsTaskExecutionRole",
+  "networkMode": "awsvpc",
+  "volumes": [],
+  "placementConstraints": [],
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "512",
+  "memory": "1024"
+}
