@@ -3,81 +3,36 @@ name: RichesReach CI/CD (OIDC)
 on:
   push:
     branches: [ main, develop ]
-    paths-ignore:
-      - "README.md"
-      - "**/*.md"
-  pull_request:
-    branches: [ main, develop ]
   workflow_dispatch:
 
-concurrency:
-  group: richesreach-cicd-${{ github.ref }}
-  cancel-in-progress: true
+permissions:
+  id-token: write      # REQUIRED for OIDC
+  contents: read
 
 env:
   AWS_REGION: us-east-1
   ECR_REPOSITORY: riches-reach-ai
   DOCKERFILE: backend/backend/Dockerfile.production
   BUILD_CONTEXT: backend
-  # ECS / Services
-  CONTAINER_NAME: riches-reach-ai
-  STAGING_CLUSTER: riches-reach-staging
-  STAGING_SERVICE: riches-reach-staging-svc
-  PRODUCTION_CLUSTER: riches-reach-prod
-  PRODUCTION_SERVICE: riches-reach-prod-svc
-  # Runtimes
-  PYTHON_VERSION: "3.11"
-  NODE_VERSION: "20"
-
-permissions:
-  id-token: write     # REQUIRED for OIDC
-  contents: read
 
 jobs:
   build-and-push:
-    name: Build & Push Docker Image
     runs-on: ubuntu-latest
-    environment: staging
     outputs:
       image: ${{ steps.tags.outputs.sha_tag }}
-      image_latest: ${{ steps.tags.outputs.latest_tag }}
-      image_branch: ${{ steps.tags.outputs.branch_tag }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Validate backend build dependencies (non-blocking)
-        run: |
-          set -e
-          if [ -f backend/backend/requirements-production.txt ]; then
-            python -m pip install --upgrade pip
-            pip install -r backend/backend/requirements-production.txt || echo "Dependency install failed (OK for CI-only build)."
-          else
-            echo "requirements-production.txt not found; continuing."
-          fi
-
-      - name: Configure AWS credentials (OIDC)
+      - name: Configure AWS (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::498606688292:role/riches-reach-github-actions
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Who am I?
+      - name: Who am I? (smoke)
         run: aws sts get-caller-identity
 
-      - name: Resolve AWS account & ECR registry
-        id: acct
-        run: |
-          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
-          echo "account_id=$ACCOUNT_ID" >> "$GITHUB_OUTPUT"
-          echo "ECR_REGISTRY=${ACCOUNT_ID}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com" >> "$GITHUB_ENV"
-
-      - name: Login to Amazon ECR
+      - name: Login to ECR
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Ensure ECR repo exists (idempotent)
@@ -116,80 +71,62 @@ jobs:
           docker push "${{ steps.tags.outputs.latest_tag }}"
 
   deploy-staging:
-    name: Deploy to Staging (ECS)
-    needs: build-and-push
     runs-on: ubuntu-latest
-    environment: staging
+    needs: build-and-push
+    env:
+      CLUSTER: riches-reach-staging
+      SERVICE: riches-reach-staging-svc
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::498606688292:role/riches-reach-github-actions
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Who am I?
-        run: aws sts get-caller-identity
-
-      - name: Resolve AWS account & ECR registry
-        run: |
-          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
-          echo "ECR_REGISTRY=${ACCOUNT_ID}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com" >> "$GITHUB_ENV"
-
       - name: Render task definition
-        id: render-stg
+        id: render
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
           task-definition: simple-task-definition.json
-          container-name: ${{ env.CONTAINER_NAME }}
+          container-name: riches-reach-ai
           image: ${{ needs.build-and-push.outputs.image }}
 
-      - name: Deploy to Amazon ECS
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+      - name: Who am I? (smoke)
+        run: aws sts get-caller-identity
+
+      - name: Deploy to ECS (staging)
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
         with:
-          task-definition: ${{ steps.render-stg.outputs.task-definition }}
-          service: ${{ env.STAGING_SERVICE }}
-          cluster: ${{ env.STAGING_CLUSTER }}
+          task-definition: ${{ steps.render.outputs.task-definition }}
+          service: ${{ env.SERVICE }}
+          cluster: ${{ env.CLUSTER }}
           wait-for-service-stability: true
 
   deploy-production:
-    name: Deploy to Production (ECS)
     if: github.ref == 'refs/heads/main'
-    needs: deploy-staging
     runs-on: ubuntu-latest
-    environment: production
+    needs: build-and-push
+    env:
+      CLUSTER: riches-reach-prod
+      SERVICE: riches-reach-prod-svc
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::498606688292:role/riches-reach-github-actions
           aws-region: ${{ env.AWS_REGION }}
-
-      - name: Who am I?
-        run: aws sts get-caller-identity
-
-      - name: Resolve AWS account & ECR registry
-        run: |
-          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
-          echo "ECR_REGISTRY=${ACCOUNT_ID}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com" >> "$GITHUB_ENV"
-
       - name: Render task definition
-        id: render-prod
+        id: render
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
           task-definition: production-task-definition.json
-          container-name: ${{ env.CONTAINER_NAME }}
+          container-name: riches-reach-ai
           image: ${{ needs.build-and-push.outputs.image }}
-
-      - name: Deploy to Amazon ECS
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+      - name: Deploy to ECS (prod)
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
         with:
-          task-definition: ${{ steps.render-prod.outputs.task-definition }}
-          service: ${{ env.PRODUCTION_SERVICE }}
-          cluster: ${{ env.PRODUCTION_CLUSTER }}
+          task-definition: ${{ steps.render.outputs.task-definition }}
+          service: ${{ env.SERVICE }}
+          cluster: ${{ env.CLUSTER }}
           wait-for-service-stability: true
