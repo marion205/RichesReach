@@ -82,11 +82,18 @@ jobs:
       - name: Compute image tags
         id: vars
         run: |
-          IMAGE_URI="${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}"
-          echo "image_uri=${IMAGE_URI}" >> "$GITHUB_OUTPUT"
-          echo "sha_tag=${IMAGE_URI}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
-          echo "branch_tag=${IMAGE_URI}:$(echo ${GITHUB_REF##*/} | tr '/' '-' )" >> "$GITHUB_OUTPUT"
-          echo "latest_tag=${IMAGE_URI}:latest" >> "$GITHUB_OUTPUT"
+          REG="${{ secrets.AWS_ACCOUNT_ID || '498606688292' }}.dkr.ecr.us-east-1.amazonaws.com"
+          REPO="riches-reach-ai"
+          echo "image_uri=$REG/$REPO" >> "$GITHUB_OUTPUT"
+          echo "sha_tag=$REG/$REPO:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "branch_tag=$REG/$REPO:$(echo ${GITHUB_REF##*/} | tr '/_' '--')" >> "$GITHUB_OUTPUT"
+          echo "latest_tag=$REG/$REPO:latest" >> "$GITHUB_OUTPUT"
+
+      - name: Debug tags
+        run: |
+          echo "SHA TAG:     ${{ steps.vars.outputs.sha_tag }}"
+          echo "BRANCH TAG:  ${{ steps.vars.outputs.branch_tag }}"
+          echo "LATEST TAG:  ${{ steps.vars.outputs.latest_tag }}"
 
       - name: Build Docker image
         run: |
