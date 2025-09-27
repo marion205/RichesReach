@@ -745,7 +745,6 @@ def get_mock_stocks():
             'pe_ratio': 28.5,
             'dividend_yield': 0.0044,  # 0.44%
             'beginner_friendly_score': 85,  # 85% (was 0.85)
-            'dividend_score': 65  # Good dividend growth history
         },
         {
             'id': '2',
@@ -756,7 +755,6 @@ def get_mock_stocks():
             'pe_ratio': 32.1,
             'dividend_yield': 0.0071,  # 0.71%
             'beginner_friendly_score': 82,  # 82% (was 0.82)
-            'dividend_score': 78  # Strong dividend growth
         },
         {
             'id': '3',
@@ -767,7 +765,6 @@ def get_mock_stocks():
             'pe_ratio': 24.8,
             'dividend_yield': 0.0,  # No dividend
             'beginner_friendly_score': 78,  # 78% (was 0.78)
-            'dividend_score': 0  # No dividend
         },
         {
             'id': '4',
@@ -778,7 +775,6 @@ def get_mock_stocks():
             'pe_ratio': 65.2,
             'dividend_yield': 0.0,  # No dividend
             'beginner_friendly_score': 65,  # 65% (was 0.65)
-            'dividend_score': 0  # No dividend
         },
         {
             'id': '5',
@@ -789,7 +785,6 @@ def get_mock_stocks():
             'pe_ratio': 45.3,
             'dividend_yield': 0.0,  # No dividend
             'beginner_friendly_score': 72,  # 72% (was 0.72)
-            'dividend_score': 0  # No dividend
         },
         {
             'id': '6',
@@ -800,7 +795,6 @@ def get_mock_stocks():
             'pe_ratio': 22.1,
             'dividend_yield': 0.0,  # No dividend
             'beginner_friendly_score': 68,  # 68% (was 0.68)
-            'dividend_score': 0  # No dividend
         },
         {
             'id': '7',
@@ -811,7 +805,6 @@ def get_mock_stocks():
             'pe_ratio': 55.8,
             'dividend_yield': 0.0003,  # 0.03%
             'beginner_friendly_score': 58,  # 58% (was 0.58)
-            'dividend_score': 25  # Minimal dividend
         },
         {
             'id': '8',
@@ -822,7 +815,6 @@ def get_mock_stocks():
             'pe_ratio': 12.3,
             'dividend_yield': 0.0234,  # 2.34%
             'beginner_friendly_score': 88,  # 88% (was 0.88)
-            'dividend_score': 85  # Excellent dividend history
         },
         {
             'id': '9',
@@ -833,7 +825,6 @@ def get_mock_stocks():
             'pe_ratio': 15.7,
             'dividend_yield': 0.0298,  # 2.98%
             'beginner_friendly_score': 92,  # 92% (was 0.92)
-            'dividend_score': 95  # Dividend aristocrat
         },
         {
             'id': '10',
@@ -844,7 +835,6 @@ def get_mock_stocks():
             'pe_ratio': 25.4,
             'dividend_yield': 0.0245,  # 2.45%
             'beginner_friendly_score': 90,  # 90% (was 0.90)
-            'dividend_score': 92  # Dividend aristocrat
         }
     ]
     return stocks
@@ -1077,7 +1067,6 @@ def get_mock_rust_stock_analysis(symbol):
                 'valuation_score': 0.75,
                 'growth_score': 0.82,
                 'stability_score': 0.88,
-                'dividend_score': 0.65,
                 'debt_score': 0.92
             },
             'reasoning': 'Apple shows strong technical momentum with RSI in neutral territory and MACD indicating bullish trend. Fundamentally, the company maintains excellent financial health with strong cash position and consistent revenue growth. The ecosystem lock-in provides competitive moat. Current valuation is reasonable given growth prospects.'
@@ -1104,7 +1093,6 @@ def get_mock_rust_stock_analysis(symbol):
                 'valuation_score': 0.78,
                 'growth_score': 0.85,
                 'stability_score': 0.91,
-                'dividend_score': 0.72,
                 'debt_score': 0.89
             },
             'reasoning': 'Microsoft demonstrates exceptional technical strength with all indicators pointing to continued upward momentum. Azure cloud growth and AI integration provide strong fundamental tailwinds. The company\'s diversified revenue streams and strong balance sheet make it a low-risk investment with high growth potential.'
@@ -1131,7 +1119,6 @@ def get_mock_rust_stock_analysis(symbol):
                 'valuation_score': 0.45,
                 'growth_score': 0.88,
                 'stability_score': 0.52,
-                'dividend_score': 0.0,
                 'debt_score': 0.78
             },
             'reasoning': 'Tesla shows mixed technical signals with RSI indicating oversold conditions but MACD showing bearish momentum. High volatility and premium valuation create significant risk. While growth prospects remain strong in EV and energy sectors, current price levels may not justify the risk for conservative investors.'
@@ -1158,7 +1145,6 @@ def get_mock_rust_stock_analysis(symbol):
                 'valuation_score': 0.82,
                 'growth_score': 0.75,
                 'stability_score': 0.85,
-                'dividend_score': 0.0,
                 'debt_score': 0.88
             },
             'reasoning': 'Alphabet presents attractive technical setup with improving momentum indicators. Search dominance and AI capabilities provide strong fundamental foundation. YouTube and cloud growth offer additional revenue streams. Current valuation appears reasonable given growth prospects and market position.'
@@ -1185,7 +1171,6 @@ def get_mock_rust_stock_analysis(symbol):
                 'valuation_score': 0.35,
                 'growth_score': 0.95,
                 'stability_score': 0.68,
-                'dividend_score': 0.15,
                 'debt_score': 0.82
             },
             'reasoning': 'NVIDIA shows extremely strong technical momentum with RSI approaching overbought levels and MACD indicating strong bullish trend. AI chip leadership provides exceptional growth potential, but high valuation creates significant risk. Suitable for growth-oriented investors with high risk tolerance.'

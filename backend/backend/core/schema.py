@@ -336,7 +336,6 @@ class BaseQuery(graphene.ObjectType):
                 pe_ratio=stock.pe_ratio,
                 dividend_yield=stock.dividend_yield,
                 beginner_friendly_score=float(stock.beginner_friendly_score) if stock.beginner_friendly_score else None,
-                dividend_score=getattr(stock, 'dividend_score', None),
                 # camelCase aliases
                 companyName=stock.company_name,
                 currentPrice=float(stock.current_price) if stock.current_price else None,
@@ -461,7 +460,6 @@ class BaseQuery(graphene.ObjectType):
             valuation_score=fund_data['valuation_score'],
             growth_score=fund_data['growth_score'],
             stability_score=fund_data['stability_score'],
-            dividend_score=fund_data['dividend_score'],
             debt_score=fund_data['debt_score']
         )
         
@@ -497,7 +495,6 @@ class BaseQuery(graphene.ObjectType):
                 pe_ratio=stock.pe_ratio,
                 dividend_yield=stock.dividend_yield,
                 beginner_friendly_score=float(stock.beginner_friendly_score) if stock.beginner_friendly_score else None,
-                dividend_score=getattr(stock, 'dividend_score', None),
                 # camelCase aliases
                 companyName=stock.company_name,
                 currentPrice=float(stock.current_price) if stock.current_price else None,

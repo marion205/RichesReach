@@ -231,7 +231,6 @@ class StockType(DjangoObjectType):
     def resolve_peRatio(self, info):
         return float(self.pe_ratio) if self.pe_ratio is not None else None
 
-    def resolve_dividendYield(self, info):
         return float(self.dividend_yield) if self.dividend_yield is not None else None
 
     def resolve_debtRatio(self, info):

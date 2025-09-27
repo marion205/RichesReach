@@ -328,7 +328,6 @@ class StockType(graphene.ObjectType):
     pe_ratio = graphene.Float()
     dividend_yield = graphene.Float()
     beginner_friendly_score = graphene.Float()
-    dividend_score = graphene.Int()
     
     # camelCase aliases for mobile app
     companyName = graphene.String()
@@ -348,7 +347,6 @@ class AdvancedStockScreeningResultType(graphene.ObjectType):
     pe_ratio = graphene.Float()
     dividend_yield = graphene.Float()
     beginner_friendly_score = graphene.Float()
-    dividend_score = graphene.Int()
     technical_score = graphene.Float()
     fundamental_score = graphene.Float()
     growth_score = graphene.Float()
@@ -371,7 +369,6 @@ class WatchlistStockType(graphene.ObjectType):
     pe_ratio = graphene.Float()
     dividend_yield = graphene.Float()
     beginner_friendly_score = graphene.Float()
-    dividend_score = graphene.Int()
     # camelCase aliases
     companyName = graphene.String()
     currentPrice = graphene.Float()
@@ -415,7 +412,6 @@ class FundamentalAnalysisType(graphene.ObjectType):
     valuation_score = graphene.Float()
     growth_score = graphene.Float()
     stability_score = graphene.Float()
-    dividend_score = graphene.Float()
     debt_score = graphene.Float()
 
 # Rust Stock Analysis type
