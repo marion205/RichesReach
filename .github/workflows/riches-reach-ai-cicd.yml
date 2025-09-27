@@ -23,17 +23,51 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 1) Request an ID token and print its claims (to confirm the sub/aud)
+      - name: Get OIDC token
+        id: oidc
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const core = require('@actions/core');
+            const token = await core.getIDToken('sts.amazonaws.com');
+            core.setOutput('token', token);
+
+      - name: Show OIDC token claims (debug)
+        run: |
+          python - <<'PY'
+          import os, json, base64
+          t=os.environ['TOKEN'].split('.'); payload=t[1]+'==='
+          print(json.dumps(json.loads(base64.urlsafe_b64decode(payload)), indent=2))
+          PY
+        env:
+          TOKEN: ${{ steps.oidc.outputs.token }}
+
+      # 2) Configure AWS via OIDC (actual assume)
       - name: Configure AWS (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::498606688292:role/riches-reach-github-actions
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: us-east-1
 
       - name: Who am I? (smoke)
         run: aws sts get-caller-identity
 
+      # 3) Login to ECR
       - name: Login to ECR
         uses: aws-actions/amazon-ecr-login@v2
+
+      # 4) **ECR smoke push** (proves OIDC+ECR are fine regardless of your app build)
+      - name: Push alpine smoke image
+        id: smoke
+        run: |
+          set -euo pipefail
+          REG="498606688292.dkr.ecr.us-east-1.amazonaws.com"
+          REPO="riches-reach-ai"
+          aws ecr describe-repositories --repository-names "$REPO" >/dev/null 2>&1 || aws ecr create-repository --repository-name "$REPO"
+          docker pull public.ecr.aws/docker/library/alpine:3.20
+          docker tag public.ecr.aws/docker/library/alpine:3.20 "$REG/$REPO:smoke-${GITHUB_SHA}"
+          docker push "$REG/$REPO:smoke-${GITHUB_SHA}"
 
       - name: Ensure ECR repo exists (idempotent)
         run: |
@@ -59,15 +93,14 @@ jobs:
           echo "LATEST TAG:  ${{ steps.tags.outputs.latest_tag }}"
 
       - name: Build image
-        shell: bash
         run: |
           set -euo pipefail
-          docker build --pull \
-            -f "${{ env.DOCKERFILE }}" \
+          docker build --pull --no-cache --progress=plain \
+            -f backend/backend/Dockerfile.production \
             -t "${{ steps.tags.outputs.sha_tag }}" \
             -t "${{ steps.tags.outputs.branch_tag }}" \
             -t "${{ steps.tags.outputs.latest_tag }}" \
-            "${{ env.BUILD_CONTEXT }}"
+            .
 
       - name: Push image
         shell: bash
