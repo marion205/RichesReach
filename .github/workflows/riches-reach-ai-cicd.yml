@@ -13,7 +13,7 @@ env:
   AWS_REGION: us-east-1
   ECR_REPOSITORY: riches-reach-ai
   DOCKERFILE: backend/backend/Dockerfile.production
-  BUILD_CONTEXT: backend
+  BUILD_CONTEXT: .
 
 jobs:
   build-and-push:
@@ -42,12 +42,14 @@ jobs:
 
       - name: Compute image tags
         id: tags
+        shell: bash
         run: |
+          set -euo pipefail
           REG="498606688292.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
           REPO="${{ env.ECR_REPOSITORY }}"
           echo "repo_uri=$REG/$REPO" >> $GITHUB_OUTPUT
           echo "sha_tag=$REG/$REPO:${GITHUB_SHA}" >> $GITHUB_OUTPUT
-          echo "branch_tag=$REG/$REPO:$(echo ${GITHUB_REF_NAME} | tr '/_' '--')" >> $GITHUB_OUTPUT
+          echo "branch_tag=$REG/$REPO:$(echo "${GITHUB_REF_NAME}" | tr '/_' '--')" >> $GITHUB_OUTPUT
           echo "latest_tag=$REG/$REPO:latest" >> $GITHUB_OUTPUT
 
       - name: Debug tags
@@ -57,15 +59,20 @@ jobs:
           echo "LATEST TAG:  ${{ steps.tags.outputs.latest_tag }}"
 
       - name: Build image
+        shell: bash
         run: |
-          docker build -f "${{ env.DOCKERFILE }}" \
+          set -euo pipefail
+          docker build --pull \
+            -f "${{ env.DOCKERFILE }}" \
             -t "${{ steps.tags.outputs.sha_tag }}" \
             -t "${{ steps.tags.outputs.branch_tag }}" \
             -t "${{ steps.tags.outputs.latest_tag }}" \
             "${{ env.BUILD_CONTEXT }}"
 
       - name: Push image
+        shell: bash
         run: |
+          set -euo pipefail
           docker push "${{ steps.tags.outputs.sha_tag }}"
           docker push "${{ steps.tags.outputs.branch_tag }}"
           docker push "${{ steps.tags.outputs.latest_tag }}"
