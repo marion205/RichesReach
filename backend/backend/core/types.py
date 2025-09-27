@@ -170,6 +170,7 @@ class StockType(DjangoObjectType):
             "debt_ratio",
             "volatility",
             "beginner_friendly_score",
+            "dividend_score",
             "current_price",
         )
 
@@ -177,6 +178,7 @@ class StockType(DjangoObjectType):
     companyName = graphene.String()
     currentPrice = graphene.Float()
     marketCap = graphene.Float()
+    dividendScore = graphene.Int()
     
     # Additional fields for mobile app
     riskLevel = graphene.String()
@@ -221,6 +223,9 @@ class StockType(DjangoObjectType):
 
     def resolve_currentPrice(self, info):
         return float(self.current_price) if self.current_price is not None else None
+
+    def resolve_dividendScore(self, info):
+        return self.dividend_score
 
     def resolve_marketCap(self, info):
         return float(self.market_cap) if self.market_cap is not None else None
