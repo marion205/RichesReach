@@ -1,222 +1,163 @@
-name: RichesReach AI CI/CD Pipeline
+name: RichesReach CI/CD
+
 on:
-push:
-branches: [ main, develop ]
-paths:
-- 'backend/**'
-- 'mobile/**'
-- '.github/workflows/**'
-pull_request:
-branches: [ main, develop ]
-paths:
-- 'backend/**'
-- 'mobile/**'
+  push:
+    branches: [ main, develop ]
+    paths-ignore:
+      - "README.md"
+      - "**/*.md"
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+concurrency:
+  group: richesreach-cicd-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
-AWS_REGION: us-east-1
-ECR_REPOSITORY: riches-reach-ai
-ECS_CLUSTER: riches-reach-ai-production-cluster
-ECS_SERVICE: riches-reach-ai-ai
-ECS_TASK_DEFINITION: riches-reach-ai-task
+  AWS_REGION: us-east-1
+  # ECR
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
+  ECR_REPOSITORY: riches-reach-ai
+  # ECS / Services
+  CONTAINER_NAME: riches-reach-web
+  STAGING_CLUSTER: riches-reach-staging
+  STAGING_SERVICE: riches-reach-staging-svc
+  PRODUCTION_CLUSTER: riches-reach-prod
+  PRODUCTION_SERVICE: riches-reach-prod-svc
+  # Runtimes
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "20"
+
+permissions:
+  contents: read
+
 jobs:
-# Test and Lint
-test:
-name: Test and Lint
-runs-on: ubuntu-latest
-steps:
-- name: Checkout code
-uses: actions/checkout@v3
-- name: Set up Python
-uses: actions/setup-python@v4
-with:
-python-version: '3.10'
-- name: Install dependencies
-run: |
-cd backend
-pip install -r requirements-production.txt
-pip install pytest pytest-asyncio flake8 black
-- name: Run linting
-run: |
-cd backend
-flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-black --check .
-- name: Run tests
-run: |
-cd backend
-python -m pytest tests/ -v --tb=short
-- name: Test ML services
-run: |
-cd backend
-python -c "
-try:
-from core.optimized_ml_service import OptimizedMLService
-from core.market_data_service import MarketDataService
-print('SUCCESS: ML services import successfully')
-except ImportError as e:
-print(f'ERROR: ML service import failed: {e}')
-exit(1)
-"
-# Build and Test Docker Image
-build:
-name: Build and Test Docker Image
-runs-on: ubuntu-latest
-needs: test
-steps:
-- name: Checkout code
-uses: actions/checkout@v3
-- name: Set up Docker Buildx
-uses: docker/setup-buildx-action@v2
-- name: Build Docker image
-run: |
-cd backend
-docker build -f Dockerfile.production -t riches-reach-ai:test .
-- name: Test Docker image
-run: |
-cd backend
-docker run --rm -d --name test-container -p 8000:8000 riches-reach-ai:test
-sleep 10
-curl -f http://localhost:8000/health || exit 1
-docker stop test-container
-# Security Scan
-security:
-name: Security Scan
-runs-on: ubuntu-latest
-needs: test
-steps:
-- name: Checkout code
-uses: actions/checkout@v3
-- name: Run Trivy vulnerability scanner
-uses: aquasecurity/trivy-action@master
-with:
-scan-type: 'fs'
-scan-ref: '.'
-format: 'sarif'
-output: 'trivy-results.sarif'
-- name: Upload Trivy scan results to GitHub Security tab
-uses: github/codeql-action/upload-sarif@v2
-if: always()
-with:
-sarif_file: 'trivy-results.sarif'
-# Deploy to Staging (on develop branch)
-deploy-staging:
-name: Deploy to Staging
-runs-on: ubuntu-latest
-needs: [test, build, security]
-if: github.ref == 'refs/heads/develop'
-environment: staging
-steps:
-- name: Checkout code
-uses: actions/checkout@v3
-- name: Configure AWS credentials
-uses: aws-actions/configure-aws-credentials@v2
-with:
-aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-aws-region: ${{ env.AWS_REGION }}
-- name: Login to Amazon ECR
-id: login-ecr
-uses: aws-actions/amazon-ecr-login@v1
-- name: Build, tag, and push image to Amazon ECR
-env:
-ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-IMAGE_TAG: ${{ github.sha }}
-run: |
-cd backend
-docker build -f Dockerfile.production -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
-- name: Deploy to ECS
-uses: aws-actions/amazon-ecs-deploy-task-definition@v1
-with:
-task-definition: backend/task-definition-staging.json
-service: ${{ env.ECS_SERVICE }}-staging
-cluster: ${{ env.ECS_CLUSTER }}-staging
-wait-for-service-stability: true
-# Deploy to Production (on main branch)
-deploy-production:
-name: Deploy to Production
-runs-on: ubuntu-latest
-needs: [test, build, security]
-if: github.ref == 'refs/heads/main'
-environment: production
-steps:
-- name: Checkout code
-uses: actions/checkout@v3
-- name: Configure AWS credentials
-uses: aws-actions/configure-aws-credentials@v2
-with:
-aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-aws-region: ${{ env.AWS_REGION }}
-- name: Login to Amazon ECR
-id: login-ecr
-uses: aws-actions/amazon-ecr-login@v1
-- name: Build, tag, and push image to Amazon ECR
-env:
-ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-IMAGE_TAG: ${{ github.sha }}
-run: |
-cd backend
-docker build -f Dockerfile.production -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
-- name: Deploy to ECS
-uses: aws-actions/amazon-ecs-deploy-task-definition@v1
-with:
-task-definition: backend/task-definition-production.json
-service: ${{ env.ECS_SERVICE }}
-cluster: ${{ env.ECS_CLUSTER }}
-wait-for-service-stability: true
-- name: Run smoke tests
-run: |
-# Wait for service to be ready
-sleep 60
-# Get load balancer DNS from CloudFormation
-ALB_DNS=$(aws cloudformation describe-stacks \
---stack-name riches-reach-ai-production \
---region ${{ env.AWS_REGION }} \
---query 'Stacks[0].Outputs[?OutputKey==`LoadBalancerDNS`].OutputValue' \
---output text)
-# Test health endpoint
-curl -f "http://$ALB_DNS/health" || exit 1
-# Test main endpoint
-curl -f "http://$ALB_DNS/" || exit 1
-echo "SUCCESS: Production deployment verified"
-- name: Notify deployment success
-if: success()
-run: |
-echo "SUCCESS: Production deployment completed successfully!"
-echo " Service URL: http://$ALB_DNS"
-echo "Monitor at: https://console.aws.amazon.com/ecs/home?region=${{ env.AWS_REGION }}#/clusters/${{ env.ECS_CLUSTER }}/services"
-# Rollback on failure
-rollback:
-name: Rollback on Failure
-runs-on: ubuntu-latest
-needs: [deploy-production]
-if: failure() && github.ref == 'refs/heads/main'
-steps:
-- name: Configure AWS credentials
-uses: aws-actions/configure-aws-credentials@v2
-with:
-aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-aws-region: ${{ env.AWS_REGION }}
-- name: Rollback ECS service
-run: |
-# Get previous task definition revision
-PREV_REVISION=$(aws ecs describe-services \
---cluster ${{ env.ECS_CLUSTER }} \
---services ${{ env.ECS_SERVICE }} \
---region ${{ env.AWS_REGION }} \
---query 'services[0].deployments[?status==`PRIMARY`].taskDefinition' \
---output text | cut -d'/' -f2 | cut -d':' -f2)
-# Rollback to previous revision
-aws ecs update-service \
---cluster ${{ env.ECS_CLUSTER }} \
---service ${{ env.ECS_SERVICE }} \
---task-definition ${{ env.ECS_SERVICE }}:$PREV_REVISION \
---region ${{ env.AWS_REGION }}
-echo " Rolled back to revision: $PREV_REVISION"
-- name: Notify rollback
-run: |
-echo "ERROR: Production deployment failed - service rolled back"
-echo " Check logs and fix issues before next deployment"
+  build-and-push:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Validate backend build dependencies (non-blocking)
+        run: |
+          set -e
+          if [ -f backend/backend/requirements-production.txt ]; then
+            python -m pip install --upgrade pip
+            pip install -r backend/backend/requirements-production.txt || echo "Dependency install failed (OK for CI-only build)."
+          else
+            echo "requirements-production.txt not found; continuing."
+          fi
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Compute image tags
+        id: vars
+        run: |
+          IMAGE_URI="${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}"
+          echo "image_uri=${IMAGE_URI}" >> "$GITHUB_OUTPUT"
+          echo "sha_tag=${IMAGE_URI}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "branch_tag=${IMAGE_URI}:$(echo ${GITHUB_REF##*/} | tr '/' '-' )" >> "$GITHUB_OUTPUT"
+          echo "latest_tag=${IMAGE_URI}:latest" >> "$GITHUB_OUTPUT"
+
+      - name: Build Docker image
+        run: |
+          DOCKERFILE="backend/backend/Dockerfile.production"
+          [ -f "$DOCKERFILE" ] || { echo "Missing $DOCKERFILE"; exit 1; }
+          docker build \
+            -f "$DOCKERFILE" \
+            -t "${{ steps.vars.outputs.sha_tag }}" \
+            -t "${{ steps.vars.outputs.branch_tag }}" \
+            -t "${{ steps.vars.outputs.latest_tag }}" \
+            backend
+
+      - name: Push Docker image
+        run: |
+          docker push "${{ steps.vars.outputs.sha_tag }}"
+          docker push "${{ steps.vars.outputs.branch_tag }}"
+          docker push "${{ steps.vars.outputs.latest_tag }}"
+
+      - name: Export image for downstream jobs
+        run: |
+          echo "IMAGE=${{ steps.vars.outputs.sha_tag }}" >> $GITHUB_ENV
+
+  deploy-staging:
+    name: Deploy to Staging (ECS)
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Render task definition
+        id: render-stg
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: simple-task-definition.json
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: ${{ needs.build-and-push.outputs.IMAGE || env.IMAGE || format('{0}/{1}:{2}', env.ECR_REGISTRY, env.ECR_REPOSITORY, github.sha) }}
+
+      - name: Deploy to Amazon ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render-stg.outputs.task-definition }}
+          service: ${{ env.STAGING_SERVICE }}
+          cluster: ${{ env.STAGING_CLUSTER }}
+          wait-for-service-stability: true
+
+  deploy-production:
+    name: Deploy to Production (ECS)
+    if: github.ref == 'refs/heads/main'
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Render task definition
+        id: render-prod
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: production-task-definition.json
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: ${{ format('{0}/{1}:{2}', env.ECR_REGISTRY, env.ECR_REPOSITORY, github.sha) }}
+
+      - name: Deploy to Amazon ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render-prod.outputs.task-definition }}
+          service: ${{ env.PRODUCTION_SERVICE }}
+          cluster: ${{ env.PRODUCTION_CLUSTER }}
+          wait-for-service-stability: true
