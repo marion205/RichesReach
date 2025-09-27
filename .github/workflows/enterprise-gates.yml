@@ -41,6 +41,32 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Python dependencies (backend, best-effort)
+        run: |
+          set -e
+          python -m pip install --upgrade pip
+          REQS=""
+          for f in \
+            backend/backend/requirements.txt \
+            backend/backend/requirements-production.txt \
+            backend/requirements.txt \
+            requirements.txt
+          do
+            if [ -f "$f" ]; then REQS="$f"; break; fi
+          done
+          if [ -n "$REQS" ]; then
+            echo "Using requirements file: $REQS"
+            pip install -r "$REQS"
+          else
+            echo "No requirements file found; installing linters only."
+            pip install black isort ruff mypy || true
+          fi
+
       - name: Install deps (mobile)
         if: steps.has_mobile.outputs.present == 'true'
         working-directory: mobile
@@ -67,6 +93,24 @@ jobs:
             echo "No typecheck/tsc script; skipping."
           fi
 
+      - name: Python linting (black, isort, ruff)
+        run: |
+          if [ -d backend ]; then
+            black --check backend || true
+            isort --check-only backend || true
+            ruff backend || true
+          else
+            echo "No backend dir; skipping Python lint."
+          fi
+
+      - name: Python type checking (mypy)
+        run: |
+          if [ -d backend ]; then
+            mypy backend || true
+          else
+            echo "No backend dir; skipping mypy."
+          fi
+
   unit-tests:
     name: Python backend tests (if backend present)
     runs-on: ubuntu-latest
@@ -88,16 +132,22 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install deps
+      - name: Install deps (backend)
         if: steps.has_backend.outputs.present == 'true'
         run: |
           python -m pip install --upgrade pip
-          if [ -f backend/requirements.txt ]; then
-            pip install -r backend/requirements.txt
-          elif [ -f backend/backend/requirements.txt ]; then
-            pip install -r backend/backend/requirements.txt
-          elif [ -f backend/backend/requirements-production.txt ]; then
-            pip install -r backend/backend/requirements-production.txt
+          REQS=""
+          for f in \
+            backend/backend/requirements.txt \
+            backend/backend/requirements-production.txt \
+            backend/requirements.txt \
+            requirements.txt
+          do
+            if [ -f "$f" ]; then REQS="$f"; break; fi
+          done
+          if [ -n "$REQS" ]; then
+            echo "Using requirements file: $REQS"
+            pip install -r "$REQS"
           else
             echo "No requirements file found; installing pytest only."
             pip install pytest
@@ -135,8 +185,22 @@ jobs:
       - name: Install deps (best-effort)
         run: |
           python -m pip install --upgrade pip
-          [ -f backend/backend/requirements.txt ] && pip install -r backend/backend/requirements.txt || true
-          pip install psycopg2-binary || true
+          REQS=""
+          for f in \
+            backend/backend/requirements.txt \
+            backend/backend/requirements-production.txt \
+            backend/requirements.txt \
+            requirements.txt
+          do
+            if [ -f "$f" ]; then REQS="$f"; break; fi
+          done
+          if [ -n "$REQS" ]; then
+            echo "Using requirements file: $REQS"
+            pip install -r "$REQS" || true
+          else
+            echo "No requirements file found; installing basic deps."
+            pip install psycopg2-binary || true
+          fi
       - name: Run migrations/constraints (best-effort)
         run: |
           if [ -f backend/manage.py ]; then
