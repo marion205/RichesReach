@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl build-essential && rm -rf /var/lib/apt/lists/*
 
 # Copy only requirements first to maximize cache
-COPY backend/backend/requirements.txt /app/requirements.txt
+COPY backend/backend/requirements-production.txt /app/requirements.txt
 
 # Cache pip directory between builds
 RUN --mount=type=cache,target=/root/.cache/pip \
