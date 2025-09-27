@@ -234,3 +234,20 @@ def schema_test(request):
         })
 
 urlpatterns.append(path("schema-test/", schema_test))
+
+# Temporary migration test endpoint
+import os
+from django.http import JsonResponse
+
+def migration_test(request):
+    migration_path = "core/migrations/0026_add_dividend_score.py"
+    exists = os.path.exists(migration_path)
+    return JsonResponse({
+        "migration_file_exists": exists,
+        "migration_path": migration_path,
+        "current_directory": os.getcwd(),
+        "files_in_core": os.listdir("core") if os.path.exists("core") else "core directory not found",
+        "files_in_migrations": os.listdir("core/migrations") if os.path.exists("core/migrations") else "migrations directory not found"
+    })
+
+urlpatterns.append(path("migration-test/", migration_test))
