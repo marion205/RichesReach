@@ -39,6 +39,14 @@ INSTALLED_APPS = [
     'graphene_django',
     'django_celery_results',
 ]
+
+# Optional safety while transitioning
+try:
+    import channels  # noqa
+    if 'channels' not in INSTALLED_APPS:
+        INSTALLED_APPS.append('channels')
+except ImportError:
+    pass
 MIDDLEWARE = [
 'corsheaders.middleware.CorsMiddleware',
 'django.middleware.security.SecurityMiddleware',
@@ -334,3 +342,13 @@ API_RATE_LIMITS = {
     'FINNHUB': {'limit': 60, 'window': 60},        # 60 requests per minute
     'YAHOO_FINANCE': {'limit': 100, 'window': 60}, # 100 requests per minute
 }
+# Production Channels Configuration
+if not DEBUG:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {
+                "hosts": [('127.0.0.1', 6379)],
+            },
+        },
+    }
