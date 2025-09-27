@@ -220,3 +220,17 @@ urlpatterns = [
     path("me/", me_view),
     path("signals/", signals_view),
 ]
+# Temporary schema test endpoint
+from django.db import connection
+from django.http import JsonResponse
+
+def schema_test(request):
+    with connection.cursor() as cursor:
+        cursor.execute("PRAGMA table_info(core_stock);")
+        columns = cursor.fetchall()
+        return JsonResponse({
+            "table": "core_stock", 
+            "columns": [{"name": col[1], "type": col[2]} for col in columns]
+        })
+
+urlpatterns.append(path("schema-test/", schema_test))
