@@ -1,4 +1,4 @@
-name: RichesReach CI/CD
+name: RichesReach CI/CD (OIDC)
 
 on:
   push:
@@ -17,7 +17,6 @@ concurrency:
 env:
   AWS_REGION: us-east-1
   # ECR
-  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
   ECR_REPOSITORY: riches-reach-ai
   # ECS / Services
   CONTAINER_NAME: riches-reach-web
@@ -30,6 +29,7 @@ env:
   NODE_VERSION: "20"
 
 permissions:
+  id-token: write     # REQUIRED for OIDC
   contents: read
 
 jobs:
@@ -37,6 +37,10 @@ jobs:
     name: Build & Push Docker Image
     runs-on: ubuntu-latest
     environment: staging
+    outputs:
+      image: ${{ steps.vars.outputs.sha_tag }}
+      image_latest: ${{ steps.vars.outputs.latest_tag }}
+      image_branch: ${{ steps.vars.outputs.branch_tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -56,15 +60,20 @@ jobs:
             echo "requirements-production.txt not found; continuing."
           fi
 
-      - name: Configure AWS credentials
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: arn:aws:iam::498606688292:role/riches-reach-github-actions
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Resolve AWS account & ECR registry
+        id: acct
+        run: |
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          echo "account_id=$ACCOUNT_ID" >> "$GITHUB_OUTPUT"
+          echo "ECR_REGISTRY=${ACCOUNT_ID}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com" >> "$GITHUB_ENV"
+
       - name: Login to Amazon ECR
-        id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Compute image tags
@@ -93,10 +102,6 @@ jobs:
           docker push "${{ steps.vars.outputs.branch_tag }}"
           docker push "${{ steps.vars.outputs.latest_tag }}"
 
-      - name: Export image for downstream jobs
-        run: |
-          echo "IMAGE=${{ steps.vars.outputs.sha_tag }}" >> $GITHUB_ENV
-
   deploy-staging:
     name: Deploy to Staging (ECS)
     needs: build-and-push
@@ -106,12 +111,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: arn:aws:iam::498606688292:role/riches-reach-github-actions
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve AWS account & ECR registry
+        run: |
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          echo "ECR_REGISTRY=${ACCOUNT_ID}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com" >> "$GITHUB_ENV"
 
       - name: Render task definition
         id: render-stg
@@ -119,7 +128,7 @@ jobs:
         with:
           task-definition: simple-task-definition.json
           container-name: ${{ env.CONTAINER_NAME }}
-          image: ${{ needs.build-and-push.outputs.IMAGE || env.IMAGE || format('{0}/{1}:{2}', env.ECR_REGISTRY, env.ECR_REPOSITORY, github.sha) }}
+          image: ${{ needs.build-and-push.outputs.image }}
 
       - name: Deploy to Amazon ECS
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
@@ -139,12 +148,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: arn:aws:iam::498606688292:role/riches-reach-github-actions
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve AWS account & ECR registry
+        run: |
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          echo "ECR_REGISTRY=${ACCOUNT_ID}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com" >> "$GITHUB_ENV"
 
       - name: Render task definition
         id: render-prod
@@ -152,7 +165,7 @@ jobs:
         with:
           task-definition: production-task-definition.json
           container-name: ${{ env.CONTAINER_NAME }}
-          image: ${{ format('{0}/{1}:{2}', env.ECR_REGISTRY, env.ECR_REPOSITORY, github.sha) }}
+          image: ${{ needs.build-and-push.outputs.image }}
 
       - name: Deploy to Amazon ECS
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2

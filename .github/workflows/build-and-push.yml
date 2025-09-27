@@ -16,10 +16,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Configure AWS
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::498606688292:role/GHA_ECR_PushRole
+          role-to-assume: arn:aws:iam::498606688292:role/riches-reach-github-actions
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to ECR
