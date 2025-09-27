@@ -13,14 +13,14 @@ RUN --mount=type=cache,target=/var/cache/apt \
     apt-get update && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
+COPY backend/backend/requirements.production.txt /app/requirements.txt
 RUN --mount=type=cache,target=/root/.cache/pip \
     python -m pip install -U pip \
  && pip install --prefer-binary -r requirements.txt \
  && pip install --prefer-binary "gunicorn>=21" "uvicorn[standard]>=0.30" "whitenoise>=6"
 
 # copy source
-COPY . .
+COPY backend/backend/ /app/
 
 # ensure no baked DB sneaks in even if present in repo history
 RUN rm -f db.sqlite3
