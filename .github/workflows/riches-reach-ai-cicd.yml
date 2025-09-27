@@ -19,7 +19,7 @@ env:
   # ECR
   ECR_REPOSITORY: riches-reach-ai
   # ECS / Services
-  CONTAINER_NAME: riches-reach-web
+  CONTAINER_NAME: riches-reach-ai
   STAGING_CLUSTER: riches-reach-staging
   STAGING_SERVICE: riches-reach-staging-svc
   PRODUCTION_CLUSTER: riches-reach-prod
@@ -65,6 +65,9 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::498606688292:role/riches-reach-github-actions
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Who am I?
+        run: aws sts get-caller-identity
 
       - name: Resolve AWS account & ECR registry
         id: acct
@@ -117,6 +120,9 @@ jobs:
           role-to-assume: arn:aws:iam::498606688292:role/riches-reach-github-actions
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Who am I?
+        run: aws sts get-caller-identity
+
       - name: Resolve AWS account & ECR registry
         run: |
           ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
@@ -153,6 +159,9 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::498606688292:role/riches-reach-github-actions
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Who am I?
+        run: aws sts get-caller-identity
 
       - name: Resolve AWS account & ECR registry
         run: |
