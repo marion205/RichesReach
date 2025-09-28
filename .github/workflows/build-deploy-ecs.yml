@@ -11,6 +11,7 @@ on:
 
 env:
   AWS_REGION: us-east-1
+  AWS_DEFAULT_REGION: us-east-1
   AWS_ACCOUNT_ID: "498606688292"
   ECR_REPO: riches-reach-ai
   CLUSTER: riches-reach-ai-production-cluster
@@ -48,6 +49,28 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
           role-to-assume: arn:aws:iam::498606688292:role/GitHubActionsDeployRole
           role-session-name: gha-ecs-deploy
+
+      - name: Assert OIDC creds active & no static keys leaking
+        shell: bash
+        run: |
+          set -euo pipefail
+          # block if any static creds are present
+          if [ -n "${AWS_ACCESS_KEY_ID:-}" ] && [[ -z "${AWS_SESSION_TOKEN:-}" ]]; then
+            echo "❌ Static AWS_ACCESS_KEY_ID detected without session token. Remove repo/org secrets or env vars."
+            exit 1
+          fi
+
+          # show where the CLI is sourcing creds/region (safe output)
+          aws --version
+          echo "AWS_REGION=${AWS_REGION:-}"
+          echo "AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-}"
+          echo "Caller identity:"
+          aws sts get-caller-identity
+
+      - name: Ensure both region envs are set
+        run: |
+          echo "AWS_REGION is $AWS_REGION"
+          echo "AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-$AWS_REGION}" >> $GITHUB_ENV
 
       - name: Log in to ECR
         uses: aws-actions/amazon-ecr-login@v2
