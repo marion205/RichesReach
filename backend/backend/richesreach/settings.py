@@ -83,7 +83,7 @@ if os.getenv('DATABASE_URL'):
     # Production: Use PostgreSQL from environment variable
     import dj_database_url
     DATABASES = {
-        'default': dj_database_url.parse(os.getenv('DATABASE_URL'))
+        'default': dj_database_url.parse(os.getenv('DATABASE_URL'), conn_max_age=60)
     }
 else:
     # Development: Use SQLite
@@ -93,6 +93,10 @@ else:
             'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
+
+# Log database engine for debugging
+import logging
+logging.getLogger(__name__).warning("DB_ENGINE=%s", DATABASES["default"]["ENGINE"])
 # Email Configuration
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')

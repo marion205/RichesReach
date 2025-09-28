@@ -8,7 +8,7 @@ WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl build-essential && rm -rf /var/lib/apt/lists/*
+    curl build-essential libpq-dev postgresql-client && rm -rf /var/lib/apt/lists/*
 
 # Copy only requirements first to maximize cache
 COPY backend/backend/requirements.production.txt /app/requirements.txt
@@ -20,6 +20,9 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 
 # Now copy the rest of the app (small diff -> keeps cache)
 COPY backend/backend/ /app
+
+# Remove any SQLite database files
+RUN rm -f db.sqlite3
 
 EXPOSE 8000
 

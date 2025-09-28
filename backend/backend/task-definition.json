@@ -10,8 +10,8 @@
 "taskRoleArn": "arn:aws:iam::498606688292:role/ecsTaskRole",
 "containerDefinitions": [
 {
-"name": "ai-service",
-"image": "498606688292.dkr.ecr.us-east-1.amazonaws.com/riches-reach-ai-ai-service:latest",
+"name": "riches-reach-ai",
+"image": "498606688292.dkr.ecr.us-east-1.amazonaws.com/riches-reach-ai:latest",
 "portMappings": [
 {
 "containerPort": 8000,
@@ -28,6 +28,12 @@
 {
 "name": "AWS_REGION",
 "value": "us-east-1"
+}
+],
+"secrets": [
+{
+"name": "DATABASE_URL",
+"valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:richesreach/DATABASE_URL-3FiSbV"
 }
 ],
 "logConfiguration": {
