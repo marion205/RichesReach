@@ -11,11 +11,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Install Python dependencies first for better caching
-COPY requirements.txt /app/
+COPY backend/requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the entire app AFTER deps so caches work
-COPY . /app
+COPY backend/ /app
 
 # Optional: verify the exact file made it into the image (helps catch "stale file")
 RUN python - <<'PY'
@@ -36,6 +36,6 @@ RUN useradd -m appuser
 USER appuser
 
 # Entrypoint runs migrations then serves
-COPY docker/entrypoint.sh /entrypoint.sh
+COPY backend/docker/entrypoint.sh /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
 EXPOSE 8000
