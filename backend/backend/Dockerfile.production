@@ -26,5 +26,5 @@ RUN rm -f db.sqlite3
 
 EXPOSE 8000
 
-# Daphne for Channels; run migrations first
-CMD sh -c "python manage.py migrate && daphne -b 0.0.0.0 -p 8000 richesreach.asgi:application"
+# Daphne for Channels; skip migrations since schema is already applied
+CMD daphne -b 0.0.0.0 -p 8000 richesreach.asgi:application
