@@ -4,158 +4,142 @@ on:
   workflow_dispatch:
     inputs:
       image_tag:
-        description: "Optional image tag (default: prod-YYYYmmddHHMMSS)"
+        description: "Optional image tag (default prod-YYYYMMDDHHMMSS)"
         required: false
+  push:
+    branches: [ "main" ]
 
 env:
   AWS_REGION: us-east-1
   AWS_ACCOUNT_ID: "498606688292"
   ECR_REPO: riches-reach-ai
-  ECR_URI: 498606688292.dkr.ecr.us-east-1.amazonaws.com/riches-reach-ai
-  ECS_CLUSTER: riches-reach-ai-production-cluster
-  ECS_SERVICE: riches-reach-ai-ai
-  TASK_FAMILY: riches-reach-ai-task
-  ROLLBACK_TD: arn:aws:ecs:us-east-1:498606688292:task-definition/riches-reach-ai-task:100
+  CLUSTER: riches-reach-ai-production-cluster
+  SERVICE: riches-reach-ai-ai
+  FAMILY: riches-reach-ai-task
+  SUBNET_ID: subnet-037cb59936a709c87
+  SECURITY_GROUP_ID: sg-007dff041138724c3
+  CONTAINER_NAME: riches-reach-ai
+  # Command to run migrations inside container
+  MIGRATE_CMD: "python manage.py migrate --noinput"
+  LOG_GROUP: /ecs/riches-reach-ai
 
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
     permissions:
-      id-token: write    # for future OIDC (safe to leave)
+      id-token: write
       contents: read
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # ---------- AWS auth ----------
-      - name: Configure AWS (access keys)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      # ---------- Buildx multi-arch ----------
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to ECR
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Compute image tag
+      - name: Choose tag
         id: tag
         run: |
-          if [ -n "${{ github.event.inputs.image_tag }}" ]; then
-            TAG="${{ github.event.inputs.image_tag }}"
+          if [ -z "${{ github.event.inputs.image_tag }}" ]; then
+            echo "val=prod-$(date +%Y%m%d%H%M%S)" >> $GITHUB_OUTPUT
           else
-            TAG="prod-$(date +%Y%m%d%H%M%S)"
+            echo "val=${{ github.event.inputs.image_tag }}" >> $GITHUB_OUTPUT
           fi
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "Full image: ${{ env.ECR_URI }}:$TAG"
+      - name: Configure AWS (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: arn:aws:iam::498606688292:role/GitHubActionsDeployRole
+          role-session-name: gha-ecs-deploy
 
-      - name: Build & Push (multi-arch)
+      - name: Log in to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build & Push image (linux/amd64 only for speed)
         run: |
-          docker buildx build \
-            --platform linux/amd64,linux/arm64 \
-            -t "${{ env.ECR_URI }}:${{ steps.tag.outputs.tag }}" \
-            --push \
-            .
+          IMAGE="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${{ steps.tag.outputs.val }}"
+          echo "Building $IMAGE"
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
+        # If you want multi-arch, swap above with buildx setup and --platform
 
-      # ---------- Prepare Task Definition JSON ----------
       - name: Get current task def
-        id: td
+        id: curtd
         run: |
-          aws ecs describe-task-definition \
-            --task-definition "${{ env.TASK_FAMILY }}" \
+          aws ecs describe-task-definition --task-definition "${FAMILY}" \
             --query 'taskDefinition' > td.json
-          # Strip AWS-managed fields for re-register
-          jq 'del(.taskDefinitionArn,.revision,.status,.requiresAttributes,.compatibilities,.registeredAt,.registeredBy)' td.json > td.base.json
+          jq 'del(.status,.revision,.taskDefinitionArn,.requiresAttributes,.compatibilities,.registeredAt,.registeredBy)' td.json > td.edit.json
+          # swap image on the target container
+          NEW_IMAGE="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${{ steps.tag.outputs.val }}"
+          jq --arg c "${CONTAINER_NAME}" --arg i "$NEW_IMAGE" '
+            .containerDefinitions |=
+              map(if .name==$c then .image=$i else . end)
+          ' td.edit.json > td.new.json
+          echo "new_image=$NEW_IMAGE" >> $GITHUB_OUTPUT
 
-      - name: Inject new image + health check
+      - name: Register new task def
+        id: reg
         run: |
-          NEW_IMAGE="${{ env.ECR_URI }}:${{ steps.tag.outputs.tag }}"
-          # Update image for the FIRST container named "riches-reach-ai"
-          jq --arg img "$NEW_IMAGE" '
-            .containerDefinitions = (
-              .containerDefinitions
-              | map(if .name=="riches-reach-ai"
-                    then
-                      .image = $img
-                      |
-                      ( .healthCheck // {
-                          "command": ["CMD-SHELL","curl -fsS http://localhost:8000/health/ || exit 1"],
-                          "interval": 30,
-                          "timeout": 5,
-                          "retries": 3,
-                          "startPeriod": 15
-                        })
-                    else .
-                    end)
-            )
-          ' td.base.json > td.next.json
-          cat td.next.json
-
-      - name: Register new task definition
-        id: register
-        run: |
-          ARN=$(aws ecs register-task-definition \
-            --cli-input-json file://td.next.json \
+          arn=$(aws ecs register-task-definition \
+            --cli-input-json file://td.new.json \
             --query 'taskDefinition.taskDefinitionArn' --output text)
-          echo "arn=$ARN" >> "$GITHUB_OUTPUT"
-          echo "Registered: $ARN"
+          echo "td_arn=$arn" >> $GITHUB_OUTPUT
+          echo "Registered $arn"
 
-      - name: Deploy to ECS service
+      - name: Update service
         run: |
           aws ecs update-service \
-            --cluster "${{ env.ECS_CLUSTER }}" \
-            --service "${{ env.ECS_SERVICE }}" \
-            --task-definition "${{ steps.register.outputs.arn }}"
-          echo "Waiting for service to stabilize..."
+            --cluster "${CLUSTER}" \
+            --service "${SERVICE}" \
+            --task-definition "${{ steps.reg.outputs.td_arn }}"
+
+      - name: Wait for service stable
+        run: |
           aws ecs wait services-stable \
-            --cluster "${{ env.ECS_CLUSTER }}" \
-            --services "${{ env.ECS_SERVICE }}"
+            --cluster "${CLUSTER}" \
+            --services "${SERVICE}"
           aws ecs describe-services \
-            --cluster "${{ env.ECS_CLUSTER }}" \
-            --services "${{ env.ECS_SERVICE }}" \
+            --cluster "${CLUSTER}" \
+            --services "${SERVICE}" \
             --query 'services[0].{desired:desiredCount,running:runningCount,pending:pendingCount,td:taskDefinition}'
 
-      # Optional: print last 50 log lines for quick sanity
-      - name: Tail recent app logs
-        continue-on-error: true
+      - name: Run DB migrations (one-off task on new image)
+        id: migrate
         run: |
-          TASK_ARN=$(aws ecs list-tasks \
-            --cluster "${{ env.ECS_CLUSTER }}" \
-            --service-name "${{ env.ECS_SERVICE }}" \
-            --query 'taskArns[0]' --output text)
-          [ "$TASK_ARN" = "None" ] && exit 0
-          STREAM="ecs/riches-reach-ai/${TASK_ARN##*/}"
-          aws logs get-log-events \
-            --log-group-name "/ecs/riches-reach-ai" \
-            --log-stream-name "$STREAM" \
-            --query 'events[-50:].message' --output text || true
+          TD="${{ steps.reg.outputs.td_arn }}"
+          # Run a single Fargate task with command override
+          TASK_ARN=$(aws ecs run-task \
+            --cluster "${CLUSTER}" \
+            --launch-type FARGATE \
+            --task-definition "$TD" \
+            --network-configuration "awsvpcConfiguration={subnets=[${SUBNET_ID}],securityGroups=[${SECURITY_GROUP_ID}],assignPublicIp=ENABLED}" \
+            --overrides "$(jq -nc --arg c "$CONTAINER_NAME" --arg cmd "${MIGRATE_CMD}" \
+              '{containerOverrides:[{name:$c,command:($cmd|split(" "))}]}')" \
+            --query 'tasks[0].taskArn' --output text)
+          echo "task_arn=$TASK_ARN" >> $GITHUB_OUTPUT
+          echo "Started migrate task: $TASK_ARN"
 
-  # Simple manual rollback job (uses the stable TD:100)
-  rollback:
-    if: ${{ github.event_name == 'workflow_dispatch' }}
-    runs-on: ubuntu-latest
-    needs: [build-and-deploy]
-    steps:
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-      - name: Roll back to :100
+          # Wait for it to stop and check exit code
+          aws ecs wait tasks-stopped --cluster "${CLUSTER}" --tasks "$TASK_ARN"
+          EXIT_CODE=$(aws ecs describe-tasks --cluster "${CLUSTER}" --tasks "$TASK_ARN" \
+            --query 'tasks[0].containers[0].exitCode' --output text)
+          echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
+          test "$EXIT_CODE" = "0"
+
+      - name: Show recent logs (service task)
+        if: always()
         run: |
-          aws ecs update-service \
-            --cluster riches-reach-ai-production-cluster \
-            --service riches-reach-ai-ai \
-            --task-definition "${{ env.ROLLBACK_TD }}" \
-            --force-new-deployment
-          aws ecs wait services-stable \
-            --cluster riches-reach-ai-production-cluster \
-            --services riches-reach-ai-ai
+          TASK=$(aws ecs list-tasks --cluster "${CLUSTER}" --service-name "${SERVICE}" \
+            --query 'taskArns[0]' --output text)
+          if [ "$TASK" != "None" ]; then
+            STREAM="ecs/${CONTAINER_NAME}/${TASK##*/}"
+            echo "=== Last 100 log lines (${STREAM}) ==="
+            aws logs get-log-events \
+              --log-group-name "${LOG_GROUP}" \
+              --log-stream-name "${STREAM}" \
+              --start-from-head --limit 100 \
+              --query 'events[].message' --output text || true
+          fi
+
+      - name: Output summary
+        run: |
+          echo "Deployed image: ${{ steps.curtd.outputs.new_image }}"
+          echo "New TD: ${{ steps.reg.outputs.td_arn }}"
+          echo "Migrate task exit: ${{ steps.migrate.outputs.exit_code }}"
