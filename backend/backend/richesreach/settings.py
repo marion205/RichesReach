@@ -78,8 +78,9 @@ ASGI_APPLICATION = 'richesreach.asgi.application'
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
-# Use PostgreSQL in production, SQLite in development
-if all(os.getenv(k) for k in ["POSTGRES_HOST", "POSTGRES_DB", "POSTGRES_USER", "POSTGRES_PASSWORD"]):
+# Production database configuration - prefer POSTGRES_* quartet
+PG_VARS = ["POSTGRES_HOST", "POSTGRES_DB", "POSTGRES_USER", "POSTGRES_PASSWORD"]
+if all(os.getenv(k) for k in PG_VARS):
     # Production: Use PostgreSQL from environment variables
     DATABASES = {
         'default': {
@@ -95,16 +96,13 @@ elif os.getenv('DATABASE_URL'):
     # Fallback: Use DATABASE_URL if present
     import dj_database_url
     DATABASES = {
-        'default': dj_database_url.parse(os.environ['DATABASE_URL'], conn_max_age=600)
+        'default': dj_database_url.parse(
+            os.environ['DATABASE_URL'], conn_max_age=600, ssl_require=False
+        )
     }
 else:
-    # Development: Use SQLite
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-        }
-    }
+    # Fail fast in prod instead of silently using sqlite
+    raise RuntimeError("No production database configuration found. Set POSTGRES_* environment variables or DATABASE_URL.")
 
 # Log database engine for debugging
 import logging
