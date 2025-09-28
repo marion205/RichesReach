@@ -79,11 +79,23 @@ ASGI_APPLICATION = 'richesreach.asgi.application'
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
 # Use PostgreSQL in production, SQLite in development
-if os.getenv('DATABASE_URL'):
-    # Production: Use PostgreSQL from environment variable
+if all(os.getenv(k) for k in ["POSTGRES_HOST", "POSTGRES_DB", "POSTGRES_USER", "POSTGRES_PASSWORD"]):
+    # Production: Use PostgreSQL from environment variables
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'HOST': os.environ['POSTGRES_HOST'],
+            'PORT': os.environ.get('POSTGRES_PORT', '5432'),
+            'NAME': os.environ['POSTGRES_DB'],
+            'USER': os.environ['POSTGRES_USER'],
+            'PASSWORD': os.environ['POSTGRES_PASSWORD'],
+        }
+    }
+elif os.getenv('DATABASE_URL'):
+    # Fallback: Use DATABASE_URL if present
     import dj_database_url
     DATABASES = {
-        'default': dj_database_url.parse(os.getenv('DATABASE_URL'), conn_max_age=60)
+        'default': dj_database_url.parse(os.environ['DATABASE_URL'], conn_max_age=600)
     }
 else:
     # Development: Use SQLite
@@ -140,8 +152,8 @@ USE_I18N = True
 USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
-STATIC_URL = 'static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATIC_URL = '/static/'
+STATIC_ROOT = os.environ.get('STATIC_ROOT', os.path.join(BASE_DIR, 'staticfiles'))
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
