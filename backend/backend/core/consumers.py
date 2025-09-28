@@ -4,8 +4,6 @@ import logging
 import time
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
-from django.contrib.auth.models import AnonymousUser
-from .models import Stock, Watchlist
 from .market_data_service import MarketDataService
 import jwt
 from django.conf import settings
@@ -15,6 +13,7 @@ class StockPriceConsumer(AsyncWebsocketConsumer):
     
     async def connect(self):
         """Handle WebSocket connection"""
+        from django.contrib.auth.models import AnonymousUser
         self.user = self.scope["user"]
         self.room_group_name = f"stock_prices_{self.user.id if not isinstance(self.user, AnonymousUser) else 'anonymous'}"
         # Join room group
@@ -104,6 +103,8 @@ class StockPriceConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def get_watchlist_prices(self):
         """Get stock prices for user's watchlist"""
+        from django.contrib.auth.models import AnonymousUser
+        from .models import Watchlist
         if isinstance(self.user, AnonymousUser):
             return []
         try:
@@ -116,6 +117,7 @@ class StockPriceConsumer(AsyncWebsocketConsumer):
     
     def get_stock_prices_sync(self, symbols):
         """Synchronous method to get stock prices"""
+        from .models import Stock
         try:
             market_service = MarketDataService()
             prices = []
@@ -254,6 +256,7 @@ class PortfolioConsumer(AsyncWebsocketConsumer):
     
     async def connect(self):
         """Handle WebSocket connection"""
+        from django.contrib.auth.models import AnonymousUser
         self.user = self.scope["user"]
         self.room_group_name = f"portfolio_{self.user.id if not isinstance(self.user, AnonymousUser) else 'anonymous'}"
         # Join room group
