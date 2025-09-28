@@ -327,6 +327,9 @@ class StockType(graphene.ObjectType):
     market_cap = graphene.Float()
     pe_ratio = graphene.Float()
     dividend_yield = graphene.Float()
+    dividend_score = graphene.Int()
+    debt_ratio = graphene.Float()
+    volatility = graphene.Float()
     beginner_friendly_score = graphene.Float()
     
     # camelCase aliases for mobile app
@@ -335,6 +338,9 @@ class StockType(graphene.ObjectType):
     marketCap = graphene.Float()
     peRatio = graphene.Float()
     dividendYield = graphene.Float()
+    dividendScore = graphene.Int()
+    debtRatio = graphene.Float()
+    volatility = graphene.Float()
     beginnerFriendlyScore = graphene.Float()
 
 # Advanced Stock Screening Result type

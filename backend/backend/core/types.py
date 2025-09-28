@@ -167,10 +167,10 @@ class StockType(DjangoObjectType):
             "market_cap",
             "pe_ratio",
             "dividend_yield",
+            "dividend_score",
             "debt_ratio",
             "volatility",
             "beginner_friendly_score",
-            
             "current_price",
         )
 

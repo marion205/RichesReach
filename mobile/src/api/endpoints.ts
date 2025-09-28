@@ -9,8 +9,8 @@ const isDev = __DEV__;
 
 // HTTP endpoints
 export const HTTP_GRAPHQL = isDev 
-  ? `${DEV_API_BASE}/graphql`
-  : `${PROD_API_BASE}/graphql`;
+  ? `${DEV_API_BASE}/graphql/`
+  : `${PROD_API_BASE}/graphql/`;
 
 export const HTTP_API_BASE = isDev 
   ? DEV_API_BASE
