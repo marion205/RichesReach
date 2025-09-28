@@ -6,7 +6,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1
 
 WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends build-essential curl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    libpq-dev \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install deps first for better caching
 COPY requirements.txt /app/requirements.txt
