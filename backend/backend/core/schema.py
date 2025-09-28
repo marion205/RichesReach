@@ -326,6 +326,9 @@ class BaseQuery(graphene.ObjectType):
         # Convert to GraphQL format
         result = []
         for stock in stocks:
+            # Safely get dividend_score field, default to None if it doesn't exist
+            dividend_score = getattr(stock, 'dividend_score', None)
+            
             result.append(StockType(
                 id=str(stock.id),
                 symbol=stock.symbol,
@@ -336,6 +339,7 @@ class BaseQuery(graphene.ObjectType):
                 pe_ratio=stock.pe_ratio,
                 dividend_yield=stock.dividend_yield,
                 beginner_friendly_score=float(stock.beginner_friendly_score) if stock.beginner_friendly_score else None,
+                dividend_score=dividend_score,
                 # camelCase aliases
                 companyName=stock.company_name,
                 currentPrice=float(stock.current_price) if stock.current_price else None,
@@ -485,6 +489,9 @@ class BaseQuery(graphene.ObjectType):
         # Convert to GraphQL format
         result = []
         for stock in stocks:
+            # Safely get dividend_score field, default to None if it doesn't exist
+            dividend_score = getattr(stock, 'dividend_score', None)
+            
             result.append(StockType(
                 id=str(stock.id),
                 symbol=stock.symbol,
@@ -495,6 +502,7 @@ class BaseQuery(graphene.ObjectType):
                 pe_ratio=stock.pe_ratio,
                 dividend_yield=stock.dividend_yield,
                 beginner_friendly_score=float(stock.beginner_friendly_score) if stock.beginner_friendly_score else None,
+                dividend_score=dividend_score,
                 # camelCase aliases
                 companyName=stock.company_name,
                 currentPrice=float(stock.current_price) if stock.current_price else None,
