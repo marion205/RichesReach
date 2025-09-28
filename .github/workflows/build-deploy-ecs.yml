@@ -39,9 +39,13 @@ jobs:
         id: tag
         run: |
           if [ -z "${{ github.event.inputs.image_tag }}" ]; then
-            echo "val=prod-$(date +%Y%m%d%H%M%S)" >> $GITHUB_OUTPUT
+            # Use commit SHA for perfect traceability
+            echo "val=${{ github.sha }}" >> $GITHUB_OUTPUT
+            # Also create human-friendly tag
+            echo "human_tag=prod-$(date +%Y%m%d%H%M%S)" >> $GITHUB_OUTPUT
           else
             echo "val=${{ github.event.inputs.image_tag }}" >> $GITHUB_OUTPUT
+            echo "human_tag=${{ github.event.inputs.image_tag }}" >> $GITHUB_OUTPUT
           fi
       - name: Configure AWS (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -77,10 +81,18 @@ jobs:
 
       - name: Build & Push image (linux/amd64 only for speed)
         run: |
-          IMAGE="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${{ steps.tag.outputs.val }}"
-          echo "Building $IMAGE"
-          docker build -t "$IMAGE" .
-          docker push "$IMAGE"
+          # Build with both immutable (commit SHA) and human-friendly tags
+          IMAGE_IMMUTABLE="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${{ steps.tag.outputs.val }}"
+          IMAGE_HUMAN="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${{ steps.tag.outputs.human_tag }}"
+          
+          echo "Building immutable tag: $IMAGE_IMMUTABLE"
+          echo "Building human tag: $IMAGE_HUMAN"
+          
+          docker build -t "$IMAGE_IMMUTABLE" -t "$IMAGE_HUMAN" .
+          docker push "$IMAGE_IMMUTABLE"
+          docker push "$IMAGE_HUMAN"
+          
+          echo "Pushed both tags successfully"
         # If you want multi-arch, swap above with buildx setup and --platform
 
       - name: Create new TD from baseline (preserve secrets/healthcheck)
@@ -142,6 +154,19 @@ jobs:
 
           echo "✔ Deployment stabilized."
 
+      - name: Enable circuit breaker (auto-rollback on failure)
+        run: |
+          aws ecs update-service \
+            --cluster "$CLUSTER" \
+            --service "$SERVICE" \
+            --deployment-configuration '{
+              "deploymentCircuitBreaker": {"enable": true, "rollback": true},
+              "maximumPercent": 200,
+              "minimumHealthyPercent": 100
+            }' \
+            --region "$AWS_REGION"
+          echo "✔ Circuit breaker enabled (auto-rollback on failure)"
+
       - name: Run DB migrations (one-off task on new image)
         id: migrate
         run: |
@@ -180,8 +205,19 @@ jobs:
               --query 'events[].message' --output text || true
           fi
 
+      - name: Update baseline for future deployments
+        if: steps.migrate.outputs.exit_code == '0'
+        run: |
+          # Extract revision number from TD ARN for future baseline
+          NEW_REVISION=$(echo "${{ steps.td.outputs.NEW_TD_ARN }}" | sed 's/.*:\([0-9]*\)$/\1/')
+          echo "New baseline TD: riches-reach-ai-task:$NEW_REVISION"
+          echo "Update your workflow's BASELINE_TD to: riches-reach-ai-task:$NEW_REVISION"
+          echo "This ensures future deployments use this successful TD as baseline"
+
       - name: Output summary
         run: |
           echo "Deployed image: ${{ steps.tag.outputs.val }}"
+          echo "Human tag: ${{ steps.tag.outputs.human_tag }}"
           echo "New TD: ${{ steps.td.outputs.NEW_TD_ARN }}"
           echo "Migrate task exit: ${{ steps.migrate.outputs.exit_code }}"
+          echo "Circuit breaker: ENABLED (auto-rollback on failure)"
