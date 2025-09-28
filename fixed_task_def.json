@@ -1,0 +1,51 @@
+{
+  "family": "riches-reach-ai-task",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::498606688292:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::498606688292:role/ecsTaskRole",
+  "containerDefinitions": [
+    {
+      "name": "riches-reach-ai",
+      "image": "498606688292.dkr.ecr.us-east-1.amazonaws.com/riches-reach-ai-ai-service:final-fixed-20250925224019",
+      "portMappings": [{ "containerPort": 8000, "protocol": "tcp" }],
+      "essential": true,
+      "environment": [
+        { "name": "DJANGO_SETTINGS_MODULE", "value": "richesreach.settings" },
+        { "name": "DEBUG", "value": "False" },
+        { "name": "ALLOWED_HOSTS", "value": "app.richesreach.com" },
+        { "name": "CSRF_TRUSTED_ORIGINS", "value": "https://app.richesreach.com" },
+        { "name": "STATIC_ROOT", "value": "/app/staticfiles" },
+        { "name": "POSTGRES_HOST", "value": "riches-reach-postgres.cmhsue8oy30k.us-east-1.rds.amazonaws.com" },
+        { "name": "POSTGRES_PORT", "value": "5432" },
+        { "name": "POSTGRES_DB", "value": "appdb" },
+        { "name": "POSTGRES_USER", "value": "appuser" }
+      ],
+      "secrets": [
+        { "name": "POSTGRES_PASSWORD", "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr-postgres-flFgNi" },
+        { "name": "SECRET_KEY", "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr-django-secret-key-IdsacH" }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/riches-reach-ai",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "healthCheck": {
+        "command": ["CMD-SHELL", "curl -fsS http://localhost:8000/health/ || exit 1"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 60
+      },
+      "entryPoint": ["/bin/sh", "-c"],
+      "command": [
+        "cd /app && echo 'Starting deployment...' && echo 'DB_ENGINE_ENV_RESOLVED:' $POSTGRES_HOST $POSTGRES_DB && python - <<'PY'\nimport os\nprint('Environment check:')\nprint('POSTGRES_HOST:', os.getenv('POSTGRES_HOST'))\nprint('POSTGRES_DB:', os.getenv('POSTGRES_DB'))\nprint('POSTGRES_USER:', os.getenv('POSTGRES_USER'))\nprint('POSTGRES_PASSWORD:', 'SET' if os.getenv('POSTGRES_PASSWORD') else 'NOT SET')\nPY\n\npython - <<'PY'\nimport os, sys\nimport django\nfrom django.apps import apps\nfrom django.conf import settings\nfrom django.db import connection\n\ndjango.setup()\n\nprint('Django setup complete')\nprint('Database engine:', settings.DATABASES['default']['ENGINE'])\nprint('Database host:', settings.DATABASES['default']['HOST'])\n\nAPP = 'core'\nINITIAL = '0001_initial'\nMIG_TO_FAKE_IF_COL_PRESENT = ('core', '0026_add_dividend_score', 'dividend_score', 'Stock')\n\ndef migration_row_exists(app, name):\n    with connection.cursor() as c:\n        try:\n            c.execute('SELECT 1 FROM django_migrations WHERE app=%s AND name=%s', [app, name])\n            row = c.fetchone()\n            return row is not None\n        except Exception as e:\n            print(f'Error checking migration {app}.{name}: {e}')\n            return False\n\n# Ensure migrations machinery exists\nif not migration_row_exists('contenttypes', '0001_initial'):\n    print('Creating django_migrations table...')\n    os.system('python manage.py migrate --noinput --run-syncdb || true')\n\n# Model-driven table name\ntry:\n    ai_model = apps.get_model(APP, 'AIPortfolioRecommendation')\n    ai_table = ai_model._meta.db_table\nexcept Exception:\n    ai_table = 'core_aiportfoliorecommendation'\n\nwith connection.cursor() as c:\n    c.execute('''\n        SELECT EXISTS (\n          SELECT FROM information_schema.tables\n          WHERE table_schema='public' AND table_name=%s\n        );\n    ''', [ai_table])\n    row = c.fetchone()\n    ai_table_exists = bool(row[0]) if row else False\n\nprint(f'AI table exists: {ai_table_exists}')\n\nif ai_table_exists and not migration_row_exists(APP, INITIAL):\n    print(f'Auto-adopting {APP} {INITIAL}...')\n    rc = os.system(f'python manage.py migrate {APP} {INITIAL} --fake --noinput')\n    if rc != 0:\n        print(f'Failed to fake {APP} {INITIAL}')\n        sys.exit(rc)\n\napp_name, mig_name, col_name, model_name = MIG_TO_FAKE_IF_COL_PRESENT\ntry:\n    stock_model = apps.get_model(APP, model_name)\n    stock_table = stock_model._meta.db_table\nexcept Exception:\n    stock_table = 'core_stock'\n\nwith connection.cursor() as c:\n    c.execute('SELECT column_name FROM information_schema.columns WHERE table_name=%s', [stock_table])\n    cols = {r[0] for r in c.fetchall()}\n\nprint(f'Stock table columns: {cols}')\n\nif (col_name in cols) and (not migration_row_exists(app_name, mig_name)):\n    print(f'Auto-adopting {app_name} {mig_name}...')\n    os.system(f'python manage.py migrate {app_name} {mig_name} --fake --noinput || true')\n\nprint('Auto-adoption checks complete.')\nPY\n\n# Static files\necho 'Collecting static files...'\npython manage.py collectstatic --noinput || true\n\n# Normal migrations\necho 'Running migrations...'\npython manage.py migrate --noinput\n\necho 'Starting Gunicorn server...'\nexec gunicorn richesreach.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120"
+      ]
+    }
+  ]
+}

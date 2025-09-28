@@ -1,0 +1,43 @@
+{
+  "family": "riches-reach-ai-task",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::498606688292:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::498606688292:role/ecsTaskRole",
+  "containerDefinitions": [
+    {
+      "name": "riches-reach-ai",
+      "image": "498606688292.dkr.ecr.us-east-1.amazonaws.com/riches-reach-ai-ai-service:final-fixed-20250925224019",
+      "portMappings": [{ "containerPort": 8000, "protocol": "tcp" }],
+      "essential": true,
+      "environment": [
+        { "name": "DJANGO_SETTINGS_MODULE", "value": "richesreach.settings" },
+        { "name": "DEBUG", "value": "False" },
+        { "name": "ALLOWED_HOSTS", "value": "*" },
+        { "name": "STATIC_ROOT", "value": "/app/staticfiles" },
+        { "name": "POSTGRES_HOST", "value": "riches-reach-postgres.cmhsue8oy30k.us-east-1.rds.amazonaws.com" },
+        { "name": "POSTGRES_PORT", "value": "5432" },
+        { "name": "POSTGRES_DB", "value": "appdb" },
+        { "name": "POSTGRES_USER", "value": "appuser" }
+      ],
+      "secrets": [
+        { "name": "POSTGRES_PASSWORD", "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr-postgres-flFgNi" },
+        { "name": "SECRET_KEY", "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr-django-secret-key-IdsacH" }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/riches-reach-ai",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "entryPoint": ["/bin/sh", "-c"],
+      "command": [
+        "cd /app && echo '=== DATABASE CONNECTION TEST ===' && python - <<'PY'\nimport os\nimport psycopg2\nimport django\nfrom django.conf import settings\n\nprint('Environment variables:')\nprint('POSTGRES_HOST:', os.getenv('POSTGRES_HOST'))\nprint('POSTGRES_DB:', os.getenv('POSTGRES_DB'))\nprint('POSTGRES_USER:', os.getenv('POSTGRES_USER'))\nprint('POSTGRES_PASSWORD:', 'SET' if os.getenv('POSTGRES_PASSWORD') else 'NOT SET')\n\nprint('\\n=== Testing direct PostgreSQL connection ===')\ntry:\n    conn = psycopg2.connect(\n        host=os.environ['POSTGRES_HOST'],\n        port=os.environ['POSTGRES_PORT'],\n        database=os.environ['POSTGRES_DB'],\n        user=os.environ['POSTGRES_USER'],\n        password=os.environ['POSTGRES_PASSWORD']\n    )\n    print('✅ Direct PostgreSQL connection successful!')\n    \n    with conn.cursor() as cur:\n        cur.execute('SELECT version();')\n        version = cur.fetchone()[0]\n        print(f'PostgreSQL version: {version}')\n        \n        cur.execute('SELECT current_database();')\n        db_name = cur.fetchone()[0]\n        print(f'Connected to database: {db_name}')\n    \n    conn.close()\nexcept Exception as e:\n    print(f'❌ Direct PostgreSQL connection failed: {e}')\n\nprint('\\n=== Testing Django database configuration ===')\ntry:\n    django.setup()\n    print('Django setup complete')\n    print('Database engine:', settings.DATABASES['default']['ENGINE'])\n    print('Database host:', settings.DATABASES['default']['HOST'])\n    print('Database name:', settings.DATABASES['default']['NAME'])\n    print('Database user:', settings.DATABASES['default']['USER'])\n    \n    from django.db import connection\n    with connection.cursor() as cursor:\n        cursor.execute('SELECT 1')\n        result = cursor.fetchone()\n        print(f'✅ Django database connection successful! Result: {result}')\nexcept Exception as e:\n    print(f'❌ Django database connection failed: {e}')\n    import traceback\n    traceback.print_exc()\n\nprint('\\n=== Test completed ===')\nPY\n\necho 'Database connection test completed. Container will now sleep for 5 minutes.'\nsleep 300"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "family": "riches-reach-ai-task",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::498606688292:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::498606688292:role/ecsTaskRole",
+  "containerDefinitions": [
+    {
+      "name": "riches-reach-ai",
+      "image": "498606688292.dkr.ecr.us-east-1.amazonaws.com/riches-reach-ai-ai-service:final-fixed-20250925224019",
+      "portMappings": [{ "containerPort": 8000, "protocol": "tcp" }],
+      "essential": true,
+      "environment": [
+        { "name": "POSTGRES_HOST", "value": "riches-reach-postgres.cmhsue8oy30k.us-east-1.rds.amazonaws.com" },
+        { "name": "POSTGRES_PORT", "value": "5432" },
+        { "name": "POSTGRES_DB", "value": "postgres" },
+        { "name": "POSTGRES_USER", "value": "richesreach" }
+      ],
+      "secrets": [
+        { "name": "POSTGRES_PASSWORD", "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr-postgres-flFgNi" }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/riches-reach-ai",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "entryPoint": ["/bin/sh", "-c"],
+      "command": [
+        "echo '=== Creating Database and User ===' && python - <<'PY'\nimport os\nimport psycopg2\nimport secrets\nimport string\n\n# Generate a strong password for appuser\napp_password = ''.join(secrets.choice(string.ascii_letters + string.digits + '!@#$%^&*') for _ in range(32))\nprint(f'Generated appuser password: {app_password}')\n\n# Connect as master user\nprint('Connecting to PostgreSQL as master user...')\ntry:\n    conn = psycopg2.connect(\n        host=os.environ['POSTGRES_HOST'],\n        port=os.environ['POSTGRES_PORT'],\n        database=os.environ['POSTGRES_DB'],\n        user=os.environ['POSTGRES_USER'],\n        password=os.environ['POSTGRES_PASSWORD']\n    )\n    conn.autocommit = True\n    \n    with conn.cursor() as cur:\n        # Create database if it doesn't exist\n        print('Creating database appdb...')\n        cur.execute('SELECT 1 FROM pg_database WHERE datname = %s', ('appdb',))\n        if not cur.fetchone():\n            cur.execute('CREATE DATABASE appdb')\n            print('✅ Database appdb created')\n        else:\n            print('✅ Database appdb already exists')\n        \n        # Create user if it doesn't exist\n        print('Creating user appuser...')\n        cur.execute('SELECT 1 FROM pg_roles WHERE rolname = %s', ('appuser',))\n        if not cur.fetchone():\n            cur.execute('CREATE ROLE appuser WITH LOGIN PASSWORD %s', (app_password,))\n            print('✅ User appuser created')\n        else:\n            print('✅ User appuser already exists')\n        \n        # Grant privileges\n        print('Granting privileges...')\n        cur.execute('GRANT ALL PRIVILEGES ON DATABASE appdb TO appuser')\n        print('✅ Granted database privileges')\n    \n    conn.close()\n    \n    # Connect to appdb to set up schema privileges\n    print('Setting up schema privileges...')\n    conn = psycopg2.connect(\n        host=os.environ['POSTGRES_HOST'],\n        port=os.environ['POSTGRES_PORT'],\n        database='appdb',\n        user=os.environ['POSTGRES_USER'],\n        password=os.environ['POSTGRES_PASSWORD']\n    )\n    conn.autocommit = True\n    \n    with conn.cursor() as cur:\n        # Make appuser own the public schema\n        cur.execute('ALTER SCHEMA public OWNER TO appuser')\n        print('✅ Transferred public schema ownership to appuser')\n        \n        # Grant future default privileges\n        cur.execute('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO appuser')\n        cur.execute('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO appuser')\n        print('✅ Granted future default privileges')\n        \n        # Transfer ownership of existing tables if any\n        cur.execute(\"\"\"\n            DO $$\n            DECLARE r RECORD;\n            BEGIN\n              FOR r IN SELECT 'ALTER TABLE '||quote_ident(schemaname)||'.'||quote_ident(tablename)||' OWNER TO appuser;' AS stmt\n                       FROM pg_tables WHERE schemaname='public'\n              LOOP EXECUTE r.stmt; END LOOP;\n            END$$;\n        \"\"\")\n        print('✅ Transferred existing table ownership to appuser')\n    \n    conn.close()\n    \n    print('\\n=== Database Setup Complete ===')\n    print(f'Database: appdb')\n    print(f'User: appuser')\n    print(f'Password: {app_password}')\n    print('\\nNext: Store this password in AWS Secrets Manager')\n    \nexcept Exception as e:\n    print(f'❌ Error: {e}')\n    import traceback\n    traceback.print_exc()\n\nprint('\\n=== Setup completed ===')\nPY\n\necho 'Database setup completed. Container will sleep for 10 minutes.'\nsleep 600"
+      ]
+    }
+  ]
+}
