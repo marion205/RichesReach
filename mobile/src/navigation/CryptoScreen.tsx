@@ -120,7 +120,7 @@ const CryptoScreen: React.FC<CryptoScreenProps> = ({ navigation }) => {
             brand="RichesReach"
             networkName="Sepolia"
             walletAddress={null} // TODO: Connect to wallet address when available
-            backendBaseUrl="http://127.0.0.1:8000" // Your backend URL
+            backendBaseUrl={process.env.EXPO_PUBLIC_API_URL || "http://127.0.0.1:8000"} // Your backend URL
             explorerTxUrl={(hash) => `https://sepolia.etherscan.io/tx/${hash}`}
             getBalance={async (symbol) => {
               // Mock balance - in production, read from wallet

@@ -1,17 +1,9 @@
-import Constants from "expo-constants";
+const API = (process.env.EXPO_PUBLIC_API_URL ?? "http://127.0.0.1:8000").replace(/\/+$/, "");
 
-// Production server (AWS)
-const PROD = "https://54.226.87.216";
+export const API_HTTP = API;                         // http://riches-reach-alb-...
+export const API_GRAPHQL = `${API}/graphql/`;
+export const API_WS = (API.startsWith("https") ? API.replace(/^https/, "wss")
+                                              : API.replace(/^http/, "ws")) + "/ws/";
 
-// Local development servers
-const IOS_SIM = "http://127.0.0.1:8000";
-const ANDROID_EMU = "http://10.0.2.2:8000";
-const LAN = "http://192.168.1.151:8000"; // Your Mac's IP from the terminal
-
-// Use local production server (full backend with all resolvers)
-export const API_BASE = IOS_SIM;
-
-// Alternative: Use local server based on platform
-// export const API_BASE = Constants.platform?.ios ? IOS_SIM : ANDROID_EMU;
-
-console.log("🔗 API_BASE configured as:", API_BASE);
+// Debug logging
+console.log("🔧 API Configuration:", { API_HTTP, API_GRAPHQL, API_WS });

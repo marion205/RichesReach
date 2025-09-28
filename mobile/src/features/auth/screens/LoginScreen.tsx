@@ -83,7 +83,7 @@ console.error('Signup error:', err);
 const handleLogin = async () => {
   try {
     // GraphQL endpoint probe for debugging
-    const GQL_URL = 'http://127.0.0.1:8001/graphql/';
+    const GQL_URL = `${process.env.EXPO_PUBLIC_API_URL || 'http://127.0.0.1:8000'}/graphql/`;
     try {
       const probeResponse = await fetch(GQL_URL, {
         method: 'POST',

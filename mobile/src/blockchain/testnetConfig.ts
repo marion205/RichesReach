@@ -23,7 +23,7 @@ export const TESTNET_ASSETS = {
 };
 
 // Testnet Backend URL (adjust to your setup)
-export const TESTNET_BACKEND = 'http://127.0.0.1:8000';
+export const TESTNET_BACKEND = process.env.EXPO_PUBLIC_API_URL || 'http://127.0.0.1:8000';
 
 // How to get testnet tokens:
 // 1. USDC: Use AAVE testnet faucet or swap on testnet DEX

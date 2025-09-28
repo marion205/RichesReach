@@ -58,5 +58,5 @@ export const AMOY_CONFIG = {
 export const ENV = {
   WALLETCONNECT_PROJECT_ID: '42421cf8-2df7-45c6-9475-df4f4b115ffc',
   ALCHEMY_KEY: 'nqMHXQoBbcV2d9X_7Zp29JxpBoQ6nWRM',
-  BACKEND_BASE_URL: 'http://127.0.0.1:8000'
+  BACKEND_BASE_URL: process.env.EXPO_PUBLIC_API_URL || 'http://127.0.0.1:8000'
 };

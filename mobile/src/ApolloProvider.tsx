@@ -15,8 +15,8 @@ import JWTAuthService from './features/auth/services/JWTAuthService';
 // Determine the correct URL based on the platform
 const getGraphQLURL = () => {
   const BASE_URL = Platform.OS === 'ios'
-    ? 'http://127.0.0.1:8000'   // iOS Simulator -> host Mac (fixed to port 8000)
-    : 'http://10.0.2.2:8000';   // Android emulator -> host Mac/PC (fixed to port 8000)
+    ? (process.env.EXPO_PUBLIC_API_URL || 'http://127.0.0.1:8000')   // Use environment variable or fallback
+    : (process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:8000');   // Android emulator -> host Mac/PC (fixed to port 8000)
   
   return `${BASE_URL}/graphql/`;
 };

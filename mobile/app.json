@@ -3,6 +3,7 @@
 "name": "RichesReach",
 "slug": "richesreach-ai",
 "version": "1.0.0",
+"sdkVersion": "54.0.0",
 "orientation": "portrait",
 "icon": "./assets/icon.png",
 "userInterfaceStyle": "light",
@@ -47,7 +48,6 @@
 },
 "extra": {
 "eas": {
-"projectId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
 }
 },
 "plugins": [

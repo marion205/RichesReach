@@ -1,5 +1,5 @@
 {
-    "taskDefinitionArn": "arn:aws:ecs:us-east-1:498606688292:task-definition/riches-reach-ai-task:30",
+    "taskDefinitionArn": "arn:aws:ecs:us-east-1:498606688292:task-definition/riches-reach-ai-task:45",
     "containerDefinitions": [
         {
             "name": "riches-reach-ai",
@@ -15,8 +15,8 @@
             "essential": true,
             "command": [
                 "/bin/sh",
-                "-c",
-                "echo \"Installing dependencies...\" && pip install gunicorn uvicorn[standard] channels daphne && echo \"Removing old SQLite...\" && rm -f db.sqlite3 && echo \"Migrating...\" && python manage.py migrate --noinput && echo \"Collecting static...\" && python manage.py collectstatic --noinput || true && echo \"Starting Gunicorn...\" && gunicorn richesreach.asgi:application -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000 --workers 3 --timeout 60"
+                "-lc",
+                "echo \"Installing channels...\" && pip install -q channels daphne && echo \"Running migrations...\" && python manage.py migrate --fake-initial --noinput && echo \"Collecting static...\" && python manage.py collectstatic --noinput || true && echo \"Starting Gunicorn...\" && exec gunicorn richesreach.wsgi:application -b 0.0.0.0:8000 --workers 3 --timeout 60"
             ],
             "environment": [
                 {
@@ -67,7 +67,7 @@
     "taskRoleArn": "arn:aws:iam::498606688292:role/ecsTaskRole",
     "executionRoleArn": "arn:aws:iam::498606688292:role/ecsTaskExecutionRole",
     "networkMode": "awsvpc",
-    "revision": 30,
+    "revision": 45,
     "volumes": [],
     "status": "ACTIVE",
     "requiresAttributes": [
@@ -116,6 +116,6 @@
     ],
     "cpu": "512",
     "memory": "1024",
-    "registeredAt": "2025-09-26T18:07:05.442000-04:00",
+    "registeredAt": "2025-09-26T19:58:32.256000-04:00",
     "registeredBy": "arn:aws:iam::498606688292:user/riches-reach-ai-user"
 }
