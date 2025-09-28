@@ -11,11 +11,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Install Python dependencies first for better caching
-COPY backend/requirements.txt /app/
+COPY backend/backend/requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the entire app AFTER deps so caches work
-COPY backend/ /app
+COPY backend/backend/ /app
 
 # Optional: verify the exact file made it into the image (helps catch "stale file")
 RUN python - <<'PY'
