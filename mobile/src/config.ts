@@ -1,4 +1,4 @@
-const API = (process.env.EXPO_PUBLIC_API_URL ?? "http://34.226.192.58:8000").replace(/\/+$/, "");
+const API = (process.env.EXPO_PUBLIC_API_URL ?? "http://34.224.165.229:8000").replace(/\/+$/, "");
 
 export const API_HTTP = API;                         // http://riches-reach-alb-...
 export const API_GRAPHQL = `${API}/graphql/`;
