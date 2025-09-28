@@ -78,31 +78,26 @@ ASGI_APPLICATION = 'richesreach.asgi.application'
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
-# Production database configuration - prefer POSTGRES_* quartet
-PG_VARS = ["POSTGRES_HOST", "POSTGRES_DB", "POSTGRES_USER", "POSTGRES_PASSWORD"]
-if all(os.getenv(k) for k in PG_VARS):
-    # Production: Use PostgreSQL from environment variables
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'HOST': os.environ['POSTGRES_HOST'],
-            'PORT': os.environ.get('POSTGRES_PORT', '5432'),
-            'NAME': os.environ['POSTGRES_DB'],
-            'USER': os.environ['POSTGRES_USER'],
-            'PASSWORD': os.environ['POSTGRES_PASSWORD'],
-        }
+# Production database configuration - prefer DJANGO_DB_* variables
+DB_ENGINE = os.getenv("DJANGO_DB_ENGINE", "django.db.backends.postgresql")
+DB_NAME = os.getenv("DJANGO_DB_NAME", "appdb")
+DB_USER = os.getenv("DJANGO_DB_USER", "appuser")
+DB_PASS = os.getenv("DJANGO_DB_PASSWORD", "")
+DB_HOST = os.getenv("DJANGO_DB_HOST", "localhost")
+DB_PORT = os.getenv("DJANGO_DB_PORT", "5432")
+
+DATABASES = {
+    "default": {
+        "ENGINE": DB_ENGINE,
+        "NAME": DB_NAME,
+        "USER": DB_USER,
+        "PASSWORD": DB_PASS,
+        "HOST": DB_HOST,
+        "PORT": DB_PORT,
+        "CONN_MAX_AGE": 60,
+        "OPTIONS": {"sslmode": "require"},
     }
-elif os.getenv('DATABASE_URL'):
-    # Fallback: Use DATABASE_URL if present
-    import dj_database_url
-    DATABASES = {
-        'default': dj_database_url.parse(
-            os.environ['DATABASE_URL'], conn_max_age=600, ssl_require=False
-        )
-    }
-else:
-    # Fail fast in prod instead of silently using sqlite
-    raise RuntimeError("No production database configuration found. Set POSTGRES_* environment variables or DATABASE_URL.")
+}
 
 # Log database engine for debugging
 import logging

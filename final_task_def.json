@@ -1,0 +1,68 @@
+{
+    "family": "riches-reach-ai-task",
+    "networkMode": "awsvpc",
+    "requiresCompatibilities": ["FARGATE"],
+    "cpu": "512",
+    "memory": "1024",
+    "executionRoleArn": "arn:aws:iam::498606688292:role/ecsTaskExecutionRole",
+    "taskRoleArn": "arn:aws:iam::498606688292:role/ecsTaskRole",
+    "containerDefinitions": [
+        {
+            "name": "riches-reach-ai",
+            "image": "498606688292.dkr.ecr.us-east-1.amazonaws.com/riches-reach-ai-ai-service:final-fixed-20250925224019",
+            "cpu": 0,
+            "portMappings": [
+                {
+                    "containerPort": 8000,
+                    "hostPort": 8000,
+                    "protocol": "tcp"
+                }
+            ],
+            "essential": true,
+            "command": [
+                "/bin/sh",
+                "-c",
+                "cd /app && python manage.py collectstatic --noinput || true && python manage.py migrate --noinput && daphne -b 0.0.0.0 -p 8000 richesreach.asgi:application"
+            ],
+            "environment": [
+                {
+                    "name": "DJANGO_SETTINGS_MODULE",
+                    "value": "richesreach.settings"
+                },
+                {
+                    "name": "SECRET_KEY",
+                    "value": "django-insecure-production-key-change-in-production"
+                },
+                {
+                    "name": "DEBUG",
+                    "value": "False"
+                },
+                {
+                    "name": "ALLOWED_HOSTS",
+                    "value": "*"
+                },
+                {
+                    "name": "STATIC_ROOT",
+                    "value": "/app/staticfiles"
+                }
+            ],
+            "mountPoints": [],
+            "volumesFrom": [],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/ecs/riches-reach-ai",
+                    "awslogs-region": "us-east-1",
+                    "awslogs-stream-prefix": "ecs"
+                }
+            },
+            "healthCheck": {
+                "command": ["CMD-SHELL", "curl -fsS http://localhost:8000/graphql/ || exit 1"],
+                "interval": 30,
+                "timeout": 5,
+                "retries": 3,
+                "startPeriod": 60
+            }
+        }
+    ]
+}
