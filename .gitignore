@@ -39,3 +39,23 @@ deployment/
 rust_crypto_engine/target/
 *.pyc
 __pycache__/
+
+# Environment files
+.env
+mobile/.env
+
+# Backup files
+*.bak
+*.backup*
+*.bak2
+*.bak3
+*.bak4
+
+# Temporary task definitions
+task-definition-*.json
+td-*.json
+temp_task_def*.json
+temp_workflow*.yml
+
+# Workflow backups
+.github/workflows/*.bak
