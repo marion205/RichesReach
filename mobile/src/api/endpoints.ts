@@ -1,8 +1,8 @@
 // API endpoint configuration
 // This file centralizes all API endpoints to avoid URL mutation issues
 
-const DEV_API_BASE = process.env.EXPO_PUBLIC_API_URL || 'http://127.0.0.1:8000';
-const PROD_API_BASE = 'https://api.richesreach.com';
+const DEV_API_BASE = process.env.EXPO_PUBLIC_API_URL || 'http://34.226.192.58:8000';
+const PROD_API_BASE = 'http://34.226.192.58:8000';
 
 // Determine if we're in development mode
 const isDev = __DEV__;
