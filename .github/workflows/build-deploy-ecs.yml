@@ -83,50 +83,69 @@ jobs:
           docker push "$IMAGE"
         # If you want multi-arch, swap above with buildx setup and --platform
 
-      - name: Get current task def
-        id: curtd
+      - name: Create new TD from baseline (preserve secrets/healthcheck)
+        id: td
+        shell: bash
+        env:
+          CLUSTER: riches-reach-ai-production-cluster
+          SERVICE: riches-reach-ai-ai
+          FAMILY: riches-reach-ai-task
+          BASELINE_TD: riches-reach-ai-task:139   # <-- baseline with secrets/healthcheck
+          ECR_URI: 498606688292.dkr.ecr.us-east-1.amazonaws.com/riches-reach-ai
+          IMAGE_TAG: ${{ steps.tag.outputs.val }}
+          AWS_REGION: us-east-1
         run: |
-          aws ecs describe-task-definition --task-definition "${FAMILY}" \
+          set -euo pipefail
+
+          # Get the full baseline task definition JSON
+          aws ecs describe-task-definition \
+            --task-definition "$BASELINE_TD" \
+            --region "$AWS_REGION" \
             --query 'taskDefinition' > td.json
-          jq 'del(.status,.revision,.taskDefinitionArn,.requiresAttributes,.compatibilities,.registeredAt,.registeredBy)' td.json > td.edit.json
-          # swap image on the target container
-          NEW_IMAGE="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${{ steps.tag.outputs.val }}"
-          jq --arg c "${CONTAINER_NAME}" --arg i "$NEW_IMAGE" '
+
+          # Strip server-side fields
+          jq 'del(.taskDefinitionArn, .revision, .status, .registeredAt, .registeredBy, .requiresAttributes, .compatibilities)' td.json > td-stripped.json
+
+          # Replace container image ONLY for the primary container (named riches-reach-ai)
+          jq --arg img "$ECR_URI:$IMAGE_TAG" '
             .containerDefinitions |=
-              map(if .name==$c then .image=$i else . end)
-          ' td.edit.json > td.new.json
-          echo "new_image=$NEW_IMAGE" >> $GITHUB_OUTPUT
+              (map(if .name == "riches-reach-ai" then .image = $img else . end))
+          ' td-stripped.json > td-new.json
 
-      - name: Register new task def
-        id: reg
-        run: |
-          arn=$(aws ecs register-task-definition \
-            --cli-input-json file://td.new.json \
+          echo "Registering new task definition from baseline $BASELINE_TD ..."
+          NEW_TD_ARN=$(aws ecs register-task-definition --region "$AWS_REGION" \
+            --cli-input-json file://td-new.json \
             --query 'taskDefinition.taskDefinitionArn' --output text)
-          echo "td_arn=$arn" >> $GITHUB_OUTPUT
-          echo "Registered $arn"
 
-      - name: Update service
+          echo "NEW_TD_ARN=$NEW_TD_ARN" | tee -a "$GITHUB_OUTPUT"
+
+      - name: Deploy service to new task definition
+        if: steps.td.outputs.NEW_TD_ARN != ''
+        env:
+          CLUSTER: riches-reach-ai-production-cluster
+          SERVICE: riches-reach-ai-ai
+          AWS_REGION: us-east-1
         run: |
+          set -euo pipefail
           aws ecs update-service \
-            --cluster "${CLUSTER}" \
-            --service "${SERVICE}" \
-            --task-definition "${{ steps.reg.outputs.td_arn }}"
+            --cluster "$CLUSTER" \
+            --service "$SERVICE" \
+            --task-definition "${{ steps.td.outputs.NEW_TD_ARN }}" \
+            --force-new-deployment \
+            --region "$AWS_REGION"
 
-      - name: Wait for service stable
-        run: |
+          echo "Waiting for service to stabilize..."
           aws ecs wait services-stable \
-            --cluster "${CLUSTER}" \
-            --services "${SERVICE}"
-          aws ecs describe-services \
-            --cluster "${CLUSTER}" \
-            --services "${SERVICE}" \
-            --query 'services[0].{desired:desiredCount,running:runningCount,pending:pendingCount,td:taskDefinition}'
+            --cluster "$CLUSTER" \
+            --services "$SERVICE" \
+            --region "$AWS_REGION"
+
+          echo "✔ Deployment stabilized."
 
       - name: Run DB migrations (one-off task on new image)
         id: migrate
         run: |
-          TD="${{ steps.reg.outputs.td_arn }}"
+          TD="${{ steps.td.outputs.NEW_TD_ARN }}"
           # Run a single Fargate task with command override
           TASK_ARN=$(aws ecs run-task \
             --cluster "${CLUSTER}" \
@@ -163,6 +182,6 @@ jobs:
 
       - name: Output summary
         run: |
-          echo "Deployed image: ${{ steps.curtd.outputs.new_image }}"
-          echo "New TD: ${{ steps.reg.outputs.td_arn }}"
+          echo "Deployed image: ${{ steps.tag.outputs.val }}"
+          echo "New TD: ${{ steps.td.outputs.NEW_TD_ARN }}"
           echo "Migrate task exit: ${{ steps.migrate.outputs.exit_code }}"
