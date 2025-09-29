@@ -13,6 +13,10 @@ import environ
 # Load environment variables from .env file
 env = environ.Env()
 environ.Env.read_env()
+
+# Read GRAPHQL_MODE early and log it
+GRAPHQL_MODE = os.getenv("GRAPHQL_MODE", "standard").lower()
+print(f"[BOOT] GRAPHQL_MODE={GRAPHQL_MODE}", flush=True)
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production

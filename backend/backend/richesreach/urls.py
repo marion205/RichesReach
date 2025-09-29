@@ -227,7 +227,9 @@ urlpatterns = [
 ]
 
 # GraphQL routing with environment flag for simple mode
-if os.environ.get("GRAPHQL_MODE") == "simple":
+from django.conf import settings
+
+if settings.GRAPHQL_MODE == "simple":
     print("DEBUG: Using SimpleGraphQLView and Mock Auth")
     from core.views_gql_simple import SimpleGraphQLView
     from core.mock_auth import mock_login
