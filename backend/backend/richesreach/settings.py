@@ -362,13 +362,13 @@ API_RATE_LIMITS = {
     'FINNHUB': {'limit': 60, 'window': 60},        # 60 requests per minute
     'YAHOO_FINANCE': {'limit': 100, 'window': 60}, # 100 requests per minute
 }
-# Production Channels Configuration
-if not DEBUG:
-    CHANNEL_LAYERS = {
-        'default': {
-            'BACKEND': 'channels_redis.core.RedisChannelLayer',
-            'CONFIG': {
-                "hosts": [('127.0.0.1', 6379)],
-            },
-        },
-    }
+# Production Channels Configuration - Use in-memory for simplicity
+# if not DEBUG:
+#     CHANNEL_LAYERS = {
+#         'default': {
+#             'BACKEND': 'channels_redis.core.RedisChannelLayer',
+#             'CONFIG': {
+#                 "hosts": [('127.0.0.1', 6379)],
+#             },
+#         },
+#     }
