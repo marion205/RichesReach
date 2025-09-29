@@ -4,7 +4,16 @@ from django.http import JsonResponse
 from django.views import View
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
-from core.schema_simple import schema
+
+print("DEBUG: Importing SimpleGraphQLView")
+try:
+    from core.schema_simple import schema
+    print("DEBUG: Successfully imported simple schema")
+except Exception as e:
+    print(f"DEBUG: Error importing simple schema: {e}")
+    # Fallback to original schema
+    from core.schema import schema
+    print("DEBUG: Using original schema as fallback")
 
 @method_decorator(csrf_exempt, name="dispatch")
 class SimpleGraphQLView(View):
