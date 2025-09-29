@@ -1,9 +1,8 @@
-from django.urls import re_path
+# core/routing.py
+from django.urls import path
 from . import consumers
 
 websocket_urlpatterns = [
-    re_path(r'ws/stock-prices/$', consumers.StockPriceConsumer.as_asgi()),
-    re_path(r'ws/discussions/$', consumers.DiscussionConsumer.as_asgi()),
-    re_path(r'ws/portfolio/$', consumers.PortfolioConsumer.as_asgi()),
-    re_path(r'ws/$', consumers.StockPriceConsumer.as_asgi()),  # Default WebSocket endpoint
+    path('ws/stock-prices/', consumers.StockPriceConsumer.as_asgi()),
+    path('ws/notifications/', consumers.NotificationConsumer.as_asgi()),
 ]

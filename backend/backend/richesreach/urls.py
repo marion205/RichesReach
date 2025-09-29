@@ -221,7 +221,7 @@ urlpatterns = [
     path("prices/", prices_view),  # <-- Prices endpoint for crypto/stocks
     path("user-profile/", user_profile_view),  # <-- User profile endpoint
     path("discussions/", discussions_view),  # <-- Stock discussions endpoint
-    path("auth/", auth_view),
+    # Note: auth/ will be added conditionally below
     path("me/", me_view),
     path("signals/", signals_view),
 ]
@@ -240,6 +240,7 @@ else:
     # Standard GraphQLView (original behavior)
     urlpatterns += [
         path("graphql/", csrf_exempt(GraphQLView.as_view(schema=schema, graphiql=False))),
+        path("auth/", auth_view),  # Use original auth view
     ]
 
 # Always add the mock GraphQL endpoint for testing
