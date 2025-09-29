@@ -124,6 +124,6 @@ python manage.py collectstatic --noinput || true
 echo "Running migrations..."
 python manage.py migrate --noinput
 
-# Start server (using Daphne for ASGI/WebSocket support)
+# Start server (using Gunicorn for now - will switch to Daphne later)
 echo "Starting server..."
-exec daphne -b 0.0.0.0 -p 8000 richesreach.asgi:application
+exec gunicorn richesreach.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120
