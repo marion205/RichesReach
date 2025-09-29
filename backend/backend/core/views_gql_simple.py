@@ -4,7 +4,7 @@ from django.http import JsonResponse
 from django.views import View
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
-from core.schema import schema
+from core.schema_simple import schema
 
 @method_decorator(csrf_exempt, name="dispatch")
 class SimpleGraphQLView(View):
