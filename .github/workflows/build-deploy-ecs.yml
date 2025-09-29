@@ -102,7 +102,7 @@ jobs:
           CLUSTER: riches-reach-ai-production-cluster
           SERVICE: riches-reach-ai-ai
           FAMILY: riches-reach-ai-task
-          BASELINE_TD: riches-reach-ai-task:139   # <-- baseline with secrets/healthcheck
+          BASELINE_TD: riches-reach-ai-task:181   # <-- baseline with secrets/healthcheck and GRAPHQL_MODE=simple
           ECR_URI: 498606688292.dkr.ecr.us-east-1.amazonaws.com/riches-reach-ai
           IMAGE_TAG: ${{ steps.tag.outputs.val }}
           AWS_REGION: us-east-1
