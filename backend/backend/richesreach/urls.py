@@ -209,6 +209,10 @@ def discussions_view(request):
 # GraphQL routing with environment flag for simple mode
 import os
 
+# Debug logging for environment variables
+print(f"DEBUG: GRAPHQL_MODE = {os.environ.get('GRAPHQL_MODE', 'NOT_SET')}")
+print(f"DEBUG: All environment variables: {dict(os.environ)}")
+
 urlpatterns = [
     path("", home),  # <-- Root endpoint
     path("admin/", admin.site.urls),
@@ -224,11 +228,13 @@ urlpatterns = [
 
 # GraphQL routing with environment flag for simple mode
 if os.environ.get("GRAPHQL_MODE") == "simple":
+    print("DEBUG: Using SimpleGraphQLView")
     from core.views_gql_simple import SimpleGraphQLView
     urlpatterns += [
         path("graphql/", SimpleGraphQLView.as_view(), name="graphql"),
     ]
 else:
+    print("DEBUG: Using standard GraphQLView")
     # Standard GraphQLView (original behavior)
     urlpatterns += [
         path("graphql/", csrf_exempt(GraphQLView.as_view(schema=schema, graphiql=False))),
