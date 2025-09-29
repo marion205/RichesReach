@@ -4,94 +4,104 @@ from graphene import ObjectType, String, Float, Int, List
 
 class StockType(graphene.ObjectType):
     id = graphene.ID()
-    symbol = graphene.String()
-    company_name = graphene.String()
+    ticker = graphene.String()  # Changed from symbol to ticker
+    companyName = graphene.String()  # Changed from company_name to companyName (camelCase)
     sector = graphene.String()
-    current_price = graphene.Float()
-    market_cap = graphene.Float()
-    pe_ratio = graphene.Float()
-    dividend_yield = graphene.Float()
-    dividend_score = graphene.Float()
-    debt_ratio = graphene.Float()
-    beginner_friendly_score = graphene.Float()
+    industry = graphene.String()
+    currentPrice = graphene.Float()  # Changed from current_price to currentPrice
+    marketCap = graphene.Float()  # Changed from market_cap to marketCap
+    peRatio = graphene.Float()  # Changed from pe_ratio to peRatio
+    dividendYield = graphene.Float()  # Changed from dividend_yield to dividendYield
+    dividendScore = graphene.Float()  # Changed from dividend_score to dividendScore
+    debtRatio = graphene.Float()  # Changed from debt_ratio to debtRatio
+    beginnerFriendlyScore = graphene.Float()  # Changed from beginner_friendly_score to beginnerFriendlyScore
     volatility = graphene.Float()
+
+# Mock stock data that matches frontend expectations
+MOCK_STOCKS = [
+    {
+        "id": "1",
+        "ticker": "AAPL",
+        "companyName": "Apple Inc.",
+        "sector": "Technology",
+        "industry": "Consumer Electronics",
+        "currentPrice": 175.50,
+        "marketCap": 2800000000000,
+        "peRatio": 28.5,
+        "dividendYield": 0.44,
+        "dividendScore": 0.7,
+        "debtRatio": 0.15,
+        "beginnerFriendlyScore": 0.9,
+        "volatility": 0.25
+    },
+    {
+        "id": "2",
+        "ticker": "MSFT",
+        "companyName": "Microsoft Corporation",
+        "sector": "Technology",
+        "industry": "Software",
+        "currentPrice": 380.25,
+        "marketCap": 2800000000000,
+        "peRatio": 32.1,
+        "dividendYield": 0.68,
+        "dividendScore": 0.8,
+        "debtRatio": 0.12,
+        "beginnerFriendlyScore": 0.85,
+        "volatility": 0.22
+    },
+    {
+        "id": "3",
+        "ticker": "TSLA",
+        "companyName": "Tesla, Inc.",
+        "sector": "Automotive",
+        "industry": "Electric Vehicles",
+        "currentPrice": 250.75,
+        "marketCap": 800000000000,
+        "peRatio": 45.2,
+        "dividendYield": 0.0,
+        "dividendScore": 0.1,
+        "debtRatio": 0.08,
+        "beginnerFriendlyScore": 0.6,
+        "volatility": 0.45
+    },
+    {
+        "id": "4",
+        "ticker": "NVDA",
+        "companyName": "NVIDIA Corporation",
+        "sector": "Technology",
+        "industry": "Semiconductors",
+        "currentPrice": 450.30,
+        "marketCap": 1100000000000,
+        "peRatio": 65.8,
+        "dividendYield": 0.04,
+        "dividendScore": 0.3,
+        "debtRatio": 0.05,
+        "beginnerFriendlyScore": 0.7,
+        "volatility": 0.35
+    },
+    {
+        "id": "5",
+        "ticker": "GOOGL",
+        "companyName": "Alphabet Inc.",
+        "sector": "Technology",
+        "industry": "Internet Services",
+        "currentPrice": 140.85,
+        "marketCap": 1800000000000,
+        "peRatio": 24.3,
+        "dividendYield": 0.0,
+        "dividendScore": 0.2,
+        "debtRatio": 0.10,
+        "beginnerFriendlyScore": 0.8,
+        "volatility": 0.28
+    }
+]
 
 class Query(ObjectType):
     stocks = graphene.List(StockType)
     
     def resolve_stocks(self, info):
-        # Return mock stock data instead of querying the database
-        return [
-            StockType(
-                id="1",
-                symbol="AAPL",
-                company_name="Apple Inc.",
-                sector="Technology",
-                current_price=175.50,
-                market_cap=2800000000000,
-                pe_ratio=28.5,
-                dividend_yield=0.44,
-                dividend_score=0.7,
-                debt_ratio=0.15,
-                beginner_friendly_score=0.9,
-                volatility=0.25
-            ),
-            StockType(
-                id="2",
-                symbol="MSFT",
-                company_name="Microsoft Corporation",
-                sector="Technology",
-                current_price=380.25,
-                market_cap=2800000000000,
-                pe_ratio=32.1,
-                dividend_yield=0.68,
-                dividend_score=0.8,
-                debt_ratio=0.12,
-                beginner_friendly_score=0.85,
-                volatility=0.22
-            ),
-            StockType(
-                id="3",
-                symbol="TSLA",
-                company_name="Tesla, Inc.",
-                sector="Automotive",
-                current_price=250.75,
-                market_cap=800000000000,
-                pe_ratio=45.2,
-                dividend_yield=0.0,
-                dividend_score=0.1,
-                debt_ratio=0.08,
-                beginner_friendly_score=0.6,
-                volatility=0.45
-            ),
-            StockType(
-                id="4",
-                symbol="NVDA",
-                company_name="NVIDIA Corporation",
-                sector="Technology",
-                current_price=450.30,
-                market_cap=1100000000000,
-                pe_ratio=65.8,
-                dividend_yield=0.04,
-                dividend_score=0.3,
-                debt_ratio=0.05,
-                beginner_friendly_score=0.7,
-                volatility=0.35
-            ),
-            StockType(
-                id="5",
-                symbol="GOOGL",
-                company_name="Alphabet Inc.",
-                sector="Technology",
-                current_price=140.85,
-                market_cap=1800000000000,
-                pe_ratio=24.3,
-                dividend_yield=0.0,
-                dividend_score=0.2,
-                debt_ratio=0.10,
-                beginner_friendly_score=0.8,
-                volatility=0.28
-            )
-        ]
+        """Return mock stock data - no database queries"""
+        print("DEBUG: resolve_stocks called - returning mock data")
+        return [StockType(**stock) for stock in MOCK_STOCKS]
 
 schema = graphene.Schema(query=Query)
