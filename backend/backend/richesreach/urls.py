@@ -239,6 +239,11 @@ else:
     urlpatterns += [
         path("graphql/", csrf_exempt(GraphQLView.as_view(schema=schema, graphiql=False))),
     ]
+
+# Always add the mock GraphQL endpoint for testing
+urlpatterns += [
+    path("mock-graphql/", mock_graphql),
+]
 # Temporary schema test endpoint
 from django.db import connection
 from django.http import JsonResponse
