@@ -336,8 +336,12 @@ GRAPHENE = {
     # "MIDDLEWARE": ["graphql_jwt.middleware.JSONWebTokenMiddleware"],
 }
 
-# CSRF Configuration for dev
-CSRF_TRUSTED_ORIGINS = ["http://localhost:8000", "http://127.0.0.1:8000"]
+# CSRF Configuration for dev and production
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:8000", 
+    "http://127.0.0.1:8000",
+    "http://riches-reach-alb-1199497064.us-east-1.elb.amazonaws.com"
+]
 
 # Environment-driven RPC + AAVE Pool
 RPC_SEPOLIA = os.getenv("RPC_SEPOLIA", "https://eth-sepolia.g.alchemy.com/v2/<KEY>")

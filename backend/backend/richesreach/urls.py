@@ -206,6 +206,9 @@ def discussions_view(request):
         }
     })
 
+# GraphQL routing with environment flag for simple mode
+import os
+
 urlpatterns = [
     path("", home),  # <-- Root endpoint
     path("admin/", admin.site.urls),
@@ -214,12 +217,22 @@ urlpatterns = [
     path("prices/", prices_view),  # <-- Prices endpoint for crypto/stocks
     path("user-profile/", user_profile_view),  # <-- User profile endpoint
     path("discussions/", discussions_view),  # <-- Stock discussions endpoint
-    # IMPORTANT: keep the trailing slash and csrf_exempt for mobile POSTs
-    path("graphql/", csrf_exempt(GraphQLView.as_view(schema=schema, graphiql=False))),
     path("auth/", auth_view),
     path("me/", me_view),
     path("signals/", signals_view),
 ]
+
+# GraphQL routing with environment flag for simple mode
+if os.environ.get("GRAPHQL_MODE") == "simple":
+    from core.views_gql_simple import SimpleGraphQLView
+    urlpatterns += [
+        path("graphql/", SimpleGraphQLView.as_view(), name="graphql"),
+    ]
+else:
+    # Standard GraphQLView (original behavior)
+    urlpatterns += [
+        path("graphql/", csrf_exempt(GraphQLView.as_view(schema=schema, graphiql=False))),
+    ]
 # Temporary schema test endpoint
 from django.db import connection
 from django.http import JsonResponse
