@@ -207,11 +207,7 @@ def discussions_view(request):
     })
 
 # GraphQL routing with environment flag for simple mode
-import os
-
-# Debug logging for environment variables
-print(f"DEBUG: GRAPHQL_MODE = {os.environ.get('GRAPHQL_MODE', 'NOT_SET')}")
-print(f"DEBUG: All environment variables: {dict(os.environ)}")
+from django.conf import settings
 
 urlpatterns = [
     path("", home),  # <-- Root endpoint
@@ -225,9 +221,6 @@ urlpatterns = [
     path("me/", me_view),
     path("signals/", signals_view),
 ]
-
-# GraphQL routing with environment flag for simple mode
-from django.conf import settings
 
 if settings.GRAPHQL_MODE == "simple":
     print("DEBUG: Using SimpleGraphQLView and Mock Auth")
@@ -308,12 +301,12 @@ def simple_graphql_test(request):
 
 # Debug endpoint to check environment variables
 def debug_env(request):
-    import os
+    from django.conf import settings
     return JsonResponse({
-        'GRAPHQL_MODE': os.environ.get('GRAPHQL_MODE', 'NOT_SET'),
-        'DJANGO_SETTINGS_MODULE': os.environ.get('DJANGO_SETTINGS_MODULE', 'NOT_SET'),
-        'DEBUG': os.environ.get('DEBUG', 'NOT_SET'),
-        'ALLOWED_HOSTS': os.environ.get('ALLOWED_HOSTS', 'NOT_SET')
+        'GRAPHQL_MODE': getattr(settings, 'GRAPHQL_MODE', 'NOT_SET'),
+        'DJANGO_SETTINGS_MODULE': getattr(settings, 'DJANGO_SETTINGS_MODULE', 'NOT_SET'),
+        'DEBUG': getattr(settings, 'DEBUG', 'NOT_SET'),
+        'ALLOWED_HOSTS': getattr(settings, 'ALLOWED_HOSTS', 'NOT_SET')
     })
 
 # Simple mock GraphQL endpoint that returns stock data
