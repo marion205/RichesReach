@@ -251,3 +251,30 @@ def migration_test(request):
     })
 
 urlpatterns.append(path("migration-test/", migration_test))
+
+# Simple GraphQL test endpoint
+@csrf_exempt
+def simple_graphql_test(request):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            query = data.get('query', '')
+            if 'ping' in query:
+                return JsonResponse({'data': {'ping': 'ok'}})
+            elif 'stocks' in query:
+                return JsonResponse({
+                    'data': {
+                        'stocks': [
+                            {'symbol': 'AAPL', 'companyName': 'Apple Inc.', 'currentPrice': 175.50},
+                            {'symbol': 'MSFT', 'companyName': 'Microsoft Corp.', 'currentPrice': 380.25}
+                        ]
+                    }
+                })
+            else:
+                return JsonResponse({'data': {'test': 'working'}})
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
+    else:
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+urlpatterns.append(path("simple-graphql/", simple_graphql_test))

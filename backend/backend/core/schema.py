@@ -306,47 +306,50 @@ class BaseQuery(graphene.ObjectType):
             holdings=[PortfolioHoldingType(**h) for h in d["holdings"]],
         )
     
+    def resolve_ping(self, info):
+        # Simple diagnostic field to test GraphQL endpoint
+        return "ok"
+    
     def resolve_stocks(self, info, search=None, limit=10, offset=0):
-        from core.models import Stock
-        from django.db import models
+        # TEMP: return simplified data from the mock advanced results
+        # This avoids resolver cross-calling and potential deadlocks
+        from core.graphql.queries import get_mock_advanced_screening_results
         
-        # Get real stocks from database
-        queryset = Stock.objects.all()
+        items = get_mock_advanced_screening_results(limit=50)
         
+        # Apply search filter if provided
         if search:
             search_lower = search.lower()
-            queryset = queryset.filter(
-                models.Q(symbol__icontains=search_lower) |
-                models.Q(company_name__icontains=search_lower)
-            )
+            items = [
+                item for item in items 
+                if (search_lower in item.get('symbol', '').lower() or 
+                    search_lower in item.get('companyName', '').lower())
+            ]
         
         # Apply pagination
-        stocks = queryset[offset:offset + limit]
+        items = items[offset:offset + limit]
         
-        # Convert to GraphQL format
+        # Convert to basic StockType format
         result = []
-        for stock in stocks:
-            # Safely get dividend_score field, default to None if it doesn't exist
-            dividend_score = getattr(stock, 'dividend_score', None)
-            
+        for item in items:
             result.append(StockType(
-                id=str(stock.id),
-                symbol=stock.symbol,
-                company_name=stock.company_name,
-                sector=stock.sector,
-                current_price=float(stock.current_price) if stock.current_price else None,
-                market_cap=float(stock.market_cap) if stock.market_cap else None,
-                pe_ratio=stock.pe_ratio,
-                dividend_yield=stock.dividend_yield,
-                beginner_friendly_score=float(stock.beginner_friendly_score) if stock.beginner_friendly_score else None,
-                dividend_score=dividend_score,
+                id=item.get('symbol', ''),
+                symbol=item.get('symbol', ''),
+                company_name=item.get('companyName', ''),
+                sector=item.get('sector', ''),
+                current_price=item.get('currentPrice', 0.0),
+                market_cap=item.get('marketCap', 0.0),
+                pe_ratio=item.get('peRatio', 0.0),
+                dividend_yield=item.get('dividendYield', 0.0),
+                beginner_friendly_score=item.get('beginnerFriendlyScore', 0.0),
+                dividend_score=0,  # Default value
                 # camelCase aliases
-                companyName=stock.company_name,
-                currentPrice=float(stock.current_price) if stock.current_price else None,
-                marketCap=float(stock.market_cap) if stock.market_cap else None,
-                peRatio=stock.pe_ratio,
-                dividendYield=stock.dividend_yield,
-                beginnerFriendlyScore=float(stock.beginner_friendly_score) if stock.beginner_friendly_score else None
+                companyName=item.get('companyName', ''),
+                currentPrice=item.get('currentPrice', 0.0),
+                marketCap=item.get('marketCap', 0.0),
+                peRatio=item.get('peRatio', 0.0),
+                dividendYield=item.get('dividendYield', 0.0),
+                beginnerFriendlyScore=item.get('beginnerFriendlyScore', 0.0)
             ))
         
         return result
