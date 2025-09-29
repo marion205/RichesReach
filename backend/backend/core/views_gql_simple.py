@@ -18,7 +18,10 @@ except Exception as e:
 @method_decorator(csrf_exempt, name="dispatch")
 class SimpleGraphQLView(View):
     def _execute(self, query, variables=None):
+        print(f"DEBUG: Executing query with simple schema: {query}")
+        print(f"DEBUG: Schema type: {type(schema)}")
         result = schema.execute(query, variable_values=variables)
+        print(f"DEBUG: Query result: {result}")
         payload = {}
         if result.errors:
             payload["errors"] = [str(e) for e in result.errors]
