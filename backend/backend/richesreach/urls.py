@@ -306,5 +306,45 @@ def debug_env(request):
         'ALLOWED_HOSTS': os.environ.get('ALLOWED_HOSTS', 'NOT_SET')
     })
 
+# Simple mock GraphQL endpoint that returns stock data
+@csrf_exempt
+def mock_graphql(request):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            query = data.get('query', '')
+            if 'stocks' in query:
+                return JsonResponse({
+                    'data': {
+                        'stocks': [
+                            {
+                                'symbol': 'AAPL',
+                                'companyName': 'Apple Inc.',
+                                'currentPrice': 175.50,
+                                'dividendScore': 0.7
+                            },
+                            {
+                                'symbol': 'MSFT',
+                                'companyName': 'Microsoft Corporation',
+                                'currentPrice': 380.25,
+                                'dividendScore': 0.8
+                            },
+                            {
+                                'symbol': 'TSLA',
+                                'companyName': 'Tesla, Inc.',
+                                'currentPrice': 250.75,
+                                'dividendScore': 0.1
+                            }
+                        ]
+                    }
+                })
+            else:
+                return JsonResponse({'data': {'test': 'working'}})
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
+    else:
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+
 urlpatterns.append(path("simple-graphql/", simple_graphql_test))
 urlpatterns.append(path("debug-env/", debug_env))
+urlpatterns.append(path("mock-graphql/", mock_graphql))
