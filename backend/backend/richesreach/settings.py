@@ -82,30 +82,63 @@ ASGI_APPLICATION = 'richesreach.asgi.application'
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
-# Production database configuration - prefer DJANGO_DB_* variables
-DB_ENGINE = os.getenv("DJANGO_DB_ENGINE", "django.db.backends.postgresql")
-DB_NAME = os.getenv("DJANGO_DB_NAME", "appdb")
-DB_USER = os.getenv("DJANGO_DB_USER", "appuser")
-DB_PASS = os.getenv("DJANGO_DB_PASSWORD", "")
-DB_HOST = os.getenv("DJANGO_DB_HOST", "localhost")
-DB_PORT = os.getenv("DJANGO_DB_PORT", "5432")
-
-DATABASES = {
-    "default": {
-        "ENGINE": DB_ENGINE,
-        "NAME": DB_NAME,
-        "USER": DB_USER,
-        "PASSWORD": DB_PASS,
-        "HOST": DB_HOST,
-        "PORT": DB_PORT,
-        "CONN_MAX_AGE": 60,
-        "OPTIONS": {"sslmode": "require"},
+if GRAPHQL_MODE == "simple":
+    # Do NOT require Postgres just to boot the app
+    # Use a throwaway SQLite file so multiple gunicorn workers don't crash on :memory:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": "/tmp/simple.sqlite3",
+        }
     }
-}
 
-# Log database engine for debugging
-import logging
-logging.getLogger(__name__).warning("DB_ENGINE=%s", DATABASES["default"]["ENGINE"])
+    # Make sure migrations don't run / aren't required in this mode
+    class _DisableMigrations(dict):
+        def __contains__(self, item): return True
+        def __getitem__(self, item): return None
+    MIGRATION_MODULES = _DisableMigrations()
+
+    # Keep caches lightweight
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "simple-mode",
+        }
+    }
+
+    print(f"[BOOT] Using SQLite database for simple mode", flush=True)
+
+else:
+    # Production / standard mode requires Postgres config
+    DB_ENGINE = os.getenv("DJANGO_DB_ENGINE", "django.db.backends.postgresql")
+    DB_NAME = os.getenv("DJANGO_DB_NAME", "appdb")
+    DB_USER = os.getenv("DJANGO_DB_USER", "appuser")
+    DB_PASS = os.getenv("DJANGO_DB_PASSWORD", "")
+    DB_HOST = os.getenv("DJANGO_DB_HOST", "localhost")
+    DB_PORT = os.getenv("DJANGO_DB_PORT", "5432")
+
+    # Validate required PostgreSQL environment variables
+    if not all([DB_HOST, DB_NAME, DB_USER, DB_PASS]):
+        raise RuntimeError(
+            "No production database configuration found. Set DJANGO_DB_* environment variables."
+        )
+
+    DATABASES = {
+        "default": {
+            "ENGINE": DB_ENGINE,
+            "NAME": DB_NAME,
+            "USER": DB_USER,
+            "PASSWORD": DB_PASS,
+            "HOST": DB_HOST,
+            "PORT": DB_PORT,
+            "CONN_MAX_AGE": 60,
+            "OPTIONS": {"sslmode": "require"},
+        }
+    }
+
+    # Log database engine for debugging
+    import logging
+    logging.getLogger(__name__).warning("DB_ENGINE=%s", DATABASES["default"]["ENGINE"])
 # Email Configuration
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
@@ -118,13 +151,7 @@ EMAIL_SSL_CHECK_HOSTNAME = False # Disable hostname verification
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@richesreach.com')
-# Cache Configuration (for rate limiting and tokens)
-CACHES = {
-'default': {
-'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-'LOCATION': 'unique-snowflake',
-}
-}
+# Cache Configuration (for rate limiting and tokens) - set above based on mode
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
 AUTH_PASSWORD_VALIDATORS = [
@@ -254,15 +281,7 @@ REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
 REDIS_PORT = int(os.getenv('REDIS_PORT', 6379))
 REDIS_DB = int(os.getenv('REDIS_DB', 0))
 REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', None)
-# Cache Configuration
-CACHES = {
-'default': {
-'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-'LOCATION': 'unique-snowflake',
-'KEY_PREFIX': 'richesreach',
-'TIMEOUT': 300, # 5 minutes default
-}
-}
+# Cache Configuration - set above based on mode
 # Use Redis for session storage as well
 SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
 SESSION_CACHE_ALIAS = 'default'

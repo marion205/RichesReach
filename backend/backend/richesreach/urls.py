@@ -3,7 +3,6 @@ from django.urls import path
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from graphene_django.views import GraphQLView
-from core.schema import schema
 import time
 import json
 
@@ -11,7 +10,7 @@ def healthz(_):
     return JsonResponse({"ok": True, "app": "richesreach"}, status=200)
 
 def health(_):
-    return JsonResponse({"ok": True}, status=200)
+    return JsonResponse({"ok": True, "mode": "simple"}, status=200)
 
 def home(_):
     return JsonResponse({"message": "Hello from RichesReach!", "status": "running"}, status=200)
@@ -232,6 +231,8 @@ if settings.GRAPHQL_MODE == "simple":
     ]
 else:
     print("DEBUG: Using standard GraphQLView")
+    # Import schema lazily only in standard mode
+    from core.schema import schema
     # Standard GraphQLView (original behavior)
     urlpatterns += [
         path("graphql/", csrf_exempt(GraphQLView.as_view(schema=schema, graphiql=False))),
