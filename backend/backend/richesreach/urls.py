@@ -290,4 +290,15 @@ def simple_graphql_test(request):
     else:
         return JsonResponse({'error': 'Method not allowed'}, status=405)
 
+# Debug endpoint to check environment variables
+def debug_env(request):
+    import os
+    return JsonResponse({
+        'GRAPHQL_MODE': os.environ.get('GRAPHQL_MODE', 'NOT_SET'),
+        'DJANGO_SETTINGS_MODULE': os.environ.get('DJANGO_SETTINGS_MODULE', 'NOT_SET'),
+        'DEBUG': os.environ.get('DEBUG', 'NOT_SET'),
+        'ALLOWED_HOSTS': os.environ.get('ALLOWED_HOSTS', 'NOT_SET')
+    })
+
 urlpatterns.append(path("simple-graphql/", simple_graphql_test))
+urlpatterns.append(path("debug-env/", debug_env))
