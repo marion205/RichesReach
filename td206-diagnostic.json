@@ -1,0 +1,104 @@
+{
+  "family": "riches-reach-ai-task",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::498606688292:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::498606688292:role/ecsTaskRole",
+  "containerDefinitions": [
+    {
+      "name": "riches-reach-ai",
+      "image": "498606688292.dkr.ecr.us-east-1.amazonaws.com/riches-reach-ai:c76bc5a40c9cbb6f6ff337a9742335cc803aa970",
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "protocol": "tcp"
+        }
+      ],
+      "essential": true,
+      "environment": [
+        {
+          "name": "DJANGO_SETTINGS_MODULE",
+          "value": "richesreach.settings"
+        },
+        {
+          "name": "GRAPHQL_MODE",
+          "value": "simple"
+        },
+        {
+          "name": "DEBUG",
+          "value": "False"
+        },
+        {
+          "name": "STATIC_ROOT",
+          "value": "/app/staticfiles"
+        },
+        {
+          "name": "ALLOWED_HOSTS",
+          "value": "*"
+        },
+        {
+          "name": "PYTHONUNBUFFERED",
+          "value": "1"
+        },
+        {
+          "name": "GUNICORN_CMD_ARGS",
+          "value": "--bind 0.0.0.0:8000 --workers 2 --threads 4 --timeout 120 --graceful-timeout 30 --log-level debug"
+        }
+      ],
+      "command": [
+        "gunicorn",
+        "richesreach.wsgi:application"
+      ],
+      "secrets": [
+        {
+          "name": "DJANGO_DB_ENGINE",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/appuser-PE1IS5:ENGINE::"
+        },
+        {
+          "name": "DJANGO_DB_NAME",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/appuser-PE1IS5:NAME::"
+        },
+        {
+          "name": "DJANGO_DB_USER",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/appuser-PE1IS5:USER::"
+        },
+        {
+          "name": "DJANGO_DB_PASSWORD",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/appuser-PE1IS5:PASSWORD::"
+        },
+        {
+          "name": "DJANGO_DB_HOST",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/appuser-PE1IS5:HOST::"
+        },
+        {
+          "name": "DJANGO_DB_PORT",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/appuser-PE1IS5:PORT::"
+        },
+        {
+          "name": "SECRET_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr-django-secret-key-IdsacH"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/riches-reach-ai",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "curl -fsS http://127.0.0.1:8000/health/ || exit 1"
+        ],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 5,
+        "startPeriod": 90
+      }
+    }
+  ]
+}

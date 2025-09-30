@@ -25,37 +25,77 @@ def auth_view(request):
             
             # Simple authentication for testing
             if email and password:
-                token = f"test-jwt-token-{int(time.time())}"
+                # Generate a proper JWT token
+                import jwt
+                import datetime
+                
+                payload = {
+                    'user_id': 1,
+                    'username': email.split('@')[0],
+                    'email': email,
+                    'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24),
+                    'iat': datetime.datetime.utcnow()
+                }
+                
+                # Use a simple secret key for development
+                secret_key = "dev-secret-key-change-in-production"
+                token = jwt.encode(payload, secret_key, algorithm="HS256")
+                
+                # Return the token directly (not wrapped in data.tokenAuth)
                 return JsonResponse({
-                    'data': {
-                        'tokenAuth': {
-                            'token': token,
-                            'user': {
-                                'id': '1',
-                                'email': email,
-                                'username': email.split('@')[0]
-                            }
-                        }
+                    'token': token,
+                    'user': {
+                        'id': '1',
+                        'email': email,
+                        'username': email.split('@')[0]
                     }
                 })
             else:
                 return JsonResponse({
-                    'data': {
-                        'tokenAuth': {
-                            'token': None,
-                            'user': None
-                        }
-                    }
+                    'token': None,
+                    'user': None
                 })
         except Exception as e:
             return JsonResponse({
-                'data': {
-                    'tokenAuth': {
-                        'token': None,
-                        'user': None
-                    }
-                }
+                'token': None,
+                'user': None
             })
+    else:
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+@csrf_exempt
+def simple_login_view(request):
+    """Simple login endpoint that returns just the token"""
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            email = data.get('email', '')
+            password = data.get('password', '')
+            
+            # Simple authentication for testing
+            if email and password:
+                # Generate a proper JWT token
+                import jwt
+                import datetime
+                
+                payload = {
+                    'user_id': 1,
+                    'username': email.split('@')[0],
+                    'email': email,
+                    'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24),
+                    'iat': datetime.datetime.utcnow()
+                }
+                
+                # Use a simple secret key for development
+                secret_key = "dev-secret-key-change-in-production"
+                token = jwt.encode(payload, secret_key, algorithm="HS256")
+                
+                # Return just the token
+                return JsonResponse({'token': token})
+            else:
+                return JsonResponse({'error': 'Invalid credentials'}, status=401)
+        except Exception as e:
+            return JsonResponse({'error': 'Invalid request'}, status=400)
     else:
         return JsonResponse({'error': 'Method not allowed'}, status=405)
 
@@ -240,9 +280,7 @@ else:
     ]
 
 # Always add the mock GraphQL endpoint for testing
-urlpatterns += [
-    path("mock-graphql/", mock_graphql),
-]
+# (mock_graphql function is defined later in the file)
 # Temporary schema test endpoint
 from django.db import connection
 from django.http import JsonResponse
@@ -352,3 +390,5 @@ def mock_graphql(request):
 urlpatterns.append(path("simple-graphql/", simple_graphql_test))
 urlpatterns.append(path("debug-env/", debug_env))
 urlpatterns.append(path("mock-graphql/", mock_graphql))
+from .views_auth import login_view
+urlpatterns.append(path("api/auth/login/", login_view))

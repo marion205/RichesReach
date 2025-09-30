@@ -11,7 +11,7 @@ import { getAAVEPoolAddressWithCache } from '../blockchain/aaveResolver';
 import Toast from 'react-native-toast-message';
 
 // Sepolia Testnet Configuration
-const BACKEND_BASE = process.env.EXPO_PUBLIC_API_URL || 'http://127.0.0.1:8000';  // Your Django base URL
+const BACKEND_BASE = process.env.EXPO_PUBLIC_API_URL || 'http://54.162.138.209:8000';  // Your Django base URL
 
 // Helper function to open explorer
 const openExplorer = (hash: string) =>

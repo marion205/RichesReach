@@ -1,8 +1,8 @@
 // API endpoint configuration
 // This file centralizes all API endpoints to avoid URL mutation issues
 
-const DEV_API_BASE = process.env.EXPO_PUBLIC_API_URL || 'http://34.224.165.229:8000';
-const PROD_API_BASE = 'http://34.224.165.229:8000';
+const DEV_API_BASE = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000';
+const PROD_API_BASE = 'http://54.162.138.209:8000';
 
 // Determine if we're in development mode
 const isDev = __DEV__;

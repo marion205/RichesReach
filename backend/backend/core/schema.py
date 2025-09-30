@@ -3,8 +3,43 @@ import graphql_jwt
 from graphene_django import DjangoObjectType
 from django.contrib.auth import get_user_model
 from core.graphql.queries import Query as SwingQuery, RunBacktestMutation, PortfolioMetricsType, PortfolioHoldingType, _mock_portfolio_metrics, StockType, AdvancedStockScreeningResultType, WatchlistItemType, WatchlistStockType, RustStockAnalysisType, TechnicalIndicatorsType, FundamentalAnalysisType, get_mock_stocks, get_mock_advanced_screening_results, get_mock_watchlist, get_mock_rust_stock_analysis, TargetPriceResultType, PositionSizeResultType, DynamicStopResultType
+from core.types import StockDiscussionType
 
 User = get_user_model()
+
+# Mock types for missing functionality
+class CryptoPriceType(graphene.ObjectType):
+    symbol = graphene.String()
+    price = graphene.Float()
+    change24h = graphene.Float()
+    changePercent24h = graphene.Float()
+
+class ResearchHubType(graphene.ObjectType):
+    symbol = graphene.String()
+    news = graphene.List(graphene.String)
+    analysis = graphene.String()
+
+class StockChartDataType(graphene.ObjectType):
+    symbol = graphene.String()
+    data = graphene.List(graphene.Float)
+
+class CryptoMLSignalType(graphene.ObjectType):
+    symbol = graphene.String()
+    signal = graphene.String()
+    confidence = graphene.Float()
+
+class CryptoRecommendationType(graphene.ObjectType):
+    symbol = graphene.String()
+    recommendation = graphene.String()
+    price = graphene.Float()
+
+class CryptocurrencyType(graphene.ObjectType):
+    symbol = graphene.String()
+    name = graphene.String()
+
+class CryptoPortfolioType(graphene.ObjectType):
+    totalValue = graphene.Float()
+    holdings = graphene.List(graphene.String)
 
 # Simple auth payload that doesn't use UserType
 class AuthPayload(graphene.ObjectType):
@@ -263,7 +298,9 @@ class BaseQuery(graphene.ObjectType):
         signalType=graphene.String(),
     )
     # Add missing queries that mobile app expects
-    stockDiscussions = graphene.List(graphene.String)
+    stockDiscussions = graphene.List(StockDiscussionType, stockSymbol=graphene.String(), limit=graphene.Int())
+    cryptoPrices = graphene.List(CryptoPriceType, symbols=graphene.List(graphene.String))
+    portfolioAnalysis = graphene.Field(PortfolioMetricsType)
     researchHub = graphene.Field(ResearchHubType, symbol=graphene.String(required=True))
     stockChartData = graphene.Field(StockChartDataType, 
         symbol=graphene.String(required=True),
@@ -315,7 +352,7 @@ class BaseQuery(graphene.ObjectType):
         # This avoids resolver cross-calling and potential deadlocks
         from core.graphql.queries import get_mock_advanced_screening_results
         
-        items = get_mock_advanced_screening_results(limit=50)
+        items = get_mock_advanced_screening_results()
         
         # Apply search filter if provided
         if search:
@@ -335,21 +372,22 @@ class BaseQuery(graphene.ObjectType):
             result.append(StockType(
                 id=item.get('symbol', ''),
                 symbol=item.get('symbol', ''),
-                company_name=item.get('companyName', ''),
+                company_name=item.get('company_name', ''),
                 sector=item.get('sector', ''),
-                current_price=item.get('currentPrice', 0.0),
-                market_cap=item.get('marketCap', 0.0),
-                pe_ratio=item.get('peRatio', 0.0),
-                dividend_yield=item.get('dividendYield', 0.0),
-                beginner_friendly_score=item.get('beginnerFriendlyScore', 0.0),
-                dividend_score=0,  # Default value
+                current_price=item.get('current_price', 0.0),
+                market_cap=item.get('market_cap', 0.0),
+                pe_ratio=item.get('pe_ratio', 0.0),
+                dividend_yield=item.get('dividend_yield', 0.0),
+                beginner_friendly_score=item.get('beginner_friendly_score', 0),
+                dividend_score=item.get('dividend_score', 0),
                 # camelCase aliases
-                companyName=item.get('companyName', ''),
-                currentPrice=item.get('currentPrice', 0.0),
-                marketCap=item.get('marketCap', 0.0),
-                peRatio=item.get('peRatio', 0.0),
-                dividendYield=item.get('dividendYield', 0.0),
-                beginnerFriendlyScore=item.get('beginnerFriendlyScore', 0.0)
+                companyName=item.get('company_name', ''),
+                currentPrice=item.get('current_price', 0.0),
+                marketCap=item.get('market_cap', 0.0),
+                peRatio=item.get('pe_ratio', 0.0),
+                dividendYield=item.get('dividend_yield', 0.0),
+                dividendScore=item.get('dividend_score', 0),
+                beginnerFriendlyScore=item.get('beginner_friendly_score', 0)
             ))
         
         return result
@@ -467,7 +505,8 @@ class BaseQuery(graphene.ObjectType):
             valuation_score=fund_data['valuation_score'],
             growth_score=fund_data['growth_score'],
             stability_score=fund_data['stability_score'],
-            debt_score=fund_data['debt_score']
+            debt_score=fund_data['debt_score'],
+            dividend_score=fund_data.get('dividend_score', 0)
         )
         
         # Create the main analysis object
@@ -504,7 +543,7 @@ class BaseQuery(graphene.ObjectType):
                 market_cap=float(stock.market_cap) if stock.market_cap else None,
                 pe_ratio=stock.pe_ratio,
                 dividend_yield=stock.dividend_yield,
-                beginner_friendly_score=float(stock.beginner_friendly_score) if stock.beginner_friendly_score else None,
+                beginner_friendly_score=stock.beginner_friendly_score,
                 dividend_score=dividend_score,
                 # camelCase aliases
                 companyName=stock.company_name,
@@ -512,10 +551,48 @@ class BaseQuery(graphene.ObjectType):
                 marketCap=float(stock.market_cap) if stock.market_cap else None,
                 peRatio=stock.pe_ratio,
                 dividendYield=stock.dividend_yield,
-                beginnerFriendlyScore=float(stock.beginner_friendly_score) if stock.beginner_friendly_score else None
+                dividendScore=dividend_score,
+                beginnerFriendlyScore=stock.beginner_friendly_score
             ))
         
         return result
+    
+    def resolve_stockDiscussions(self, info, stockSymbol=None, limit=10):
+        """Resolve stock discussions query"""
+        from core.models import StockDiscussion
+        
+        discussions = StockDiscussion.objects.all()
+        if stockSymbol:
+            discussions = discussions.filter(stock__symbol__iexact=stockSymbol)
+        
+        return discussions[:limit]
+    
+    def resolve_cryptoPrices(self, info, symbols=None):
+        """Resolve crypto prices query"""
+        # Return mock crypto prices for now
+        mock_prices = [
+            {"symbol": "BTC", "price": 45000.0, "change24h": 1200.0, "changePercent24h": 2.74},
+            {"symbol": "ETH", "price": 3200.0, "change24h": -50.0, "changePercent24h": -1.54}
+        ]
+        
+        if symbols:
+            return [price for price in mock_prices if price["symbol"] in symbols]
+        return mock_prices
+    
+    def resolve_portfolioAnalysis(self, info):
+        """Resolve portfolio analysis query - alias for portfolioMetrics"""
+        # Return mock portfolio metrics for now
+        from core.graphql.queries import _mock_portfolio_metrics, PortfolioMetricsType
+        mock_data = _mock_portfolio_metrics()
+        return PortfolioMetricsType(
+            total_value=mock_data.get('total_value', 0.0),
+            total_cost=mock_data.get('total_cost', 0.0),
+            total_return=mock_data.get('total_return', 0.0),
+            total_return_percent=mock_data.get('total_return_percent', 0.0),
+            holdings=mock_data.get('holdings', []),
+            dailyChange=mock_data.get('dailyChange', 0.0),
+            dailyChangePercent=mock_data.get('dailyChangePercent', 0.0)
+        )
     
     def resolve_calculateTargetPrice(self, info, entryPrice, stopPrice, riskRewardRatio=None, atr=None, resistanceLevel=None, supportLevel=None, signalType=None):
         # Import the resolver from queries.py
@@ -535,13 +612,6 @@ class BaseQuery(graphene.ObjectType):
         swing_query = SwingQuery()
         return swing_query.resolve_calculateDynamicStop(info, entryPrice, atr, atrMultiplier, supportLevel, resistanceLevel, signalType)
     
-    def resolve_stockDiscussions(self, info):
-        # Mock stock discussions for demo
-        return [
-            "AAPL showing strong technical breakout",
-            "TSLA volatility expected to continue",
-            "NVDA AI chip demand remains high"
-        ]
     
     def resolve_researchHub(self, info, symbol):
         # Mock research hub data for demo

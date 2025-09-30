@@ -850,7 +850,8 @@ def get_mock_advanced_screening_results():
             'market_cap': 2800000000000,
             'pe_ratio': 28.5,
             'dividend_yield': 0.0044,
-            'beginner_friendly_score': 0.85,
+            'beginner_friendly_score': 85,
+            'dividend_score': 70,
             'technical_score': 0.78,
             'fundamental_score': 0.82,
             'growth_score': 0.75,
@@ -870,7 +871,8 @@ def get_mock_advanced_screening_results():
             'market_cap': 2600000000000,
             'pe_ratio': 32.1,
             'dividend_yield': 0.0071,
-            'beginner_friendly_score': 0.82,
+            'beginner_friendly_score': 82,
+            'dividend_score': 75,
             'technical_score': 0.85,
             'fundamental_score': 0.88,
             'growth_score': 0.82,
@@ -890,7 +892,8 @@ def get_mock_advanced_screening_results():
             'market_cap': 1800000000000,
             'pe_ratio': 24.8,
             'dividend_yield': 0.0,
-            'beginner_friendly_score': 0.78,
+            'beginner_friendly_score': 78,
+            'dividend_score': 20,
             'technical_score': 0.72,
             'fundamental_score': 0.85,
             'growth_score': 0.88,
@@ -910,7 +913,8 @@ def get_mock_advanced_screening_results():
             'market_cap': 800000000000,
             'pe_ratio': 65.2,
             'dividend_yield': 0.0,
-            'beginner_friendly_score': 0.65,
+            'beginner_friendly_score': 65,
+            'dividend_score': 10,
             'technical_score': 0.68,
             'fundamental_score': 0.72,
             'growth_score': 0.85,
@@ -930,7 +934,8 @@ def get_mock_advanced_screening_results():
             'market_cap': 1500000000000,
             'pe_ratio': 45.3,
             'dividend_yield': 0.0,
-            'beginner_friendly_score': 0.72,
+            'beginner_friendly_score': 72,
+            'dividend_score': 0,
             'technical_score': 0.75,
             'fundamental_score': 0.78,
             'growth_score': 0.82,
@@ -956,7 +961,7 @@ def get_mock_watchlist():
                 'company_name': 'Apple Inc.',
                 'companyName': 'Apple Inc.',
                 'sector': 'Technology',
-                'beginner_friendly_score': 0.85,
+                'beginner_friendly_score': 85,
                 'current_price': 175.50,
                 'currentPrice': 175.50,
                 'change': 2.5,
@@ -974,7 +979,7 @@ def get_mock_watchlist():
                 'company_name': 'Tesla, Inc.',
                 'companyName': 'Tesla, Inc.',
                 'sector': 'Automotive',
-                'beginner_friendly_score': 0.65,
+                'beginner_friendly_score': 65,
                 'current_price': 245.80,
                 'currentPrice': 245.80,
                 'change': -5.2,
@@ -992,7 +997,7 @@ def get_mock_watchlist():
                 'company_name': 'Microsoft Corporation',
                 'companyName': 'Microsoft Corporation',
                 'sector': 'Technology',
-                'beginner_friendly_score': 0.82,
+                'beginner_friendly_score': 82,
                 'current_price': 380.25,
                 'currentPrice': 380.25,
                 'change': 3.1,
@@ -1010,7 +1015,7 @@ def get_mock_watchlist():
                 'company_name': 'Alphabet Inc.',
                 'companyName': 'Alphabet Inc.',
                 'sector': 'Communication Services',
-                'beginner_friendly_score': 0.78,
+                'beginner_friendly_score': 78,
                 'current_price': 142.30,
                 'currentPrice': 142.30,
                 'change': 1.8,
@@ -1047,7 +1052,7 @@ def get_mock_rust_stock_analysis(symbol):
     analysis_data = {
         'AAPL': {
             'symbol': 'AAPL',
-            'beginner_friendly_score': 0.85,
+            'beginner_friendly_score': 85,
             'risk_level': 'Medium',
             'recommendation': 'BUY',
             'technical_indicators': {
@@ -1067,13 +1072,14 @@ def get_mock_rust_stock_analysis(symbol):
                 'valuation_score': 0.75,
                 'growth_score': 0.82,
                 'stability_score': 0.88,
-                'debt_score': 0.92
+                'debt_score': 0.92,
+                'dividend_score': 70
             },
             'reasoning': 'Apple shows strong technical momentum with RSI in neutral territory and MACD indicating bullish trend. Fundamentally, the company maintains excellent financial health with strong cash position and consistent revenue growth. The ecosystem lock-in provides competitive moat. Current valuation is reasonable given growth prospects.'
         },
         'MSFT': {
             'symbol': 'MSFT',
-            'beginner_friendly_score': 0.82,
+            'beginner_friendly_score': 82,
             'risk_level': 'Low',
             'recommendation': 'STRONG BUY',
             'technical_indicators': {
@@ -1093,13 +1099,14 @@ def get_mock_rust_stock_analysis(symbol):
                 'valuation_score': 0.78,
                 'growth_score': 0.85,
                 'stability_score': 0.91,
-                'debt_score': 0.89
+                'debt_score': 0.89,
+                'dividend_score': 75
             },
             'reasoning': 'Microsoft demonstrates exceptional technical strength with all indicators pointing to continued upward momentum. Azure cloud growth and AI integration provide strong fundamental tailwinds. The company\'s diversified revenue streams and strong balance sheet make it a low-risk investment with high growth potential.'
         },
         'TSLA': {
             'symbol': 'TSLA',
-            'beginner_friendly_score': 0.65,
+            'beginner_friendly_score': 65,
             'risk_level': 'High',
             'recommendation': 'HOLD',
             'technical_indicators': {
@@ -1119,13 +1126,14 @@ def get_mock_rust_stock_analysis(symbol):
                 'valuation_score': 0.45,
                 'growth_score': 0.88,
                 'stability_score': 0.52,
-                'debt_score': 0.78
+                'debt_score': 0.78,
+                'dividend_score': 10
             },
             'reasoning': 'Tesla shows mixed technical signals with RSI indicating oversold conditions but MACD showing bearish momentum. High volatility and premium valuation create significant risk. While growth prospects remain strong in EV and energy sectors, current price levels may not justify the risk for conservative investors.'
         },
         'GOOGL': {
             'symbol': 'GOOGL',
-            'beginner_friendly_score': 0.78,
+            'beginner_friendly_score': 78,
             'risk_level': 'Medium',
             'recommendation': 'BUY',
             'technical_indicators': {
@@ -1145,7 +1153,8 @@ def get_mock_rust_stock_analysis(symbol):
                 'valuation_score': 0.82,
                 'growth_score': 0.75,
                 'stability_score': 0.85,
-                'debt_score': 0.88
+                'debt_score': 0.88,
+                'dividend_score': 20
             },
             'reasoning': 'Alphabet presents attractive technical setup with improving momentum indicators. Search dominance and AI capabilities provide strong fundamental foundation. YouTube and cloud growth offer additional revenue streams. Current valuation appears reasonable given growth prospects and market position.'
         },
@@ -1171,7 +1180,8 @@ def get_mock_rust_stock_analysis(symbol):
                 'valuation_score': 0.35,
                 'growth_score': 0.95,
                 'stability_score': 0.68,
-                'debt_score': 0.82
+                'debt_score': 0.82,
+                'dividend_score': 5
             },
             'reasoning': 'NVIDIA shows extremely strong technical momentum with RSI approaching overbought levels and MACD indicating strong bullish trend. AI chip leadership provides exceptional growth potential, but high valuation creates significant risk. Suitable for growth-oriented investors with high risk tolerance.'
         }

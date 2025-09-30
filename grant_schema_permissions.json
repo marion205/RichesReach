@@ -1,0 +1,43 @@
+{
+    "family": "grant-schema-permissions-task",
+    "networkMode": "awsvpc",
+    "requiresCompatibilities": ["FARGATE"],
+    "cpu": "256",
+    "memory": "512",
+    "executionRoleArn": "arn:aws:iam::498606688292:role/ecsTaskExecutionRole",
+    "taskRoleArn": "arn:aws:iam::498606688292:role/ecsTaskRole",
+    "containerDefinitions": [
+        {
+            "name": "grant-schema-permissions",
+            "image": "postgres:15",
+            "essential": true,
+            "command": [
+                "psql",
+                "-h", "riches-reach-postgres.cmhsue8oy30k.us-east-1.rds.amazonaws.com",
+                "-p", "5432",
+                "-U", "appuser",
+                "-d", "postgres",
+                "-c", "GRANT CREATE ON SCHEMA public TO appuser;",
+                "-c", "GRANT USAGE ON SCHEMA public TO appuser;",
+                "-c", "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO appuser;",
+                "-c", "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO appuser;",
+                "-c", "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO appuser;",
+                "-c", "SELECT 'Schema permissions granted successfully!' as status;"
+            ],
+            "secrets": [
+                {
+                    "name": "PGPASSWORD",
+                    "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/appuser-postgres-db-fBFuAP:PASSWORD::"
+                }
+            ],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/ecs/grant-schema-permissions",
+                    "awslogs-region": "us-east-1",
+                    "awslogs-stream-prefix": "ecs"
+                }
+            }
+        }
+    ]
+}

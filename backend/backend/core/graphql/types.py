@@ -304,6 +304,9 @@ class PortfolioMetricsType(graphene.ObjectType):
     totalCost = graphene.Float(required=True)
     totalGainLoss = graphene.Float(required=True)
     totalGainLossPercent = graphene.Float(required=True)
+    # Additional fields for mobile app compatibility
+    dailyChange = graphene.Float()
+    dailyChangePercent = graphene.Float()
     
     def resolve_totalValue(self, info):
         return self.total_value
@@ -330,7 +333,7 @@ class StockType(graphene.ObjectType):
     dividend_score = graphene.Int()
     debt_ratio = graphene.Float()
     volatility = graphene.Float()
-    beginner_friendly_score = graphene.Float()
+    beginner_friendly_score = graphene.Int()
     
     # camelCase aliases for mobile app
     companyName = graphene.String()
@@ -341,7 +344,7 @@ class StockType(graphene.ObjectType):
     dividendScore = graphene.Int()
     debtRatio = graphene.Float()
     volatility = graphene.Float()
-    beginnerFriendlyScore = graphene.Float()
+    beginnerFriendlyScore = graphene.Int()
 
 # Advanced Stock Screening Result type
 class AdvancedStockScreeningResultType(graphene.ObjectType):
@@ -352,6 +355,7 @@ class AdvancedStockScreeningResultType(graphene.ObjectType):
     market_cap = graphene.Float()
     pe_ratio = graphene.Float()
     dividend_yield = graphene.Float()
+    dividend_score = graphene.Int()
     beginner_friendly_score = graphene.Float()
     technical_score = graphene.Float()
     fundamental_score = graphene.Float()
@@ -419,6 +423,7 @@ class FundamentalAnalysisType(graphene.ObjectType):
     growth_score = graphene.Float()
     stability_score = graphene.Float()
     debt_score = graphene.Float()
+    dividend_score = graphene.Int()
 
 # Rust Stock Analysis type
 class RustStockAnalysisType(graphene.ObjectType):

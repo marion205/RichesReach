@@ -1,0 +1,40 @@
+{
+    "family": "test-richesreach-db-task",
+    "networkMode": "awsvpc",
+    "requiresCompatibilities": ["FARGATE"],
+    "cpu": "256",
+    "memory": "512",
+    "executionRoleArn": "arn:aws:iam::498606688292:role/ecsTaskExecutionRole",
+    "taskRoleArn": "arn:aws:iam::498606688292:role/ecsTaskRole",
+    "containerDefinitions": [
+        {
+            "name": "test-richesreach-db",
+            "image": "postgres:15",
+            "essential": true,
+            "command": [
+                "psql",
+                "-h", "riches-reach-postgres.cmhsue8oy30k.us-east-1.rds.amazonaws.com",
+                "-p", "5432",
+                "-U", "appuser",
+                "-d", "richesreach",
+                "-c", "SELECT 'Connected to richesreach database!' as status;",
+                "-c", "SELECT has_schema_privilege('appuser', 'public', 'CREATE') as can_create_in_public;",
+                "-c", "SELECT has_database_privilege('appuser', 'richesreach', 'CREATE') as can_create_in_richesreach;"
+            ],
+            "secrets": [
+                {
+                    "name": "PGPASSWORD",
+                    "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/appuser-postgres-db-fBFuAP:PASSWORD::"
+                }
+            ],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/ecs/test-richesreach-db",
+                    "awslogs-region": "us-east-1",
+                    "awslogs-stream-prefix": "ecs"
+                }
+            }
+        }
+    ]
+}

@@ -289,6 +289,7 @@ class FundamentalAnalysisType(graphene.ObjectType):
     growthScore = graphene.Float()
     stabilityScore = graphene.Float()
     debtScore = graphene.Float()
+    dividendScore = graphene.Int()
 
 
 class RustStockAnalysisType(graphene.ObjectType):
@@ -594,6 +595,8 @@ class PortfolioMetricsType(graphene.ObjectType):
     totalReturnPercent = graphene.Float()
     dayChange = graphene.Float()
     dayChangePercent = graphene.Float()
+    dailyChange = graphene.Float()  # Alias for dayChange
+    dailyChangePercent = graphene.Float()  # Alias for dayChangePercent
     positionsCount = graphene.Int()
     volatility = graphene.Float()
     sharpeRatio = graphene.Float()
@@ -1027,6 +1030,7 @@ class FundamentalAnalysisType(graphene.ObjectType):
     growthScore = graphene.Float()
     stabilityScore = graphene.Float()
     debtScore = graphene.Float()
+    dividendScore = graphene.Int()
 
 class RustStockAnalysisType(graphene.ObjectType):
     symbol = graphene.String()

@@ -26,6 +26,10 @@ SECRET_KEY = 'django-insecure-wk_qy339*l)1xg=(f6_e@9+d7sgi7%#0t!e17a3nkeu&p#@zq9
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
 ALLOWED_HOSTS = ["*"]  # dev only
+
+# CORS settings for development
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
 # Frontend URL for email links
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
 # Application definition
@@ -109,36 +113,56 @@ if GRAPHQL_MODE == "simple":
     print(f"[BOOT] Using SQLite database for simple mode", flush=True)
 
 else:
-    # Production / standard mode requires Postgres config
-    DB_ENGINE = os.getenv("DJANGO_DB_ENGINE", "django.db.backends.postgresql")
-    DB_NAME = os.getenv("DJANGO_DB_NAME", "appdb")
-    DB_USER = os.getenv("DJANGO_DB_USER", "appuser")
-    DB_PASS = os.getenv("DJANGO_DB_PASSWORD", "")
-    DB_HOST = os.getenv("DJANGO_DB_HOST", "localhost")
-    DB_PORT = os.getenv("DJANGO_DB_PORT", "5432")
+    # Production / standard mode - use DATABASE_URL or fallback to local dev defaults
+    DATABASE_URL = os.getenv("DATABASE_URL")
+    
+    if DATABASE_URL:
+        # Use dj-database-url for production
+        try:
+            import dj_database_url
+            DATABASES = {"default": dj_database_url.parse(DATABASE_URL, conn_max_age=600, ssl_require=False)}
+        except ImportError:
+            # Fallback to manual parsing if dj-database-url not available
+            from urllib.parse import urlparse
+            url = urlparse(DATABASE_URL)
+            DATABASES = {
+                "default": {
+                    "ENGINE": "django.db.backends.postgresql",
+                    "NAME": url.path[1:],  # Remove leading slash
+                    "USER": url.username,
+                    "PASSWORD": url.password,
+                    "HOST": url.hostname,
+                    "PORT": url.port or 5432,
+                    "CONN_MAX_AGE": 600,
+                    "OPTIONS": {"sslmode": "require"},
+                }
+            }
+    else:
+        # Local development defaults
+        DB_NAME = os.getenv("PGDATABASE", "dev")
+        DB_USER = os.getenv("PGUSER", os.getenv("USER", "dev"))  # Use current user
+        DB_PASS = os.getenv("PGPASSWORD", "")  # No password for local dev
+        DB_HOST = os.getenv("PGHOST", "localhost")
+        DB_PORT = os.getenv("PGPORT", "5432")
 
-    # Validate required PostgreSQL environment variables
-    if not all([DB_HOST, DB_NAME, DB_USER, DB_PASS]):
-        raise RuntimeError(
-            "No production database configuration found. Set DJANGO_DB_* environment variables."
-        )
-
-    DATABASES = {
-        "default": {
-            "ENGINE": DB_ENGINE,
-            "NAME": DB_NAME,
-            "USER": DB_USER,
-            "PASSWORD": DB_PASS,
-            "HOST": DB_HOST,
-            "PORT": DB_PORT,
-            "CONN_MAX_AGE": 60,
-            "OPTIONS": {"sslmode": "require"},
+        DATABASES = {
+            "default": {
+                "ENGINE": "django.db.backends.postgresql",
+                "NAME": DB_NAME,
+                "USER": DB_USER,
+                "PASSWORD": DB_PASS,
+                "HOST": DB_HOST,
+                "PORT": DB_PORT,
+                "CONN_MAX_AGE": 600,
+                "ATOMIC_REQUESTS": True,
+                # For local Postgres, ensure no SSL requirement:
+                "OPTIONS": {"sslmode": os.getenv("PGSSLMODE", "disable")},
+            }
         }
-    }
 
     # Log database engine for debugging
     import logging
-    logging.getLogger(__name__).warning("DB_ENGINE=%s", DATABASES["default"]["ENGINE"])
+    logging.getLogger(__name__).warning("DB_ENGINE=%s, DB_NAME=%s", DATABASES["default"]["ENGINE"], DATABASES["default"]["NAME"])
 # Email Configuration
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')

@@ -1,0 +1,38 @@
+{
+    "family": "test-appdb-connection-task",
+    "networkMode": "awsvpc",
+    "requiresCompatibilities": ["FARGATE"],
+    "cpu": "256",
+    "memory": "512",
+    "executionRoleArn": "arn:aws:iam::498606688292:role/ecsTaskExecutionRole",
+    "taskRoleArn": "arn:aws:iam::498606688292:role/ecsTaskRole",
+    "containerDefinitions": [
+        {
+            "name": "test-appdb-connection",
+            "image": "postgres:15",
+            "essential": true,
+            "command": [
+                "psql",
+                "-h", "riches-reach-postgres.cmhsue8oy30k.us-east-1.rds.amazonaws.com",
+                "-p", "5432",
+                "-U", "appuser",
+                "-d", "appdb",
+                "-c", "SELECT 'Connected to appdb successfully!' as status;"
+            ],
+            "secrets": [
+                {
+                    "name": "PGPASSWORD",
+                    "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/appuser-final-uwvkBO:PASSWORD::"
+                }
+            ],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/ecs/test-appdb-connection",
+                    "awslogs-region": "us-east-1",
+                    "awslogs-stream-prefix": "ecs"
+                }
+            }
+        }
+    ]
+}

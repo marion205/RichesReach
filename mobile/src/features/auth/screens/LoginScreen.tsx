@@ -3,6 +3,7 @@ import { useMutation, useApolloClient, gql } from '@apollo/client';
 import { View, TextInput, Text, TouchableOpacity, StyleSheet, Image, ScrollView, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TOKEN_AUTH } from '../../../graphql/auth';
+import RestAuthService from '../services/RestAuthService';
 
 // Three common JWT mutations
 const MUTATIONS = [
@@ -48,6 +49,29 @@ const inFlight = useRef(false);
 const [signup, { loading: signupLoading, error: signupError }] = useMutation(SIGNUP);
 const client = useApolloClient();
 
+// REST Auth Service for fallback
+const restAuthService = RestAuthService.getInstance();
+
+// REST-based login function
+const loginWithRest = async () => {
+  if (inFlight.current) return;
+  inFlight.current = true;
+  
+  try {
+    console.log('🔄 Trying REST auth...');
+    const { token } = await restAuthService.login(email, password);
+    console.log('✅ REST login successful!');
+    await AsyncStorage.setItem('token', token);
+    await client.resetStore();
+    onLogin(token);
+  } catch (error) {
+    console.error('❌ REST login failed:', error);
+    Alert.alert('Login Failed', error instanceof Error ? error.message : 'An error occurred');
+  } finally {
+    inFlight.current = false;
+  }
+};
+
 const [tokenAuth, { loading: loginLoading, error: loginError }] = useMutation(TOKEN_AUTH, {
   fetchPolicy: "no-cache",          // critical for auth flows
   context: { noRetry: true },       // our retryLink respects this
@@ -83,7 +107,7 @@ console.error('Signup error:', err);
 const handleLogin = async () => {
   try {
     // GraphQL endpoint probe for debugging
-    const GQL_URL = `${process.env.EXPO_PUBLIC_API_URL || 'http://127.0.0.1:8000'}/graphql/`;
+    const GQL_URL = `${process.env.EXPO_PUBLIC_API_URL || 'http://54.162.138.209:8000'}/graphql/`;
     try {
       const probeResponse = await fetch(GQL_URL, {
         method: 'POST',
@@ -181,7 +205,16 @@ secureTextEntry
   disabled={loginLoading || inFlight.current}
 >
 <Text style={styles.buttonText}>
-{loginLoading || inFlight.current ? 'Logging In...' : 'Log In'}
+{loginLoading || inFlight.current ? 'Logging In...' : 'Log In (GraphQL)'}
+</Text>
+</TouchableOpacity>
+<TouchableOpacity 
+  style={[styles.button, styles.buttonSecondary, (loginLoading || inFlight.current) && styles.buttonDisabled]} 
+  onPress={loginWithRest}
+  disabled={loginLoading || inFlight.current}
+>
+<Text style={[styles.buttonText, styles.buttonTextSecondary]}>
+{loginLoading || inFlight.current ? 'Logging In...' : 'Log In (REST)'}
 </Text>
 </TouchableOpacity>
 <TouchableOpacity onPress={onNavigateToForgotPassword}>
@@ -234,6 +267,10 @@ paddingVertical: 12,
 borderRadius: 6,
 alignItems: 'center',
 },
+buttonSecondary: {
+backgroundColor: '#34c759',
+marginTop: 8,
+},
 buttonDisabled: {
 backgroundColor: '#ccc',
 },
@@ -241,6 +278,9 @@ buttonText: {
 color: '#fff',
 fontWeight: 'bold',
 fontSize: 16,
+},
+buttonTextSecondary: {
+color: '#fff',
 },
 error: {
 color: 'red',

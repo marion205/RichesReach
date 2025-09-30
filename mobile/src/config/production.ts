@@ -1,8 +1,8 @@
 // Production Configuration
 export const PRODUCTION_CONFIG = {
-  API_BASE_URL: 'https://api.richesreach.com',
-  GRAPHQL_URL: 'https://api.richesreach.com/graphql/',
-  WS_URL: 'wss://api.richesreach.com/ws/',
+  API_BASE_URL: 'http://54.162.138.209:8000',
+  GRAPHQL_URL: 'http://54.162.138.209:8000/graphql/',
+  WS_URL: 'ws://54.162.138.209:8000/ws/',
   ENABLE_ANALYTICS: true,
   ENABLE_ERROR_REPORTING: true,
   ENABLE_PERFORMANCE_MONITORING: true,
