@@ -59,3 +59,14 @@ temp_workflow*.yml
 
 # Workflow backups
 .github/workflows/*.bak
+
+# Environment files with API keys
+.env
+.env.local
+.env.production
+*.env
+
+# AWS deployment files with secrets
+*-task-definition.json
+deploy-aws*.sh
+setup-aws-secrets.sh
