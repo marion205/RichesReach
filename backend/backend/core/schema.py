@@ -379,6 +379,7 @@ class IndicatorsType(graphene.ObjectType):
     BBLower = graphene.Float()
     MACDSignal = graphene.Float()
     MACDHist = graphene.Float()
+    macdHistogram = graphene.Float()  # Add the missing field
 
 class StockChartDataType(graphene.ObjectType):
     symbol = graphene.String()
@@ -1022,6 +1023,7 @@ class BaseQuery(graphene.ObjectType):
         if not indicators_list or "MACDHist" in indicators_list or "MACD_hist" in indicators_list:
             indicators_data["MACD_hist"] = 0.2
             indicators_data["MACDHist"] = 0.2
+            indicators_data["macdHistogram"] = 0.2
         
         return StockChartDataType(
             symbol=symbol,
