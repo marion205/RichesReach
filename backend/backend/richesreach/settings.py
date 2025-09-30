@@ -25,11 +25,26 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-wk_qy339*l)1xg=(f6_e@9+d7sgi7%#0t!e17a3nkeu&p#@zq9'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
-ALLOWED_HOSTS = ["*"]  # dev only
-
-# CORS settings for development
-CORS_ALLOW_ALL_ORIGINS = True
-CORS_ALLOW_CREDENTIALS = True
+# Production Security Settings
+if DEBUG:
+    ALLOWED_HOSTS = ["*", "192.168.1.151", "localhost", "127.0.0.1"]  # dev only
+    CORS_ALLOW_ALL_ORIGINS = True
+    CORS_ALLOW_CREDENTIALS = True
+else:
+    # Production settings
+    ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost').split(',')
+    CORS_ALLOW_ALL_ORIGINS = False
+    CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', '').split(',') if os.getenv('CORS_ALLOWED_ORIGINS') else []
+    CORS_ALLOW_CREDENTIALS = os.getenv('CORS_ALLOW_CREDENTIALS', 'True').lower() == 'true'
+    
+    # Security Headers
+    SECURE_SSL_REDIRECT = os.getenv('SECURE_SSL_REDIRECT', 'False').lower() == 'true'
+    SECURE_HSTS_SECONDS = int(os.getenv('SECURE_HSTS_SECONDS', '0'))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = os.getenv('SECURE_HSTS_INCLUDE_SUBDOMAINS', 'False').lower() == 'true'
+    SECURE_HSTS_PRELOAD = os.getenv('SECURE_HSTS_PRELOAD', 'False').lower() == 'true'
+    SECURE_CONTENT_TYPE_NOSNIFF = os.getenv('SECURE_CONTENT_TYPE_NOSNIFF', 'True').lower() == 'true'
+    SECURE_BROWSER_XSS_FILTER = os.getenv('SECURE_BROWSER_XSS_FILTER', 'True').lower() == 'true'
+    X_FRAME_OPTIONS = os.getenv('X_FRAME_OPTIONS', 'DENY')
 # Frontend URL for email links
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
 # Application definition
@@ -46,6 +61,7 @@ INSTALLED_APPS = [
     'core',
     'graphene_django',
     'django_celery_results',
+    # 'marketdata',  # New market data microservice - temporarily disabled due to migration issues
 ]
 
 # Optional safety while transitioning
@@ -56,14 +72,18 @@ try:
 except ImportError:
     pass
 MIDDLEWARE = [
-'corsheaders.middleware.CorsMiddleware',
-'django.middleware.security.SecurityMiddleware',
-'django.contrib.sessions.middleware.SessionMiddleware',
-'django.middleware.common.CommonMiddleware',
-'django.middleware.csrf.CsrfViewMiddleware',
-'django.contrib.auth.middleware.AuthenticationMiddleware',
-'django.contrib.messages.middleware.MessageMiddleware',
-'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
+    'django.middleware.security.SecurityMiddleware',
+    'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.common.CommonMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django.contrib.messages.middleware.MessageMiddleware',
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # Production middleware
+    'core.middleware.PerformanceMiddleware',
+    'core.middleware.SecurityHeadersMiddleware',
+    'core.middleware.RequestLoggingMiddleware',
 ]
 ROOT_URLCONF = 'richesreach.urls'
 TEMPLATES = [
@@ -202,9 +222,60 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 STATIC_URL = '/static/'
 STATIC_ROOT = os.environ.get('STATIC_ROOT', os.path.join(BASE_DIR, 'staticfiles'))
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Production Logging Configuration
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': os.path.join(BASE_DIR, 'logs', 'django.log'),
+            'formatter': 'verbose',
+        },
+        'console': {
+            'level': 'DEBUG' if DEBUG else 'INFO',
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple',
+        },
+    },
+    'root': {
+        'handlers': ['console', 'file'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'core': {
+            'handlers': ['console', 'file'],
+            'level': 'DEBUG' if DEBUG else 'INFO',
+            'propagate': False,
+        },
+    },
+}
+
+# Create logs directory if it doesn't exist
+logs_dir = os.path.join(BASE_DIR, 'logs')
+if not os.path.exists(logs_dir):
+    os.makedirs(logs_dir)
 CORS_ALLOW_ALL_ORIGINS = True # For dev only
 
 # AAVE/DeFi Configuration
@@ -234,13 +305,40 @@ GRAPHQL_JWT = {
     'JWT_REFRESH_EXPIRATION_DELTA': timedelta(days=7),
     'JWT_VERIFY_EXPIRATION': True,
     'JWT_LEEWAY': 0,
-    'JWT_AUTH_HEADER_PREFIX': 'JWT',
+    'JWT_AUTH_HEADER_PREFIX': 'Bearer',
     'JWT_AUTH_COOKIE': None,
 }
-# OpenAI Configuration
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY') # Set this in environment variable OPENAI_API_KEY
-OPENAI_MODEL = "gpt-3.5-turbo" # Default model to use
-OPENAI_MAX_TOKENS = 1000 # Maximum tokens for responses
+# Market Data Configuration
+REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+POLYGON_API_KEY = os.getenv('POLYGON_API_KEY', 'uuKmy9dPAjaSVXVEtCumQPga1dqEPDS2')
+FINNHUB_API_KEY = os.getenv('FINNHUB_API_KEY', 'd2rnitpr01qv11lfegugd2rnitpr01qv11lfegv0')
+
+# OpenAI Configuration - Production-Ready with Environment Separation
+USE_OPENAI = os.getenv('USE_OPENAI', 'false').lower() == 'true'  # Feature flag
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')  # No default - must be explicitly set
+OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-4o-mini')  # Primary model
+OPENAI_MAX_TOKENS = int(os.getenv('OPENAI_MAX_TOKENS', '1200'))  # Optimized token count
+OPENAI_TIMEOUT_MS = int(os.getenv('OPENAI_TIMEOUT_MS', '12000'))  # 12 second timeout
+OPENAI_ENABLE_FALLBACK = os.getenv('OPENAI_ENABLE_FALLBACK', 'true').lower() == 'true'  # Safety net
+
+# Environment-specific API keys (recommended for production)
+OPENAI_API_KEY_STAGING = os.getenv('OPENAI_API_KEY_STAGING')
+OPENAI_API_KEY_PROD = os.getenv('OPENAI_API_KEY_PROD')
+
+# Auto-select API key based on environment
+if USE_OPENAI:
+    if DEBUG:  # Development/Staging
+        OPENAI_API_KEY = OPENAI_API_KEY_STAGING or OPENAI_API_KEY
+        print("INFO: Using OpenAI API key for STAGING/DEVELOPMENT")
+    else:  # Production
+        OPENAI_API_KEY = OPENAI_API_KEY_PROD or OPENAI_API_KEY
+        print("INFO: Using OpenAI API key for PRODUCTION")
+    
+    if not OPENAI_API_KEY:
+        print("WARNING: USE_OPENAI=true but no API key found. Disabling OpenAI.")
+        USE_OPENAI = False
+else:
+    print("INFO: OpenAI disabled via USE_OPENAI flag. Using mock/fallback mode.")
 
 # ML Service Configuration
 ML_SERVICE_CONFIG = {
@@ -296,10 +394,21 @@ MONITORING_CONFIG = {
     'SLACK_WEBHOOK': os.getenv('MONITORING_SLACK_WEBHOOK', ''),
     'HEALTH_CHECK_INTERVAL': int(os.getenv('MONITORING_HEALTH_CHECK_INTERVAL', '60')),  # seconds
 }
-# AlphaVantage API Configuration
-ALPHA_VANTAGE_API_KEY = os.getenv('ALPHA_VANTAGE_API_KEY')
-if not ALPHA_VANTAGE_API_KEY:
-    print("WARNING: ALPHA_VANTAGE_API_KEY not set. Stock price data will not be available.")
+# API Configuration - Production Keys
+ALPHA_VANTAGE_API_KEY = os.getenv('ALPHA_VANTAGE_API_KEY', 'OHYSFF1AE446O7CR')
+FINNHUB_API_KEY = os.getenv('FINNHUB_API_KEY', 'd2rnitpr01qv11lfegugd2rnitpr01qv11lfegv0')
+NEWS_API_KEY = os.getenv('NEWS_API_KEY', '94a335c7316145f79840edd62f77e11e')
+POLYGON_API_KEY = os.getenv('POLYGON_API_KEY', 'uuKmy9dPAjaSVXVEtCumQPga1dqEPDS2')
+
+# Use Finnhub as primary data source (60 requests/minute vs Alpha Vantage's 25/day)
+if os.getenv('USE_FINNHUB', 'true').lower() == 'true' and FINNHUB_API_KEY:
+    print("INFO: Using Finnhub API for real-time market data (60 requests/minute)")
+    print("INFO: Alpha Vantage API available as backup (25 requests/day)")
+elif os.getenv('DISABLE_ALPHA_VANTAGE', 'false').lower() == 'true':
+    ALPHA_VANTAGE_API_KEY = None
+    print("INFO: Alpha Vantage API disabled. Using mock data.")
+elif not ALPHA_VANTAGE_API_KEY:
+    print("WARNING: No API keys configured. Using mock data.")
 # Redis Configuration for Caching
 REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
 REDIS_PORT = int(os.getenv('REDIS_PORT', 6379))
@@ -379,9 +488,15 @@ AUTHENTICATION_BACKENDS = [
 # GraphQL Configuration
 GRAPHENE = {
     "SCHEMA": "core.schema.schema",
-    # Disable JWT middleware for development to avoid token decoding errors
-    # "MIDDLEWARE": ["graphql_jwt.middleware.JSONWebTokenMiddleware"],
 }
+
+# Disable JWT middleware in development to avoid signature decoding errors
+DEV_ALLOW_ANON_GRAPHQL = os.getenv("DEV_ALLOW_ANON_GRAPHQL", "1") == "1"
+
+if DEV_ALLOW_ANON_GRAPHQL and DEBUG:
+    print("INFO: Development mode - JWT middleware disabled for anonymous GraphQL requests")
+else:
+    GRAPHENE["MIDDLEWARE"] = ["graphql_jwt.middleware.JSONWebTokenMiddleware"]
 
 # CSRF Configuration for dev and production
 CSRF_TRUSTED_ORIGINS = [

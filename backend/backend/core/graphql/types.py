@@ -2,6 +2,7 @@ from graphene_django import DjangoObjectType
 from graphene.types.generic import GenericScalar
 import graphene
 from django.utils import timezone
+from core.types import IncomeProfileType
 
 # Create a simple ObjectType instead of DjangoObjectType for User (database-free)
 class UserType(graphene.ObjectType):
@@ -9,9 +10,14 @@ class UserType(graphene.ObjectType):
     name = graphene.String()
     email = graphene.String()
     username = graphene.String()  # Add username field for signals
+    profilePic = graphene.String()  # Add profilePic field
+    followersCount = graphene.Int()  # Add followersCount field
+    followingCount = graphene.Int()  # Add followingCount field
+    isFollowingUser = graphene.Boolean()  # Add isFollowingUser field
+    isFollowedByUser = graphene.Boolean()  # Add isFollowedByUser field
     hasPremiumAccess = graphene.Boolean()
     subscriptionTier = graphene.String()
-    incomeProfile = graphene.String()  # Add incomeProfile field
+    incomeProfile = graphene.Field(IncomeProfileType)  # Add incomeProfile field
     followedTickers = graphene.List(graphene.String)  # Add followedTickers field
 
 # Create a simple ObjectType instead of DjangoObjectType for Signal
@@ -307,6 +313,15 @@ class PortfolioMetricsType(graphene.ObjectType):
     # Additional fields for mobile app compatibility
     dailyChange = graphene.Float()
     dailyChangePercent = graphene.Float()
+    dayChange = graphene.Float()  # Alias for dailyChange
+    dayChangePercent = graphene.Float()  # Alias for dailyChangePercent
+    volatility = graphene.Float()
+    sharpeRatio = graphene.Float()
+    maxDrawdown = graphene.Float()
+    beta = graphene.Float()
+    alpha = graphene.Float()
+    sectorAllocation = graphene.JSONString()
+    riskMetrics = graphene.JSONString()
     
     def resolve_totalValue(self, info):
         return self.total_value
@@ -319,6 +334,44 @@ class PortfolioMetricsType(graphene.ObjectType):
     
     def resolve_totalGainLossPercent(self, info):
         return self.total_return_percent
+    
+    def resolve_dayChange(self, info):
+        return getattr(self, 'daily_change', 0.0)
+    
+    def resolve_dayChangePercent(self, info):
+        return getattr(self, 'daily_change_percent', 0.0)
+    
+    def resolve_volatility(self, info):
+        return getattr(self, 'volatility', 0.15)  # Default 15% volatility
+    
+    def resolve_sharpeRatio(self, info):
+        return getattr(self, 'sharpe_ratio', 1.2)  # Default Sharpe ratio
+    
+    def resolve_maxDrawdown(self, info):
+        return getattr(self, 'max_drawdown', -0.08)  # Default -8% max drawdown
+    
+    def resolve_beta(self, info):
+        return getattr(self, 'beta', 1.0)  # Default beta of 1.0
+    
+    def resolve_alpha(self, info):
+        return getattr(self, 'alpha', 0.02)  # Default 2% alpha
+    
+    def resolve_sectorAllocation(self, info):
+        return getattr(self, 'sector_allocation', {
+            "Technology": 0.4,
+            "Healthcare": 0.2,
+            "Financial": 0.15,
+            "Consumer": 0.15,
+            "Other": 0.1
+        })
+    
+    def resolve_riskMetrics(self, info):
+        return getattr(self, 'risk_metrics', {
+            "var95": -0.05,
+            "var99": -0.08,
+            "expectedShortfall": -0.06,
+            "tailRisk": 0.12
+        })
 
 # Stock type for stock browsing
 class StockType(graphene.ObjectType):
@@ -345,6 +398,33 @@ class StockType(graphene.ObjectType):
     debtRatio = graphene.Float()
     volatility = graphene.Float()
     beginnerFriendlyScore = graphene.Int()
+    
+    def resolve_companyName(self, info):
+        return self.company_name
+    
+    def resolve_currentPrice(self, info):
+        return float(self.current_price) if self.current_price else 0.0
+    
+    def resolve_marketCap(self, info):
+        return float(self.market_cap) if self.market_cap else 0.0
+    
+    def resolve_peRatio(self, info):
+        return float(self.pe_ratio) if self.pe_ratio else 0.0
+    
+    def resolve_dividendYield(self, info):
+        return float(self.dividend_yield) if self.dividend_yield else 0.0
+    
+    def resolve_dividendScore(self, info):
+        return int(self.dividend_score) if self.dividend_score else 0
+    
+    def resolve_debtRatio(self, info):
+        return float(self.debt_ratio) if self.debt_ratio else 0.0
+    
+    def resolve_volatility(self, info):
+        return float(self.volatility) if self.volatility else 0.0
+    
+    def resolve_beginnerFriendlyScore(self, info):
+        return int(self.beginner_friendly_score) if self.beginner_friendly_score else 0
 
 # Advanced Stock Screening Result type
 class AdvancedStockScreeningResultType(graphene.ObjectType):
@@ -424,6 +504,8 @@ class FundamentalAnalysisType(graphene.ObjectType):
     stability_score = graphene.Float()
     debt_score = graphene.Float()
     dividend_score = graphene.Int()
+    peRatio = graphene.Float()  # Add missing field
+    marketCap = graphene.Float()  # Add missing field
 
 # Rust Stock Analysis type
 class RustStockAnalysisType(graphene.ObjectType):
@@ -434,6 +516,37 @@ class RustStockAnalysisType(graphene.ObjectType):
     technical_indicators = graphene.Field(TechnicalIndicatorsType)
     fundamental_analysis = graphene.Field(FundamentalAnalysisType)
     reasoning = graphene.String()
+
+# Day Trading Types
+class DayTradingFeaturesType(graphene.ObjectType):
+    momentum15m = graphene.Float()
+    rvol10m = graphene.Float()
+    vwapDist = graphene.Float()
+    breakoutPct = graphene.Float()
+    spreadBps = graphene.Float()
+    catalystScore = graphene.Float()
+
+class DayTradingRiskType(graphene.ObjectType):
+    atr5m = graphene.Float()
+    sizeShares = graphene.Int()
+    stop = graphene.Float()
+    targets = graphene.List(graphene.Float)
+    timeStopMin = graphene.Int()
+
+class DayTradingPickType(graphene.ObjectType):
+    symbol = graphene.String()
+    side = graphene.String()
+    score = graphene.Float()
+    features = graphene.Field(DayTradingFeaturesType)
+    risk = graphene.Field(DayTradingRiskType)
+    notes = graphene.String()
+
+class DayTradingPicksType(graphene.ObjectType):
+    asOf = graphene.String()
+    mode = graphene.String()
+    picks = graphene.List(DayTradingPickType)
+    universeSize = graphene.Int()
+    qualityThreshold = graphene.Float()
 
 # Mock User class for data (database-free)
 class MockUser:

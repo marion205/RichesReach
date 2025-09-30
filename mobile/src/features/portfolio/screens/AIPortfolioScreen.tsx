@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,10 +14,14 @@ import {
   Platform,
   FlatList,
 } from 'react-native';
+
+// 🔥 FILE LOADED INDICATOR - If you see this, the updated code is being used
+console.log('🔥 FILE LOADED: AIPortfolioScreen.tsx with updated validation logic');
 import Icon from 'react-native-vector-icons/Feather';
 import { useMutation, useQuery, gql, useApolloClient } from '@apollo/client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import TradingButton from '../../../components/forms/TradingButton';
+import { StableNumberInput } from '../../../components/StableNumberInput';
 
 /* -------------------------------- THEME ---------------------------------- */
 const COLORS = {
@@ -1051,7 +1055,24 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
   });
 
   const user = userData?.me;
-  const hasProfile = !!user?.incomeProfile;
+  // Check if profile exists AND has meaningful data (not just empty strings)
+  const hasProfile = !!user?.incomeProfile && 
+    user.incomeProfile.age && 
+    user.incomeProfile.incomeBracket && 
+    user.incomeProfile.investmentHorizon && 
+    user.incomeProfile.riskTolerance && 
+    user.incomeProfile.investmentGoals?.length > 0;
+  
+  // Debug logging for profile validation
+  console.log('🔍 Profile Debug:', {
+    hasIncomeProfile: !!user?.incomeProfile,
+    age: user?.incomeProfile?.age,
+    incomeBracket: user?.incomeProfile?.incomeBracket,
+    investmentHorizon: user?.incomeProfile?.investmentHorizon,
+    riskTolerance: user?.incomeProfile?.riskTolerance,
+    investmentGoals: user?.incomeProfile?.investmentGoals,
+    hasProfile: hasProfile
+  });
   
 
   const {
@@ -1162,8 +1183,8 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
       return;
     }
     const parsedAge = parseInt(age, 10);
-    if (Number.isNaN(parsedAge) || parsedAge < 13 || parsedAge > 120) {
-      Alert.alert('Invalid Age', 'Please enter a valid age between 13 and 120.');
+    if (Number.isNaN(parsedAge) || parsedAge < 18 || parsedAge > 120) {
+      Alert.alert('Invalid Age', 'Please enter a valid age between 18 and 120.');
       return;
     }
 
@@ -1201,17 +1222,53 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
 
 
   const handleGenerateRecommendations = useCallback(async () => {
+    console.log('🔥🔥🔥 NEW CODE RUNNING - Updated validation logic active!');
+    console.log('🔄 REGENERATE BUTTON PRESSED - Starting AI Portfolio Recommendations Generation');
+    console.log('📊 Current user profile (local state):', { age, incomeBracket, investmentHorizon, riskTolerance, selectedGoals });
+    console.log('📊 Current user profile (GraphQL data):', {
+      age: user?.incomeProfile?.age,
+      incomeBracket: user?.incomeProfile?.incomeBracket,
+      investmentHorizon: user?.incomeProfile?.investmentHorizon,
+      riskTolerance: user?.incomeProfile?.riskTolerance,
+      investmentGoals: user?.incomeProfile?.investmentGoals
+    });
+    console.log('🔍 hasProfile value:', hasProfile);
+    
+    // Check if profile is complete before proceeding
+    if (!hasProfile) {
+      console.log('❌ Profile incomplete - cannot generate recommendations');
+      Alert.alert(
+        'Profile Required', 
+        'Please complete your financial profile first to generate AI recommendations.',
+        [{ text: 'OK', onPress: () => setShowProfileForm(true) }]
+      );
+      return;
+    }
+    
+    console.log('✅ Profile complete - proceeding with generation');
+    
     setIsGeneratingRecommendations(true);
     try {
+      console.log('🚀 Calling generateAIRecommendations GraphQL mutation...');
       const res = await generateAIRecommendations();
+      
+      console.log('📥 GraphQL Response received:', {
+        success: res.data?.generateAiRecommendations?.success,
+        message: res.data?.generateAiRecommendations?.message,
+        hasData: !!res.data?.generateAiRecommendations?.recommendations,
+        errors: res.errors
+      });
       
       const ok = res.data?.generateAiRecommendations?.success;
       
       if (!ok) {
         const message = res.data?.generateAiRecommendations?.message || 'Failed to generate recommendations';
+        console.log('❌ Generation failed:', message);
         Alert.alert('Error', message);
         return;
       }
+      
+      console.log('✅ Generation successful! Clearing cache and refreshing data...');
       
       // Clear Apollo Client cache for aiRecommendations
       client.cache.evict({ fieldName: 'aiRecommendations' });
@@ -1222,12 +1279,21 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
         fetchPolicy: 'network-only',
         notifyOnNetworkStatusChange: true 
       });
+      
+      console.log('🔄 Data refresh completed');
     } catch (err) {
+      console.error('💥 ERROR in handleGenerateRecommendations:', err);
+      console.error('💥 Error details:', {
+        message: err?.message,
+        stack: err?.stack,
+        name: err?.name
+      });
       Alert.alert('Error', 'Failed to generate recommendations. Please try again.');
     } finally {
+      console.log('🏁 Generation process completed, setting loading to false');
       setIsGeneratingRecommendations(false);
     }
-  }, [generateAIRecommendations, refetchRecommendations, client]);
+  }, [generateAIRecommendations, refetchRecommendations, client, hasProfile, setShowProfileForm]);
 
   // Refresh data when component mounts or profile changes
   useEffect(() => {
@@ -1287,12 +1353,18 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
       {/* Age */}
       <View style={styles.formGroup}>
         <Text style={styles.label}>Age</Text>
-        <TextInput
-          style={styles.input}
+        <StableNumberInput
           value={age}
-          onChangeText={setAge}
-          placeholder="Enter your age"
-          keyboardType="numeric"
+          onSubmitValue={(n) => {
+            // Validate when user submits or blurs
+            if (n === null || n < 18) {
+              setAge('18');
+            } else {
+              setAge(String(n));
+            }
+          }}
+          style={styles.input}
+          placeholder="Enter your age (minimum 18)"
           maxLength={3}
         />
       </View>

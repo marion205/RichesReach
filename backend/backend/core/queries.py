@@ -1544,7 +1544,7 @@ class Query(graphene.ObjectType):
     
     # AAVE-style lending queries
     lending_reserves = graphene.List('core.crypto_graphql.LendingReserveType')
-    my_lending_account = graphene.Field('core.crypto_graphql.LendingAccountDataType')
+    # my_lending_account = graphene.Field('core.crypto_graphql.LendingAccountDataType')  # Commented out - type doesn't exist
     my_supply_positions = graphene.List('core.crypto_graphql.SupplyPositionType')
     my_borrow_positions = graphene.List('core.crypto_graphql.BorrowPositionType')
     
@@ -1673,41 +1673,41 @@ class Query(graphene.ObjectType):
         from .crypto_models import LendingReserve
         return LendingReserve.objects.filter(is_active=True)
     
-    def resolve_my_lending_account(self, info):
-        user = _require_auth(info)
-        if not user:
-            return None
-        
-        from .crypto_models import SupplyPosition, BorrowPosition, CryptoPrice
-        from .aave_risk import calculate_lending_account_data
-        
-        # Get user's positions
-        supplies = SupplyPosition.objects.filter(user=user)
-        borrows = BorrowPosition.objects.filter(user=user, is_active=True)
-        
-        # Get current prices for all assets
-        symbols = set()
-        for sp in supplies:
-            symbols.add(sp.reserve.cryptocurrency.symbol)
-        for bp in borrows:
-            symbols.add(bp.reserve.cryptocurrency.symbol)
-        
-        prices = {}
-        for symbol in symbols:
-            try:
-                from .crypto_models import Cryptocurrency
-                currency = Cryptocurrency.objects.get(symbol=symbol)
-                latest_price = CryptoPrice.objects.filter(cryptocurrency=currency).first()
-                if latest_price:
-                    prices[symbol] = latest_price.price_usd
-            except:
-                continue
-        
-        # Calculate account data
-        supplies_data = [(sp.reserve, sp.quantity, sp.use_as_collateral) for sp in supplies]
-        borrows_data = [(bp.reserve, bp.amount) for bp in borrows]
-        
-        return calculate_lending_account_data(supplies_data, borrows_data, prices)
+    # def resolve_my_lending_account(self, info):  # Commented out - type doesn't exist
+    #     user = _require_auth(info)
+    #     if not user:
+    #         return None
+    #     
+    #     from .crypto_models import SupplyPosition, BorrowPosition, CryptoPrice
+    #     from .aave_risk import calculate_lending_account_data
+    #     
+    #     # Get user's positions
+    #     supplies = SupplyPosition.objects.filter(user=user)
+    #     borrows = BorrowPosition.objects.filter(user=user, is_active=True)
+    #     
+    #     # Get current prices for all assets
+    #     symbols = set()
+    #     for sp in supplies:
+    #         symbols.add(sp.reserve.cryptocurrency.symbol)
+    #     for bp in borrows:
+    #         symbols.add(bp.reserve.cryptocurrency.symbol)
+    #     
+    #     prices = {}
+    #     for symbol in symbols:
+    #         try:
+    #             from .crypto_models import Cryptocurrency
+    #             currency = Cryptocurrency.objects.get(symbol=symbol)
+    #             latest_price = CryptoPrice.objects.filter(cryptocurrency=currency).first()
+    #             if latest_price:
+    #                 prices[symbol] = latest_price.price_usd
+    #         except:
+    #             continue
+    #     
+    #     # Calculate account data
+    #     supplies_data = [(sp.reserve, sp.quantity, sp.use_as_collateral) for sp in supplies]
+    #     borrows_data = [(bp.reserve, bp.amount) for bp in borrows]
+    #     
+    #     return calculate_lending_account_data(supplies_data, borrows_data, prices)
     
     def resolve_my_supply_positions(self, info):
         user = _require_auth(info)

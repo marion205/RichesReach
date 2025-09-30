@@ -15,15 +15,15 @@ class StockDataProvider:
     def get_stock_data(self, symbol: str) -> Optional[Dict]:
         """Get stock data from the best available provider"""
         
-        # Try Polygon.io first (best free tier)
-        if self.polygon_api_key:
-            data = self._get_polygon_data(symbol)
+        # Try FinnHub first (60 calls/minute, reliable)
+        if self.finnhub_key:
+            data = self._get_finnhub_data(symbol)
             if data:
                 return data
         
-        # Try FinnHub as backup
-        if self.finnhub_key:
-            data = self._get_finnhub_data(symbol)
+        # Try Polygon.io as backup (5 calls/minute, 1000/day)
+        if self.polygon_api_key:
+            data = self._get_polygon_data(symbol)
             if data:
                 return data
                 
@@ -62,16 +62,35 @@ class StockDataProvider:
     def _get_finnhub_data(self, symbol: str) -> Optional[Dict]:
         """Get data from FinnHub (free tier: 60 calls/minute)"""
         try:
-            url = f"https://finnhub.io/api/v1/quote"
-            params = {
+            # Get quote data
+            quote_url = f"https://finnhub.io/api/v1/quote"
+            quote_params = {
                 'symbol': symbol,
                 'token': self.finnhub_key
             }
             
-            response = requests.get(url, params=params, timeout=5)
+            response = requests.get(quote_url, params=quote_params, timeout=5)
             if response.status_code == 200:
                 data = response.json()
                 if data.get('c'):  # Current price exists
+                    # Get additional data for volume
+                    volume = 0
+                    try:
+                        # Try to get company profile for additional data
+                        profile_url = f"https://finnhub.io/api/v1/stock/profile2"
+                        profile_params = {
+                            'symbol': symbol,
+                            'token': self.finnhub_key
+                        }
+                        profile_response = requests.get(profile_url, params=profile_params, timeout=3)
+                        if profile_response.status_code == 200:
+                            profile_data = profile_response.json()
+                            # Use market cap as volume proxy if available
+                            if profile_data.get('marketCapitalization'):
+                                volume = int(profile_data['marketCapitalization'] / 1000000)  # Convert to millions
+                    except:
+                        pass  # Volume is optional
+                    
                     return {
                         'symbol': symbol,
                         'price': data.get('c', 0),
@@ -79,8 +98,11 @@ class StockDataProvider:
                         'change_percent': data.get('dp', 0),  # Change percent
                         'high': data.get('h', 0),
                         'low': data.get('l', 0),
+                        'volume': volume,
                         'provider': 'finnhub'
                     }
+            else:
+                print(f"FinnHub API error for {symbol}: HTTP {response.status_code}")
         except Exception as e:
             print(f"FinnHub error for {symbol}: {e}")
         

@@ -19,7 +19,7 @@ from .portfolio_types import CreatePortfolio, CreatePortfolioHolding, UpdatePort
 from .auth_utils import RateLimiter, SecurityUtils
 from .websocket_service import websocket_service
 from .ml_mutations import GenerateMLPortfolioRecommendation, GetMLMarketAnalysis, GetMLServiceStatus, GenerateInstitutionalPortfolioRecommendation
-from .monitoring_types import MonitoringMutations
+# from .monitoring_types import MonitoringMutations
 
 
 # ------------------------ small helpers for metrics ------------------------
@@ -455,6 +455,6 @@ class Mutation(graphene.ObjectType):
     generate_institutional_portfolio_recommendation = GenerateInstitutionalPortfolioRecommendation.Field()
     
     # Monitoring mutations
-    create_alert = MonitoringMutations.create_alert
-    update_alert = MonitoringMutations.update_alert
-    delete_alert = MonitoringMutations.delete_alert
+    # create_alert = MonitoringMutations.create_alert
+    # update_alert = MonitoringMutations.update_alert
+    # delete_alert = MonitoringMutations.delete_alert

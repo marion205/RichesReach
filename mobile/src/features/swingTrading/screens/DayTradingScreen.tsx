@@ -10,11 +10,11 @@ type Side = 'LONG' | 'SHORT';
 type TradingMode = 'SAFE' | 'AGGRESSIVE';
 
 interface Features {
-  momentum_15m: number; rvol_10m: number; vwap_dist: number; breakout_pct: number; spread_bps: number; catalyst_score: number;
+  momentum15m: number; rvol10m: number; vwapDist: number; breakoutPct: number; spreadBps: number; catalystScore: number;
 }
-interface Risk { atr_5m: number; size_shares: number; stop: number; targets: number[]; time_stop_min: number; }
+interface Risk { atr5m: number; sizeShares: number; stop: number; targets: number[]; timeStopMin: number; }
 interface DayTradingPick { symbol: string; side: Side; score: number; features: Features; risk: Risk; notes: string; }
-interface DayTradingData { as_of: string; mode: TradingMode; picks: DayTradingPick[]; universe_size: number; quality_threshold: number; }
+interface DayTradingData { asOf: string; mode: TradingMode; picks: DayTradingPick[]; universeSize: number; qualityThreshold: number; }
 
 const C = {
   bg: '#F5F6FA', card: '#FFFFFF', line: '#E9EAF0', text: '#111827', sub: '#6B7280',
@@ -49,7 +49,7 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (s: stri
   const getScoreColor = (score: number) => (score >= 2 ? C.green : score >= 1 ? C.amber : C.red);
 
   const handleExecute = useCallback((pick: DayTradingPick) => {
-    const entryApprox = (pick.risk.stop + pick.risk.atr_5m).toFixed(2);
+    const entryApprox = (pick.risk.stop + pick.risk.atr5m).toFixed(2);
     const tgt = pick.risk.targets?.[0]?.toFixed(2);
     Alert.alert(
       'Confirm Trade',
@@ -105,8 +105,8 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (s: stri
 
       {dayTradingData && (
         <View style={s.metaBar}>
-          <Text style={s.meta}>Updated {new Date(dayTradingData.as_of).toLocaleTimeString()}</Text>
-          <Text style={s.meta}>Universe {dayTradingData.universe_size} • Threshold {dayTradingData.quality_threshold}</Text>
+          <Text style={s.meta}>Updated {new Date(dayTradingData.asOf).toLocaleTimeString()}</Text>
+          <Text style={s.meta}>Universe {dayTradingData.universeSize} • Threshold {dayTradingData.qualityThreshold}</Text>
         </View>
       )}
     </View>
@@ -130,20 +130,20 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (s: stri
       <View style={s.section}>
         <Text style={s.sectionTitle}>Key Features</Text>
         <View style={s.grid}>
-          <KV k="Momentum" v={item.features.momentum_15m.toFixed(3)} />
-          <KV k="RVOL" v={`${item.features.rvol_10m.toFixed(2)}×`} />
-          <KV k="VWAP Dist" v={item.features.vwap_dist.toFixed(3)} />
-          <KV k="Breakout" v={item.features.breakout_pct.toFixed(3)} />
+          <KV k="Momentum" v={item.features.momentum15m.toFixed(3)} />
+          <KV k="RVOL" v={`${item.features.rvol10m.toFixed(2)}×`} />
+          <KV k="VWAP Dist" v={item.features.vwapDist.toFixed(3)} />
+          <KV k="Breakout" v={item.features.breakoutPct.toFixed(3)} />
         </View>
       </View>
 
       <View style={s.section}>
         <Text style={s.sectionTitle}>Risk</Text>
         <View style={s.grid}>
-          <KV k="Size" v={`${item.risk.size_shares} sh`} />
+          <KV k="Size" v={`${item.risk.sizeShares} sh`} />
           <KV k="Stop" v={`$${item.risk.stop.toFixed(2)}`} />
           <KV k="Target" v={item.risk.targets?.[0] ? `$${item.risk.targets[0].toFixed(2)}` : '—'} />
-          <KV k="Time Stop" v={`${item.risk.time_stop_min}m`} />
+          <KV k="Time Stop" v={`${item.risk.timeStopMin}m`} />
         </View>
       </View>
 

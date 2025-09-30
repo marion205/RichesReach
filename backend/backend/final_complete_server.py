@@ -1307,13 +1307,13 @@ def _build_chart_payload(symbol: str, timeframe: str, indicators: list[str] | No
             _ind["EMA26"] = [round(x, 2) if x is not None else None for x in ema(closes, 26)]
         if "RSI14" in indicators:
             _ind["RSI14"] = [round(x, 2) if x is not None else None for x in rsi(closes, 14)]
-        if "MACD" in indicators or "MACD_SIGNAL" in indicators or "MACD_hist" in indicators:
+        if "MACD" in indicators or "MACD_SIGNAL" in indicators or "MACD_hist" in indicators or "MACDHist" in indicators:
             macd_line, signal_line, histogram = macd(closes)
             if "MACD" in indicators:
                 _ind["MACD"] = [round(x, 2) if x is not None else None for x in macd_line]
             if "MACD_SIGNAL" in indicators:
                 _ind["MACD_SIGNAL"] = [round(x, 2) if x is not None else None for x in signal_line]
-            if "MACD_hist" in indicators:
+            if "MACD_hist" in indicators or "MACDHist" in indicators:
                 _ind["MACD_hist"] = [round(x, 2) if x is not None else None for x in histogram]
         if "BB" in indicators:
             up, mid, low = bollinger(closes)
@@ -3370,7 +3370,7 @@ async def graphql_endpoint(request_data: dict):
         timeframe = variables.get("timeframe", "1D")
         interval = variables.get("interval") or timeframe
         limit = int(variables.get("limit") or 120)
-        indicators_req = variables.get("indicators") or []
+        indicators_req = variables.get("indicators") or variables.get("inds") or []
         
         if not symbol:
             # Simple string parsing instead of regex
@@ -3413,20 +3413,29 @@ async def graphql_endpoint(request_data: dict):
         closes = [c["close"] for c in chart]
         inds = {}
         
-        # Overlays
-        if "SMA20" in indicators_req: inds["SMA20"] = sma(closes, 20)
-        if "SMA50" in indicators_req: inds["SMA50"] = sma(closes, 50)
-        if "EMA12" in indicators_req: inds["EMA12"] = ema(closes, 12)
-        if "EMA26" in indicators_req: inds["EMA26"] = ema(closes, 26)
-        if "BB" in indicators_req:
-            u, m, l = bollinger(closes, 20, 2)
-            inds["BB_upper"], inds["BB_middle"], inds["BB_lower"] = u, m, l
-        
-        # Oscillators
-        if "RSI" in indicators_req: inds["RSI14"] = rsi(closes, 14)
-        if "MACD" in indicators_req:
-            line, signal_line, hist = macd(closes, 12, 26, 9)
-            inds["MACD"], inds["MACD_signal"], inds["MACD_hist"] = line, signal_line, hist
+        try:
+            # Overlays
+            if "SMA20" in indicators_req: inds["SMA20"] = sma(closes, 20)
+            if "SMA50" in indicators_req: inds["SMA50"] = sma(closes, 50)
+            if "EMA12" in indicators_req: inds["EMA12"] = ema(closes, 12)
+            if "EMA26" in indicators_req: inds["EMA26"] = ema(closes, 26)
+            if "BB" in indicators_req:
+                u, m, l = bollinger(closes, 20, 2)
+                inds["BB_upper"], inds["BB_middle"], inds["BB_lower"] = u, m, l
+            
+            # Oscillators
+            if "RSI" in indicators_req: inds["RSI14"] = rsi(closes, 14)
+            if "MACD" in indicators_req or "MACDHist" in indicators_req or "MACD_hist" in indicators_req:
+                line, signal_line, hist = macd(closes, 12, 26, 9)
+                if "MACD" in indicators_req:
+                    inds["MACD"] = line
+                if "MACDHist" in indicators_req or "MACD_hist" in indicators_req:
+                    inds["MACD_hist"] = hist
+                if "MACD_signal" in indicators_req:
+                    inds["MACD_signal"] = signal_line
+        except Exception as e:
+            logger.error(f"Indicator calculation error: {e}")
+            inds = {}
         
         cp, pp = chart[-1]["close"], chart[0]["close"]
         response_data["stockChartData"] = {
@@ -4952,6 +4961,35 @@ async def graphql_endpoint(request_data: dict):
         records = []
         for r in rows:
             s = by_symbol.get(r["symbol"], {})
+            # Generate reasoning based on scores and metrics
+            beginner_score = int(float(s.get("beginner_score", 0)))
+            ml_score = float(s.get("ml_score", 0.0))
+            reasoning_parts = []
+            
+            if beginner_score >= 70:
+                reasoning_parts.append("High beginner-friendly score")
+            elif beginner_score >= 50:
+                reasoning_parts.append("Moderate beginner-friendly score")
+            else:
+                reasoning_parts.append("Lower beginner-friendly score")
+                
+            if ml_score >= 0.7:
+                reasoning_parts.append("Strong ML analysis")
+            elif ml_score >= 0.5:
+                reasoning_parts.append("Moderate ML analysis")
+            else:
+                reasoning_parts.append("Weaker ML analysis")
+                
+            if r["peRatio"] < 20:
+                reasoning_parts.append("Attractive valuation")
+            elif r["peRatio"] > 30:
+                reasoning_parts.append("Higher valuation")
+                
+            if r["dividendYield"] > 2.0:
+                reasoning_parts.append("Good dividend yield")
+                
+            reasoning = "; ".join(reasoning_parts) if reasoning_parts else "Standard investment opportunity"
+            
             records.append({
                 "symbol": r["symbol"],
                 "companyName": r.get("companyName"),
@@ -4962,9 +5000,10 @@ async def graphql_endpoint(request_data: dict):
                 "currentPrice": r.get("currentPrice"),
                 "volatility": r["volatility"],
                 "debtRatio": r["debtToEquity"],
-                "beginnerFriendlyScore": int(float(s.get("beginner_score", 0))),
-                "mlScore": float(s.get("ml_score", 0.0)),
-                "score": float(s.get("ml_score", 0.0)),  # Add score field (same as mlScore for now)
+                "beginnerFriendlyScore": beginner_score,
+                "mlScore": ml_score,
+                "score": ml_score,  # Add score field (same as mlScore for now)
+                "reasoning": reasoning,
                 "__typename": "AdvancedStock",
             })
 

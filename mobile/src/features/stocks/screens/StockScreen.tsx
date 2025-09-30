@@ -166,7 +166,7 @@ const CHART_QUERY = gql`
     $tf: String = "1D",
     $iv: String = "1D",
     $limit: Int = 180,
-    $inds: [String!] = ["SMA20","SMA50","EMA12","EMA26","RSI","MACD","MACD_hist","BB"]
+    $inds: [String!] = ["SMA20","SMA50","EMA12","EMA26","RSI","MACD","MACDHist","BB"]
   ) {
     stockChartData(
       symbol: $symbol,
@@ -194,13 +194,13 @@ const CHART_QUERY = gql`
         SMA50
         EMA12
         EMA26
-        BB_upper
-        BB_middle
-        BB_lower
+        BBUpper
+        BBMiddle
+        BBLower
         RSI14
         MACD
-        MACD_signal
-        MACD_hist
+        MACDSignal
+        MACDHist
       }
 }
 }
@@ -251,7 +251,7 @@ const [searchQuery, setSearchQuery] = useState('');
       tf: chartInterval,
       iv: chartInterval,
       limit: 180,
-      inds: ["SMA20","SMA50","EMA12","EMA26","RSI","MACD","MACD_hist","BB"],
+      inds: ["SMA20","SMA50","EMA12","EMA26","RSI","MACD","MACDHist","BB"],
     },
     skip: activeTab !== 'research' || !researchSymbol,
     fetchPolicy: 'cache-and-network',
@@ -785,214 +785,228 @@ placeholderTextColor="#999"
 
       {/* Options Tab Content */}
       {activeTab === 'options' && (
-        <ScrollView style={styles.optionsContainer} contentContainerStyle={styles.optionsContentContainer}>
-          <View style={styles.optionsHeader}>
-            <Text style={styles.optionsTitle}>Options Trading</Text>
-            <View style={styles.searchContainer}>
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Enter symbol (e.g., AAPL)"
-                value={optionsSymbol}
-                onChangeText={(text) => setOptionsSymbol(text.toUpperCase().trim())}
-                autoCapitalize="characters"
-                autoCorrect={false}
-              />
-              <TouchableOpacity style={styles.searchButton} onPress={() => {}}>
-                <Icon name="search" size={20} color="#007AFF" />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Options Chain */}
-             <OptionChainCard
-               symbol={optionsSymbol}
-               expiration="2024-02-16"
-               underlyingPrice={243.36}
-               calls={[
-                 { 
-                   strike: 140, bid: 8.50, ask: 8.80, volume: 1250, optionType: 'CALL',
-                   greeks: { delta: 0.85, gamma: 0.02, theta: -0.12, vega: 0.18, iv: 0.22, probITM: 0.85 }
-                 },
-                 { 
-                   strike: 145, bid: 6.20, ask: 6.50, volume: 890, optionType: 'CALL',
-                   greeks: { delta: 0.72, gamma: 0.03, theta: -0.15, vega: 0.22, iv: 0.24, probITM: 0.72 }
-                 },
-                 { 
-                   strike: 150, bid: 4.10, ask: 4.40, volume: 2100, optionType: 'CALL',
-                   greeks: { delta: 0.58, gamma: 0.04, theta: -0.18, vega: 0.25, iv: 0.26, probITM: 0.58 }
-                 },
-                 { 
-                   strike: 155, bid: 2.50, ask: 2.80, volume: 1560, optionType: 'CALL',
-                   greeks: { delta: 0.42, gamma: 0.05, theta: -0.20, vega: 0.28, iv: 0.28, probITM: 0.42 }
-                 },
-                 { 
-                   strike: 160, bid: 1.40, ask: 1.70, volume: 980, optionType: 'CALL',
-                   greeks: { delta: 0.28, gamma: 0.04, theta: -0.18, vega: 0.25, iv: 0.30, probITM: 0.28 }
-                 },
-               ]}
-               puts={[
-                 { 
-                   strike: 140, bid: 1.20, ask: 1.50, volume: 890, optionType: 'PUT',
-                   greeks: { delta: -0.15, gamma: 0.02, theta: -0.08, vega: 0.18, iv: 0.22, probITM: 0.15 }
-                 },
-                 { 
-                   strike: 145, bid: 2.10, ask: 2.40, volume: 1200, optionType: 'PUT',
-                   greeks: { delta: -0.28, gamma: 0.03, theta: -0.10, vega: 0.22, iv: 0.24, probITM: 0.28 }
-                 },
-                 { 
-                   strike: 150, bid: 3.50, ask: 3.80, volume: 1800, optionType: 'PUT',
-                   greeks: { delta: -0.42, gamma: 0.04, theta: -0.12, vega: 0.25, iv: 0.26, probITM: 0.42 }
-                 },
-                 { 
-                   strike: 155, bid: 5.20, ask: 5.50, volume: 1100, optionType: 'PUT',
-                   greeks: { delta: -0.58, gamma: 0.05, theta: -0.15, vega: 0.28, iv: 0.28, probITM: 0.58 }
-                 },
-                 { 
-                   strike: 160, bid: 7.10, ask: 7.40, volume: 750, optionType: 'PUT',
-                   greeks: { delta: -0.72, gamma: 0.04, theta: -0.18, vega: 0.25, iv: 0.30, probITM: 0.72 }
-                 },
-               ]}
-               selected={selectedOption}
-               onSelect={(opt) => setSelectedOption(opt)}
-               fullBleed
-               gutter={20}
-             />
-
-          {/* Order Form */}
-          {selectedOption && (
-            <View style={styles.card}>
-              <Text style={styles.sectionTitle}>Place Order</Text>
-              <View style={styles.orderForm}>
-                <View style={styles.orderInfo}>
-                  <Text style={styles.orderInfoText}>
-                    {selectedOption.optionType} {optionsSymbol} ${selectedOption.strike} {selectedOption.expiration}
-                  </Text>
-                  <Text style={styles.orderInfoSubtext}>
-                    Bid: ${selectedOption.bid} | Ask: ${selectedOption.ask}
-                  </Text>
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Quantity</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={orderQuantity}
-                    onChangeText={setOrderQuantity}
-                    keyboardType="numeric"
-                    placeholder="1"
-                  />
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Order Type</Text>
-                  <View style={styles.segmentedControl}>
-                    {['MARKET', 'LIMIT'].map((type) => (
-                      <TouchableOpacity
-                        key={type}
-                        style={[styles.segment, orderType === type && styles.activeSegment]}
-                        onPress={() => setOrderType(type)}
-                      >
-                        <Text style={[styles.segmentText, orderType === type && styles.activeSegmentText]}>
-                          {type}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
+        <View style={styles.optionsContainer}>
+          <FlatList
+            data={[]} // Empty data since we're using ListHeaderComponent and ListFooterComponent
+            keyExtractor={() => 'options-placeholder'}
+            renderItem={() => null}
+            ListHeaderComponent={() => (
+              <View style={styles.optionsContentContainer}>
+                <View style={styles.optionsHeader}>
+                  <Text style={styles.optionsTitle}>Options Trading</Text>
+                  <View style={styles.searchContainer}>
+                    <TextInput
+                      style={styles.searchInput}
+                      placeholder="Enter symbol (e.g., AAPL)"
+                      value={optionsSymbol}
+                      onChangeText={(text) => setOptionsSymbol(text.toUpperCase().trim())}
+                      autoCapitalize="characters"
+                      autoCorrect={false}
+                    />
+                    <TouchableOpacity style={styles.searchButton} onPress={() => {}}>
+                      <Icon name="search" size={20} color="#007AFF" />
+                    </TouchableOpacity>
                   </View>
                 </View>
 
-                {orderType === 'LIMIT' && (
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Limit Price</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={limitPrice}
-                      onChangeText={setLimitPrice}
-                      keyboardType="numeric"
-                      placeholder="0.00"
-                    />
+                {/* Options Chain */}
+                <OptionChainCard
+                  symbol={optionsSymbol}
+                  expiration="2024-02-16"
+                  underlyingPrice={243.36}
+                  calls={[
+                    { 
+                      strike: 140, bid: 8.50, ask: 8.80, volume: 1250, optionType: 'CALL',
+                      greeks: { delta: 0.85, gamma: 0.02, theta: -0.12, vega: 0.18, iv: 0.22, probITM: 0.85 }
+                    },
+                    { 
+                      strike: 145, bid: 6.20, ask: 6.50, volume: 890, optionType: 'CALL',
+                      greeks: { delta: 0.72, gamma: 0.03, theta: -0.15, vega: 0.22, iv: 0.24, probITM: 0.72 }
+                    },
+                    { 
+                      strike: 150, bid: 4.10, ask: 4.40, volume: 2100, optionType: 'CALL',
+                      greeks: { delta: 0.58, gamma: 0.04, theta: -0.18, vega: 0.25, iv: 0.26, probITM: 0.58 }
+                    },
+                    { 
+                      strike: 155, bid: 2.50, ask: 2.80, volume: 1560, optionType: 'CALL',
+                      greeks: { delta: 0.42, gamma: 0.05, theta: -0.20, vega: 0.28, iv: 0.28, probITM: 0.42 }
+                    },
+                    { 
+                      strike: 160, bid: 1.40, ask: 1.70, volume: 980, optionType: 'CALL',
+                      greeks: { delta: 0.28, gamma: 0.04, theta: -0.18, vega: 0.25, iv: 0.30, probITM: 0.28 }
+                    },
+                  ]}
+                  puts={[
+                    { 
+                      strike: 140, bid: 1.20, ask: 1.50, volume: 890, optionType: 'PUT',
+                      greeks: { delta: -0.15, gamma: 0.02, theta: -0.08, vega: 0.18, iv: 0.22, probITM: 0.15 }
+                    },
+                    { 
+                      strike: 145, bid: 2.10, ask: 2.40, volume: 1200, optionType: 'PUT',
+                      greeks: { delta: -0.28, gamma: 0.03, theta: -0.10, vega: 0.22, iv: 0.24, probITM: 0.28 }
+                    },
+                    { 
+                      strike: 150, bid: 3.50, ask: 3.80, volume: 1800, optionType: 'PUT',
+                      greeks: { delta: -0.42, gamma: 0.04, theta: -0.12, vega: 0.25, iv: 0.26, probITM: 0.42 }
+                    },
+                    { 
+                      strike: 155, bid: 5.20, ask: 5.50, volume: 1100, optionType: 'PUT',
+                      greeks: { delta: -0.58, gamma: 0.05, theta: -0.15, vega: 0.28, iv: 0.28, probITM: 0.58 }
+                    },
+                    { 
+                      strike: 160, bid: 7.10, ask: 7.40, volume: 750, optionType: 'PUT',
+                      greeks: { delta: -0.72, gamma: 0.04, theta: -0.18, vega: 0.25, iv: 0.30, probITM: 0.72 }
+                    },
+                  ]}
+                  selected={selectedOption}
+                  onSelect={(opt) => setSelectedOption(opt)}
+                  fullBleed
+                  gutter={20}
+                />
+              </View>
+            )}
+            ListFooterComponent={() => (
+              <View style={styles.optionsContentContainer}>
+                {/* Order Form */}
+                {selectedOption && (
+                  <View style={styles.card}>
+                    <Text style={styles.sectionTitle}>Place Order</Text>
+                    <View style={styles.orderForm}>
+                      <View style={styles.orderInfo}>
+                        <Text style={styles.orderInfoText}>
+                          {selectedOption.optionType} {optionsSymbol} ${selectedOption.strike} {selectedOption.expiration}
+                        </Text>
+                        <Text style={styles.orderInfoSubtext}>
+                          Bid: ${selectedOption.bid} | Ask: ${selectedOption.ask}
+                        </Text>
+                      </View>
+
+                      <View style={styles.inputGroup}>
+                        <Text style={styles.inputLabel}>Quantity</Text>
+                        <TextInput
+                          style={styles.input}
+                          value={orderQuantity}
+                          onChangeText={setOrderQuantity}
+                          keyboardType="numeric"
+                          placeholder="1"
+                        />
+                      </View>
+
+                      <View style={styles.inputGroup}>
+                        <Text style={styles.inputLabel}>Order Type</Text>
+                        <View style={styles.segmentedControl}>
+                          {['MARKET', 'LIMIT'].map((type) => (
+                            <TouchableOpacity
+                              key={type}
+                              style={[styles.segment, orderType === type && styles.activeSegment]}
+                              onPress={() => setOrderType(type)}
+                            >
+                              <Text style={[styles.segmentText, orderType === type && styles.activeSegmentText]}>
+                                {type}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </View>
+
+                      {orderType === 'LIMIT' && (
+                        <View style={styles.inputGroup}>
+                          <Text style={styles.inputLabel}>Limit Price</Text>
+                          <TextInput
+                            style={styles.input}
+                            value={limitPrice}
+                            onChangeText={setLimitPrice}
+                            keyboardType="numeric"
+                            placeholder="0.00"
+                          />
+                        </View>
+                      )}
+
+                      <View style={styles.inputGroup}>
+                        <Text style={styles.inputLabel}>Time in Force</Text>
+                        <View style={styles.segmentedControl}>
+                          {['DAY', 'GTC'].map((tif) => (
+                            <TouchableOpacity
+                              key={tif}
+                              style={[styles.segment, timeInForce === tif && styles.activeSegment]}
+                              onPress={() => setTimeInForce(tif)}
+                            >
+                              <Text style={[styles.segmentText, timeInForce === tif && styles.activeSegmentText]}>
+                                {tif}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </View>
+
+                      <View style={styles.inputGroup}>
+                        <Text style={styles.inputLabel}>Notes (Optional)</Text>
+                        <TextInput
+                          style={[styles.input, styles.textArea]}
+                          value={orderNotes}
+                          onChangeText={setOrderNotes}
+                          placeholder="Add notes about this trade..."
+                          multiline
+                          numberOfLines={3}
+                        />
+                      </View>
+
+                      <TouchableOpacity
+                        style={[styles.placeOrderButton, placingOrder && styles.placeOrderButtonDisabled]}
+                        onPress={handlePlaceOptionOrder}
+                        disabled={placingOrder}
+                      >
+                        <Text style={styles.placeOrderButtonText}>
+                          {placingOrder ? 'Placing Order...' : 'Place Order'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 )}
 
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Time in Force</Text>
-                  <View style={styles.segmentedControl}>
-                    {['DAY', 'GTC'].map((tif) => (
-                      <TouchableOpacity
-                        key={tif}
-                        style={[styles.segment, timeInForce === tif && styles.activeSegment]}
-                        onPress={() => setTimeInForce(tif)}
-                      >
-                        <Text style={[styles.segmentText, timeInForce === tif && styles.activeSegmentText]}>
-                          {tif}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
+                {/* Order History */}
+                <View style={styles.card}>
+                  <Text style={styles.sectionTitle}>Order History</Text>
+                  {optionsOrdersLoading ? (
+                    <Text style={styles.loadingText}>Loading orders...</Text>
+                  ) : optionsOrdersData?.optionOrders?.length > 0 ? (
+                    optionsOrdersData.optionOrders.map((order: any) => (
+                      <View key={order.id} style={styles.orderRow}>
+                        <View style={styles.orderInfo}>
+                          <Text style={styles.orderSymbol}>
+                            {order.symbol} {order.optionType} ${order.strike} {order.expiration}
+                          </Text>
+                          <Text style={styles.orderDetails}>
+                            {order.side} {order.quantity} @ {order.orderType}
+                            {order.limitPrice && ` $${order.limitPrice}`}
+                          </Text>
+                          <Text style={styles.orderStatus}>{order.status}</Text>
+                        </View>
+                        <View style={styles.orderActions}>
+                          <Text style={styles.orderDate}>
+                            {new Date(order.createdAt).toLocaleDateString()}
+                          </Text>
+                          {order.status === 'PENDING' && (
+                            <TouchableOpacity
+                              style={styles.cancelButton}
+                              onPress={() => handleCancelOptionOrder(order.id)}
+                            >
+                              <Text style={styles.cancelButtonText}>Cancel</Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      </View>
+                    ))
+                  ) : (
+                    <Text style={styles.noOrdersText}>No orders found</Text>
+                  )}
                 </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Notes (Optional)</Text>
-                  <TextInput
-                    style={[styles.input, styles.textArea]}
-                    value={orderNotes}
-                    onChangeText={setOrderNotes}
-                    placeholder="Add notes about this trade..."
-                    multiline
-                    numberOfLines={3}
-                  />
-                </View>
-
-                <TouchableOpacity
-                  style={[styles.placeOrderButton, placingOrder && styles.placeOrderButtonDisabled]}
-                  onPress={handlePlaceOptionOrder}
-                  disabled={placingOrder}
-                >
-                  <Text style={styles.placeOrderButtonText}>
-                    {placingOrder ? 'Placing Order...' : 'Place Order'}
-                  </Text>
-                </TouchableOpacity>
               </View>
-            </View>
-          )}
-
-          {/* Order History */}
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Order History</Text>
-            {optionsOrdersLoading ? (
-              <Text style={styles.loadingText}>Loading orders...</Text>
-            ) : optionsOrdersData?.optionOrders?.length > 0 ? (
-              optionsOrdersData.optionOrders.map((order: any) => (
-                <View key={order.id} style={styles.orderRow}>
-                  <View style={styles.orderInfo}>
-                    <Text style={styles.orderSymbol}>
-                      {order.symbol} {order.optionType} ${order.strike} {order.expiration}
-                    </Text>
-                    <Text style={styles.orderDetails}>
-                      {order.side} {order.quantity} @ {order.orderType}
-                      {order.limitPrice && ` $${order.limitPrice}`}
-                    </Text>
-                    <Text style={styles.orderStatus}>{order.status}</Text>
-                  </View>
-                  <View style={styles.orderActions}>
-                    <Text style={styles.orderDate}>
-                      {new Date(order.createdAt).toLocaleDateString()}
-                    </Text>
-                    {order.status === 'PENDING' && (
-                      <TouchableOpacity
-                        style={styles.cancelButton}
-                        onPress={() => handleCancelOptionOrder(order.id)}
-                      >
-                        <Text style={styles.cancelButtonText}>Cancel</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                </View>
-              ))
-            ) : (
-              <Text style={styles.noOrdersText}>No orders found</Text>
             )}
-          </View>
-        </ScrollView>
+            contentContainerStyle={{ flexGrow: 1 }}
+            showsVerticalScrollIndicator={false}
+          />
+        </View>
       )}
 
       {/* Chart Modal - Show for selected stock (only on non-research/options tabs) */}

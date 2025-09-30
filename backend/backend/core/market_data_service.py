@@ -1,300 +1,414 @@
-"""
-Market Data Service for ML Models
-Fetches real-time and historical market data for enhanced AI recommendations
-"""
-
-import logging
-import requests
+# core/market_data_service.py
 import json
-from typing import Dict, List, Any, Optional
-from datetime import datetime, timedelta
+import os
+import hashlib
 import time
-import random
+import logging
+from typing import Dict, Any, Optional
+from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
+# Redis configuration
+try:
+    import redis
+    redis_client = redis.Redis.from_url(
+        os.getenv("REDIS_URL", "redis://localhost:6379/0"),
+        decode_responses=True,
+        socket_connect_timeout=2,
+        socket_timeout=2,
+        retry_on_timeout=True
+    )
+    # Test connection
+    redis_client.ping()
+    REDIS_AVAILABLE = True
+    logger.info("✅ Redis client initialized and connected")
+except Exception as e:
+    logger.warning(f"⚠️ Redis not available: {e}")
+    redis_client = None
+    REDIS_AVAILABLE = False
+
 class MarketDataService:
-    """
-    Service for fetching market data from various sources
-    """
+    """Market data service with Polygon + Finnhub providers and caching"""
     
     def __init__(self):
-        # API keys and endpoints (in production, use environment variables)
-        self.alpha_vantage_key = None  # Get from https://www.alphavantage.co/
-        self.finnhub_key = None        # Get from https://finnhub.io/
-        self.yahoo_finance_base = "https://query1.finance.yahoo.com"
-        
-        # Cache for market data
-        self.cache = {}
-        self.cache_expiry = {}
-        self.cache_duration = 300  # 5 minutes
-        
-        # Fallback data when APIs are not available
-        self.fallback_data = self._initialize_fallback_data()
+        self.cache_ttl = {
+            "quote": 30,  # 30 seconds for quotes (increased for better performance)
+            "profile": 3600,  # 1 hour for profiles
+            "options": 300,  # 5 minutes for options
+            "market_status": 60,  # 1 minute for market status
+        }
+        self.cache_prefix = "md:v1:"  # Version the cache keys
     
-    def get_market_overview(self) -> Dict[str, Any]:
-        """
-        Get comprehensive market overview for ML models
+    def _cache_key(self, kind: str, **params) -> str:
+        """Generate cache key for data"""
+        key_data = kind + ":" + json.dumps(params, sort_keys=True)
+        return f"{self.cache_prefix}{hashlib.sha1(key_data.encode()).hexdigest()}"
+    
+    def _get_from_cache(self, cache_key: str) -> Optional[Dict[str, Any]]:
+        """Get data from Redis cache"""
+        if not REDIS_AVAILABLE:
+            return None
         
-        Returns:
-            Dictionary containing market indicators and conditions
-        """
         try:
-            # Try to get real market data
-            market_data = self._fetch_real_market_data()
-            if market_data:
-                return market_data
-            
-            # Fallback to synthetic data
-            return self._generate_synthetic_market_data()
-            
+            cached_data = redis_client.get(cache_key)
+            if cached_data:
+                logger.debug(f"🎯 Cache HIT: {cache_key[:20]}...")
+                return json.loads(cached_data)
+            else:
+                logger.debug(f"❌ Cache MISS: {cache_key[:20]}...")
         except Exception as e:
-            logger.error(f"Error getting market overview: {e}")
-            return self._generate_synthetic_market_data()
-    
-    def get_sector_performance(self) -> Dict[str, str]:
-        """
-        Get current sector performance
+            logger.warning(f"⚠️ Cache read error: {e}")
         
-        Returns:
-            Dictionary mapping sectors to performance indicators
-        """
+        return None
+    
+    def _set_cache(self, cache_key: str, data: Dict[str, Any], ttl: int):
+        """Set data in Redis cache"""
+        if not REDIS_AVAILABLE:
+            return
+        
         try:
-            # Try to get real sector data
-            sector_data = self._fetch_sector_data()
-            if sector_data:
-                return sector_data
-            
-            # Fallback to synthetic data
-            return self._generate_synthetic_sector_data()
-            
+            redis_client.setex(cache_key, ttl, json.dumps(data))
+            logger.debug(f"💾 Cache SET: {cache_key[:20]}... (TTL: {ttl}s)")
         except Exception as e:
-            logger.error(f"Error getting sector performance: {e}")
-            return self._generate_synthetic_sector_data()
+            logger.warning(f"⚠️ Cache write error: {e}")
     
-    def get_economic_indicators(self) -> Dict[str, float]:
-        """
-        Get key economic indicators
+    def get_quote(self, symbol: str) -> Dict[str, Any]:
+        """Get real-time quote with caching and provider fallback"""
+        symbol = symbol.upper().strip()
+        cache_key = self._cache_key("quote", symbol=symbol)
         
-        Returns:
-            Dictionary of economic indicators and their values
-        """
-        try:
-            # Try to get real economic data
-            economic_data = self._fetch_economic_data()
-            if economic_data:
-                return economic_data
-            
-            # Fallback to synthetic data
-            return self._generate_synthetic_economic_data()
-            
-        except Exception as e:
-            logger.error(f"Error getting economic indicators: {e}")
-            return self._generate_synthetic_economic_data()
-    
-    def get_market_regime_indicators(self) -> Dict[str, Any]:
-        """
-        Get indicators for market regime classification
+        # Try cache first
+        cached_data = self._get_from_cache(cache_key)
+        if cached_data:
+            logger.debug(f"Cache hit for quote: {symbol}")
+            return cached_data
         
-        Returns:
-            Dictionary of market regime indicators
-        """
-        try:
-            market_data = self.get_market_overview()
-            economic_data = self.get_economic_indicators()
-            sector_data = self.get_sector_performance()
-            
-            # Calculate regime indicators
-            regime_indicators = {
-                'sp500_return': market_data.get('sp500_return', 0.0),
-                'volatility': market_data.get('volatility', 0.15),
-                'interest_rate': economic_data.get('interest_rate', 0.05),
-                'gdp_growth': economic_data.get('gdp_growth', 0.02),
-                'unemployment_rate': economic_data.get('unemployment_rate', 0.05),
-                'sector_performance': sector_data,
-                'market_regime': self._classify_market_regime(market_data, economic_data),
-                'volatility_regime': self._classify_volatility_regime(market_data),
-                'interest_rate_environment': self._classify_interest_rate_environment(economic_data),
-                'economic_cycle': self._classify_economic_cycle(economic_data)
-            }
-            
-            return regime_indicators
-            
-        except Exception as e:
-            logger.error(f"Error getting market regime indicators: {e}")
-            return self._generate_synthetic_regime_indicators()
-    
-    def _fetch_real_market_data(self) -> Optional[Dict[str, Any]]:
-        """Fetch real market data from APIs"""
-        # This is a placeholder for real API integration
-        # In production, implement actual API calls to financial data providers
+        # Try providers in order
+        providers = [
+            ("polygon", self._get_polygon_quote),
+            ("finnhub", self._get_finnhub_quote),
+        ]
         
-        # Example: Alpha Vantage API for S&P 500 data
-        if self.alpha_vantage_key:
+        for provider_name, provider_func in providers:
             try:
-                # Fetch S&P 500 data
-                sp500_url = f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=SPY&apikey={self.alpha_vantage_key}"
-                response = requests.get(sp500_url, timeout=10)
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    # Process the data and return market indicators
-                    # This is simplified - you'd want to calculate returns, volatility, etc.
-                    return {
-                        'sp500_return': 0.05,  # Placeholder
-                        'volatility': 0.15,    # Placeholder
-                        'last_updated': datetime.now().isoformat()
-                    }
+                data = provider_func(symbol)
+                if data and data.get("price"):
+                    data["provider"] = provider_name
+                    data["cached_at"] = int(time.time())
+                    
+                    # Cache the result
+                    self._set_cache(cache_key, data, self.cache_ttl["quote"])
+                    
+                    logger.info(f"Quote retrieved for {symbol} from {provider_name}")
+                    return data
             except Exception as e:
-                logger.warning(f"Failed to fetch Alpha Vantage data: {e}")
+                logger.warning(f"{provider_name} quote failed for {symbol}: {e}")
+                continue
         
-        return None
+        # Fallback to mock data
+        logger.warning(f"All providers failed for {symbol}, using mock data")
+        return self._get_mock_quote(symbol)
     
-    def _fetch_sector_data(self) -> Optional[Dict[str, str]]:
-        """Fetch real sector performance data"""
-        # Placeholder for real sector data API
-        return None
-    
-    def _fetch_economic_data(self) -> Optional[Dict[str, float]]:
-        """Fetch real economic indicators"""
-        # Placeholder for economic data API
-        return None
-    
-    def _classify_market_regime(self, market_data: Dict[str, Any], economic_data: Dict[str, Any]) -> str:
-        """Classify current market regime based on indicators"""
-        sp500_return = market_data.get('sp500_return', 0.0)
-        gdp_growth = economic_data.get('gdp_growth', 0.02)
-        unemployment = economic_data.get('unemployment_rate', 0.05)
+    def _get_polygon_quote(self, symbol: str) -> Dict[str, Any]:
+        """Get quote from Polygon.io"""
+        import httpx
         
-        # Simple classification logic
-        if sp500_return > 0.1 and gdp_growth > 0.02 and unemployment < 0.06:
-            return 'bull_market'
-        elif sp500_return < -0.1 or gdp_growth < 0.0 or unemployment > 0.08:
-            return 'bear_market'
-        elif abs(sp500_return) < 0.05:
-            return 'sideways'
-        else:
-            return 'volatile'
-    
-    def _classify_volatility_regime(self, market_data: Dict[str, Any]) -> str:
-        """Classify volatility regime"""
-        volatility = market_data.get('volatility', 0.15)
+        api_key = getattr(settings, 'POLYGON_API_KEY', None)
+        if not api_key or api_key.strip() == '':
+            raise Exception("Polygon API key not configured or empty")
         
-        if volatility < 0.10:
-            return 'low'
-        elif volatility < 0.20:
-            return 'moderate'
-        else:
-            return 'high'
+        try:
+            with httpx.Client(timeout=5) as client:
+                # Use free tier endpoint - daily open/close data (use yesterday for weekends)
+                from datetime import datetime, timedelta
+                yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+                
+                response = client.get(
+                    f"https://api.polygon.io/v1/open-close/{symbol}/{yesterday}",
+                    params={"apikey": api_key}
+                )
+                response.raise_for_status()
+                data = response.json()
+                
+                if data.get("status") == "OK":
+                    return {
+                        "symbol": symbol,
+                        "price": float(data.get("close", 0)),
+                        "open": float(data.get("open", 0)),
+                        "high": float(data.get("high", 0)),
+                        "low": float(data.get("low", 0)),
+                        "volume": int(data.get("volume", 0)),
+                        "timestamp": int(time.time() * 1000),
+                        "after_hours": float(data.get("afterHours", 0)) if data.get("afterHours") else None,
+                        "pre_market": float(data.get("preMarket", 0)) if data.get("preMarket") else None,
+                    }
+                
+                raise Exception(f"No quote data available for {symbol}")
+            
+        except Exception as e:
+            raise Exception(f"Polygon API error: {e}")
     
-    def _classify_interest_rate_environment(self, economic_data: Dict[str, Any]) -> str:
-        """Classify interest rate environment"""
-        interest_rate = economic_data.get('interest_rate', 0.05)
+    def _get_finnhub_quote(self, symbol: str) -> Dict[str, Any]:
+        """Get quote from Finnhub"""
+        import httpx
         
-        # This would need historical context in production
-        # For now, use simple thresholds
-        if interest_rate > 0.06:
-            return 'rising'
-        elif interest_rate < 0.04:
-            return 'falling'
-        else:
-            return 'stable'
-    
-    def _classify_economic_cycle(self, economic_data: Dict[str, Any]) -> str:
-        """Classify economic cycle phase"""
-        gdp_growth = economic_data.get('gdp_growth', 0.02)
-        unemployment = economic_data.get('unemployment_rate', 0.05)
+        api_key = getattr(settings, 'FINNHUB_API_KEY', None)
+        if not api_key:
+            raise Exception("Finnhub API key not configured")
         
-        if gdp_growth > 0.03 and unemployment < 0.05:
-            return 'expansion'
-        elif gdp_growth > 0.02 and unemployment < 0.06:
-            return 'peak'
-        elif gdp_growth < 0.01 or unemployment > 0.07:
-            return 'contraction'
-        else:
-            return 'trough'
+        try:
+            with httpx.Client(timeout=5) as client:
+                response = client.get(
+                    "https://finnhub.io/api/v1/quote",
+                    params={"symbol": symbol, "token": api_key}
+                )
+                response.raise_for_status()
+                data = response.json()
+                
+                if data.get("error"):
+                    raise Exception(f"Finnhub error: {data['error']}")
+                
+                return {
+                    "symbol": symbol,
+                    "price": float(data.get("c", 0)),
+                    "change": float(data.get("d", 0)),
+                    "change_percent": float(data.get("dp", 0)),
+                    "high": float(data.get("h", 0)),
+                    "low": float(data.get("l", 0)),
+                    "open": float(data.get("o", 0)),
+                    "timestamp": int(time.time() * 1000),
+                }
+            
+        except Exception as e:
+            raise Exception(f"Finnhub API error: {e}")
     
-    def _generate_synthetic_market_data(self) -> Dict[str, Any]:
-        """Generate synthetic market data for development/testing"""
-        # Simulate realistic market conditions
-        base_return = random.uniform(-0.05, 0.08)  # -5% to +8%
-        base_volatility = random.uniform(0.10, 0.25)  # 10% to 25%
+    def _get_mock_quote(self, symbol: str) -> Dict[str, Any]:
+        """Fallback mock quote data"""
+        base_prices = {
+            "AAPL": 150.0, "MSFT": 300.0, "GOOGL": 2500.0, "TSLA": 200.0,
+            "AMZN": 3000.0, "META": 300.0, "NVDA": 400.0, "NFLX": 400.0
+        }
+        
+        import random
+        base_price = base_prices.get(symbol, 100.0)
+        variation = random.uniform(-0.05, 0.05)
+        current_price = base_price * (1 + variation)
         
         return {
-            'sp500_return': round(base_return, 4),
-            'volatility': round(base_volatility, 4),
-            'last_updated': datetime.now().isoformat(),
-            'method': 'synthetic'
+            "symbol": symbol,
+            "price": round(current_price, 2),
+            "change": round(current_price - base_price, 2),
+            "change_percent": round(variation * 100, 2),
+            "timestamp": int(time.time() * 1000),
+            "provider": "mock"
         }
     
-    def _generate_synthetic_sector_data(self) -> Dict[str, str]:
-        """Generate synthetic sector performance data"""
-        sectors = ['technology', 'healthcare', 'financials', 'consumer_discretionary', 'utilities', 'energy']
-        performances = ['outperforming', 'neutral', 'underperforming']
+    def get_options_chain(self, symbol: str, limit: int = 50) -> Dict[str, Any]:
+        """Get options chain with caching and provider fallback"""
+        symbol = symbol.upper().strip()
+        cache_key = self._cache_key("options", symbol=symbol, limit=limit)
         
-        sector_data = {}
-        for sector in sectors:
-            # Weight towards neutral performance
-            weights = [0.3, 0.5, 0.2]  # 30% outperforming, 50% neutral, 20% underperforming
-            sector_data[sector] = random.choices(performances, weights=weights)[0]
+        # Try cache first
+        cached_data = self._get_from_cache(cache_key)
+        if cached_data:
+            logger.debug(f"Cache hit for options: {symbol}")
+            return cached_data
         
-        return sector_data
-    
-    def _generate_synthetic_economic_data(self) -> Dict[str, float]:
-        """Generate synthetic economic indicators"""
-        return {
-            'interest_rate': round(random.uniform(0.03, 0.08), 4),
-            'gdp_growth': round(random.uniform(-0.01, 0.04), 4),
-            'unemployment_rate': round(random.uniform(0.03, 0.08), 4),
-            'inflation_rate': round(random.uniform(0.01, 0.06), 4),
-            'method': 'synthetic'
-        }
-    
-    def _generate_synthetic_regime_indicators(self) -> Dict[str, Any]:
-        """Generate synthetic regime indicators"""
-        return {
-            'sp500_return': round(random.uniform(-0.08, 0.12), 4),
-            'volatility': round(random.uniform(0.08, 0.30), 4),
-            'interest_rate': round(random.uniform(0.02, 0.10), 4),
-            'gdp_growth': round(random.uniform(-0.02, 0.05), 4),
-            'unemployment_rate': round(random.uniform(0.03, 0.09), 4),
-            'sector_performance': self._generate_synthetic_sector_data(),
-            'market_regime': random.choice(['bull_market', 'bear_market', 'sideways', 'volatile']),
-            'volatility_regime': random.choice(['low', 'moderate', 'high']),
-            'interest_rate_environment': random.choice(['rising', 'falling', 'stable']),
-            'economic_cycle': random.choice(['expansion', 'peak', 'contraction', 'trough']),
-            'method': 'synthetic'
-        }
-    
-    def _initialize_fallback_data(self) -> Dict[str, Any]:
-        """Initialize fallback data structure"""
-        return {
-            'market_overview': self._generate_synthetic_market_data(),
-            'sector_performance': self._generate_synthetic_sector_data(),
-            'economic_indicators': self._generate_synthetic_economic_data(),
-            'regime_indicators': self._generate_synthetic_regime_indicators()
-        }
-    
-    def set_api_keys(self, alpha_vantage_key: str = None, finnhub_key: str = None):
-        """Set API keys for real data sources"""
-        if alpha_vantage_key:
-            self.alpha_vantage_key = alpha_vantage_key
-        if finnhub_key:
-            self.finnhub_key = finnhub_key
+        # Try Polygon for options (Finnhub has limited options support)
+        try:
+            data = self._get_polygon_options(symbol, limit)
+            if data and data.get("contracts"):
+                data["provider"] = "polygon"
+                data["cached_at"] = int(time.time())
+                
+                # Cache the result
+                self._set_cache(cache_key, data, self.cache_ttl["options"])
+                
+                logger.info(f"Options chain retrieved for {symbol} from polygon")
+                return data
+        except Exception as e:
+            logger.warning(f"Polygon options failed for {symbol}: {e}")
         
-        logger.info("API keys updated")
+        # Fallback to mock options
+        logger.warning(f"Options providers failed for {symbol}, using mock data")
+        return self._get_mock_options(symbol, limit)
     
-    def clear_cache(self):
-        """Clear the market data cache"""
-        self.cache.clear()
-        self.cache_expiry.clear()
-        logger.info("Market data cache cleared")
+    def _get_polygon_options(self, symbol: str, limit: int) -> Dict[str, Any]:
+        """Get options from Polygon.io"""
+        import httpx
+        
+        api_key = getattr(settings, 'POLYGON_API_KEY', None)
+        if not api_key or api_key.strip() == '':
+            raise Exception("Polygon API key not configured or empty")
+        
+        try:
+            with httpx.Client(timeout=10) as client:
+                # Get options contracts
+                response = client.get(
+                    "https://api.polygon.io/v3/reference/options/contracts",
+                    params={
+                        "underlying_ticker": symbol,
+                        "limit": limit,
+                        "apikey": api_key
+                    }
+                )
+                response.raise_for_status()
+                data = response.json()
+                
+                if data.get("status") == "OK":
+                    contracts = data.get("results", [])
+                    
+                    # Process contracts
+                    contract_data = []
+                    for contract in contracts[:limit]:
+                        contract_data.append({
+                            "symbol": contract.get("ticker", ""),
+                            "type": contract.get("contract_type", "").upper(),
+                            "strike": float(contract.get("strike_price", 0)),
+                            "expiration": contract.get("expiration_date", ""),
+                            "ticker": contract.get("ticker", ""),
+                        })
+                    
+                    return {
+                        "symbol": symbol,
+                        "contracts": contract_data,
+                    }
+                
+                raise Exception(f"No options data available for {symbol}")
+                
+        except Exception as e:
+            raise Exception(f"Polygon options API error: {e}")
     
-    def get_cache_status(self) -> Dict[str, Any]:
-        """Get cache status information"""
+    def _get_option_quote(self, client, contract_symbol: str, api_key: str) -> Dict[str, Any]:
+        """Get quote for a specific option contract"""
+        try:
+            response = client.get(
+                f"https://api.polygon.io/v2/last/trade/{contract_symbol}",
+                params={"apikey": api_key}
+            )
+            response.raise_for_status()
+            data = response.json()
+            
+            if data.get("status") == "OK" and data.get("results"):
+                result = data["results"]
+                return {
+                    "last_price": float(result.get("p", 0)),
+                    "volume": result.get("s", 0)
+                }
+        except:
+            pass
+        
+        # Fallback to NBBO
+        try:
+            response = client.get(
+                f"https://api.polygon.io/v2/last/nbbo/{contract_symbol}",
+                params={"apikey": api_key}
+            )
+            response.raise_for_status()
+            data = response.json()
+            
+            if data.get("status") == "OK" and data.get("results"):
+                result = data["results"]
+                bid = result.get("bid", {})
+                ask = result.get("ask", {})
+                
+                return {
+                    "bid": float(bid.get("price", 0)) if bid.get("price") else None,
+                    "ask": float(ask.get("price", 0)) if ask.get("price") else None
+                }
+        except:
+            pass
+        
+        return {}
+    
+    def _get_mock_options(self, symbol: str, limit: int) -> Dict[str, Any]:
+        """Fallback mock options data"""
+        import random
+        from datetime import datetime, timedelta
+        
+        # Get current price for realistic strikes
+        quote_data = self.get_quote(symbol)
+        current_price = quote_data.get("price", 100.0)
+        
+        # Generate expiration dates (next 4 Fridays)
+        today = datetime.now()
+        expirations = []
+        for i in range(1, 5):
+            exp_date = today + timedelta(days=7*i)
+            expirations.append(exp_date.strftime('%Y-%m-%d'))
+        
+        contracts = []
+        for exp in expirations[:2]:  # Only first 2 expirations
+            for strike in range(int(current_price - 15), int(current_price + 15), 10):
+                # Call option
+                contracts.append({
+                    "symbol": f'{symbol}{exp.replace("-", "")}C{strike:05d}',
+                    "type": "CALL",
+                    "strike": float(strike),
+                    "expiration": exp,
+                    "bid": max(0.01, (current_price - strike) * 0.1 + random.uniform(-0.5, 0.5)),
+                    "ask": max(0.01, (current_price - strike) * 0.1 + random.uniform(0.5, 1.0)),
+                    "last_price": max(0.01, (current_price - strike) * 0.1 + random.uniform(-0.3, 0.3)),
+                    "volume": random.randint(100, 500),
+                    "open_interest": random.randint(1000, 3000),
+                })
+                
+                # Put option
+                contracts.append({
+                    "symbol": f'{symbol}{exp.replace("-", "")}P{strike:05d}',
+                    "type": "PUT",
+                    "strike": float(strike),
+                    "expiration": exp,
+                    "bid": max(0.01, (strike - current_price) * 0.1 + random.uniform(-0.5, 0.5)),
+                    "ask": max(0.01, (strike - current_price) * 0.1 + random.uniform(0.5, 1.0)),
+                    "last_price": max(0.01, (strike - current_price) * 0.1 + random.uniform(-0.3, 0.3)),
+                    "volume": random.randint(100, 500),
+                    "open_interest": random.randint(1000, 3000),
+                })
+        
         return {
-            'cache_size': len(self.cache),
-            'cache_keys': list(self.cache.keys()),
-            'cache_expiry': self.cache_expiry,
-            'cache_duration': self.cache_duration
+            "symbol": symbol,
+            "contracts": contracts[:limit],
+            "provider": "mock"
         }
+    
+    def clear_cache(self, pattern: str = None):
+        """Clear cache entries matching pattern"""
+        if not REDIS_AVAILABLE:
+            return {"cleared": 0, "redis_available": False}
+        
+        if pattern is None:
+            pattern = f"{self.cache_prefix}*"
+        
+        try:
+            keys = redis_client.keys(pattern)
+            if keys:
+                redis_client.delete(*keys)
+                logger.info(f"🧹 Cleared {len(keys)} cache entries matching '{pattern}'")
+                return {"cleared": len(keys), "pattern": pattern}
+            return {"cleared": 0, "pattern": pattern}
+        except Exception as e:
+            logger.error(f"❌ Failed to clear cache: {e}")
+            return {"error": str(e), "pattern": pattern}
+    
+    def get_cache_stats(self):
+        """Get cache statistics"""
+        if not REDIS_AVAILABLE:
+            return {"redis_available": False}
+        
+        try:
+            info = redis_client.info('memory')
+            keys = redis_client.keys(f"{self.cache_prefix}*")
+            
+            return {
+                "redis_available": True,
+                "total_keys": len(keys),
+                "memory_used": info.get('used_memory_human', 'unknown'),
+                "memory_peak": info.get('used_memory_peak_human', 'unknown'),
+                "cache_prefix": self.cache_prefix,
+                "sample_keys": [key for key in keys[:5]]  # First 5 keys as sample
+            }
+        except Exception as e:
+            logger.error(f"❌ Failed to get cache stats: {e}")
+            return {"redis_available": True, "error": str(e)}

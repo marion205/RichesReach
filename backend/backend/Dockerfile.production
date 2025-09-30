@@ -1,30 +1,48 @@
-# syntax=docker/dockerfile:1.6
-FROM python:3.11-slim
+# Production Dockerfile for RichesReach Backend
+FROM python:3.10-slim
 
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV DEBIAN_FRONTEND=noninteractive
 
+# Set work directory
 WORKDIR /app
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl build-essential libpq-dev postgresql-client && rm -rf /var/lib/apt/lists/*
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        postgresql-client \
+        build-essential \
+        libpq-dev \
+        curl \
+        redis-tools \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy only requirements first to maximize cache
-COPY backend/backend/requirements.production.txt /app/requirements.txt
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Cache pip directory between builds
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --upgrade pip && \
-    pip install -r requirements.txt
+# Copy project
+COPY . .
 
-# Now copy the rest of the app (small diff -> keeps cache)
-COPY backend/backend/ /app
+# Create logs directory
+RUN mkdir -p logs
 
-# Remove any SQLite database files
-RUN rm -f db.sqlite3
+# Collect static files
+RUN python manage.py collectstatic --noinput
 
+# Create non-root user
+RUN adduser --disabled-password --gecos '' appuser
+RUN chown -R appuser:appuser /app
+USER appuser
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health/ || exit 1
+
+# Expose port
 EXPOSE 8000
 
-# Daphne for Channels; skip migrations since schema is already applied
-CMD daphne -b 0.0.0.0 -p 8000 richesreach.asgi:application
+# Run the application
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "4", "--timeout", "120", "--keep-alive", "2", "--max-requests", "1000", "--max-requests-jitter", "100", "richesreach.wsgi:application"]

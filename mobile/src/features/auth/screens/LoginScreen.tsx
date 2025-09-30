@@ -107,7 +107,7 @@ console.error('Signup error:', err);
 const handleLogin = async () => {
   try {
     // GraphQL endpoint probe for debugging
-    const GQL_URL = `${process.env.EXPO_PUBLIC_API_URL || 'http://54.162.138.209:8000'}/graphql/`;
+    const GQL_URL = `${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000'}/graphql/`;
     try {
       const probeResponse = await fetch(GQL_URL, {
         method: 'POST',
@@ -123,7 +123,18 @@ const handleLogin = async () => {
     // Dev fallback for testing
     const USE_MOCK_AUTH = __DEV__;
     if (USE_MOCK_AUTH) {
-      const mock = { token: 'dev-mock-' + Date.now(), user: { id:'1', email, username:'dev' } };
+      // Create a proper mock JWT token with 3 parts (header.payload.signature)
+      const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+      const payload = btoa(JSON.stringify({ 
+        user_id: '1', 
+        email: email, 
+        username: 'dev',
+        exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60) // 24 hours from now
+      }));
+      const signature = btoa('mock-signature-' + Date.now());
+      const mockToken = `${header}.${payload}.${signature}`;
+      
+      const mock = { token: mockToken, user: { id:'1', email, username:'dev' } };
       await AsyncStorage.setItem('token', mock.token);
       await client.resetStore();
       onLogin(mock.token);
@@ -205,16 +216,7 @@ secureTextEntry
   disabled={loginLoading || inFlight.current}
 >
 <Text style={styles.buttonText}>
-{loginLoading || inFlight.current ? 'Logging In...' : 'Log In (GraphQL)'}
-</Text>
-</TouchableOpacity>
-<TouchableOpacity 
-  style={[styles.button, styles.buttonSecondary, (loginLoading || inFlight.current) && styles.buttonDisabled]} 
-  onPress={loginWithRest}
-  disabled={loginLoading || inFlight.current}
->
-<Text style={[styles.buttonText, styles.buttonTextSecondary]}>
-{loginLoading || inFlight.current ? 'Logging In...' : 'Log In (REST)'}
+{loginLoading || inFlight.current ? 'Logging In...' : 'Login'}
 </Text>
 </TouchableOpacity>
 <TouchableOpacity onPress={onNavigateToForgotPassword}>
@@ -267,10 +269,6 @@ paddingVertical: 12,
 borderRadius: 6,
 alignItems: 'center',
 },
-buttonSecondary: {
-backgroundColor: '#34c759',
-marginTop: 8,
-},
 buttonDisabled: {
 backgroundColor: '#ccc',
 },
@@ -278,9 +276,6 @@ buttonText: {
 color: '#fff',
 fontWeight: 'bold',
 fontSize: 16,
-},
-buttonTextSecondary: {
-color: '#fff',
 },
 error: {
 color: 'red',

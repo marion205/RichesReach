@@ -151,12 +151,20 @@ class PortfolioType(graphene.ObjectType):
     name = graphene.String()
     totalValue = graphene.Float()
     totalReturnPercent = graphene.Float()
+    holdingsCount = graphene.Int()
+    holdings = graphene.List(lambda: MyPortfolioHoldingType)
 
 class StockType(graphene.ObjectType):
+    id = graphene.ID()
     symbol = graphene.String()
     companyName = graphene.String()
     currentPrice = graphene.Float()
     changePercent = graphene.Float()
+    sector = graphene.String()
+    marketCap = graphene.Float()
+    peRatio = graphene.Float()
+    dividendYield = graphene.Float()
+    beginnerFriendlyScore = graphene.Int()
 
 class CommentType(graphene.ObjectType):
     id = graphene.ID()
@@ -195,11 +203,111 @@ class QuoteType(graphene.ObjectType):
     symbol = graphene.String()
     last = graphene.Float()
     changePct = graphene.Float()
+    # Additional fields for mobile app
+    price = graphene.Float()
+    chg = graphene.Float()
+    chgPct = graphene.Float()
+    high = graphene.Float()
+    low = graphene.Float()
+    volume = graphene.Float()
+    currentPrice = graphene.Float()
+    change = graphene.Float()
 
-# Portfolio Types
-class PortfolioHoldingType(graphene.ObjectType):
+# Options Analysis Types
+class OptionType(graphene.ObjectType):
+    symbol = graphene.String()
+    contractSymbol = graphene.String()
+    strike = graphene.Float()
+    expirationDate = graphene.String()
+    optionType = graphene.String()
+    bid = graphene.Float()
+    ask = graphene.Float()
+    lastPrice = graphene.Float()
+    volume = graphene.Int()
+    openInterest = graphene.Int()
+    impliedVolatility = graphene.Float()
+    delta = graphene.Float()
+    gamma = graphene.Float()
+    theta = graphene.Float()
+    vega = graphene.Float()
+    rho = graphene.Float()
+    intrinsicValue = graphene.Float()
+    timeValue = graphene.Float()
+    daysToExpiration = graphene.Int()
+
+class GreeksType(graphene.ObjectType):
+    delta = graphene.Float()
+    gamma = graphene.Float()
+    theta = graphene.Float()
+    vega = graphene.Float()
+    rho = graphene.Float()
+
+class TopTradeType(graphene.ObjectType):
+    symbol = graphene.String()
+    contractSymbol = graphene.String()
+    optionType = graphene.String()
+    strike = graphene.Float()
+    expirationDate = graphene.String()
+    volume = graphene.Int()
+    openInterest = graphene.Int()
+    premium = graphene.Float()
+    impliedVolatility = graphene.Float()
+    unusualActivityScore = graphene.Float()
+    activityType = graphene.String()
+    type = graphene.String()
+
+class UnusualFlowType(graphene.ObjectType):
+    symbol = graphene.String()
+    totalVolume = graphene.Int()
+    unusualVolume = graphene.Int()
+    unusualVolumePercent = graphene.Float()
+    topTrades = graphene.List(TopTradeType)
+    sweepTrades = graphene.List(graphene.String)
+    blockTrades = graphene.List(graphene.String)
+    lastUpdated = graphene.String()
+
+class RecommendedStrategyType(graphene.ObjectType):
+    strategyName = graphene.String()
+    strategyType = graphene.String()
+    description = graphene.String()
+    riskLevel = graphene.String()
+    marketOutlook = graphene.String()
+    maxProfit = graphene.Float()
+    maxLoss = graphene.Float()
+    breakevenPoints = graphene.List(graphene.Float)
+    probabilityOfProfit = graphene.Float()
+    riskRewardRatio = graphene.Float()
+    daysToExpiration = graphene.Int()
+    totalCost = graphene.Float()
+    totalCredit = graphene.Float()
+
+class MarketSentimentType(graphene.ObjectType):
+    sentiment = graphene.String()
+    sentimentDescription = graphene.String()
+
+class OptionsChainType(graphene.ObjectType):
+    expirationDates = graphene.List(graphene.String)
+    calls = graphene.List(OptionType)
+    puts = graphene.List(OptionType)
+    greeks = graphene.Field(GreeksType)
+
+class OptionsAnalysisType(graphene.ObjectType):
+    underlyingSymbol = graphene.String()
+    underlyingPrice = graphene.Float()
+    optionsChain = graphene.Field(OptionsChainType)
+    unusualFlow = graphene.Field(UnusualFlowType)
+    recommendedStrategies = graphene.List(RecommendedStrategyType)
+    marketSentiment = graphene.Field(MarketSentimentType)
+    putCallRatio = graphene.Float()
+    impliedVolatilityRank = graphene.Float()
+    skew = graphene.Float()
+    sentimentScore = graphene.Float()
+    sentimentDescription = graphene.String()
+
+# PortfolioHoldingType for mobile app compatibility (myPortfolios)
+class MyPortfolioHoldingType(graphene.ObjectType):
     id = graphene.ID()
-    stock = graphene.Field('StockType')  # Keep quotes for forward reference
+    stock = graphene.Field(lambda: StockType)
     shares = graphene.Int()
     averagePrice = graphene.Float()
     currentPrice = graphene.Float()
@@ -208,11 +316,7 @@ class PortfolioHoldingType(graphene.ObjectType):
     createdAt = graphene.DateTime()
     updatedAt = graphene.DateTime()
 
-class PortfolioType(graphene.ObjectType):
-    name = graphene.String()
-    totalValue = graphene.Float()
-    holdingsCount = graphene.Int()
-    holdings = graphene.List(PortfolioHoldingType)
+# PortfolioType already defined above
 
 class MyPortfoliosType(graphene.ObjectType):
     totalPortfolios = graphene.Int()
@@ -599,13 +703,13 @@ class BaseQuery(graphene.ObjectType):
     
     def resolve_portfolioMetrics(self, info):
         d = _mock_portfolio_metrics()
-        # Safest: return typed objects (avoids dict key/name mismatches)
+        # Return the mock data directly - PortfolioMetricsType will handle the field resolution
         return PortfolioMetricsType(
             total_value=d["total_value"],
             total_cost=d["total_cost"],
             total_return=d["total_return"],
             total_return_percent=d["total_return_percent"],
-            holdings=[PortfolioHoldingType(**h) for h in d["holdings"]],
+            holdings=d["holdings"],  # Pass the raw data, let Graphene handle the conversion
         )
     
     def resolve_ping(self, info):
@@ -634,26 +738,18 @@ class BaseQuery(graphene.ObjectType):
         # Convert to basic StockType format
         result = []
         for item in items:
-            result.append(StockType(
-                id=item.get('symbol', ''),
-                symbol=item.get('symbol', ''),
-                company_name=item.get('company_name', ''),
-                sector=item.get('sector', ''),
-                current_price=item.get('current_price', 0.0),
-                market_cap=item.get('market_cap', 0.0),
-                pe_ratio=item.get('pe_ratio', 0.0),
-                dividend_yield=item.get('dividend_yield', 0.0),
-                beginner_friendly_score=item.get('beginner_friendly_score', 0),
-                dividend_score=item.get('dividend_score', 0),
-                # camelCase aliases
-                companyName=item.get('company_name', ''),
-                currentPrice=item.get('current_price', 0.0),
-                marketCap=item.get('market_cap', 0.0),
-                peRatio=item.get('pe_ratio', 0.0),
-                dividendYield=item.get('dividend_yield', 0.0),
-                dividendScore=item.get('dividend_score', 0),
-                beginnerFriendlyScore=item.get('beginner_friendly_score', 0)
-            ))
+            stock = StockType()
+            stock.id = item.get('symbol', '')
+            stock.symbol = item.get('symbol', '')
+            stock.companyName = item.get('company_name', '')
+            stock.currentPrice = item.get('current_price', 0.0)
+            stock.changePercent = item.get('change_percent', 0.0)
+            stock.sector = item.get('sector', '')
+            stock.marketCap = item.get('market_cap', 0.0)
+            stock.peRatio = item.get('pe_ratio', 0.0)
+            stock.dividendYield = item.get('dividend_yield', 0.0)
+            stock.beginnerFriendlyScore = item.get('beginner_friendly_score', 0)
+            result.append(stock)
         
         return result
     
@@ -836,26 +932,18 @@ class BaseQuery(graphene.ObjectType):
         # Convert to GraphQL format
         result = []
         for stock_data in beginner_stocks:
-            result.append(StockType(
-                id=stock_data.get('id', ''),
-                symbol=stock_data.get('symbol', ''),
-                company_name=stock_data.get('company_name', ''),
-                sector=stock_data.get('sector', ''),
-                current_price=stock_data.get('current_price'),
-                market_cap=stock_data.get('market_cap'),
-                pe_ratio=stock_data.get('pe_ratio'),
-                dividend_yield=stock_data.get('dividend_yield'),
-                beginner_friendly_score=stock_data.get('beginner_friendly_score'),
-                dividend_score=stock_data.get('dividend_score'),
-                # camelCase aliases
-                companyName=stock_data.get('company_name', ''),
-                currentPrice=stock_data.get('current_price'),
-                marketCap=stock_data.get('market_cap'),
-                peRatio=stock_data.get('pe_ratio'),
-                dividendYield=stock_data.get('dividend_yield'),
-                dividendScore=stock_data.get('dividend_score'),
-                beginnerFriendlyScore=stock_data.get('beginner_friendly_score')
-            ))
+            stock = StockType()
+            stock.id = stock_data.get('id', '')
+            stock.symbol = stock_data.get('symbol', '')
+            stock.companyName = stock_data.get('company_name', '')
+            stock.currentPrice = stock_data.get('current_price', 0.0)
+            stock.changePercent = stock_data.get('change_percent', 0.0)
+            stock.sector = stock_data.get('sector', '')
+            stock.marketCap = stock_data.get('market_cap', 0.0)
+            stock.peRatio = stock_data.get('pe_ratio', 0.0)
+            stock.dividendYield = stock_data.get('dividend_yield', 0.0)
+            stock.beginnerFriendlyScore = stock_data.get('beginner_friendly_score', 0)
+            result.append(stock)
         
         return result
     
@@ -1265,10 +1353,256 @@ class BaseQuery(graphene.ObjectType):
             mock_orders = mock_orders[:limit]
         
         return mock_orders
+    
+    def resolve_optionsAnalysis(self, info, symbol):
+        # Mock implementation for options analysis with performance optimizations
+        from datetime import datetime, timedelta
+        import random
+        
+        # Use a more stable price for better performance (less random variation)
+        base_price = 150.0
+        current_price = base_price + random.uniform(-5, 5)  # Reduced variation
+        
+        # Generate expiration dates (next 4 Fridays)
+        today = datetime.now()
+        expirations = []
+        for i in range(1, 5):
+            exp_date = today + timedelta(days=7*i)
+            expirations.append(exp_date.strftime('%Y-%m-%d'))
+        
+        # Generate calls and puts (reduced set for better performance)
+        calls = []
+        puts = []
+        
+        # Only generate options for 2 expiration dates and fewer strikes for better performance
+        for exp in expirations[:2]:  # Only first 2 expirations
+            for strike in range(int(current_price - 15), int(current_price + 15), 10):  # Wider strike spacing
+                # Call option
+                call = OptionType()
+                call.symbol = f'{symbol}{exp.replace("-", "")}C{strike:05d}'
+                call.contractSymbol = f'{symbol}{exp.replace("-", "")}C{strike:05d}'
+                call.strike = float(strike)
+                call.expirationDate = exp
+                call.optionType = 'call'
+                call.bid = max(0.01, (current_price - strike) * 0.1 + random.uniform(-0.5, 0.5))
+                call.ask = max(0.01, (current_price - strike) * 0.1 + random.uniform(0.5, 1.0))
+                call.lastPrice = max(0.01, (current_price - strike) * 0.1 + random.uniform(-0.3, 0.3))
+                call.volume = random.randint(100, 500)  # Reduced range
+                call.openInterest = random.randint(1000, 3000)  # Reduced range
+                call.impliedVolatility = round(random.uniform(0.20, 0.35), 3)  # Simplified range
+                call.delta = round(max(0, min(1, (current_price - strike) / current_price)), 3)  # Simplified calculation
+                call.gamma = round(random.uniform(0.005, 0.015), 4)  # Simplified range
+                call.theta = round(-random.uniform(0.02, 0.04), 3)  # Simplified range
+                call.vega = round(random.uniform(0.15, 0.25), 3)  # Simplified range
+                call.rho = round(random.uniform(0.02, 0.04), 3)  # Simplified range
+                call.intrinsicValue = max(0, current_price - strike)
+                call.timeValue = max(0.01, random.uniform(0.5, 5.0))
+                call.daysToExpiration = (datetime.strptime(exp, '%Y-%m-%d') - today).days
+                calls.append(call)
+                
+                # Put option
+                put = OptionType()
+                put.symbol = f'{symbol}{exp.replace("-", "")}P{strike:05d}'
+                put.contractSymbol = f'{symbol}{exp.replace("-", "")}P{strike:05d}'
+                put.strike = float(strike)
+                put.expirationDate = exp
+                put.optionType = 'put'
+                put.bid = max(0.01, (strike - current_price) * 0.1 + random.uniform(-0.5, 0.5))
+                put.ask = max(0.01, (strike - current_price) * 0.1 + random.uniform(0.5, 1.0))
+                put.lastPrice = max(0.01, (strike - current_price) * 0.1 + random.uniform(-0.3, 0.3))
+                put.volume = random.randint(100, 500)  # Reduced range
+                put.openInterest = random.randint(1000, 3000)  # Reduced range
+                put.impliedVolatility = round(random.uniform(0.20, 0.35), 3)  # Simplified range
+                put.delta = round(max(-1, min(0, (current_price - strike) / current_price)), 3)  # Simplified calculation
+                put.gamma = round(random.uniform(0.005, 0.015), 4)  # Simplified range
+                put.theta = round(-random.uniform(0.02, 0.04), 3)  # Simplified range
+                put.vega = round(random.uniform(0.15, 0.25), 3)  # Simplified range
+                put.rho = round(-random.uniform(0.02, 0.04), 3)  # Simplified range
+                put.intrinsicValue = max(0, strike - current_price)
+                put.timeValue = max(0.01, random.uniform(0.5, 5.0))
+                put.daysToExpiration = (datetime.strptime(exp, '%Y-%m-%d') - today).days
+                puts.append(put)
+        
+        # Calculate additional metrics
+        total_call_volume = sum(call.volume for call in calls)
+        total_put_volume = sum(put.volume for put in puts)
+        put_call_ratio = total_put_volume / total_call_volume if total_call_volume > 0 else 0.0
+        
+        # Calculate average implied volatility
+        all_ivs = [call.impliedVolatility for call in calls] + [put.impliedVolatility for put in puts]
+        avg_iv = sum(all_ivs) / len(all_ivs) if all_ivs else 0.0
+        
+        # Generate mock unusual flow data
+        top_trades = [
+            TopTradeType(
+                symbol=f"{symbol}20251007C00150",
+                contractSymbol=f"{symbol}20251007C00150",
+                optionType="call",
+                strike=150.0,
+                expirationDate="2025-10-07",
+                volume=5000,
+                openInterest=10000,
+                premium=2.50,
+                impliedVolatility=0.25,
+                unusualActivityScore=0.85,
+                activityType="sweep",
+                type="unusual"
+            ),
+            TopTradeType(
+                symbol=f"{symbol}20251014P00140",
+                contractSymbol=f"{symbol}20251014P00140",
+                optionType="put",
+                strike=140.0,
+                expirationDate="2025-10-14",
+                volume=3000,
+                openInterest=8000,
+                premium=1.80,
+                impliedVolatility=0.30,
+                unusualActivityScore=0.75,
+                activityType="block",
+                type="unusual"
+            )
+        ]
+        
+        unusual_flow = UnusualFlowType(
+            symbol=symbol,
+            totalVolume=50000,
+            unusualVolume=8000,
+            unusualVolumePercent=16.0,
+            topTrades=top_trades,
+            sweepTrades=[f"{symbol}20251021C00155", f"{symbol}20251028P00145"],
+            blockTrades=[f"{symbol}20251014C00150", f"{symbol}20251021P00140"],
+            lastUpdated="2025-09-30T15:30:00Z"
+        )
+        
+        # Generate mock recommended strategies
+        recommended_strategies = [
+            RecommendedStrategyType(
+                strategyName="Covered Call Strategy",
+                strategyType="income",
+                description="Sell call options against long stock position",
+                riskLevel="low",
+                marketOutlook="neutral",
+                maxProfit=2.50,
+                maxLoss=-10.0,
+                breakevenPoints=[145.0, 155.0],
+                probabilityOfProfit=0.65,
+                riskRewardRatio=0.25,
+                daysToExpiration=30,
+                totalCost=0.0,
+                totalCredit=2.50
+            ),
+            RecommendedStrategyType(
+                strategyName="Protective Put Strategy",
+                strategyType="protection",
+                description="Buy put options to protect long stock position",
+                riskLevel="low",
+                marketOutlook="bearish",
+                maxProfit=1000.0,  # Large but finite number
+                maxLoss=-2.0,
+                breakevenPoints=[148.0],
+                probabilityOfProfit=0.40,
+                riskRewardRatio=500.0,  # Large but finite number
+                daysToExpiration=30,
+                totalCost=2.0,
+                totalCredit=0.0
+            ),
+            RecommendedStrategyType(
+                strategyName="Iron Condor Strategy",
+                strategyType="neutral",
+                description="Sell call and put spreads for income",
+                riskLevel="medium",
+                marketOutlook="neutral",
+                maxProfit=1.50,
+                maxLoss=-3.50,
+                breakevenPoints=[146.5, 153.5],
+                probabilityOfProfit=0.70,
+                riskRewardRatio=0.43,
+                daysToExpiration=30,
+                totalCost=0.0,
+                totalCredit=1.50
+            ),
+            RecommendedStrategyType(
+                strategyName="Straddle Strategy",
+                strategyType="volatility",
+                description="Buy call and put at same strike",
+                riskLevel="high",
+                marketOutlook="volatile",
+                maxProfit=1000.0,  # Large but finite number
+                maxLoss=-5.0,
+                breakevenPoints=[145.0, 155.0],
+                probabilityOfProfit=0.30,
+                riskRewardRatio=200.0,  # Large but finite number
+                daysToExpiration=30,
+                totalCost=5.0,
+                totalCredit=0.0
+            )
+        ]
+        
+        # Determine market sentiment based on put/call ratio
+        if put_call_ratio > 1.2:
+            market_sentiment = MarketSentimentType(
+                sentiment="Bearish",
+                sentimentDescription="High put activity suggests bearish sentiment"
+            )
+            sentiment_score = -0.7
+            sentiment_description = "High put activity suggests bearish sentiment"
+        elif put_call_ratio < 0.8:
+            market_sentiment = MarketSentimentType(
+                sentiment="Bullish",
+                sentimentDescription="High call activity suggests bullish sentiment"
+            )
+            sentiment_score = 0.7
+            sentiment_description = "High call activity suggests bullish sentiment"
+        else:
+            market_sentiment = MarketSentimentType(
+                sentiment="Neutral",
+                sentimentDescription="Balanced options activity suggests neutral sentiment"
+            )
+            sentiment_score = 0.0
+            sentiment_description = "Balanced options activity suggests neutral sentiment"
+        
+        # Calculate skew (difference between put and call IVs)
+        call_ivs = [call.impliedVolatility for call in calls if call.impliedVolatility > 0]
+        put_ivs = [put.impliedVolatility for put in puts if put.impliedVolatility > 0]
+        avg_call_iv = sum(call_ivs) / len(call_ivs) if call_ivs else 0.0
+        avg_put_iv = sum(put_ivs) / len(put_ivs) if put_ivs else 0.0
+        skew = avg_put_iv - avg_call_iv
+        
+        # Generate mock Greeks summary
+        greeks_summary = GreeksType(
+            delta=0.5,
+            gamma=0.02,
+            theta=-0.05,
+            vega=0.15,
+            rho=0.01
+        )
+        
+        return OptionsAnalysisType(
+            underlyingSymbol=symbol,
+            underlyingPrice=current_price,
+            optionsChain=OptionsChainType(
+                expirationDates=expirations,
+                calls=calls,
+                puts=puts,
+                greeks=greeks_summary
+            ),
+            unusualFlow=unusual_flow,
+            recommendedStrategies=recommended_strategies,
+            marketSentiment=market_sentiment,
+            putCallRatio=round(put_call_ratio, 3),
+            impliedVolatilityRank=round(avg_iv, 3),
+            skew=round(skew, 3),
+            sentimentScore=round(sentiment_score, 2),
+            sentimentDescription=sentiment_description
+        )
 
 class Query(SwingQuery, BaseQuery, graphene.ObjectType):
     # merging by multiple inheritance; keep simple to avoid MRO issues
     optionOrders = graphene.List(OptionOrderType, status=graphene.String())
+    
+    # Options Analysis
+    optionsAnalysis = graphene.Field(lambda: OptionsAnalysisType, symbol=graphene.String(required=True))
     
     def resolve_optionOrders(self, info, status=None):
         # Mock implementation - return sample option orders
@@ -1838,12 +2172,23 @@ class Query(SwingQuery, BaseQuery, graphene.ObjectType):
             variation = random.uniform(-0.05, 0.05)  # ±5% variation
             current_price = base_price * (1 + variation)
             change_pct = variation * 100
+            change_amount = current_price - base_price
             
-            mock_quotes.append({
-                "symbol": symbol,
-                "last": round(current_price, 2),
-                "changePct": round(change_pct, 2)
-            })
+            # Create QuoteType object
+            quote = QuoteType()
+            quote.symbol = symbol
+            quote.last = round(current_price, 2)
+            quote.changePct = round(change_pct, 2)
+            quote.price = round(current_price, 2)
+            quote.chg = round(change_amount, 2)
+            quote.chgPct = round(change_pct, 2)
+            quote.high = round(current_price * 1.02, 2)  # Mock high
+            quote.low = round(current_price * 0.98, 2)   # Mock low
+            quote.volume = random.randint(1000000, 10000000)  # Mock volume
+            quote.currentPrice = round(current_price, 2)
+            quote.change = round(change_amount, 2)
+            
+            mock_quotes.append(quote)
         
         return mock_quotes
 
@@ -1873,11 +2218,15 @@ class Query(SwingQuery, BaseQuery, graphene.ObjectType):
             }
         ]
         
-        # Create mock holdings
+        # Create mock holdings with the structure expected by mobile app
         mock_holdings = [
             {
                 "id": "1",
-                "stock": mock_stocks[0],
+                "stock": {
+                    "id": "1",
+                    "symbol": "AAPL",
+                    "companyName": "Apple Inc."
+                },
                 "shares": 100,
                 "averagePrice": 145.50,
                 "currentPrice": 150.25,
@@ -1888,7 +2237,11 @@ class Query(SwingQuery, BaseQuery, graphene.ObjectType):
             },
             {
                 "id": "2",
-                "stock": mock_stocks[1],
+                "stock": {
+                    "id": "2",
+                    "symbol": "TSLA",
+                    "companyName": "Tesla Inc."
+                },
                 "shares": 50,
                 "averagePrice": 240.00,
                 "currentPrice": 245.80,
@@ -1899,7 +2252,11 @@ class Query(SwingQuery, BaseQuery, graphene.ObjectType):
             },
             {
                 "id": "3",
-                "stock": mock_stocks[2],
+                "stock": {
+                    "id": "3",
+                    "symbol": "MSFT",
+                    "companyName": "Microsoft Corporation"
+                },
                 "shares": 75,
                 "averagePrice": 325.00,
                 "currentPrice": 330.15,
@@ -1926,11 +2283,44 @@ class Query(SwingQuery, BaseQuery, graphene.ObjectType):
             }
         ]
         
-        return {
-            "totalPortfolios": 2,
-            "totalValue": 52076.25,
-            "portfolios": mock_portfolios
-        }
+        # Create properly instantiated PortfolioType objects
+        portfolio_objects = []
+        for portfolio_data in mock_portfolios:
+            portfolio = PortfolioType()
+            portfolio.name = portfolio_data["name"]
+            portfolio.totalValue = portfolio_data["totalValue"]
+            portfolio.holdingsCount = portfolio_data["holdingsCount"]
+            
+            # Create properly instantiated PortfolioHoldingType objects
+            holdings_objects = []
+            for holding_data in portfolio_data["holdings"]:
+                # Create StockType object
+                stock = StockType()
+                stock.id = holding_data["stock"]["id"]
+                stock.symbol = holding_data["stock"]["symbol"]
+                stock.companyName = holding_data["stock"]["companyName"]
+                
+                # Create MyPortfolioHoldingType object
+                holding = MyPortfolioHoldingType()
+                holding.id = holding_data["id"]
+                holding.stock = stock
+                holding.shares = holding_data["shares"]
+                holding.averagePrice = holding_data["averagePrice"]
+                holding.currentPrice = holding_data["currentPrice"]
+                holding.totalValue = holding_data["totalValue"]
+                holding.notes = holding_data["notes"]
+                holding.createdAt = holding_data["createdAt"]
+                holding.updatedAt = holding_data["updatedAt"]
+                holdings_objects.append(holding)
+            
+            portfolio.holdings = holdings_objects
+            portfolio_objects.append(portfolio)
+        
+        return MyPortfoliosType(
+            totalPortfolios=2,
+            totalValue=52076.25,
+            portfolios=portfolio_objects
+        )
 
     def resolve_dayTradingPicks(self, info, mode):
         # Mock implementation for day trading picks
@@ -2229,17 +2619,272 @@ class Mutation(graphene.ObjectType):
             message="Income profile created successfully"
         )
     
-        def resolve_generateAiRecommendations(self, info):
-            # Mock implementation - generate sample AI recommendations
-            # In a real implementation, this would use ML/AI to generate personalized recommendations
-            mock_recommendations = [
+    def resolve_generateAiRecommendations(self, info):
+        print("DEBUG: generateAiRecommendations mutation called - USING REAL AI")
+        # Check if user is authenticated
+        user = info.context.user
+        print(f"DEBUG: User: {user}, Authenticated: {user.is_authenticated if user else 'No user'}")
+        
+        # For development, let's create a mock user if none exists
+        if not user or not user.is_authenticated:
+            print("DEBUG: No authenticated user, creating mock user for development")
+            # Create a mock user object for development
+            class MockUser:
+                def __init__(self):
+                    self.id = 1
+                    self.is_authenticated = True
+                    self.email = "test@example.com"
+                    self.username = "dev"
+            user = MockUser()
+        
+        # Get user profile data
+        user_profile = {}
+        try:
+            # Try to get the income profile
+            income_profile = getattr(user, 'incomeprofile', None)
+            if income_profile:
+                user_profile = {
+                    'age': getattr(income_profile, 'age', 30),
+                    'income_bracket': getattr(income_profile, 'income_bracket', 'Unknown'),
+                    'investment_horizon': getattr(income_profile, 'investment_horizon', '5-10 years'),
+                    'risk_tolerance': getattr(income_profile, 'risk_tolerance', 'Moderate'),
+                    'investment_goals': getattr(income_profile, 'investment_goals', ['Wealth Building'])
+                }
+                print(f"DEBUG: Using real user profile: {user_profile}")
+            else:
+                print("DEBUG: No income profile found, using default profile")
+                user_profile = {
+                    'age': 30,
+                    'income_bracket': 'Unknown',
+                    'investment_horizon': '5-10 years',
+                    'risk_tolerance': 'Moderate',
+                    'investment_goals': ['Wealth Building']
+                }
+        except Exception as e:
+            print(f"DEBUG: Profile error: {e}, using default profile")
+            user_profile = {
+                'age': 30,
+                'income_bracket': 'Unknown',
+                'investment_horizon': '5-10 years',
+                'risk_tolerance': 'Moderate',
+                'investment_goals': ['Wealth Building']
+            }
+        
+        # Generate REAL AI recommendations using OpenAI (Production-Safe Implementation)
+        try:
+            from openai import OpenAI
+            from django.conf import settings
+            import json
+            
+            if settings.OPENAI_API_KEY:
+                print("DEBUG: Using OpenAI API for real AI recommendations")
+                
+                # Production-safe OpenAI integration
+                client = OpenAI(api_key=settings.OPENAI_API_KEY)
+                
+                SYSTEM_PROMPT = (
+                    "You are a professional financial advisor. "
+                    "Return strict JSON only. No prose, no markdown."
+                )
+                
+                def build_prompt(user_profile: dict) -> str:
+                    return f"""
+Create 3 personalized investment portfolio recommendations for:
+Age: {user_profile.get('age')}
+Income: {user_profile.get('income_bracket')}
+Risk Tolerance: {user_profile.get('risk_tolerance')}
+Goals: {', '.join(user_profile.get('investment_goals', []))}
+Investment Horizon: {user_profile.get('investment_horizon')}
+
+Return a JSON array with 3 items. Each item must have:
+- "riskProfile": "Conservative" | "Moderate" | "Aggressive"
+- "portfolioAllocation": string (e.g., "60% Stocks, 30% Bonds, 10% Cash")
+- "recommendedStocks": string[] (tickers like ["VTI","BND","QQQ"])
+- "expectedPortfolioReturn": number (decimal, e.g., 0.08)
+- "riskAssessment": string
+"""
+                
+                def parse_or_fallback(text: str, fallback_data: list) -> list:
+                    try:
+                        data = json.loads(text)
+                        if isinstance(data, list) and len(data) >= 1:
+                            return data
+                    except Exception:
+                        pass
+                    return fallback_data
+                
+                def fallback_recommendations(user_profile: dict) -> list:
+                    return [
+                        {
+                            "riskProfile": "Moderate",
+                            "portfolioAllocation": "60% Stocks, 30% Bonds, 10% Cash",
+                            "recommendedStocks": ["VTI", "VXUS", "BND"],
+                            "expectedPortfolioReturn": 0.07,
+                            "riskAssessment": "Diversified core allocation with moderate volatility."
+                        },
+                        {
+                            "riskProfile": "Conservative",
+                            "portfolioAllocation": "40% Stocks, 50% Bonds, 10% Cash",
+                            "recommendedStocks": ["VTV", "BND", "SHY"],
+                            "expectedPortfolioReturn": 0.05,
+                            "riskAssessment": "Lower volatility focus with income tilt."
+                        },
+                        {
+                            "riskProfile": "Aggressive",
+                            "portfolioAllocation": "80% Stocks, 15% Bonds, 5% Cash",
+                            "recommendedStocks": ["QQQ", "VTI", "IWM"],
+                            "expectedPortfolioReturn": 0.10,
+                            "riskAssessment": "Higher growth potential with higher drawdown risk."
+                        },
+                    ]
+                
+                # Check if OpenAI is enabled
+                if not settings.USE_OPENAI:
+                    print("DEBUG: OpenAI disabled via USE_OPENAI flag, using fallback recommendations")
+                    raise Exception("OpenAI disabled")
+                
+                # Generate AI recommendations with smart model fallback
+                prompt = build_prompt(user_profile)
+                
+                # Try models in order of preference
+                models_to_try = [settings.OPENAI_MODEL, "gpt-4o-mini", "gpt-3.5-turbo"]
+                
+                try:
+                    for model in models_to_try:
+                        try:
+                            print(f"DEBUG: Trying model: {model}")
+                            # Use the new Responses API with timeout
+                            res = client.chat.completions.create(
+                                model=model,
+                                messages=[
+                                    {"role": "system", "content": SYSTEM_PROMPT},
+                                    {"role": "user", "content": prompt},
+                                ],
+                                temperature=0.6,
+                                max_tokens=settings.OPENAI_MAX_TOKENS,
+                                timeout=settings.OPENAI_TIMEOUT_MS / 1000,  # Convert to seconds
+                            )
+                            print(f"DEBUG: Successfully used model: {model}")
+                            break  # Success, exit the loop
+                        except Exception as model_error:
+                            print(f"DEBUG: Model {model} failed: {model_error}")
+                            if model == models_to_try[-1]:  # Last model failed
+                                raise model_error  # Re-raise the last error
+                            continue  # Try next model
+                    
+                    # If we get here, one of the models worked
+                    text = res.choices[0].message.content
+                    data = parse_or_fallback(text, fallback_recommendations(user_profile))
+                    
+                    # Convert to GraphQL format
+                    recommendations = []
+                    for i, rec in enumerate(data):
+                        recommendations.append(AIRecommendationType(
+                            id=str(i + 1),
+                            riskProfile=rec.get('riskProfile', 'Moderate'),
+                            portfolioAllocation=rec.get('portfolioAllocation', '60% Stocks, 30% Bonds, 10% Cash'),
+                            recommendedStocks=rec.get('recommendedStocks', ['VTI', 'BND', 'VXUS']),
+                            expectedPortfolioReturn=float(rec.get('expectedPortfolioReturn', 0.08)),
+                            riskAssessment=rec.get('riskAssessment', 'Moderate risk with balanced growth potential')
+                        ))
+                    
+                    print("DEBUG: Successfully generated real AI recommendations")
+                    return GenerateAIRecommendationsResult(
+                        success=True,
+                        message="AI recommendations generated successfully using OpenAI",
+                        recommendations=recommendations
+                    )
+                
+                except Exception as e:
+                    msg = str(e).lower()
+                    quota_like = any(k in msg for k in ["insufficient_quota", "billing", "rate limit", "exceeded"])
+                    timeout_like = any(k in msg for k in ["timeout", "timed out", "connection"])
+                    
+                    if not settings.OPENAI_ENABLE_FALLBACK:
+                        print(f"DEBUG: OpenAI error and fallback disabled: {e}")
+                        raise e
+                    
+                    if quota_like:
+                        print(f"DEBUG: OpenAI quota/limit error: {e}, using fallback recommendations")
+                    elif timeout_like:
+                        print(f"DEBUG: OpenAI timeout error: {e}, using fallback recommendations")
+                    else:
+                        print(f"DEBUG: OpenAI error: {e}, using fallback recommendations")
+                    
+                    # Use fallback data
+                    fallback_data = fallback_recommendations(user_profile)
+                    recommendations = []
+                    for i, rec in enumerate(fallback_data):
+                        recommendations.append(AIRecommendationType(
+                            id=str(i + 1),
+                            riskProfile=rec.get('riskProfile', 'Moderate'),
+                            portfolioAllocation=rec.get('portfolioAllocation', '60% Stocks, 30% Bonds, 10% Cash'),
+                            recommendedStocks=rec.get('recommendedStocks', ['VTI', 'BND', 'VXUS']),
+                            expectedPortfolioReturn=float(rec.get('expectedPortfolioReturn', 0.08)),
+                            riskAssessment=rec.get('riskAssessment', 'Moderate risk with balanced growth potential')
+                        ))
+                    
+                    return GenerateAIRecommendationsResult(
+                        success=True,
+                        message="AI recommendations generated successfully (fallback mode)",
+                        recommendations=recommendations
+                    )
+            else:
+                print("DEBUG: No OpenAI API key, using fallback recommendations")
+        except Exception as e:
+            print(f"DEBUG: OpenAI setup error: {e}, using fallback recommendations")
+        
+        # Fallback to smart mock recommendations based on user profile
+        risk_tolerance = user_profile.get('risk_tolerance', 'Moderate').lower()
+        age = user_profile.get('age', 30)
+        
+        if 'conservative' in risk_tolerance or age > 50:
+            recommendations = [
+                AIRecommendationType(
+                    id="1",
+                    riskProfile="Conservative",
+                    portfolioAllocation="40% Stocks, 50% Bonds, 10% Cash",
+                    recommendedStocks=["VTI", "BND", "VXUS", "GLD"],
+                    expectedPortfolioReturn=0.06,
+                    riskAssessment="Conservative approach with stable returns and lower volatility"
+                ),
+                AIRecommendationType(
+                    id="2",
+                    riskProfile="Moderate",
+                    portfolioAllocation="60% Stocks, 30% Bonds, 10% Cash",
+                    recommendedStocks=["VTI", "BND", "VXUS", "QQQ"],
+                    expectedPortfolioReturn=0.08,
+                    riskAssessment="Balanced approach with moderate risk and steady growth"
+                )
+            ]
+        elif 'aggressive' in risk_tolerance or age < 30:
+            recommendations = [
+                AIRecommendationType(
+                    id="1",
+                    riskProfile="Aggressive",
+                    portfolioAllocation="80% Stocks, 15% Bonds, 5% Cash",
+                    recommendedStocks=["QQQ", "VTI", "ARKK", "TSLA", "NVDA"],
+                    expectedPortfolioReturn=0.12,
+                    riskAssessment="High growth potential with increased volatility and risk"
+                ),
+                AIRecommendationType(
+                    id="2",
+                    riskProfile="Moderate",
+                    portfolioAllocation="60% Stocks, 30% Bonds, 10% Cash",
+                    recommendedStocks=["VTI", "BND", "VXUS", "QQQ"],
+                    expectedPortfolioReturn=0.08,
+                    riskAssessment="Balanced approach with moderate risk and steady growth"
+                )
+            ]
+        else:  # Moderate
+            recommendations = [
                 AIRecommendationType(
                     id="1",
                     riskProfile="Moderate",
                     portfolioAllocation="60% Stocks, 30% Bonds, 10% Cash",
-                    recommendedStocks=["AAPL", "MSFT", "GOOGL", "VTI", "BND"],
+                    recommendedStocks=["VTI", "BND", "VXUS", "QQQ"],
                     expectedPortfolioReturn=0.08,
-                    riskAssessment="Moderate risk with balanced growth potential"
+                    riskAssessment="Balanced approach with moderate risk and steady growth potential"
                 ),
                 AIRecommendationType(
                     id="2",
@@ -2248,22 +2893,15 @@ class Mutation(graphene.ObjectType):
                     recommendedStocks=["VTI", "BND", "VXUS", "GLD"],
                     expectedPortfolioReturn=0.06,
                     riskAssessment="Conservative approach with stable returns"
-                ),
-                AIRecommendationType(
-                    id="3",
-                    riskProfile="Aggressive",
-                    portfolioAllocation="80% Stocks, 15% Bonds, 5% Cash",
-                    recommendedStocks=["TSLA", "NVDA", "ARKK", "QQQ", "SPY"],
-                    expectedPortfolioReturn=0.12,
-                    riskAssessment="High growth potential with increased volatility"
                 )
             ]
-            
-            return GenerateAIRecommendationsResult(
-                success=True,
-                message="AI recommendations generated successfully",
-                recommendations=mock_recommendations
-            )
+        
+        print("DEBUG: Returning fallback AI recommendations")
+        return GenerateAIRecommendationsResult(
+            success=True,
+            message="AI recommendations generated successfully (fallback mode)",
+            recommendations=recommendations
+        )
 
 
     def resolve_createPosition(self, info, symbol, side, price, atr, quantity=None, sector=None, confidence=None):
@@ -2385,7 +3023,7 @@ class TickerPostType(graphene.ObjectType):
     kind = graphene.String()
     title = graphene.String()
     tickers = graphene.List(graphene.String)
-    user = graphene.Field('core.graphql.types.UserType')
+    user = graphene.Field(lambda: UserType)
     createdAt = graphene.DateTime()
 
 class Subscription(graphene.ObjectType):

@@ -4,7 +4,7 @@ export const GET_MY_FOLLOWS = gql`
   query GetMyFollows {
     me {
       id
-      followedTickers { symbol }
+      followedTickers
     }
   }
 `;

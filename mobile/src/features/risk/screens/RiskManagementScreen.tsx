@@ -228,30 +228,30 @@ export default function RiskManagementScreen({ navigateTo }: RiskManagementScree
           <View style={styles.summaryCard}>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Account Value:</Text>
-              <Text style={styles.summaryValue}>{formatCurrency(riskSummary.account_value)}</Text>
+              <Text style={styles.summaryValue}>{formatCurrency(riskSummary.accountValue)}</Text>
             </View>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Daily P&L:</Text>
               <Text style={[
                 styles.summaryValue,
-                { color: riskSummary.daily_pnl >= 0 ? '#4CAF50' : '#F44336' }
+                { color: riskSummary.dailyPnl >= 0 ? '#4CAF50' : '#F44336' }
               ]}>
-                {formatCurrency(riskSummary.daily_pnl)} ({formatPercentage(riskSummary.daily_pnl_pct)})
+                {formatCurrency(riskSummary.dailyPnl)} ({formatPercentage(riskSummary.dailyPnlPct)})
               </Text>
             </View>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Active Positions:</Text>
-              <Text style={styles.summaryValue}>{riskSummary.active_positions}</Text>
+              <Text style={styles.summaryValue}>{riskSummary.activePositions}</Text>
             </View>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Total Exposure:</Text>
               <Text style={styles.summaryValue}>
-                {formatCurrency(riskSummary.total_exposure)} ({formatPercentage(riskSummary.exposure_pct)})
+                {formatCurrency(riskSummary.totalExposure)} ({formatPercentage(riskSummary.exposurePct)})
               </Text>
             </View>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Risk Level:</Text>
-              <Text style={styles.summaryValue}>{riskSummary.risk_level}</Text>
+              <Text style={styles.summaryValue}>{riskSummary.riskLevel}</Text>
             </View>
           </View>
         ) : (
@@ -275,15 +275,15 @@ export default function RiskManagementScreen({ navigateTo }: RiskManagementScree
             <>
               <View style={styles.settingRow}>
                 <Text style={styles.settingLabel}>Max Position Size:</Text>
-                <Text style={styles.settingValue}>{formatPercentage(riskSummary.risk_limits.max_position_size)}</Text>
+                <Text style={styles.settingValue}>{formatPercentage(riskSummary.riskLimits.maxPositionSize)}</Text>
               </View>
               <View style={styles.settingRow}>
                 <Text style={styles.settingLabel}>Max Daily Loss:</Text>
-                <Text style={styles.settingValue}>{formatPercentage(riskSummary.risk_limits.max_daily_loss)}</Text>
+                <Text style={styles.settingValue}>{formatPercentage(riskSummary.riskLimits.maxDailyLoss)}</Text>
               </View>
               <View style={styles.settingRow}>
                 <Text style={styles.settingLabel}>Max Concurrent Trades:</Text>
-                <Text style={styles.settingValue}>{riskSummary.risk_limits.max_concurrent_trades}</Text>
+                <Text style={styles.settingValue}>{riskSummary.riskLimits.maxConcurrentTrades}</Text>
               </View>
             </>
           )}
@@ -307,16 +307,16 @@ export default function RiskManagementScreen({ navigateTo }: RiskManagementScree
               </View>
               <View style={styles.positionDetails}>
                 <Text style={styles.positionDetail}>
-                  Entry: {formatCurrency(position.entry_price)} × {position.quantity}
+                  Entry: {formatCurrency(position.entryPrice)} × {position.quantity}
                 </Text>
                 <Text style={styles.positionDetail}>
-                  Stop Loss: {formatCurrency(position.stop_loss_price)}
+                  Stop Loss: {formatCurrency(position.stopLossPrice)}
                 </Text>
                 <Text style={styles.positionDetail}>
-                  Take Profit: {formatCurrency(position.take_profit_price)}
+                  Take Profit: {formatCurrency(position.takeProfitPrice)}
                 </Text>
                 <Text style={styles.positionDetail}>
-                  Time Remaining: {position.time_remaining_minutes} min
+                  Time Remaining: {position.timeRemainingMinutes} min
                 </Text>
               </View>
             </View>

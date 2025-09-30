@@ -5,6 +5,7 @@ from django.views.decorators.csrf import csrf_exempt
 from graphene_django.views import GraphQLView
 import time
 import json
+from core.schema import schema
 
 def healthz(_):
     return JsonResponse({"ok": True, "app": "richesreach"}, status=200)
@@ -391,4 +392,111 @@ urlpatterns.append(path("simple-graphql/", simple_graphql_test))
 urlpatterns.append(path("debug-env/", debug_env))
 urlpatterns.append(path("mock-graphql/", mock_graphql))
 from .views_auth import login_view
+from core.views_ai import ai_options_recommendations, ai_status, cache_status
+from core.views_health import health_check, readiness_check, liveness_check
+# from marketdata.urls import urlpatterns as marketdata_urls
+
 urlpatterns.append(path("api/auth/login/", login_view))
+# AI Options endpoints (both with and without trailing slash)
+urlpatterns.append(path("api/ai-options/recommendations", ai_options_recommendations, name='ai_opts_recs_no_slash'))
+urlpatterns.append(path("api/ai-options/recommendations/", ai_options_recommendations, name='ai_opts_recs'))
+# AI Status endpoint for feature flag checking
+urlpatterns.append(path("api/ai-status", ai_status, name='ai_status'))
+urlpatterns.append(path("api/cache-status", cache_status, name='cache_status'))
+
+# Health check endpoints
+urlpatterns.append(path("health/", health_check, name='health_check'))
+urlpatterns.append(path("health", health_check, name='health_check_no_slash'))
+urlpatterns.append(path("ready/", readiness_check, name='readiness_check'))
+urlpatterns.append(path("ready", readiness_check, name='readiness_check_no_slash'))
+urlpatterns.append(path("live/", liveness_check, name='liveness_check'))
+urlpatterns.append(path("live", liveness_check, name='liveness_check_no_slash'))
+
+# Market data endpoints
+# urlpatterns.extend(marketdata_urls)
+
+# Simple test endpoint for debugging
+@csrf_exempt
+def test_endpoint(request):
+    return JsonResponse({"status": "ok", "message": "Test endpoint working", "timestamp": str(time.time())})
+
+@csrf_exempt
+def ai_options_recommendations(request):
+    """REST endpoint that forwards to GraphQL generateAiRecommendations mutation"""
+    if request.method != "POST":
+        return JsonResponse({"detail": "Method not allowed"}, status=405)
+    
+    try:
+        payload = json.loads(request.body.decode("utf-8"))
+    except Exception:
+        return JsonResponse({"detail": "Invalid JSON"}, status=400)
+
+    # GraphQL mutation query
+    query = """
+    mutation GenerateAiRecommendations {
+        generateAiRecommendations {
+            success
+            message
+            recommendations {
+                id
+                riskProfile
+                portfolioAllocation
+                recommendedStocks
+                expectedPortfolioReturn
+                riskAssessment
+            }
+        }
+    }
+    """
+    
+    try:
+        result = schema.execute(
+            query,
+            context_value=request,
+        )
+        
+        if result.errors:
+            return JsonResponse(
+                {"errors": [str(e) for e in result.errors]},
+                status=400
+            )
+        
+        # Return the GraphQL response in the expected format
+        graphql_data = result.data.get("generateAiRecommendations", {})
+        
+        # Transform to match the expected REST API format
+        if graphql_data.get("success"):
+            recommendations = graphql_data.get("recommendations", [])
+            return JsonResponse({
+                "symbol": payload.get("symbol", "AAPL"),
+                "current_price": 150.0,  # Mock price
+                "recommendations": recommendations,
+                "market_analysis": {
+                    "symbol": payload.get("symbol", "AAPL"),
+                    "current_price": 150.0,
+                    "volatility": 0.25,
+                    "implied_volatility": 0.30,
+                    "volume": 1000000,
+                    "market_cap": 2500000000000,
+                    "sector": "Technology",
+                    "sentiment_score": 0.7,
+                    "trend_direction": "bullish",
+                    "support_levels": [145.0, 140.0],
+                    "resistance_levels": [155.0, 160.0],
+                    "dividend_yield": 0.5,
+                    "beta": 1.2
+                },
+                "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "total_recommendations": len(recommendations)
+            })
+        else:
+            return JsonResponse({
+                "error": graphql_data.get("message", "Failed to generate recommendations")
+            }, status=400)
+            
+    except Exception as e:
+        return JsonResponse({
+            "error": f"Internal server error: {str(e)}"
+        }, status=500)
+
+urlpatterns.append(path("api/test/", test_endpoint))

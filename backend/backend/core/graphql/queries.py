@@ -3,6 +3,7 @@ from django.utils import timezone
 from datetime import datetime, timedelta
 import random
 from .types import SignalType, UserType, MockSignal, MockUser, LeaderboardEntryType, TraderScoreType, MockTraderScore, MockLeaderboardEntry, BacktestStrategyType, MockBacktestStrategy, BacktestResultType, MockBacktestResult, BacktestConfigType, StrategyParamsType, BacktestResultOutputType, RunBacktestResultType, TargetPriceResultType, PositionSizeResultType, DynamicStopResultType, PortfolioMetricsType, PortfolioHoldingType, StockType, AdvancedStockScreeningResultType, WatchlistItemType, WatchlistStockType, RustStockAnalysisType, TechnicalIndicatorsType, FundamentalAnalysisType
+from core.types import IncomeProfileType
 
 # Mock data for signals - completely database-free
 def get_mock_signals():
@@ -387,6 +388,17 @@ class Query(graphene.ObjectType):
     
     def resolve_me(self, info):
         # Return mock user data (database-free)
+        mock_income_profile = IncomeProfileType(
+            id=1,
+            income_bracket='$75,000 - $100,000',
+            age=28,
+            investment_goals=['Wealth Building', 'Retirement Savings'],
+            risk_tolerance='Moderate',
+            investment_horizon='5-10 years',
+            created_at='2024-01-01T00:00:00Z',
+            updated_at='2024-01-01T00:00:00Z'
+        )
+        
         return MockUser(
             id=1,
             name='Test User',
@@ -394,7 +406,7 @@ class Query(graphene.ObjectType):
             username='testuser',
             hasPremiumAccess=True,
             subscriptionTier='PREMIUM',
-            incomeProfile='premium',
+            incomeProfile=mock_income_profile,
             followedTickers=['AAPL', 'TSLA', 'NVDA']
         )
     

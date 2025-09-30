@@ -16,7 +16,7 @@ from .crypto_models import (
     LendingReserve, SupplyPosition, BorrowPosition,
 )
 from .crypto_ml_engine import CryptoMLPredictionService
-from .auth_utils import get_current_user_from_info
+from .auth_utils import MLMutationAuth
 
 # Risk helpers (same ones used by the REST layer)
 from .aave_risk import (
@@ -219,13 +219,13 @@ class CryptoQuery(graphene.ObjectType):
             return None
 
     def resolve_crypto_portfolio(self, info):
-        user = get_current_user_from_info(info)
+        user = MLMutationAuth.require_authentication(info.context)
         if not user: return None
         portfolio, _ = CryptoPortfolio.objects.get_or_create(user=user)
         return portfolio
 
     def resolve_crypto_analytics(self, info):
-        user = get_current_user_from_info(info)
+        user = MLMutationAuth.require_authentication(info.context)
         if not user: return None
         try:
             portfolio, _ = CryptoPortfolio.objects.get_or_create(user=user)
@@ -265,7 +265,7 @@ class CryptoQuery(graphene.ObjectType):
             return None
 
     def resolve_crypto_trades(self, info, symbol=None, limit=50):
-        user = get_current_user_from_info(info)
+        user = MLMutationAuth.require_authentication(info.context)
         if not user: return []
         trades = CryptoTrade.objects.filter(user=user)
         if symbol:
@@ -303,7 +303,7 @@ class CryptoQuery(graphene.ObjectType):
 
     def resolve_crypto_sbloc_loans(self, info):
         # Deprecated path kept for backwards-compat
-        user = get_current_user_from_info(info)
+        user = MLMutationAuth.require_authentication(info.context)
         if not user: return []
         return CryptoSBLOCLoan.objects.filter(user=user).order_by('-created_at')
 
@@ -312,7 +312,7 @@ class CryptoQuery(graphene.ObjectType):
         return LendingReserve.objects.filter(is_active=True).select_related("cryptocurrency").order_by("cryptocurrency__symbol")
 
     def resolve_defi_account(self, info):
-        user = get_current_user_from_info(info)
+        user = MLMutationAuth.require_authentication(info.context)
         if not user: return None
 
         supplies = SupplyPosition.objects.filter(user=user).select_related("reserve__cryptocurrency")
@@ -362,7 +362,7 @@ class ExecuteCryptoTrade(graphene.Mutation):
     message = graphene.String()
 
     def mutate(self, info, symbol, trade_type, quantity, price_per_unit=None):
-        user = get_current_user_from_info(info)
+        user = MLMutationAuth.require_authentication(info.context)
         if not user:
             return ExecuteCryptoTrade(success=False, message="Authentication required")
 
@@ -423,7 +423,7 @@ class DefiSupply(graphene.Mutation):
     position = graphene.Field(SupplyPositionType)
 
     def mutate(self, info, symbol, quantity, use_as_collateral=True):
-        user = get_current_user_from_info(info)
+        user = MLMutationAuth.require_authentication(info.context)
         if not user:
             return DefiSupply(success=False, message="Authentication required")
 
@@ -456,7 +456,7 @@ class DefiWithdraw(graphene.Mutation):
     remaining = graphene.Float()
 
     def mutate(self, info, symbol, quantity):
-        user = get_current_user_from_info(info)
+        user = MLMutationAuth.require_authentication(info.context)
         if not user:
             return DefiWithdraw(success=False, message="Authentication required")
 
@@ -508,7 +508,7 @@ class DefiBorrow(graphene.Mutation):
     health_factor_after = graphene.Float()
 
     def mutate(self, info, symbol, amount, rate_mode="VARIABLE"):
-        user = get_current_user_from_info(info)
+        user = MLMutationAuth.require_authentication(info.context)
         if not user:
             return DefiBorrow(success=False, message="Authentication required")
 
@@ -568,7 +568,7 @@ class DefiRepay(graphene.Mutation):
     is_active = graphene.Boolean()
 
     def mutate(self, info, symbol, amount):
-        user = get_current_user_from_info(info)
+        user = MLMutationAuth.require_authentication(info.context)
         if not user:
             return DefiRepay(success=False, message="Authentication required")
 
@@ -608,7 +608,7 @@ class DefiToggleCollateral(graphene.Mutation):
     health_factor_after = graphene.Float()
 
     def mutate(self, info, symbol, use_as_collateral):
-        user = get_current_user_from_info(info)
+        user = MLMutationAuth.require_authentication(info.context)
         if not user:
             return DefiToggleCollateral(success=False, message="Authentication required")
 
@@ -659,7 +659,7 @@ class GenerateMLPrediction(graphene.Mutation):
     message = graphene.String()
 
     def mutate(self, info, symbol):
-        user = get_current_user_from_info(info)
+        user = MLMutationAuth.require_authentication(info.context)
         if not user:
             return GenerateMLPrediction(success=False, message="Authentication required")
         try:
@@ -720,7 +720,7 @@ class StressTestHF(graphene.Mutation):
     message = graphene.String()
 
     def mutate(self, info, shocks=None):
-        user = get_current_user_from_info(info)
+        user = MLMutationAuth.require_authentication(info.context)
         if not user:
             return StressTestHF(success=False, message="Authentication required")
         

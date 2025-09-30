@@ -178,6 +178,9 @@ class StockType(DjangoObjectType):
     companyName = graphene.String()
     currentPrice = graphene.Float()
     marketCap = graphene.Float()
+    peRatio = graphene.Float()
+    dividendYield = graphene.Float()
+    beginnerFriendlyScore = graphene.Float()
     
     # Additional fields for mobile app
     riskLevel = graphene.String()
@@ -208,11 +211,7 @@ class StockType(DjangoObjectType):
             return "Medium"
         else:
             return "Low"
-    peRatio = graphene.Float()
-    dividendYield = graphene.Float()
     debtRatio = graphene.Float()
-    volatility = graphene.Float()
-    beginnerFriendlyScore = graphene.Int()
     reasoning = graphene.String()
     score = graphene.Float()
     mlScore = graphene.Float()
@@ -223,14 +222,13 @@ class StockType(DjangoObjectType):
     def resolve_currentPrice(self, info):
         return float(self.current_price) if self.current_price is not None else None
 
-        return self.dividend_score
-
     def resolve_marketCap(self, info):
         return float(self.market_cap) if self.market_cap is not None else None
 
     def resolve_peRatio(self, info):
         return float(self.pe_ratio) if self.pe_ratio is not None else None
 
+    def resolve_dividendYield(self, info):
         return float(self.dividend_yield) if self.dividend_yield is not None else None
 
     def resolve_debtRatio(self, info):
@@ -1099,6 +1097,7 @@ class StockDiscussionType(DjangoObjectType):
     poll = graphene.Field(lambda: PollType)
     score = graphene.Int()
     commentCount = graphene.Int()
+    author = graphene.String()  # Add author field for compatibility
 
     def resolve_score(self, info):
         """Return the number of likes as the score"""
@@ -1107,6 +1106,12 @@ class StockDiscussionType(DjangoObjectType):
     def resolve_commentCount(self, info):
         """Return the number of comments"""
         return self.comments.count()
+
+    def resolve_author(self, info):
+        """Return the author name"""
+        if self.user:
+            return self.user.name or self.user.email
+        return "Anonymous"
 
     def resolve_kind(self, info):
         """Return the post type/kind"""
@@ -1144,3 +1149,22 @@ class SignalType(graphene.ObjectType):
     validationPrice = graphene.Float()
     validationTimestamp = graphene.String()
     createdBy = graphene.Field(UserType)
+
+# Option Order type
+class OptionOrderType(graphene.ObjectType):
+    id = graphene.ID()
+    symbol = graphene.String()
+    optionType = graphene.String()
+    strike = graphene.Float()
+    expiration = graphene.String()
+    side = graphene.String()
+    quantity = graphene.Int()
+    orderType = graphene.String()
+    limitPrice = graphene.Float()
+    timeInForce = graphene.String()
+    status = graphene.String()
+    filledPrice = graphene.Float()
+    filledQuantity = graphene.Int()
+    createdAt = graphene.DateTime()
+    updatedAt = graphene.DateTime()
+    notes = graphene.String()

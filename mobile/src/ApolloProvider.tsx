@@ -15,8 +15,8 @@ import JWTAuthService from './features/auth/services/JWTAuthService';
 // Determine the correct URL based on the platform
 const getGraphQLURL = () => {
   const BASE_URL = Platform.OS === 'ios'
-    ? (process.env.EXPO_PUBLIC_API_URL || 'http://54.162.138.209:8000')   // Use production backend
-    : (process.env.EXPO_PUBLIC_API_URL || 'http://54.162.138.209:8000');   // Use production backend
+    ? (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000')   // Use local backend for development
+    : (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000');   // Use local backend for development
   
   return `${BASE_URL}/graphql/`;
 };

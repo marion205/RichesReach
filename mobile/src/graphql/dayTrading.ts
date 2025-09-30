@@ -3,31 +3,31 @@ import { gql } from '@apollo/client';
 export const GET_DAY_TRADING_PICKS = gql`
   query GetDayTradingPicks($mode: String!) {
     dayTradingPicks(mode: $mode) {
-      as_of
+      asOf
       mode
       picks {
         symbol
         side
         score
         features {
-          momentum_15m
-          rvol_10m
-          vwap_dist
-          breakout_pct
-          spread_bps
-          catalyst_score
+          momentum15m
+          rvol10m
+          vwapDist
+          breakoutPct
+          spreadBps
+          catalystScore
         }
         risk {
-          atr_5m
-          size_shares
+          atr5m
+          sizeShares
           stop
           targets
-          time_stop_min
+          timeStopMin
         }
         notes
       }
-      universe_size
-      quality_threshold
+      universeSize
+      qualityThreshold
     }
   }
 `;
@@ -44,31 +44,31 @@ export const LOG_DAY_TRADING_OUTCOME = gql`
 export const SUBSCRIBE_DAY_TRADING_UPDATES = gql`
   subscription SubscribeDayTradingUpdates($mode: String!) {
     dayTradingUpdates(mode: $mode) {
-      as_of
+      asOf
       mode
       picks {
         symbol
         side
         score
         features {
-          momentum_15m
-          rvol_10m
-          vwap_dist
-          breakout_pct
-          spread_bps
-          catalyst_score
+          momentum15m
+          rvol10m
+          vwapDist
+          breakoutPct
+          spreadBps
+          catalystScore
         }
         risk {
-          atr_5m
-          size_shares
+          atr5m
+          sizeShares
           stop
           targets
-          time_stop_min
+          timeStopMin
         }
         notes
       }
-      universe_size
-      quality_threshold
+      universeSize
+      qualityThreshold
     }
   }
 `;

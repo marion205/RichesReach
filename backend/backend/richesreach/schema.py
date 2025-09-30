@@ -1,6 +1,7 @@
 # richesreach/schema.py
 import graphene
 from core.crypto_graphql import Query as CryptoQuery, Mutation as CryptoMutation
+# from marketdata.schema import MarketDataQuery, MarketDataMutation
 
 class Query(CryptoQuery, graphene.ObjectType):
     pass

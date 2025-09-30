@@ -202,7 +202,7 @@ export const mockBacktestResults = [
 ];
 
 export const mockDayTradingPicks = {
-  as_of: new Date().toISOString(),
+  asOf: new Date().toISOString(),
   mode: 'SAFE',
   picks: [
     {
@@ -210,19 +210,19 @@ export const mockDayTradingPicks = {
       side: 'LONG',
       score: 2.1,
       features: {
-        momentum_15m: 0.023,
-        rvol_10m: 1.8,
-        vwap_dist: 0.012,
-        breakout_pct: 0.015,
-        spread_bps: 2.1,
-        catalyst_score: 0.75
+        momentum15m: 0.023,
+        rvol10m: 1.8,
+        vwapDist: 0.012,
+        breakoutPct: 0.015,
+        spreadBps: 2.1,
+        catalystScore: 0.75
       },
       risk: {
-        atr_5m: 1.2,
-        size_shares: 100,
+        atr5m: 1.2,
+        sizeShares: 100,
         stop: 445.50,
         targets: [448.00, 450.50],
-        time_stop_min: 45
+        timeStopMin: 45
       },
       notes: 'Strong momentum with low spread. Earnings catalyst in 2 days.'
     },
@@ -231,25 +231,25 @@ export const mockDayTradingPicks = {
       side: 'SHORT',
       score: 1.8,
       features: {
-        momentum_15m: -0.018,
-        rvol_10m: 2.1,
-        vwap_dist: -0.008,
-        breakout_pct: -0.012,
-        spread_bps: 1.8,
-        catalyst_score: 0.65
+        momentum15m: -0.018,
+        rvol10m: 2.1,
+        vwapDist: -0.008,
+        breakoutPct: -0.012,
+        spreadBps: 1.8,
+        catalystScore: 0.65
       },
       risk: {
-        atr_5m: 0.9,
-        size_shares: 50,
+        atr5m: 0.9,
+        sizeShares: 50,
         stop: 378.20,
         targets: [375.00, 372.50],
-        time_stop_min: 30
+        timeStopMin: 30
       },
       notes: 'Bearish momentum with high relative volume. Tech sector weakness.'
     }
   ],
-  universe_size: 500,
-  quality_threshold: 1.5
+  universeSize: 500,
+  qualityThreshold: 1.5
 };
 
 export const mockRiskCalculation = {

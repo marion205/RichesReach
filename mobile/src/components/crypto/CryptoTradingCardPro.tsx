@@ -337,6 +337,7 @@ const CryptoTradingCardPro: React.FC<CryptoTradingCardProps> = ({
 
   /* ---------- Render ---------- */
   return (
+    <>
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       {/* Side */}
       <View style={styles.segment}>
@@ -624,29 +625,39 @@ const CryptoTradingCardPro: React.FC<CryptoTradingCardProps> = ({
         <Text style={styles.noticeText}>Crypto orders may execute partially or not at all depending on liquidity and your time-in-force.</Text>
       </View>
 
-      {/* Confirm Sheet */}
-      <Modal animationType="slide" transparent visible={confirmOpen} onRequestClose={() => setConfirmOpen(false)}>
-        <View style={styles.sheetOverlay}>
-          <View style={styles.sheet}>
-            <Text style={styles.sheetTitle}>Confirm Order</Text>
-            <View style={{ height: 8 }} />
-            <Row label="Side" value={tradeType} />
-            <Row label="Type" value={orderType.replace(/_/g,' ')} />
-            <Row label="TIF" value={timeInForce} />
-            <Row label="Symbol" value={selectedSymbol} />
-            {orderType === 'STOP_MARKET' || orderType === 'STOP_LIMIT'
-              ? <Row label="Trigger" value={fmtUSD(Number(triggerPrice || '0'))} />
-              : null}
-            {(orderType === 'LIMIT' || orderType === 'STOP_LIMIT' || orderType === 'TAKE_PROFIT_LIMIT') && (
-              <Row label="Limit" value={fmtUSD(Number(limitPrice || '0'))} />
+
+    </ScrollView>
+
+    {/* Modals moved outside ScrollView to avoid nested scrollable components */}
+    {/* Trade Confirmation Modal */}
+    <Modal transparent animationType="slide" visible={confirmOpen} onRequestClose={() => setConfirmOpen(false)}>
+      <View style={styles.sheetOverlay}>
+        <View style={styles.confirmSheet}>
+          <View style={styles.sheetHeader}>
+            <Text style={styles.sheetTitle}>Confirm Trade</Text>
+            <TouchableOpacity onPress={() => setConfirmOpen(false)}>
+              <Icon name="x" size={20} color="#111827" />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.confirmContent}>
+            <Row label="Action" value={`${tradeType} ${selectedSymbol}`} />
+            <Row label="Order Type" value={orderType.replace(/_/g, ' ')} />
+            {orderType !== 'MARKET' && <Row label="Limit Price" value={fmtUSD(parseFloat(limitPrice))} />}
+            {['STOP_MARKET', 'STOP_LIMIT'].includes(orderType) && <Row label="Trigger Price" value={fmtUSD(parseFloat(triggerPrice))} />}
+            <Row label="Quantity" value={qty} />
+            <Row label="Time in Force" value={timeInForce} />
+            {orderType !== 'MARKET' && (
+              <>
+                <Row label="Est. Fill Price" value={fmtUSD(effectivePrice)} />
+                <Row label="Est. Slippage" value={`${(SLIPPAGE_BPS / 100).toFixed(2)}%`} />
+              </>
             )}
-            <Row label="Quantity" value={`${qtyNum.toFixed(8)} ${selectedSymbol}`} />
-            <Row label="Preview Px" value={fmtUSD(effectivePrice)} />
-            <View style={styles.divider} />
-            <Row label="Notional" value={fmtUSD(usdNum)} />
-            <Row label="Est. Fee" value={fmtUSD(fee)} />
-            {(orderType === 'MARKET' || orderType === 'STOP_MARKET') && (
-              <Row label="Est. Slippage" value={fmtUSD(estSlippage)} />
+            <Row label="Commission" value={fmtUSD(fee)} />
+            {orderType === 'MARKET' && (
+              <>
+                <Row label="Est. Fill Price" value={fmtUSD(effectivePrice)} />
+                <Row label="Est. Slippage" value={`${(SLIPPAGE_BPS / 100).toFixed(2)}%`} />
+              </>
             )}
             <View style={styles.divider} />
             <Row label={tradeType === 'BUY' ? 'Total Cost' : 'Est. Proceeds'} value={fmtUSD(totalCost)} bold />
@@ -661,101 +672,102 @@ const CryptoTradingCardPro: React.FC<CryptoTradingCardProps> = ({
             </View>
           </View>
         </View>
-      </Modal>
+      </View>
+    </Modal>
 
-      {/* Symbol Picker Modal */}
-      <Modal transparent animationType="slide" visible={pickerOpen} onRequestClose={() => setPickerOpen(false)}>
-        <View style={styles.sheetOverlay}>
-          <View style={styles.pickerSheet}>
-            {/* Sticky header */}
-            <View style={styles.pickerHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Text style={styles.sheetTitle}>Select Asset</Text>
-              </View>
-              <TouchableOpacity onPress={() => setPickerOpen(false)}>
-                <Icon name="x" size={20} color="#111827" />
-              </TouchableOpacity>
+    {/* Symbol Picker Modal */}
+    <Modal transparent animationType="slide" visible={pickerOpen} onRequestClose={() => setPickerOpen(false)}>
+      <View style={styles.sheetOverlay}>
+        <View style={styles.pickerSheet}>
+          {/* Sticky header */}
+          <View style={styles.pickerHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={styles.sheetTitle}>Select Asset</Text>
             </View>
+            <TouchableOpacity onPress={() => setPickerOpen(false)}>
+              <Icon name="x" size={20} color="#111827" />
+            </TouchableOpacity>
+          </View>
 
-            <View style={styles.searchRow}>
-              <Icon name="search" size={16} color="#6B7280" />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search by symbol or name"
-                value={symbolQuery}
-                onChangeText={setSymbolQuery}
-                autoCapitalize="characters"
-              />
-            </View>
-
-            {/* Favorites toggle */}
-            <View style={styles.favToggleRow}>
-              <Text style={styles.groupLabel}>Favorites only</Text>
-              <Switch
-                value={favoritesOnly}
-                onValueChange={setFavoritesOnly}
-                thumbColor={favoritesOnly ? '#111827' : '#f4f3f4'}
-                trackColor={{ false: '#D1D5DB', true: '#9CA3AF' }}
-              />
-            </View>
-
-            {/* Quick favorites chips */}
-            {!favoritesOnly && favoriteSymbols.length > 0 && (
-              <>
-                <Text style={styles.groupLabel}>Favorites</Text>
-                <FlatList
-                  data={favoriteSymbols}
-                  keyExtractor={(item) => item.symbol}
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{ paddingVertical: 4 }}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity
-                      style={[styles.chip, item.symbol === selectedSymbol && styles.chipActive]}
-                      onPress={() => { setSelectedSymbol(item.symbol); setPickerOpen(false); setSymbolQuery(''); }}
-                    >
-                      <Text style={[styles.chipText, item.symbol === selectedSymbol && styles.chipTextActive]}>{item.symbol}</Text>
-                    </TouchableOpacity>
-                  )}
-                />
-              </>
-            )}
-
-            {/* All / filtered list */}
-            <FlatList
-              data={queryFiltered}
-              keyExtractor={(item) => item.symbol}
-              showsVerticalScrollIndicator={false}
-              ItemSeparatorComponent={() => <View style={styles.sep} />}
-              renderItem={({ item }) => {
-                const bal = balances?.[item.symbol] ?? 0;
-                const fav = favorites.includes(item.symbol);
-                return (
-                  <TouchableOpacity
-                    style={styles.assetRow}
-                    onPress={() => { setSelectedSymbol(item.symbol); setPickerOpen(false); setSymbolQuery(''); }}
-                  >
-                    <View style={styles.assetLeft}>
-                      {renderIcon(item.symbol, 24, item.iconUrl)}
-                      <View>
-                        <Text style={styles.assetSymbol}>{item.symbol}</Text>
-                        {!!item.name && <Text style={styles.assetName} numberOfLines={1}>{item.name}</Text>}
-                      </View>
-                    </View>
-                    <View style={styles.assetRight}>
-                      <Text style={styles.assetBal}>{bal.toFixed(8)}</Text>
-                      <TouchableOpacity onPress={() => toggleFavorite(item.symbol)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                        <Icon name="star" size={16} color={fav ? '#F59E0B' : '#D1D5DB'} />
-                      </TouchableOpacity>
-                    </View>
-                  </TouchableOpacity>
-                );
-              }}
+          <View style={styles.searchRow}>
+            <Icon name="search" size={16} color="#6B7280" />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search by symbol or name"
+              value={symbolQuery}
+              onChangeText={setSymbolQuery}
+              autoCapitalize="characters"
             />
           </View>
+
+          {/* Favorites toggle */}
+          <View style={styles.favToggleRow}>
+            <Text style={styles.groupLabel}>Favorites only</Text>
+            <Switch
+              value={favoritesOnly}
+              onValueChange={setFavoritesOnly}
+              thumbColor={favoritesOnly ? '#111827' : '#f4f3f4'}
+              trackColor={{ false: '#D1D5DB', true: '#9CA3AF' }}
+            />
+          </View>
+
+          {/* Quick favorites chips */}
+          {!favoritesOnly && favoriteSymbols.length > 0 && (
+            <>
+              <Text style={styles.groupLabel}>Favorites</Text>
+              <FlatList
+                data={favoriteSymbols}
+                keyExtractor={(item) => item.symbol}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingVertical: 4 }}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={[styles.chip, item.symbol === selectedSymbol && styles.chipActive]}
+                    onPress={() => { setSelectedSymbol(item.symbol); setPickerOpen(false); setSymbolQuery(''); }}
+                  >
+                    <Text style={[styles.chipText, item.symbol === selectedSymbol && styles.chipTextActive]}>{item.symbol}</Text>
+                  </TouchableOpacity>
+                )}
+              />
+            </>
+          )}
+
+          {/* All / filtered list */}
+          <FlatList
+            data={queryFiltered}
+            keyExtractor={(item) => item.symbol}
+            showsVerticalScrollIndicator={false}
+            ItemSeparatorComponent={() => <View style={styles.sep} />}
+            renderItem={({ item }) => {
+              const bal = balances?.[item.symbol] ?? 0;
+              const fav = favorites.includes(item.symbol);
+              return (
+                <TouchableOpacity
+                  style={styles.assetRow}
+                  onPress={() => { setSelectedSymbol(item.symbol); setPickerOpen(false); setSymbolQuery(''); }}
+                >
+                  <View style={styles.assetLeft}>
+                    {renderIcon(item.symbol, 24, item.iconUrl)}
+                    <View>
+                      <Text style={styles.assetSymbol}>{item.symbol}</Text>
+                      {!!item.name && <Text style={styles.assetName} numberOfLines={1}>{item.name}</Text>}
+                    </View>
+                  </View>
+                  <View style={styles.assetRight}>
+                    <Text style={styles.assetBal}>{bal.toFixed(8)}</Text>
+                    <TouchableOpacity onPress={() => toggleFavorite(item.symbol)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Icon name="star" size={16} color={fav ? '#F59E0B' : '#D1D5DB'} />
+                    </TouchableOpacity>
+                  </View>
+                </TouchableOpacity>
+              );
+            }}
+          />
         </View>
-      </Modal>
-    </ScrollView>
+      </View>
+    </Modal>
+    </>
   );
 };
 

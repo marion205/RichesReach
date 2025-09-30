@@ -201,8 +201,8 @@ function DayTradingTab() {
       <Text style={styles.sectionTitle}>⚡ Day Trading Picks</Text>
       <View style={styles.modeInfo}>
         <Text style={styles.modeText}>Mode: {mockDayTradingPicks.mode}</Text>
-        <Text style={styles.modeText}>Universe: {mockDayTradingPicks.universe_size} stocks</Text>
-        <Text style={styles.modeText}>Threshold: {mockDayTradingPicks.quality_threshold}</Text>
+        <Text style={styles.modeText}>Universe: {mockDayTradingPicks.universeSize} stocks</Text>
+        <Text style={styles.modeText}>Threshold: {mockDayTradingPicks.qualityThreshold}</Text>
       </View>
       {mockDayTradingPicks.picks.map((pick, index) => (
         <View key={index} style={styles.pickCard}>
@@ -217,8 +217,8 @@ function DayTradingTab() {
           <View style={styles.pickMetrics}>
             <Text style={styles.metric}>Stop: ${pick.risk.stop}</Text>
             <Text style={styles.metric}>Target: ${pick.risk.targets[0]}</Text>
-            <Text style={styles.metric}>Size: {pick.risk.size_shares} shares</Text>
-            <Text style={styles.metric}>Time Stop: {pick.risk.time_stop_min}m</Text>
+            <Text style={styles.metric}>Size: {pick.risk.sizeShares} shares</Text>
+            <Text style={styles.metric}>Time Stop: {pick.risk.timeStopMin}m</Text>
           </View>
         </View>
       ))}
