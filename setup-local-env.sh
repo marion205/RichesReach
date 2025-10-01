@@ -38,7 +38,7 @@ sed -i '' 's/your-finnhub-api-key-here/d2rnitpr01qv11lfegugd2rnitpr01qv11lfegv0/
 sed -i '' 's/your-news-api-key-here/94a335c7316145f79840edd62f77e11e/g' .env
 
 # Update OpenAI API key
-sed -i '' 's/your-openai-api-key-here/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/g' .env
+sed -i '' 's/your-openai-api-key-here/YOUR_OPENAI_API_KEY_HERE
 
 # Generate a secure secret key
 SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(50))")
