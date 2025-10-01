@@ -10,7 +10,14 @@
 
 ## Next-Generation AI Investment Platform
 
-RichesReach is a comprehensive AI-powered investment platform featuring advanced options trading, cryptocurrency analysis, DeFi integration, comprehensive learning modules, portfolio management, and real-time market analysis. Built with cutting-edge machine learning, high-performance Rust engines, and deployed on enterprise-grade infrastructure.
+RichesReach is a comprehensive AI-powered investment platform featuring advanced options trading, cryptocurrency analysis, DeFi integration, comprehensive learning modules, portfolio management, and real-time market analysis. Built with cutting-edge machine learning powered by GPT-5o-mini, high-performance Rust engines, and deployed on enterprise-grade infrastructure.
+
+### 🚀 **Production Status**
+- **✅ Live on AWS**: Production deployment with HTTPS at `https://app.richesreach.net`
+- **✅ Real AI Integration**: GPT-5o-mini powered recommendations with fallback to mock data
+- **✅ Mobile Ready**: React Native app with Expo Go for instant access
+- **✅ Real-time Data**: Live market data from Finnhub and Polygon APIs
+- **✅ Production ML**: Real machine learning models with graceful fallbacks
 
 ## Core Features
 
@@ -193,9 +200,11 @@ npx expo start
 
 ### Production Deployment (Already Live)
 ```bash
-# Your app is already deployed on AWS ECS
+# Your app is already deployed on AWS ECS with HTTPS
+# Production URL: https://app.richesreach.net
 # Backend: Running on AWS ECS with auto-scaling
 # Mobile: Share via Expo Go for instant access
+# AI: GPT-5o-mini powered recommendations with fallback to mock data
 # Deploy updates (if needed)
 ./quick_deploy_latest.sh
 ```
@@ -224,9 +233,11 @@ npm start
 - **Password**: `password123`
 
 ### 🌐 **Service URLs**
-- **Backend**: `http://127.0.0.1:8000` (Full production server)
+- **Production**: `https://app.richesreach.net` (Live on AWS with HTTPS)
+- **Local Backend**: `http://127.0.0.1:8000` (Full production server)
 - **Rust Engine**: `http://127.0.0.1:3002` (Crypto analysis)
 - **GraphQL**: `http://127.0.0.1:8000/graphql`
+- **AI Status**: GPT-5o-mini with fallback to mock data
 
 > **📚 For complete setup instructions, troubleshooting, and development workflow, see [DEVELOPMENT_SETUP.md](./DEVELOPMENT_SETUP.md)**
 

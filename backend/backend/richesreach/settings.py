@@ -316,7 +316,7 @@ FINNHUB_API_KEY = os.getenv('FINNHUB_API_KEY')  # No default - must be set via e
 # OpenAI Configuration - Production-Ready with Environment Separation
 USE_OPENAI = os.getenv('USE_OPENAI', 'false').lower() == 'true'  # Feature flag
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')  # No default - must be explicitly set
-OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-4o-mini')  # Primary model
+OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-5o-mini')  # Primary model - GPT-5o-mini
 OPENAI_MAX_TOKENS = int(os.getenv('OPENAI_MAX_TOKENS', '1200'))  # Optimized token count
 OPENAI_TIMEOUT_MS = int(os.getenv('OPENAI_TIMEOUT_MS', '12000'))  # 12 second timeout
 OPENAI_ENABLE_FALLBACK = os.getenv('OPENAI_ENABLE_FALLBACK', 'true').lower() == 'true'  # Safety net
