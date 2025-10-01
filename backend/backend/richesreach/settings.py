@@ -310,8 +310,8 @@ GRAPHQL_JWT = {
 }
 # Market Data Configuration
 REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
-POLYGON_API_KEY = os.getenv('POLYGON_API_KEY', 'uuKmy9dPAjaSVXVEtCumQPga1dqEPDS2')
-FINNHUB_API_KEY = os.getenv('FINNHUB_API_KEY', 'd2rnitpr01qv11lfegugd2rnitpr01qv11lfegv0')
+POLYGON_API_KEY = os.getenv('POLYGON_API_KEY')  # No default - must be set via environment
+FINNHUB_API_KEY = os.getenv('FINNHUB_API_KEY')  # No default - must be set via environment
 
 # OpenAI Configuration - Production-Ready with Environment Separation
 USE_OPENAI = os.getenv('USE_OPENAI', 'false').lower() == 'true'  # Feature flag
@@ -394,11 +394,11 @@ MONITORING_CONFIG = {
     'SLACK_WEBHOOK': os.getenv('MONITORING_SLACK_WEBHOOK', ''),
     'HEALTH_CHECK_INTERVAL': int(os.getenv('MONITORING_HEALTH_CHECK_INTERVAL', '60')),  # seconds
 }
-# API Configuration - Production Keys
-ALPHA_VANTAGE_API_KEY = os.getenv('ALPHA_VANTAGE_API_KEY', 'OHYSFF1AE446O7CR')
-FINNHUB_API_KEY = os.getenv('FINNHUB_API_KEY', 'd2rnitpr01qv11lfegugd2rnitpr01qv11lfegv0')
-NEWS_API_KEY = os.getenv('NEWS_API_KEY', '94a335c7316145f79840edd62f77e11e')
-POLYGON_API_KEY = os.getenv('POLYGON_API_KEY', 'uuKmy9dPAjaSVXVEtCumQPga1dqEPDS2')
+# API Configuration - Environment Variables Only
+ALPHA_VANTAGE_API_KEY = os.getenv('ALPHA_VANTAGE_API_KEY')  # No default - must be set via environment
+FINNHUB_API_KEY = os.getenv('FINNHUB_API_KEY')  # No default - must be set via environment  
+NEWS_API_KEY = os.getenv('NEWS_API_KEY')  # No default - must be set via environment
+POLYGON_API_KEY = os.getenv('POLYGON_API_KEY')  # No default - must be set via environment
 
 # Use Finnhub as primary data source (60 requests/minute vs Alpha Vantage's 25/day)
 if os.getenv('USE_FINNHUB', 'true').lower() == 'true' and FINNHUB_API_KEY:
