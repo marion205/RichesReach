@@ -1,0 +1,78 @@
+{
+  "family": "richesreach-production",
+  "networkMode": "awsvpc",
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::498606688292:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::498606688292:role/ecsTaskRole",
+  "requiresCompatibilities": ["FARGATE"],
+  "containerDefinitions": [
+    {
+      "name": "richesreach-backend",
+      "image": "python:3.10-slim",
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "hostPort": 8000,
+          "protocol": "tcp"
+        }
+      ],
+      "essential": true,
+      "command": [
+        "/bin/sh",
+        "-c",
+        "pip install fastapi uvicorn && python aws-server.py"
+      ],
+      "environment": [
+        {
+          "name": "DEBUG",
+          "value": "False"
+        },
+        {
+          "name": "ENVIRONMENT",
+          "value": "production"
+        },
+        {
+          "name": "PORT",
+          "value": "8000"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "POLYGON_API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:richesreach/polygon-api-key"
+        },
+        {
+          "name": "FINNHUB_API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:richesreach/finnhub-api-key"
+        },
+        {
+          "name": "OPENAI_API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:richesreach/openai-api-key"
+        },
+        {
+          "name": "USE_OPENAI",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:richesreach/use-openai"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/richesreach-backend",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "curl -f http://localhost:8000/health/ || exit 1"
+        ],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 60
+      }
+    }
+  ]
+}

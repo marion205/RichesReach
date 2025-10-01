@@ -392,8 +392,9 @@ urlpatterns.append(path("simple-graphql/", simple_graphql_test))
 urlpatterns.append(path("debug-env/", debug_env))
 urlpatterns.append(path("mock-graphql/", mock_graphql))
 from .views_auth import login_view
-from core.views_ai import ai_options_recommendations, ai_status, cache_status
+from core.views_ai import ai_status, cache_status
 from core.views_health import health_check, readiness_check, liveness_check
+from core.views import ai_options_recommendations
 # from marketdata.urls import urlpatterns as marketdata_urls
 
 urlpatterns.append(path("api/auth/login/", login_view))
@@ -420,83 +421,5 @@ urlpatterns.append(path("live", liveness_check, name='liveness_check_no_slash'))
 def test_endpoint(request):
     return JsonResponse({"status": "ok", "message": "Test endpoint working", "timestamp": str(time.time())})
 
-@csrf_exempt
-def ai_options_recommendations(request):
-    """REST endpoint that forwards to GraphQL generateAiRecommendations mutation"""
-    if request.method != "POST":
-        return JsonResponse({"detail": "Method not allowed"}, status=405)
-    
-    try:
-        payload = json.loads(request.body.decode("utf-8"))
-    except Exception:
-        return JsonResponse({"detail": "Invalid JSON"}, status=400)
-
-    # GraphQL mutation query
-    query = """
-    mutation GenerateAiRecommendations {
-        generateAiRecommendations {
-            success
-            message
-            recommendations {
-                id
-                riskProfile
-                portfolioAllocation
-                recommendedStocks
-                expectedPortfolioReturn
-                riskAssessment
-            }
-        }
-    }
-    """
-    
-    try:
-        result = schema.execute(
-            query,
-            context_value=request,
-        )
-        
-        if result.errors:
-            return JsonResponse(
-                {"errors": [str(e) for e in result.errors]},
-                status=400
-            )
-        
-        # Return the GraphQL response in the expected format
-        graphql_data = result.data.get("generateAiRecommendations", {})
-        
-        # Transform to match the expected REST API format
-        if graphql_data.get("success"):
-            recommendations = graphql_data.get("recommendations", [])
-            return JsonResponse({
-                "symbol": payload.get("symbol", "AAPL"),
-                "current_price": 150.0,  # Mock price
-                "recommendations": recommendations,
-                "market_analysis": {
-                    "symbol": payload.get("symbol", "AAPL"),
-                    "current_price": 150.0,
-                    "volatility": 0.25,
-                    "implied_volatility": 0.30,
-                    "volume": 1000000,
-                    "market_cap": 2500000000000,
-                    "sector": "Technology",
-                    "sentiment_score": 0.7,
-                    "trend_direction": "bullish",
-                    "support_levels": [145.0, 140.0],
-                    "resistance_levels": [155.0, 160.0],
-                    "dividend_yield": 0.5,
-                    "beta": 1.2
-                },
-                "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "total_recommendations": len(recommendations)
-            })
-        else:
-            return JsonResponse({
-                "error": graphql_data.get("message", "Failed to generate recommendations")
-            }, status=400)
-            
-    except Exception as e:
-        return JsonResponse({
-            "error": f"Internal server error: {str(e)}"
-        }, status=500)
 
 urlpatterns.append(path("api/test/", test_endpoint))

@@ -2896,12 +2896,12 @@ Return a JSON array with 3 items. Each item must have:
                 )
             ]
         
-        print("DEBUG: Returning fallback AI recommendations")
-        return GenerateAIRecommendationsResult(
-            success=True,
-            message="AI recommendations generated successfully (fallback mode)",
-            recommendations=recommendations
-        )
+            print("DEBUG: Returning fallback AI recommendations")
+            return GenerateAIRecommendationsResult(
+                success=True,
+                message="AI recommendations generated successfully (fallback mode)",
+                recommendations=recommendations
+            )
 
 
     def resolve_createPosition(self, info, symbol, side, price, atr, quantity=None, sector=None, confidence=None):

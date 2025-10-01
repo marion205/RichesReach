@@ -1,8 +1,8 @@
 // Production Configuration
 export const PRODUCTION_CONFIG = {
-  API_BASE_URL: 'http://54.162.138.209:8000',
-  GRAPHQL_URL: 'http://54.162.138.209:8000/graphql/',
-  WS_URL: 'ws://54.162.138.209:8000/ws/',
+  API_BASE_URL: 'https://app.richesreach.net',
+  GRAPHQL_URL: 'https://app.richesreach.net/graphql/',
+  WS_URL: 'wss://app.richesreach.net/ws/',
   ENABLE_ANALYTICS: true,
   ENABLE_ERROR_REPORTING: true,
   ENABLE_PERFORMANCE_MONITORING: true,
@@ -48,5 +48,5 @@ export const PRODUCTION_UTILS = {
   logError: (error: any) => console.error('Production Error:', error),
   logPerformance: (metric: string, value: number) => console.log(`Performance: ${metric} = ${value}ms`),
   sanitizeData: (data: any) => data, // Placeholder for data sanitization
-  getWebSocketUrl: () => 'wss://api.richesreach.com/ws/',
+  getWebSocketUrl: () => 'wss://app.richesreach.net/ws/',
 };

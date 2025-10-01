@@ -32,7 +32,7 @@ if DEBUG:
     CORS_ALLOW_CREDENTIALS = True
 else:
     # Production settings
-    ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost').split(',')
+    ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'app.richesreach.net,localhost').split(',')
     CORS_ALLOW_ALL_ORIGINS = False
     CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', '').split(',') if os.getenv('CORS_ALLOWED_ORIGINS') else []
     CORS_ALLOW_CREDENTIALS = os.getenv('CORS_ALLOW_CREDENTIALS', 'True').lower() == 'true'
