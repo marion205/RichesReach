@@ -9,7 +9,7 @@ from core.crypto_graphql import CryptoPriceType, CryptocurrencyType, CryptoMutat
 from core.sbloc_queries import SblocQuery
 from core.sbloc_mutations import SblocMutation
 from core.notification_graphql import NotificationQuery, NotificationMutation
-from core.benchmark_graphql import BenchmarkQuery
+from core.benchmark_graphql import BenchmarkQuery, BenchmarkMutation
 
 User = get_user_model()
 
@@ -3034,7 +3034,7 @@ class Query(SwingQuery, BaseQuery, SblocQuery, NotificationQuery, BenchmarkQuery
             }
         }
 
-class Mutation(SblocMutation, NotificationMutation, graphene.ObjectType):
+class Mutation(SblocMutation, NotificationMutation, BenchmarkMutation, graphene.ObjectType):
     token_auth = ObtainJSONWebToken.Field()
     verify_token = graphql_jwt.Verify.Field()
     refresh_token = graphql_jwt.Refresh.Field()
