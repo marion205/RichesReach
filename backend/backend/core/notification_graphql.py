@@ -160,7 +160,93 @@ class UpdateNotificationSettings(graphene.Mutation):
             settings=NotificationSettingsType(**settings)
         )
 
+class NewsPreferencesType(graphene.ObjectType):
+    breakingNews = graphene.Boolean()
+    marketNews = graphene.Boolean()
+    companyNews = graphene.Boolean()
+    earningsNews = graphene.Boolean()
+    cryptoNews = graphene.Boolean()
+    personalStocks = graphene.Boolean()
+    quietHours = graphene.Boolean()
+    quietStart = graphene.String()
+    quietEnd = graphene.String()
+    frequency = graphene.String()
+
+class NewsPreferencesInput(graphene.InputObjectType):
+    breakingNews = graphene.Boolean()
+    marketNews = graphene.Boolean()
+    companyNews = graphene.Boolean()
+    earningsNews = graphene.Boolean()
+    cryptoNews = graphene.Boolean()
+    personalStocks = graphene.Boolean()
+    quietHours = graphene.Boolean()
+    quietStart = graphene.String()
+    quietEnd = graphene.String()
+    frequency = graphene.String()
+
+class GetNewsPreferences(graphene.Mutation):
+    class Arguments:
+        pass
+    
+    success = graphene.Boolean()
+    preferences = graphene.Field(NewsPreferencesType)
+    error = graphene.String()
+
+    def mutate(self, info):
+        user = getattr(info.context, 'user', None)
+        if not user or not user.is_authenticated:
+            return GetNewsPreferences(
+                success=False,
+                error="Authentication required"
+            )
+        
+        # Mock implementation - in real app, fetch from user profile
+        preferences = {
+            "breakingNews": True,
+            "marketNews": True,
+            "companyNews": True,
+            "earningsNews": False,
+            "cryptoNews": False,
+            "personalStocks": True,
+            "quietHours": False,
+            "quietStart": "22:00",
+            "quietEnd": "08:00",
+            "frequency": "immediate"
+        }
+        
+        return GetNewsPreferences(
+            success=True,
+            preferences=preferences,
+            error=None
+        )
+
+class UpdateNewsPreferences(graphene.Mutation):
+    class Arguments:
+        preferences = NewsPreferencesInput(required=True)
+    
+    success = graphene.Boolean()
+    preferences = graphene.Field(NewsPreferencesType)
+    error = graphene.String()
+
+    def mutate(self, info, preferences):
+        user = getattr(info.context, 'user', None)
+        if not user or not user.is_authenticated:
+            return UpdateNewsPreferences(
+                success=False,
+                error="Authentication required"
+            )
+        
+        # Mock implementation - in real app, save to user profile
+        # For now, just return the preferences that were sent
+        return UpdateNewsPreferences(
+            success=True,
+            preferences=preferences,
+            error=None
+        )
+
 class NotificationMutation(graphene.ObjectType):
     markNotificationRead = MarkNotificationRead.Field(description="Mark a notification as read")
     markAllNotificationsRead = MarkAllNotificationsRead.Field(description="Mark all notifications as read")
     updateNotificationSettings = UpdateNotificationSettings.Field(description="Update notification settings")
+    getNewsPreferences = GetNewsPreferences.Field(description="Get user news preferences")
+    updateNewsPreferences = UpdateNewsPreferences.Field(description="Update user news preferences")

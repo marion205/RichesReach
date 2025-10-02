@@ -12,19 +12,9 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useMutation } from '@apollo/client';
+import { GET_NEWS_PREFERENCES, UPDATE_NEWS_PREFERENCES, NewsPreferences } from '../../../graphql/newsPreferences';
 
-interface NewsPreferences {
-  breakingNews: boolean;
-  marketNews: boolean;
-  companyNews: boolean;
-  earningsNews: boolean;
-  cryptoNews: boolean;
-  personalStocks: boolean;
-  quietHours: boolean;
-  quietStart: string;
-  quietEnd: string;
-  frequency: 'immediate' | 'hourly' | 'daily';
-}
 
 const NewsPreferencesScreen = ({ navigation }: { navigation?: any }) => {
   const [preferences, setPreferences] = useState<NewsPreferences>({
@@ -41,18 +31,37 @@ const NewsPreferencesScreen = ({ navigation }: { navigation?: any }) => {
   });
   const [loading, setLoading] = useState(true);
 
+  const [getNewsPreferences] = useMutation(GET_NEWS_PREFERENCES);
+  const [updateNewsPreferences] = useMutation(UPDATE_NEWS_PREFERENCES);
+
   useEffect(() => {
     loadPreferences();
   }, []);
 
   const loadPreferences = async () => {
     try {
-      const saved = await AsyncStorage.getItem('newsPreferences');
-      if (saved) {
-        setPreferences(JSON.parse(saved));
+      // Try to load from backend first
+      const { data } = await getNewsPreferences();
+      if (data?.getNewsPreferences?.success && data?.getNewsPreferences?.preferences) {
+        setPreferences(data.getNewsPreferences.preferences);
+      } else {
+        // Fallback to local storage
+        const saved = await AsyncStorage.getItem('newsPreferences');
+        if (saved) {
+          setPreferences(JSON.parse(saved));
+        }
       }
     } catch (error) {
       console.error('Error loading news preferences:', error);
+      // Fallback to local storage
+      try {
+        const saved = await AsyncStorage.getItem('newsPreferences');
+        if (saved) {
+          setPreferences(JSON.parse(saved));
+        }
+      } catch (localError) {
+        console.error('Error loading from local storage:', localError);
+      }
     } finally {
       setLoading(false);
     }
@@ -60,11 +69,29 @@ const NewsPreferencesScreen = ({ navigation }: { navigation?: any }) => {
 
   const savePreferences = async (newPreferences: NewsPreferences) => {
     try {
-      await AsyncStorage.setItem('newsPreferences', JSON.stringify(newPreferences));
-      setPreferences(newPreferences);
+      // Save to backend
+      const { data } = await updateNewsPreferences({
+        variables: { preferences: newPreferences }
+      });
+      
+      if (data?.updateNewsPreferences?.success) {
+        setPreferences(newPreferences);
+        // Also save to local storage as backup
+        await AsyncStorage.setItem('newsPreferences', JSON.stringify(newPreferences));
+      } else {
+        throw new Error(data?.updateNewsPreferences?.error || 'Failed to save preferences');
+      }
     } catch (error) {
       console.error('Error saving news preferences:', error);
-      Alert.alert('Error', 'Failed to save preferences');
+      // Fallback to local storage
+      try {
+        await AsyncStorage.setItem('newsPreferences', JSON.stringify(newPreferences));
+        setPreferences(newPreferences);
+        Alert.alert('Warning', 'Preferences saved locally only. Check your connection.');
+      } catch (localError) {
+        console.error('Error saving to local storage:', localError);
+        Alert.alert('Error', 'Failed to save preferences');
+      }
     }
   };
 
