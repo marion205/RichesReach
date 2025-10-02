@@ -9,6 +9,7 @@ from core.crypto_graphql import CryptoPriceType, CryptocurrencyType, CryptoMutat
 from core.sbloc_queries import SblocQuery
 from core.sbloc_mutations import SblocMutation
 from core.notification_graphql import NotificationQuery, NotificationMutation
+from core.benchmark_graphql import BenchmarkQuery
 
 User = get_user_model()
 
@@ -2080,7 +2081,7 @@ class BaseQuery(graphene.ObjectType):
             sentimentDescription=sentiment_description
         )
 
-class Query(SwingQuery, BaseQuery, SblocQuery, NotificationQuery, graphene.ObjectType):
+class Query(SwingQuery, BaseQuery, SblocQuery, NotificationQuery, BenchmarkQuery, graphene.ObjectType):
     # merging by multiple inheritance; keep simple to avoid MRO issues
     optionOrders = graphene.List(OptionOrderType, status=graphene.String())
     

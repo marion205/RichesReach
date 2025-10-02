@@ -15,10 +15,22 @@ import { LineChart } from 'react-native-chart-kit';
 import Svg, { Line as SvgLine, Circle as SvgCircle, Rect as SvgRect, Text as SvgText } from 'react-native-svg';
 import Icon from 'react-native-vector-icons/Feather';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useQuery } from '@apollo/client';
 import EducationalTooltip from '../../../components/common/EducationalTooltip';
 import PortfolioEducationModal from './PortfolioEducationModal';
 import { getTermExplanation } from '../../../shared/financialTerms';
 import webSocketService, { PortfolioUpdate } from '../../../services/WebSocketService';
+import { 
+  GET_BENCHMARK_SERIES, 
+  GET_AVAILABLE_BENCHMARKS,
+  BenchmarkSeries,
+  extractBenchmarkValues,
+  getBenchmarkSummary,
+  calculateAlpha,
+  formatBenchmarkSymbol,
+  getBenchmarkColor
+} from '../../../graphql/benchmarkQueries';
+import BenchmarkSelector from './BenchmarkSelector';
 
 const { width } = Dimensions.get('window');
 const PREF_SHOW_BENCH = 'rr.pref.show_benchmark'; // NEW
@@ -29,6 +41,7 @@ type Props = {
   totalReturnPercent: number;
   benchmarkSymbol?: string;        // e.g., 'SPY'
   benchmarkSeries?: number[];      // optional: pass real benchmark series (same length as current timeframe)
+  useRealBenchmarkData?: boolean;  // whether to fetch real benchmark data from GraphQL
 };
 
 const TABS = ['1D', '1W', '1M', '3M', '1Y', 'All'] as const;
@@ -48,6 +61,7 @@ export default function PortfolioPerformanceCard({
   totalReturnPercent,
   benchmarkSymbol = 'SPY',
   benchmarkSeries,
+  useRealBenchmarkData = true,
 }: Props) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -60,7 +74,7 @@ export default function PortfolioPerformanceCard({
     grid: isDark ? '#2A2E34' : '#EDF0F2',
     green: '#22C55E',
     red: '#EF4444',
-    bench: isDark ? '#8B9DB3' : '#64748B',   // benchmark neutral line
+    bench: getBenchmarkColor(selectedBenchmarkSymbol, isDark),   // benchmark color based on selected symbol
     chipBg: isDark ? '#1A1C1F' : '#F3F4F6',
     chipActiveBg: isDark ? '#2B2F36' : '#111827',
     chipActiveText: '#FFFFFF',
@@ -73,6 +87,21 @@ export default function PortfolioPerformanceCard({
   const [clickedElement, setClickedElement] = useState<string>('');
   const [tab, setTab] = useState<Timeframe>('1M');
   const [showBenchmark, setShowBenchmark] = useState<boolean>(true);
+  const [selectedBenchmarkSymbol, setSelectedBenchmarkSymbol] = useState<string>(benchmarkSymbol);
+
+  // GraphQL queries for benchmark data
+  const { data: benchmarkData, loading: benchmarkLoading, error: benchmarkError } = useQuery(
+    GET_BENCHMARK_SERIES,
+    {
+      variables: { symbol: selectedBenchmarkSymbol, timeframe: tab },
+      skip: !useRealBenchmarkData || !showBenchmark,
+      fetchPolicy: 'cache-and-network',
+    }
+  );
+
+  const { data: availableBenchmarksData } = useQuery(GET_AVAILABLE_BENCHMARKS, {
+    skip: !useRealBenchmarkData,
+  });
 
   const [liveTotalValue, setLiveTotalValue] = useState(totalValue);
   const [liveTotalReturn, setLiveTotalReturn] = useState(totalReturn);
@@ -135,10 +164,20 @@ export default function PortfolioPerformanceCard({
 
   const genBenchmarkSeries = useCallback(
     (points: number) => {
+      // Use real benchmark data if available
+      if (useRealBenchmarkData && benchmarkData?.benchmarkSeries) {
+        const realValues = extractBenchmarkValues(benchmarkData.benchmarkSeries);
+        if (realValues.length > 0) {
+          return realValues;
+        }
+      }
+      
+      // Fallback to provided benchmark series
       if (benchmarkSeries && benchmarkSeries.length >= points) {
         return benchmarkSeries.slice(-points);
       }
-      // synthetic: lower vol + gentle positive drift
+      
+      // Fallback to synthetic data
       const series: number[] = [];
       const base = curValue * 0.98; // start close to portfolio
       const vol = 0.007;
@@ -151,7 +190,7 @@ export default function PortfolioPerformanceCard({
       series[series.length - 1] = curValue * 0.995; // finish near portfolio but not identical
       return series;
     },
-    [benchmarkSeries, curValue]
+    [benchmarkSeries, curValue, useRealBenchmarkData, benchmarkData]
   );
 
   const [history, setHistory] = useState<number[]>([]);
@@ -219,16 +258,20 @@ export default function PortfolioPerformanceCard({
     [history, curValue, stepX, pointCount]
   );
 
-  // period returns
+  // period returns - use real benchmark data if available
   const pStart = history[0] ?? curValue;
   const pEnd = history[history.length - 1] ?? curValue;
   const pRetPct = ((pEnd - pStart) / pStart) * 100;
-
-  const bStart = bench[0] ?? pStart;
-  const bEnd = bench[bench.length - 1] ?? pEnd;
-  const bRetPct = ((bEnd - bStart) / bStart) * 100;
-
-  const vsBenchmark = pRetPct - bRetPct; // + means outperformance
+  
+  // Use real benchmark performance if available
+  const benchmarkSummary = useRealBenchmarkData && benchmarkData?.benchmarkSeries 
+    ? getBenchmarkSummary(benchmarkData.benchmarkSeries)
+    : null;
+  
+  const bStart = benchmarkSummary?.startValue ?? (bench[0] ?? pStart);
+  const bEnd = benchmarkSummary?.endValue ?? (bench[bench.length - 1] ?? pEnd);
+  const bRetPct = benchmarkSummary?.totalReturnPercent ?? (((bEnd - bStart) / bStart) * 100);
+  const vsBenchmark = calculateAlpha(pRetPct, bRetPct); // + means outperformance
 
   // Datasets (portfolio + optional benchmark)
   const chartData = useMemo(
@@ -329,7 +372,7 @@ export default function PortfolioPerformanceCard({
         </SvgText>
         {showBenchmark && bVal != null && (
           <SvgText x={tipX + 10} y={tipY + 36} fill={palette.tooltipText} fontSize="12">
-            {`${benchmarkSymbol}: ${fmtUsd(bVal)} (${fmtPct(bPctAt!)})`}
+            {`${useRealBenchmarkData ? formatBenchmarkSymbol(selectedBenchmarkSymbol) : selectedBenchmarkSymbol}: ${fmtUsd(bVal)} (${fmtPct(bPctAt!)})`}
           </SvgText>
         )}
       </Svg>
@@ -347,18 +390,27 @@ export default function PortfolioPerformanceCard({
           </View>
 
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            {/* Benchmark selector */}
+            {useRealBenchmarkData && (
+              <BenchmarkSelector
+                selectedSymbol={selectedBenchmarkSymbol}
+                onSymbolChange={setSelectedBenchmarkSymbol}
+                style={{ marginRight: 8 }}
+              />
+            )}
+            
             {/* Benchmark toggle */}
             <TouchableOpacity
               onPress={() => setShowBenchmark(v => !v)}
               accessibilityRole="button"
-              accessibilityLabel={`Toggle ${benchmarkSymbol} benchmark`}
+              accessibilityLabel={`Toggle ${selectedBenchmarkSymbol} benchmark`}
               style={[
                 styles.benchToggle,
                 { borderColor: palette.border, backgroundColor: showBenchmark ? `${palette.bench}22` : palette.chipBg },
               ]}
             >
               <View style={{ width: 10, height: 2, backgroundColor: palette.bench, marginRight: 6 }} />
-              <Text style={{ color: palette.text, fontSize: 12, fontWeight: '600' }}>{benchmarkSymbol}</Text>
+              <Text style={{ color: palette.text, fontSize: 12, fontWeight: '600' }}>{selectedBenchmarkSymbol}</Text>
             </TouchableOpacity>
 
             {/* Timeframe chips */}
@@ -418,7 +470,9 @@ export default function PortfolioPerformanceCard({
               {/* vs benchmark pill */}
               {showBenchmark && (
                 <View style={[styles.vsPill, { borderColor: palette.border }]}>
-                  <Text style={{ fontSize: 11, color: palette.sub, marginRight: 6 }}>vs {benchmarkSymbol}</Text>
+                  <Text style={{ fontSize: 11, color: palette.sub, marginRight: 6 }}>
+                    vs {useRealBenchmarkData ? formatBenchmarkSymbol(selectedBenchmarkSymbol) : selectedBenchmarkSymbol}
+                  </Text>
                   <Text style={{ fontSize: 12, fontWeight: '700', color: vsBenchmark >= 0 ? palette.green : palette.red }}>
                     {fmtPct(vsBenchmark)}
                   </Text>
@@ -462,7 +516,9 @@ export default function PortfolioPerformanceCard({
           {showBenchmark && (
             <View style={styles.legendItem}>
               <View style={[styles.legendSwatch, { backgroundColor: palette.bench }]} />
-              <Text style={styles.legendText}>{benchmarkSymbol}</Text>
+              <Text style={styles.legendText}>
+                {useRealBenchmarkData ? formatBenchmarkSymbol(selectedBenchmarkSymbol) : selectedBenchmarkSymbol}
+              </Text>
             </View>
           )}
         </View>
