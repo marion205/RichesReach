@@ -1,5 +1,18 @@
+// Import Reanimated first (required for worklets)
+import 'react-native-reanimated';
+
 // Import URL polyfill first to fix React Native URL.protocol issues
 import 'react-native-url-polyfill/auto';
+
+// Suppress React Native warnings in development
+import { LogBox } from 'react-native';
+LogBox.ignoreLogs([
+  'SafeAreaView has been deprecated',
+  'NetInfo not available',
+  'Store reset while query was in flight',
+  'Network request failed',
+  'Network request timed out'
+]);
 
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
@@ -49,6 +62,9 @@ import NotificationsScreen from './features/notifications/screens/NotificationsS
 import CryptoScreen from './navigation/CryptoScreen';
 import OptionsLearningScreen from './features/options/screens/OptionsLearningScreen';
 import SBLOCLearningScreen from './features/learning/screens/SBLOCLearningScreen';
+import SBLOCBankSelectionScreen from './features/sbloc/screens/SBLOCBankSelectionScreen';
+import SBLOCApplicationScreen from './features/sbloc/screens/SBLOCApplicationScreen';
+import SBLOCStatusScreen from './features/sbloc/screens/SBLOCStatusScreen';
 import PortfolioLearningScreen from './features/learning/screens/PortfolioLearningScreen';
 // Components
 import { BottomTabBar, TopHeader, PersonalizedDashboard } from './components';
@@ -240,7 +256,7 @@ return <ProfileScreen navigateTo={navigateTo} onLogout={handleLogout} />;
 case 'stock':
 return <StockScreen navigateTo={navigateTo} />;
 case 'crypto':
-return <CryptoScreen navigation={{ navigate: navigateTo }} />;
+return <CryptoScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('home') }} />;
 case 'ai-portfolio':
 return <AIPortfolioScreen navigateTo={navigateTo} />;
 case 'portfolio':
@@ -290,7 +306,7 @@ return <DiscoverUsersScreen onNavigate={navigateTo} />;
 case 'social-feed':
 return <SocialScreen onNavigate={navigateTo} />;
 case 'ai-options':
-return <AIOptionsScreen navigation={{ goBack: () => setCurrentScreen('home') }} />;
+return <AIOptionsScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('home') }} />;
 case 'trading':
 return <TradingScreen navigateTo={navigateTo} />;
 case 'day-trading':
@@ -310,15 +326,21 @@ return <DayTradingScreen navigateTo={navigateTo} />;
         case 'swing-leaderboard':
           return <LeaderboardScreen navigateTo={navigateTo} />;
         case 'bank-accounts':
-return <BankAccountScreen navigateTo={navigateTo} />;
+return <BankAccountScreen navigateTo={navigateTo} navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('home') }} />;
 case 'notifications':
 return <NotificationsScreen navigateTo={navigateTo} />;
 case 'options-learning':
-return <OptionsLearningScreen navigation={{ goBack: () => setCurrentScreen('home') }} />;
+return <OptionsLearningScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('home') }} />;
 case 'sbloc-learning':
-return <SBLOCLearningScreen navigation={{ goBack: () => setCurrentScreen('home') }} />;
+return <SBLOCLearningScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('home') }} />;
 case 'portfolio-learning':
-return <PortfolioLearningScreen navigation={{ goBack: () => setCurrentScreen('home') }} />;
+return <PortfolioLearningScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('home') }} />;
+case 'SBLOCBankSelection':
+return <SBLOCBankSelectionScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('bank-accounts') }} route={{ params: { amountUsd: 25000 } }} />;
+case 'SBLOCApplication':
+return <SBLOCApplicationScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('SBLOCBankSelection') }} route={{ params: { sessionUrl: '', referral: { id: '', bank: { name: '' } } } }} />;
+case 'SblocStatus':
+return <SBLOCStatusScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('SBLOCBankSelection') }} route={{ params: { sessionId: '' } }} />;
     default:
       // Handle user-profile and user-portfolios with userId pattern
       if (currentScreen.startsWith('user-profile-')) {

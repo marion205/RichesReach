@@ -19,6 +19,7 @@ import SBLOCCalculator from '../../../components/forms/SBLOCCalculator';
 import SblocFundingCard from '../../../components/forms/SblocFundingCard';
 import SblocCalculatorModal from '../../../components/forms/SblocCalculatorModal';
 import { GET_SBLOC_OFFER } from '../../../sboclGql';
+import { GET_SBLOC_BANKS } from '../../../graphql/sblocQueries';
 
 const { width } = Dimensions.get('window');
 
@@ -120,7 +121,7 @@ const INITIATE_FUNDING = gql`
   }
 `;
 
-const BankAccountScreen = ({ navigateTo }: { navigateTo?: (screen: string) => void }) => {
+const BankAccountScreen = ({ navigateTo, navigation }: { navigateTo?: (screen: string) => void; navigation?: any }) => {
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [showFundingModal, setShowFundingModal] = useState(false);
   const [showSBLOCModal, setShowSBLOCModal] = useState(false);
@@ -359,7 +360,24 @@ const BankAccountScreen = ({ navigateTo }: { navigateTo?: (screen: string) => vo
               <SblocFundingCard
                 maxBorrow={maxBorrow}
                 aprPct={apr * 100}
-                onPress={() => setShowSblocCalculator(true)}
+                portfolioValue={eligibleEquity}
+                onPress={() => {
+                  // Navigate to SBLOC bank selection
+                  navigation.navigate('SBLOCBankSelection', {
+                    requestedAmount: maxBorrow * 0.5, // Default to 50% of max
+                    consentData: {
+                      consent: true,
+                      dataScope: {
+                        identity: true,
+                        contact: true,
+                        portfolioSummary: true,
+                        positions: true,
+                        recentTransfers: false,
+                        income: false,
+                      },
+                    },
+                  });
+                }}
               />
             </View>
           );
