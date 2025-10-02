@@ -3,7 +3,7 @@ import numpy as np
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional, Tuple
 from django.contrib.auth.models import User
-from .models import CustomBenchmark, CustomBenchmarkHolding
+from .models_custom_benchmark import CustomBenchmark, CustomBenchmarkHolding
 from .real_market_data_service import real_market_data_service
 
 logger = logging.getLogger(__name__)

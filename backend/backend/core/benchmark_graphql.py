@@ -6,6 +6,9 @@ from django.contrib.auth import get_user_model
 from .real_market_data_service import real_market_data_service
 from .advanced_analytics_service import advanced_analytics_service
 from .custom_benchmark_service import custom_benchmark_service
+from .advanced_dashboard_service import advanced_dashboard_service
+from .portfolio_optimization_service import portfolio_optimization_service
+from .performance_attribution_service import performance_attribution_service
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -150,6 +153,39 @@ class BenchmarkQuery(graphene.ObjectType):
         portfolioData=graphene.JSONString(required=True, description="Portfolio performance data"),
         benchmarkData=graphene.JSONString(required=True, description="Benchmark performance data"),
         description="Get advanced analytics comparing portfolio to benchmark"
+    )
+    
+    advancedDashboard = graphene.Field(
+        graphene.JSONString,
+        portfolioId=graphene.String(description="Portfolio ID"),
+        timeframe=graphene.String(default_value="1Y", description="Analysis timeframe"),
+        description="Get comprehensive dashboard data for advanced visualization"
+    )
+    
+    portfolioOptimization = graphene.Field(
+        graphene.JSONString,
+        symbols=graphene.List(graphene.String, required=True, description="List of symbols to optimize"),
+        optimizationType=graphene.String(default_value="max_sharpe", description="Optimization method"),
+        constraints=graphene.JSONString(description="Optimization constraints"),
+        riskFreeRate=graphene.Float(default_value=0.02, description="Risk-free rate"),
+        targetReturn=graphene.Float(description="Target return for optimization"),
+        targetVolatility=graphene.Float(description="Target volatility for optimization"),
+        description="Optimize portfolio using various methods"
+    )
+    
+    efficientFrontier = graphene.Field(
+        graphene.JSONString,
+        symbols=graphene.List(graphene.String, required=True, description="List of symbols"),
+        numPortfolios=graphene.Int(default_value=100, description="Number of portfolios to generate"),
+        description="Generate efficient frontier"
+    )
+    
+    performanceAttribution = graphene.Field(
+        graphene.JSONString,
+        portfolioId=graphene.String(required=True, description="Portfolio ID"),
+        benchmarkId=graphene.String(required=True, description="Benchmark ID"),
+        timeframe=graphene.String(default_value="1Y", description="Analysis timeframe"),
+        description="Get detailed performance attribution analysis"
     )
 
     def resolve_benchmarkSeries(self, info, symbol: str, timeframe: str, useRealData: bool = True):
@@ -369,6 +405,81 @@ class BenchmarkQuery(graphene.ObjectType):
             )
         except Exception as e:
             logger.error(f"Error resolving benchmark analytics: {e}")
+            return None
+    
+    def resolve_advancedDashboard(self, info, portfolioId: str = None, timeframe: str = "1Y"):
+        """Resolve advanced dashboard data"""
+        user = getattr(info.context, 'user', None)
+        if not user or not user.is_authenticated:
+            logger.warning("Authentication required for advanced dashboard")
+            return None
+        
+        try:
+            dashboard_data = advanced_dashboard_service.get_comprehensive_dashboard_data(
+                user=user,
+                portfolio_id=portfolioId,
+                timeframe=timeframe
+            )
+            return dashboard_data
+        except Exception as e:
+            logger.error(f"Error resolving advanced dashboard: {e}")
+            return None
+    
+    def resolve_portfolioOptimization(self, info, symbols: List[str], optimizationType: str = "max_sharpe",
+                                    constraints: Dict = None, riskFreeRate: float = 0.02,
+                                    targetReturn: float = None, targetVolatility: float = None):
+        """Resolve portfolio optimization"""
+        try:
+            optimization_result = portfolio_optimization_service.optimize_portfolio(
+                symbols=symbols,
+                optimization_type=optimizationType,
+                constraints=constraints,
+                risk_free_rate=riskFreeRate,
+                target_return=targetReturn,
+                target_volatility=targetVolatility
+            )
+            return optimization_result
+        except Exception as e:
+            logger.error(f"Error resolving portfolio optimization: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'timestamp': datetime.now().isoformat()
+            }
+    
+    def resolve_efficientFrontier(self, info, symbols: List[str], numPortfolios: int = 100):
+        """Resolve efficient frontier"""
+        try:
+            frontier_data = portfolio_optimization_service.generate_efficient_frontier(
+                symbols=symbols,
+                num_portfolios=numPortfolios
+            )
+            return frontier_data
+        except Exception as e:
+            logger.error(f"Error resolving efficient frontier: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'timestamp': datetime.now().isoformat()
+            }
+    
+    def resolve_performanceAttribution(self, info, portfolioId: str, benchmarkId: str, timeframe: str = "1Y"):
+        """Resolve performance attribution analysis"""
+        user = getattr(info.context, 'user', None)
+        if not user or not user.is_authenticated:
+            logger.warning("Authentication required for performance attribution")
+            return None
+        
+        try:
+            attribution_data = performance_attribution_service.get_comprehensive_attribution(
+                user=user,
+                portfolio_id=portfolioId,
+                benchmark_id=benchmarkId,
+                timeframe=timeframe
+            )
+            return attribution_data
+        except Exception as e:
+            logger.error(f"Error resolving performance attribution: {e}")
             return None
 
 # Input types for mutations
