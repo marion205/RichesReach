@@ -158,7 +158,7 @@ const NewsPreferencesScreen = ({ navigation }: { navigation?: any }) => {
               key: 'companyNews' as keyof NewsPreferences,
               title: 'Company News',
               description: 'Corporate announcements and updates',
-              icon: 'building',
+              icon: 'briefcase',
               color: '#007AFF',
             },
             {
@@ -172,7 +172,7 @@ const NewsPreferencesScreen = ({ navigation }: { navigation?: any }) => {
               key: 'cryptoNews' as keyof NewsPreferences,
               title: 'Crypto News',
               description: 'Cryptocurrency market updates',
-              icon: 'bitcoin',
+              icon: 'circle',
               color: '#AF52DE',
             },
             {
