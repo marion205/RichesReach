@@ -21,6 +21,7 @@ import { getTermExplanation } from '../../../shared/financialTerms';
 import webSocketService, { PortfolioUpdate } from '../../../services/WebSocketService';
 
 const { width } = Dimensions.get('window');
+const PREF_SHOW_BENCH = 'rr.pref.show_benchmark'; // NEW
 
 type Props = {
   totalValue: number;
@@ -88,31 +89,19 @@ export default function PortfolioPerformanceCard({
   const accent = positive ? palette.green : palette.red;
   const trendIcon = positive ? 'trending-up' : 'trending-down';
 
-  // Load benchmark toggle preference
+  // NEW: hydrate persisted toggle on mount
   useEffect(() => {
-    const loadBenchmarkPreference = async () => {
+    (async () => {
       try {
-        const saved = await AsyncStorage.getItem('portfolio.showBenchmark');
-        if (saved !== null) {
-          setShowBenchmark(saved === 'true');
-        }
-      } catch (error) {
-        console.error('Error loading benchmark preference:', error);
-      }
-    };
-    loadBenchmarkPreference();
+        const raw = await AsyncStorage.getItem(PREF_SHOW_BENCH);
+        if (raw != null) setShowBenchmark(raw === '1');
+      } catch {}
+    })();
   }, []);
 
-  // Save benchmark toggle preference
+  // NEW: persist on change
   useEffect(() => {
-    const saveBenchmarkPreference = async () => {
-      try {
-        await AsyncStorage.setItem('portfolio.showBenchmark', showBenchmark.toString());
-      } catch (error) {
-        console.error('Error saving benchmark preference:', error);
-      }
-    };
-    saveBenchmarkPreference();
+    AsyncStorage.setItem(PREF_SHOW_BENCH, showBenchmark ? '1' : '0').catch(() => {});
   }, [showBenchmark]);
 
   // === Series generation (stub) ===
@@ -464,16 +453,16 @@ export default function PortfolioPerformanceCard({
           <View style={StyleSheet.absoluteFillObject} pointerEvents="none" />
         </View>
 
-        {/* Legend */}
-        <View style={styles.legend}>
+        {/* NEW: Legend */}
+        <View style={styles.legendRow}>
           <View style={styles.legendItem}>
-            <View style={[styles.legendLine, { backgroundColor: accent }]} />
-            <Text style={[styles.legendText, { color: palette.sub }]}>Portfolio</Text>
+            <View style={[styles.legendSwatch, { backgroundColor: accent }]} />
+            <Text style={styles.legendText}>Portfolio</Text>
           </View>
           {showBenchmark && (
             <View style={styles.legendItem}>
-              <View style={[styles.legendLine, { backgroundColor: palette.bench }]} />
-              <Text style={[styles.legendText, { color: palette.sub }]}>{benchmarkSymbol} Benchmark</Text>
+              <View style={[styles.legendSwatch, { backgroundColor: palette.bench }]} />
+              <Text style={styles.legendText}>{benchmarkSymbol}</Text>
             </View>
           )}
         </View>
@@ -515,27 +504,11 @@ const styles = StyleSheet.create({
   deltaText: { fontSize: 14, fontWeight: '700' },
   chartShell: { alignItems: 'center', marginTop: 4 },
   chart: { borderRadius: 12 },
-  legend: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 20,
-    marginTop: 8,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  legendLine: {
-    width: 16,
-    height: 2,
-    borderRadius: 1,
-  },
-  legendText: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
+  // NEW: Legend styles
+  legendRow: { flexDirection: 'row', gap: 16, justifyContent: 'center', alignItems: 'center', marginTop: 8 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  legendSwatch: { width: 12, height: 4, borderRadius: 2 },
+  legendText: { fontSize: 12, color: '#6B7280' },
   footer: { marginTop: 10, paddingTop: 10, borderTopWidth: 1 },
   footerText: { fontSize: 12, textAlign: 'center' },
 });
