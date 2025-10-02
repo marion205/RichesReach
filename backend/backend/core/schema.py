@@ -6,8 +6,62 @@ from core.graphql.queries import Query as SwingQuery, RunBacktestMutation, Portf
 from core.graphql.types import DayTradingPicksType, DayTradingPickType, DayTradingFeaturesType, DayTradingRiskType
 from core.types import StockDiscussionType, OptionOrderType, IncomeProfileType, AIRecommendationsType
 from core.crypto_graphql import CryptoPriceType, CryptocurrencyType, CryptoMutation
+from core.sbloc_queries import SblocQuery
+from core.sbloc_mutations import SblocMutation
+from core.notification_graphql import NotificationQuery, NotificationMutation
 
 User = get_user_model()
+
+# Helper function to add budget-aware scoring breakdown to StockType
+def add_scoring_breakdown(stock_type, stock_data=None, user_budget=1000.0):
+    """Add budget-aware scoring breakdown to a StockType object"""
+    try:
+        from .scoring.beginner_score import compute_beginner_score
+        
+        # Use provided data or extract from stock_type
+        if stock_data:
+            overview_data = stock_data
+        else:
+            overview_data = {
+                'Name': getattr(stock_type, 'companyName', ''),
+                'Symbol': getattr(stock_type, 'symbol', ''),
+                'Sector': getattr(stock_type, 'sector', ''),
+                'MarketCapitalization': str(getattr(stock_type, 'marketCap', 0)) if getattr(stock_type, 'marketCap', 0) else None,
+                'PERatio': str(getattr(stock_type, 'peRatio', 0)) if getattr(stock_type, 'peRatio', 0) else None,
+                'DividendYield': str(getattr(stock_type, 'dividendYield', 0)) if getattr(stock_type, 'dividendYield', 0) else None,
+                'Beta': '1.0',
+                'ProfitMargin': '0.15',
+                'ReturnOnEquityTTM': '0.20',
+                'DebtToEquity': '0.5'
+            }
+        
+        market_data = {
+            'price': getattr(stock_type, 'currentPrice', 100.0),
+            'avgDollarVolume': 5e7,  # Default $50M/day
+            'annualizedVol': 0.25,  # Default 25% volatility
+            'beta': 1.0
+        }
+        
+        score_result = compute_beginner_score(overview_data, market_data, user_budget)
+        
+        # Create breakdown object
+        breakdown = BeginnerScoreBreakdownType()
+        breakdown.score = score_result.score
+        breakdown.factors = []
+        for factor in score_result.factors:
+            factor_obj = FactorType()
+            factor_obj.name = factor.name
+            factor_obj.weight = factor.weight
+            factor_obj.value = factor.value
+            factor_obj.contrib = factor.contrib
+            factor_obj.detail = factor.detail
+            breakdown.factors.append(factor_obj)
+        breakdown.notes = score_result.notes
+        stock_type.beginnerScoreBreakdown = breakdown
+        
+    except Exception as e:
+        print(f"Scoring breakdown error for {getattr(stock_type, 'symbol', 'Unknown')}: {e}")
+        stock_type.beginnerScoreBreakdown = None
 
 # Mock types for missing functionality
 # CryptoPriceType is defined in crypto_graphql.py
@@ -154,6 +208,56 @@ class PortfolioType(graphene.ObjectType):
     holdingsCount = graphene.Int()
     holdings = graphene.List(lambda: MyPortfolioHoldingType)
 
+class FactorType(graphene.ObjectType):
+    name = graphene.String()
+    weight = graphene.Float()
+    value = graphene.Float()
+    contrib = graphene.Float()
+    detail = graphene.String()
+
+class BeginnerScoreBreakdownType(graphene.ObjectType):
+    score = graphene.Int()
+    factors = graphene.List(FactorType)
+    notes = graphene.List(graphene.String)
+
+# Bank Account Types
+class BankAccountType(graphene.ObjectType):
+    id = graphene.ID()
+    bankName = graphene.String()
+    accountType = graphene.String()
+    lastFour = graphene.String()
+    isVerified = graphene.Boolean()
+    isPrimary = graphene.Boolean()
+    linkedAt = graphene.String()
+
+class FundingHistoryType(graphene.ObjectType):
+    id = graphene.ID()
+    amount = graphene.Float()
+    status = graphene.String()
+    bankAccountId = graphene.String()
+    initiatedAt = graphene.String()
+    completedAt = graphene.String()
+
+class SblocOfferType(graphene.ObjectType):
+    ltv = graphene.Float()
+    apr = graphene.Float()
+    minDraw = graphene.Float()
+    maxDrawMultiplier = graphene.Float()
+    disclosures = graphene.List(graphene.String)
+    eligibleEquity = graphene.Float()
+    updatedAt = graphene.String()
+
+# Bank Account Mutation Result Types
+class LinkBankAccountResultType(graphene.ObjectType):
+    success = graphene.Boolean()
+    message = graphene.String()
+    bankAccount = graphene.Field(BankAccountType)
+
+class InitiateFundingResultType(graphene.ObjectType):
+    success = graphene.Boolean()
+    message = graphene.String()
+    funding = graphene.Field(FundingHistoryType)
+
 class StockType(graphene.ObjectType):
     id = graphene.ID()
     symbol = graphene.String()
@@ -165,6 +269,7 @@ class StockType(graphene.ObjectType):
     peRatio = graphene.Float()
     dividendYield = graphene.Float()
     beginnerFriendlyScore = graphene.Int()
+    beginnerScoreBreakdown = graphene.Field(BeginnerScoreBreakdownType)
 
 class CommentType(graphene.ObjectType):
     id = graphene.ID()
@@ -589,6 +694,9 @@ class BaseQuery(graphene.ObjectType):
         StockType,
         limit=graphene.Int(default_value=10),
     )
+    bankAccounts = graphene.List(BankAccountType)
+    fundingHistory = graphene.List(FundingHistoryType)
+    sblocOffer = graphene.Field(SblocOfferType)
     calculateTargetPrice = graphene.Field(
         TargetPriceResultType,
         entryPrice=graphene.Float(required=True),
@@ -716,9 +824,164 @@ class BaseQuery(graphene.ObjectType):
         # Simple diagnostic field to test GraphQL endpoint
         return "ok"
     
+    def resolve_bankAccounts(self, info):
+        # Return mock bank account data for development
+        return [
+            BankAccountType(
+                id="1",
+                bankName="Chase Bank",
+                accountType="Checking",
+                lastFour="1234",
+                isVerified=True,
+                isPrimary=True,
+                linkedAt="2024-01-15T10:30:00Z"
+            ),
+            BankAccountType(
+                id="2", 
+                bankName="Bank of America",
+                accountType="Savings",
+                lastFour="5678",
+                isVerified=True,
+                isPrimary=False,
+                linkedAt="2024-02-20T14:45:00Z"
+            )
+        ]
+    
+    def resolve_fundingHistory(self, info):
+        # Return mock funding history data for development
+        return [
+            FundingHistoryType(
+                id="1",
+                amount=5000.0,
+                status="completed",
+                bankAccountId="1",
+                initiatedAt="2024-03-01T09:00:00Z",
+                completedAt="2024-03-01T09:15:00Z"
+            ),
+            FundingHistoryType(
+                id="2",
+                amount=2500.0,
+                status="pending",
+                bankAccountId="2",
+                initiatedAt="2024-03-15T11:30:00Z",
+                completedAt=None
+            )
+        ]
+    
+    def resolve_sblocOffer(self, info):
+        # Return mock SBLOC offer data for development
+        return SblocOfferType(
+            ltv=0.5,  # 50% loan-to-value
+            apr=0.085,  # 8.5% APR
+            minDraw=1000.0,
+            maxDrawMultiplier=0.95,
+            disclosures=[
+                "Securities-based lending involves risk of loss",
+                "Interest rates may vary based on market conditions",
+                "Collateral requirements may change"
+            ],
+            eligibleEquity=50000.0,  # $50k eligible equity
+            updatedAt="2024-03-20T12:00:00Z"
+        )
+    
     def resolve_stocks(self, info, search=None, limit=10, offset=0):
-        # TEMP: return simplified data from the mock advanced results
-        # This avoids resolver cross-calling and potential deadlocks
+        # Use real ML/AI services to get stock recommendations
+        try:
+            from .models import Stock
+            import django.db.models as djmodels
+            
+            limit = max(1, min(limit or 10, 200))
+            offset = max(0, offset or 0)
+            
+            # If there's a search term, try to use the stock service to search and sync real data
+            if search and search.strip():
+                try:
+                    from .stock_service import SimpleStockSearchService
+                    stock_service = SimpleStockSearchService()
+                    # Search and sync stocks from external APIs
+                    searched_stocks = stock_service.search_and_sync_stocks(search.strip())
+                    if searched_stocks:
+                        return searched_stocks[offset:offset+limit]
+                except Exception as e:
+                    print(f"Stock service search error: {e}")
+            
+            # Get stocks from database with ML-enhanced scoring
+            qs = Stock.objects.all()
+            if search:
+                qs = qs.filter(
+                    djmodels.Q(symbol__icontains=search.upper()) |
+                    djmodels.Q(company_name__icontains=search)
+                )
+            
+            # Try to enhance with ML scoring if available
+            try:
+                from .ml_stock_recommender import MLStockRecommender
+                from .models import User
+                
+                # Get a default user for ML recommendations
+                user = User.objects.first()
+                if user:
+                    ml_recommender = MLStockRecommender()
+                    # Get ML-generated stock recommendations
+                    recommendations = ml_recommender.generate_ml_recommendations(user, limit=limit + offset)
+                    
+                    # Apply search filter if provided
+                    if search:
+                        search_lower = search.lower()
+                        recommendations = [
+                            rec for rec in recommendations 
+                            if (search_lower in rec.stock.symbol.lower() or 
+                                search_lower in rec.stock.company_name.lower())
+                        ]
+                    
+                    # Apply pagination
+                    recommendations = recommendations[offset:offset + limit]
+                    
+                    # Convert to StockType format
+                    result = []
+                    for rec in recommendations:
+                        stock = StockType()
+                        stock.id = rec.stock.symbol
+                        stock.symbol = rec.stock.symbol
+                        stock.companyName = rec.stock.company_name
+                        stock.currentPrice = float(rec.stock.current_price) if rec.stock.current_price else 0.0
+                        stock.changePercent = 0.0  # Will be updated with real-time data
+                        stock.sector = rec.stock.sector or 'Unknown'
+                        stock.marketCap = float(rec.stock.market_cap) if rec.stock.market_cap else 0.0
+                        stock.peRatio = float(rec.stock.pe_ratio) if rec.stock.pe_ratio else 0.0
+                        stock.dividendYield = float(rec.stock.dividend_yield) if rec.stock.dividend_yield else 0.0
+                        stock.beginnerFriendlyScore = int(rec.confidence_score * 100)  # Convert 0-1 to 0-100
+                        result.append(stock)
+                    
+                    return result
+            except Exception as e:
+                print(f"ML enhancement error: {e}")
+            
+            # Fallback to regular database query - convert to StockType objects
+            db_stocks = qs.order_by('symbol')[offset:offset+limit]
+            result = []
+            for stock in db_stocks:
+                stock_type = StockType()
+                stock_type.id = stock.symbol
+                stock_type.symbol = stock.symbol
+                stock_type.companyName = stock.company_name
+                stock_type.currentPrice = float(stock.current_price) if stock.current_price else 0.0
+                stock_type.changePercent = 0.0  # Will be updated with real-time data
+                stock_type.sector = stock.sector or 'Unknown'
+                stock_type.marketCap = float(stock.market_cap) if stock.market_cap else 0.0
+                stock_type.peRatio = float(stock.pe_ratio) if stock.pe_ratio else 0.0
+                stock_type.dividendYield = float(stock.dividend_yield) if stock.dividend_yield else 0.0
+                stock_type.beginnerFriendlyScore = stock.beginner_friendly_score
+                
+                # Add budget-aware scoring breakdown
+                add_scoring_breakdown(stock_type, user_budget=1000.0)
+                
+                result.append(stock_type)
+            return result
+            
+        except Exception as e:
+            print(f"Stock query error: {e}")
+            # Final fallback to mock data
         from core.graphql.queries import get_mock_advanced_screening_results
         
         items = get_mock_advanced_screening_results()
@@ -738,18 +1001,18 @@ class BaseQuery(graphene.ObjectType):
         # Convert to basic StockType format
         result = []
         for item in items:
-            stock = StockType()
-            stock.id = item.get('symbol', '')
-            stock.symbol = item.get('symbol', '')
-            stock.companyName = item.get('company_name', '')
-            stock.currentPrice = item.get('current_price', 0.0)
-            stock.changePercent = item.get('change_percent', 0.0)
-            stock.sector = item.get('sector', '')
-            stock.marketCap = item.get('market_cap', 0.0)
-            stock.peRatio = item.get('pe_ratio', 0.0)
-            stock.dividendYield = item.get('dividend_yield', 0.0)
-            stock.beginnerFriendlyScore = item.get('beginner_friendly_score', 0)
-            result.append(stock)
+                stock = StockType()
+                stock.id = item.get('symbol', '')
+                stock.symbol = item.get('symbol', '')
+                stock.companyName = item.get('company_name', '')
+                stock.currentPrice = item.get('current_price', 0.0)
+                stock.changePercent = item.get('change_percent', 0.0)
+                stock.sector = item.get('sector', '')
+                stock.marketCap = item.get('market_cap', 0.0)
+                stock.peRatio = item.get('pe_ratio', 0.0)
+                stock.dividendYield = item.get('dividend_yield', 0.0)
+                stock.beginnerFriendlyScore = item.get('beginner_friendly_score', 0)
+                result.append(stock)
         
         return result
     
@@ -1001,7 +1264,72 @@ class BaseQuery(graphene.ObjectType):
         )
     
     def resolve_beginnerFriendlyStocks(self, info, limit=10):
-        # Use mock data for now since database is empty
+        # Use real ML/AI services to get beginner-friendly stock recommendations
+        try:
+            from .models import Stock
+            
+            # Try to enhance with ML scoring if available
+            try:
+                from .ml_stock_recommender import MLStockRecommender
+                from .models import User
+                
+                # Get a default user for ML recommendations
+                user = User.objects.first()
+                if user:
+                    ml_recommender = MLStockRecommender()
+                    
+                    # Get ML-generated beginner-friendly stock recommendations
+                    recommendations = ml_recommender.get_beginner_friendly_stocks(user, limit=limit)
+                    
+                    # Convert to StockType format
+                    result = []
+                    for rec in recommendations:
+                        stock = StockType()
+                        stock.id = rec.stock.symbol
+                        stock.symbol = rec.stock.symbol
+                        stock.companyName = rec.stock.company_name
+                        stock.currentPrice = float(rec.stock.current_price) if rec.stock.current_price else 0.0
+                        stock.changePercent = 0.0  # Will be updated with real-time data
+                        stock.sector = rec.stock.sector or 'Unknown'
+                        stock.marketCap = float(rec.stock.market_cap) if rec.stock.market_cap else 0.0
+                        stock.peRatio = float(rec.stock.pe_ratio) if rec.stock.pe_ratio else 0.0
+                        stock.dividendYield = float(rec.stock.dividend_yield) if rec.stock.dividend_yield else 0.0
+                        stock.beginnerFriendlyScore = int(rec.confidence_score * 100)  # Convert 0-1 to 0-100
+                        result.append(stock)
+                    
+                    return result
+            except Exception as e:
+                print(f"ML enhancement error: {e}")
+            
+            # Fallback to database query - convert to StockType objects
+            db_stocks = Stock.objects.filter(
+                beginner_friendly_score__gte=65, # Moderate beginner-friendly score
+                market_cap__gte=10000000000, # Mid to large cap companies (>$10B)
+            ).order_by('-beginner_friendly_score')[:limit]
+            
+            result = []
+            for stock in db_stocks:
+                stock_type = StockType()
+                stock_type.id = stock.symbol
+                stock_type.symbol = stock.symbol
+                stock_type.companyName = stock.company_name
+                stock_type.currentPrice = float(stock.current_price) if stock.current_price else 0.0
+                stock_type.changePercent = 0.0  # Will be updated with real-time data
+                stock_type.sector = stock.sector or 'Unknown'
+                stock_type.marketCap = float(stock.market_cap) if stock.market_cap else 0.0
+                stock_type.peRatio = float(stock.pe_ratio) if stock.pe_ratio else 0.0
+                stock_type.dividendYield = float(stock.dividend_yield) if stock.dividend_yield else 0.0
+                stock_type.beginnerFriendlyScore = stock.beginner_friendly_score
+                
+                # Add budget-aware scoring breakdown
+                add_scoring_breakdown(stock_type, user_budget=1000.0)
+                
+                result.append(stock_type)
+            return result
+            
+        except Exception as e:
+            print(f"Beginner-friendly stock query error: {e}")
+            # Final fallback to mock data
         from core.graphql.queries import get_mock_advanced_screening_results
         
         # Get mock data and filter for beginner-friendly stocks (score >= 80)
@@ -1018,18 +1346,18 @@ class BaseQuery(graphene.ObjectType):
         # Convert to GraphQL format
         result = []
         for stock_data in beginner_stocks:
-            stock = StockType()
-            stock.id = stock_data.get('id', '')
-            stock.symbol = stock_data.get('symbol', '')
-            stock.companyName = stock_data.get('company_name', '')
-            stock.currentPrice = stock_data.get('current_price', 0.0)
-            stock.changePercent = stock_data.get('change_percent', 0.0)
-            stock.sector = stock_data.get('sector', '')
-            stock.marketCap = stock_data.get('market_cap', 0.0)
-            stock.peRatio = stock_data.get('pe_ratio', 0.0)
-            stock.dividendYield = stock_data.get('dividend_yield', 0.0)
-            stock.beginnerFriendlyScore = stock_data.get('beginner_friendly_score', 0)
-            result.append(stock)
+                stock = StockType()
+                stock.id = stock_data.get('id', '')
+                stock.symbol = stock_data.get('symbol', '')
+                stock.companyName = stock_data.get('company_name', '')
+                stock.currentPrice = stock_data.get('current_price', 0.0)
+                stock.changePercent = stock_data.get('change_percent', 0.0)
+                stock.sector = stock_data.get('sector', '')
+                stock.marketCap = stock_data.get('market_cap', 0.0)
+                stock.peRatio = stock_data.get('pe_ratio', 0.0)
+                stock.dividendYield = stock_data.get('dividend_yield', 0.0)
+                stock.beginnerFriendlyScore = stock_data.get('beginner_friendly_score', 0)
+                result.append(stock)
         
         return result
     
@@ -1148,24 +1476,72 @@ class BaseQuery(graphene.ObjectType):
         )
     
     def resolve_stockChartData(self, info, symbol, timeframe="1D", interval="1D", limit=180, indicators=None):
-        # Mock chart data for demo
-        import time
-        current_time = int(time.time())
+        # Use real market data from Finnhub/Polygon
+        from .market_data_service import MarketDataService
         
-        # Generate mock chart data
-        chart_data = []
-        base_price = 150.0
-        for i in range(min(limit, 30)):  # Limit to 30 data points for demo
-            timestamp = current_time - (i * 3600)  # Hourly data
-            price = base_price + (i * 0.5) + (i % 3 - 1) * 2  # Some variation
-            chart_data.append(ChartDataType(
-                timestamp=str(timestamp),
-                open=price,
-                high=price + 1.0,
-                low=price - 1.0,
-                close=price + 0.5,
-                volume=1000000.0
-            ))
+        try:
+            market_service = MarketDataService()
+            
+            # Map timeframe to Finnhub resolution
+            resolution_map = {
+                '1H': '1',
+                '1D': 'D',
+                '1W': 'W',
+                '1M': 'M'
+            }
+            resolution = resolution_map.get(timeframe, 'D')
+            
+            # Get real chart data
+            chart_data = market_service.get_stock_chart_data(symbol, resolution, limit)
+            
+            if not chart_data or not chart_data.get('data'):
+                # Fallback to mock data if real data unavailable
+                import time
+                current_time = int(time.time())
+                chart_data = []
+                base_price = 150.0
+                for i in range(min(limit, 30)):
+                    timestamp = current_time - (i * 3600)
+                    price = base_price + (i * 0.5) + (i % 3 - 1) * 2
+                    chart_data.append(ChartDataType(
+                        timestamp=str(timestamp),
+                        open=price,
+                        high=price + 1.0,
+                        low=price - 1.0,
+                        close=price + 0.5,
+                        volume=1000000.0
+                    ))
+            else:
+                # Convert real data to ChartDataType objects
+                chart_data_objects = []
+                for point in chart_data['data']:
+                    chart_data_objects.append(ChartDataType(
+                        timestamp=str(point.get('timestamp', '')),
+                        open=point.get('open', 0),
+                        high=point.get('high', 0),
+                        low=point.get('low', 0),
+                        close=point.get('close', 0),
+                        volume=point.get('volume', 0)
+                    ))
+                chart_data = chart_data_objects
+                
+        except Exception as e:
+            # Fallback to mock data on error
+            import time
+            current_time = int(time.time())
+            chart_data = []
+            base_price = 150.0
+            for i in range(min(limit, 30)):
+                timestamp = current_time - (i * 3600)
+                price = base_price + (i * 0.5) + (i % 3 - 1) * 2
+                chart_data.append(ChartDataType(
+                    timestamp=str(timestamp),
+                    open=price,
+                    high=price + 1.0,
+                    low=price - 1.0,
+                    close=price + 0.5,
+                    volume=1000000.0
+                ))
         
         # Handle indicators parameter - support both 'indicators' and 'inds'
         indicators_list = indicators or []
@@ -1199,11 +1575,16 @@ class BaseQuery(graphene.ObjectType):
             indicators_data["MACDHist"] = 0.2
             indicators_data["macdHistogram"] = 0.2
         
+        # Calculate current price from the latest data point
+        current_price = 150.0  # Default fallback
+        if chart_data:
+            current_price = chart_data[-1].close if hasattr(chart_data[-1], 'close') else 150.0
+        
         return StockChartDataType(
             symbol=symbol,
             interval=interval,
             limit=limit,
-            currentPrice=base_price,
+            currentPrice=current_price,
             change=2.5,
             changePercent=1.69,
             data=chart_data,
@@ -1699,7 +2080,7 @@ class BaseQuery(graphene.ObjectType):
             sentimentDescription=sentiment_description
         )
 
-class Query(SwingQuery, BaseQuery, graphene.ObjectType):
+class Query(SwingQuery, BaseQuery, SblocQuery, NotificationQuery, graphene.ObjectType):
     # merging by multiple inheritance; keep simple to avoid MRO issues
     optionOrders = graphene.List(OptionOrderType, status=graphene.String())
     
@@ -2652,11 +3033,14 @@ class Query(SwingQuery, BaseQuery, graphene.ObjectType):
             }
         }
 
-class Mutation(graphene.ObjectType):
+class Mutation(SblocMutation, NotificationMutation, graphene.ObjectType):
     token_auth = ObtainJSONWebToken.Field()
     verify_token = graphql_jwt.Verify.Field()
     refresh_token = graphql_jwt.Refresh.Field()
     runBacktest = RunBacktestMutation.Field()
+    
+    # SBLOC mutations
+    create_sbloc_session = SblocMutation.create_sbloc_session
     
     # Income profile mutations
     createIncomeProfile = graphene.Field(
@@ -2736,6 +3120,22 @@ class Mutation(graphene.ObjectType):
         description="Cancel an option order"
     )
     
+    # Bank Account Mutations
+    linkBankAccount = graphene.Field(
+        LinkBankAccountResultType,
+        bankName=graphene.String(required=True),
+        accountNumber=graphene.String(required=True),
+        routingNumber=graphene.String(required=True),
+        description="Link a bank account (mock implementation)"
+    )
+    
+    initiateFunding = graphene.Field(
+        InitiateFundingResultType,
+        amount=graphene.Float(required=True),
+        bankAccountId=graphene.String(required=True),
+        description="Initiate funding from bank account (mock implementation)"
+    )
+    
     def resolve_likeSignal(self, info, signalId):
         # Mock implementation - always return success
         return True
@@ -2743,6 +3143,100 @@ class Mutation(graphene.ObjectType):
     def resolve_commentSignal(self, info, signalId, content):
         # Mock implementation - always return success
         return True
+    
+    def resolve_linkBankAccount(self, info, bankName, accountNumber, routingNumber):
+        # Mock implementation for bank account linking
+        # In production, this would integrate with Plaid, Yodlee, or direct bank APIs
+        
+        # Basic validation
+        if not bankName or not accountNumber or not routingNumber:
+            return LinkBankAccountResultType(
+                success=False,
+                message="All fields are required",
+                bankAccount=None
+            )
+        
+        # Mock validation - check routing number format (9 digits)
+        if len(routingNumber) != 9 or not routingNumber.isdigit():
+            return LinkBankAccountResultType(
+                success=False,
+                message="Invalid routing number format",
+                bankAccount=None
+            )
+        
+        # Mock account number validation (4-17 digits)
+        if len(accountNumber) < 4 or len(accountNumber) > 17 or not accountNumber.isdigit():
+            return LinkBankAccountResultType(
+                success=False,
+                message="Invalid account number format",
+                bankAccount=None
+            )
+        
+        # Mock successful linking
+        import uuid
+        from datetime import datetime
+        
+        new_bank_account = BankAccountType(
+            id=str(uuid.uuid4()),
+            bankName=bankName,
+            accountType="Checking",  # Default to checking
+            lastFour=accountNumber[-4:],  # Last 4 digits
+            isVerified=True,  # Mock as verified
+            isPrimary=False,  # Not primary by default
+            linkedAt=datetime.now().isoformat() + "Z"
+        )
+        
+        return LinkBankAccountResultType(
+            success=True,
+            message="Bank account linked successfully",
+            bankAccount=new_bank_account
+        )
+    
+    def resolve_initiateFunding(self, info, amount, bankAccountId):
+        # Mock implementation for funding initiation
+        # In production, this would integrate with ACH/wire transfer services
+        
+        # Basic validation
+        if amount <= 0:
+            return InitiateFundingResultType(
+                success=False,
+                message="Amount must be greater than 0",
+                funding=None
+            )
+        
+        if amount < 1.0:
+            return InitiateFundingResultType(
+                success=False,
+                message="Minimum funding amount is $1.00",
+                funding=None
+            )
+        
+        if amount > 100000.0:
+            return InitiateFundingResultType(
+                success=False,
+                message="Maximum funding amount is $100,000.00",
+                funding=None
+            )
+        
+        # Mock successful funding initiation
+        import uuid
+        from datetime import datetime, timedelta
+        
+        # Mock funding transaction
+        funding_transaction = FundingHistoryType(
+            id=str(uuid.uuid4()),
+            amount=amount,
+            status="pending",  # Mock as pending
+            bankAccountId=bankAccountId,
+            initiatedAt=datetime.now().isoformat() + "Z",
+            completedAt=None  # Will be completed later
+        )
+        
+        return InitiateFundingResultType(
+            success=True,
+            message=f"Funding of ${amount:,.2f} initiated successfully. Expected completion: 1-3 business days.",
+            funding=funding_transaction
+        )
     
     def resolve_createIncomeProfile(self, info, incomeBracket, age, riskTolerance, investmentHorizon, investmentGoals=None):
         # Mock implementation - always return success
@@ -2752,40 +3246,49 @@ class Mutation(graphene.ObjectType):
             message="Income profile created successfully"
         )
     
-    def resolve_generateAiRecommendations(self, info):
-        print("DEBUG: generateAiRecommendations mutation called - USING REAL AI")
-        # Check if user is authenticated
-        user = info.context.user
-        print(f"DEBUG: User: {user}, Authenticated: {user.is_authenticated if user else 'No user'}")
-        
-        # For development, let's create a mock user if none exists
-        if not user or not user.is_authenticated:
-            print("DEBUG: No authenticated user, creating mock user for development")
-            # Create a mock user object for development
-            class MockUser:
-                def __init__(self):
-                    self.id = 1
-                    self.is_authenticated = True
-                    self.email = "test@example.com"
-                    self.username = "dev"
-            user = MockUser()
-        
-        # Get user profile data
-        user_profile = {}
-        try:
-            # Try to get the income profile
-            income_profile = getattr(user, 'incomeprofile', None)
-            if income_profile:
-                user_profile = {
-                    'age': getattr(income_profile, 'age', 30),
-                    'income_bracket': getattr(income_profile, 'income_bracket', 'Unknown'),
-                    'investment_horizon': getattr(income_profile, 'investment_horizon', '5-10 years'),
-                    'risk_tolerance': getattr(income_profile, 'risk_tolerance', 'Moderate'),
-                    'investment_goals': getattr(income_profile, 'investment_goals', ['Wealth Building'])
-                }
-                print(f"DEBUG: Using real user profile: {user_profile}")
-            else:
-                print("DEBUG: No income profile found, using default profile")
+        def resolve_generateAiRecommendations(self, info):
+            print("DEBUG: generateAiRecommendations mutation called - USING REAL AI")
+            # Check if user is authenticated
+            user = info.context.user
+            print(f"DEBUG: User: {user}, Authenticated: {user.is_authenticated if user else 'No user'}")
+            
+            # For development, let's create a mock user if none exists
+            if not user or not user.is_authenticated:
+                print("DEBUG: No authenticated user, creating mock user for development")
+                # Create a mock user object for development
+                class MockUser:
+                    def __init__(self):
+                        self.id = 1
+                        self.is_authenticated = True
+                        self.email = "test@example.com"
+                        self.username = "dev"
+                user = MockUser()
+            
+            # Get user profile data
+            user_profile = {}
+            try:
+                # Try to get the income profile
+                income_profile = getattr(user, 'incomeprofile', None)
+                if income_profile:
+                    user_profile = {
+                        'age': getattr(income_profile, 'age', 30),
+                        'income_bracket': getattr(income_profile, 'income_bracket', 'Unknown'),
+                        'investment_horizon': getattr(income_profile, 'investment_horizon', '5-10 years'),
+                        'risk_tolerance': getattr(income_profile, 'risk_tolerance', 'Moderate'),
+                        'investment_goals': getattr(income_profile, 'investment_goals', ['Wealth Building'])
+                    }
+                    print(f"DEBUG: Using real user profile: {user_profile}")
+                else:
+                    print("DEBUG: No income profile found, using default profile")
+                    user_profile = {
+                        'age': 30,
+                        'income_bracket': 'Unknown',
+                        'investment_horizon': '5-10 years',
+                        'risk_tolerance': 'Moderate',
+                        'investment_goals': ['Wealth Building']
+                    }
+            except Exception as e:
+                print(f"DEBUG: Profile error: {e}, using default profile")
                 user_profile = {
                     'age': 30,
                     'income_bracket': 'Unknown',
@@ -2793,15 +3296,6 @@ class Mutation(graphene.ObjectType):
                     'risk_tolerance': 'Moderate',
                     'investment_goals': ['Wealth Building']
                 }
-        except Exception as e:
-            print(f"DEBUG: Profile error: {e}, using default profile")
-            user_profile = {
-                'age': 30,
-                'income_bracket': 'Unknown',
-                'investment_horizon': '5-10 years',
-                'risk_tolerance': 'Moderate',
-                'investment_goals': ['Wealth Building']
-            }
         
         # Generate REAL AI recommendations using OpenAI (Production-Safe Implementation)
         try:
