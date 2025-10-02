@@ -65,6 +65,7 @@ import SBLOCLearningScreen from './features/learning/screens/SBLOCLearningScreen
 import SBLOCBankSelectionScreen from './features/sbloc/screens/SBLOCBankSelectionScreen';
 import SBLOCApplicationScreen from './features/sbloc/screens/SBLOCApplicationScreen';
 import SBLOCStatusScreen from './features/sbloc/screens/SBLOCStatusScreen';
+import NewsPreferencesScreen from './features/news/screens/NewsPreferencesScreen';
 import PortfolioLearningScreen from './features/learning/screens/PortfolioLearningScreen';
 // Components
 import { BottomTabBar, TopHeader, PersonalizedDashboard } from './components';
@@ -341,6 +342,8 @@ case 'SBLOCApplication':
 return <SBLOCApplicationScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('SBLOCBankSelection') }} route={{ params: { sessionUrl: '', referral: { id: '', bank: { name: '' } } } }} />;
 case 'SblocStatus':
 return <SBLOCStatusScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('SBLOCBankSelection') }} route={{ params: { sessionId: '' } }} />;
+case 'news-preferences':
+return <NewsPreferencesScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('profile') }} />;
     default:
       // Handle user-profile and user-portfolios with userId pattern
       if (currentScreen.startsWith('user-profile-')) {
