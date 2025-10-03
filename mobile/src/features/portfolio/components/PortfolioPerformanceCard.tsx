@@ -20,6 +20,8 @@ import EducationalTooltip from '../../../components/common/EducationalTooltip';
 import PortfolioEducationModal from './PortfolioEducationModal';
 import { getTermExplanation } from '../../../shared/financialTerms';
 import webSocketService, { PortfolioUpdate } from '../../../services/WebSocketService';
+import { useOptimizedPolling } from '../../../hooks/useOptimizedPolling';
+import { useOptimizedDataService } from '../../../services/OptimizedDataService';
 import { 
   GET_BENCHMARK_SERIES, 
   GET_AVAILABLE_BENCHMARKS,

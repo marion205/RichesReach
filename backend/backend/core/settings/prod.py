@@ -45,7 +45,7 @@ DATABASES = {
         'HOST': os.getenv('DB_HOST', 'localhost'),
         'PORT': os.getenv('DB_PORT', '5432'),
         'OPTIONS': {
-            'sslmode': 'require',
+            'sslmode': 'prefer',  # Use SSL if available, but don't require it
         },
     }
 }
@@ -87,7 +87,18 @@ USE_FINNHUB = os.getenv('USE_FINNHUB', 'true').lower() == 'true'
 DISABLE_ALPHA_VANTAGE = os.getenv('DISABLE_ALPHA_VANTAGE', 'false').lower() == 'true'
 
 # Logging Configuration (Production)
-LOGGING['handlers']['file']['filename'] = '/var/log/richesreach/django.log'
+# Create log directory if it doesn't exist
+import os
+log_dir = '/var/log/richesreach'
+if not os.path.exists(log_dir):
+    try:
+        os.makedirs(log_dir, exist_ok=True)
+    except PermissionError:
+        # Fallback to local logs directory if we can't create system log dir
+        log_dir = os.path.join(BASE_DIR, 'logs')
+        os.makedirs(log_dir, exist_ok=True)
+
+LOGGING['handlers']['file']['filename'] = os.path.join(log_dir, 'django.log')
 LOGGING['handlers']['file']['class'] = 'logging.handlers.RotatingFileHandler'
 LOGGING['handlers']['file']['maxBytes'] = 1024 * 1024 * 10  # 10MB
 LOGGING['handlers']['file']['backupCount'] = 5
