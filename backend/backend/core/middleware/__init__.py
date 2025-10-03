@@ -3,10 +3,6 @@ Core middleware package for RichesReach application.
 """
 
 from .rate_limit import RateLimitMiddleware, GraphQLRateLimitMiddleware
+from .logging import RequestLoggingMiddleware, PerformanceMiddleware, SecurityHeadersMiddleware
 
-# Import from the main middleware module
-try:
-    from core.middleware import RequestLoggingMiddleware, PerformanceMiddleware, SecurityHeadersMiddleware
-    __all__ = ['RateLimitMiddleware', 'GraphQLRateLimitMiddleware', 'RequestLoggingMiddleware', 'PerformanceMiddleware', 'SecurityHeadersMiddleware']
-except ImportError:
-    __all__ = ['RateLimitMiddleware', 'GraphQLRateLimitMiddleware']
+__all__ = ['RateLimitMiddleware', 'GraphQLRateLimitMiddleware', 'RequestLoggingMiddleware', 'PerformanceMiddleware', 'SecurityHeadersMiddleware']
