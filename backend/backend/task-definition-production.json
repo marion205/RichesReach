@@ -19,7 +19,7 @@
       "command": [
         "bash",
         "-lc",
-        "echo '=== PRODUCTION DEPLOYMENT ===' && echo 'Environment check:' && echo 'DJANGO_DB_ENGINE:' $DJANGO_DB_ENGINE && echo 'DJANGO_DB_HOST:' $DJANGO_DB_HOST && echo 'DJANGO_DB_NAME:' $DJANGO_DB_NAME && echo 'DJANGO_DB_USER:' $DJANGO_DB_USER && echo 'DJANGO_DB_PASSWORD:' 'SET' && echo 'DJANGO_DB_PORT:' $DJANGO_DB_PORT && echo 'Running migrations...' && python manage.py migrate --noinput && echo 'Collecting static files...' && python manage.py collectstatic --noinput && echo 'Starting Gunicorn server...' && exec gunicorn richesreach.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120 --access-logfile - --error-logfile -"
+        "echo \"=== PRODUCTION DEPLOYMENT ===\" && echo \"Starting in simple mode with SQLite...\" && python manage.py migrate --noinput && python manage.py collectstatic --noinput && echo \"Starting Gunicorn server...\" && exec gunicorn richesreach.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120 --access-logfile - --error-logfile -"
       ],
       "environment": [
         {
@@ -37,35 +37,15 @@
         {
           "name": "ALLOWED_HOSTS",
           "value": "*"
+        },
+        {
+          "name": "GRAPHQL_MODE",
+          "value": "simple"
         }
       ],
       "mountPoints": [],
       "volumesFrom": [],
       "secrets": [
-        {
-          "name": "DJANGO_DB_ENGINE",
-          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/appuser-PE1IS5:DJANGO_DB_ENGINE::"
-        },
-        {
-          "name": "DJANGO_DB_NAME",
-          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/appuser-PE1IS5:DJANGO_DB_NAME::"
-        },
-        {
-          "name": "DJANGO_DB_USER",
-          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/appuser-PE1IS5:DJANGO_DB_USER::"
-        },
-        {
-          "name": "DJANGO_DB_PASSWORD",
-          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/appuser-PE1IS5:DJANGO_DB_PASSWORD::"
-        },
-        {
-          "name": "DJANGO_DB_HOST",
-          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/appuser-PE1IS5:DJANGO_DB_HOST::"
-        },
-        {
-          "name": "DJANGO_DB_PORT",
-          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/appuser-PE1IS5:DJANGO_DB_PORT::"
-        },
         {
           "name": "SECRET_KEY",
           "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr-django-secret-key-IdsacH"
