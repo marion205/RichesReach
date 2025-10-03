@@ -22,6 +22,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy code as root, then fix ownership once
 COPY . /app
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 RUN chown -R appuser:appuser /app
 
 # Drop privileges
@@ -29,4 +31,5 @@ USER appuser
 
 # Expose & default command (override in task def if you prefer)
 EXPOSE 8000
-CMD ["bash", "-lc", "gunicorn richesreach.wsgi:application --bind 0.0.0.0:8000 --workers 3 --threads 2 --access-logfile - --error-logfile - --log-level info"]
+HEALTHCHECK --interval=20s --timeout=3s --retries=5 CMD curl -fsS http://localhost:8000/health/ || exit 1
+CMD ["/app/entrypoint.sh"]

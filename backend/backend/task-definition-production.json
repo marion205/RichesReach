@@ -16,11 +16,6 @@
         }
       ],
       "essential": true,
-      "command": [
-        "bash",
-        "-lc",
-        "echo \"=== PRODUCTION DEPLOYMENT ===\" && echo \"Starting in simple mode with SQLite...\" && python manage.py migrate --noinput && python manage.py collectstatic --noinput && echo \"Starting Gunicorn server...\" && exec gunicorn richesreach.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120 --access-logfile - --error-logfile -"
-      ],
       "environment": [
         {
           "name": "DJANGO_SETTINGS_MODULE",
@@ -80,7 +75,7 @@
   "cpu": "512",
   "memory": "1024",
   "runtimePlatform": {
-    "cpuArchitecture": "ARM64",
+    "cpuArchitecture": "X86_64",
     "operatingSystemFamily": "LINUX"
   }
 }
