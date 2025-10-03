@@ -166,30 +166,46 @@ else:
                 }
             }
     else:
-        # Local development defaults
-        DB_NAME = os.getenv("PGDATABASE", "dev")
-        DB_USER = os.getenv("PGUSER", os.getenv("USER", "dev"))  # Use current user
-        DB_PASS = os.getenv("PGPASSWORD", "")  # No password for local dev
-        DB_HOST = os.getenv("PGHOST", "localhost")
-        DB_PORT = os.getenv("PGPORT", "5432")
-
-        DATABASES = {
-            "default": {
-                "ENGINE": "django.db.backends.postgresql",
-                "NAME": DB_NAME,
-                "USER": DB_USER,
-                "PASSWORD": DB_PASS,
-                "HOST": DB_HOST,
-                "PORT": DB_PORT,
-                "CONN_MAX_AGE": 0,  # Disable connection pooling to avoid transaction issues
-                "ATOMIC_REQUESTS": False,  # Disable atomic requests to prevent transaction blocks
-                # For local Postgres, ensure no SSL requirement:
-                "OPTIONS": {
-                    "sslmode": os.getenv("PGSSLMODE", "disable"),
-                    "autocommit": True,  # Enable autocommit to prevent transaction blocks
-                },
+        # Check for DJANGO_DB_* environment variables first (from ECS secrets)
+        if os.getenv("DJANGO_DB_ENGINE"):
+            # Production mode with DJANGO_DB_* environment variables
+            DATABASES = {
+                "default": {
+                    "ENGINE": os.getenv("DJANGO_DB_ENGINE"),
+                    "NAME": os.getenv("DJANGO_DB_NAME"),
+                    "USER": os.getenv("DJANGO_DB_USER"),
+                    "PASSWORD": os.getenv("DJANGO_DB_PASSWORD"),
+                    "HOST": os.getenv("DJANGO_DB_HOST"),
+                    "PORT": os.getenv("DJANGO_DB_PORT"),
+                    "CONN_MAX_AGE": 600,
+                    "OPTIONS": {"sslmode": "require"},
+                }
             }
-        }
+        else:
+            # Local development defaults
+            DB_NAME = os.getenv("PGDATABASE", "dev")
+            DB_USER = os.getenv("PGUSER", os.getenv("USER", "dev"))  # Use current user
+            DB_PASS = os.getenv("PGPASSWORD", "")  # No password for local dev
+            DB_HOST = os.getenv("PGHOST", "localhost")
+            DB_PORT = os.getenv("PGPORT", "5432")
+
+            DATABASES = {
+                "default": {
+                    "ENGINE": "django.db.backends.postgresql",
+                    "NAME": DB_NAME,
+                    "USER": DB_USER,
+                    "PASSWORD": DB_PASS,
+                    "HOST": DB_HOST,
+                    "PORT": DB_PORT,
+                    "CONN_MAX_AGE": 0,  # Disable connection pooling to avoid transaction issues
+                    "ATOMIC_REQUESTS": False,  # Disable atomic requests to prevent transaction blocks
+                    # For local Postgres, ensure no SSL requirement:
+                    "OPTIONS": {
+                        "sslmode": os.getenv("PGSSLMODE", "disable"),
+                        "autocommit": True,  # Enable autocommit to prevent transaction blocks
+                    },
+                }
+            }
 
     # Log database engine for debugging
     import logging
