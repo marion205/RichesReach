@@ -18,3 +18,4 @@ gunicorn>=21.2
 uvicorn[standard]>=0.24
 whitenoise>=6
 pandas~=2.2
+scikit-learn~=1.3
