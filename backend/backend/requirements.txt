@@ -17,3 +17,4 @@ dj-database-url>=2.1.0
 gunicorn>=21.2
 uvicorn[standard]>=0.24
 whitenoise>=6
+pandas~=2.2
