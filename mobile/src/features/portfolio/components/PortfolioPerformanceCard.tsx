@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
 import Svg, { Line as SvgLine, Circle as SvgCircle, Rect as SvgRect, Text as SvgText } from 'react-native-svg';
-import Icon from 'react-native-vector-icons/Feather';
+import Icon from '@expo/vector-icons/Feather';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery } from '@apollo/client';
 import EducationalTooltip from '../../../components/common/EducationalTooltip';
@@ -65,6 +65,7 @@ export default function PortfolioPerformanceCard({
 }: Props) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const [selectedBenchmarkSymbol, setSelectedBenchmarkSymbol] = useState<string>(benchmarkSymbol);
 
   const palette = {
     bg: isDark ? '#111214' : '#FFFFFF',
@@ -74,6 +75,7 @@ export default function PortfolioPerformanceCard({
     grid: isDark ? '#2A2E34' : '#EDF0F2',
     green: '#22C55E',
     red: '#EF4444',
+    accent: isDark ? '#3B82F6' : '#2563EB',
     bench: getBenchmarkColor(selectedBenchmarkSymbol, isDark),   // benchmark color based on selected symbol
     chipBg: isDark ? '#1A1C1F' : '#F3F4F6',
     chipActiveBg: isDark ? '#2B2F36' : '#111827',
@@ -87,7 +89,6 @@ export default function PortfolioPerformanceCard({
   const [clickedElement, setClickedElement] = useState<string>('');
   const [tab, setTab] = useState<Timeframe>('1M');
   const [showBenchmark, setShowBenchmark] = useState<boolean>(true);
-  const [selectedBenchmarkSymbol, setSelectedBenchmarkSymbol] = useState<string>(benchmarkSymbol);
 
   // GraphQL queries for benchmark data
   const { data: benchmarkData, loading: benchmarkLoading, error: benchmarkError } = useQuery(
@@ -385,17 +386,39 @@ export default function PortfolioPerformanceCard({
         {/* Header */}
         <View style={styles.headerRow}>
           <View style={styles.titleWrap}>
-            <Icon name="pie-chart" size={18} color={accent} />
+            <Icon name="pie-chart" size={18} color={palette.accent} />
             <Text style={[styles.title, { color: palette.text }]}>Portfolio Performance</Text>
           </View>
 
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            {/* Benchmark selector */}
+          <View style={styles.tabsWrap}>
+            {TABS.map(t => {
+              const active = t === tab;
+              return (
+                <TouchableOpacity
+                  key={t}
+                  onPress={() => { setTab(t); setPointer(null); }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Timeframe ${t}`}
+                  style={[
+                    styles.chip,
+                    {
+                      backgroundColor: active ? palette.chipActiveBg : palette.chipBg,
+                      borderColor: active ? palette.chipActiveBg : palette.border,
+                    },
+                  ]}
+                >
+                  <Text style={{ color: active ? palette.chipActiveText : palette.text, fontSize: 12, fontWeight: '600' }}>
+                    {t}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+            
+            {/* Benchmark controls on the same line */}
             {useRealBenchmarkData && (
               <BenchmarkSelector
                 selectedSymbol={selectedBenchmarkSymbol}
                 onSymbolChange={setSelectedBenchmarkSymbol}
-                style={{ marginRight: 8 }}
               />
             )}
             
@@ -412,32 +435,6 @@ export default function PortfolioPerformanceCard({
               <View style={{ width: 10, height: 2, backgroundColor: palette.bench, marginRight: 6 }} />
               <Text style={{ color: palette.text, fontSize: 12, fontWeight: '600' }}>{selectedBenchmarkSymbol}</Text>
             </TouchableOpacity>
-
-            {/* Timeframe chips */}
-            <View style={styles.tabsWrap}>
-              {TABS.map(t => {
-                const active = t === tab;
-                return (
-                  <TouchableOpacity
-                    key={t}
-                    onPress={() => { setTab(t); setPointer(null); }}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Timeframe ${t}`}
-                    style={[
-                      styles.chip,
-                      {
-                        backgroundColor: active ? palette.chipActiveBg : palette.chipBg,
-                        borderColor: active ? palette.chipActiveBg : palette.border,
-                      },
-                    ]}
-                  >
-                    <Text style={{ color: active ? palette.chipActiveText : palette.text, fontSize: 12, fontWeight: '600' }}>
-                      {t}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
           </View>
         </View>
 
@@ -545,26 +542,26 @@ export default function PortfolioPerformanceCard({
 }
 
 const styles = StyleSheet.create({
-  card: { marginHorizontal: 16, marginVertical: 8, borderRadius: 16, padding: 16, borderWidth: 1 },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  titleWrap: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  title: { fontSize: 16, fontWeight: '700' },
-  tabsWrap: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  chip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 1 },
-  benchToggle: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 1 },
+  card: { marginHorizontal: 0, marginVertical: 8, borderRadius: 0, padding: 16, borderWidth: 0, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 4 },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, flexWrap: 'wrap' },
+  titleWrap: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 },
+  title: { fontSize: 18, fontWeight: '700' },
+  tabsWrap: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+  chip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 1, minWidth: 36, alignItems: 'center' },
+  benchToggle: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1, maxWidth: 120 },
   kpiRow: { marginTop: 4, marginBottom: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
-  value: { fontSize: 28, fontWeight: '800' },
-  kpiLabel: { fontSize: 12, marginTop: 2 },
+  value: { fontSize: 24, fontWeight: '700' },
+  kpiLabel: { fontSize: 12, marginTop: 2, opacity: 0.7 },
   deltaPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, borderWidth: 1, alignSelf: 'flex-start' },
-  vsPill: { marginTop: 6, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, borderWidth: 1 },
+  vsPill: { marginTop: 4, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, borderWidth: 1 },
   deltaText: { fontSize: 14, fontWeight: '700' },
-  chartShell: { alignItems: 'center', marginTop: 4 },
-  chart: { borderRadius: 12 },
+  chartShell: { alignItems: 'center', marginTop: 4, marginBottom: 12 },
+  chart: { borderRadius: 16 },
   // NEW: Legend styles
-  legendRow: { flexDirection: 'row', gap: 16, justifyContent: 'center', alignItems: 'center', marginTop: 8 },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  legendSwatch: { width: 12, height: 4, borderRadius: 2 },
-  legendText: { fontSize: 12, color: '#6B7280' },
-  footer: { marginTop: 10, paddingTop: 10, borderTopWidth: 1 },
-  footerText: { fontSize: 12, textAlign: 'center' },
+  legendRow: { flexDirection: 'row', gap: 16, justifyContent: 'center', alignItems: 'center', marginTop: 8, marginBottom: 4 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  legendSwatch: { width: 14, height: 4, borderRadius: 2 },
+  legendText: { fontSize: 13, fontWeight: '500', opacity: 0.8 },
+  footer: { marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)' },
+  footerText: { fontSize: 13, textAlign: 'center', opacity: 0.6 },
 });

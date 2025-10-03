@@ -180,11 +180,11 @@ const styles = StyleSheet.create({
   selector: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 8,
     borderWidth: 1,
-    minWidth: 120,
+    maxWidth: 100,
   },
   selectorContent: {
     flexDirection: 'row',
@@ -201,11 +201,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   selectorSymbol: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
   },
   selectorName: {
-    fontSize: 12,
+    fontSize: 10,
     marginTop: 1,
   },
   modalOverlay: {
