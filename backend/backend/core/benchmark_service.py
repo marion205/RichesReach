@@ -14,6 +14,7 @@ class BenchmarkService:
         self.benchmark_info = {
             'SPY': {'name': 'SPDR S&P 500 ETF', 'description': 'S&P 500 Index'},
             'QQQ': {'name': 'Invesco QQQ Trust', 'description': 'NASDAQ-100 Index'},
+            'DIA': {'name': 'SPDR Dow Jones Industrial Average ETF', 'description': 'Dow Jones Industrial Average'},
             'IWM': {'name': 'iShares Russell 2000 ETF', 'description': 'Russell 2000 Index'},
             'VTI': {'name': 'Vanguard Total Stock Market ETF', 'description': 'Total Stock Market'},
             'VEA': {'name': 'Vanguard FTSE Developed Markets ETF', 'description': 'Developed Markets'},
@@ -129,6 +130,7 @@ class BenchmarkService:
             '1W': (7, 1440, 450.0),     # 7 days, daily data, start at $450
             '1M': (30, 1440, 450.0),    # 30 days, daily data, start at $450
             '3M': (13, 10080, 450.0),   # 13 weeks, weekly data, start at $450
+            '6M': (26, 10080, 450.0),   # 26 weeks, weekly data, start at $450
             '1Y': (12, 43200, 450.0),   # 12 months, monthly data, start at $450
             'All': (60, 43200, 400.0),  # 60 months, monthly data, start at $400
         }
@@ -139,6 +141,7 @@ class BenchmarkService:
         configs = {
             'SPY': {'volatility': 1.2, 'drift': 0.05},      # S&P 500 - moderate volatility, slight upward drift
             'QQQ': {'volatility': 1.8, 'drift': 0.08},      # NASDAQ - higher volatility, tech growth
+            'DIA': {'volatility': 1.1, 'drift': 0.04},      # Dow Jones - lower volatility, blue chip stability
             'IWM': {'volatility': 2.1, 'drift': 0.06},      # Small caps - high volatility
             'VTI': {'volatility': 1.3, 'drift': 0.05},      # Total market - similar to SPY
             'VEA': {'volatility': 1.4, 'drift': 0.03},      # Developed markets - moderate

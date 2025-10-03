@@ -508,47 +508,79 @@ def calculate_beginner_friendly_score(self, stock) -> int:
         return stock.beginner_friendly_score or 50
 
 def _calculate_beginner_score(self, overview_data: dict) -> int:
-"""Calculate beginner-friendly score based on company data"""
-score = 60 # Higher base score for more stocks to qualify
-try:
-# Market cap scoring (more generous)
-if 'MarketCapitalization' in overview_data and overview_data['MarketCapitalization'] != 'None':
-market_cap = int(overview_data['MarketCapitalization'])
-if market_cap > 100000000000: # >$100B
-score += 25
-elif market_cap > 10000000000: # >$10B
-score += 20
-elif market_cap > 1000000000: # >$1B
-score += 15
-# PE ratio scoring (more generous)
-if 'PERatio' in overview_data and overview_data['PERatio'] != 'None':
-pe_ratio = float(overview_data['PERatio'])
-if 10 <= pe_ratio <= 25:
-score += 20
-elif 5 <= pe_ratio <= 30:
-score += 15
-elif pe_ratio < 50: # Accept higher PE ratios
-score += 10
-# Dividend yield scoring (more generous)
-if 'DividendYield' in overview_data and overview_data['DividendYield'] != 'None':
-dividend_yield = float(overview_data['DividendYield'])
-if 2 <= dividend_yield <= 6:
-score += 15
-elif dividend_yield > 0:
-score += 10
-# Sector scoring (more sectors considered stable)
-if 'Sector' in overview_data:
-stable_sectors = ['Technology', 'Healthcare', 'Consumer Defensive', 'Utilities', 'Financial Services', 'Consumer Cyclical']
-if overview_data['Sector'] in stable_sectors:
-score += 10
-# Company name recognition bonus (well-known companies are better for beginners)
-if 'Name' in overview_data:
-well_known = ['Apple', 'Microsoft', 'Amazon', 'Google', 'Tesla', 'Johnson & Johnson', 'Procter & Gamble']
-if any(name in overview_data['Name'] for name in well_known):
-score += 10
-except Exception as e:
-logger.error(f"Error calculating beginner score: {e}")
-return min(100, max(0, score)) # Ensure score is between 0-100
+    """Calculate beginner-friendly score using the new robust scoring system"""
+    try:
+        from .scoring.beginner_score import compute_beginner_score
+        
+        # Build a minimal `market` dict from available data
+        market = {
+            "price": overview_data.get("Price"),
+            "beta": overview_data.get("Beta"),
+            "avgDollarVolume": overview_data.get("AvgDollarVolume"),
+            "annualizedVol": overview_data.get("RealizedVol"),
+        }
+        
+        # Get user budget from context (default to $1000 for beginners)
+        user_budget = getattr(self, 'user_budget', 1000.0)
+        result = compute_beginner_score(overview_data, market, user_budget)
+        
+        # Log the scoring breakdown for debugging
+        logger.info(f"Beginner score for {overview_data.get('Symbol', 'Unknown')}: {result.score}")
+        for factor in result.factors:
+            logger.debug(f"  {factor.name}: {factor.value:.3f} (weight: {factor.weight:.2f}, contrib: {factor.contrib:.1f})")
+        
+        if result.notes:
+            logger.info(f"  Notes: {', '.join(result.notes)}")
+        
+        return result.score
+        
+    except Exception as e:
+        logger.error(f"Error calculating beginner score: {e}")
+        # Fallback to simple scoring if the new system fails
+        return self._calculate_beginner_score_fallback(overview_data)
+
+def _calculate_beginner_score_fallback(self, overview_data: dict) -> int:
+    """Fallback beginner-friendly score calculation"""
+    score = 60  # Higher base score for more stocks to qualify
+    try:
+        # Market cap scoring (more generous)
+        if 'MarketCapitalization' in overview_data and overview_data['MarketCapitalization'] != 'None':
+            market_cap = int(overview_data['MarketCapitalization'])
+            if market_cap > 100000000000:  # >$100B
+                score += 25
+            elif market_cap > 10000000000:  # >$10B
+                score += 20
+            elif market_cap > 1000000000:  # >$1B
+                score += 15
+        # PE ratio scoring (more generous)
+        if 'PERatio' in overview_data and overview_data['PERatio'] != 'None':
+            pe_ratio = float(overview_data['PERatio'])
+            if 10 <= pe_ratio <= 25:
+                score += 20
+            elif 5 <= pe_ratio <= 30:
+                score += 15
+            elif pe_ratio < 50:  # Accept higher PE ratios
+                score += 10
+        # Dividend yield scoring (more generous)
+        if 'DividendYield' in overview_data and overview_data['DividendYield'] != 'None':
+            dividend_yield = float(overview_data['DividendYield'])
+            if 2 <= dividend_yield <= 6:
+                score += 15
+            elif dividend_yield > 0:
+                score += 10
+        # Sector scoring (more sectors considered stable)
+        if 'Sector' in overview_data:
+            stable_sectors = ['Technology', 'Healthcare', 'Consumer Defensive', 'Utilities', 'Financial Services', 'Consumer Cyclical']
+            if overview_data['Sector'] in stable_sectors:
+                score += 10
+        # Company name recognition bonus (well-known companies are better for beginners)
+        if 'Name' in overview_data:
+            well_known = ['Apple', 'Microsoft', 'Amazon', 'Google', 'Tesla', 'Johnson & Johnson', 'Procter & Gamble']
+            if any(name in overview_data['Name'] for name in well_known):
+                score += 10
+    except Exception as e:
+        logger.error(f"Error calculating fallback beginner score: {e}")
+    return min(100, max(0, score))  # Ensure score is between 0-100
 def get_stock_quote(self, symbol: str) -> Optional[dict]:
 """Get real-time stock quote"""
 if not self.api_key:

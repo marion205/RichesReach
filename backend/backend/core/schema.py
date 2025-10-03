@@ -10,6 +10,7 @@ from core.sbloc_queries import SblocQuery
 from core.sbloc_mutations import SblocMutation
 from core.notification_graphql import NotificationQuery, NotificationMutation
 from core.benchmark_graphql import BenchmarkQuery, BenchmarkMutation
+from core.swing_trading_graphql import SwingTradingQuery, SwingTradingMutation
 
 User = get_user_model()
 
@@ -2081,7 +2082,7 @@ class BaseQuery(graphene.ObjectType):
             sentimentDescription=sentiment_description
         )
 
-class Query(SwingQuery, BaseQuery, SblocQuery, NotificationQuery, BenchmarkQuery, graphene.ObjectType):
+class Query(SwingQuery, BaseQuery, SblocQuery, NotificationQuery, BenchmarkQuery, SwingTradingQuery, graphene.ObjectType):
     # merging by multiple inheritance; keep simple to avoid MRO issues
     optionOrders = graphene.List(OptionOrderType, status=graphene.String())
     
@@ -3034,7 +3035,7 @@ class Query(SwingQuery, BaseQuery, SblocQuery, NotificationQuery, BenchmarkQuery
             }
         }
 
-class Mutation(SblocMutation, NotificationMutation, BenchmarkMutation, graphene.ObjectType):
+class Mutation(SblocMutation, NotificationMutation, BenchmarkMutation, SwingTradingMutation, graphene.ObjectType):
     token_auth = ObtainJSONWebToken.Field()
     verify_token = graphql_jwt.Verify.Field()
     refresh_token = graphql_jwt.Refresh.Field()

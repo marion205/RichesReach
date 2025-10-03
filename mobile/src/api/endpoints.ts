@@ -1,20 +1,12 @@
 // API endpoint configuration
 // This file centralizes all API endpoints to avoid URL mutation issues
 
-const DEV_API_BASE = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000';
-const PROD_API_BASE = 'http://54.162.138.209:8000';
-
-// Determine if we're in development mode
-const isDev = __DEV__;
+// Import from single source of truth
+import { API_BASE, API_GRAPHQL } from '../../config/api';
 
 // HTTP endpoints
-export const HTTP_GRAPHQL = isDev 
-  ? `${DEV_API_BASE}/graphql/`
-  : `${PROD_API_BASE}/graphql/`;
-
-export const HTTP_API_BASE = isDev 
-  ? DEV_API_BASE
-  : PROD_API_BASE;
+export const HTTP_GRAPHQL = API_GRAPHQL;
+export const HTTP_API_BASE = API_BASE;
 
 // WebSocket endpoints - using string replacement instead of URL mutation
 export const WS_GRAPHQL = HTTP_GRAPHQL

@@ -373,6 +373,151 @@ class MarketDataService:
             "provider": "mock"
         }
     
+    def get_stock_chart_data(self, symbol: str, resolution: str = "D", limit: int = 180) -> Dict[str, Any]:
+        """Get stock chart data (candlesticks) with caching"""
+        cache_key = self._cache_key("chart", symbol=symbol, resolution=resolution, limit=limit)
+        
+        # Try cache first
+        cached_data = self._get_from_cache(cache_key)
+        if cached_data:
+            return cached_data
+        
+        # Get from Finnhub
+        try:
+            finnhub_data = self._get_finnhub_chart(symbol, resolution, limit)
+            if finnhub_data:
+                self._set_cache(cache_key, finnhub_data, self.cache_ttl["quote"])
+                return finnhub_data
+        except Exception as e:
+            logger.warning(f"Finnhub chart error for {symbol}: {e}")
+        
+        # Fallback to mock data
+        return self._get_mock_chart_data(symbol, resolution, limit)
+    
+    def _get_finnhub_chart(self, symbol: str, resolution: str, limit: int) -> Dict[str, Any]:
+        """Get chart data from Finnhub API"""
+        import requests
+        
+        finnhub_key = os.getenv("FINNHUB_API_KEY")
+        if not finnhub_key:
+            raise Exception("FINNHUB_API_KEY not configured")
+        
+        # Map resolution to Finnhub format
+        resolution_map = {
+            '1': '1',  # 1 minute
+            '5': '5',  # 5 minutes
+            '15': '15',  # 15 minutes
+            '30': '30',  # 30 minutes
+            '60': '60',  # 1 hour
+            'D': 'D',  # Daily
+            'W': 'W',  # Weekly
+            'M': 'M'   # Monthly
+        }
+        
+        finnhub_resolution = resolution_map.get(resolution, 'D')
+        
+        # Calculate time range based on resolution and limit
+        import time
+        current_time = int(time.time())
+        
+        # Estimate time range needed
+        if finnhub_resolution in ['1', '5', '15', '30', '60']:
+            # Intraday data
+            hours_back = min(limit, 24)  # Max 24 hours for intraday
+            from_time = current_time - (hours_back * 3600)
+        elif finnhub_resolution == 'D':
+            # Daily data
+            days_back = min(limit, 365)  # Max 1 year
+            from_time = current_time - (days_back * 86400)
+        elif finnhub_resolution == 'W':
+            # Weekly data
+            weeks_back = min(limit, 52)  # Max 1 year
+            from_time = current_time - (weeks_back * 604800)
+        else:  # Monthly
+            months_back = min(limit, 12)  # Max 1 year
+            from_time = current_time - (months_back * 2592000)
+        
+        url = f"https://finnhub.io/api/v1/stock/candle"
+        params = {
+            'symbol': symbol,
+            'resolution': finnhub_resolution,
+            'from': from_time,
+            'to': current_time,
+            'token': finnhub_key
+        }
+        
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
+        if data.get('s') == 'no_data':
+            raise Exception(f"No data available for {symbol}")
+        
+        if 'c' not in data or not data['c']:
+            raise Exception(f"Invalid chart data for {symbol}")
+        
+        # Convert Finnhub format to our format
+        chart_data = []
+        for i in range(len(data['c'])):
+            chart_data.append({
+                'timestamp': data['t'][i],
+                'open': data['o'][i],
+                'high': data['h'][i],
+                'low': data['l'][i],
+                'close': data['c'][i],
+                'volume': data['v'][i] if 'v' in data else 0
+            })
+        
+        return {
+            'symbol': symbol,
+            'data': chart_data,
+            'provider': 'finnhub'
+        }
+    
+    def _get_mock_chart_data(self, symbol: str, resolution: str, limit: int) -> Dict[str, Any]:
+        """Generate mock chart data"""
+        import time
+        import random
+        
+        current_time = int(time.time())
+        chart_data = []
+        
+        # Base price varies by symbol
+        base_price = 100 + (hash(symbol) % 200)
+        
+        for i in range(min(limit, 30)):
+            # Calculate timestamp based on resolution
+            if resolution in ['1', '5', '15', '30', '60']:
+                timestamp = current_time - (i * 3600)  # Hourly
+            elif resolution == 'D':
+                timestamp = current_time - (i * 86400)  # Daily
+            elif resolution == 'W':
+                timestamp = current_time - (i * 604800)  # Weekly
+            else:  # Monthly
+                timestamp = current_time - (i * 2592000)  # Monthly
+            
+            # Generate realistic price movement
+            price_change = random.uniform(-2, 2)
+            open_price = base_price + (i * 0.1) + price_change
+            close_price = open_price + random.uniform(-1, 1)
+            high_price = max(open_price, close_price) + random.uniform(0, 1)
+            low_price = min(open_price, close_price) - random.uniform(0, 1)
+            
+            chart_data.append({
+                'timestamp': timestamp,
+                'open': round(open_price, 2),
+                'high': round(high_price, 2),
+                'low': round(low_price, 2),
+                'close': round(close_price, 2),
+                'volume': random.randint(100000, 1000000)
+            })
+        
+        return {
+            'symbol': symbol,
+            'data': chart_data,
+            'provider': 'mock'
+        }
+    
     def clear_cache(self, pattern: str = None):
         """Clear cache entries matching pattern"""
         if not REDIS_AVAILABLE:

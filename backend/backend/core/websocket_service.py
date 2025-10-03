@@ -9,6 +9,7 @@ from django.contrib.auth.models import User
 from .real_market_data_service import real_market_data_service
 from .advanced_analytics_service import advanced_analytics_service
 from .custom_benchmark_service import custom_benchmark_service
+from .smart_alerts_service import smart_alerts_service
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,7 @@ class RealTimeDataConsumer(AsyncWebsocketConsumer):
         self.update_interval = 5  # seconds
         self.is_running = False
         self.update_task = None
+        self.alerts_service = smart_alerts_service
     
     async def connect(self):
         """Handle WebSocket connection"""
@@ -186,6 +188,9 @@ class RealTimeDataConsumer(AsyncWebsocketConsumer):
                 # Update subscribed benchmarks
                 if self.subscribed_benchmarks:
                     await self.update_benchmark_data()
+                
+                # Check for new smart alerts
+                await self.check_smart_alerts()
                 
             except asyncio.CancelledError:
                 break
@@ -528,4 +533,51 @@ class RiskAlertConsumer(AsyncWebsocketConsumer):
             
         except Exception as e:
             logger.error(f"Error checking risk alerts: {e}")
+            return []
+    
+    async def check_smart_alerts(self):
+        """Check for new smart alerts and send them via WebSocket"""
+        try:
+            # Get smart alerts for the user
+            alerts = await self.get_smart_alerts_async()
+            
+            if alerts:
+                # Send alerts to the user
+                await self.send(text_data=json.dumps({
+                    'type': 'smart_alerts',
+                    'alerts': alerts,
+                    'timestamp': datetime.now().isoformat()
+                }))
+                
+                logger.info(f"Sent {len(alerts)} smart alerts to user {self.user.id}")
+                
+        except Exception as e:
+            logger.error(f"Error checking smart alerts: {e}")
+    
+    @database_sync_to_async
+    def get_smart_alerts_async(self):
+        """Get smart alerts for the user (async wrapper)"""
+        try:
+            # Get alerts for the first subscribed portfolio or default
+            portfolio_id = list(self.subscribed_portfolios)[0] if self.subscribed_portfolios else None
+            
+            alerts = self.alerts_service.generate_smart_alerts(
+                user=self.user,
+                portfolio_id=portfolio_id,
+                timeframe='1M'
+            )
+            
+            # Filter alerts by priority and recent timestamp
+            recent_alerts = []
+            cutoff_time = datetime.now() - timedelta(hours=1)  # Only alerts from last hour
+            
+            for alert in alerts:
+                alert_time = datetime.fromisoformat(alert.get('timestamp', ''))
+                if alert_time > cutoff_time and alert.get('priority') in ['high', 'medium']:
+                    recent_alerts.append(alert)
+            
+            return recent_alerts[:5]  # Limit to 5 most recent alerts
+            
+        except Exception as e:
+            logger.error(f"Error getting smart alerts: {e}")
             return []

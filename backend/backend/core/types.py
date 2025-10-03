@@ -383,7 +383,6 @@ class AIPortfolioRecommendationType(DjangoObjectType):
             "expected_portfolio_return",
             "risk_assessment",
             "created_at",
-            "updated_at",
         )
 
     # camelCase aliases
@@ -428,25 +427,25 @@ class AIPortfolioRecommendationType(DjangoObjectType):
 class PostType(DjangoObjectType):
     class Meta:
         model = Post
-        fields = ("id", "user", "content", "image", "created_at", "likes", "comments")
+        fields = ("id", "user", "content", "created_at", "likes", "comments")
 
 
 class ChatSessionType(DjangoObjectType):
     class Meta:
         model = ChatSession
-        fields = ("id", "user", "title", "created_at", "updated_at", "messages")
+        fields = ("id", "user", "created_at", "messages")
 
 
 class ChatMessageType(DjangoObjectType):
     class Meta:
         model = ChatMessage
-        fields = ("id", "session", "role", "content", "created_at", "confidence", "tokens_used")
+        fields = ("id", "session", "content", "created_at")
 
 
 class SourceType(DjangoObjectType):
     class Meta:
         model = Source
-        fields = ("id", "title", "url", "snippet")
+        fields = ("id", "url")
 
 
 class LikeType(DjangoObjectType):

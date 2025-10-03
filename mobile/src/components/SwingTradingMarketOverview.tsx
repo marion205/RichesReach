@@ -6,8 +6,22 @@ import {
   ScrollView,
   TouchableOpacity,
   Dimensions,
+  useColorScheme,
+  ActivityIndicator,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
+import { useQuery } from '@apollo/client';
+import {
+  GET_MARKET_DATA,
+  GET_SECTOR_DATA,
+  GET_VOLATILITY_DATA,
+  MarketDataPoint,
+  SectorDataPoint,
+  VolatilityData,
+  formatCurrency,
+  formatPercentage,
+  formatCompactNumber,
+} from '../graphql/swingTradingQueries';
 
 const { width } = Dimensions.get('window');
 
@@ -37,61 +51,27 @@ interface VolatilityData {
 }
 
 const SwingTradingMarketOverview: React.FC = () => {
-  // Mock data - in real app, this would come from API
-  const marketData: MarketData[] = [
-    {
-      symbol: 'SPY',
-      name: 'S&P 500',
-      price: 4456.78,
-      change: 12.45,
-      changePercent: 0.28,
-      volume: 45234567,
-      marketCap: '$40.2T'
-    },
-    {
-      symbol: 'QQQ',
-      name: 'NASDAQ 100',
-      price: 3789.23,
-      change: -8.92,
-      changePercent: -0.23,
-      volume: 23456789,
-      marketCap: '$15.8T'
-    },
-    {
-      symbol: 'IWM',
-      name: 'Russell 2000',
-      price: 1892.45,
-      change: 5.67,
-      changePercent: 0.30,
-      volume: 12345678,
-      marketCap: '$2.1T'
-    },
-    {
-      symbol: 'VIX',
-      name: 'Volatility Index',
-      price: 18.45,
-      change: -1.23,
-      changePercent: -6.25,
-      volume: 9876543,
-      marketCap: 'N/A'
-    }
-  ];
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
 
-  const sectorData: SectorData[] = [
-    { name: 'Technology', symbol: 'XLK', change: 0.45, changePercent: 0.32, weight: 28.5 },
-    { name: 'Healthcare', symbol: 'XLV', change: -0.12, changePercent: -0.08, weight: 13.2 },
-    { name: 'Financials', symbol: 'XLF', change: 0.78, changePercent: 0.56, weight: 11.8 },
-    { name: 'Consumer Discretionary', symbol: 'XLY', change: 0.23, changePercent: 0.18, weight: 10.9 },
-    { name: 'Communication Services', symbol: 'XLC', change: -0.34, changePercent: -0.25, weight: 8.7 },
-    { name: 'Industrials', symbol: 'XLI', change: 0.67, changePercent: 0.48, weight: 8.1 },
-    { name: 'Consumer Staples', symbol: 'XLP', change: 0.15, changePercent: 0.12, weight: 6.8 },
-    { name: 'Energy', symbol: 'XLE', change: 1.23, changePercent: 0.89, weight: 4.2 },
-    { name: 'Utilities', symbol: 'XLU', change: -0.08, changePercent: -0.06, weight: 3.1 },
-    { name: 'Real Estate', symbol: 'XLRE', change: 0.34, changePercent: 0.28, weight: 2.8 },
-    { name: 'Materials', symbol: 'XLB', change: 0.56, changePercent: 0.42, weight: 2.0 }
-  ];
+  // Fetch real market data
+  const { data: marketDataResponse, loading: marketLoading, error: marketError } = useQuery(GET_MARKET_DATA, {
+    variables: { symbols: ['SPY', 'QQQ', 'IWM', 'VIX', 'DIA', 'VTI'] },
+    pollInterval: 30000, // Poll every 30 seconds
+  });
 
-  const volatilityData: VolatilityData = {
+  const { data: sectorDataResponse, loading: sectorLoading, error: sectorError } = useQuery(GET_SECTOR_DATA, {
+    pollInterval: 60000, // Poll every minute
+  });
+
+  const { data: volatilityDataResponse, loading: volatilityLoading, error: volatilityError } = useQuery(GET_VOLATILITY_DATA, {
+    pollInterval: 30000, // Poll every 30 seconds
+  });
+
+  // Use real data or fallback to empty arrays
+  const marketData: MarketDataPoint[] = marketDataResponse?.marketData || [];
+  const sectorData: SectorDataPoint[] = sectorDataResponse?.sectorData || [];
+  const volatilityData: VolatilityData = volatilityDataResponse?.volatilityData || {
     vix: 18.45,
     vixChange: -1.23,
     fearGreedIndex: 65,
@@ -125,6 +105,23 @@ const SwingTradingMarketOverview: React.FC = () => {
     if (volume >= 1000) return `${(volume / 1000).toFixed(1)}K`;
     return volume.toString();
   };
+
+  // Show loading state if any data is loading
+  if (marketLoading || sectorLoading || volatilityLoading) {
+    return (
+      <View style={[styles.container, { backgroundColor: isDark ? '#0F1115' : '#FFFFFF' }]}>
+        <View style={styles.header}>
+          <Text style={[styles.title, { color: isDark ? '#E2E8F0' : '#1F2937' }]}>Market Overview</Text>
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={isDark ? '#3B82F6' : '#2563EB'} />
+          <Text style={[styles.loadingText, { color: isDark ? '#A1A7AF' : '#6B7280' }]}>
+            Loading market data...
+          </Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -592,6 +589,17 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  loadingText: {
+    fontSize: 16,
+    marginTop: 12,
+    textAlign: 'center',
   },
 });
 

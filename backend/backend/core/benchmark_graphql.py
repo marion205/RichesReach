@@ -9,6 +9,9 @@ from .custom_benchmark_service import custom_benchmark_service
 from .advanced_dashboard_service import advanced_dashboard_service
 from .portfolio_optimization_service import portfolio_optimization_service
 from .performance_attribution_service import performance_attribution_service
+from .smart_alerts_service import smart_alerts_service
+from .ml_anomaly_service import ml_anomaly_service
+from .alert_delivery_service import alert_delivery_service
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -187,12 +190,47 @@ class BenchmarkQuery(graphene.ObjectType):
         timeframe=graphene.String(default_value="1Y", description="Analysis timeframe"),
         description="Get detailed performance attribution analysis"
     )
+    
+    smartAlerts = graphene.Field(
+        graphene.JSONString,
+        portfolioId=graphene.String(description="Portfolio ID"),
+        timeframe=graphene.String(default_value="1M", description="Analysis timeframe"),
+        description="Get intelligent portfolio coaching alerts and insights"
+    )
+    
+    alertCategories = graphene.Field(
+        graphene.JSONString,
+        description="Get available alert categories and their descriptions"
+    )
+    
+    alertPreferences = graphene.Field(
+        graphene.JSONString,
+        description="Get user's alert preferences and settings"
+    )
+    
+    mlAnomalies = graphene.Field(
+        graphene.List(graphene.JSONString),
+        portfolio_id=graphene.String(),
+        timeframe=graphene.String(default_value='30d'),
+        description="Get ML-detected anomalies in user's portfolio behavior"
+    )
+    
+    deliveryPreferences = graphene.Field(
+        graphene.JSONString,
+        description="Get user's delivery preferences for different alert types"
+    )
+    
+    deliveryHistory = graphene.Field(
+        graphene.List(graphene.JSONString),
+        alert_id=graphene.String(),
+        description="Get delivery history for a specific alert"
+    )
 
     def resolve_benchmarkSeries(self, info, symbol: str, timeframe: str, useRealData: bool = True):
         """Resolve benchmark series data"""
         try:
             # Validate timeframe
-            valid_timeframes = ['1D', '1W', '1M', '3M', '1Y', 'All']
+            valid_timeframes = ['1D', '1W', '1M', '3M', '6M', '1Y', 'All']
             if timeframe not in valid_timeframes:
                 raise ValueError(f"Invalid timeframe: {timeframe}. Must be one of {valid_timeframes}")
             
@@ -481,6 +519,126 @@ class BenchmarkQuery(graphene.ObjectType):
         except Exception as e:
             logger.error(f"Error resolving performance attribution: {e}")
             return None
+    
+    def resolve_smartAlerts(self, info, portfolioId: str = None, timeframe: str = "1M"):
+        """Resolve smart alerts for portfolio coaching"""
+        user = getattr(info.context, 'user', None)
+        if not user or not user.is_authenticated:
+            logger.warning("Authentication required for smart alerts")
+            return None
+        
+        try:
+            alerts = smart_alerts_service.generate_smart_alerts(
+                user=user,
+                portfolio_id=portfolioId,
+                timeframe=timeframe
+            )
+            return alerts
+        except Exception as e:
+            logger.error(f"Error resolving smart alerts: {e}")
+            return []
+    
+    def resolve_alertCategories(self, info):
+        """Resolve available alert categories"""
+        try:
+            categories = smart_alerts_service.get_alert_categories()
+            return categories
+        except Exception as e:
+            logger.error(f"Error resolving alert categories: {e}")
+            return []
+    
+    def resolve_alertPreferences(self, info):
+        """Resolve user's alert preferences"""
+        user = getattr(info.context, 'user', None)
+        if not user or not user.is_authenticated:
+            logger.warning("Authentication required for alert preferences")
+            return None
+        
+        try:
+            preferences = smart_alerts_service.get_user_alert_preferences(user)
+            return preferences
+        except Exception as e:
+            logger.error(f"Error resolving alert preferences: {e}")
+            return None
+    
+    def resolve_mlAnomalies(self, info, portfolio_id: str = None, timeframe: str = '30d'):
+        """Resolve ML-detected anomalies"""
+        try:
+            user = getattr(info.context, 'user', None)
+            if not user or not user.is_authenticated:
+                logger.warning("Authentication required for ML anomalies")
+                return []
+            
+            # Get ML anomalies (synchronous call for now)
+            # Note: In production, you might want to use Django Channels or Celery for async processing
+            import asyncio
+            try:
+                loop = asyncio.get_event_loop()
+                anomalies = loop.run_until_complete(
+                    ml_anomaly_service.detect_anomalies(user, portfolio_id, timeframe)
+                )
+            except RuntimeError:
+                # If no event loop is running, create a new one
+                anomalies = asyncio.run(
+                    ml_anomaly_service.detect_anomalies(user, portfolio_id, timeframe)
+                )
+            
+            # Convert to JSON strings for GraphQL
+            return [json.dumps(anomaly) for anomaly in anomalies]
+            
+        except Exception as e:
+            logger.error(f"Error resolving ML anomalies: {e}")
+            return []
+    
+    def resolve_deliveryPreferences(self, info):
+        """Resolve user's delivery preferences"""
+        try:
+            user = getattr(info.context, 'user', None)
+            if not user or not user.is_authenticated:
+                logger.warning("Authentication required for delivery preferences")
+                return json.dumps({"error": "Authentication required"})
+            
+            # Get delivery preferences from config service
+            preferences = alert_config_service.get_all_user_delivery_preferences(user)
+            
+            return json.dumps(preferences)
+            
+        except Exception as e:
+            logger.error(f"Error resolving delivery preferences: {e}")
+            return json.dumps({"error": "Failed to get delivery preferences"})
+    
+    def resolve_deliveryHistory(self, info, alert_id: str):
+        """Resolve delivery history for a specific alert"""
+        try:
+            user = getattr(info.context, 'user', None)
+            if not user or not user.is_authenticated:
+                logger.warning("Authentication required for delivery history")
+                return []
+            
+            # Get delivery history from database
+            from .models_smart_alerts import AlertDeliveryHistory
+            history = AlertDeliveryHistory.objects.filter(
+                alert__user=user,
+                alert__alert_id=alert_id
+            ).order_by('-delivery_attempted_at')
+            
+            # Convert to JSON strings
+            history_data = []
+            for record in history:
+                history_data.append(json.dumps({
+                    'delivery_method': record.delivery_method,
+                    'status': record.status,
+                    'delivery_attempted_at': record.delivery_attempted_at.isoformat(),
+                    'delivery_confirmed_at': record.delivery_confirmed_at.isoformat() if record.delivery_confirmed_at else None,
+                    'error_message': record.error_message,
+                    'external_id': record.external_id
+                }))
+            
+            return history_data
+            
+        except Exception as e:
+            logger.error(f"Error resolving delivery history: {e}")
+            return []
 
 # Input types for mutations
 class BenchmarkHoldingInput(graphene.InputObjectType):
@@ -489,6 +647,45 @@ class BenchmarkHoldingInput(graphene.InputObjectType):
     name = graphene.String(description="Company name")
     sector = graphene.String(description="Sector classification")
     description = graphene.String(description="Additional description")
+
+class QuietHoursInput(graphene.InputObjectType):
+    enabled = graphene.Boolean(description="Whether quiet hours are enabled")
+    start = graphene.String(description="Quiet hours start time (HH:MM)")
+    end = graphene.String(description="Quiet hours end time (HH:MM)")
+
+class CustomThresholdsInput(graphene.InputObjectType):
+    performance_threshold = graphene.Float(description="Performance difference threshold (%)")
+    volatility_threshold = graphene.Float(description="Volatility threshold (%)")
+    drawdown_threshold = graphene.Float(description="Drawdown threshold (%)")
+    sector_concentration_threshold = graphene.Float(description="Sector concentration threshold (0-1)")
+
+class AlertPreferencesInput(graphene.InputObjectType):
+    enabled_categories = graphene.List(graphene.String, description="List of enabled alert categories")
+    priority_threshold = graphene.String(description="Minimum priority threshold")
+    frequency = graphene.String(description="Alert frequency preference")
+    delivery_method = graphene.String(description="Preferred delivery method")
+    quiet_hours = graphene.Field(QuietHoursInput, description="Quiet hours settings")
+    custom_thresholds = graphene.Field(CustomThresholdsInput, description="Custom alert thresholds")
+
+# Output types for mutations
+class QuietHoursType(graphene.ObjectType):
+    enabled = graphene.Boolean()
+    start = graphene.String()
+    end = graphene.String()
+
+class CustomThresholdsType(graphene.ObjectType):
+    performance_threshold = graphene.Float()
+    volatility_threshold = graphene.Float()
+    drawdown_threshold = graphene.Float()
+    sector_concentration_threshold = graphene.Float()
+
+class AlertPreferencesType(graphene.ObjectType):
+    enabled_categories = graphene.List(graphene.String)
+    priority_threshold = graphene.String()
+    frequency = graphene.String()
+    delivery_method = graphene.String()
+    quiet_hours = graphene.Field(QuietHoursType)
+    custom_thresholds = graphene.Field(CustomThresholdsType)
 
 # Mutations
 class CreateCustomBenchmark(graphene.Mutation):
@@ -742,6 +939,121 @@ class CreatePredefinedBenchmark(graphene.Mutation):
                 error=f"Error creating predefined benchmark: {str(e)}"
             )
 
+class UpdateAlertPreferences(graphene.Mutation):
+    """Update user's alert preferences and thresholds"""
+    
+    class Arguments:
+        input = AlertPreferencesInput(required=True, description="Alert preferences to update")
+    
+    success = graphene.Boolean()
+    preferences = graphene.Field(AlertPreferencesType)
+    error = graphene.String()
+    
+    def mutate(self, info, input: AlertPreferencesInput):
+        user = getattr(info.context, 'user', None)
+        if not user or not user.is_authenticated:
+            return UpdateAlertPreferences(
+                success=False,
+                error="Authentication required"
+            )
+        
+        try:
+            # Update alert thresholds
+            if input.custom_thresholds:
+                thresholds = input.custom_thresholds
+                
+                # Update performance thresholds
+                if thresholds.performance_threshold is not None:
+                    alert_config_service.set_user_thresholds(
+                        user, 'performance_underperformance', 
+                        {'performance_diff_threshold': thresholds.performance_threshold}
+                    )
+                    alert_config_service.set_user_thresholds(
+                        user, 'performance_outperformance', 
+                        {'performance_diff_threshold': thresholds.performance_threshold}
+                    )
+                
+                # Update volatility threshold
+                if thresholds.volatility_threshold is not None:
+                    alert_config_service.set_user_thresholds(
+                        user, 'risk_high_volatility', 
+                        {'volatility_max_threshold': thresholds.volatility_threshold}
+                    )
+                
+                # Update drawdown threshold (convert to negative for backend)
+                if thresholds.drawdown_threshold is not None:
+                    alert_config_service.set_user_thresholds(
+                        user, 'risk_high_drawdown', 
+                        {'drawdown_max_threshold': -abs(thresholds.drawdown_threshold)}
+                    )
+                
+                # Update sector concentration threshold
+                if thresholds.sector_concentration_threshold is not None:
+                    alert_config_service.set_user_thresholds(
+                        user, 'allocation_tech_overweight', 
+                        {'tech_weight_max_threshold': thresholds.sector_concentration_threshold}
+                    )
+                    alert_config_service.set_user_thresholds(
+                        user, 'allocation_high_concentration', 
+                        {'sector_concentration_max_threshold': thresholds.sector_concentration_threshold}
+                    )
+            
+            # Update delivery preferences
+            if input.delivery_method or input.quiet_hours:
+                # Update delivery preferences for each category and priority level
+                categories = ['performance', 'risk', 'allocation', 'portfolio', 'transaction', 'behavior']
+                priority_levels = ['critical', 'important', 'informational']
+                
+                for category in categories:
+                    for priority_level in priority_levels:
+                        prefs = {}
+                        
+                        if input.delivery_method:
+                            prefs['delivery_method'] = input.delivery_method
+                        
+                        if input.quiet_hours:
+                            prefs['quiet_hours_enabled'] = input.quiet_hours.enabled
+                            prefs['quiet_hours_start'] = input.quiet_hours.start
+                            prefs['quiet_hours_end'] = input.quiet_hours.end
+                        
+                        if prefs:
+                            alert_config_service.set_user_delivery_preferences(
+                                user, category, priority_level, prefs
+                            )
+            
+            # Get updated preferences
+            updated_preferences = {
+                'enabled_categories': input.enabled_categories or [],
+                'priority_threshold': input.priority_threshold or 'medium',
+                'frequency': input.frequency or 'daily',
+                'delivery_method': input.delivery_method or 'in_app',
+                'quiet_hours': {
+                    'enabled': input.quiet_hours.enabled if input.quiet_hours else True,
+                    'start': input.quiet_hours.start if input.quiet_hours else '22:00',
+                    'end': input.quiet_hours.end if input.quiet_hours else '08:00',
+                },
+                'custom_thresholds': {
+                    'performance_threshold': input.custom_thresholds.performance_threshold if input.custom_thresholds else 2.0,
+                    'volatility_threshold': input.custom_thresholds.volatility_threshold if input.custom_thresholds else 20.0,
+                    'drawdown_threshold': abs(input.custom_thresholds.drawdown_threshold) if input.custom_thresholds and input.custom_thresholds.drawdown_threshold else 15.0,
+                    'sector_concentration_threshold': input.custom_thresholds.sector_concentration_threshold if input.custom_thresholds else 0.35,
+                }
+            }
+            
+            return UpdateAlertPreferences(
+                success=True,
+                preferences=updated_preferences,
+                error=None
+            )
+            
+        except Exception as e:
+            logger.error(f"Error updating alert preferences: {e}")
+            return UpdateAlertPreferences(
+                success=False,
+                error=str(e)
+            )
+
+
 class BenchmarkMutation(graphene.ObjectType):
     """GraphQL mutations for benchmark operations"""
     
@@ -749,3 +1061,4 @@ class BenchmarkMutation(graphene.ObjectType):
     updateCustomBenchmark = UpdateCustomBenchmark.Field(description="Update an existing custom benchmark portfolio")
     deleteCustomBenchmark = DeleteCustomBenchmark.Field(description="Delete a custom benchmark portfolio")
     createPredefinedBenchmark = CreatePredefinedBenchmark.Field(description="Create a predefined benchmark portfolio")
+    updateAlertPreferences = UpdateAlertPreferences.Field(description="Update user's alert preferences and thresholds")

@@ -17,9 +17,9 @@ class RealMarketDataService:
     """Service for fetching real market data from various APIs"""
     
     def __init__(self):
-        self.alpha_vantage_key = getattr(settings, 'ALPHA_VANTAGE_API_KEY', None)
-        self.polygon_key = getattr(settings, 'POLYGON_API_KEY', None)
-        self.finnhub_key = getattr(settings, 'FINNHUB_API_KEY', None)
+        self.alpha_vantage_key = None
+        self.polygon_key = None
+        self.finnhub_key = None
         self.session = requests.Session()
         self.session.headers.update({
             'User-Agent': 'RichesReach/1.0 (Financial Analysis App)'
@@ -27,6 +27,20 @@ class RealMarketDataService:
         
         # Rate limiting
         self.last_request_time = {}
+        self._initialized = False
+    
+    def _ensure_initialized(self):
+        """Lazy initialization of settings-dependent attributes"""
+        if not self._initialized:
+            try:
+                from django.conf import settings
+                self.alpha_vantage_key = getattr(settings, 'ALPHA_VANTAGE_API_KEY', None)
+                self.polygon_key = getattr(settings, 'POLYGON_API_KEY', None)
+                self.finnhub_key = getattr(settings, 'FINNHUB_API_KEY', None)
+                self._initialized = True
+            except Exception as e:
+                # Fallback to defaults if Django settings not available
+                self._initialized = True
         self.min_request_interval = 0.1  # 100ms between requests
         
     def _rate_limit(self, api_name: str):
@@ -40,6 +54,7 @@ class RealMarketDataService:
     
     def get_yahoo_finance_data(self, symbol: str, period: str = "1y", interval: str = "1d") -> Optional[Dict[str, Any]]:
         """Get data from Yahoo Finance using yfinance library"""
+        self._ensure_initialized()
         try:
             self._rate_limit('yahoo')
             
@@ -85,6 +100,7 @@ class RealMarketDataService:
     
     def get_alpha_vantage_data(self, symbol: str, timeframe: str) -> Optional[Dict[str, Any]]:
         """Get data from Alpha Vantage API"""
+        self._ensure_initialized()
         if not self.alpha_vantage_key:
             logger.warning("Alpha Vantage API key not configured")
             return None
@@ -180,6 +196,7 @@ class RealMarketDataService:
     
     def get_polygon_data(self, symbol: str, timeframe: str) -> Optional[Dict[str, Any]]:
         """Get data from Polygon.io API"""
+        self._ensure_initialized()
         if not self.polygon_key:
             logger.warning("Polygon API key not configured")
             return None
@@ -271,6 +288,7 @@ class RealMarketDataService:
     
     def get_benchmark_data(self, symbol: str, timeframe: str) -> Optional[Dict[str, Any]]:
         """Get benchmark data from the best available source"""
+        self._ensure_initialized()
         # Try sources in order of preference
         sources = [
             ('yahoo', self.get_yahoo_finance_data),
@@ -356,6 +374,7 @@ class RealMarketDataService:
     
     def get_multiple_benchmarks(self, symbols: List[str], timeframe: str) -> Dict[str, Dict[str, Any]]:
         """Get data for multiple benchmarks concurrently"""
+        self._ensure_initialized()
         results = {}
         
         with ThreadPoolExecutor(max_workers=5) as executor:

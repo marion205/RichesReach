@@ -4,6 +4,7 @@ import { View, TextInput, Text, TouchableOpacity, StyleSheet, Image, ScrollView,
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TOKEN_AUTH } from '../../../graphql/auth';
 import RestAuthService from '../services/RestAuthService';
+import { API_GRAPHQL } from '../../../../config/api';
 
 // Three common JWT mutations
 const MUTATIONS = [
@@ -62,7 +63,8 @@ const loginWithRest = async () => {
     const { token } = await restAuthService.login(email, password);
     console.log('✅ REST login successful!');
     await AsyncStorage.setItem('token', token);
-    await client.resetStore();
+    // Clear cache safely without resetting store while queries are in flight
+    await client.cache.reset();
     onLogin(token);
   } catch (error) {
     console.error('❌ REST login failed:', error);
@@ -85,7 +87,8 @@ const [tokenAuth, { loading: loginLoading, error: loginError }] = useMutation(TO
     console.log('✅ Token received:', token);
     await AsyncStorage.setItem('token', token);
     console.log('✅ Token stored in AsyncStorage');
-    await client.resetStore();
+    // Clear cache safely without resetting store while queries are in flight
+    await client.cache.reset();
     console.log('✅ Apollo store reset');
     inFlight.current = false;
     console.log('✅ Calling onLogin with token');
@@ -107,7 +110,7 @@ console.error('Signup error:', err);
 const handleLogin = async () => {
   try {
     // GraphQL endpoint probe for debugging
-    const GQL_URL = `${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000'}/graphql/`;
+    const GQL_URL = API_GRAPHQL;
     try {
       const probeResponse = await fetch(GQL_URL, {
         method: 'POST',
@@ -136,7 +139,8 @@ const handleLogin = async () => {
       
       const mock = { token: mockToken, user: { id:'1', email, username:'dev' } };
       await AsyncStorage.setItem('token', mock.token);
-      await client.resetStore();
+      // Clear cache safely without resetting store while queries are in flight
+    await client.cache.reset();
       onLogin(mock.token);
       return;
     }
@@ -184,7 +188,8 @@ const handleLogin = async () => {
     // success path
     console.log('✅ Logged in. JWT:', finalToken.slice(0, 16) + '…');
     await AsyncStorage.setItem('token', finalToken);
-    await client.resetStore();
+    // Clear cache safely without resetting store while queries are in flight
+    await client.cache.reset();
     onLogin(finalToken);
   } catch (e:any) {
     console.error('🌐 Network error:', e);

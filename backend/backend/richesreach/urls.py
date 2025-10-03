@@ -6,6 +6,7 @@ from graphene_django.views import GraphQLView
 import time
 import json
 from core.schema import schema
+from core.mock_tools import dev_sbloc_advance
 
 def healthz(_):
     return JsonResponse({"ok": True, "app": "richesreach"}, status=200)
@@ -393,8 +394,12 @@ urlpatterns.append(path("debug-env/", debug_env))
 urlpatterns.append(path("mock-graphql/", mock_graphql))
 from .views_auth import login_view
 from core.views_ai import ai_status, cache_status
-from core.views_health import health_check, readiness_check, liveness_check
+from core.views.health import health_check, health_detailed, health_ready, health_live
 from core.views import ai_options_recommendations
+from core.views_yodlee import (
+    start_fastlink, fastlink_callback, fetch_accounts, 
+    refresh_account, get_transactions, yodlee_webhook, delete_bank_link
+)
 # from marketdata.urls import urlpatterns as marketdata_urls
 
 urlpatterns.append(path("api/auth/login/", login_view))
@@ -408,10 +413,11 @@ urlpatterns.append(path("api/cache-status", cache_status, name='cache_status'))
 # Health check endpoints
 urlpatterns.append(path("health/", health_check, name='health_check'))
 urlpatterns.append(path("health", health_check, name='health_check_no_slash'))
-urlpatterns.append(path("ready/", readiness_check, name='readiness_check'))
-urlpatterns.append(path("ready", readiness_check, name='readiness_check_no_slash'))
-urlpatterns.append(path("live/", liveness_check, name='liveness_check'))
-urlpatterns.append(path("live", liveness_check, name='liveness_check_no_slash'))
+urlpatterns.append(path("health/detailed/", health_detailed, name='health_detailed'))
+urlpatterns.append(path("ready/", health_ready, name='readiness_check'))
+urlpatterns.append(path("ready", health_ready, name='readiness_check_no_slash'))
+urlpatterns.append(path("live/", health_live, name='liveness_check'))
+urlpatterns.append(path("live", health_live, name='liveness_check_no_slash'))
 
 # Market data endpoints
 # urlpatterns.extend(marketdata_urls)
@@ -423,3 +429,15 @@ def test_endpoint(request):
 
 
 urlpatterns.append(path("api/test/", test_endpoint))
+
+# Yodlee Integration endpoints
+urlpatterns.append(path("api/yodlee/fastlink/start", start_fastlink, name='yodlee_fastlink_start'))
+urlpatterns.append(path("api/yodlee/fastlink/callback", fastlink_callback, name='yodlee_fastlink_callback'))
+urlpatterns.append(path("api/yodlee/accounts", fetch_accounts, name='yodlee_fetch_accounts'))
+urlpatterns.append(path("api/yodlee/refresh", refresh_account, name='yodlee_refresh_account'))
+urlpatterns.append(path("api/yodlee/transactions", get_transactions, name='yodlee_get_transactions'))
+urlpatterns.append(path("api/yodlee/webhook", yodlee_webhook, name='yodlee_webhook'))
+urlpatterns.append(path("api/yodlee/bank-link/<int:bank_link_id>", delete_bank_link, name='yodlee_delete_bank_link'))
+
+# SBLOC Aggregator URLs
+urlpatterns.append(path("dev/mock/sbloc/advance/<int:session_id>/", dev_sbloc_advance))

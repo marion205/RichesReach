@@ -4,9 +4,11 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useApolloClient, gql, useQuery, useMutation } from '@apollo/client';
+import { ADD_TO_WATCHLIST, REMOVE_FROM_WATCHLIST } from '../../../graphql/mutations';
 
 import StockCard from '../../../components/common/StockCard';
 import WatchlistCard, { WatchlistItem } from '../../../components/common/WatchlistCard';
+import BudgetImpactModal from '../../../components/common/BudgetImpactModal';
 import StockChart from '../components/StockChart';
 import AdvancedChart from '../../../components/charts/AdvancedChart';
 import OptionChainCard from '../../../components/OptionChainCard';
@@ -58,6 +60,18 @@ type Stock = {
   id: string; symbol: string; companyName: string; sector: string;
   marketCap?: number | string | null; peRatio?: number | null;
   dividendYield?: number | null; beginnerFriendlyScore: number;
+  currentPrice?: number | string | null;
+  beginnerScoreBreakdown?: {
+    score: number;
+    factors: Array<{
+      name: string;
+      weight: number;
+      value: number;
+      contrib: number;
+      detail: string;
+    }>;
+    notes: string[];
+  };
 };
 
 const GET_BEGINNER_FRIENDLY_STOCKS = gql`
@@ -71,6 +85,18 @@ const GET_BEGINNER_FRIENDLY_STOCKS = gql`
       peRatio
       dividendYield
       beginnerFriendlyScore
+      currentPrice
+      beginnerScoreBreakdown {
+        score
+        factors {
+          name
+          weight
+          value
+          contrib
+          detail
+        }
+        notes
+      }
       __typename
     }
   }
@@ -215,6 +241,7 @@ const [searchQuery, setSearchQuery] = useState('');
   const [rust, setRust] = useState<any | null>(null);
   const [rustOpen, setRustOpen] = useState(false);
   const [selectedStock, setSelectedStock] = useState<Stock | null>(null);
+  const [budgetImpactModal, setBudgetImpactModal] = useState<{ open: boolean; stock: Stock | null }>({ open: false, stock: null });
   
   // Research state
   const [researchSymbol, setResearchSymbol] = useState('AAPL');
@@ -231,6 +258,10 @@ const [searchQuery, setSearchQuery] = useState('');
   
   const client = useApolloClient();
   const { stocks, screening } = useStockSearch(searchQuery, false); // Always run the query
+  
+  // Watchlist mutations
+  const [addToWatchlistMutation] = useMutation(ADD_TO_WATCHLIST);
+  const [removeFromWatchlistMutation] = useMutation(REMOVE_FROM_WATCHLIST);
   const { data: beginnerData, loading: beginnerLoading, refetch: refetchBeginner, error: beginnerError } =
     useQuery(GET_BEGINNER_FRIENDLY_STOCKS_ALT, { 
       fetchPolicy: 'network-only', 
@@ -393,17 +424,58 @@ const [searchQuery, setSearchQuery] = useState('');
 
   const onAddConfirm = useCallback(async () => {
     if (!watchlistModal.stock) return;
-    await addToWatchlist(watchlistModal.stock.symbol, notes);
-    setWatchlistModal({ open: false, stock: null });
-    setNotes('');
-  }, [watchlistModal, notes, addToWatchlist]);
+    
+    try {
+      const { data } = await addToWatchlistMutation({
+        variables: {
+          symbol: watchlistModal.stock.symbol,
+          companyName: watchlistModal.stock.companyName,
+          notes: notes
+        }
+      });
+      
+      if (data?.addToWatchlist?.success) {
+        Alert.alert('Success', data.addToWatchlist.message);
+        setWatchlistModal({ open: false, stock: null });
+        setNotes('');
+        // Refresh watchlist data
+        if (watchlistQ?.refetch) {
+          watchlistQ.refetch();
+        }
+      } else {
+        Alert.alert('Error', data?.addToWatchlist?.message || 'Failed to add to watchlist');
+      }
+    } catch (error) {
+      console.error('Error adding to watchlist:', error);
+      Alert.alert('Error', 'Failed to add to watchlist. Please try again.');
+    }
+  }, [watchlistModal, notes, addToWatchlistMutation, watchlistQ]);
 
   const onRemoveWatchlist = useCallback((symbol: string) => {
     Alert.alert('Remove from Watchlist', 'Are you sure?', [
-{ text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: () => removeFromWatchlist(symbol) },
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: async () => {
+        try {
+          const { data } = await removeFromWatchlistMutation({
+            variables: { symbol }
+          });
+          
+          if (data?.removeFromWatchlist?.success) {
+            Alert.alert('Success', data.removeFromWatchlist.message);
+            // Refresh watchlist data
+            if (watchlistQ?.refetch) {
+              watchlistQ.refetch();
+            }
+          } else {
+            Alert.alert('Error', data?.removeFromWatchlist?.message || 'Failed to remove from watchlist');
+          }
+        } catch (error) {
+          console.error('Error removing from watchlist:', error);
+          Alert.alert('Error', 'Failed to remove from watchlist. Please try again.');
+        }
+      }},
     ]);
-  }, [removeFromWatchlist]);
+  }, [removeFromWatchlistMutation, watchlistQ]);
 
   const handleRustAnalysis = useCallback(async (symbol: string) => {
     console.log('🔍 Starting Advanced Analysis for:', symbol);
@@ -436,9 +508,11 @@ const [searchQuery, setSearchQuery] = useState('');
       peRatio={item.peRatio}
       dividendYield={item.dividendYield}
       beginnerFriendlyScore={item.beginnerFriendlyScore}
+      beginnerScoreBreakdown={item.beginnerScoreBreakdown}
       onPressAdd={() => onPressAdd(item)}
       onPressAnalysis={() => handleRustAnalysis(item.symbol)}
       onPressMetric={showMetricTooltip}
+      onPressBudgetImpact={() => setBudgetImpactModal({ open: true, stock: item })}
       onPress={() => setSelectedStock(selectedStock?.symbol === item.symbol ? null : item)}
       isSelected={selectedStock?.symbol === item.symbol}
     />
@@ -588,12 +662,6 @@ placeholderTextColor="#999"
         ))}
       </View>
 
-      {/* Browse All Filter */}
-      {activeTab === 'browse' && (
-        <View style={styles.filterContainer}>
-          <Text style={styles.filterLabel}>All</Text>
-        </View>
-      )}
 
       {/* Research Tab Content */}
       {activeTab === 'research' && (
@@ -1270,6 +1338,20 @@ placeholderTextColor="#999"
 </View>
 </View>
       </Modal>
+
+      {/* Budget Impact Modal */}
+      <BudgetImpactModal
+        visible={budgetImpactModal.open && !!budgetImpactModal.stock}
+        onClose={() => setBudgetImpactModal({ open: false, stock: null })}
+        stockSymbol={budgetImpactModal.stock?.symbol || ''}
+        stockName={budgetImpactModal.stock?.companyName || ''}
+        score={budgetImpactModal.stock?.beginnerScoreBreakdown?.score || budgetImpactModal.stock?.beginnerFriendlyScore || 0}
+        factors={budgetImpactModal.stock?.beginnerScoreBreakdown?.factors || []}
+        notes={budgetImpactModal.stock?.beginnerScoreBreakdown?.notes || []}
+        budget={1000} // Default budget - could be made dynamic from user profile
+        price={budgetImpactModal.stock?.currentPrice ? Number(budgetImpactModal.stock.currentPrice) : undefined}
+        currency="USD"
+      />
 </View>
 );
 }

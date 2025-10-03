@@ -17,70 +17,22 @@ import { gql } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
 // import { useNavigation } from '@react-navigation/native'; // Removed - using custom navigation
 import { mockSignals } from '../../../mockData/swingTradingMockData';
+import {
+  GET_SWING_SIGNALS,
+  LIKE_SIGNAL,
+  COMMENT_SIGNAL,
+  SwingSignal,
+  formatCurrency,
+  formatPercentage,
+  getTimeAgo,
+  getSignalColor,
+  getMLScoreColor,
+  getMLScoreLabel,
+} from '../../../graphql/swingTradingQueries';
 
 const { width } = Dimensions.get('window');
 
-// GraphQL Queries
-const GET_SIGNALS = gql`
-  query GetSignals($symbol: String, $signalType: String, $minMlScore: Float, $isActive: Boolean, $limit: Int) {
-    signals(symbol: $symbol, signalType: $signalType, minMlScore: $minMlScore, isActive: $isActive, limit: $limit) {
-      id
-      symbol
-      timeframe
-      triggeredAt
-      signalType
-      entryPrice
-      stopPrice
-      targetPrice
-      mlScore
-      thesis
-      riskRewardRatio
-      daysSinceTriggered
-      isLikedByUser
-      userLikeCount
-      features
-      isActive
-      isValidated
-      validationPrice
-      validationTimestamp
-      createdBy {
-        id
-        username
-        name
-      }
-    }
-  }
-`;
-
-const LIKE_SIGNAL = gql`
-  mutation LikeSignal($signalId: ID!) {
-    likeSignal(signalId: $signalId) {
-      success
-      isLiked
-      likeCount
-      errors
-    }
-  }
-`;
-
-const COMMENT_SIGNAL = gql`
-  mutation CommentSignal($signalId: ID!, $content: String!) {
-    commentSignal(signalId: $signalId, content: $content) {
-      success
-      comment {
-        id
-        content
-        createdAt
-        user {
-          id
-          username
-          name
-        }
-      }
-      errors
-    }
-  }
-`;
+// Use the imported GraphQL queries from swingTradingQueries.ts
 
 interface Signal {
   id: string;
@@ -125,7 +77,7 @@ const SignalsScreen: React.FC<SignalsScreenProps> = ({ navigateTo }) => {
     isActive: true,
   });
 
-  const { data, loading, error, refetch } = useQuery(GET_SIGNALS, {
+  const { data, loading, error, refetch } = useQuery(GET_SWING_SIGNALS, {
     variables: {
       symbol: filters.symbol || undefined,
       signalType: filters.signalType || undefined,
@@ -139,8 +91,8 @@ const SignalsScreen: React.FC<SignalsScreenProps> = ({ navigateTo }) => {
   const [likeSignal] = useMutation(LIKE_SIGNAL);
   const [commentSignal] = useMutation(COMMENT_SIGNAL);
 
-  // Use mock data as fallback when GraphQL fails
-  const signals = data?.signals || (error ? mockSignals : []);
+  // Use real data from GraphQL or fallback to mock data
+  const signals: SwingSignal[] = data?.swingSignals || (error ? mockSignals : []);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);

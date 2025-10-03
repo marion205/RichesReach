@@ -1,0 +1,11 @@
+[
+  { "model":"core.slocbank","pk":1,
+    "fields":{"name":"Interactive Brokers","slug":"ibkr","min_apr":0.0599,"max_apr":0.0999,"min_ltv":0.30,"max_ltv":0.50,"min_loan_usd":5000,"regions":["US","EU","UK","AU"],"notes":"Aggressive rates; good API."}
+  },
+  { "model":"core.slocbank","pk":2,
+    "fields":{"name":"Charles Schwab","slug":"schwab","min_apr":0.0699,"max_apr":0.1099,"min_ltv":0.30,"max_ltv":0.50,"min_loan_usd":25000,"regions":["US"],"notes":"Household brand; strong servicing."}
+  },
+  { "model":"core.slocbank","pk":3,
+    "fields":{"name":"Fidelity","slug":"fidelity","min_apr":0.0699,"max_apr":0.1099,"min_ltv":0.30,"max_ltv":0.50,"min_loan_usd":25000,"regions":["US"],"notes":"Excellent CX."}
+  }
+]

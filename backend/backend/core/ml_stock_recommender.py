@@ -417,7 +417,24 @@ class MLStockRecommender:
         """
         knobs = self._income_params(user)
 
-        bfs = self._normalize_beginner_score(getattr(stock, "beginner_friendly_score", 0.0))
+        # Use the new robust beginner scoring system
+        try:
+            from .scoring.beginner_score import compute_beginner_score
+            market_data = {
+                "price": price,
+                "beta": f.get("beta", 1.0),
+                "avgDollarVolume": f.get("avg_dollar_volume", 5e7),
+                "annualizedVol": ann_vol,
+            }
+            # Get user budget from user profile (default to $1000 for beginners)
+            user_budget = getattr(user, 'portfolio_size', 1000.0)
+            beginner_result = compute_beginner_score(overview or {}, market_data, user_budget)
+            z_beg = beginner_result.score / 100.0
+        except Exception as e:
+            logger.warning(f"Failed to use new beginner scoring: {e}")
+            bfs = self._normalize_beginner_score(getattr(stock, "beginner_friendly_score", 0.0))
+            z_beg = min(max(bfs / 10.0, 0.0), 1.0)
+        
         pe = self._safe_float((overview or {}).get("PERatio"), default=np.nan)
         div_yield = self._safe_float((overview or {}).get("DividendYield"), default=0.0)
 
@@ -442,13 +459,13 @@ class MLStockRecommender:
         rsi_ok  = 1.0 if 30 < rsi < 70 else 0.6
         vol_conf = 1.0 if vol_trend > 1.05 else 0.7
 
-        # income-aware weights
+        # income-aware weights (increased beginner suitability weight)
         score = (
             knobs["stability_weight"] * z_vol +
             knobs["mom_weight"]       * z_mom +
             knobs["value_weight"]     * z_pe +
             knobs["div_weight"]       * z_div +
-            0.10                      * z_beg
+            0.15                      * z_beg  # Increased from 0.10 to 0.15
         )
         score = float(np.clip(score * rsi_ok * vol_conf, 0, 1))
 

@@ -27,13 +27,20 @@ SECRET_KEY = 'django-insecure-wk_qy339*l)1xg=(f6_e@9+d7sgi7%#0t!e17a3nkeu&p#@zq9
 DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
 # Production Security Settings
 if DEBUG:
-    ALLOWED_HOSTS = ["*", "192.168.1.151", "localhost", "127.0.0.1"]  # dev only
+    ALLOWED_HOSTS = ["*"]  # dev only - includes current LAN IP
     CORS_ALLOW_ALL_ORIGINS = True
     CORS_ALLOW_CREDENTIALS = True
+    # CSRF settings for development
+    CSRF_TRUSTED_ORIGINS = [
+        "http://172.20.10.8:8000",
+        "http://localhost:8000", 
+        "http://127.0.0.1:8000",
+        "http://192.168.1.151:8000"
+    ]
 else:
     # Production settings
     ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'app.richesreach.net,localhost').split(',')
-    CORS_ALLOW_ALL_ORIGINS = False
+    CORS_ALLOW_ALL_ORIGINS = True
     CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', '').split(',') if os.getenv('CORS_ALLOWED_ORIGINS') else []
     CORS_ALLOW_CREDENTIALS = os.getenv('CORS_ALLOW_CREDENTIALS', 'True').lower() == 'true'
     
@@ -74,6 +81,7 @@ except ImportError:
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'core.middleware.rate_limit.RateLimitMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -173,10 +181,13 @@ else:
                 "PASSWORD": DB_PASS,
                 "HOST": DB_HOST,
                 "PORT": DB_PORT,
-                "CONN_MAX_AGE": 600,
-                "ATOMIC_REQUESTS": True,
+                "CONN_MAX_AGE": 0,  # Disable connection pooling to avoid transaction issues
+                "ATOMIC_REQUESTS": False,  # Disable atomic requests to prevent transaction blocks
                 # For local Postgres, ensure no SSL requirement:
-                "OPTIONS": {"sslmode": os.getenv("PGSSLMODE", "disable")},
+                "OPTIONS": {
+                    "sslmode": os.getenv("PGSSLMODE", "disable"),
+                    "autocommit": True,  # Enable autocommit to prevent transaction blocks
+                },
             }
         }
 
@@ -340,6 +351,48 @@ if USE_OPENAI:
 else:
     print("INFO: OpenAI disabled via USE_OPENAI flag. Using mock/fallback mode.")
 
+# Yodlee Configuration
+USE_YODLEE = os.getenv('USE_YODLEE', 'false').lower() == 'true'
+YODLEE_ENV = os.getenv('YODLEE_ENV', 'sandbox')
+YODLEE_BASE_URL = os.getenv('YODLEE_BASE_URL', 'https://sandbox.api.yodlee.com/ysl')
+YODLEE_CLIENT_ID = os.getenv('YODLEE_CLIENT_ID', '')
+YODLEE_SECRET = os.getenv('YODLEE_SECRET', '')
+YODLEE_FASTLINK_URL = os.getenv('YODLEE_FASTLINK_URL', 'https://sandbox.fastlink2.yodlee.com/apps')
+YODLEE_LOGIN_NAME = os.getenv('YODLEE_LOGIN_NAME', '')
+
+# Log Yodlee configuration status
+if USE_YODLEE:
+    if not all([YODLEE_CLIENT_ID, YODLEE_SECRET, YODLEE_LOGIN_NAME]):
+        print("WARNING: USE_YODLEE=true but missing required credentials. Disabling Yodlee.")
+        USE_YODLEE = False
+    else:
+        print(f"INFO: Yodlee enabled - Environment: {YODLEE_ENV}")
+else:
+    print("INFO: Yodlee disabled via USE_YODLEE flag. Using mock bank linking.")
+
+# SBLOC Configuration
+USE_SBLOC_MOCK = bool(os.getenv("USE_SBLOC_MOCK", "true").lower() == "true")
+SBLOC_STATUS_ADVANCE_SECONDS = int(os.getenv("SBLOC_STATUS_ADVANCE_SECONDS", "30"))
+
+# SBLOC Aggregator Configuration (for production)
+USE_SBLOC_AGGREGATOR = os.getenv('USE_SBLOC_AGGREGATOR', 'false').lower() == 'true'
+SBLOC_AGGREGATOR_BASE_URL = os.getenv('SBLOC_AGGREGATOR_BASE_URL', 'https://api.sbloc-aggregator.com')
+SBLOC_AGGREGATOR_API_KEY = os.getenv('SBLOC_AGGREGATOR_API_KEY', '')
+SBLOC_WEBHOOK_SECRET = os.getenv('SBLOC_WEBHOOK_SECRET', '')
+SBLOC_REDIRECT_URI = os.getenv('SBLOC_REDIRECT_URI', 'https://app.richesreach.net/sbloc/callback')
+
+# Log SBLOC configuration status
+if USE_SBLOC_MOCK:
+    print(f"INFO: SBLOC Mock enabled - Status advance every {SBLOC_STATUS_ADVANCE_SECONDS}s")
+elif USE_SBLOC_AGGREGATOR:
+    if not all([SBLOC_AGGREGATOR_API_KEY, SBLOC_WEBHOOK_SECRET]):
+        print("WARNING: USE_SBLOC_AGGREGATOR=true but missing required credentials. Disabling SBLOC.")
+        USE_SBLOC_AGGREGATOR = False
+    else:
+        print(f"INFO: SBLOC Aggregator enabled - Base URL: {SBLOC_AGGREGATOR_BASE_URL}")
+else:
+    print("INFO: SBLOC disabled. Set USE_SBLOC_MOCK=true for development.")
+
 # ML Service Configuration
 ML_SERVICE_CONFIG = {
     'ENABLED': os.getenv('ML_SERVICE_ENABLED', 'True').lower() == 'true',
@@ -400,13 +453,15 @@ FINNHUB_API_KEY = os.getenv('FINNHUB_API_KEY')  # No default - must be set via e
 NEWS_API_KEY = os.getenv('NEWS_API_KEY')  # No default - must be set via environment
 POLYGON_API_KEY = os.getenv('POLYGON_API_KEY')  # No default - must be set via environment
 
-# Use Finnhub as primary data source (60 requests/minute vs Alpha Vantage's 25/day)
+# Use Finnhub and Polygon as primary data sources (60 requests/minute each)
 if os.getenv('USE_FINNHUB', 'true').lower() == 'true' and FINNHUB_API_KEY:
     print("INFO: Using Finnhub API for real-time market data (60 requests/minute)")
-    print("INFO: Alpha Vantage API available as backup (25 requests/day)")
-elif os.getenv('DISABLE_ALPHA_VANTAGE', 'false').lower() == 'true':
+    print("INFO: Using Polygon API for additional market data")
+    # Disable Alpha Vantage completely
     ALPHA_VANTAGE_API_KEY = None
-    print("INFO: Alpha Vantage API disabled. Using mock data.")
+elif os.getenv('DISABLE_ALPHA_VANTAGE', 'true').lower() == 'true':
+    ALPHA_VANTAGE_API_KEY = None
+    print("INFO: Alpha Vantage API disabled. Using Polygon and Finnhub.")
 elif not ALPHA_VANTAGE_API_KEY:
     print("WARNING: No API keys configured. Using mock data.")
 # Redis Configuration for Caching

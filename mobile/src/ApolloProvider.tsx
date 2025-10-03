@@ -12,13 +12,11 @@ import JWTAuthService from './features/auth/services/JWTAuthService';
 // import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
 // import { createClient } from 'graphql-ws';
 
-// Determine the correct URL based on the platform
+// Import from single source of truth
+import { API_GRAPHQL } from '../config/api';
+
 const getGraphQLURL = () => {
-  const BASE_URL = Platform.OS === 'ios'
-    ? (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000')   // Use local backend for development
-    : (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000');   // Use local backend for development
-  
-  return `${BASE_URL}/graphql/`;
+  return API_GRAPHQL;
 };
 
 const HTTP_URL = getGraphQLURL();
@@ -207,10 +205,24 @@ defaultOptions: {
     errorPolicy: 'all',
   },
 },
+// Prevent "Store reset while query was in flight" errors
+assumeImmutableResults: true,
 });
 
 // Initialize the JWT service with the Apollo client
 JWTAuthService.getInstance().setApolloClient(client);
+
+// Safe cache clearing utility to prevent "Store reset while query was in flight" errors
+export const safeClearCache = async () => {
+  try {
+    // Wait for any pending queries to complete
+    await client.clearStore();
+  } catch (error) {
+    console.warn('Cache clear failed, using fallback method:', error);
+    // Fallback: just clear the cache without resetting the store
+    client.cache.reset();
+  }
+};
 
 export { client };
 export default function ApolloWrapper({ children }: { children: React.ReactNode }) {

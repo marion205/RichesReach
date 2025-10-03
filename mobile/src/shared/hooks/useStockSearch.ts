@@ -12,6 +12,18 @@ const GET_STOCKS = gql`
       peRatio
       dividendYield
       beginnerFriendlyScore
+      currentPrice
+      beginnerScoreBreakdown {
+        score
+        factors {
+          name
+          weight
+          value
+          contrib
+          detail
+        }
+        notes
+      }
       __typename
     }
   }

@@ -24,8 +24,8 @@ class ChatSessionAdmin(admin.ModelAdmin):
     message_count.short_description = 'Messages'
 @admin.register(ChatMessage)
 class ChatMessageAdmin(admin.ModelAdmin):
-    list_display = ('session', 'is_user', 'content_preview', 'created_at')
-    list_filter = ('is_user', 'created_at')
+    list_display = ('session', 'role', 'content_preview', 'created_at')
+    list_filter = ('role', 'created_at')
     search_fields = ('content', 'session__user__name')
     ordering = ('-created_at',)
     
@@ -34,8 +34,8 @@ class ChatMessageAdmin(admin.ModelAdmin):
     content_preview.short_description = 'Content'
 @admin.register(Source)
 class SourceAdmin(admin.ModelAdmin):
-    list_display = ('name', 'url', 'created_at')
-    search_fields = ('name', 'url')
+    list_display = ('title', 'url', 'created_at')
+    search_fields = ('title', 'url')
     ordering = ('-created_at',)
 @admin.register(Like)
 class LikeAdmin(admin.ModelAdmin):

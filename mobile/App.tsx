@@ -1,3 +1,4 @@
+import 'react-native-reanimated';
 import React, { useEffect, useState } from 'react';
 import { SafeAreaView, Text, TouchableOpacity, ActivityIndicator, Linking } from 'react-native';
 import { API_HTTP, API_GRAPHQL, API_WS } from './src/config';

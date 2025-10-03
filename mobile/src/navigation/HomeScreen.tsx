@@ -9,7 +9,7 @@ import React, {
   import Icon from 'react-native-vector-icons/Feather';
   import AsyncStorage from '@react-native-async-storage/async-storage';
   
-import PortfolioGraph from '../features/portfolio/components/PortfolioGraph';
+import PortfolioPerformanceCard from '../features/portfolio/components/PortfolioPerformanceCard';
 import PortfolioHoldings from '../features/portfolio/components/PortfolioHoldings';
 import { BasicRiskMetrics } from '../components';
 import PortfolioComparison from '../features/portfolio/components/PortfolioComparison';
@@ -487,18 +487,12 @@ import FinancialChatbotService, { AlphaVantageRecommendationProvider } from '../
             </>
           ) : (
             <>
-              <PortfolioGraph
+              <PortfolioPerformanceCard
                 totalValue={resolved.totalValue}
                 totalReturn={resolved.totalReturn}
                 totalReturnPercent={resolved.totalReturnPercent}
-                onPress={() =>
-                  navigateTo('PortfolioEducation', {
-                    clickedElement: 'chart',
-                    totalValue: resolved.totalValue,
-                    totalReturn: resolved.totalReturn,
-                    totalReturnPercent: resolved.totalReturnPercent,
-                  })
-                }
+                benchmarkSymbol="SPY"
+                useRealBenchmarkData={true}
               />
 
               {resolved.holdings?.length > 0 ? (

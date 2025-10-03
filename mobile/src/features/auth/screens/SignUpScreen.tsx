@@ -172,7 +172,8 @@ profilePic: profilePic || null
 } 
 });
 // User created successfully - go directly to onboarding
-await client.resetStore();
+// Clear cache safely without resetting store while queries are in flight
+await client.cache.reset();
 onSignUp();
 } catch (err) {
 console.error('Signup error:', err);
