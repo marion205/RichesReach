@@ -9,13 +9,21 @@ from dataclasses import dataclass
 from typing import Dict, Any, Tuple, List, Optional
 from datetime import datetime, timedelta
 import logging
-from sklearn.linear_model import LogisticRegression
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
-from sklearn.calibration import CalibratedClassifierCV
-from sklearn.model_selection import TimeSeriesSplit
 import joblib
 import json
+
+# Lazy imports for sklearn to avoid startup issues
+def _import_sklearn():
+    try:
+        from sklearn.linear_model import LogisticRegression
+        from sklearn.pipeline import Pipeline
+        from sklearn.preprocessing import StandardScaler
+        from sklearn.calibration import CalibratedClassifierCV
+        from sklearn.model_selection import TimeSeriesSplit
+        return LogisticRegression, Pipeline, StandardScaler, CalibratedClassifierCV, TimeSeriesSplit
+    except ImportError as e:
+        logger.warning(f"sklearn not available: {e}")
+        return None, None, None, None, None
 
 logger = logging.getLogger(__name__)
 
@@ -153,6 +161,11 @@ class CryptoMLModel:
         
     def build_model(self):
         """Build the ML pipeline"""
+        LogisticRegression, Pipeline, StandardScaler, CalibratedClassifierCV, TimeSeriesSplit = _import_sklearn()
+        
+        if LogisticRegression is None:
+            raise ImportError("sklearn is not available. Please install scikit-learn.")
+        
         base_pipeline = Pipeline([
             ('scaler', StandardScaler(with_mean=True, with_std=True)),
             ('classifier', LogisticRegression(max_iter=200, random_state=42))
