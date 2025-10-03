@@ -81,7 +81,7 @@ const errorLink = onError(({ graphQLErrors, networkError, operation, forward }) 
     console.error(`Network error: ${networkError}`);
     
     // Handle 404 errors gracefully
-    if (networkError.statusCode === 404) {
+    if ((networkError as any).statusCode === 404) {
       console.warn('GraphQL endpoint not found (404) - this is expected if using REST fallback');
       // Don't throw the error, just log it
       return;

@@ -9,7 +9,7 @@ import {
   SafeAreaView,
   Linking,
 } from 'react-native';
-import { WebBrowser } from 'expo-web-browser';
+import * as WebBrowser from 'expo-web-browser';
 import Icon from 'react-native-vector-icons/Feather';
 import { SBLOCReferral } from '../../../types/sbloc';
 

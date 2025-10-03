@@ -54,10 +54,10 @@ const errorLink = onError(({ graphQLErrors, networkError, operation, forward }) 
     console.error(`[Network error]: ${networkError}`);
     
     // Handle network errors
-    if (networkError.statusCode === 401) {
+    if ((networkError as any).statusCode === 401) {
       // Unauthorized - redirect to login
       window.location.href = '/login';
-    } else if (networkError.statusCode >= 500) {
+    } else if ((networkError as any).statusCode >= 500) {
       // Server error - show retry option
       console.error('Server error - please try again');
     }
