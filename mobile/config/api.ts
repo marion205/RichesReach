@@ -6,7 +6,7 @@
 const devHost = process.env.EXPO_PUBLIC_API_BASE
   ?? "http://192.168.1.151:8000"; // Your current network IP
 
-const prodHost = "https://app.richesreach.net";
+const prodHost = "http://3.84.81.154:8000";
 
 export const API_BASE = __DEV__ ? devHost : prodHost;
 
