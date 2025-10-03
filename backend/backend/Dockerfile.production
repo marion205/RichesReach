@@ -1,48 +1,32 @@
-# Production Dockerfile for RichesReach Backend
-FROM python:3.10-slim
+# Container-Native Production Dockerfile for RichesReach Backend
+FROM python:3.11-slim
 
-# Set environment variables
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
-# Set work directory
+# System dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl ca-certificates \
+    postgresql-client \
+    build-essential \
+    libpq-dev \
+ && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user and home
+RUN useradd -m -u 10001 appuser
+
+# Create app dir and set ownership
 WORKDIR /app
-
-# Install system dependencies
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        postgresql-client \
-        build-essential \
-        libpq-dev \
-        curl \
-        redis-tools \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy project
-COPY . .
-
-# Create logs directory
-RUN mkdir -p logs
-
-# Collect static files
-RUN python manage.py collectstatic --noinput
-
-# Create non-root user
-RUN adduser --disabled-password --gecos '' appuser
+# Copy code as root, then fix ownership once
+COPY . /app
 RUN chown -R appuser:appuser /app
+
+# Drop privileges
 USER appuser
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health/ || exit 1
-
-# Expose port
+# Expose & default command (override in task def if you prefer)
 EXPOSE 8000
-
-# Run the application
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "4", "--timeout", "120", "--keep-alive", "2", "--max-requests", "1000", "--max-requests-jitter", "100", "richesreach.wsgi:application"]
+CMD ["bash", "-lc", "gunicorn richesreach.wsgi:application --bind 0.0.0.0:8000 --workers 3 --threads 2 --access-logfile - --error-logfile - --log-level info"]

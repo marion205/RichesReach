@@ -1,0 +1,104 @@
+{
+    "family": "riches-reach-ai-task",
+    "networkMode": "awsvpc",
+    "requiresCompatibilities": ["FARGATE"],
+    "cpu": "512",
+    "memory": "1024",
+    "executionRoleArn": "arn:aws:iam::498606688292:role/ecsTaskExecutionRole",
+    "taskRoleArn": "arn:aws:iam::498606688292:role/ecsTaskRole",
+    "containerDefinitions": [
+        {
+            "name": "riches-reach-ai",
+            "image": "498606688292.dkr.ecr.us-east-1.amazonaws.com/riches-reach-ai:214862070ec0e57fae3397f30fe39e569cc69fc8",
+            "portMappings": [
+                {
+                    "containerPort": 8000,
+                    "hostPort": 8000,
+                    "protocol": "tcp"
+                }
+            ],
+            "essential": true,
+            "entryPoint": [
+                "/bin/sh",
+                "-c"
+            ],
+            "command": [
+                "cd /app && echo '=== PRODUCTION DEPLOYMENT ===' && echo 'Environment check:' && echo 'PGDATABASE:' $PGDATABASE && echo 'PGHOST:' $PGHOST && echo 'PGUSER:' $PGUSER && echo 'PGPASSWORD:' 'SET' && echo 'PGPORT:' $PGPORT && echo 'SECRET_KEY:' 'SET' && echo 'LOG_DIR:' $LOG_DIR && echo 'Constructing DATABASE_URL...' && export DATABASE_URL=\"postgresql://$PGUSER:$PGPASSWORD@$PGHOST:$PGPORT/$PGDATABASE\" && echo 'DATABASE_URL constructed' && python - <<'PY'\nimport os\nimport psycopg2\nimport django\nfrom django.conf import settings\n\nprint('\\n=== Testing Database Connection ===')\ntry:\n    # Test direct PostgreSQL connection\n    conn = psycopg2.connect(\n        host=os.environ['PGHOST'],\n        port=os.environ['PGPORT'],\n        database=os.environ['PGDATABASE'],\n        user=os.environ['PGUSER'],\n        password=os.environ['PGPASSWORD'],\n        sslmode='require'\n    )\n    print('✅ Direct PostgreSQL connection successful!')\n    \n    with conn.cursor() as cur:\n        cur.execute('SELECT current_user, version();')\n        user, version = cur.fetchone()\n        print(f'Connected as user: {user}')\n        print(f'PostgreSQL version: {version}')\n    \n    conn.close()\nexcept Exception as e:\n    print(f'❌ Direct PostgreSQL connection failed: {e}')\n    print('This will cause the application to fail - no SQLite fallback in production!')\n    exit(1)\n\nprint('\\n=== Testing Django Database Configuration ===')\ntry:\n    django.setup()\n    print('Django setup complete')\n    print('Database engine:', settings.DATABASES['default']['ENGINE'])\n    print('Database host:', settings.DATABASES['default']['HOST'])\n    print('Database name:', settings.DATABASES['default']['NAME'])\n    print('Database user:', settings.DATABASES['default']['USER'])\n    \n    from django.db import connection\n    with connection.cursor() as cursor:\n        cursor.execute('SELECT 1')\n        result = cursor.fetchone()\n        print(f'✅ Django database connection successful! Result: {result}')\nexcept Exception as e:\n    print(f'❌ Django database connection failed: {e}')\n    import traceback\n    traceback.print_exc()\n    exit(1)\n\nprint('\\n=== Running Migrations ===')\ntry:\n    from django.core.management import execute_from_command_line\n    execute_from_command_line(['manage.py', 'migrate', '--noinput'])\n    print('✅ Migrations completed successfully!')\nexcept Exception as e:\n    print(f'❌ Migrations failed: {e}')\n    import traceback\n    traceback.print_exc()\n    exit(1)\n\nprint('\\n=== Collecting Static Files ===')\ntry:\n    from django.core.management import execute_from_command_line\n    execute_from_command_line(['manage.py', 'collectstatic', '--noinput'])\n    print('✅ Static files collected successfully!')\nexcept Exception as e:\n    print(f'⚠️ Static files collection failed: {e}')\n    # Don't exit on static files failure\n\nprint('\\n=== Starting Gunicorn Server ===')\nPY\n\necho 'Starting Gunicorn server...'\nexec gunicorn richesreach.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120"
+            ],
+            "environment": [
+                {
+                    "name": "DJANGO_SETTINGS_MODULE",
+                    "value": "richesreach.settings"
+                },
+                {
+                    "name": "GRAPHQL_MODE",
+                    "value": "simple"
+                },
+                {
+                    "name": "DEBUG",
+                    "value": "False"
+                },
+                {
+                    "name": "STATIC_ROOT",
+                    "value": "/app/staticfiles"
+                },
+                {
+                    "name": "ALLOWED_HOSTS",
+                    "value": "*"
+                },
+                {
+                    "name": "USE_SQLITE_FALLBACK",
+                    "value": "false"
+                },
+                {
+                    "name": "LOG_DIR",
+                    "value": ""
+                }
+            ],
+            "secrets": [
+                {
+                    "name": "PGDATABASE",
+                    "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/appuser-PE1IS5:NAME::"
+                },
+                {
+                    "name": "PGUSER",
+                    "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/appuser-PE1IS5:USER::"
+                },
+                {
+                    "name": "PGPASSWORD",
+                    "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/appuser-PE1IS5:PASSWORD::"
+                },
+                {
+                    "name": "PGHOST",
+                    "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/appuser-PE1IS5:HOST::"
+                },
+                {
+                    "name": "PGPORT",
+                    "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/appuser-PE1IS5:PORT::"
+                },
+                {
+                    "name": "SECRET_KEY",
+                    "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr-django-secret-key-IdsacH"
+                }
+            ],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/ecs/riches-reach-ai",
+                    "awslogs-region": "us-east-1",
+                    "awslogs-stream-prefix": "ecs"
+                }
+            },
+            "healthCheck": {
+                "command": [
+                    "CMD-SHELL",
+                    "curl -fsS http://localhost:8000/health/ || exit 1"
+                ],
+                "interval": 10,
+                "timeout": 5,
+                "retries": 6,
+                "startPeriod": 60
+            }
+        }
+    ]
+}
