@@ -19,7 +19,7 @@ const HOST = __DEV__ ? DEV_IP : "app.richesreach.com";
 export const API_BASE = `http://${HOST}:8000`;
 
 export const API_HTTP    = API_BASE;
-export const API_GRAPHQL = `${API_BASE}/graphql/`;
+export const API_GRAPHQL = `${API_BASE}/graphql`;
 export const API_AUTH    = `${API_BASE}/api/auth/login/`;
 export const API_WS      = `ws://${HOST}:8000/ws/`;
 

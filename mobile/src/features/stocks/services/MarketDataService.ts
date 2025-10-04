@@ -89,13 +89,18 @@ console.error('Failed to save API key:', error);
       throw error;
     }
   }
-// Get real-time stock quote
-public async getStockQuote(symbol: string): Promise<StockQuote> {
-try {
-const data = await this.makeApiCall({
-function: 'GLOBAL_QUOTE',
-symbol: symbol.toUpperCase()
-});
+  // Get real-time stock quote
+  public async getStockQuote(symbol: string): Promise<StockQuote> {
+    // In development mode, always return mock data
+    if (__DEV__) {
+      return this.getMockQuote(symbol);
+    }
+    
+    try {
+      const data = await this.makeApiCall({
+        function: 'GLOBAL_QUOTE',
+        symbol: symbol.toUpperCase()
+      });
 // Check for API errors
 if (data['Error Message']) {
 console.warn(`API Error for ${symbol}:`, data['Error Message']);
@@ -371,13 +376,41 @@ nextClose: nextClose.toISOString(),
 timezone: 'America/New_York'
 };
 }
-// Search for stocks
-public async searchStocks(query: string): Promise<any[]> {
-try {
-const data = await this.makeApiCall({
-function: 'SYMBOL_SEARCH',
-keywords: query
-});
+  // Search for stocks
+  public async searchStocks(query: string): Promise<any[]> {
+    // In development mode, return mock search results
+    if (__DEV__) {
+      return [
+        {
+          symbol: 'AAPL',
+          name: 'Apple Inc.',
+          type: 'Equity',
+          region: 'United States',
+          marketOpen: '09:30',
+          marketClose: '16:00',
+          timezone: 'UTC-05',
+          currency: 'USD',
+          matchScore: '1.0000'
+        },
+        {
+          symbol: 'MSFT',
+          name: 'Microsoft Corporation',
+          type: 'Equity',
+          region: 'United States',
+          marketOpen: '09:30',
+          marketClose: '16:00',
+          timezone: 'UTC-05',
+          currency: 'USD',
+          matchScore: '0.9000'
+        }
+      ];
+    }
+    
+    try {
+      const data = await this.makeApiCall({
+        function: 'SYMBOL_SEARCH',
+        keywords: query
+      });
 if (data['Error Message']) {
 throw new Error(data['Error Message']);
 }
