@@ -78,12 +78,18 @@ const errorLink = onError(({ graphQLErrors, networkError, operation, forward }) 
   }
 
   if (networkError) {
-    console.error(`Network error: ${networkError}`);
+    console.warn(`Network error (expected in development): ${networkError}`);
     
-    // Handle 404 errors gracefully
+    // Handle 404 errors gracefully - this is expected when using mock data
     if ((networkError as any).statusCode === 404) {
-      console.warn('GraphQL endpoint not found (404) - this is expected if using REST fallback');
-      // Don't throw the error, just log it
+      console.log('GraphQL endpoint not found (404) - using mock data fallback');
+      return;
+    }
+    
+    // Handle network timeouts gracefully
+    if (networkError.message?.includes('Network request failed') || 
+        networkError.message?.includes('timeout')) {
+      console.log('Network timeout - using mock data fallback');
       return;
     }
   }

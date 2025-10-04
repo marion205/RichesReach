@@ -3,19 +3,25 @@
  * Single source of truth for all API endpoints
  */
 
-const devHost = process.env.EXPO_PUBLIC_API_BASE
-  ?? "http://192.168.1.151:8000"; // Your current network IP
+import { Platform } from "react-native";
+import Constants from "expo-constants";
 
-const prodHost = "https://app.richesreach.net";
+function guessHost() {
+  const host =
+    (Constants as any)?.expoConfig?.hostUri ||
+    (Constants as any)?.manifest?.debuggerHost || "";
+  return host ? host.split(":")[0] : (Platform.OS === "android" ? "10.0.2.2" : "localhost");
+}
 
-export const API_BASE = __DEV__ ? devHost : prodHost;
+const DEV_IP = "192.168.1.236"; // your Mac on Wi-Fi
+const HOST = __DEV__ ? DEV_IP : "app.richesreach.com";
+
+export const API_BASE = `http://${HOST}:8000`;
 
 export const API_HTTP    = API_BASE;
 export const API_GRAPHQL = `${API_BASE}/graphql/`;
 export const API_AUTH    = `${API_BASE}/api/auth/login/`;
-export const API_WS      = API_BASE.startsWith("https")
-  ? API_BASE.replace("https","wss") + "/ws/"
-  : API_BASE.replace("http","ws")   + "/ws/";
+export const API_WS      = `ws://${HOST}:8000/ws/`;
 
 console.log("🔧 API Configuration:", { API_HTTP: API_BASE, API_GRAPHQL, API_AUTH, API_WS });
 

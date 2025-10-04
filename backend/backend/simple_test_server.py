@@ -4,7 +4,7 @@ Simple test server for RichesReach mobile app
 Provides basic authentication and API endpoints for testing
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
@@ -101,8 +101,95 @@ async def get_crypto():
         ]
     }
 
+@app.get("/graphql")
+@app.get("/graphql/")
+@app.post("/graphql")
+@app.post("/graphql/")
+async def graphql_endpoint(request: Request):
+    """Mock GraphQL endpoint for user profile and portfolio data"""
+    if request.method == "GET":
+        query = request.query_params.get("query", "")
+    else:
+        body = await request.json()
+        query = body.get("query", "")
+    
+    # Mock user profile data
+    if "GetMe" in query or "me" in query:
+        return {
+            "data": {
+                "me": {
+                    "id": "1",
+                    "name": "Test User",
+                    "email": "test@example.com",
+                    "profilePic": None,
+                    "followersCount": 0,
+                    "followingCount": 0,
+                    "isFollowingUser": False,
+                    "isFollowedByUser": False,
+                    "hasPremiumAccess": True,
+                    "subscriptionTier": "premium",
+                    "incomeProfile": {
+                        "age": 28,
+                        "incomeBracket": "Under $30,000",
+                        "investmentGoals": ["Emergency Fund", "Wealth Building"],
+                        "riskTolerance": "Moderate",
+                        "investmentHorizon": "5-10 years"
+                    }
+                }
+            }
+        }
+    
+    # Mock portfolio data
+    if "GetPortfolioMetrics" in query or "portfolioMetrics" in query:
+        return {
+            "data": {
+                "portfolioMetrics": {
+                    "totalValue": 50000.00,
+                    "totalGain": 2500.00,
+                    "totalGainPercent": 5.26,
+                    "positions": [
+                        {"symbol": "AAPL", "shares": 100, "value": 15025.00, "gain": 1025.00, "gainPercent": 7.33},
+                        {"symbol": "GOOGL", "shares": 10, "value": 28005.00, "gain": 1005.00, "gainPercent": 3.73},
+                        {"symbol": "MSFT", "shares": 50, "value": 17537.50, "gain": 537.50, "gainPercent": 3.16}
+                    ]
+                }
+            }
+        }
+    
+    # Mock AI recommendations
+    if "GetAIRecommendations" in query or "aiRecommendations" in query:
+        return {
+            "data": {
+                "aiRecommendations": {
+                    "portfolioAnalysis": {
+                        "totalValue": 50000.00,
+                        "riskScore": 0.65,
+                        "diversificationScore": 0.78
+                    },
+                    "recommendations": [
+                        {
+                            "symbol": "VTI",
+                            "action": "BUY",
+                            "confidence": 0.85,
+                            "reason": "Diversification improvement"
+                        },
+                        {
+                            "symbol": "AAPL",
+                            "action": "HOLD",
+                            "confidence": 0.72,
+                            "reason": "Strong fundamentals"
+                        }
+                    ]
+                }
+            }
+        }
+    
+    # Default response
+    return {"data": {}}
+
 if __name__ == "__main__":
     print("🚀 Starting RichesReach Test Server...")
-    print("📱 Mobile app can now connect to: http://localhost:8000")
+    print("📱 Mobile app can now connect to: http://192.168.1.236:8000")
     print("🔑 Test login: test@example.com / password123")
+    print("🌐 Server binding to all interfaces (0.0.0.0:8000)")
     uvicorn.run(app, host="0.0.0.0", port=8000)

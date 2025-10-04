@@ -18,9 +18,11 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { ApolloProvider } from '@apollo/client';
 import { client } from './ApolloProvider';
+import ErrorBoundary from './components/common/ErrorBoundary';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import JWTAuthService from './features/auth/services/JWTAuthService';
 import Toast from 'react-native-toast-message';
+import { API_HTTP } from './config/api';
 // Use only Expo Go compatible services to avoid "Exception in HostFunction" errors
 import expoGoCompatibleNotificationService from './features/notifications/services/ExpoGoCompatibleNotificationService';
 import expoGoCompatiblePriceAlertService from './features/stocks/services/ExpoGoCompatiblePriceAlertService';
@@ -80,6 +82,21 @@ if (!__DEV__) {
 // Analytics tracking would go here
 }
 }, [currentScreen]);
+
+  // Health probe to test backend connectivity (development only)
+  useEffect(() => {
+    if (__DEV__) {
+      (async () => {
+        try {
+          const r = await fetch(`${API_HTTP}/health`, { method: "GET" });
+          const t = await r.text();
+          console.log("HEALTH", r.status, t);
+        } catch (e) {
+          console.log("HEALTH_ERROR (expected in development):", JSON.stringify(e));
+        }
+      })();
+    }
+  }, []);
 const [isLoggedIn, setIsLoggedIn] = useState(false);
 const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
 const [isLoading, setIsLoading] = useState(true);
@@ -366,6 +383,7 @@ return <NewsPreferencesScreen navigation={{ navigate: navigateTo, goBack: () => 
 }
 };
 return (
+<ErrorBoundary>
 <ApolloProvider client={client}>
 <View style={styles.container}>
 {isLoggedIn && currentScreen !== 'login' && currentScreen !== 'signup' && currentScreen !== 'onboarding' && (
@@ -378,6 +396,7 @@ return (
 </View>
 <Toast />
 </ApolloProvider>
+</ErrorBoundary>
 );
 }
 const styles = StyleSheet.create({
