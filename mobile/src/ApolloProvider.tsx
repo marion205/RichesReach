@@ -24,7 +24,10 @@ const HTTP_URL = getGraphQLURL();
 const httpLink = createHttpLink({ 
   uri: HTTP_URL,
   fetch,
-  credentials: "omit" 
+  credentials: "omit",
+  fetchOptions: {
+    timeout: 30000, // 30 second timeout
+  }
 });
 
 // Simple retry link that skips auth operations

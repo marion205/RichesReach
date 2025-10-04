@@ -129,14 +129,23 @@ async def get_user_profile():
     }
 
 @app.post("/graphql")
+@app.post("/graphql/")
+@app.get("/graphql")
+@app.get("/graphql/")
 async def graphql_endpoint(request: Request):
     """Mock GraphQL endpoint for user profile and portfolio data"""
     try:
-        body = await request.json()
-        query = body.get("query", "")
-    except:
+        if request.method == "GET":
+            query = request.query_params.get("query", "")
+            variables = request.query_params.get("variables", "{}")
+            body = {"query": query, "variables": json.loads(variables) if variables else {}}
+        else:
+            body = await request.json()
+            query = body.get("query", "")
+    except Exception as e:
         query = ""
-        print("DEBUG: Failed to parse request body")
+        body = {}
+        print(f"DEBUG: Failed to parse request body: {e}")
     
     # Mock user profile data - only for specific user queries
     if "GetMe" in query or (query.strip().startswith("query") and "me" in query and "beginnerFriendlyStocks" not in query and "researchHub" not in query and "stockChartData" not in query and "tradingAccount" not in query and "stocks" not in query):
