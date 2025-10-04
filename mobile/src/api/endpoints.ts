@@ -2,7 +2,7 @@
 // This file centralizes all API endpoints to avoid URL mutation issues
 
 // Import from single source of truth
-import { API_BASE, API_GRAPHQL } from '../../config/api';
+import { API_BASE, API_GRAPHQL } from '../config/api';
 
 // HTTP endpoints
 export const HTTP_GRAPHQL = API_GRAPHQL;

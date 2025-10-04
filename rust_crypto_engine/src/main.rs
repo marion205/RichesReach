@@ -161,7 +161,13 @@ async fn main() -> Result<()> {
     // ---------------- routes ----------------
     let api = build_routes(state.clone());
 
-    let addr: SocketAddr = ([0, 0, 0, 0], 3001).into();
+    // Parse port from command line args
+    let port = std::env::args()
+        .nth(1)
+        .and_then(|arg| arg.parse::<u16>().ok())
+        .unwrap_or(3002);
+    
+    let addr: SocketAddr = ([0, 0, 0, 0], port).into();
     info!("🚀 Crypto Analysis Engine on http://{addr}");
     info!("📊 Health (live):  GET /health/live");
     info!("📊 Health (ready): GET /health/ready");

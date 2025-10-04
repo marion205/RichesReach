@@ -23,6 +23,16 @@ export type WatchlistCardProps = {
 };
 
 function WatchlistCard({ item, onRemove }: WatchlistCardProps) {
+  // Safety check for undefined stock data
+  if (!item.stock || typeof item.stock.beginnerFriendlyScore !== 'number') {
+    return (
+      <View style={styles.card}>
+        <Text style={styles.symbol}>Loading...</Text>
+        <Text style={styles.company}>Stock data unavailable</Text>
+      </View>
+    );
+  }
+  
   const rec = getBuyRecommendation(item.stock.beginnerFriendlyScore);
 
   return (

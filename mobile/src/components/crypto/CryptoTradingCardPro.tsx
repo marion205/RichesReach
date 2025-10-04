@@ -74,24 +74,30 @@ const CryptoTradingCardPro: React.FC<CryptoTradingCardProps> = ({
   type CurrencyMeta = { symbol: string; name?: string; iconUrl?: string; qtyDecimals?: number; priceDecimals?: number };
   const allSymbolsRaw: CurrencyMeta[] = useMemo(() => {
     const list: any[] = currenciesData?.supportedCurrencies ?? [];
-    return list.map(s => ({
-      symbol: s.symbol,
-      name: s.name,
-      iconUrl: s.iconUrl,
-      qtyDecimals: s.qtyDecimals,
-      priceDecimals: s.priceDecimals,
-    }));
+    return list
+      .filter(s => s && s.symbol) // Filter out items without symbols
+      .map(s => ({
+        symbol: s.symbol || '',
+        name: s.name || '',
+        iconUrl: s.iconUrl,
+        qtyDecimals: s.qtyDecimals,
+        priceDecimals: s.priceDecimals,
+      }));
   }, [currenciesData]);
 
   // Sort common majors first, then alphabetical
   const allSymbols = useMemo(() => {
     const majors = new Set(['BTC','ETH','SOL','USDT','USDC','XRP','ADA','DOGE','AVAX','BNB','MATIC','LTC']);
-    return [...allSymbolsRaw].sort((a, b) => {
-      const aMajor = majors.has(a.symbol) ? 0 : 1;
-      const bMajor = majors.has(b.symbol) ? 0 : 1;
-      if (aMajor !== bMajor) return aMajor - bMajor;
-      return a.symbol.localeCompare(b.symbol);
-    });
+    return [...allSymbolsRaw]
+      .filter(item => item && item.symbol) // Filter out undefined/null items and items without symbols
+      .sort((a, b) => {
+        const aSymbol = a.symbol || '';
+        const bSymbol = b.symbol || '';
+        const aMajor = majors.has(aSymbol) ? 0 : 1;
+        const bMajor = majors.has(bSymbol) ? 0 : 1;
+        if (aMajor !== bMajor) return aMajor - bMajor;
+        return aSymbol.localeCompare(bSymbol);
+      });
   }, [allSymbolsRaw]);
 
   const symbolMeta = useMemo(() => {

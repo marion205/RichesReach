@@ -4,7 +4,7 @@ import { View, TextInput, Text, TouchableOpacity, StyleSheet, Image, ScrollView,
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TOKEN_AUTH } from '../../../graphql/auth';
 import RestAuthService from '../services/RestAuthService';
-import { API_GRAPHQL } from '../../../../config/api';
+import { API_GRAPHQL } from '../../../config/api';
 
 // Three common JWT mutations
 const MUTATIONS = [

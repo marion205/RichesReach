@@ -32,7 +32,9 @@ export type StockCardProps = {
 };
 
 function StockCard(props: StockCardProps) {
-  const rec = getBuyRecommendation(props.beginnerFriendlyScore);
+  // Safety check for beginnerFriendlyScore
+  const score = props.beginnerFriendlyScore ?? 0;
+  const rec = getBuyRecommendation(score);
 
   return (
     <TouchableOpacity 
@@ -44,8 +46,8 @@ function StockCard(props: StockCardProps) {
         <View style={styles.row}>
           <Text style={styles.symbol}>{props.symbol}</Text>
           <View style={styles.row}>
-            <View style={[styles.scoreBadge, { backgroundColor: getScoreColor(props.beginnerFriendlyScore) }]}>
-              <Text style={styles.scoreText}>{props.beginnerFriendlyScore}</Text>
+            <View style={[styles.scoreBadge, { backgroundColor: getScoreColor(score) }]}>
+              <Text style={styles.scoreText}>{score}</Text>
             </View>
             <View style={[styles.recBadge, { backgroundColor: rec.backgroundColor, borderColor: rec.color }]}>
               <Text style={[styles.recText, { color: rec.color }]}>{rec.text}</Text>

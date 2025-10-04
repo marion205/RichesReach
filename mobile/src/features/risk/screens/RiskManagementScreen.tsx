@@ -228,30 +228,30 @@ export default function RiskManagementScreen({ navigateTo }: RiskManagementScree
           <View style={styles.summaryCard}>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Account Value:</Text>
-              <Text style={styles.summaryValue}>{formatCurrency(riskSummary.accountValue)}</Text>
+              <Text style={styles.summaryValue}>{formatCurrency(riskSummary.account_value)}</Text>
             </View>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Daily P&L:</Text>
               <Text style={[
                 styles.summaryValue,
-                { color: riskSummary.dailyPnl >= 0 ? '#4CAF50' : '#F44336' }
+                { color: riskSummary.daily_pnl >= 0 ? '#4CAF50' : '#F44336' }
               ]}>
-                {formatCurrency(riskSummary.dailyPnl)} ({formatPercentage(riskSummary.dailyPnlPct)})
+                {formatCurrency(riskSummary.daily_pnl)} ({formatPercentage(riskSummary.daily_pnl_pct)})
               </Text>
             </View>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Active Positions:</Text>
-              <Text style={styles.summaryValue}>{riskSummary.activePositions}</Text>
+              <Text style={styles.summaryValue}>{riskSummary.active_positions}</Text>
             </View>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Total Exposure:</Text>
               <Text style={styles.summaryValue}>
-                {formatCurrency(riskSummary.totalExposure)} ({formatPercentage(riskSummary.exposurePct)})
+                {formatCurrency(riskSummary.total_exposure)} ({formatPercentage(riskSummary.exposure_pct)})
               </Text>
             </View>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Risk Level:</Text>
-              <Text style={styles.summaryValue}>{riskSummary.riskLevel}</Text>
+              <Text style={styles.summaryValue}>{riskSummary.risk_level}</Text>
             </View>
           </View>
         ) : (
@@ -275,15 +275,15 @@ export default function RiskManagementScreen({ navigateTo }: RiskManagementScree
             <>
               <View style={styles.settingRow}>
                 <Text style={styles.settingLabel}>Max Position Size:</Text>
-                <Text style={styles.settingValue}>{formatPercentage(riskSummary.riskLimits.maxPositionSize)}</Text>
+                <Text style={styles.settingValue}>{formatPercentage(riskSummary.risk_limits.max_position_size)}</Text>
               </View>
               <View style={styles.settingRow}>
                 <Text style={styles.settingLabel}>Max Daily Loss:</Text>
-                <Text style={styles.settingValue}>{formatPercentage(riskSummary.riskLimits.maxDailyLoss)}</Text>
+                <Text style={styles.settingValue}>{formatPercentage(riskSummary.risk_limits.max_daily_loss)}</Text>
               </View>
               <View style={styles.settingRow}>
                 <Text style={styles.settingLabel}>Max Concurrent Trades:</Text>
-                <Text style={styles.settingValue}>{riskSummary.riskLimits.maxConcurrentTrades}</Text>
+                <Text style={styles.settingValue}>{riskSummary.risk_limits.max_concurrent_trades}</Text>
               </View>
             </>
           )}

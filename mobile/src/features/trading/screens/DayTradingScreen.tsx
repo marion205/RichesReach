@@ -20,29 +20,29 @@ interface DayTradingPick {
   side: Side;
   score: number;
   features: {
-    momentum15m: number;
-    rvol10m: number;
-    vwapDist: number;
-    breakoutPct: number;
-    spreadBps: number;
-    catalystScore: number;
+    momentum_15m: number;
+    rvol_10m: number;
+    vwap_dist: number;
+    breakout_pct: number;
+    spread_bps: number;
+    catalyst_score: number;
   };
   risk: {
-    atr5m: number;
-    sizeShares: number;
+    atr_5m: number;
+    size_shares: number;
     stop: number;
     targets: number[];
-    timeStopMin: number;
+    time_stop_min: number;
   };
   notes: string;
 }
 
 interface DayTradingData {
-  asOf: string;
+  as_of: string;
   mode: TradingMode;
   picks: DayTradingPick[];
-  universeSize: number;
-  qualityThreshold: number;
+  universe_size: number;
+  quality_threshold: number;
 }
 
 export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen: string) => void }) {
@@ -142,18 +142,23 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
   const getScoreColor = (score: number) => (score >= 2 ? C.long : score >= 1 ? C.aggressive : C.short);
 
   // robust entry computation (use atr around stop; invert for SHORT)
-  const computeEntry = (pick: DayTradingPick) =>
-    pick.side === 'LONG' ? pick.risk.stop + pick.risk.atr5m : Math.max(0, pick.risk.stop - pick.risk.atr5m);
+  const computeEntry = (pick: DayTradingPick) => {
+    const stop = pick.risk?.stop || 0;
+    const atr = pick.risk?.atr_5m || 0;
+    return pick.side === 'LONG' ? stop + atr : Math.max(0, stop - atr);
+  };
 
   const handleTradeExecution = useCallback(
     (pick: DayTradingPick) => {
       const entry = computeEntry(pick);
-      const primaryTarget = pick.risk.targets?.[0] ?? entry;
+      const primaryTarget = pick.risk?.targets?.[0] ?? entry;
+      const stop = pick.risk?.stop || 0;
+      const sizeShares = pick.risk?.size_shares || 0;
       Alert.alert(
         'Execute Trade',
-        `Execute ${pick.side} ${pick.symbol}?\n\nEntry: $${entry.toFixed(2)}\nStop: $${pick.risk.stop.toFixed(
+        `Execute ${pick.side} ${pick.symbol}?\n\nEntry: $${entry.toFixed(2)}\nStop: $${stop.toFixed(
           2,
-        )}\nTarget: $${Number(primaryTarget).toFixed(2)}\nSize: ${pick.risk.size_shares} shares`,
+        )}\nTarget: $${Number(primaryTarget).toFixed(2)}\nSize: ${sizeShares} shares`,
         [
           { text: 'Cancel', style: 'cancel' },
           {
@@ -209,7 +214,7 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
               </View>
             </View>
             <View style={styles.pickScoreWrap}>
-              <Text style={[styles.scoreValue, { color: getScoreColor(item.score) }]}>{item.score.toFixed(2)}</Text>
+              <Text style={[styles.scoreValue, { color: getScoreColor(item.score) }]}>{(item.score || 0).toFixed(2)}</Text>
               <Text style={[styles.scoreLabel, { color: C.sub }]}>Score</Text>
             </View>
           </View>
@@ -218,10 +223,10 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
           <View style={styles.block}>
             <Text style={[styles.blockTitle, { color: C.text }]}>Key Features</Text>
             <View style={styles.grid}>
-              <KV label="Momentum" value={item.features.momentum15m.toFixed(3)} />
-              <KV label="RVOL" value={`${item.features.rvol10m.toFixed(2)}x`} />
-              <KV label="VWAP" value={item.features.vwapDist.toFixed(3)} />
-              <KV label="Breakout" value={item.features.breakoutPct.toFixed(3)} />
+              <KV label="Momentum" value={(item.features?.momentum_15m || 0).toFixed(3)} />
+              <KV label="RVOL" value={`${(item.features?.rvol_10m || 0).toFixed(2)}x`} />
+              <KV label="VWAP" value={(item.features?.vwap_dist || 0).toFixed(3)} />
+              <KV label="Breakout" value={(item.features?.breakout_pct || 0).toFixed(3)} />
             </View>
           </View>
 
@@ -229,12 +234,12 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
           <View style={styles.block}>
             <Text style={[styles.blockTitle, { color: C.text }]}>Risk Management</Text>
             <View style={styles.grid}>
-              <KV label="Size" value={`${item.risk.sizeShares} shares`} />
+              <KV label="Size" value={`${item.risk?.size_shares || 0} shares`} />
               <KV label="Entry" value={`$${entry.toFixed(2)}`} />
-              <KV label="Stop" value={`$${item.risk.stop.toFixed(2)}`} />
+              <KV label="Stop" value={`$${(item.risk?.stop || 0).toFixed(2)}`} />
               <KV label="Target" value={`$${Number(target).toFixed(2)}`} />
-              <KV label="Time Stop" value={`${item.risk.timeStopMin} min`} />
-              <KV label="ATR(5m)" value={`${item.risk.atr5m.toFixed(2)}`} />
+              <KV label="Time Stop" value={`${item.risk?.time_stop_min || 0} min`} />
+              <KV label="ATR(5m)" value={`${(item.risk?.atr_5m || 0).toFixed(2)}`} />
             </View>
           </View>
 

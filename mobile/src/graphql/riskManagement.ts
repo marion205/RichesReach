@@ -4,20 +4,20 @@ import { gql } from '@apollo/client';
 export const GET_RISK_SUMMARY = gql`
   query GetRiskSummary {
     riskSummary {
-      accountValue
-      dailyPnl
-      dailyPnlPct
-      dailyTrades
-      activePositions
-      totalExposure
-      exposurePct
-      sectorExposure
-      riskLevel
-      riskLimits {
-        maxPositionSize
-        maxDailyLoss
-        maxConcurrentTrades
-        maxSectorExposure
+      account_value
+      daily_pnl
+      daily_pnl_pct
+      daily_trades
+      active_positions
+      total_exposure
+      exposure_pct
+      sector_exposure
+      risk_level
+      risk_limits {
+        max_position_size
+        max_daily_loss
+        max_concurrent_trades
+        max_sector_exposure
       }
     }
   }
@@ -109,20 +109,20 @@ export const UPDATE_RISK_SETTINGS = gql`
       success
       message
       currentSettings {
-        accountValue
-        dailyPnl
-        dailyPnlPct
-        dailyTrades
-        activePositions
-        totalExposure
-        exposurePct
-        sectorExposure
-        riskLevel
-        riskLimits {
-          maxPositionSize
-          maxDailyLoss
-          maxConcurrentTrades
-          maxSectorExposure
+        account_value
+        daily_pnl
+        daily_pnl_pct
+        daily_trades
+        active_positions
+        total_exposure
+        exposure_pct
+        sector_exposure
+        risk_level
+        risk_limits {
+          max_position_size
+          max_daily_loss
+          max_concurrent_trades
+          max_sector_exposure
         }
       }
     }
@@ -131,20 +131,20 @@ export const UPDATE_RISK_SETTINGS = gql`
 
 // Risk Management Types
 export interface RiskSummary {
-  accountValue: number;
-  dailyPnl: number;
-  dailyPnlPct: number;
-  dailyTrades: number;
-  activePositions: number;
-  totalExposure: number;
-  exposurePct: number;
-  sectorExposure: Record<string, number>;
-  riskLevel: string;
-  riskLimits: {
-    maxPositionSize: number;
-    maxDailyLoss: number;
-    maxConcurrentTrades: number;
-    maxSectorExposure: number;
+  account_value: number;
+  daily_pnl: number;
+  daily_pnl_pct: number;
+  daily_trades: number;
+  active_positions: number;
+  total_exposure: number;
+  exposure_pct: number;
+  sector_exposure: Record<string, number>;
+  risk_level: string;
+  risk_limits: {
+    max_position_size: number;
+    max_daily_loss: number;
+    max_concurrent_trades: number;
+    max_sector_exposure: number;
   };
 }
 

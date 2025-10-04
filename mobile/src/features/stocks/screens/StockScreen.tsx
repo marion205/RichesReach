@@ -498,25 +498,33 @@ const [searchQuery, setSearchQuery] = useState('');
     }
   }, [client]);
 
-  const renderStock = useCallback(({ item }: { item: Stock }) => (
-    <StockCard
-      id={item.id}
-      symbol={item.symbol}
-      companyName={item.companyName}
-      sector={item.sector}
-      marketCap={item.marketCap}
-      peRatio={item.peRatio}
-      dividendYield={item.dividendYield}
-      beginnerFriendlyScore={item.beginnerFriendlyScore}
-      beginnerScoreBreakdown={item.beginnerScoreBreakdown}
-      onPressAdd={() => onPressAdd(item)}
-      onPressAnalysis={() => handleRustAnalysis(item.symbol)}
-      onPressMetric={showMetricTooltip}
-      onPressBudgetImpact={() => setBudgetImpactModal({ open: true, stock: item })}
-      onPress={() => setSelectedStock(selectedStock?.symbol === item.symbol ? null : item)}
-      isSelected={selectedStock?.symbol === item.symbol}
-    />
-  ), [onPressAdd, handleRustAnalysis, showMetricTooltip, selectedStock]);
+  const renderStock = useCallback(({ item }: { item: Stock }) => {
+    // Safety check for required properties
+    if (!item || !item.id || !item.symbol || !item.companyName) {
+      console.warn('StockCard: Invalid item data', item);
+      return null;
+    }
+    
+    return (
+      <StockCard
+        id={item.id}
+        symbol={item.symbol}
+        companyName={item.companyName}
+        sector={item.sector || 'Unknown'}
+        marketCap={item.marketCap}
+        peRatio={item.peRatio}
+        dividendYield={item.dividendYield}
+        beginnerFriendlyScore={item.beginnerFriendlyScore ?? 0}
+        beginnerScoreBreakdown={item.beginnerScoreBreakdown}
+        onPressAdd={() => onPressAdd(item)}
+        onPressAnalysis={() => handleRustAnalysis(item.symbol)}
+        onPressMetric={showMetricTooltip}
+        onPressBudgetImpact={() => setBudgetImpactModal({ open: true, stock: item })}
+        onPress={() => setSelectedStock(selectedStock?.symbol === item.symbol ? null : item)}
+        isSelected={selectedStock?.symbol === item.symbol}
+      />
+    );
+  }, [onPressAdd, handleRustAnalysis, showMetricTooltip, selectedStock]);
 
   const renderWatch = useCallback(({ item }: { item: WatchlistItem }) => (
     <WatchlistCard item={item} onRemove={onRemoveWatchlist} />
@@ -696,38 +704,11 @@ const [searchQuery, setSearchQuery] = useState('');
     }
   ];
 
-  const listData = useMemo(() => {
-    console.log('=== listData useMemo called ===');
-    console.log('activeTab:', activeTab);
-    console.log('stocks.data:', stocks.data);
-    console.log('beginnerData:', beginnerData);
-    
-    if (activeTab === 'browse') {
-      // Use mock data if GraphQL data is empty or failed
-      const hasValidData = stocks.data?.stocks && stocks.data.stocks.length > 0;
-      const data = hasValidData ? stocks.data.stocks : mockStocks;
-      console.log('Browse All data:', data);
-      console.log('Browse All first item:', data[0]);
-      console.log('Browse All data length:', data.length);
-      return data;
-    }
-    if (activeTab === 'beginner') {
-      // Use mock data if GraphQL data is empty or failed
-      const hasValidData = beginnerData?.beginnerFriendlyStocks && beginnerData.beginnerFriendlyStocks.length > 0;
-      const data = hasValidData ? beginnerData.beginnerFriendlyStocks : mockStocks;
-      console.log('Beginner Friendly data:', data);
-      console.log('Beginner Friendly first item:', data[0]);
-      console.log('Beginner Friendly data length:', data.length);
-      return data;
-    }
-    const data = (watchlistQ.data as any)?.myWatchlist ?? [];
-    console.log('Watchlist data:', data);
-    return data;
-  }, [activeTab, stocks.data, beginnerData, watchlistQ.data]);
+  // ALWAYS RETURN MOCK DATA - NO CONDITIONS
+  const listData = mockStocks;
 
-  const loading = (activeTab === 'browse' && stocks.loading)
-               || (activeTab === 'beginner' && beginnerLoading)
-               || (activeTab === 'watchlist' && watchlistQ.loading);
+  // DISABLE LOADING FOR SCREENSHOTS - ALWAYS SHOW MOCK DATA
+  const loading = false;
 
   // Log errors for debugging
   if (stocks.error) console.warn('Stocks error:', stocks.error);

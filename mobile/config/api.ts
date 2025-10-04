@@ -3,12 +3,9 @@
  * Single source of truth for all API endpoints
  */
 
-const devHost = process.env.EXPO_PUBLIC_API_BASE
-  ?? "http://192.168.1.151:8000"; // Your current network IP
-
-const prodHost = "http://3.84.81.154:8000";
-
-export const API_BASE = __DEV__ ? devHost : prodHost;
+// Use production URL for all environments
+const API_BASE = process.env.EXPO_PUBLIC_API_BASE
+  ?? "https://app.richesreach.com"; // Production URL only
 
 export const API_HTTP    = API_BASE;
 export const API_GRAPHQL = `${API_BASE}/graphql/`;
