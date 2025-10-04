@@ -582,6 +582,120 @@ const [searchQuery, setSearchQuery] = useState('');
     }
   }, [cancelOptionOrder, refetchOptionsOrders]);
 
+  // Mock data for development/screenshots
+  const mockStocks = [
+    {
+      id: "1",
+      symbol: "AAPL",
+      companyName: "Apple Inc.",
+      sector: "Technology",
+      marketCap: 3000000000000,
+      peRatio: 28.5,
+      dividendYield: 0.44,
+      beginnerFriendlyScore: 0.85,
+      currentPrice: 150.25,
+      beginnerScoreBreakdown: {
+        score: 0.85,
+        factors: [
+          { name: "Stability", weight: 0.3, value: 0.9, contrib: 0.27, detail: "Large cap, stable business" },
+          { name: "Growth", weight: 0.25, value: 0.8, contrib: 0.2, detail: "Consistent revenue growth" },
+          { name: "Dividend", weight: 0.2, value: 0.7, contrib: 0.14, detail: "Regular dividend payments" },
+          { name: "Volatility", weight: 0.25, value: 0.8, contrib: 0.2, detail: "Moderate price volatility" }
+        ],
+        notes: "Excellent choice for beginners due to strong fundamentals and market position"
+      },
+      __typename: "Stock"
+    },
+    {
+      id: "2",
+      symbol: "MSFT",
+      companyName: "Microsoft Corporation",
+      sector: "Technology",
+      marketCap: 2800000000000,
+      peRatio: 32.1,
+      dividendYield: 0.68,
+      beginnerFriendlyScore: 0.82,
+      currentPrice: 350.75,
+      beginnerScoreBreakdown: {
+        score: 0.82,
+        factors: [
+          { name: "Stability", weight: 0.3, value: 0.85, contrib: 0.255, detail: "Dominant market position" },
+          { name: "Growth", weight: 0.25, value: 0.75, contrib: 0.1875, detail: "Cloud business growth" },
+          { name: "Dividend", weight: 0.2, value: 0.8, contrib: 0.16, detail: "Growing dividend yield" },
+          { name: "Volatility", weight: 0.25, value: 0.8, contrib: 0.2, detail: "Stable price movement" }
+        ],
+        notes: "Strong cloud business and enterprise focus make it beginner-friendly"
+      },
+      __typename: "Stock"
+    },
+    {
+      id: "3",
+      symbol: "GOOGL",
+      companyName: "Alphabet Inc.",
+      sector: "Technology",
+      marketCap: 1800000000000,
+      peRatio: 25.8,
+      dividendYield: 0.0,
+      beginnerFriendlyScore: 0.78,
+      currentPrice: 142.50,
+      beginnerScoreBreakdown: {
+        score: 0.78,
+        factors: [
+          { name: "Stability", weight: 0.3, value: 0.8, contrib: 0.24, detail: "Search dominance" },
+          { name: "Growth", weight: 0.25, value: 0.85, contrib: 0.2125, detail: "Strong revenue growth" },
+          { name: "Dividend", weight: 0.2, value: 0.0, contrib: 0.0, detail: "No dividend" },
+          { name: "Volatility", weight: 0.25, value: 0.7, contrib: 0.175, detail: "Higher volatility" }
+        ],
+        notes: "Growth stock with no dividend, suitable for growth-focused investors"
+      },
+      __typename: "Stock"
+    },
+    {
+      id: "4",
+      symbol: "TSLA",
+      companyName: "Tesla Inc.",
+      sector: "Consumer Discretionary",
+      marketCap: 800000000000,
+      peRatio: 45.2,
+      dividendYield: 0.0,
+      beginnerFriendlyScore: 0.65,
+      currentPrice: 250.80,
+      beginnerScoreBreakdown: {
+        score: 0.65,
+        factors: [
+          { name: "Stability", weight: 0.3, value: 0.6, contrib: 0.18, detail: "Volatile stock" },
+          { name: "Growth", weight: 0.25, value: 0.9, contrib: 0.225, detail: "High growth potential" },
+          { name: "Dividend", weight: 0.2, value: 0.0, contrib: 0.0, detail: "No dividend" },
+          { name: "Volatility", weight: 0.25, value: 0.5, contrib: 0.125, detail: "High volatility" }
+        ],
+        notes: "High-risk, high-reward growth stock"
+      },
+      __typename: "Stock"
+    },
+    {
+      id: "5",
+      symbol: "AMZN",
+      companyName: "Amazon.com Inc.",
+      sector: "Consumer Discretionary",
+      marketCap: 1600000000000,
+      peRatio: 52.3,
+      dividendYield: 0.0,
+      beginnerFriendlyScore: 0.72,
+      currentPrice: 155.40,
+      beginnerScoreBreakdown: {
+        score: 0.72,
+        factors: [
+          { name: "Stability", weight: 0.3, value: 0.75, contrib: 0.225, detail: "E-commerce leader" },
+          { name: "Growth", weight: 0.25, value: 0.8, contrib: 0.2, detail: "Cloud and retail growth" },
+          { name: "Dividend", weight: 0.2, value: 0.0, contrib: 0.0, detail: "No dividend" },
+          { name: "Volatility", weight: 0.25, value: 0.7, contrib: 0.175, detail: "Moderate volatility" }
+        ],
+        notes: "Diversified business model with strong growth prospects"
+      },
+      __typename: "Stock"
+    }
+  ];
+
   const listData = useMemo(() => {
     console.log('=== listData useMemo called ===');
     console.log('activeTab:', activeTab);
@@ -589,14 +703,16 @@ const [searchQuery, setSearchQuery] = useState('');
     console.log('beginnerData:', beginnerData);
     
     if (activeTab === 'browse') {
-      const data = stocks.data?.stocks ?? [];
+      // Use mock data if GraphQL data is empty or failed
+      const data = stocks.data?.stocks?.length > 0 ? stocks.data.stocks : mockStocks;
       console.log('Browse All data:', data);
       console.log('Browse All first item:', data[0]);
       console.log('Browse All data length:', data.length);
       return data;
     }
     if (activeTab === 'beginner') {
-      const data = beginnerData?.beginnerFriendlyStocks ?? [];
+      // Use mock data if GraphQL data is empty or failed
+      const data = beginnerData?.beginnerFriendlyStocks?.length > 0 ? beginnerData.beginnerFriendlyStocks : mockStocks;
       console.log('Beginner Friendly data:', data);
       console.log('Beginner Friendly first item:', data[0]);
       console.log('Beginner Friendly data length:', data.length);
