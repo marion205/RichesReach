@@ -704,7 +704,8 @@ const [searchQuery, setSearchQuery] = useState('');
     
     if (activeTab === 'browse') {
       // Use mock data if GraphQL data is empty or failed
-      const data = stocks.data?.stocks?.length > 0 ? stocks.data.stocks : mockStocks;
+      const hasValidData = stocks.data?.stocks && stocks.data.stocks.length > 0;
+      const data = hasValidData ? stocks.data.stocks : mockStocks;
       console.log('Browse All data:', data);
       console.log('Browse All first item:', data[0]);
       console.log('Browse All data length:', data.length);
@@ -712,7 +713,8 @@ const [searchQuery, setSearchQuery] = useState('');
     }
     if (activeTab === 'beginner') {
       // Use mock data if GraphQL data is empty or failed
-      const data = beginnerData?.beginnerFriendlyStocks?.length > 0 ? beginnerData.beginnerFriendlyStocks : mockStocks;
+      const hasValidData = beginnerData?.beginnerFriendlyStocks && beginnerData.beginnerFriendlyStocks.length > 0;
+      const data = hasValidData ? beginnerData.beginnerFriendlyStocks : mockStocks;
       console.log('Beginner Friendly data:', data);
       console.log('Beginner Friendly first item:', data[0]);
       console.log('Beginner Friendly data length:', data.length);
