@@ -70,3 +70,17 @@ temp_workflow*.yml
 *-task-definition.json
 deploy-aws*.sh
 setup-aws-secrets.sh
+
+# Terraform files
+**/.terraform/
+**/*.tfstate
+**/*.tfstate.*
+**/*.tfplan
+**/*.tfplan.*
+**/.terraform.lock.hcl
+
+# Lambda deployment packages
+**/*.zip
+
+# AWS credentials and secrets
+**/secrets_management_policy.json
