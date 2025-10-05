@@ -8,6 +8,7 @@
 [![Crypto Ready](https://img.shields.io/badge/Crypto-DeFi%20Ready-yellow.svg)](https://ethereum.org)
 [![ML Production](https://img.shields.io/badge/ML-Production%20R²%200.023-brightgreen.svg)](https://github.com/marion205/RichesReach)
 [![Phase 1 Complete](https://img.shields.io/badge/Phase%201-Architecture%20Upgrade%20Complete-brightgreen.svg)](https://github.com/marion205/RichesReach)
+[![Phase 2 Complete](https://img.shields.io/badge/Phase%202-Streaming%20%26%20ML%20Complete-brightgreen.svg)](https://github.com/marion205/RichesReach)
 [![Enterprise Ready](https://img.shields.io/badge/Enterprise-Monitoring%20%26%20Caching-blue.svg)](https://github.com/marion205/RichesReach)
 
 ## Next-Generation AI Investment Platform
@@ -21,6 +22,7 @@ RichesReach is a comprehensive AI-powered investment platform featuring advanced
 - **✅ Real-time Data**: Live market data from Finnhub and Polygon APIs
 - **✅ Production ML**: Real machine learning models with graceful fallbacks
 - **✅ Phase 1 Complete**: Enterprise-grade monitoring, caching, and data management
+- **✅ Phase 2 Complete**: Streaming pipeline, ML versioning, and AWS Batch
 - **✅ Enhanced Architecture**: S3 data lake, Redis clustering, Feast feature store
 
 ## Core Features
@@ -177,6 +179,32 @@ RichesReach is a comprehensive AI-powered investment platform featuring advanced
 - **Live Market Data**: Real-time stock and crypto price feeds
 - **AI Recommendations**: Production-grade options strategies with risk analysis
 
+### 🚀 **Phase 2 Streaming & ML Architecture (Complete)**
+
+**Real-Time Streaming Pipeline:**
+- **Kafka/Kinesis Integration**: High-throughput real-time data ingestion
+- **Multi-Source Data**: Polygon, Finnhub, and CoinGecko data streams
+- **Event-Driven Processing**: Real-time market data processing and analysis
+- **Scalable Consumers**: Auto-scaling data processing workers
+
+**Advanced ML Model Management:**
+- **MLflow Integration**: Complete ML lifecycle management and versioning
+- **A/B Testing Framework**: Statistical testing for model performance
+- **Model Registry**: Centralized model storage and deployment tracking
+- **Performance Monitoring**: Real-time model drift detection and alerting
+
+**AWS Batch Processing:**
+- **Scalable ML Training**: On-demand compute resources for model training
+- **Job Management**: Automated job scheduling and resource allocation
+- **Cost Optimization**: Spot instances and auto-scaling for cost efficiency
+- **Training Pipelines**: End-to-end ML training and deployment workflows
+
+**Enhanced Monitoring & Analytics:**
+- **Real-Time Metrics**: Live system performance and business metrics
+- **Advanced Alerting**: Intelligent alerting with context and correlation
+- **Distributed Tracing**: End-to-end request tracing across services
+- **Business Intelligence**: Real-time analytics and reporting dashboards
+
 ## Architecture
 
 ### 🏗️ **Phase 1 Enterprise Architecture (Complete)**
@@ -222,6 +250,37 @@ RichesReach is a comprehensive AI-powered investment platform featuring advanced
                     │ (Aave Protocol) │
                     │ + Sepolia Test  │
                     └─────────────────┘
+```
+
+### 🚀 **Phase 2 Streaming & ML Architecture (Complete)**
+
+```
+┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
+│ Real-Time Data  │ │ Streaming       │ │ ML Model        │
+│ Sources         │ │ Pipeline        │ │ Management      │
+│ + Polygon       │ │ + Kafka/Kinesis │ │ + MLflow        │
+│ + Finnhub       │ │ + Event Streams │ │ + A/B Testing   │
+│ + CoinGecko     │ │ + Auto-Scaling  │ │ + Model Registry│
+└─────────────────┘ └─────────────────┘ └─────────────────┘
+         │                   │                   │
+         └───────────────────┼───────────────────┘
+                             │
+                    ┌─────────────────┐
+                    │ AWS Batch       │
+                    │ Processing      │
+                    │ + ML Training   │
+                    │ + Job Scheduling│
+                    │ + Cost Optimize │
+                    └─────────────────┘
+                             │
+         ┌───────────────────┼───────────────────┐
+         │                   │                   │
+┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
+│ Enhanced        │ │ Real-Time       │ │ Advanced        │
+│ Monitoring      │ │ Analytics       │ │ Alerting        │
+│ + Prometheus    │ │ + BI Dashboard  │ │ + Context Aware │
+│ + Tracing       │ │ + Live Metrics  │ │ + Correlation   │
+└─────────────────┘ └─────────────────┘ └─────────────────┘
 ```
 
 ### 🔧 **Enhanced Infrastructure Components**
@@ -560,6 +619,22 @@ RichesReach/
 - `GET /metrics/` - Prometheus metrics endpoint
 - `GET /health/` - Basic health check
 
+### Phase 2 Streaming & ML APIs
+- `GET /phase2/streaming/status/` - Streaming pipeline status
+- `POST /phase2/streaming/start/` - Start streaming data ingestion
+- `GET /phase2/ml/models/` - List all ML models and versions
+- `GET /phase2/ml/models/{model_id}/best/` - Get best performing model
+- `GET /phase2/ml/experiments/` - List A/B testing experiments
+- `POST /phase2/ml/experiments/` - Create new A/B testing experiment
+- `GET /phase2/ml/experiments/{experiment_id}/analyze/` - Analyze experiment results
+- `GET /phase2/batch/status/` - AWS Batch infrastructure status
+- `POST /phase2/batch/setup/` - Setup AWS Batch infrastructure
+- `POST /phase2/batch/training/` - Submit ML training job
+- `GET /phase2/batch/jobs/` - List all batch jobs
+- `GET /phase2/batch/jobs/{job_id}/` - Get specific job details
+- `GET /phase2/batch/jobs/{job_id}/logs/` - Get job logs
+- `POST /phase2/batch/jobs/{job_id}/cancel/` - Cancel running job
+
 ## Security Features
 
 - **JWT Authentication**: Secure user authentication
@@ -668,6 +743,14 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - ✅ **Redis Clustering**: High-availability caching with failover support
 - ✅ **Real Data Integration**: Fixed RealDataService, crypto icons, live market data
 - ✅ **Enterprise Infrastructure**: Production-grade monitoring and caching
+
+### Phase 2 Streaming & ML Architecture (Completed)
+- ✅ **Streaming Pipeline**: Kafka/Kinesis real-time data ingestion
+- ✅ **ML Model Versioning**: MLflow integration with A/B testing
+- ✅ **AWS Batch Processing**: Scalable ML model training infrastructure
+- ✅ **Advanced Monitoring**: Real-time metrics and distributed tracing
+- ✅ **Enhanced Analytics**: Business intelligence and reporting dashboards
+- ✅ **Production Ready**: All Phase 2 components tested and operational
 
 ### Phase 5 (Planned)
 - Advanced AI trading algorithms
