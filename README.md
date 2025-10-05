@@ -10,6 +10,7 @@
 [![Phase 1 Complete](https://img.shields.io/badge/Phase%201-Architecture%20Upgrade%20Complete-brightgreen.svg)](https://github.com/marion205/RichesReach)
 [![Phase 2 Complete](https://img.shields.io/badge/Phase%202-Streaming%20%26%20ML%20Complete-brightgreen.svg)](https://github.com/marion205/RichesReach)
 [![Enterprise Ready](https://img.shields.io/badge/Enterprise-Monitoring%20%26%20Caching-blue.svg)](https://github.com/marion205/RichesReach)
+[![Security](https://img.shields.io/badge/Security-Enterprise%20Grade%20Secrets%20Management-red.svg)](https://github.com/marion205/RichesReach)
 
 ## Next-Generation AI Investment Platform
 
@@ -24,6 +25,7 @@ RichesReach is a comprehensive AI-powered investment platform featuring advanced
 - **✅ Phase 1 Complete**: Enterprise-grade monitoring, caching, and data management
 - **✅ Phase 2 Complete**: Streaming pipeline, ML versioning, and AWS Batch
 - **✅ Enhanced Architecture**: S3 data lake, Redis clustering, Feast feature store
+- **✅ Enterprise Security**: AWS Secrets Manager with KMS encryption and automated rotation
 
 ## Core Features
 
@@ -178,6 +180,26 @@ RichesReach is a comprehensive AI-powered investment platform featuring advanced
 - **Crypto Icon Integration**: Real cryptocurrency icons for enhanced UX
 - **Live Market Data**: Real-time stock and crypto price feeds
 - **AI Recommendations**: Production-grade options strategies with risk analysis
+
+### 🔐 **Enterprise Security & Secrets Management (Complete)**
+
+**AWS Secrets Manager Integration:**
+- **Zero Plaintext Secrets**: All API keys and credentials stored securely in AWS Secrets Manager
+- **Multi-Region KMS Encryption**: AES-256 encryption with automatic key rotation
+- **Least-Privilege Access**: IAM policies with minimal required permissions
+- **Complete Audit Trails**: Full logging of all secret access and modifications
+
+**Automated Secret Rotation:**
+- **Manual Rotation Scripts**: Secure key rotation with verification and rollback
+- **ECS Task Integration**: Container secrets injected at runtime via IAM roles
+- **Health Check Integration**: Secret rotation with application health verification
+- **Emergency Rollback**: Instant rollback to previous secret versions
+
+**Security Best Practices:**
+- **No Secrets in Code**: Zero API keys or credentials in source code or images
+- **Environment Isolation**: Separate secrets for development, staging, and production
+- **Access Monitoring**: Real-time monitoring of secret access patterns
+- **Compliance Ready**: SOC2, GDPR, and enterprise security standards
 
 ### 🚀 **Phase 2 Streaming & ML Architecture (Complete)**
 
@@ -472,8 +494,17 @@ RichesReach/
 └── infrastructure/          # Infrastructure configs
     ├── aws/                 # AWS configurations
     ├── nginx/               # Web server configs
+    ├── secrets/             # Secure secrets management
+    │   ├── terraform/       # Terraform infrastructure
+    │   ├── lambdas/         # Secret rotation Lambda functions
+    │   └── policies/        # IAM policies and permissions
     └── data_lake_setup.py   # S3 data lake configuration
 ├── PHASE_1_ARCHITECTURE_UPGRADE.md  # Phase 1 documentation
+├── SECRET_ROTATION_GUIDE.md         # Security and secret management guide
+├── SECURE_SECRETS_ROTATION_TEMPLATE.md  # Enterprise security template
+├── rotate_secrets_manual.sh         # Manual secret rotation script
+├── verify_secrets_deployment.sh     # Security deployment verification
+└── ecs-task-definition-with-secrets.json  # ECS integration template
 ```
 
 ## Learning Modules
@@ -637,11 +668,20 @@ RichesReach/
 
 ## Security Features
 
+### 🔐 **Enterprise-Grade Security**
+- **AWS Secrets Manager**: Zero plaintext secrets with KMS encryption
+- **Automated Key Rotation**: 30-day rotation schedule with health checks
+- **Multi-Region Encryption**: AES-256 encryption across all regions
+- **Least-Privilege Access**: IAM policies with minimal required permissions
+- **Complete Audit Trails**: Full logging of all secret access and modifications
+
+### 🛡️ **Application Security**
 - **JWT Authentication**: Secure user authentication
 - **API Rate Limiting**: Protection against abuse
 - **Data Encryption**: End-to-end data protection
 - **Input Validation**: Comprehensive input sanitization
 - **CORS Protection**: Cross-origin request security
+- **Environment Isolation**: Separate secrets for dev/staging/production
 
 ## Performance Features
 
@@ -716,6 +756,8 @@ expo build:ios
 - [Business Documents](docs/business/)
 - [API Documentation](https://54.226.87.216/docs)
 - [Deployment Guide](docs/technical/PRODUCTION_DEPLOYMENT_GUIDE.md)
+- [Security Guide](SECRET_ROTATION_GUIDE.md) - Complete secret management and rotation guide
+- [Secure Secrets Template](SECURE_SECRETS_ROTATION_TEMPLATE.md) - Enterprise security infrastructure
 
 ## Support
 
