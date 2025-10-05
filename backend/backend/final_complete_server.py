@@ -7,7 +7,7 @@ Final Complete Server for RichesReach - All GraphQL fields included (OperationNa
 - Exposes /graphql and /graphql/
 - Adds X-Server-Build header for easy verification you hit the updated server
 """
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 import uvicorn
@@ -71,6 +71,63 @@ try:
 except ImportError as e:
     ML_VERSIONING_AVAILABLE = False
     print(f"⚠️ Phase 2 ML model versioning not available: {e}")
+
+# Phase 3: AI Router
+try:
+    from core.ai_router import ai_router
+    from core.ai_router_api import router as ai_router_api
+    AI_ROUTER_AVAILABLE = True
+    print("✅ Phase 3 AI Router loaded successfully")
+except ImportError as e:
+    AI_ROUTER_AVAILABLE = False
+    print(f"⚠️ Phase 3 AI Router not available: {e}")
+
+# Phase 3: Advanced Analytics
+try:
+    from core.analytics_engine import initialize_analytics, analytics_engine, predictive_analytics
+    from core.analytics_api import router as analytics_api
+    from core.analytics_websocket import websocket_manager
+    ANALYTICS_AVAILABLE = True
+    print("✅ Phase 3 Advanced Analytics loaded successfully")
+except ImportError as e:
+    ANALYTICS_AVAILABLE = False
+    print(f"⚠️ Phase 3 Advanced Analytics not available: {e}")
+
+# Phase 3: Advanced AI Integration
+try:
+    from core.advanced_ai_router import advanced_ai_router
+    from core.advanced_ai_router_api import router as advanced_ai_router_api
+    from core.ai_model_training import ai_model_trainer
+    from core.ai_training_api import router as ai_training_api
+    ADVANCED_AI_AVAILABLE = True
+    print("✅ Phase 3 Advanced AI Integration loaded successfully")
+except ImportError as e:
+    ADVANCED_AI_AVAILABLE = False
+    print(f"⚠️ Phase 3 Advanced AI Integration not available: {e}")
+
+# Phase 3: Performance Optimization
+try:
+    from core.performance_optimizer import performance_optimizer
+    from core.cdn_optimizer import cdn_optimizer, CDNConfig
+    from core.database_optimizer import database_optimizer, DatabaseConfig
+    from core.performance_api import router as performance_api
+    PERFORMANCE_OPTIMIZATION_AVAILABLE = True
+    print("✅ Phase 3 Performance Optimization loaded successfully")
+except ImportError as e:
+    PERFORMANCE_OPTIMIZATION_AVAILABLE = False
+    print(f"⚠️ Phase 3 Performance Optimization not available: {e}")
+
+# Phase 3: Advanced Security
+try:
+    from core.zero_trust_security import zero_trust_engine
+    from core.encryption_manager import encryption_manager
+    from core.compliance_manager import compliance_manager
+    from core.security_api import router as security_api
+    ADVANCED_SECURITY_AVAILABLE = True
+    print("✅ Phase 3 Advanced Security loaded successfully")
+except ImportError as e:
+    ADVANCED_SECURITY_AVAILABLE = False
+    print(f"⚠️ Phase 3 Advanced Security not available: {e}")
 
 # Phase 2: AWS Batch for ML Training
 try:
@@ -1189,8 +1246,13 @@ from django.conf import settings
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'richesreach.settings')
 
 # Configure Django
-if not settings.configured:
-    django.setup()
+try:
+    if not settings.configured:
+        django.setup()
+        print("✅ Django configured successfully")
+except Exception as e:
+    print(f"⚠️ Django setup failed: {e}")
+    # Continue without Django for now
 
 # Import and include Crypto API router
 try:
@@ -1207,6 +1269,43 @@ try:
     logger.info("✅ ML API router included")
 except Exception as e:
     logger.warning(f"⚠️ Failed to include ML API router: {e}")
+
+# Include Phase 3 AI Router API
+if AI_ROUTER_AVAILABLE:
+    app.include_router(ai_router_api)
+    logger.info("✅ Phase 3 AI Router API included")
+else:
+    logger.warning("⚠️ Phase 3 AI Router API not available")
+
+# Include Phase 3 Advanced Analytics API
+if ANALYTICS_AVAILABLE:
+    app.include_router(analytics_api)
+    logger.info("✅ Phase 3 Advanced Analytics API included")
+else:
+    logger.warning("⚠️ Phase 3 Advanced Analytics API not available")
+
+# Include Phase 3 Advanced AI Router API
+if ADVANCED_AI_AVAILABLE:
+    app.include_router(advanced_ai_router_api)
+    app.include_router(ai_training_api)
+    logger.info("✅ Phase 3 Advanced AI Router API included")
+    logger.info("✅ Phase 3 AI Training API included")
+else:
+    logger.warning("⚠️ Phase 3 Advanced AI Router API not available")
+
+# Include Phase 3 Performance Optimization API
+if PERFORMANCE_OPTIMIZATION_AVAILABLE:
+    app.include_router(performance_api)
+    logger.info("✅ Phase 3 Performance Optimization API included")
+else:
+    logger.warning("⚠️ Phase 3 Performance Optimization API not available")
+
+# Include Phase 3 Advanced Security API
+if ADVANCED_SECURITY_AVAILABLE:
+    app.include_router(security_api)
+    logger.info("✅ Phase 3 Advanced Security API included")
+else:
+    logger.warning("⚠️ Phase 3 Advanced Security API not available")
 
 # Debug endpoint to prove which scoring module is active
 @app.get("/debug/scoring_info")
@@ -2230,6 +2329,58 @@ async def detailed_health_check():
         else:
             health_status["aws_batch"] = {"available": False}
         
+        # Phase 3 components
+        if AI_ROUTER_AVAILABLE:
+            health_status["ai_router"] = {
+                "available": True,
+                "models_loaded": len(ai_router.models) if ai_router else 0,
+                "performance_tracking": len(ai_router.performance_tracking) if ai_router else 0
+            }
+        else:
+            health_status["ai_router"] = {"available": False}
+        
+        if ANALYTICS_AVAILABLE:
+            health_status["analytics"] = {
+                "available": True,
+                "dashboards": len(analytics_engine.dashboards) if analytics_engine else 0,
+                "websocket_connections": websocket_manager.get_connection_stats()["total_connections"] if websocket_manager else 0,
+                "prediction_models": len(predictive_analytics.models) if predictive_analytics else 0
+            }
+        else:
+            health_status["analytics"] = {"available": False}
+        
+        if ADVANCED_AI_AVAILABLE:
+            health_status["advanced_ai"] = {
+                "available": True,
+                "models_loaded": len(advanced_ai_router.models) if advanced_ai_router else 0,
+                "performance_tracking": len(advanced_ai_router.performance_tracking) if advanced_ai_router else 0,
+                "training_jobs": len(ai_model_trainer.training_jobs) if ai_model_trainer else 0
+            }
+        else:
+            health_status["advanced_ai"] = {"available": False}
+        
+        if PERFORMANCE_OPTIMIZATION_AVAILABLE:
+            health_status["performance_optimization"] = {
+                "available": True,
+                "cache_hit_rate": performance_optimizer.get_cache_metrics().hit_rate if performance_optimizer else 0,
+                "memory_usage_mb": performance_optimizer.get_performance_metrics().memory_usage_mb if performance_optimizer else 0,
+                "cpu_usage_percent": performance_optimizer.get_performance_metrics().cpu_usage_percent if performance_optimizer else 0
+            }
+        else:
+            health_status["performance_optimization"] = {"available": False}
+        
+        # Phase 3 components
+        if ADVANCED_SECURITY_AVAILABLE:
+            health_status["advanced_security"] = {
+                "available": True,
+                "zero_trust_engine": len(zero_trust_engine.security_contexts) if zero_trust_engine else 0,
+                "encryption_keys": len(encryption_manager.encryption_keys) if encryption_manager else 0,
+                "compliance_rules": len(compliance_manager.compliance_rules) if compliance_manager else 0,
+                "audit_events": len(compliance_manager.audit_events) if compliance_manager else 0
+            }
+        else:
+            health_status["advanced_security"] = {"available": False}
+        
         return health_status
     except Exception as e:
         return {"ok": False, "error": str(e), "mode": "error"}
@@ -2552,6 +2703,32 @@ async def debug_fields(request: Request):
         }
     except Exception as e:
         return {"error": str(e)}
+
+# ---------- WebSocket Endpoints ----------
+if ANALYTICS_AVAILABLE:
+    @app.websocket("/ws/analytics/dashboard")
+    async def websocket_dashboard(websocket: WebSocket):
+        """WebSocket endpoint for real-time dashboard updates"""
+        from core.analytics_websocket import handle_dashboard_websocket
+        await handle_dashboard_websocket(websocket)
+    
+    @app.websocket("/ws/analytics/metrics")
+    async def websocket_metrics(websocket: WebSocket):
+        """WebSocket endpoint for real-time metrics updates"""
+        from core.analytics_websocket import handle_metrics_websocket
+        await handle_metrics_websocket(websocket)
+    
+    @app.websocket("/ws/analytics/predictions")
+    async def websocket_predictions(websocket: WebSocket):
+        """WebSocket endpoint for real-time predictions updates"""
+        from core.analytics_websocket import handle_predictions_websocket
+        await handle_predictions_websocket(websocket)
+    
+    @app.websocket("/ws/analytics/alerts")
+    async def websocket_alerts(websocket: WebSocket):
+        """WebSocket endpoint for real-time alerts"""
+        from core.analytics_websocket import handle_alerts_websocket
+        await handle_alerts_websocket(websocket)
 
 # ---------- GraphQL helpers (operationName-aware) ----------
 _OP_HEADER_RE = re.compile(
