@@ -279,7 +279,7 @@ class HealthChecker:
     def get_system_health(self) -> Dict[str, Any]:
         """Get comprehensive system health"""
         return {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now().isoformat(),
             "database": self.check_database_health(),
             "redis": self.check_redis_health(),
             "external_apis": self.check_external_apis(),

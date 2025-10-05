@@ -21,6 +21,8 @@ import jwt
 import hashlib
 import random
 import requests
+import uuid
+from time import perf_counter
 
 # Enhanced Monitoring System
 try:
@@ -1615,11 +1617,7 @@ async def timing_and_headers(request: Request, call_next):
 
     # Enhanced monitoring
     if MONITORING_AVAILABLE:
-        logger.info("Request started", 
-                   request_id=req_id,
-                   method=request.method, 
-                   url=str(request.url),
-                   client_ip=request.client.host if request.client else "unknown")
+        logger.info(f"Request started - ID: {req_id}, Method: {request.method}, URL: {str(request.url)}, Client: {request.client.host if request.client else 'unknown'}")
 
     try:
         response = await call_next(request)
@@ -1634,23 +1632,13 @@ async def timing_and_headers(request: Request, call_next):
                 duration=perf_counter() - t0
             )
             
-            logger.info("Request completed",
-                       request_id=req_id,
-                       method=request.method,
-                       url=str(request.url),
-                       status_code=status,
-                       duration=perf_counter() - t0)
+            logger.info(f"Request completed - ID: {req_id}, Method: {request.method}, URL: {str(request.url)}, Status: {status}, Duration: {perf_counter() - t0:.3f}s")
         
     except Exception as e:
         # Record error metrics
         if MONITORING_AVAILABLE:
             performance_monitor.metrics.record_api_error("http", type(e).__name__)
-            logger.error("Request failed",
-                        request_id=req_id,
-                        method=request.method,
-                        url=str(request.url),
-                        error=str(e),
-                        duration=perf_counter() - t0)
+            logger.error(f"Request failed - ID: {req_id}, Method: {request.method}, URL: {str(request.url)}, Error: {str(e)}, Duration: {perf_counter() - t0:.3f}s")
         
         logger.exception("Unhandled error on %s %s", request.method, raw_path)
         status = 200 if raw_path.startswith("/graphql") else 500
@@ -2186,50 +2174,65 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "timestamp": datetime.now().isoformat(), "build": BUILD_ID}
+    try:
+        return {"status": "healthy", "timestamp": datetime.now().isoformat(), "build": BUILD_ID}
+    except Exception as e:
+        return {"status": "error", "error": str(e), "build": BUILD_ID}
 
 @app.get("/health/detailed/")
 async def detailed_health_check():
     """Detailed health check with system status"""
-    health_status = {"ok": True, "mode": "basic"}
-    
-    if MONITORING_AVAILABLE:
-        health_status.update(health_checker.get_system_health())
-    
-    if FEAST_AVAILABLE:
-        health_status["feast"] = feast_manager.health_check()
-    
-    if REDIS_CLUSTER_AVAILABLE:
-        health_status["redis_cluster"] = redis_cluster.health_check()
-    
-    # Phase 2 components
-    if STREAMING_AVAILABLE:
-        health_status["streaming_pipeline"] = {
-            "available": True,
-            "producer_initialized": streaming_producer is not None,
-            "consumer_initialized": streaming_consumer is not None
-        }
-    else:
-        health_status["streaming_pipeline"] = {"available": False}
-    
-    if ML_VERSIONING_AVAILABLE:
-        health_status["ml_versioning"] = {
-            "available": True,
-            "model_manager_initialized": model_version_manager is not None,
-            "ab_testing_initialized": ab_testing_manager is not None
-        }
-    else:
-        health_status["ml_versioning"] = {"available": False}
-    
-    if AWS_BATCH_AVAILABLE:
-        health_status["aws_batch"] = {
-            "available": True,
-            "batch_manager_initialized": aws_batch_manager is not None
-        }
-    else:
-        health_status["aws_batch"] = {"available": False}
-    
-    return health_status
+    try:
+        health_status = {"ok": True, "mode": "basic"}
+        
+        if MONITORING_AVAILABLE:
+            try:
+                health_status.update(health_checker.get_system_health())
+            except Exception as e:
+                health_status["monitoring_error"] = str(e)
+        
+        if FEAST_AVAILABLE:
+            try:
+                health_status["feast"] = feast_manager.health_check()
+            except Exception as e:
+                health_status["feast"] = {"error": str(e)}
+        
+        if REDIS_CLUSTER_AVAILABLE:
+            try:
+                health_status["redis_cluster"] = redis_cluster.health_check()
+            except Exception as e:
+                health_status["redis_cluster"] = {"error": str(e)}
+        
+        # Phase 2 components
+        if STREAMING_AVAILABLE:
+            health_status["streaming_pipeline"] = {
+                "available": True,
+                "producer_initialized": streaming_producer is not None,
+                "consumer_initialized": streaming_consumer is not None
+            }
+        else:
+            health_status["streaming_pipeline"] = {"available": False}
+        
+        if ML_VERSIONING_AVAILABLE:
+            health_status["ml_versioning"] = {
+                "available": True,
+                "model_manager_initialized": model_version_manager is not None,
+                "ab_testing_initialized": ab_testing_manager is not None
+            }
+        else:
+            health_status["ml_versioning"] = {"available": False}
+        
+        if AWS_BATCH_AVAILABLE:
+            health_status["aws_batch"] = {
+                "available": True,
+                "batch_manager_initialized": aws_batch_manager is not None
+            }
+        else:
+            health_status["aws_batch"] = {"available": False}
+        
+        return health_status
+    except Exception as e:
+        return {"ok": False, "error": str(e), "mode": "error"}
 
 @app.get("/metrics/")
 async def metrics_endpoint():
