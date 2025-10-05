@@ -3,6 +3,8 @@
 [![Production Status](https://img.shields.io/badge/Status-Live%20on%20AWS-green.svg)](https://github.com/marion205/RichesReach)
 [![AWS Deployed](https://img.shields.io/badge/AWS-ECS%20Deployed-blue.svg)](https://aws.amazon.com)
 [![AI Options](https://img.shields.io/badge/AI-Options%20Engine-purple.svg)](https://github.com/marion205/RichesReach)
+[![AI Scans](https://img.shields.io/badge/AI-Market%20Scans-green.svg)](https://github.com/marion205/RichesReach)
+[![Options Copilot](https://img.shields.io/badge/AI-Options%20Copilot-blue.svg)](https://github.com/marion205/RichesReach)
 [![Mobile Ready](https://img.shields.io/badge/Mobile-Expo%20Ready-orange.svg)](https://expo.dev)
 [![Rust Engine](https://img.shields.io/badge/Rust-High%20Performance-red.svg)](https://rust-lang.org)
 [![Crypto Ready](https://img.shields.io/badge/Crypto-DeFi%20Ready-yellow.svg)](https://ethereum.org)
@@ -19,6 +21,8 @@ RichesReach is a comprehensive AI-powered investment platform featuring advanced
 ### 🚀 **Production Status**
 - **✅ Live on AWS**: Production deployment with HTTPS at `https://app.richesreach.net`
 - **✅ Real AI Integration**: GPT-5o-mini powered recommendations with fallback to mock data
+- **✅ AI Scans**: Hedge-fund-grade market intelligence scanning with playbooks
+- **✅ Options Copilot**: Advanced AI-powered options strategy recommendations
 - **✅ Mobile Ready**: React Native app with Expo Go for instant access
 - **✅ Real-time Data**: Live market data from Finnhub and Polygon APIs
 - **✅ Production ML**: Real machine learning models with graceful fallbacks
@@ -28,6 +32,15 @@ RichesReach is a comprehensive AI-powered investment platform featuring advanced
 - **✅ Enterprise Security**: AWS Secrets Manager with KMS encryption and automated rotation
 
 ## Core Features
+
+### 🧠 **AI-Powered Market Intelligence**
+- **AI Scans**: Hedge-fund-grade market scanning with institutional-quality analysis
+- **Options Copilot**: Advanced AI-powered options strategy recommendations with risk metrics
+- **Market Intelligence**: Real-time scanning with playbooks and cloning capabilities
+- **Strategy Analysis**: Detailed risk assessment, Greeks calculation, and expected payoffs
+- **Hedge-Fund Grade**: Institutional-ready framework with strong typing and performance metrics
+- **Data Lineage**: Complete audit trails and explainability for all AI decisions
+- **Risk Engine Integration**: Advanced risk rails and position sizing recommendations
 
 ### 🚀 High-Performance Rust Engine
 - **5-10x Faster Analysis**: Rust-powered crypto and stock analysis
