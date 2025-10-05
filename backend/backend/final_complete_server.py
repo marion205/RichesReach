@@ -51,6 +51,25 @@ except ImportError as e:
     REDIS_CLUSTER_AVAILABLE = False
     print(f"⚠️ Enhanced Redis cluster not available: {e}")
 
+# Phase 2: Streaming Pipeline
+try:
+    from core.streaming_producer import StreamingProducer, initialize_streaming
+    from core.streaming_consumer import StreamingConsumer, initialize_streaming_consumer
+    STREAMING_AVAILABLE = True
+    print("✅ Phase 2 streaming pipeline loaded successfully")
+except ImportError as e:
+    STREAMING_AVAILABLE = False
+    print(f"⚠️ Phase 2 streaming pipeline not available: {e}")
+
+# Phase 2: ML Model Versioning
+try:
+    from core.ml_model_versioning import ModelVersionManager, ABTestingManager, initialize_ml_versioning
+    ML_VERSIONING_AVAILABLE = True
+    print("✅ Phase 2 ML model versioning loaded successfully")
+except ImportError as e:
+    ML_VERSIONING_AVAILABLE = False
+    print(f"⚠️ Phase 2 ML model versioning not available: {e}")
+
 # Prometheus metrics
 try:
     from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
@@ -1046,6 +1065,63 @@ def get_real_data_service():
             # Create a mock service as fallback
             real_data_service = MockDataService()
     return real_data_service
+
+# Phase 2: Initialize streaming and ML versioning
+streaming_producer = None
+streaming_consumer = None
+model_version_manager = None
+ab_testing_manager = None
+
+def initialize_phase2():
+    """Initialize Phase 2 components"""
+    global streaming_producer, streaming_consumer, model_version_manager, ab_testing_manager
+    
+    try:
+        # Streaming configuration
+        streaming_config = {
+            'kafka_enabled': os.getenv('KAFKA_ENABLED', 'false').lower() == 'true',
+            'kinesis_enabled': os.getenv('KINESIS_ENABLED', 'false').lower() == 'true',
+            'kafka': {
+                'bootstrap_servers': os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'localhost:9092').split(','),
+                'group_id': os.getenv('KAFKA_GROUP_ID', 'riches-reach-consumer')
+            },
+            'kinesis': {
+                'region': os.getenv('AWS_REGION', 'us-east-1'),
+                'stream_name': os.getenv('KINESIS_STREAM_NAME', 'riches-reach-market-data'),
+                'access_key_id': os.getenv('AWS_ACCESS_KEY_ID'),
+                'secret_access_key': os.getenv('AWS_SECRET_ACCESS_KEY')
+            },
+            'symbols': ['AAPL', 'GOOGL', 'MSFT', 'TSLA', 'AMZN', 'NVDA', 'META', 'NFLX'],
+            'sources': ['polygon', 'finnhub'],
+            'polygon_api_key': os.getenv('POLYGON_API_KEY'),
+            'finnhub_api_key': os.getenv('FINNHUB_API_KEY'),
+            'ingestion_interval': int(os.getenv('INGESTION_INTERVAL', '60'))
+        }
+        
+        # ML versioning configuration
+        ml_config = {
+            'models_dir': os.getenv('MODELS_DIR', 'models'),
+            'mlflow_tracking_uri': os.getenv('MLFLOW_TRACKING_URI', 'file:./mlruns'),
+            'experiment_name': os.getenv('MLFLOW_EXPERIMENT_NAME', 'riches-reach-ml')
+        }
+        
+        # Initialize streaming if available
+        if STREAMING_AVAILABLE:
+            streaming_producer = initialize_streaming(streaming_config)
+            logger.info("✅ Phase 2 streaming producer initialized")
+        
+        # Initialize ML versioning if available
+        if ML_VERSIONING_AVAILABLE:
+            model_version_manager, ab_testing_manager = initialize_ml_versioning(ml_config)
+            logger.info("✅ Phase 2 ML versioning initialized")
+        
+        logger.info("✅ Phase 2 components initialized successfully")
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize Phase 2 components: {e}")
+
+# Initialize Phase 2 on startup
+initialize_phase2()
 
 # ---------- App ----------
 app = FastAPI(
@@ -2098,6 +2174,25 @@ async def detailed_health_check():
     if REDIS_CLUSTER_AVAILABLE:
         health_status["redis_cluster"] = redis_cluster.health_check()
     
+    # Phase 2 components
+    if STREAMING_AVAILABLE:
+        health_status["streaming_pipeline"] = {
+            "available": True,
+            "producer_initialized": streaming_producer is not None,
+            "consumer_initialized": streaming_consumer is not None
+        }
+    else:
+        health_status["streaming_pipeline"] = {"available": False}
+    
+    if ML_VERSIONING_AVAILABLE:
+        health_status["ml_versioning"] = {
+            "available": True,
+            "model_manager_initialized": model_version_manager is not None,
+            "ab_testing_initialized": ab_testing_manager is not None
+        }
+    else:
+        health_status["ml_versioning"] = {"available": False}
+    
     return health_status
 
 @app.get("/metrics/")
@@ -2107,6 +2202,144 @@ async def metrics_endpoint():
         return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
     else:
         return {"error": "Prometheus metrics not available"}
+
+# Phase 2: Streaming Pipeline Endpoints
+@app.get("/phase2/streaming/status/")
+async def streaming_status():
+    """Get streaming pipeline status"""
+    if not STREAMING_AVAILABLE:
+        return {"error": "Streaming pipeline not available"}
+    
+    status = {
+        "streaming_available": STREAMING_AVAILABLE,
+        "producer_initialized": streaming_producer is not None,
+        "consumer_initialized": streaming_consumer is not None
+    }
+    
+    if streaming_producer:
+        status["producer_config"] = {
+            "kafka_enabled": streaming_producer.config.get('kafka_enabled', False),
+            "kinesis_enabled": streaming_producer.config.get('kinesis_enabled', False)
+        }
+    
+    return status
+
+@app.post("/phase2/streaming/start/")
+async def start_streaming():
+    """Start streaming data ingestion"""
+    if not STREAMING_AVAILABLE:
+        return {"error": "Streaming pipeline not available"}
+    
+    try:
+        # Start streaming services
+        import asyncio
+        from core.streaming_producer import start_streaming_services
+        
+        config = {
+            'kafka_enabled': os.getenv('KAFKA_ENABLED', 'false').lower() == 'true',
+            'kinesis_enabled': os.getenv('KINESIS_ENABLED', 'false').lower() == 'true',
+            'symbols': ['AAPL', 'GOOGL', 'MSFT', 'TSLA', 'AMZN'],
+            'sources': ['polygon', 'finnhub'],
+            'polygon_api_key': os.getenv('POLYGON_API_KEY'),
+            'finnhub_api_key': os.getenv('FINNHUB_API_KEY'),
+            'ingestion_interval': 60
+        }
+        
+        producer = await start_streaming_services(config)
+        
+        if producer:
+            return {"status": "success", "message": "Streaming services started"}
+        else:
+            return {"status": "error", "message": "Failed to start streaming services"}
+            
+    except Exception as e:
+        logger.error(f"Failed to start streaming: {e}")
+        return {"status": "error", "message": str(e)}
+
+# Phase 2: ML Model Versioning Endpoints
+@app.get("/phase2/ml/models/")
+async def list_ml_models():
+    """List all ML models and versions"""
+    if not ML_VERSIONING_AVAILABLE or not model_version_manager:
+        return {"error": "ML versioning not available"}
+    
+    try:
+        models = model_version_manager.list_models()
+        return {"status": "success", "models": models}
+    except Exception as e:
+        logger.error(f"Failed to list models: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.get("/phase2/ml/models/{model_id}/best/")
+async def get_best_model(model_id: str, metric: str = "f1_score"):
+    """Get the best performing model version"""
+    if not ML_VERSIONING_AVAILABLE or not model_version_manager:
+        return {"error": "ML versioning not available"}
+    
+    try:
+        model, metadata = model_version_manager.get_best_model(model_id, metric)
+        return {
+            "status": "success",
+            "model_id": model_id,
+            "version": metadata.version,
+            "performance_metrics": metadata.performance_metrics,
+            "training_timestamp": metadata.training_timestamp.isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Failed to get best model: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.get("/phase2/ml/experiments/")
+async def list_ab_experiments():
+    """List all A/B testing experiments"""
+    if not ML_VERSIONING_AVAILABLE or not ab_testing_manager:
+        return {"error": "A/B testing not available"}
+    
+    try:
+        experiments = ab_testing_manager.experiments
+        return {"status": "success", "experiments": experiments}
+    except Exception as e:
+        logger.error(f"Failed to list experiments: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.post("/phase2/ml/experiments/")
+async def create_ab_experiment(experiment_data: dict):
+    """Create a new A/B testing experiment"""
+    if not ML_VERSIONING_AVAILABLE or not ab_testing_manager:
+        return {"error": "A/B testing not available"}
+    
+    try:
+        experiment = ab_testing_manager.create_experiment(
+            name=experiment_data.get('name'),
+            description=experiment_data.get('description'),
+            model_versions=experiment_data.get('model_versions', []),
+            traffic_split=experiment_data.get('traffic_split', []),
+            success_metric=experiment_data.get('success_metric', 'f1_score'),
+            minimum_sample_size=experiment_data.get('minimum_sample_size', 1000),
+            confidence_level=experiment_data.get('confidence_level', 0.95)
+        )
+        
+        return {
+            "status": "success",
+            "experiment_id": experiment.experiment_id,
+            "experiment": experiment
+        }
+    except Exception as e:
+        logger.error(f"Failed to create experiment: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.get("/phase2/ml/experiments/{experiment_id}/analyze/")
+async def analyze_experiment(experiment_id: str):
+    """Analyze A/B testing experiment results"""
+    if not ML_VERSIONING_AVAILABLE or not ab_testing_manager:
+        return {"error": "A/B testing not available"}
+    
+    try:
+        analysis = ab_testing_manager.analyze_experiment(experiment_id)
+        return {"status": "success", "analysis": analysis}
+    except Exception as e:
+        logger.error(f"Failed to analyze experiment: {e}")
+        return {"status": "error", "message": str(e)}
 
 @app.post("/debug/fields")
 async def debug_fields(request: Request):
