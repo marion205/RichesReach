@@ -1,11 +1,11 @@
 from django.db import models
-from django.contrib.auth.models import User
+from django.conf import settings
 from django.utils import timezone
 
 class CustomBenchmark(models.Model):
     """Custom benchmark portfolio created by users"""
     
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='custom_benchmarks')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='custom_benchmarks')
     name = models.CharField(max_length=200, help_text="Name of the custom benchmark")
     description = models.TextField(blank=True, help_text="Description of the benchmark strategy")
     is_active = models.BooleanField(default=True, help_text="Whether the benchmark is active")
@@ -152,7 +152,7 @@ class BenchmarkAnalytics(models.Model):
 class BenchmarkComparison(models.Model):
     """Comparison between portfolio and benchmark performance"""
     
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='benchmark_comparisons')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='benchmark_comparisons')
     portfolio_id = models.CharField(max_length=100, help_text="Portfolio identifier")
     benchmark_id = models.CharField(max_length=100, help_text="Benchmark identifier")
     benchmark_name = models.CharField(max_length=200, help_text="Benchmark name")

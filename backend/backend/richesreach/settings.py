@@ -202,7 +202,6 @@ else:
                     # For local Postgres, ensure no SSL requirement:
                     "OPTIONS": {
                         "sslmode": os.getenv("PGSSLMODE", "disable"),
-                        "autocommit": True,  # Enable autocommit to prevent transaction blocks
                     },
                 }
             }

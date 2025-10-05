@@ -1,0 +1,20 @@
+project: richesreach_ai
+registry:
+  registry_type: sql
+  path: postgresql://admin:password@localhost:5432/dev
+provider: local
+online_store:
+  type: postgres
+  host: localhost
+  port: 5432
+  database: dev
+  user: admin
+  password: password
+offline_store:
+  type: postgres
+  host: localhost
+  port: 5432
+  database: dev
+  user: admin
+  password: password
+entity_key_serialization_version: 2

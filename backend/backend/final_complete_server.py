@@ -22,6 +22,35 @@ import hashlib
 import random
 import requests
 
+# Enhanced Monitoring System
+try:
+    from core.monitoring import performance_monitor, health_checker, get_logger
+    MONITORING_AVAILABLE = True
+    logger = get_logger("richesreach")
+    print("✅ Enhanced monitoring system loaded successfully")
+except ImportError as e:
+    MONITORING_AVAILABLE = False
+    print(f"⚠️ Enhanced monitoring not available: {e}")
+    logger = logging.getLogger("richesreach")
+
+# Feast Feature Store
+try:
+    from core.feast_manager import feast_manager
+    FEAST_AVAILABLE = True
+    print("✅ Feast feature store loaded successfully")
+except ImportError as e:
+    FEAST_AVAILABLE = False
+    print(f"⚠️ Feast feature store not available: {e}")
+
+# Enhanced Redis Cluster
+try:
+    from core.redis_cluster import redis_cluster
+    REDIS_CLUSTER_AVAILABLE = True
+    print("✅ Enhanced Redis cluster loaded successfully")
+except ImportError as e:
+    REDIS_CLUSTER_AVAILABLE = False
+    print(f"⚠️ Enhanced Redis cluster not available: {e}")
+
 # Prometheus metrics
 try:
     from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
@@ -159,15 +188,15 @@ class RealDataService:
         self.scaler = StandardScaler()
 
         # --- resilient session ---
-        self.session = requests.Session()
+        self._session = requests.Session()
         retries = Retry(
             total=3,
             backoff_factor=0.3,
             status_forcelist=[429, 500, 502, 503, 504],
             allowed_methods=frozenset(["GET"])
         )
-        self.session.mount("https://", HTTPAdapter(max_retries=retries))
-        self.session.headers.update({"User-Agent": "RichesReach/1.0"})
+        self._session.mount("https://", HTTPAdapter(max_retries=retries))
+        self._session.headers.update({"User-Agent": "RichesReach/1.0"})
         self.default_timeout = 10
         
         # Async client (opt-in)
@@ -1468,10 +1497,45 @@ async def timing_and_headers(request: Request, call_next):
     route = request.scope.get("route")
     norm_path = normalize_path(raw_path, route)
 
+    # Enhanced monitoring
+    if MONITORING_AVAILABLE:
+        logger.info("Request started", 
+                   request_id=req_id,
+                   method=request.method, 
+                   url=str(request.url),
+                   client_ip=request.client.host if request.client else "unknown")
+
     try:
         response = await call_next(request)
         status = response.status_code
+        
+        # Record successful request metrics
+        if MONITORING_AVAILABLE:
+            performance_monitor.metrics.record_request(
+                method=request.method,
+                endpoint=norm_path,
+                status=status,
+                duration=perf_counter() - t0
+            )
+            
+            logger.info("Request completed",
+                       request_id=req_id,
+                       method=request.method,
+                       url=str(request.url),
+                       status_code=status,
+                       duration=perf_counter() - t0)
+        
     except Exception as e:
+        # Record error metrics
+        if MONITORING_AVAILABLE:
+            performance_monitor.metrics.record_api_error("http", type(e).__name__)
+            logger.error("Request failed",
+                        request_id=req_id,
+                        method=request.method,
+                        url=str(request.url),
+                        error=str(e),
+                        duration=perf_counter() - t0)
+        
         logger.exception("Unhandled error on %s %s", request.method, raw_path)
         status = 200 if raw_path.startswith("/graphql") else 500
         payload = {"errors": [{"message": "Internal error"}]} if status == 200 else {"error": "Internal Server Error"}
@@ -2007,6 +2071,30 @@ async def root():
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "timestamp": datetime.now().isoformat(), "build": BUILD_ID}
+
+@app.get("/health/detailed/")
+async def detailed_health_check():
+    """Detailed health check with system status"""
+    health_status = {"ok": True, "mode": "basic"}
+    
+    if MONITORING_AVAILABLE:
+        health_status.update(health_checker.get_system_health())
+    
+    if FEAST_AVAILABLE:
+        health_status["feast"] = feast_manager.health_check()
+    
+    if REDIS_CLUSTER_AVAILABLE:
+        health_status["redis_cluster"] = redis_cluster.health_check()
+    
+    return health_status
+
+@app.get("/metrics/")
+async def metrics_endpoint():
+    """Prometheus metrics endpoint"""
+    if PROMETHEUS_AVAILABLE:
+        return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+    else:
+        return {"error": "Prometheus metrics not available"}
 
 @app.post("/debug/fields")
 async def debug_fields(request: Request):
@@ -3064,11 +3152,20 @@ async def graphql_endpoint(request_data: dict):
                             results.append({
                                 "symbol": rec.get("symbol", ""),
                                 "name": rec.get("symbol", ""),
+                                "currentPrice": float(rec.get("price_usd", 0.0)),
                                 "priceUsd": float(rec.get("price_usd", 0.0)),
+                                "change24h": float(rec.get("change_24h", 0.0)),
+                                "changePercent24h": float(rec.get("change_percent_24h", 0.0)),
+                                "marketCap": float(rec.get("market_cap", 0.0)),
+                                "volume24h": float(rec.get("liquidity_24h_usd", 0.0)),
                                 "volumeUsd24h": float(rec.get("liquidity_24h_usd", 0.0)),
                                 "volatilityTier": rec.get("volatility_tier", "MEDIUM"),
                                 "probability": rec.get("probability", 0.5),
                                 "confidenceLevel": rec.get("confidence_level", "LOW"),
+                                "riskLevel": rec.get("risk_level", "MEDIUM"),
+                                "liquidity24hUsd": float(rec.get("liquidity_24h_usd", 0.0)),
+                                "rationale": rec.get("rationale", "Rust analysis completed"),
+                                "recommendation": rec.get("recommendation", "HOLD"),
                                 "explanation": rec.get("rationale", "Rust analysis completed"),
                                 "score": rec.get("score", 0.0),
                                 "__typename": "CryptoRecommendation"
@@ -3111,11 +3208,20 @@ async def graphql_endpoint(request_data: dict):
                     results.append({
                         "symbol": symbol,
                         "name": symbol,  # Could be enhanced with full names
+                        "currentPrice": price_usd,
                         "priceUsd": price_usd,
+                        "change24h": float(price_data.get("change24h", 0.0)),
+                        "changePercent24h": float(price_data.get("changePercent24h", 0.0)),
+                        "marketCap": float(price_data.get("marketCap", 0.0)),
+                        "volume24h": volume_24h,
                         "volumeUsd24h": volume_24h,
                         "volatilityTier": volatility_tier,
                         "probability": prob,
                         "confidenceLevel": ml_pred.get("confidenceLevel", "LOW"),
+                        "riskLevel": "HIGH" if volatility_tier == "HIGH" else "MEDIUM" if volatility_tier == "MEDIUM" else "LOW",
+                        "liquidity24hUsd": volume_24h,
+                        "rationale": ml_pred.get("explanation", "Model produced a valid signal."),
+                        "recommendation": "BUY" if prob > 0.6 else "SELL" if prob < 0.4 else "HOLD",
                         "explanation": ml_pred.get("explanation", "Model produced a valid signal."),
                         "score": round(score, 1),
                         "__typename": "CryptoRecommendation"
@@ -3126,11 +3232,20 @@ async def graphql_endpoint(request_data: dict):
                     results.append({
                         "symbol": symbol,
                         "name": symbol,
+                        "currentPrice": 0.0,
                         "priceUsd": 0.0,
+                        "change24h": 0.0,
+                        "changePercent24h": 0.0,
+                        "marketCap": 0.0,
+                        "volume24h": 0.0,
                         "volumeUsd24h": 0.0,
                         "volatilityTier": "UNKNOWN",
                         "probability": 0.5,
                         "confidenceLevel": "LOW",
+                        "riskLevel": "UNKNOWN",
+                        "liquidity24hUsd": 0.0,
+                        "rationale": "Error processing symbol",
+                        "recommendation": "HOLD",
                         "explanation": "Error processing symbol",
                         "score": 0.0,
                         "__typename": "CryptoRecommendation"
@@ -3373,18 +3488,33 @@ async def graphql_endpoint(request_data: dict):
         indicators_req = variables.get("indicators") or variables.get("inds") or []
         
         if not symbol:
-            # Simple string parsing instead of regex
-            if 'symbol:' in query:
-                start = query.find('symbol:') + 7
-                end = query.find('"', start + 1)
-                if end > start:
-                    symbol = query[start:end].strip().strip('"')
+            # Enhanced GraphQL query parsing
+            import re
+            # Look for symbol: "AAPL" pattern
+            symbol_match = re.search(r'symbol:\s*["\']([^"\']+)["\']', query)
+            if symbol_match:
+                symbol = symbol_match.group(1)
+            else:
+                # Fallback: look for stockChartData(symbol: "AAPL")
+                symbol_match = re.search(r'stockChartData\s*\(\s*symbol:\s*["\']([^"\']+)["\']', query)
+                if symbol_match:
+                    symbol = symbol_match.group(1)
+        
         if not timeframe:
-            if 'timeframe:' in query:
-                start = query.find('timeframe:') + 10
-                end = query.find('"', start + 1)
-                if end > start:
-                    timeframe = query[start:end].strip().strip('"')
+            # Look for timeframe: "1d" pattern
+            timeframe_match = re.search(r'timeframe:\s*["\']([^"\']+)["\']', query)
+            if timeframe_match:
+                timeframe = timeframe_match.group(1)
+        
+        # Parse indicators from query if not in variables
+        if not indicators_req:
+            # Look for indicators: ["SMA20", "RSI"] pattern
+            indicators_match = re.search(r'indicators:\s*\[([^\]]+)\]', query)
+            if indicators_match:
+                indicators_str = indicators_match.group(1)
+                # Parse the array elements
+                indicators_req = [ind.strip().strip('"\'') for ind in indicators_str.split(',')]
+        
         if not symbol:
             return {"errors": [{"message": "Symbol is required for chart data"}]}
 
@@ -5032,7 +5162,7 @@ async def graphql_endpoint(request_data: dict):
                     "min_addv": 50_000_000,  # $50M
                     "max_spread_bps": 6.0,
                     "allow_gappers": False,
-                    "max_positions": 2,
+                    "max_positions": 3,  # Changed from 2 to 3 for daily three picks
                     "per_trade_risk_pct": 0.005,  # 0.5%
                     "time_stop_min": 45,
                     "atr_mult": 0.75,
@@ -5044,7 +5174,7 @@ async def graphql_endpoint(request_data: dict):
                         "spread_pen": -0.10,
                         "catalyst": 0.05
                     },
-                    "min_score": 1.25
+                    "min_score": 1.0  # Lowered threshold to ensure we get 3 picks
                 },
                 "AGGRESSIVE": {
                     "min_price": 2.0,
@@ -5063,7 +5193,7 @@ async def graphql_endpoint(request_data: dict):
                         "spread_pen": -0.05,
                         "catalyst": 0.10
                     },
-                    "min_score": 0.75
+                    "min_score": 0.5  # Lowered threshold to ensure we get 3 picks
                 }
             }
             
@@ -5549,6 +5679,14 @@ async def graphql_endpoint(request_data: dict):
                     "stabilityScore": 88 if market_cap > 1000000000000 else 75
                 },
                 "technicalIndicators": technical_indicators,
+                "beginnerScoreBreakdown": {
+                    "totalScore": beginner_score,
+                    "debtScore": 85 if fundamental_data["debtToEquity"] < 0.2 else 70,
+                    "dividendScore": 95 if dividend_yield > 2.0 else 80 if dividend_yield > 1.0 else 60,
+                    "valuationScore": 78 if pe_ratio < 25 else 65,
+                    "growthScore": 82 if fundamental_data["revenueGrowth"] > 10 else 70,
+                    "stabilityScore": 88 if market_cap > 1000000000000 else 75
+                },
                 "__typename": "Stock"
             })
         
