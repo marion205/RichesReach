@@ -1032,8 +1032,20 @@ class RealDataService:
             logger.warning(f"[async] profile fail {symbol}: {e}")
         return self._get_mock_profile(symbol)
 
-# Initialize real data service
-real_data_service = RealDataService()
+# Initialize real data service (lazy initialization)
+real_data_service = None
+
+def get_real_data_service():
+    global real_data_service
+    if real_data_service is None:
+        try:
+            real_data_service = RealDataService()
+            logger.info("✅ RealDataService initialized successfully")
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize RealDataService: {e}")
+            # Create a mock service as fallback
+            real_data_service = MockDataService()
+    return real_data_service
 
 # ---------- App ----------
 app = FastAPI(
@@ -1044,7 +1056,7 @@ app = FastAPI(
 
 @app.on_event("shutdown")
 async def _close_httpx():
-    svc = real_data_service
+    svc = get_real_data_service()
     if getattr(svc, "async_client", None):
         with suppress(Exception):
             await svc.async_client.aclose()
@@ -1843,8 +1855,8 @@ def get_real_buy_recommendations():
         # Build feature rows for scoring
         rows = []
         for sym in symbols:
-            quote = real_data_service.get_stock_quote(sym)
-            profile = real_data_service.get_company_profile(sym)
+            quote = get_real_data_service().get_stock_quote(sym)
+            profile = get_real_data_service().get_company_profile(sym)
             
             rows.append({
                 "symbol": sym,
@@ -1969,8 +1981,8 @@ def get_real_sell_recommendations():
         # Build feature rows for scoring
         rows = []
         for sym in symbols:
-            quote = real_data_service.get_stock_quote(sym)
-            profile = real_data_service.get_company_profile(sym)
+            quote = get_real_data_service().get_stock_quote(sym)
+            profile = get_real_data_service().get_company_profile(sym)
             
             rows.append({
                 "symbol": sym,
@@ -3988,9 +4000,9 @@ async def graphql_endpoint(request_data: dict):
         stocks_data = []
         
         for symbol in beginner_symbols:
-            quote = real_data_service.get_stock_quote(symbol)
-            profile = real_data_service.get_company_profile(symbol)
-            technical_indicators = real_data_service.get_technical_indicators(symbol)
+            quote = get_real_data_service().get_stock_quote(symbol)
+            profile = get_real_data_service().get_company_profile(symbol)
+            technical_indicators = get_real_data_service().get_technical_indicators(symbol)
             
             # Calculate enhanced scores
             market_cap = profile.get("marketCap", 1000000000000)
@@ -3998,8 +4010,8 @@ async def graphql_endpoint(request_data: dict):
             pe_ratio = 25.5 if symbol == "AAPL" else 28.0 if symbol == "MSFT" else 20.0
             dividend_yield = 0.5 if symbol == "AAPL" else 0.7 if symbol == "MSFT" else 2.0 if symbol in ["JNJ", "PG", "KO"] else 1.0
             
-            risk_level = real_data_service.calculate_risk_level(symbol, volatility, market_cap)
-            beginner_score = real_data_service.calculate_beginner_score(symbol, market_cap, volatility, pe_ratio, dividend_yield)
+            risk_level = get_real_data_service().calculate_risk_level(symbol, volatility, market_cap)
+            beginner_score = get_real_data_service().calculate_beginner_score(symbol, market_cap, volatility, pe_ratio, dividend_yield)
             
             fundamental_data = {
                 "peRatio": pe_ratio,
@@ -4011,7 +4023,7 @@ async def graphql_endpoint(request_data: dict):
                 "priceToBook": 39.2 if symbol == "AAPL" else 12.8 if symbol == "MSFT" else 3.0
             }
             
-            ml_score = real_data_service.calculate_ml_score(symbol, fundamental_data)
+            ml_score = get_real_data_service().calculate_ml_score(symbol, fundamental_data)
             
             stocks_data.append({
                 "id": f"stock_{symbol}",
@@ -5039,8 +5051,8 @@ async def graphql_endpoint(request_data: dict):
         rows = []
         for sym in symbols:
             # Get real data for each symbol
-            quote = real_data_service.get_stock_quote(sym)
-            profile = real_data_service.get_company_profile(sym)
+            quote = get_real_data_service().get_stock_quote(sym)
+            profile = get_real_data_service().get_company_profile(sym)
             
             rows.append({
                 "symbol": sym,
@@ -5570,7 +5582,7 @@ async def graphql_endpoint(request_data: dict):
         symbols = variables.get("symbols", ["AAPL", "MSFT", "GOOGL"])
         target_return = float(variables.get("targetReturn", 0.1))
         
-        optimization_result = real_data_service.optimize_portfolio(symbols, target_return)
+        optimization_result = get_real_data_service().optimize_portfolio(symbols, target_return)
         return {"data": {"portfolioOptimization": optimization_result}}
 
     if "socialSentiment" in fields:
@@ -5599,7 +5611,7 @@ async def graphql_endpoint(request_data: dict):
 
     if "marketRegimeAnalysis" in fields:
         # Get market regime analysis
-        market_regime = real_data_service.get_market_regime_analysis()
+        market_regime = get_real_data_service().get_market_regime_analysis()
         return {"data": {"marketRegimeAnalysis": market_regime}}
 
     if "advancedMLPrediction" in fields:
@@ -5621,9 +5633,9 @@ async def graphql_endpoint(request_data: dict):
         stocks_data = []
         
         for symbol in stock_symbols:
-            quote = real_data_service.get_stock_quote(symbol)
-            profile = real_data_service.get_company_profile(symbol)
-            technical_indicators = real_data_service.get_technical_indicators(symbol)
+            quote = get_real_data_service().get_stock_quote(symbol)
+            profile = get_real_data_service().get_company_profile(symbol)
+            technical_indicators = get_real_data_service().get_technical_indicators(symbol)
             
             # Calculate enhanced scores
             market_cap = profile.get("marketCap", 1000000000000)
@@ -5631,8 +5643,8 @@ async def graphql_endpoint(request_data: dict):
             pe_ratio = 25.5 if symbol == "AAPL" else 28.0 if symbol == "MSFT" else 20.0
             dividend_yield = 0.5 if symbol == "AAPL" else 0.7 if symbol == "MSFT" else 2.0 if symbol in ["JNJ", "PG", "KO"] else 1.0
             
-            risk_level = real_data_service.calculate_risk_level(symbol, volatility, market_cap)
-            beginner_score = real_data_service.calculate_beginner_score(symbol, market_cap, volatility, pe_ratio, dividend_yield)
+            risk_level = get_real_data_service().calculate_risk_level(symbol, volatility, market_cap)
+            beginner_score = get_real_data_service().calculate_beginner_score(symbol, market_cap, volatility, pe_ratio, dividend_yield)
             
             fundamental_data = {
                 "peRatio": pe_ratio,
@@ -5644,7 +5656,7 @@ async def graphql_endpoint(request_data: dict):
                 "priceToBook": 39.2 if symbol == "AAPL" else 12.8 if symbol == "MSFT" else 3.0
             }
             
-            ml_score = real_data_service.calculate_ml_score(symbol, fundamental_data)
+            ml_score = get_real_data_service().calculate_ml_score(symbol, fundamental_data)
             
             stocks_data.append({
                 "id": f"stock_{symbol}",
@@ -5836,15 +5848,15 @@ async def graphql_endpoint(request_data: dict):
         symbol = variables.get("symbol", "AAPL")
         
         # Get real data
-        quote = real_data_service.get_stock_quote(symbol)
-        profile = real_data_service.get_company_profile(symbol)
-        technical_indicators = real_data_service.get_technical_indicators(symbol)
+        quote = get_real_data_service().get_stock_quote(symbol)
+        profile = get_real_data_service().get_company_profile(symbol)
+        technical_indicators = get_real_data_service().get_technical_indicators(symbol)
         
         # Calculate real scores
         market_cap = profile.get("marketCap", 1000000000000)
         volatility = 0.28 if symbol == "AAPL" else 0.24  # Could be calculated from real data
-        risk_level = real_data_service.calculate_risk_level(symbol, volatility, market_cap)
-        beginner_score = real_data_service.calculate_beginner_score(symbol, market_cap, volatility)
+        risk_level = get_real_data_service().calculate_risk_level(symbol, volatility, market_cap)
+        beginner_score = get_real_data_service().calculate_beginner_score(symbol, market_cap, volatility)
         
         # Calculate ML score from real fundamental data
         fundamental_data = {
@@ -5853,7 +5865,7 @@ async def graphql_endpoint(request_data: dict):
             "profitMargin": 25.3 if symbol == "AAPL" else 36.8,
             "debtToEquity": 0.15 if symbol == "AAPL" else 0.12
         }
-        ml_score = real_data_service.calculate_ml_score(symbol, fundamental_data)
+        ml_score = get_real_data_service().calculate_ml_score(symbol, fundamental_data)
         
         return {"data": {"rustStockAnalysis": {
             "symbol": symbol,
