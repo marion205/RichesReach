@@ -70,6 +70,15 @@ except ImportError as e:
     ML_VERSIONING_AVAILABLE = False
     print(f"⚠️ Phase 2 ML model versioning not available: {e}")
 
+# Phase 2: AWS Batch for ML Training
+try:
+    from core.aws_batch_manager import AWSBatchManager, initialize_aws_batch
+    AWS_BATCH_AVAILABLE = True
+    print("✅ Phase 2 AWS Batch manager loaded successfully")
+except ImportError as e:
+    AWS_BATCH_AVAILABLE = False
+    print(f"⚠️ Phase 2 AWS Batch manager not available: {e}")
+
 # Prometheus metrics
 try:
     from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
@@ -1071,10 +1080,11 @@ streaming_producer = None
 streaming_consumer = None
 model_version_manager = None
 ab_testing_manager = None
+aws_batch_manager = None
 
 def initialize_phase2():
     """Initialize Phase 2 components"""
-    global streaming_producer, streaming_consumer, model_version_manager, ab_testing_manager
+    global streaming_producer, streaming_consumer, model_version_manager, ab_testing_manager, aws_batch_manager
     
     try:
         # Streaming configuration
@@ -1114,6 +1124,24 @@ def initialize_phase2():
         if ML_VERSIONING_AVAILABLE:
             model_version_manager, ab_testing_manager = initialize_ml_versioning(ml_config)
             logger.info("✅ Phase 2 ML versioning initialized")
+        
+        # Initialize AWS Batch if available
+        if AWS_BATCH_AVAILABLE:
+            batch_config = {
+                'region': os.getenv('AWS_REGION', 'us-east-1'),
+                'account_id': os.getenv('AWS_ACCOUNT_ID'),
+                'job_queue_name': os.getenv('BATCH_JOB_QUEUE_NAME', 'riches-reach-ml-queue'),
+                'job_definition_name': os.getenv('BATCH_JOB_DEFINITION_NAME', 'riches-reach-ml-training'),
+                'compute_environment_name': os.getenv('BATCH_COMPUTE_ENVIRONMENT_NAME', 'riches-reach-ml-compute'),
+                'role_name': os.getenv('BATCH_ROLE_NAME', 'riches-reach-batch-role'),
+                's3_bucket': os.getenv('BATCH_S3_BUCKET', 'riches-reach-ml-training-data'),
+                's3_prefix': os.getenv('BATCH_S3_PREFIX', 'training-jobs'),
+                'training_image': os.getenv('BATCH_TRAINING_IMAGE', 'python:3.9-slim'),
+                'subnet_ids': os.getenv('BATCH_SUBNET_IDS', '').split(',') if os.getenv('BATCH_SUBNET_IDS') else [],
+                'security_group_ids': os.getenv('BATCH_SECURITY_GROUP_IDS', '').split(',') if os.getenv('BATCH_SECURITY_GROUP_IDS') else []
+            }
+            aws_batch_manager = initialize_aws_batch(batch_config)
+            logger.info("✅ Phase 2 AWS Batch manager initialized")
         
         logger.info("✅ Phase 2 components initialized successfully")
         
@@ -2193,6 +2221,14 @@ async def detailed_health_check():
     else:
         health_status["ml_versioning"] = {"available": False}
     
+    if AWS_BATCH_AVAILABLE:
+        health_status["aws_batch"] = {
+            "available": True,
+            "batch_manager_initialized": aws_batch_manager is not None
+        }
+    else:
+        health_status["aws_batch"] = {"available": False}
+    
     return health_status
 
 @app.get("/metrics/")
@@ -2339,6 +2375,138 @@ async def analyze_experiment(experiment_id: str):
         return {"status": "success", "analysis": analysis}
     except Exception as e:
         logger.error(f"Failed to analyze experiment: {e}")
+        return {"status": "error", "message": str(e)}
+
+# Phase 2: AWS Batch Endpoints
+@app.get("/phase2/batch/status/")
+async def batch_status():
+    """Get AWS Batch infrastructure status"""
+    if not AWS_BATCH_AVAILABLE or not aws_batch_manager:
+        return {"error": "AWS Batch not available"}
+    
+    try:
+        status = aws_batch_manager.get_infrastructure_status()
+        return {"status": "success", "infrastructure": status}
+    except Exception as e:
+        logger.error(f"Failed to get batch status: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.post("/phase2/batch/setup/")
+async def setup_batch_infrastructure():
+    """Set up AWS Batch infrastructure"""
+    if not AWS_BATCH_AVAILABLE or not aws_batch_manager:
+        return {"error": "AWS Batch not available"}
+    
+    try:
+        success = aws_batch_manager.setup_batch_infrastructure()
+        if success:
+            return {"status": "success", "message": "AWS Batch infrastructure setup complete"}
+        else:
+            return {"status": "error", "message": "Failed to setup AWS Batch infrastructure"}
+    except Exception as e:
+        logger.error(f"Failed to setup batch infrastructure: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.post("/phase2/batch/training/")
+async def submit_training_job(job_data: dict):
+    """Submit a training job to AWS Batch"""
+    if not AWS_BATCH_AVAILABLE or not aws_batch_manager:
+        return {"error": "AWS Batch not available"}
+    
+    try:
+        # Validate required fields
+        required_fields = ['job_name', 'model_type', 'hyperparameters', 'feature_columns', 'target_column']
+        if not all(field in job_data for field in required_fields):
+            return {"status": "error", "message": f"Missing required fields: {required_fields}"}
+        
+        # Create sample training data (in production, this would come from the request)
+        import pandas as pd
+        import numpy as np
+        
+        # Generate sample data for demonstration
+        np.random.seed(42)
+        n_samples = 1000
+        n_features = len(job_data['feature_columns'])
+        
+        X = np.random.randn(n_samples, n_features)
+        y = np.random.randint(0, 2, n_samples)
+        
+        training_data = pd.DataFrame(X, columns=job_data['feature_columns'])
+        training_data[job_data['target_column']] = y
+        
+        # Submit job
+        job_id = aws_batch_manager.submit_training_job(
+            job_name=job_data['job_name'],
+            model_type=job_data['model_type'],
+            training_data=training_data,
+            hyperparameters=job_data['hyperparameters'],
+            feature_columns=job_data['feature_columns'],
+            target_column=job_data['target_column']
+        )
+        
+        return {
+            "status": "success",
+            "job_id": job_id,
+            "message": f"Training job submitted successfully"
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to submit training job: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.get("/phase2/batch/jobs/")
+async def list_training_jobs():
+    """List all training jobs"""
+    if not AWS_BATCH_AVAILABLE or not aws_batch_manager:
+        return {"error": "AWS Batch not available"}
+    
+    try:
+        jobs = aws_batch_manager.list_training_jobs()
+        return {"status": "success", "jobs": jobs}
+    except Exception as e:
+        logger.error(f"Failed to list training jobs: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.get("/phase2/batch/jobs/{job_id}/")
+async def get_job_status(job_id: str):
+    """Get training job status"""
+    if not AWS_BATCH_AVAILABLE or not aws_batch_manager:
+        return {"error": "AWS Batch not available"}
+    
+    try:
+        status = aws_batch_manager.get_job_status(job_id)
+        return {"status": "success", "job_status": status}
+    except Exception as e:
+        logger.error(f"Failed to get job status: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.get("/phase2/batch/jobs/{job_id}/logs/")
+async def get_job_logs(job_id: str):
+    """Get training job logs"""
+    if not AWS_BATCH_AVAILABLE or not aws_batch_manager:
+        return {"error": "AWS Batch not available"}
+    
+    try:
+        logs = aws_batch_manager.get_job_logs(job_id)
+        return {"status": "success", "logs": logs}
+    except Exception as e:
+        logger.error(f"Failed to get job logs: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.post("/phase2/batch/jobs/{job_id}/cancel/")
+async def cancel_training_job(job_id: str):
+    """Cancel a training job"""
+    if not AWS_BATCH_AVAILABLE or not aws_batch_manager:
+        return {"error": "AWS Batch not available"}
+    
+    try:
+        success = aws_batch_manager.cancel_job(job_id)
+        if success:
+            return {"status": "success", "message": f"Job {job_id} cancelled successfully"}
+        else:
+            return {"status": "error", "message": f"Failed to cancel job {job_id}"}
+    except Exception as e:
+        logger.error(f"Failed to cancel job: {e}")
         return {"status": "error", "message": str(e)}
 
 @app.post("/debug/fields")
