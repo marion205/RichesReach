@@ -6,6 +6,7 @@ import {
 import { useQuery, useMutation, NetworkStatus } from '@apollo/client';
 import { gql } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
+import { safeGetTimestamp } from '../../../utils/dateUtils';
 import SparkMini from '../../../components/charts/SparkMini';
 import SBLOCCalculator from '../../../components/forms/SBLOCCalculator';
 
@@ -40,11 +41,8 @@ const GET_TRADING_POSITIONS = gql`
       quantity
       marketValue
       costBasis
-      unrealizedPl
-      unrealizedpi
-      unrealizedPI
+      unrealizedPL
       unrealizedPLPercent
-      unrealizedPlpc
       currentPrice
       side
     }
@@ -200,7 +198,7 @@ const groupOrders = (orders: any[]) => {
 
   const buckets: Record<string, any[]> = { 'Today': [], 'This Week': [], 'Earlier': [] };
   for (const o of orders) {
-    const t = new Date(o.createdAt).getTime();
+    const t = safeGetTimestamp(o.createdAt, 0);
     if (t >= startOfDay) buckets['Today'].push(o);
     else if (t >= startOfWeek) buckets['This Week'].push(o);
     else buckets['Earlier'].push(o);
@@ -292,7 +290,7 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
         quantity: 100,
         marketValue: 17525.00,
         costBasis: 16500.00,
-        unrealizedPl: 1025.00,
+        unrealizedPL: 1025.00,
         unrealizedPLPercent: 6.21,
         currentPrice: 175.25,
         side: "long"
@@ -303,7 +301,7 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
         quantity: 50,
         marketValue: 19037.50,
         costBasis: 18500.00,
-        unrealizedPl: 537.50,
+        unrealizedPL: 537.50,
         unrealizedPLPercent: 2.91,
         currentPrice: 380.75,
         side: "long"
@@ -314,7 +312,7 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
         quantity: 10,
         marketValue: 28050.00,
         costBasis: 27000.00,
-        unrealizedPl: 1050.00,
+        unrealizedPL: 1050.00,
         unrealizedPLPercent: 3.89,
         currentPrice: 2805.00,
         side: "long"
@@ -452,7 +450,7 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
     // Inline SBLOC nudge for tax-aware flow (only for sells with gains)
     if (orderSide === 'sell') {
       const pos = positions.find((p: any) => p.symbol === upper(symbol));
-      const unrealized = Number(pos?.unrealizedPl ?? pos?.unrealizedpl ?? pos?.unrealizedPL ?? 0);
+      const unrealized = Number(pos?.unrealizedPL ?? 0);
       if (unrealized > 0) {
         Alert.alert(
           'Need cash without selling?',
@@ -989,7 +987,7 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
 /* ----------------------------- Position Row Component ----------------------------- */
 
 const PositionRow = ({ position }: { position: any }) => {
-  const isUp = (Number(position?.unrealizedPl) ?? 0) >= 0;
+  const isUp = (Number(position?.unrealizedPL) ?? 0) >= 0;
   const { data: chartData } = useQuery(GET_STOCK_CHART_DATA, {
     variables: { symbol: position.symbol, timeframe: '1D' },
     errorPolicy: 'all',
@@ -999,7 +997,7 @@ const PositionRow = ({ position }: { position: any }) => {
   const chartPrices = chartData?.stockChartData?.data?.map((d: any) => d.close) || [];
   
   // Normalize inconsistent server fields
-  const plPct = Number(position.unrealizedPlpc ?? position.unrealizedPLPercent ?? 0);
+  const plPct = Number(position.unrealizedPLPercent ?? 0);
 
   return (
     <View style={styles.positionRow}>
@@ -1029,7 +1027,7 @@ const PositionRow = ({ position }: { position: any }) => {
         <View style={styles.rowBetween}>
           <Text style={styles.sub}>{position.quantity} shares  •  @ ${position.currentPrice?.toFixed(2)}</Text>
           <Text style={[styles.value, { color: isUp ? C.green : C.red }]}>
-            {isUp?'+':''}${position.unrealizedPl?.toFixed(2)}
+            {isUp?'+':''}${position.unrealizedPL?.toFixed(2)}
           </Text>
         </View>
 

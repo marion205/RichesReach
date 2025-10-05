@@ -15,6 +15,7 @@ import {
 import { useQuery, useMutation } from '@apollo/client';
 import { gql } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
+import { safeFormatDate } from '../../../utils/dateUtils';
 import SBLOCCalculator from '../../../components/forms/SBLOCCalculator';
 import SblocFundingCard from '../../../components/forms/SblocFundingCard';
 import SblocCalculatorModal from '../../../components/forms/SblocCalculatorModal';
@@ -26,7 +27,7 @@ const { width } = Dimensions.get('window');
 // Utils
 const fmtMoney = (n?: number) =>
   typeof n === 'number' ? n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00';
-const fmtDate = (iso?: string) => (iso ? new Date(iso).toLocaleDateString() : '');
+const fmtDate = (iso?: string) => safeFormatDate(iso, '');
 
 // Mini components
 const Chip = ({ label, tone = 'neutral', icon }: { label: string; tone?: 'neutral'|'success'|'warning'|'danger'|'info'; icon?: string }) => {

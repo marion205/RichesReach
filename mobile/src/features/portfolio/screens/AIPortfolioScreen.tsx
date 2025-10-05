@@ -1367,13 +1367,48 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
         success: res.data?.generateAiRecommendations?.success,
         message: res.data?.generateAiRecommendations?.message,
         hasData: !!res.data?.generateAiRecommendations?.recommendations,
-        errors: res.errors
+        errors: res.errors,
+        fullResponse: res.data
       });
       
-      const ok = res.data?.generateAiRecommendations?.success;
+      // Check for GraphQL errors first
+      if (res.errors && res.errors.length > 0) {
+        console.log('❌ GraphQL errors:', res.errors);
+        const errorMessage = res.errors[0]?.message || 'Unknown GraphQL error';
+        
+        if (errorMessage.includes('Authentication required') || errorMessage.includes('not authenticated')) {
+          Alert.alert(
+            'Authentication Required',
+            'Please log in to generate AI recommendations.',
+            [{ text: 'OK' }]
+          );
+          return;
+        }
+        
+        if (errorMessage.includes('Income profile required')) {
+          Alert.alert(
+            'Profile Required',
+            'Please complete your financial profile first to generate AI recommendations.',
+            [{ text: 'OK', onPress: () => setShowProfileForm(true) }]
+          );
+          return;
+        }
+        
+        Alert.alert('Error', errorMessage);
+        return;
+      }
+      
+      // Check if response data is null or missing
+      if (!res.data || !res.data.generateAiRecommendations) {
+        console.log('❌ No response data received');
+        Alert.alert('Error', 'No response received from server. Please try again.');
+        return;
+      }
+      
+      const ok = res.data.generateAiRecommendations.success;
       
       if (!ok) {
-        const message = res.data?.generateAiRecommendations?.message || 'Failed to generate recommendations';
+        const message = res.data.generateAiRecommendations.message || 'Failed to generate recommendations';
         console.log('❌ Generation failed:', message);
         Alert.alert('Error', message);
         return;
@@ -1399,7 +1434,21 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
         stack: err?.stack,
         name: err?.name
       });
-      Alert.alert('Error', 'Failed to generate recommendations. Please try again.');
+      
+      // Provide more specific error messages based on error type
+      let errorMessage = 'Failed to generate recommendations. Please try again.';
+      
+      if (err?.message?.includes('Network request failed')) {
+        errorMessage = 'Network error. Please check your internet connection and try again.';
+      } else if (err?.message?.includes('Authentication required')) {
+        errorMessage = 'Please log in to generate AI recommendations.';
+      } else if (err?.message?.includes('GraphQL')) {
+        errorMessage = 'Server error. Please try again later.';
+      } else if (err?.message) {
+        errorMessage = err.message;
+      }
+      
+      Alert.alert('Error', errorMessage);
     } finally {
       console.log('🏁 Generation process completed, setting loading to false');
       setIsGeneratingRecommendations(false);

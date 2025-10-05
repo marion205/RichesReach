@@ -15,6 +15,7 @@ import {
 import { gql, useQuery, useMutation, useApolloClient } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { safeFormatDate } from '../../../utils/dateUtils';
 import JWTAuthService from '../../auth/services/JWTAuthService';
 import { GET_MY_PORTFOLIOS } from '../../../portfolioQueries';
 import SBLOCCalculator from '../../../components/forms/SBLOCCalculator';
@@ -579,7 +580,7 @@ watchlistData.myWatchlist.map((w: any) => (
 </View>
 <View style={{ flex: 1 }}>
 <Text style={styles.holdingName}>{w.stock.companyName}</Text>
-<Text style={styles.holdingMeta}>Added {new Date(w.addedAt).toLocaleDateString()}</Text>
+<Text style={styles.holdingMeta}>Added {safeFormatDate(w.addedAt)}</Text>
 <Text style={styles.noteTxt}>{w.notes || 'No notes added'}</Text>
 </View>
 <View style={{ alignItems: 'flex-end' }}>

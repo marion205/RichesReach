@@ -16,6 +16,7 @@ import {
   GET_CRYPTO_RECOMMENDATIONS
 } from '../../cryptoQueries';
 import { gql } from '@apollo/client';
+import { safeFormatDateTime, safeCreateDate } from '../../utils/dateUtils';
 
 // Add this lightweight holdings query
 const GET_CRYPTO_HOLDINGS = gql`
@@ -242,6 +243,18 @@ const CryptoMLSignalsCard: React.FC<Props> = ({ initialSymbol = 'BTC', pollInter
   const signal = useMemo(() => {
     const s = signalData?.cryptoMlSignal ?? {};
     
+    // Validate and sanitize timestamp
+    let validTimestamp = null;
+    if (s.timestamp) {
+      try {
+        const timestamp = typeof s.timestamp === 'string' ? parseFloat(s.timestamp) : s.timestamp;
+        if (typeof timestamp === 'number' && !isNaN(timestamp) && timestamp > 0) {
+          validTimestamp = timestamp;
+        }
+      } catch (error) {
+        console.warn('Error processing timestamp:', s.timestamp, error);
+      }
+    }
     
     // safe defaults to avoid client crashes
     return {
@@ -251,8 +264,28 @@ const CryptoMLSignalsCard: React.FC<Props> = ({ initialSymbol = 'BTC', pollInter
       sentiment: s.probability > 0.6 ? 'Bullish' : s.probability < 0.4 ? 'Bearish' : 'Neutral',
       sentimentDescription: s.probability > 0.6 ? 'Positive market sentiment detected.' : s.probability < 0.4 ? 'Negative market sentiment detected.' : 'Neutral market conditions.',
       featuresUsed: s.features || {},
-      createdAt: s.timestamp ? new Date(s.timestamp * 1000).toISOString() : new Date().toISOString(),
-      expiresAt: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(), // +6h
+      createdAt: (() => {
+        try {
+          if (validTimestamp) {
+            const timestampMs = validTimestamp * 1000;
+            if (timestampMs > 0 && timestampMs < Number.MAX_SAFE_INTEGER) {
+              return new Date(timestampMs).toISOString();
+            }
+          }
+          return new Date().toISOString();
+        } catch (error) {
+          console.warn('Invalid timestamp in signal data:', validTimestamp, error);
+          return new Date().toISOString();
+        }
+      })(),
+      expiresAt: (() => {
+        try {
+          return new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(); // +6h
+        } catch (error) {
+          console.warn('Error creating expiration date:', error);
+          return new Date().toISOString();
+        }
+      })(),
       explanation: s.explanation || 'Model output available. Awaiting more data for richer rationale.',
     };
   }, [signalData, signalLoading, signalError]);
@@ -281,16 +314,50 @@ const CryptoMLSignalsCard: React.FC<Props> = ({ initialSymbol = 'BTC', pollInter
     try {
       setGenerating(true);
       const res = await generatePrediction({ variables: { symbol: selectedSymbol } });
-      const ok = res.data?.crypto?.generateMlPrediction?.success;
+      
+      console.log('ML Prediction response:', res);
+      
+      // Check for GraphQL errors first
+      if (res.errors && res.errors.length > 0) {
+        console.log('GraphQL errors:', res.errors);
+        const errorMessage = res.errors[0]?.message || 'Unknown GraphQL error';
+        Alert.alert('Error', errorMessage);
+        return;
+      }
+      
+      // Check if response data is null or missing
+      if (!res.data || !res.data.generateMlPrediction) {
+        console.log('No response data received');
+        Alert.alert('Error', 'No response received from server. Please try again.');
+        return;
+      }
+      
+      const ok = res.data.generateMlPrediction.success;
       if (ok) {
-        const p = clamp01(res.data.crypto.generateMlPrediction.probability);
-        Alert.alert('Prediction Generated', `${selectedSymbol}: ${pctStr(p)} probability`);
+        const p = clamp01(res.data.generateMlPrediction.probability);
+        const explanation = res.data.generateMlPrediction.explanation;
+        Alert.alert(
+          'Prediction Generated', 
+          `${selectedSymbol}: ${pctStr(p)} probability\n\n${explanation || 'AI analysis completed.'}`
+        );
         await refetchSignal();
       } else {
-        Alert.alert('Error', res.data?.crypto?.generateMlPrediction?.message || 'Failed to generate prediction.');
+        const message = res.data.generateMlPrediction.message || 'Failed to generate prediction.';
+        Alert.alert('Error', message);
       }
     } catch (e) {
-      Alert.alert('Error', 'Failed to generate prediction. Please try again.');
+      console.error('ML Prediction error:', e);
+      let errorMessage = 'Failed to generate prediction. Please try again.';
+      
+      if (e?.message?.includes('Network request failed')) {
+        errorMessage = 'Network error. Please check your internet connection and try again.';
+      } else if (e?.message?.includes('Authentication required')) {
+        errorMessage = 'Please log in to generate ML predictions.';
+      } else if (e?.message) {
+        errorMessage = e.message;
+      }
+      
+      Alert.alert('Error', errorMessage);
     } finally {
       setGenerating(false);
     }
@@ -461,8 +528,8 @@ const CryptoMLSignalsCard: React.FC<Props> = ({ initialSymbol = 'BTC', pollInter
 
           {/* Timestamps */}
           <View style={styles.footer}>
-            <Text style={styles.meta}>Generated: {new Date(signal.createdAt).toLocaleString()}</Text>
-            <Text style={styles.meta}>Expires: {new Date(signal.expiresAt).toLocaleString()}</Text>
+            <Text style={styles.meta}>Generated: {safeFormatDateTime(signal.createdAt)}</Text>
+            <Text style={styles.meta}>Expires: {safeFormatDateTime(signal.expiresAt)}</Text>
           </View>
         </View>
       ) : (

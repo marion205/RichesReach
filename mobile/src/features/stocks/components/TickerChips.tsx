@@ -6,8 +6,15 @@ import TickerFollowButton from './TickerFollowButton';
 
 const C = { primary: '#00cc99', red: '#EF4444', green: '#10B981', text: '#111827', chip: '#F3F4F6', border: '#E5E7EB' };
 
-export default function TickerChips({ symbols, onPressSymbol }: { symbols: string[]; onPressSymbol?: (s: string) => void }) {
-  const uniq = useMemo(() => Array.from(new Set((symbols || []).filter(Boolean).map((s) => s.toUpperCase()))), [symbols]);
+export default function TickerChips({ symbols, onPressSymbol }: { symbols: (string | {symbol: string, __typename?: string})[]; onPressSymbol?: (s: string) => void }) {
+  const uniq = useMemo(() => {
+    const processed = (symbols || []).filter(Boolean).map((s) => {
+      // Handle both string and object formats
+      const symbol = typeof s === 'string' ? s : s.symbol;
+      return symbol?.toUpperCase();
+    }).filter(Boolean);
+    return Array.from(new Set(processed));
+  }, [symbols]);
   const { data } = useQuery(MINI_QUOTES, { variables: { symbols: uniq }, skip: !uniq.length, fetchPolicy: 'cache-first' });
 
   const quoteMap = useMemo(() => {

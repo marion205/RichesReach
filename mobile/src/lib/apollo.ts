@@ -53,7 +53,56 @@ const errorLink = onError(({ networkError, operation, graphQLErrors }) => {
 // Create Apollo Client with all links
 export const apollo = new ApolloClient({
   link: from([loggingLink, errorLink, retryLink, httpLink]),
-  cache: new InMemoryCache(),
+  cache: new InMemoryCache({
+    typePolicies: {
+      Query: {
+        fields: {
+          portfolioMetrics: {
+            merge: true, // Merge partial updates
+          },
+          myPortfolios: {
+            merge: true, // Merge partial updates
+          },
+        },
+      },
+      // Add type policy for portfolio holdings to handle currentPrice field
+      PortfolioHolding: {
+        keyFields: ["id"], // Use id as the key field
+        fields: {
+          currentPrice: {
+            read(existing, { readField }) {
+              // Try to get currentPrice from the holding itself first
+              const directPrice = readField('currentPrice');
+              if (directPrice !== undefined) {
+                return directPrice;
+              }
+              // If not found, get it from the nested stock object
+              const stock = readField('stock');
+              return stock?.currentPrice;
+            },
+          },
+        },
+      },
+      // Add type policy for portfolio positions (used in myPortfolios)
+      PortfolioPosition: {
+        keyFields: ["id"],
+        fields: {
+          currentPrice: {
+            read(existing, { readField }) {
+              // Try to get currentPrice from the position itself first
+              const directPrice = readField('currentPrice');
+              if (directPrice !== undefined) {
+                return directPrice;
+              }
+              // If not found, get it from the nested stock object
+              const stock = readField('stock');
+              return stock?.currentPrice;
+            },
+          },
+        },
+      },
+    },
+  }),
   defaultOptions: {
     watchQuery: { 
       fetchPolicy: "cache-and-network", 

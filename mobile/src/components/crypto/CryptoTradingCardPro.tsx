@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useQuery, useMutation } from '@apollo/client';
+import CryptoIcon from './CryptoIcon';
 import {
   GET_SUPPORTED_CURRENCIES,
   GET_CRYPTO_PRICE,
@@ -333,12 +334,8 @@ const CryptoTradingCardPro: React.FC<CryptoTradingCardProps> = ({
     if (iconUrl) {
       return <Image source={{ uri: iconUrl }} style={{ width: size, height: size, borderRadius: size/2 }} resizeMode="cover" />;
     }
-    // Fallback initial
-    return (
-      <View style={[styles.fallbackCircle, { width: size, height: size, borderRadius: size/2 }]}>
-        <Text style={styles.fallbackText}>{sym.slice(0,1)}</Text>
-      </View>
-    );
+    // Use our custom CryptoIcon component as fallback
+    return <CryptoIcon symbol={sym} size={size} iconUrl={iconUrl} />;
   };
 
   /* ---------- Render ---------- */

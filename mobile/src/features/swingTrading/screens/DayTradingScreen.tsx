@@ -5,6 +5,7 @@ import {
 import { useQuery, useMutation } from '@apollo/client';
 import { GET_DAY_TRADING_PICKS, LOG_DAY_TRADING_OUTCOME } from '../../../graphql/dayTrading';
 import Icon from 'react-native-vector-icons/Feather';
+import { safeFormatTime } from '../../../utils/dateUtils';
 
 type Side = 'LONG' | 'SHORT';
 type TradingMode = 'SAFE' | 'AGGRESSIVE';
@@ -105,7 +106,7 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (s: stri
 
       {dayTradingData && (
         <View style={s.metaBar}>
-          <Text style={s.meta}>Updated {new Date(dayTradingData.asOf).toLocaleTimeString()}</Text>
+          <Text style={s.meta}>Updated {safeFormatTime(dayTradingData.asOf)}</Text>
           <Text style={s.meta}>Universe {dayTradingData.universeSize} • Threshold {dayTradingData.qualityThreshold}</Text>
         </View>
       )}

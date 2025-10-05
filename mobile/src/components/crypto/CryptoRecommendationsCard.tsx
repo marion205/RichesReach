@@ -11,6 +11,7 @@ import {
 import { useQuery } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
 import { GET_CRYPTO_RECOMMENDATIONS } from '../../cryptoQueries';
+import CryptoIcon from './CryptoIcon';
 
 interface CryptoRecommendation {
   symbol: string;
@@ -21,6 +22,8 @@ interface CryptoRecommendation {
   volatilityTier: string;
   liquidity24hUsd: number;
   rationale: string;
+  recommendation: string;
+  riskLevel: string;
 }
 
 interface CryptoRecommendationsCardProps {
@@ -176,6 +179,7 @@ const CryptoRecommendationsCard: React.FC<CryptoRecommendationsCardProps> = ({
             >
               <View style={styles.recommendationHeader}>
                 <View style={styles.symbolContainer}>
+                  <CryptoIcon symbol={rec.symbol} size={24} />
                   <Text style={styles.symbol}>{rec.symbol}</Text>
                   <View style={[
                     styles.volatilityBadge,

@@ -5,7 +5,7 @@ import Icon from 'react-native-vector-icons/Feather';
 type Quotes = Record<string, { price?: number; chg?: number }>;
 
 type Props = {
-  symbols: string[];
+  symbols: (string | {symbol: string, __typename?: string})[];
   liveQuotes?: Quotes; // optional
   onPressSymbol?: (symbol: string) => void;
   onManagePress?: () => void;
@@ -32,7 +32,9 @@ const FollowingRibbon: React.FC<Props> = ({ symbols, liveQuotes = {}, onPressSym
         contentContainerStyle={styles.scroller}
       >
         {symbols.map((sym) => {
-          const q = liveQuotes[sym] || {};
+          // Handle both string and object formats
+          const symbol = typeof sym === 'string' ? sym : sym.symbol;
+          const q = liveQuotes[symbol] || {};
           const chg = Number.isFinite(q.chg) ? (q.chg as number) : undefined; // % change
           const price = Number.isFinite(q.price) ? (q.price as number) : undefined;
 
@@ -42,13 +44,13 @@ const FollowingRibbon: React.FC<Props> = ({ symbols, liveQuotes = {}, onPressSym
 
           return (
             <TouchableOpacity
-              key={sym}
-              onPress={() => onPressSymbol?.(sym)}
+              key={symbol}
+              onPress={() => onPressSymbol?.(symbol)}
               activeOpacity={0.85}
             >
               <View style={styles.chip}>
                 <View style={styles.left}>
-                  <Text style={styles.sym} numberOfLines={1}>{sym}</Text>
+                  <Text style={styles.sym} numberOfLines={1}>{symbol}</Text>
                   <Text style={styles.price} numberOfLines={1}>
                     {price == null ? '—' : price.toFixed(2)}
                   </Text>

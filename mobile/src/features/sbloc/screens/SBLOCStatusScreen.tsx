@@ -1,6 +1,7 @@
 import React, { useMemo, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, Linking, Alert } from 'react-native';
 import { useQuery, gql } from '@apollo/client';
+import { safeFormatDateTime } from '../../../utils/dateUtils';
 
 type SessionStatus =
   | 'CREATED'
@@ -168,7 +169,7 @@ export default function SblocStatusScreen({ route, navigation }: any) {
           )}
           {!!session.lastUpdatedIso && (
             <Text style={{ marginTop: 2, color: '#888', fontSize: 12 }}>
-              Updated: {new Date(session.lastUpdatedIso).toLocaleString()}
+              Updated: {safeFormatDateTime(session.lastUpdatedIso)}
             </Text>
           )}
           {!!session.message && (

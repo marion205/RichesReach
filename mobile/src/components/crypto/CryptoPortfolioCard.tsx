@@ -25,6 +25,7 @@ import {
 import Icon from 'react-native-vector-icons/Feather';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { SkeletonPortfolioCard } from '../common/Skeleton';
+import CryptoIcon from './CryptoIcon';
 
 type Holding = {
   cryptocurrency?: { symbol?: string };
@@ -306,17 +307,11 @@ const CryptoPortfolioCard: React.FC<CryptoPortfolioCardProps> = ({
           accessibilityLabel={`Open ${symbol} details`}
         >
           <View style={styles.holdingLeft}>
-            <View style={styles.holdingIcon}>
-              {iconInfo ? (
-                <Image 
-                  source={iconInfo.source} 
-                  style={styles.assetIcon}
-                  resizeMode="cover"
-                />
-              ) : (
-                <Text style={styles.holdingIconText}>{symbol.substring(0, 2)}</Text>
-              )}
-            </View>
+            <CryptoIcon 
+              symbol={symbol} 
+              size={40}
+              iconUrl={iconInfo?.type === 'url' ? iconInfo.source.uri : undefined}
+            />
             <View style={{ flex: 1 }}>
               <Text style={styles.holdingName}>{symbol}</Text>
               <Text style={styles.holdingSub}>{qty.toFixed(6)} coins</Text>

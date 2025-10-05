@@ -18,7 +18,7 @@ class RustCryptoService:
     """High-performance crypto analysis service using Rust backend"""
     
     def __init__(self):
-        self.rust_base_url = "http://localhost:3001"
+        self.rust_base_url = "http://localhost:3002"
         self.redis_client = None
         self.cache_ttl = 300  # 5 minutes
         self._init_redis()

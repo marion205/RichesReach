@@ -1347,7 +1347,12 @@ def sma(values, n):
     for i, v in enumerate(values):
         s += v
         if i >= n: s -= values[i-n]
-        out.append(s/n if i >= n-1 else None)
+        # Use current value as fallback for early periods to reduce nulls
+        if i >= n-1:
+            out.append(s/n)
+        else:
+            # Use partial average for early periods instead of None
+            out.append(s/(i+1))
     return out
 
 def ema(values, n):
@@ -1357,7 +1362,8 @@ def ema(values, n):
     for v in values:
         e = v if e is None else (v - e)*k + e
         out.append(e)
-    return [None]*(n-1) + out[n-1:]  # align with window
+    # Return all values instead of padding with None to reduce nulls
+    return out
 
 def rsi(closes, n=14):
     """Relative Strength Index - Wilder's smoothing"""
@@ -1369,9 +1375,20 @@ def rsi(closes, n=14):
     # Wilder's smoothing
     rsis, avg_g, avg_l = [], None, None
     for i in range(len(closes)):
-        if i == 0: rsis.append(None); continue
+        if i == 0: 
+            rsis.append(50.0)  # Default neutral RSI instead of None
+            continue
         g, l = gains[i], losses[i]
-        if i < n: rsis.append(None); continue
+        if i < n: 
+            # Use simple average for early periods instead of None
+            if i > 1:
+                avg_g = sum(gains[1:i+1]) / i
+                avg_l = sum(losses[1:i+1]) / i
+                rs = (avg_g / avg_l) if avg_l != 0 else 1
+                rsis.append(100 - 100/(1+rs))
+            else:
+                rsis.append(50.0)
+            continue
         if i == n:
             avg_g = sum(gains[1:n+1]) / n
             avg_l = sum(losses[1:n+1]) / n
@@ -1410,7 +1427,19 @@ def bollinger(closes, n=20, k=2):
     out_u, out_m, out_l = [], [], []
     for i in range(len(closes)):
         if i < n-1:
-            out_u.append(None); out_m.append(None); out_l.append(None)
+            # Use partial data for early periods instead of None
+            window = closes[:i+1]
+            m = sma_vals[i]
+            if len(window) > 1:
+                var = sum((x - m)**2 for x in window) / len(window)
+                std = var**0.5
+                out_u.append(m + k*std)
+                out_m.append(m)
+                out_l.append(m - k*std)
+            else:
+                out_u.append(m)
+                out_m.append(m)
+                out_l.append(m)
             continue
         window = closes[i-n+1:i+1]
         m = sma_vals[i]
@@ -3061,16 +3090,35 @@ async def graphql_endpoint(request_data: dict):
                         # Map Rust response to GraphQL schema
                         results = []
                         for rec in items:
+                            # Determine risk level based on volatility tier
+                            volatility_tier = rec.get("volatility_tier", "MEDIUM")
+                            risk_level = "LOW" if volatility_tier == "LOW" else "HIGH" if volatility_tier == "HIGH" else "MEDIUM"
+                            
+                            # Determine recommendation based on score
+                            score = rec.get("score", 0.0)
+                            if score >= 0.7:
+                                recommendation = "STRONG BUY"
+                            elif score >= 0.6:
+                                recommendation = "BUY"
+                            elif score >= 0.4:
+                                recommendation = "HOLD"
+                            else:
+                                recommendation = "SELL"
+                            
                             results.append({
                                 "symbol": rec.get("symbol", ""),
                                 "name": rec.get("symbol", ""),
                                 "priceUsd": float(rec.get("price_usd", 0.0)),
                                 "volumeUsd24h": float(rec.get("liquidity_24h_usd", 0.0)),
-                                "volatilityTier": rec.get("volatility_tier", "MEDIUM"),
+                                "liquidity24hUsd": float(rec.get("liquidity_24h_usd", 0.0)),
+                                "volatilityTier": volatility_tier,
                                 "probability": rec.get("probability", 0.5),
                                 "confidenceLevel": rec.get("confidence_level", "LOW"),
                                 "explanation": rec.get("rationale", "Rust analysis completed"),
-                                "score": rec.get("score", 0.0),
+                                "rationale": rec.get("rationale", "Rust analysis completed"),
+                                "recommendation": recommendation,
+                                "riskLevel": risk_level,
+                                "score": score,
                                 "__typename": "CryptoRecommendation"
                             })
                         logger.info(f"✅ Used Rust service for recommendations")
@@ -3372,6 +3420,16 @@ async def graphql_endpoint(request_data: dict):
         limit = int(variables.get("limit") or 120)
         indicators_req = variables.get("indicators") or variables.get("inds") or []
         
+        # If indicators not in variables, try to extract from query string
+        if not indicators_req:
+            import re
+            # Look for default value in variable definition: $inds: [String!] = [...]
+            indicators_match = re.search(r'\$inds:\s*\[String!\].*?=\s*\[(.*?)\]', query, re.DOTALL)
+            if indicators_match:
+                indicators_str = indicators_match.group(1)
+                # Parse the array of strings
+                indicators_req = [s.strip().strip('"') for s in indicators_str.split(',') if s.strip()]
+        
         if not symbol:
             # Simple string parsing instead of regex
             if 'symbol:' in query:
@@ -3421,18 +3479,22 @@ async def graphql_endpoint(request_data: dict):
             if "EMA26" in indicators_req: inds["EMA26"] = ema(closes, 26)
             if "BB" in indicators_req:
                 u, m, l = bollinger(closes, 20, 2)
+                # Support both naming conventions for compatibility
                 inds["BB_upper"], inds["BB_middle"], inds["BB_lower"] = u, m, l
+                inds["BBUpper"], inds["BBMiddle"], inds["BBLower"] = u, m, l
             
             # Oscillators
             if "RSI" in indicators_req: inds["RSI14"] = rsi(closes, 14)
-            if "MACD" in indicators_req or "MACDHist" in indicators_req or "MACD_hist" in indicators_req:
+            if "MACD" in indicators_req or "MACDHist" in indicators_req or "MACD_hist" in indicators_req or "MACDSignal" in indicators_req or "MACD_signal" in indicators_req:
                 line, signal_line, hist = macd(closes, 12, 26, 9)
                 if "MACD" in indicators_req:
                     inds["MACD"] = line
                 if "MACDHist" in indicators_req or "MACD_hist" in indicators_req:
                     inds["MACD_hist"] = hist
-                if "MACD_signal" in indicators_req:
+                    inds["MACDHist"] = hist  # Support both naming conventions
+                if "MACD_signal" in indicators_req or "MACDSignal" in indicators_req:
                     inds["MACD_signal"] = signal_line
+                    inds["MACDSignal"] = signal_line  # Support both naming conventions
         except Exception as e:
             logger.error(f"Indicator calculation error: {e}")
             inds = {}
@@ -3937,6 +3999,7 @@ async def graphql_endpoint(request_data: dict):
         ]}}
 
     if "myPortfolios" in fields:
+        print("DEBUG: myPortfolios handler called - updated version")
         return {"data": {"myPortfolios": {
             "totalPortfolios": 2,
             "totalValue": 50000.00,
@@ -3949,8 +4012,8 @@ async def graphql_endpoint(request_data: dict):
                     "createdAt": "2024-01-15T10:00:00Z",
                     "updatedAt": datetime.now().isoformat(),
                     "holdings": [
-                        {"id": "h1", "stock": {"id": "stock_1", "symbol": "AAPL", "companyName": "Apple Inc.", "debtRatio": 0.15, "volatility": 0.28, "currentPrice": 175.5, "fundamentalAnalysis": {"revenueGrowth": 8.2, "profitMargin": 25.3, "returnOnEquity": 147.2, "debtToEquity": 0.15, "currentRatio": 1.05, "priceToBook": 39.2, "debtScore": 85, "dividendScore": 72, "valuationScore": 78, "growthScore": 82, "stabilityScore": 88}, "technicalIndicators": {"rsi": 65.2, "macd": 2.1, "macdhistogram": 0.8, "bollingerUpper": 185.3, "bollingerMiddle": 175.5, "bollingerLower": 165.7, "movingAverage50": 172.8, "movingAverage200": 168.5, "sma20": 175.5, "sma50": 172.8, "ema12": 176.8, "ema26": 174.2, "supportLevel": 170.0, "resistanceLevel": 180.0}, "updatedAt": datetime.now().isoformat()}, "shares": 50, "totalValue": 8750.00, "averagePrice": 175.0, "notes": "Core technology holding", "createdAt": "2024-01-15T10:00:00Z", "updatedAt": datetime.now().isoformat()},
-                        {"id": "h2", "stock": {"id": "stock_2", "symbol": "MSFT", "companyName": "Microsoft Corp.", "debtRatio": 0.12, "volatility": 0.24, "currentPrice": 380.25, "fundamentalAnalysis": {"revenueGrowth": 12.4, "profitMargin": 36.8, "returnOnEquity": 45.2, "debtToEquity": 0.12, "currentRatio": 2.5, "priceToBook": 12.8, "debtScore": 92, "dividendScore": 88, "valuationScore": 85, "growthScore": 90, "stabilityScore": 92}, "technicalIndicators": {"rsi": 58.7, "macd": 3.2, "macdhistogram": 1.2, "bollingerUpper": 395.1, "bollingerMiddle": 380.25, "bollingerLower": 365.4, "movingAverage50": 378.9, "movingAverage200": 365.2, "sma20": 380.25, "sma50": 378.9, "ema12": 384.5, "ema26": 382.1, "supportLevel": 375.0, "resistanceLevel": 390.0}, "updatedAt": datetime.now().isoformat()}, "shares": 30, "totalValue": 11407.50, "averagePrice": 380.25, "notes": "Cloud leadership play", "createdAt": "2024-01-16T14:30:00Z", "updatedAt": datetime.now().isoformat()}
+                        {"id": "h1", "currentPrice": 175.5, "stock": {"id": "stock_1", "symbol": "AAPL", "companyName": "Apple Inc.", "debtRatio": 0.15, "volatility": 0.28, "currentPrice": 175.5, "fundamentalAnalysis": {"revenueGrowth": 8.2, "profitMargin": 25.3, "returnOnEquity": 147.2, "debtToEquity": 0.15, "currentRatio": 1.05, "priceToBook": 39.2, "debtScore": 85, "dividendScore": 72, "valuationScore": 78, "growthScore": 82, "stabilityScore": 88}, "technicalIndicators": {"rsi": 65.2, "macd": 2.1, "macdhistogram": 0.8, "bollingerUpper": 185.3, "bollingerMiddle": 175.5, "bollingerLower": 165.7, "movingAverage50": 172.8, "movingAverage200": 168.5, "sma20": 175.5, "sma50": 172.8, "ema12": 176.8, "ema26": 174.2, "supportLevel": 170.0, "resistanceLevel": 180.0}, "updatedAt": datetime.now().isoformat()}, "shares": 50, "totalValue": 8750.00, "averagePrice": 175.0, "notes": "Core technology holding", "createdAt": "2024-01-15T10:00:00Z", "updatedAt": datetime.now().isoformat()},
+                        {"id": "h2", "currentPrice": 380.25, "stock": {"id": "stock_2", "symbol": "MSFT", "companyName": "Microsoft Corp.", "debtRatio": 0.12, "volatility": 0.24, "currentPrice": 380.25, "fundamentalAnalysis": {"revenueGrowth": 12.4, "profitMargin": 36.8, "returnOnEquity": 45.2, "debtToEquity": 0.12, "currentRatio": 2.5, "priceToBook": 12.8, "debtScore": 92, "dividendScore": 88, "valuationScore": 85, "growthScore": 90, "stabilityScore": 92}, "technicalIndicators": {"rsi": 58.7, "macd": 3.2, "macdhistogram": 1.2, "bollingerUpper": 395.1, "bollingerMiddle": 380.25, "bollingerLower": 365.4, "movingAverage50": 378.9, "movingAverage200": 365.2, "sma20": 380.25, "sma50": 378.9, "ema12": 384.5, "ema26": 382.1, "supportLevel": 375.0, "resistanceLevel": 390.0}, "updatedAt": datetime.now().isoformat()}, "shares": 30, "totalValue": 11407.50, "averagePrice": 380.25, "notes": "Cloud leadership play", "createdAt": "2024-01-16T14:30:00Z", "updatedAt": datetime.now().isoformat()}
                     ],
                     "__typename": "Portfolio"
                 },
@@ -3962,7 +4025,7 @@ async def graphql_endpoint(request_data: dict):
                     "createdAt": "2024-01-20T14:30:00Z",
                     "updatedAt": datetime.now().isoformat(),
                     "holdings": [
-                        {"id": "h3", "stock": {"id": "stock_3", "symbol": "JNJ", "companyName": "Johnson & Johnson", "debtRatio": 0.08, "volatility": 0.18, "currentPrice": 150.0, "fundamentalAnalysis": {"revenueGrowth": 3.2, "profitMargin": 18.5, "returnOnEquity": 22.1, "debtToEquity": 0.08, "currentRatio": 1.2, "priceToBook": 4.1, "debtScore": 78, "dividendScore": 95, "valuationScore": 72, "growthScore": 45, "stabilityScore": 95}, "technicalIndicators": {"rsi": 42.3, "macd": 0.8, "macdhistogram": 0.3, "bollingerUpper": 155.2, "bollingerMiddle": 150.5, "bollingerLower": 145.8, "movingAverage50": 150.1, "movingAverage200": 148.7, "sma20": 150.5, "sma50": 150.1, "ema12": 151.2, "ema26": 149.8, "supportLevel": 148.0, "resistanceLevel": 152.0}, "updatedAt": datetime.now().isoformat()}, "shares": 100, "totalValue": 15000.00, "averagePrice": 150.0, "notes": "Stable dividend stock", "createdAt": "2024-01-20T14:30:00Z", "updatedAt": datetime.now().isoformat()}
+                        {"id": "h3", "currentPrice": 150.0, "stock": {"id": "stock_3", "symbol": "JNJ", "companyName": "Johnson & Johnson", "debtRatio": 0.08, "volatility": 0.18, "currentPrice": 150.0, "fundamentalAnalysis": {"revenueGrowth": 3.2, "profitMargin": 18.5, "returnOnEquity": 22.1, "debtToEquity": 0.08, "currentRatio": 1.2, "priceToBook": 4.1, "debtScore": 78, "dividendScore": 95, "valuationScore": 72, "growthScore": 45, "stabilityScore": 95}, "technicalIndicators": {"rsi": 42.3, "macd": 0.8, "macdhistogram": 0.3, "bollingerUpper": 155.2, "bollingerMiddle": 150.5, "bollingerLower": 145.8, "movingAverage50": 150.1, "movingAverage200": 148.7, "sma20": 150.5, "sma50": 150.1, "ema12": 151.2, "ema26": 149.8, "supportLevel": 148.0, "resistanceLevel": 152.0}, "updatedAt": datetime.now().isoformat()}, "shares": 100, "totalValue": 15000.00, "averagePrice": 150.0, "notes": "Stable dividend stock", "createdAt": "2024-01-20T14:30:00Z", "updatedAt": datetime.now().isoformat()}
                     ],
                     "__typename": "Portfolio"
                 }
@@ -5525,6 +5588,16 @@ async def graphql_endpoint(request_data: dict):
                 "peRatio": pe_ratio,
                 "dividendYield": dividend_yield,
                 "beginnerFriendlyScore": beginner_score,
+                "beginnerScoreBreakdown": {
+                    "score": beginner_score,
+                    "factors": [
+                        { "name": "Market Cap", "weight": 0.25, "value": 0.9 if market_cap > 1000000000000 else 0.7, "contrib": 0.225 if market_cap > 1000000000000 else 0.175, "detail": "Large cap stocks are typically more stable" },
+                        { "name": "Volatility", "weight": 0.25, "value": 0.8 if volatility < 0.25 else 0.6, "contrib": 0.2 if volatility < 0.25 else 0.15, "detail": "Lower volatility indicates more predictable price movements" },
+                        { "name": "P/E Ratio", "weight": 0.25, "value": 0.85 if pe_ratio < 30 else 0.65, "contrib": 0.2125 if pe_ratio < 30 else 0.1625, "detail": "Reasonable valuation relative to earnings" },
+                        { "name": "Dividend", "weight": 0.25, "value": 0.9 if dividend_yield > 1.0 else 0.7, "contrib": 0.225 if dividend_yield > 1.0 else 0.175, "detail": "Dividend provides income and indicates financial stability" }
+                    ],
+                    "notes": ["Diversified business model with strong growth prospects"]
+                },
                 "currentPrice": quote.get("currentPrice", 100.0),
                 "change": quote.get("change", 0.0),
                 "changePercent": quote.get("changePercent", 0.0),

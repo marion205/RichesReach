@@ -1,6 +1,7 @@
 import React, { memo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
+import { safeFormatDate } from '../../utils/dateUtils';
 import { getScoreColor, getBuyRecommendation } from '../../shared/utils/score';
 
 export type WatchlistItem = {
@@ -64,7 +65,7 @@ function WatchlistCard({ item, onRemove }: WatchlistCardProps) {
         </View>
       ) : null}
 
-      <Text style={styles.added}>Added: {new Date(item.addedAt).toLocaleDateString()}</Text>
+      <Text style={styles.added}>Added: {safeFormatDate(item.addedAt)}</Text>
     </View>
   );
 }

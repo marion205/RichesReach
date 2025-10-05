@@ -58,7 +58,7 @@ class UserType(DjangoObjectType):
     subscriptionTier = graphene.String()
     
     # ticker follows
-    followedTickers = graphene.List('core.types.TickerType')
+    followedTickers = graphene.List(graphene.String)
 
     def resolve_profilePic(self, info):
         return getattr(self, 'profile_pic', None)
@@ -105,7 +105,7 @@ class UserType(DjangoObjectType):
         """Return the ticker symbols this user is following"""
         from .ticker_follows import get_followed_tickers
         followed_symbols = get_followed_tickers(self.id)
-        return [TickerType(symbol=symbol) for symbol in followed_symbols]
+        return followed_symbols  # Return strings directly, not TickerType objects
 
     def resolve_subscriptionTier(self, info):
         return "free"

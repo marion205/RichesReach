@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useQuery, useMutation } from '@apollo/client';
 import { GET_DAY_TRADING_PICKS, LOG_DAY_TRADING_OUTCOME } from '../../../graphql/dayTrading';
+import { safeFormatTime } from '../../../utils/dateUtils';
 
 type TradingMode = 'SAFE' | 'AGGRESSIVE';
 type Side = 'LONG' | 'SHORT';
@@ -337,7 +338,7 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
       {dayTradingData && (
         <View style={[styles.marketBox, { backgroundColor: C.card }]}>
           <Text style={[styles.marketText, { color: C.sub }]}>
-            Last Updated: {new Date(dayTradingData.asOf).toLocaleTimeString()}
+            Last Updated: {safeFormatTime(dayTradingData.asOf)}
           </Text>
           <Text style={[styles.marketText, { color: C.sub }]}>
             Universe: {dayTradingData.universeSize} • Threshold: {dayTradingData.qualityThreshold}

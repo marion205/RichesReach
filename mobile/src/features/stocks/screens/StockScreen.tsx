@@ -5,6 +5,7 @@ import {
 import Icon from 'react-native-vector-icons/Feather';
 import { useApolloClient, gql, useQuery, useMutation } from '@apollo/client';
 import { ADD_TO_WATCHLIST, REMOVE_FROM_WATCHLIST } from '../../../graphql/mutations';
+import { safeFormatDate } from '../../../utils/dateUtils';
 
 import StockCard from '../../../components/common/StockCard';
 import WatchlistCard, { WatchlistItem } from '../../../components/common/WatchlistCard';
@@ -192,7 +193,7 @@ const CHART_QUERY = gql`
     $tf: String = "1D",
     $iv: String = "1D",
     $limit: Int = 180,
-    $inds: [String!] = ["SMA20","SMA50","EMA12","EMA26","RSI","MACD","MACDHist","BB"]
+    $inds: [String!] = ["SMA20","SMA50","EMA12","EMA26","RSI","MACD","MACDSignal","MACDHist","BB"]
   ) {
     stockChartData(
       symbol: $symbol,
@@ -282,7 +283,7 @@ const [searchQuery, setSearchQuery] = useState('');
       tf: chartInterval,
       iv: chartInterval,
       limit: 180,
-      inds: ["SMA20","SMA50","EMA12","EMA26","RSI","MACD","MACDHist","BB"],
+      inds: ["SMA20","SMA50","EMA12","EMA26","RSI","MACD","MACDSignal","MACDHist","BB"],
     },
     skip: activeTab !== 'research' || !researchSymbol,
     fetchPolicy: 'cache-and-network',
@@ -704,11 +705,37 @@ const [searchQuery, setSearchQuery] = useState('');
     }
   ];
 
-  // ALWAYS RETURN MOCK DATA - NO CONDITIONS
-  const listData = mockStocks;
+  // Use real data based on active tab
+  const listData = useMemo(() => {
+    switch (activeTab) {
+      case 'browse':
+        return stocks.data?.stocks || [];
+      case 'beginner':
+        return beginnerData?.beginnerFriendlyStocks || [];
+      case 'watchlist':
+        return watchlistQ.data?.myWatchlist || [];
+      case 'research':
+        return researchData?.researchHub?.peers || [];
+      default:
+        return [];
+    }
+  }, [activeTab, stocks.data, beginnerData, watchlistQ.data, researchData]);
 
-  // DISABLE LOADING FOR SCREENSHOTS - ALWAYS SHOW MOCK DATA
-  const loading = false;
+  // Use real loading state
+  const loading = useMemo(() => {
+    switch (activeTab) {
+      case 'browse':
+        return stocks.loading;
+      case 'beginner':
+        return beginnerLoading;
+      case 'watchlist':
+        return watchlistQ.loading;
+      case 'research':
+        return researchLoading;
+      default:
+        return false;
+    }
+  }, [activeTab, stocks.loading, beginnerLoading, watchlistQ.loading, researchLoading]);
 
   // Log errors for debugging
   if (stocks.error) console.warn('Stocks error:', stocks.error);
@@ -861,7 +888,7 @@ placeholderTextColor="#999"
                   <ResponsiveChart height={220}>
                     {(w) => (
                       <AdvancedChart
-                        key={`${researchSymbol}-${chartInterval}-${chartData.stockChartData.data.length}`}
+                        key={`${researchSymbol}-${chartInterval}`}
                         data={chartData.stockChartData.data}
                         indicators={chartData.stockChartData.indicators || {}}
                         width={w}
@@ -1151,7 +1178,7 @@ placeholderTextColor="#999"
                         </View>
                         <View style={styles.orderActions}>
                           <Text style={styles.orderDate}>
-                            {new Date(order.createdAt).toLocaleDateString()}
+                            {safeFormatDate(order.createdAt)}
                           </Text>
                           {order.status === 'PENDING' && (
                             <TouchableOpacity

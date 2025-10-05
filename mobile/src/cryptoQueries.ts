@@ -301,14 +301,12 @@ export const CREATE_SBLOC_LOAN = gql`
 
 export const GENERATE_ML_PREDICTION = gql`
   mutation GenerateMLPrediction($symbol: String!) {
-    crypto {
-      generateMlPrediction(symbol: $symbol) {
-        success
-        predictionId
-        probability
-        explanation
-        message
-      }
+    generateMlPrediction(symbol: $symbol) {
+      success
+      predictionId
+      probability
+      explanation
+      message
     }
   }
 `;
