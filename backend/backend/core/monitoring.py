@@ -313,6 +313,9 @@ def get_logger(name: str = "richesreach"):
     """Get structured logger"""
     return structlog.get_logger(name)
 
+# Export logger for backward compatibility
+logger = get_logger()
+
 # Export commonly used functions
 __all__ = [
     'performance_monitor',

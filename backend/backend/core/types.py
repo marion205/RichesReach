@@ -1167,3 +1167,39 @@ class OptionOrderType(graphene.ObjectType):
     createdAt = graphene.DateTime()
     updatedAt = graphene.DateTime()
     notes = graphene.String()
+
+# AI Scans Types
+class ScanResultType(graphene.ObjectType):
+    """Scan Result type"""
+    id = graphene.String()
+    symbol = graphene.String()
+    currentPrice = graphene.Float()
+    changePercent = graphene.Float()
+    confidence = graphene.Float()
+
+class PlaybookPerformanceType(graphene.ObjectType):
+    """Playbook Performance type"""
+    successRate = graphene.Float()
+    averageReturn = graphene.Float()
+
+class PlaybookType(graphene.ObjectType):
+    """Playbook type"""
+    id = graphene.String()
+    name = graphene.String()
+    author = graphene.String()
+    riskLevel = graphene.String()
+    performance = graphene.Field(PlaybookPerformanceType)
+    tags = graphene.List(graphene.String)
+
+class AIScanType(graphene.ObjectType):
+    """AI Scan type"""
+    id = graphene.String()
+    name = graphene.String()
+    description = graphene.String()
+    category = graphene.String()
+    riskLevel = graphene.String()
+    timeHorizon = graphene.String()
+    isActive = graphene.Boolean()
+    lastRun = graphene.String()
+    results = graphene.List(ScanResultType)
+    playbook = graphene.Field(PlaybookType)

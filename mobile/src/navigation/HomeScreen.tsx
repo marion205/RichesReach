@@ -185,7 +185,7 @@ import FinancialChatbotService, { AlphaVantageRecommendationProvider } from '../
       <View style={styles.chatModal} accessibilityViewIsModal>
         <View style={styles.chatHeader}>
           <View style={styles.chatTitleContainer}>
-            <Icon name="zap" size={20} color="#00cc99" style={styles.chatTitleIcon} />
+            <Icon name="flash-on" size={20} color="#00cc99" style={styles.chatTitleIcon} />
             <Text style={styles.chatTitle}>Financial Education Assistant</Text>
           </View>
           <View style={styles.chatHeaderActions}>
@@ -527,6 +527,46 @@ import FinancialChatbotService, { AlphaVantageRecommendationProvider } from '../
               portfolioHistory={portfolioHistory}
             />
           )}
+
+          {/* AI Tools Section */}
+          <View style={styles.learningSection}>
+            <View style={styles.learningHeader}>
+              <View style={styles.learningHeaderLeft}>
+                <Icon name="zap" size={20} color="#00cc99" />
+                <Text style={styles.learningTitle}>AI Tools</Text>
+              </View>
+              <TouchableOpacity style={styles.learningButton} onPress={() => navigateTo('ai-scans')}>
+                <Text style={styles.learningButtonText}>Explore All</Text>
+                <Icon name="chevron-right" size={16} color="#00cc99" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.learningCards}>
+              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('ai-scans')}>
+                <View style={styles.learningCardIcon}>
+                  <Icon name="search" size={24} color="#00cc99" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={styles.learningCardTitle}>AI Scans</Text>
+                  <Text style={styles.learningCardDescription}>Market intelligence & scanning</Text>
+                  <Text style={styles.learningCardMeta}>Hedge-fund grade analysis</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('ai-options')}>
+                <View style={styles.learningCardIcon}>
+                  <Icon name="trending-up" size={24} color="#FF3B30" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={styles.learningCardTitle}>AI Options</Text>
+                  <Text style={styles.learningCardDescription}>Options strategy recommendations</Text>
+                  <Text style={styles.learningCardMeta}>Advanced options analysis</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+            </View>
+          </View>
   
           {/* Swing Trading Section */}
           <View style={styles.learningSection}>
@@ -655,6 +695,7 @@ import FinancialChatbotService, { AlphaVantageRecommendationProvider } from '../
               </TouchableOpacity>
             </View>
           </View>
+
         </ScrollView>
   
         {/* Floating chat button */}

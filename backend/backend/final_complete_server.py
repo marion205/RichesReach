@@ -129,6 +129,24 @@ except ImportError as e:
     ADVANCED_SECURITY_AVAILABLE = False
     print(f"⚠️ Phase 3 Advanced Security not available: {e}")
 
+# AI Scans Integration
+try:
+    from core.ai_scans_api import router as ai_scans_api
+    AI_SCANS_AVAILABLE = True
+    print("✅ AI Scans API loaded successfully")
+except ImportError as e:
+    AI_SCANS_AVAILABLE = False
+    print(f"⚠️ AI Scans API not available: {e}")
+
+# Options Copilot Integration
+try:
+    from core.options_copilot_api import router as options_copilot_api
+    OPTIONS_COPILOT_AVAILABLE = True
+    print("✅ Options Copilot API loaded successfully")
+except ImportError as e:
+    OPTIONS_COPILOT_AVAILABLE = False
+    print(f"⚠️ Options Copilot API not available: {e}")
+
 # Phase 2: AWS Batch for ML Training
 try:
     from core.aws_batch_manager import AWSBatchManager, initialize_aws_batch
@@ -1224,9 +1242,23 @@ async def _close_httpx():
         with suppress(Exception):
             await svc.async_client.aclose()
 
+# CORS Configuration - Production vs Development
+if os.getenv("ENV") == "production":
+    # Production CORS - Restricted origins
+    allowed_origins = [
+        "https://app.richesreach.net",
+        "https://riches-reach-alb-1199497064.us-east-1.elb.amazonaws.com",
+    ]
+else:
+    # Development CORS - Allow all for local testing
+    allowed_origins = ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"],
+    allow_origins=allowed_origins, 
+    allow_credentials=True, 
+    allow_methods=["*"], 
+    allow_headers=["*"],
 )
 
 # Import and include AI Options API router
@@ -1306,6 +1338,20 @@ if ADVANCED_SECURITY_AVAILABLE:
     logger.info("✅ Phase 3 Advanced Security API included")
 else:
     logger.warning("⚠️ Phase 3 Advanced Security API not available")
+
+# Include AI Scans API
+if AI_SCANS_AVAILABLE:
+    app.include_router(ai_scans_api)
+    logger.info("✅ AI Scans API included")
+else:
+    logger.warning("⚠️ AI Scans API not available")
+
+# Include Options Copilot API
+if OPTIONS_COPILOT_AVAILABLE:
+    app.include_router(options_copilot_api)
+    logger.info("✅ Options Copilot API included")
+else:
+    logger.warning("⚠️ Options Copilot API not available")
 
 # Debug endpoint to prove which scoring module is active
 @app.get("/debug/scoring_info")
@@ -2380,6 +2426,26 @@ async def detailed_health_check():
             }
         else:
             health_status["advanced_security"] = {"available": False}
+
+        # AI Scans components
+        if AI_SCANS_AVAILABLE:
+            health_status["ai_scans"] = {
+                "available": True,
+                "endpoints": ["/api/ai-scans/", "/api/ai-scans/playbooks/"],
+                "features": ["market_scanning", "playbooks", "cloning"]
+            }
+        else:
+            health_status["ai_scans"] = {"available": False}
+
+        # Options Copilot components
+        if OPTIONS_COPILOT_AVAILABLE:
+            health_status["options_copilot"] = {
+                "available": True,
+                "endpoints": ["/api/options/copilot/recommendations", "/api/options/copilot/chain"],
+                "features": ["ai_recommendations", "risk_rails", "greeks_calculation"]
+            }
+        else:
+            health_status["options_copilot"] = {"available": False}
         
         return health_status
     except Exception as e:

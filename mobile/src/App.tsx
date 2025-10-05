@@ -57,6 +57,9 @@ import { SignalsScreen, RiskCoachScreen, BacktestingScreen } from './features/sw
 import LeaderboardScreen from './features/swingTrading/screens/LeaderboardScreen';
 import SwingTradingTestScreen from './components/SwingTradingTestScreen';
 import AIOptionsScreen from './features/options/screens/AIOptionsScreen';
+import OptionsCopilotScreen from './features/options/screens/OptionsCopilotScreen';
+import AIScansScreen from './features/aiScans/screens/AIScansScreen';
+import ScanPlaybookScreen from './features/aiScans/screens/ScanPlaybookScreen';
 import BankAccountScreen from './features/user/screens/BankAccountScreen';
 import NotificationsScreen from './features/notifications/screens/NotificationsScreen';
 import CryptoScreen from './navigation/CryptoScreen';
@@ -308,6 +311,12 @@ case 'social-feed':
 return <SocialScreen onNavigate={navigateTo} />;
 case 'ai-options':
 return <AIOptionsScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('home') }} />;
+case 'options-copilot':
+return <OptionsCopilotScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('ai-options') }} />;
+case 'ai-scans':
+return <AIScansScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('home') }} />;
+case 'scan-playbook':
+return <ScanPlaybookScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('ai-scans') }} route={{ params: { scan: {} } }} />;
 case 'trading':
 return <TradingScreen navigateTo={navigateTo} />;
 case 'day-trading':

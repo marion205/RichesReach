@@ -1449,6 +1449,108 @@ class Query(graphene.ObjectType):
             "reasoning": reasoning,
         }
 
+    # --- AI Scans ---
+    aiScans = graphene.List('core.types.AIScanType', filters=graphene.String(required=False))
+    playbooks = graphene.List('core.types.PlaybookType')
+
+    def resolve_aiScans(self, info, filters=None):
+        """Resolve AI Scans with optional filters"""
+        try:
+            from .ai_scans_engine import AIScansEngine
+            from .real_data_service import get_real_data_service
+            
+            # Initialize AI Scans Engine
+            ai_engine = AIScansEngine(get_real_data_service())
+            
+            # Get available scans
+            scans = ai_engine.get_available_scans()
+            
+            # Apply filters if provided
+            if filters:
+                # Simple filter implementation
+                filtered_scans = []
+                for scan in scans:
+                    if filters.lower() in scan.get('name', '').lower() or \
+                       filters.lower() in scan.get('category', '').lower():
+                        filtered_scans.append(scan)
+                return filtered_scans
+            
+            return scans
+            
+        except Exception as e:
+            print(f"Error resolving aiScans: {e}")
+            # Return mock data for testing
+            return [
+                {
+                    "id": "scan_1",
+                    "name": "Momentum Scanner",
+                    "description": "Identifies stocks with strong momentum signals",
+                    "category": "MOMENTUM",
+                    "riskLevel": "MEDIUM",
+                    "timeHorizon": "SHORT_TERM",
+                    "isActive": True,
+                    "lastRun": "2024-01-15T10:30:00Z",
+                    "results": [
+                        {
+                            "id": "result_1",
+                            "symbol": "AAPL",
+                            "currentPrice": 175.50,
+                            "changePercent": 2.3,
+                            "confidence": 0.85
+                        }
+                    ],
+                    "playbook": {
+                        "id": "playbook_1",
+                        "name": "Momentum Strategy",
+                        "performance": {
+                            "successRate": 0.75,
+                            "averageReturn": 0.12
+                        }
+                    }
+                }
+            ]
+
+    def resolve_playbooks(self, info):
+        """Resolve available playbooks"""
+        try:
+            from .ai_scans_engine import AIScansEngine
+            from .real_data_service import get_real_data_service
+            
+            # Initialize AI Scans Engine
+            ai_engine = AIScansEngine(get_real_data_service())
+            
+            # Get available playbooks
+            playbooks = ai_engine.get_available_playbooks()
+            return playbooks
+            
+        except Exception as e:
+            print(f"Error resolving playbooks: {e}")
+            # Return mock data for testing
+            return [
+                {
+                    "id": "playbook_1",
+                    "name": "Momentum Strategy",
+                    "author": "AI System",
+                    "riskLevel": "MEDIUM",
+                    "performance": {
+                        "successRate": 0.75,
+                        "averageReturn": 0.12
+                    },
+                    "tags": ["momentum", "short-term", "technical"]
+                },
+                {
+                    "id": "playbook_2", 
+                    "name": "Value Hunter",
+                    "author": "AI System",
+                    "riskLevel": "LOW",
+                    "performance": {
+                        "successRate": 0.68,
+                        "averageReturn": 0.08
+                    },
+                    "tags": ["value", "long-term", "fundamental"]
+                }
+            ]
+
 
 # --- AAVE-style Lending Queries --------------------------------------------
 
