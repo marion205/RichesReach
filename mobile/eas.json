@@ -18,6 +18,11 @@
 "autoIncrement": "buildNumber"
 },
 "android": {
+"buildType": "app-bundle"
+}
+},
+"internal": {
+"android": {
 "buildType": "apk"
 }
 }
