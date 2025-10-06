@@ -1,39 +1,117 @@
+# Git and version control
 .git
-node_modules
+.gitignore
+.gitattributes
+.github/
+
+# Python cache and compiled files
 **/__pycache__/
-**/*.pyc
-.venv
-mobile/android
-mobile/ios
-*.log
-.env
-.env.local
-.env.production
-.env.development
-.DS_Store
-*.md
-docs/
-tests/
-__pycache__/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.coverage
 *.pyc
 *.pyo
 *.pyd
 .Python
-env/
-venv/
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
 .venv/
+venv/
+env/
 ENV/
-env.bak/
-venv.bak/
-.coverage
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Node.js (if any)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn-integrity
+
+# IDEs and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+
+# Documentation
+*.md
+docs/
+README*
+
+# Test files
+tests/
+test_*
+*_test.py
+pytest.ini
 .pytest_cache/
-.tox/
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-.hypothesis/
-.pytest_cache/
-.mypy_cache/
-.dmypy.json
-dmypy.json
+
+# Development and deployment files
+docker-compose*.yml
+Dockerfile*
+.dockerignore
+deploy*.sh
+*.sh
+
+# AWS and deployment configs
+*.json
+!package.json
+!tsconfig.json
+!requirements*.txt
+!Cargo.toml
+!Cargo.lock
+
+# Data and cache directories
+data/
+cache/
+.cache/
+
+# Build artifacts
+target/
+*.tar.gz
+*.zip
+
+# Local development files
+local/
+dev/
+development/
+
+# Monitoring and profiling
+*.prof
+*.trace

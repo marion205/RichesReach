@@ -1,2 +1,0 @@
-# Trigger OIDC Fri Sep 26 23:37:00 EDT 2025
-# Trigger OIDC pipeline re-run with fixed ECR permissions
