@@ -102,7 +102,7 @@ jobs:
           CLUSTER: riches-reach-ai-production-cluster
           SERVICE: riches-reach-ai-ai
           FAMILY: riches-reach-ai-task
-          BASELINE_TD: riches-reach-streaming-pipeline-optimized:1   # <-- optimized task definition with 50% resource reduction
+          BASELINE_TD: riches-reach-ai-task:275   # <-- current working task definition
           ECR_URI: 498606688292.dkr.ecr.us-east-1.amazonaws.com/riches-reach-ai
           IMAGE_TAG: ${{ steps.tag.outputs.val }}
           AWS_REGION: us-east-1
