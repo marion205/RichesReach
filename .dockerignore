@@ -96,6 +96,10 @@ deploy*.sh
 !requirements*.txt
 !Cargo.toml
 !Cargo.lock
+!live_data_feed_config.json
+!ml_model_config.json
+!enhanced_producer_config.json
+!data_validation_schemas.json
 
 # Data and cache directories
 data/

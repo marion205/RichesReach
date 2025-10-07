@@ -49,15 +49,11 @@
       "secrets": [
         {
           "name": "POLYGON_API_KEY",
-          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:riches-reach/polygon-api-key"
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:richesreach/polygon-api-key-cuwyhr"
         },
         {
           "name": "FINNHUB_API_KEY",
-          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:riches-reach/finnhub-api-key"
-        },
-        {
-          "name": "ALPHA_VANTAGE_API_KEY",
-          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:riches-reach/alpha-vantage-api-key"
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:richesreach/finnhub-api-key-LqpWaB"
         }
       ],
       "mountPoints": [],

@@ -1,7 +1,7 @@
 {
   "serviceName": "riches-reach-streaming-service",
   "cluster": "riches-reach-cluster",
-  "taskDefinition": "riches-reach-streaming-pipeline",
+  "taskDefinition": "riches-reach-streaming-pipeline-optimized:2",
   "desiredCount": 2,
   "launchType": "FARGATE",
   "networkConfiguration": {
@@ -19,7 +19,7 @@
   },
   "loadBalancers": [
     {
-      "targetGroupArn": "arn:aws:elasticloadbalancing:us-east-1:498606688292:targetgroup/riches-reach-streaming/1234567890123456",
+      "targetGroupArn": "arn:aws:elasticloadbalancing:us-east-1:498606688292:targetgroup/riches-reach-tg/0233836fa56bf9f1",
       "containerName": "streaming-pipeline",
       "containerPort": 8000
     }
