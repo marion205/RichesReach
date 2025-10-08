@@ -2304,6 +2304,11 @@ users_db = {
         "id": "user_123", "name": "Test User", "email": "test@example.com",
         "password": hashlib.sha256("password123".encode()).hexdigest(),
         "hasPremiumAccess": True, "subscriptionTier": "premium"
+    },
+    "play.reviewer@richesreach.net": {
+        "id": "reviewer_001", "name": "Google Play Reviewer", "email": "play.reviewer@richesreach.net",
+        "password": hashlib.sha256("ReviewerPass123!".encode()).hexdigest(),
+        "hasPremiumAccess": True, "subscriptionTier": "premium"
     }
 }
 
