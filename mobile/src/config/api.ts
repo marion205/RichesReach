@@ -2,7 +2,7 @@
 // This file eliminates all hardcoded LAN IPs and provides a clean production URL
 
 // Force use of the correct backend URL for development
-export const API_URL = "http://192.168.1.236:8000/graphql";
+export const API_URL = "http://127.0.0.1:8000/graphql";
 
 export const API_BASE = API_URL.replace('/graphql', '');
 export const API_GRAPHQL = API_URL;
