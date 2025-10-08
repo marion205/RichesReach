@@ -19,6 +19,12 @@
 },
 "android": {
 "buildType": "app-bundle"
+},
+"env": {
+"EXPO_PUBLIC_API_URL": "https://app.richesreach.net",
+"EXPO_PUBLIC_GRAPHQL_URL": "https://app.richesreach.net/graphql",
+"EXPO_PUBLIC_RUST_API_URL": "https://app.richesreach.net:3001",
+"EXPO_PUBLIC_ENVIRONMENT": "production"
 }
 },
 "internal": {
