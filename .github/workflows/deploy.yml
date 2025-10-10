@@ -13,11 +13,13 @@ permissions:
 
 env:
   AWS_REGION: us-east-1
-  ECR_REGISTRY: 498606688292.dkr.ecr.us-east-1.amazonaws.com
-  ECR_REPOSITORY: riches-reach-ai
+  AWS_ACCOUNT_ID: "498606688292"
+  ECR_REPO: riches-reach-ai
+  IMAGE_SHA: ${{ github.sha }}
+  IMAGE_URI: ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO }}
   ECS_CLUSTER: riches-reach-prod
-  ECS_SERVICE: riches-reach-backend
-  CONTAINER_NAME: riches-reach-api
+  ECS_SERVICE: riches-reach-prod-svc
+  CONTAINER_NAME: riches-reach-ai
   DOCKERFILE: backend/backend/Dockerfile.production
 
 jobs:
@@ -49,17 +51,23 @@ jobs:
           file: ${{ env.DOCKERFILE }}
           push: true
           build-args: |
-            GIT_SHA=${{ github.sha }}
+            GIT_SHA=${{ env.IMAGE_SHA }}
           tags: |
-            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
-            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:prod-${{ github.run_id }}
+            ${{ env.IMAGE_URI }}:${{ env.IMAGE_SHA }}
+            ${{ env.IMAGE_URI }}:prod-${{ github.run_id }}
+
+      # Assert the image exists in ECR (fast fail if push failed)
+      - name: Verify image in ECR
+        run: |
+          aws ecr describe-images --repository-name "${ECR_REPO}" \
+            --image-ids imageTag="${IMAGE_SHA}" >/dev/null
 
       # ----- Update ECS task definition to new image tag -----
       - name: Deploy to ECS
         shell: bash
         run: |
           set -euo pipefail
-          IMAGE="${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}"
+          IMAGE="${{ env.IMAGE_URI }}:${{ env.IMAGE_SHA }}"
 
           # Get current task definition arn
           TD_ARN=$(aws ecs describe-services \
@@ -114,7 +122,7 @@ jobs:
           echo "$VERSION_RESPONSE"
           
           # Check if version matches current SHA
-          if echo "$VERSION_RESPONSE" | grep -q "${{ github.sha }}"; then
+          if echo "$VERSION_RESPONSE" | grep -q "${{ env.IMAGE_SHA }}"; then
             echo "✅ Version endpoint shows correct SHA"
           else
             echo "⚠️  Version endpoint SHA doesn't match current commit"
