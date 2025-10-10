@@ -214,7 +214,12 @@ import os
 from pathlib import Path
 
 LOG_DIR = Path(os.getenv("LOG_DIR", "/app/logs"))
-LOG_DIR.mkdir(parents=True, exist_ok=True)  # Ensure directory exists
+try:
+    LOG_DIR.mkdir(parents=True, exist_ok=True)  # Ensure directory exists
+except (OSError, PermissionError):
+    # Fallback to current directory if /app/logs can't be created
+    LOG_DIR = Path(os.getcwd()) / "logs"
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 LOGGING = {
     'version': 1,
