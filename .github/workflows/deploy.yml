@@ -3,52 +3,41 @@ name: Deploy Backend
 on:
   push:
     branches: [ main ]
-    paths:
-      - "backend/**"
-      - ".github/workflows/deploy.yml"
-
-permissions:
-  contents: read
-  id-token: write   # required for OIDC
-
-env:
-  AWS_REGION: us-east-1
-  AWS_ACCOUNT_ID: "498606688292"
-  ECR_REPO: riches-reach-ai
-  IMAGE_SHA: ${{ github.sha }}
-  IMAGE_URI: ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO }}
-  ECS_CLUSTER: riches-reach-prod
-  ECS_SERVICE: riches-reach-prod-svc
-  CONTAINER_NAME: riches-reach-ai
-  DOCKERFILE: backend/backend/Dockerfile.production
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      AWS_REGION: us-east-1
+      AWS_ACCOUNT_ID: "498606688292"
+      ECR_REPO: riches-reach-ai
+      IMAGE_SHA: ${{ github.sha }}
+
     steps:
       - uses: actions/checkout@v4
 
-      # ----- AWS credentials (OIDC role) -----
-      - name: Configure AWS (OIDC)
+      - name: Configure AWS via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_GH_ACTIONS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Who am I?
-        run: aws sts get-caller-identity
-
-      # ----- ECR login -----
-      - name: Login to Amazon ECR
+      - name: Login to ECR
+        id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # ----- Build & push -----
-      - name: Build and push image
-        id: build
+      - name: Set derived env
+        run: |
+          echo "IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPO }}" >> $GITHUB_ENV
+
+      - name: Build & push image
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ${{ env.DOCKERFILE }}
+          file: backend/backend/Dockerfile.production
           push: true
           build-args: |
             GIT_SHA=${{ env.IMAGE_SHA }}
@@ -56,13 +45,11 @@ jobs:
             ${{ env.IMAGE_URI }}:${{ env.IMAGE_SHA }}
             ${{ env.IMAGE_URI }}:prod-${{ github.run_id }}
 
-      # Assert the image exists in ECR (fast fail if push failed)
-      - name: Verify image in ECR
+      - name: Verify image exists in ECR
         run: |
           aws ecr describe-images --repository-name "${ECR_REPO}" \
             --image-ids imageTag="${IMAGE_SHA}" >/dev/null
 
-      # ----- Update ECS task definition to new image tag -----
       - name: Deploy to ECS
         shell: bash
         run: |
@@ -71,8 +58,8 @@ jobs:
 
           # Get current task definition arn
           TD_ARN=$(aws ecs describe-services \
-            --cluster "${{ env.ECS_CLUSTER }}" \
-            --services "${{ env.ECS_SERVICE }}" \
+            --cluster riches-reach-prod \
+            --services riches-reach-prod-svc \
             --query 'services[0].taskDefinition' --output text)
 
           # Download the task definition JSON
@@ -83,7 +70,7 @@ jobs:
           jq 'del(.taskDefinitionArn,.revision,.status,.requiresAttributes,.compatibilities,.registeredAt,.registeredBy)' td.json > td-stripped.json
 
           # Swap image for the target container
-          jq --arg NAME "${{ env.CONTAINER_NAME }}" --arg IMG "$IMAGE" '
+          jq --arg NAME "riches-reach-ai" --arg IMG "$IMAGE" '
             .containerDefinitions = (.containerDefinitions | map(
               if .name == $NAME then .image = $IMG | . else . end
             ))
@@ -97,15 +84,15 @@ jobs:
 
           # Update service
           aws ecs update-service \
-            --cluster "${{ env.ECS_CLUSTER }}" \
-            --service "${{ env.ECS_SERVICE }}" \
+            --cluster riches-reach-prod \
+            --service riches-reach-prod-svc \
             --task-definition "$NEW_TD_ARN" \
             --force-new-deployment
 
           # Wait until stable
           aws ecs wait services-stable \
-            --cluster "${{ env.ECS_CLUSTER }}" \
-            --services "${{ env.ECS_SERVICE }}"
+            --cluster riches-reach-prod \
+            --services riches-reach-prod-svc
 
       # ----- Simple smoke test -----
       - name: Smoke test
