@@ -1,8 +1,8 @@
 // Production Configuration
 export const PRODUCTION_CONFIG = {
-  API_BASE_URL: 'https://richesreach-alb-2022321469.us-east-1.elb.amazonaws.com',
-  GRAPHQL_URL: 'https://richesreach-alb-2022321469.us-east-1.elb.amazonaws.com/graphql/',
-  WS_URL: 'wss://richesreach-alb-2022321469.us-east-1.elb.amazonaws.com/ws/',
+  API_BASE_URL: 'https://api.richesreach.com',
+  GRAPHQL_URL: 'https://api.richesreach.com/graphql/',
+  WS_URL: 'wss://api.richesreach.com/ws/',
   ENABLE_ANALYTICS: true,
   ENABLE_ERROR_REPORTING: true,
   ENABLE_PERFORMANCE_MONITORING: true,
@@ -48,5 +48,5 @@ export const PRODUCTION_UTILS = {
   logError: (error: any) => console.error('Production Error:', error),
   logPerformance: (metric: string, value: number) => console.log(`Performance: ${metric} = ${value}ms`),
   sanitizeData: (data: any) => data, // Placeholder for data sanitization
-  getWebSocketUrl: () => 'wss://richesreach-alb-2022321469.us-east-1.elb.amazonaws.com/ws/',
+  getWebSocketUrl: () => 'wss://api.richesreach.com/ws/',
 };
