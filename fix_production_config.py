@@ -60,8 +60,8 @@ def main():
         "WALLETCONNECT_PROJECT_ID": "42421cf8-2df7-45c6-9475-df4f4b115ffc",
         "ALCHEMY_API_KEY": "nqMHXQoBbcV2d9X_7Zp29JxpBoQ6nWRM",
         "SEPOLIA_ETH_RPC_URL": "https://eth-sepolia.g.alchemy.com/v2/2-rJhszNwQ6I3NuBdN5pz",
-        "AWS_ACCESS_KEY_ID": "AWS_ACCESS_KEY_ID_PLACEHOLDER",
-        "AWS_SECRET_ACCESS_KEY": "5ZT7z1M7ReIDCAKCxWyx9AdM8NrWrZJ2/CHzGWYW",
+        "AWS_ACCESS_KEY_ID": "${AWS_ACCESS_KEY_ID}",
+        "AWS_SECRET_ACCESS_KEY": "${AWS_SECRET_ACCESS_KEY}",
         
         # Production settings
         "USE_OPENAI": "true",

@@ -36,8 +36,8 @@ def main():
         "SEPOLIA_ETH_RPC_URL": "https://eth-sepolia.g.alchemy.com/v2/2-rJhszNwQ6I3NuBdN5pz",
         
         # AWS Configuration
-        "AWS_ACCESS_KEY_ID": "AWS_ACCESS_KEY_ID_PLACEHOLDER",
-        "AWS_SECRET_ACCESS_KEY": "5ZT7z1M7ReIDCAKCxWyx9AdM8NrWrZJ2/CHzGWYW",
+        "AWS_ACCESS_KEY_ID": "${AWS_ACCESS_KEY_ID}",
+        "AWS_SECRET_ACCESS_KEY": "${AWS_SECRET_ACCESS_KEY}",
         "AWS_ACCOUNT_ID": "498606688292",
         "AWS_DEFAULT_REGION": "us-east-1",
         
