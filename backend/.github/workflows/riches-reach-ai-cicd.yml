@@ -227,4 +227,4 @@ jobs:
       - name: Notify rollback
         run: |
           echo "ERROR: Production deployment failed - service rolled back"
-          echo "Check logs and fix issues before next deployment"
+          echo "Check logs and fix issues before next deployment"# Trigger deployment - Fri Oct 10 12:19:07 EDT 2025
