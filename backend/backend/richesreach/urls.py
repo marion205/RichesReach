@@ -8,6 +8,10 @@ import json
 from core.schema import schema
 from core.mock_tools import dev_sbloc_advance
 from core.views_misc import version
+from core.billing_views import (
+    SubscriptionPlansView, CurrentSubscriptionView, CreateSubscriptionView,
+    CancelSubscriptionView, FeatureAccessView, stripe_webhook, revenuecat_webhook
+)
 
 def healthz(_):
     return JsonResponse({"ok": True, "app": "richesreach"}, status=200)
@@ -679,3 +683,12 @@ if TAX_OPTIMIZATION_AVAILABLE:
     urlpatterns.append(path("api/tax/smart-lot-optimizer-v2", smart_lot_optimizer_v2, name='smart_lot_optimizer_v2'))
     urlpatterns.append(path("api/tax/two-year-gains-planner", two_year_gains_planner, name='two_year_gains_planner'))
     urlpatterns.append(path("api/tax/wash-sale-guard-v2", wash_sale_guard_v2, name='wash_sale_guard_v2'))
+
+# Billing and Subscription URLs
+urlpatterns.append(path("api/billing/plans/", SubscriptionPlansView.as_view(), name='subscription_plans'))
+urlpatterns.append(path("api/billing/subscription/", CurrentSubscriptionView.as_view(), name='current_subscription'))
+urlpatterns.append(path("api/billing/subscribe/", CreateSubscriptionView.as_view(), name='create_subscription'))
+urlpatterns.append(path("api/billing/cancel/", CancelSubscriptionView.as_view(), name='cancel_subscription'))
+urlpatterns.append(path("api/billing/feature-access/", FeatureAccessView.as_view(), name='feature_access'))
+urlpatterns.append(path("api/billing/webhooks/stripe/", stripe_webhook, name='stripe_webhook'))
+urlpatterns.append(path("api/billing/webhooks/revenuecat/", revenuecat_webhook, name='revenuecat_webhook'))

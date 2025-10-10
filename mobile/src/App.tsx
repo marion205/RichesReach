@@ -70,6 +70,12 @@ import SBLOCApplicationScreen from './features/sbloc/screens/SBLOCApplicationScr
 import SBLOCStatusScreen from './features/sbloc/screens/SBLOCStatusScreen';
 import NewsPreferencesScreen from './features/news/screens/NewsPreferencesScreen';
 import PortfolioLearningScreen from './features/learning/screens/PortfolioLearningScreen';
+// Tax Optimization Screens
+import TaxOptimizationScreen from './screens/TaxOptimizationScreen';
+import SmartLotsScreen from './screens/SmartLotsScreen';
+import BorrowVsSellScreen from './screens/BorrowVsSellScreen';
+import WashGuardScreen from './screens/WashGuardScreen';
+import SubscriptionScreen from './screens/SubscriptionScreen';
 // Components
 import { BottomTabBar, TopHeader, PersonalizedDashboard } from './components';
 // Services
@@ -353,6 +359,16 @@ case 'SblocStatus':
 return <SBLOCStatusScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('SBLOCBankSelection') }} route={{ params: { sessionId: '' } }} />;
 case 'news-preferences':
 return <NewsPreferencesScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('profile') }} />;
+case 'tax-optimization':
+return <TaxOptimizationScreen />;
+case 'smart-lots':
+return <SmartLotsScreen />;
+case 'borrow-vs-sell':
+return <BorrowVsSellScreen />;
+case 'wash-guard':
+return <WashGuardScreen />;
+case 'subscription':
+return <SubscriptionScreen />;
     default:
       // Handle user-profile and user-portfolios with userId pattern
       if (currentScreen.startsWith('user-profile-')) {

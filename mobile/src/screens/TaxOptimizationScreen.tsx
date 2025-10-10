@@ -9,219 +9,158 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../contexts/AuthContext';
+import taxOptimizationService from '../services/taxOptimizationService';
 
 interface TaxOptimizationData {
-  total_potential_savings: number;
-  high_priority_actions: number;
-  medium_priority_actions: number;
-  low_priority_actions: number;
-  next_deadline: string;
-  key_opportunities: Array<{
-    type: string;
-    description: string;
-    potential_savings: number;
-    priority: string;
-    deadline: string;
-  }>;
-  estimated_annual_savings: number;
-  tax_efficiency_score: number;
-}
-
-interface TaxLossHarvestingData {
-  recommendations: Array<{
-    symbol: string;
-    action: string;
-    shares: number;
-    unrealized_loss: number;
-    potential_tax_savings: number;
-    reason: string;
-    priority: string;
-  }>;
-  total_potential_savings: number;
-  tax_bracket: number;
-  realized_gains: number;
+  summary?: any;
+  lossHarvesting?: any;
+  capitalGains?: any;
+  rebalancing?: any;
+  bracketAnalysis?: any;
 }
 
 const TaxOptimizationScreen: React.FC = () => {
-  const [loading, setLoading] = useState(true);
+  const { user, token } = useAuth();
+  const [data, setData] = useState<TaxOptimizationData>({});
+  const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'loss-harvesting' | 'capital-gains' | 'rebalancing' | 'bracket-analysis'>('overview');
-  const [taxData, setTaxData] = useState<TaxOptimizationData | null>(null);
-  const [lossHarvestingData, setLossHarvestingData] = useState<TaxLossHarvestingData | null>(null);
+  const [activeTab, setActiveTab] = useState('summary');
 
-  const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000';
+  const loadData = async () => {
+    if (!token) {
+      Alert.alert('Authentication Required', 'Please log in to access tax optimization features.');
+      return;
+    }
 
-  useEffect(() => {
-    loadTaxOptimizationData();
-  }, []);
-
-  const loadTaxOptimizationData = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const response = await fetch(`${API_BASE_URL}/api/tax/optimization-summary`, {
-        headers: {
-          'Authorization': `Bearer ${await getAuthToken()}`,
-        },
+      const [summary, lossHarvesting, capitalGains, rebalancing, bracketAnalysis] = await Promise.allSettled([
+        taxOptimizationService.getOptimizationSummary(token),
+        taxOptimizationService.getTaxLossHarvesting(token),
+        taxOptimizationService.getCapitalGainsOptimization(token),
+        taxOptimizationService.getTaxEfficientRebalancing(token),
+        taxOptimizationService.getTaxBracketAnalysis(token),
+      ]);
+
+      setData({
+        summary: summary.status === 'fulfilled' ? summary.value : null,
+        lossHarvesting: lossHarvesting.status === 'fulfilled' ? lossHarvesting.value : null,
+        capitalGains: capitalGains.status === 'fulfilled' ? capitalGains.value : null,
+        rebalancing: rebalancing.status === 'fulfilled' ? rebalancing.value : null,
+        bracketAnalysis: bracketAnalysis.status === 'fulfilled' ? bracketAnalysis.value : null,
       });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setTaxData(data.summary);
-      }
     } catch (error) {
       console.error('Error loading tax optimization data:', error);
-      Alert.alert('Error', 'Failed to load tax optimization data');
+      Alert.alert('Error', 'Failed to load tax optimization data. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  const loadLossHarvestingData = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/tax/loss-harvesting`, {
-        headers: {
-          'Authorization': `Bearer ${await getAuthToken()}`,
-        },
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setLossHarvestingData(data);
-      }
-    } catch (error) {
-      console.error('Error loading loss harvesting data:', error);
-    }
-  };
-
-  const getAuthToken = async (): Promise<string> => {
-    // Mock token - replace with actual auth logic
-    return 'mock-auth-token';
-  };
-
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadTaxOptimizationData();
-    if (activeTab === 'loss-harvesting') {
-      await loadLossHarvestingData();
-    }
+    await loadData();
     setRefreshing(false);
   };
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'HIGH': return '#FF6B6B';
-      case 'MEDIUM': return '#FFD93D';
-      case 'LOW': return '#6BCF7F';
-      default: return '#6BCF7F';
-    }
-  };
+  useEffect(() => {
+    loadData();
+  }, [token]);
 
-  const renderOverview = () => {
-    if (!taxData) return null;
-
-    return (
-      <View style={styles.tabContent}>
+  const renderSummaryTab = () => (
+    <View style={styles.tabContent}>
+      <Text style={styles.sectionTitle}>Tax Optimization Summary</Text>
+      {data.summary ? (
         <View style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>Tax Optimization Summary</Text>
-          <View style={styles.summaryStats}>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>${taxData.total_potential_savings.toLocaleString()}</Text>
-              <Text style={styles.statLabel}>Potential Savings</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{taxData.tax_efficiency_score}%</Text>
-              <Text style={styles.statLabel}>Efficiency Score</Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.opportunitiesCard}>
-          <Text style={styles.cardTitle}>Key Opportunities</Text>
-          {taxData.key_opportunities.map((opportunity, index) => (
-            <View key={index} style={styles.opportunityItem}>
-              <View style={styles.opportunityHeader}>
-                <Text style={styles.opportunityType}>{opportunity.type.replace(/_/g, ' ')}</Text>
-                <View style={[styles.priorityBadge, { backgroundColor: getPriorityColor(opportunity.priority) }]}>
-                  <Text style={styles.priorityText}>{opportunity.priority}</Text>
-                </View>
-              </View>
-              <Text style={styles.opportunityDescription}>{opportunity.description}</Text>
-              <View style={styles.opportunityFooter}>
-                <Text style={styles.savingsText}>${opportunity.potential_savings.toLocaleString()} savings</Text>
-                <Text style={styles.deadlineText}>Due: {opportunity.deadline}</Text>
-              </View>
-            </View>
-          ))}
-        </View>
-      </View>
-    );
-  };
-
-  const renderLossHarvesting = () => {
-    if (!lossHarvestingData) {
-      loadLossHarvestingData();
-      return (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
-          <Text style={styles.loadingText}>Loading tax loss harvesting recommendations...</Text>
-        </View>
-      );
-    }
-
-    return (
-      <View style={styles.tabContent}>
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>Tax Loss Harvesting</Text>
-          <Text style={styles.summarySubtitle}>
-            Total Potential Savings: ${lossHarvestingData.total_potential_savings.toLocaleString()}
-          </Text>
-          <Text style={styles.summarySubtitle}>
-            Tax Bracket: {(lossHarvestingData.tax_bracket * 100).toFixed(0)}%
+          <Text style={styles.summaryText}>
+            {JSON.stringify(data.summary, null, 2)}
           </Text>
         </View>
-
-        <View style={styles.recommendationsCard}>
-          <Text style={styles.cardTitle}>Recommendations</Text>
-          {lossHarvestingData.recommendations.map((rec, index) => (
-            <View key={index} style={styles.recommendationItem}>
-              <View style={styles.recommendationHeader}>
-                <Text style={styles.symbolText}>{rec.symbol}</Text>
-                <View style={[styles.priorityBadge, { backgroundColor: getPriorityColor(rec.priority) }]}>
-                  <Text style={styles.priorityText}>{rec.priority}</Text>
-                </View>
-              </View>
-              <Text style={styles.actionText}>Action: {rec.action} {rec.shares} shares</Text>
-              <Text style={styles.reasonText}>{rec.reason}</Text>
-              <Text style={styles.savingsText}>
-                Potential Tax Savings: ${rec.potential_tax_savings.toLocaleString()}
-              </Text>
-            </View>
-          ))}
-        </View>
-      </View>
-    );
-  };
-
-  const renderTabButton = (tab: string, label: string, icon: string) => (
-    <TouchableOpacity
-      key={tab}
-      style={[styles.tabButton, activeTab === tab && styles.activeTabButton]}
-      onPress={() => setActiveTab(tab as any)}
-    >
-      <Ionicons 
-        name={icon as any} 
-        size={20} 
-        color={activeTab === tab ? '#FFFFFF' : '#007AFF'} 
-      />
-      <Text style={[styles.tabButtonText, activeTab === tab && styles.activeTabButtonText]}>
-        {label}
-      </Text>
-    </TouchableOpacity>
+      ) : (
+        <Text style={styles.noDataText}>No summary data available</Text>
+      )}
+    </View>
   );
 
-  if (loading) {
+  const renderLossHarvestingTab = () => (
+    <View style={styles.tabContent}>
+      <Text style={styles.sectionTitle}>Tax Loss Harvesting</Text>
+      {data.lossHarvesting ? (
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryText}>
+            {JSON.stringify(data.lossHarvesting, null, 2)}
+          </Text>
+        </View>
+      ) : (
+        <Text style={styles.noDataText}>No loss harvesting data available</Text>
+      )}
+    </View>
+  );
+
+  const renderCapitalGainsTab = () => (
+    <View style={styles.tabContent}>
+      <Text style={styles.sectionTitle}>Capital Gains Optimization</Text>
+      {data.capitalGains ? (
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryText}>
+            {JSON.stringify(data.capitalGains, null, 2)}
+          </Text>
+        </View>
+      ) : (
+        <Text style={styles.noDataText}>No capital gains data available</Text>
+      )}
+    </View>
+  );
+
+  const renderRebalancingTab = () => (
+    <View style={styles.tabContent}>
+      <Text style={styles.sectionTitle}>Tax Efficient Rebalancing</Text>
+      {data.rebalancing ? (
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryText}>
+            {JSON.stringify(data.rebalancing, null, 2)}
+          </Text>
+        </View>
+      ) : (
+        <Text style={styles.noDataText}>No rebalancing data available</Text>
+      )}
+    </View>
+  );
+
+  const renderBracketAnalysisTab = () => (
+    <View style={styles.tabContent}>
+      <Text style={styles.sectionTitle}>Tax Bracket Analysis</Text>
+      {data.bracketAnalysis ? (
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryText}>
+            {JSON.stringify(data.bracketAnalysis, null, 2)}
+          </Text>
+        </View>
+      ) : (
+        <Text style={styles.noDataText}>No bracket analysis data available</Text>
+      )}
+    </View>
+  );
+
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'summary':
+        return renderSummaryTab();
+      case 'loss-harvesting':
+        return renderLossHarvestingTab();
+      case 'capital-gains':
+        return renderCapitalGainsTab();
+      case 'rebalancing':
+        return renderRebalancingTab();
+      case 'bracket-analysis':
+        return renderBracketAnalysisTab();
+      default:
+        return renderSummaryTab();
+    }
+  };
+
+  if (loading && !refreshing) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#007AFF" />
@@ -232,23 +171,41 @@ const TaxOptimizationScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <LinearGradient
-        colors={['#007AFF', '#0056CC']}
-        style={styles.header}
-      >
-        <Text style={styles.headerTitle}>Tax Optimization</Text>
-        <Text style={styles.headerSubtitle}>Premium Features</Text>
-      </LinearGradient>
+      <Text style={styles.title}>Tax Optimization</Text>
+      <Text style={styles.subtitle}>Premium Features</Text>
 
-      <View style={styles.tabContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {renderTabButton('overview', 'Overview', 'analytics-outline')}
-          {renderTabButton('loss-harvesting', 'Loss Harvesting', 'trending-down-outline')}
-          {renderTabButton('capital-gains', 'Capital Gains', 'trending-up-outline')}
-          {renderTabButton('rebalancing', 'Rebalancing', 'swap-horizontal-outline')}
-          {renderTabButton('bracket-analysis', 'Bracket Analysis', 'bar-chart-outline')}
-        </ScrollView>
-      </View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.tabContainer}
+        contentContainerStyle={styles.tabContentContainer}
+      >
+        {[
+          { key: 'summary', label: 'Summary' },
+          { key: 'loss-harvesting', label: 'Loss Harvesting' },
+          { key: 'capital-gains', label: 'Capital Gains' },
+          { key: 'rebalancing', label: 'Rebalancing' },
+          { key: 'bracket-analysis', label: 'Bracket Analysis' },
+        ].map((tab) => (
+          <TouchableOpacity
+            key={tab.key}
+            style={[
+              styles.tab,
+              activeTab === tab.key && styles.activeTab,
+            ]}
+            onPress={() => setActiveTab(tab.key)}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                activeTab === tab.key && styles.activeTabText,
+              ]}
+            >
+              {tab.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
 
       <ScrollView
         style={styles.content}
@@ -256,29 +213,7 @@ const TaxOptimizationScreen: React.FC = () => {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {activeTab === 'overview' && renderOverview()}
-        {activeTab === 'loss-harvesting' && renderLossHarvesting()}
-        {activeTab === 'capital-gains' && (
-          <View style={styles.comingSoonContainer}>
-            <Ionicons name="construct-outline" size={64} color="#007AFF" />
-            <Text style={styles.comingSoonText}>Capital Gains Optimization</Text>
-            <Text style={styles.comingSoonSubtext}>Coming Soon</Text>
-          </View>
-        )}
-        {activeTab === 'rebalancing' && (
-          <View style={styles.comingSoonContainer}>
-            <Ionicons name="construct-outline" size={64} color="#007AFF" />
-            <Text style={styles.comingSoonText}>Tax-Efficient Rebalancing</Text>
-            <Text style={styles.comingSoonSubtext}>Coming Soon</Text>
-          </View>
-        )}
-        {activeTab === 'bracket-analysis' && (
-          <View style={styles.comingSoonContainer}>
-            <Ionicons name="construct-outline" size={64} color="#007AFF" />
-            <Text style={styles.comingSoonText}>Tax Bracket Analysis</Text>
-            <Text style={styles.comingSoonSubtext}>Coming Soon</Text>
-          </View>
-        )}
+        {renderTabContent()}
       </ScrollView>
     </View>
   );
@@ -287,229 +222,94 @@ const TaxOptimizationScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
-  },
-  header: {
-    paddingTop: 60,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-  },
-  headerSubtitle: {
-    fontSize: 16,
-    color: '#E3F2FD',
-    marginTop: 4,
-  },
-  tabContainer: {
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E1E5E9',
-  },
-  tabButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginHorizontal: 4,
-    borderRadius: 20,
-    backgroundColor: '#F8F9FA',
-  },
-  activeTabButton: {
-    backgroundColor: '#007AFF',
-  },
-  tabButtonText: {
-    marginLeft: 6,
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#007AFF',
-  },
-  activeTabButtonText: {
-    color: '#FFFFFF',
-  },
-  content: {
-    flex: 1,
-    padding: 16,
-  },
-  tabContent: {
-    flex: 1,
+    backgroundColor: '#f5f5f5',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    backgroundColor: '#f5f5f5',
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#666666',
+    color: '#666',
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#333',
     textAlign: 'center',
+    marginTop: 20,
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  tabContainer: {
+    marginBottom: 20,
+  },
+  tabContentContainer: {
+    paddingHorizontal: 16,
+  },
+  tab: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    marginRight: 12,
+    borderRadius: 20,
+    backgroundColor: '#e0e0e0',
+  },
+  activeTab: {
+    backgroundColor: '#007AFF',
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+  },
+  activeTabText: {
+    color: '#fff',
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  tabContent: {
+    flex: 1,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 16,
   },
   summaryCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  summaryTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1A1A1A',
-    marginBottom: 8,
-  },
-  summarySubtitle: {
-    fontSize: 16,
-    color: '#666666',
-    marginBottom: 4,
-  },
-  summaryStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: 16,
-  },
-  statItem: {
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#007AFF',
-  },
-  statLabel: {
-    fontSize: 14,
-    color: '#666666',
-    marginTop: 4,
-  },
-  opportunitiesCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1A1A1A',
-    marginBottom: 16,
-  },
-  opportunityItem: {
+    backgroundColor: '#fff',
     padding: 16,
-    backgroundColor: '#F8F9FA',
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  opportunityHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  opportunityType: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1A1A1A',
-    textTransform: 'capitalize',
-  },
-  priorityBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
     borderRadius: 12,
-  },
-  priorityText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  opportunityDescription: {
-    fontSize: 14,
-    color: '#666666',
-    marginBottom: 8,
-  },
-  opportunityFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  savingsText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#007AFF',
-  },
-  deadlineText: {
-    fontSize: 12,
-    color: '#999999',
-  },
-  recommendationsCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 20,
     marginBottom: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
-  recommendationItem: {
-    padding: 16,
-    backgroundColor: '#F8F9FA',
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  recommendationHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  symbolText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1A1A1A',
-  },
-  actionText: {
+  summaryText: {
     fontSize: 14,
-    color: '#666666',
-    marginBottom: 4,
+    color: '#333',
+    fontFamily: 'monospace',
   },
-  reasonText: {
-    fontSize: 14,
-    color: '#666666',
-    marginBottom: 8,
-  },
-  comingSoonContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 40,
-  },
-  comingSoonText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1A1A1A',
-    marginTop: 16,
-    textAlign: 'center',
-  },
-  comingSoonSubtext: {
+  noDataText: {
     fontSize: 16,
-    color: '#666666',
-    marginTop: 8,
+    color: '#666',
     textAlign: 'center',
+    marginTop: 40,
   },
 });
 
