@@ -622,6 +622,24 @@ try:
 except ImportError as e:
     print(f"Warning: SBLOC views not available: {e}")
     SBLOC_VIEWS_AVAILABLE = False
+
+# Tax Optimization Premium URLs
+try:
+    from core.tax_optimization_views import (
+        tax_loss_harvesting, capital_gains_optimization, 
+        tax_efficient_rebalancing, tax_bracket_analysis, 
+        tax_optimization_summary
+    )
+    from core.smart_lot_optimizer import smart_lot_optimizer
+    from core.wash_sale_guard import wash_sale_guard
+    from core.borrow_vs_sell_advisor import borrow_vs_sell_advisor
+    from core.smart_lot_optimizer_v2 import smart_lot_optimizer_v2
+    from core.two_year_gains_planner import two_year_gains_planner
+    from core.wash_sale_guard_v2 import wash_sale_guard_v2
+    TAX_OPTIMIZATION_AVAILABLE = True
+except ImportError as e:
+    print(f"Warning: Tax optimization views not available: {e}")
+    TAX_OPTIMIZATION_AVAILABLE = False
     # Create dummy functions to avoid errors
     def sbloc_webhook(request):
         return JsonResponse({"error": "SBLOC not available"}, status=503)
@@ -640,3 +658,22 @@ urlpatterns.append(path("api/sbloc/health/", sbloc_health, name='sbloc_health_sl
 
 # Add login URL pattern to handle authentication redirects
 urlpatterns.append(path("accounts/login/", auth_view, name='login'))
+
+# Tax Optimization Premium URLs
+if TAX_OPTIMIZATION_AVAILABLE:
+    # Original tax optimization endpoints
+    urlpatterns.append(path("api/tax/loss-harvesting", tax_loss_harvesting, name='tax_loss_harvesting'))
+    urlpatterns.append(path("api/tax/capital-gains-optimization", capital_gains_optimization, name='capital_gains_optimization'))
+    urlpatterns.append(path("api/tax/efficient-rebalancing", tax_efficient_rebalancing, name='tax_efficient_rebalancing'))
+    urlpatterns.append(path("api/tax/bracket-analysis", tax_bracket_analysis, name='tax_bracket_analysis'))
+    urlpatterns.append(path("api/tax/optimization-summary", tax_optimization_summary, name='tax_optimization_summary'))
+    
+    # Best-in-market premium endpoints
+    urlpatterns.append(path("api/tax/smart-lot-optimizer", smart_lot_optimizer, name='smart_lot_optimizer'))
+    urlpatterns.append(path("api/tax/wash-sale-guard", wash_sale_guard, name='wash_sale_guard'))
+    urlpatterns.append(path("api/tax/borrow-vs-sell", borrow_vs_sell_advisor, name='borrow_vs_sell_advisor'))
+    
+    # Best-in-market premium endpoints V2
+    urlpatterns.append(path("api/tax/smart-lot-optimizer-v2", smart_lot_optimizer_v2, name='smart_lot_optimizer_v2'))
+    urlpatterns.append(path("api/tax/two-year-gains-planner", two_year_gains_planner, name='two_year_gains_planner'))
+    urlpatterns.append(path("api/tax/wash-sale-guard-v2", wash_sale_guard_v2, name='wash_sale_guard_v2'))
