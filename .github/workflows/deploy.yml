@@ -4,69 +4,132 @@ on:
   push:
     branches: [ main ]
     paths:
-      - 'backend/**'
-      - '.github/workflows/deploy.yml'
+      - "backend/**"
+      - ".github/workflows/deploy.yml"
+
+permissions:
+  contents: read
+  id-token: write   # required for OIDC
 
 env:
   AWS_REGION: us-east-1
-  ECR_REPO: 498606688292.dkr.ecr.us-east-1.amazonaws.com/riches-reach-ai
-  SERVICE: riches-reach-backend
-  CLUSTER: riches-reach-prod
+  ECR_REGISTRY: 498606688292.dkr.ecr.us-east-1.amazonaws.com
+  ECR_REPOSITORY: riches-reach-ai
+  ECS_CLUSTER: riches-reach-prod
+  ECS_SERVICE: riches-reach-backend
+  CONTAINER_NAME: riches-reach-api
+  DOCKERFILE: backend/backend/Dockerfile.production
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Configure AWS
-        uses: aws-actions/configure-aws-credentials@v2
+      # ----- AWS credentials (prefers OIDC role, else static keys) -----
+      - name: Configure AWS (OIDC)
+        if: ${{ secrets.AWS_GH_ACTIONS_ROLE_ARN != '' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_GH_ACTIONS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Configure AWS (static keys)
+        if: ${{ secrets.AWS_GH_ACTIONS_ROLE_ARN == '' }}
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Login to ECR
+      - name: Who am I?
+        run: aws sts get-caller-identity
+
+      # ----- ECR login -----
+      - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Set up Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build & push image (correct Dockerfile path)
+      # ----- Build & push -----
+      - name: Build and push image
+        id: build
         uses: docker/build-push-action@v5
         with:
-          context: .                                   # repo root
-          file: backend/backend/Dockerfile.production  # <- important
+          context: .
+          file: ${{ env.DOCKERFILE }}
           push: true
           build-args: |
             GIT_SHA=${{ github.sha }}
           tags: |
-            ${{ env.ECR_REPO }}:${{ github.sha }}
-            ${{ env.ECR_REPO }}:prod-${{ github.run_id }}
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:prod-${{ github.run_id }}
 
-      - name: Force new ECS deployment
+      # ----- Update ECS task definition to new image tag -----
+      - name: Deploy to ECS
+        shell: bash
         run: |
+          set -euo pipefail
+          IMAGE="${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}"
+
+          # Get current task definition arn
+          TD_ARN=$(aws ecs describe-services \
+            --cluster "${{ env.ECS_CLUSTER }}" \
+            --services "${{ env.ECS_SERVICE }}" \
+            --query 'services[0].taskDefinition' --output text)
+
+          # Download the task definition JSON
+          aws ecs describe-task-definition --task-definition "$TD_ARN" \
+            --query 'taskDefinition' > td.json
+
+          # Strip fields not allowed on register
+          jq 'del(.taskDefinitionArn,.revision,.status,.requiresAttributes,.compatibilities,.registeredAt,.registeredBy)' td.json > td-stripped.json
+
+          # Swap image for the target container
+          jq --arg NAME "${{ env.CONTAINER_NAME }}" --arg IMG "$IMAGE" '
+            .containerDefinitions = (.containerDefinitions | map(
+              if .name == $NAME then .image = $IMG | . else . end
+            ))
+          ' td-stripped.json > td-new.json
+
+          # Register new revision
+          NEW_TD_ARN=$(aws ecs register-task-definition \
+            --cli-input-json file://td-new.json \
+            --query 'taskDefinition.taskDefinitionArn' --output text)
+          echo "New task def: $NEW_TD_ARN"
+
+          # Update service
           aws ecs update-service \
-            --cluster "${CLUSTER}" \
-            --service "${SERVICE}" \
-            --force-new-deployment >/dev/null
+            --cluster "${{ env.ECS_CLUSTER }}" \
+            --service "${{ env.ECS_SERVICE }}" \
+            --task-definition "$NEW_TD_ARN" \
+            --force-new-deployment
 
-      - name: Wait for service stability
-        run: |
+          # Wait until stable
           aws ecs wait services-stable \
-            --cluster "${CLUSTER}" \
-            --services "${SERVICE}"
+            --cluster "${{ env.ECS_CLUSTER }}" \
+            --services "${{ env.ECS_SERVICE }}"
 
-      - name: Smoke test deployed endpoints
-        env:
-          PROD_URL: http://riches-reach-alb-1199497064.us-east-1.elb.amazonaws.com
+      # ----- Simple smoke test -----
+      - name: Smoke test
         run: |
           set -e
-          curl -sf "${PROD_URL}/" >/dev/null
-          # make 404 a failure (ensures image includes tax routes)
-          curl -sf "${PROD_URL}/api/tax/optimization-summary" >/dev/null
-          echo "✅ Smoke test passed"
+          API="http://riches-reach-alb-1199497064.us-east-1.elb.amazonaws.com"
+          echo "GET / ..."
+          curl -sf "$API/" | head -c 200
+          echo -e "\nOK"
+
+          # Version endpoint verification
+          echo "GET /__version__ ..."
+          VERSION_RESPONSE=$(curl -sf "$API/__version__")
+          echo "$VERSION_RESPONSE"
+          
+          # Check if version matches current SHA
+          if echo "$VERSION_RESPONSE" | grep -q "${{ github.sha }}"; then
+            echo "✅ Version endpoint shows correct SHA"
+          else
+            echo "⚠️  Version endpoint SHA doesn't match current commit"
+          fi
+
+          # Test tax optimization endpoint
+          echo "GET /api/tax/optimization-summary ..."
+          curl -sf "$API/api/tax/optimization-summary" >/dev/null
+          echo "✅ Tax optimization endpoint accessible"
