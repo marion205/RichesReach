@@ -72,7 +72,7 @@ jobs:
       - name: Build Docker image
         run: |
           cd backend
-          docker build -f Dockerfile.production -t riches-reach-ai:test .
+          docker build -f backend/Dockerfile.production -t riches-reach-ai:test .
       - name: Test Docker image
         run: |
           cd backend
@@ -127,13 +127,13 @@ jobs:
           IMAGE_TAG: ${{ github.sha }}
         run: |
           cd backend
-          docker build -f Dockerfile.production -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker build -f backend/Dockerfile.production -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
       - name: Deploy to ECS
         uses: aws-actions/amazon-ecs-deploy-task-definition@v1
         with:
-          task-definition: backend/task-definition-staging.json
+          task-definition: backend/backend/task-definition-staging.json
           service: ${{ env.ECS_SERVICE }}-staging
           cluster: ${{ env.ECS_CLUSTER }}-staging
           wait-for-service-stability: true
@@ -163,13 +163,13 @@ jobs:
           IMAGE_TAG: ${{ github.sha }}
         run: |
           cd backend
-          docker build -f Dockerfile.production -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker build -f backend/Dockerfile.production -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
       - name: Deploy to ECS
         uses: aws-actions/amazon-ecs-deploy-task-definition@v1
         with:
-          task-definition: backend/task-definition-production.json
+          task-definition: backend/backend/task-definition-production.json
           service: ${{ env.ECS_SERVICE }}
           cluster: ${{ env.ECS_CLUSTER }}
           wait-for-service-stability: true
