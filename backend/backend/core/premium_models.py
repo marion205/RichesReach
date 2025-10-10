@@ -6,6 +6,7 @@ Models for managing premium features and subscriptions
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
+from django.http import JsonResponse
 from datetime import timedelta
 import uuid
 
