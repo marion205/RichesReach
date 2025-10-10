@@ -15,9 +15,14 @@ RUN pip install --upgrade pip && pip install -r /app/requirements.txt
 COPY . /app
 
 # Set Django settings for production
+ARG GIT_SHA=unknown
 ENV DJANGO_SETTINGS_MODULE=richesreach.settings_production \
     PORT=8000 \
+    GIT_SHA=$GIT_SHA \
     GUNICORN_CMD_ARGS="--bind 0.0.0.0:8000 --workers 3 --timeout 60 --access-logfile - --error-logfile -"
+
+# Create logs directory
+RUN mkdir -p /app/logs
 
 # Collect static files
 RUN python backend/backend/manage.py collectstatic --noinput

@@ -3,6 +3,9 @@ name: Deploy to Production
 on:
   push:
     branches: [ main ]
+    paths:
+      - "backend/**"
+      - ".github/workflows/**"
 
 env:
   AWS_REGION: us-east-1
@@ -35,8 +38,9 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
+          GIT_SHA: ${{ github.sha }}
         run: |
-          docker build -f backend/backend/Dockerfile.production -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker build -f backend/backend/Dockerfile.production --build-arg GIT_SHA=$GIT_SHA -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
           
@@ -52,3 +56,21 @@ jobs:
         run: |
           sleep 30
           curl -f http://riches-reach-alb-1199497064.us-east-1.elb.amazonaws.com/health || exit 1
+          
+      - name: URL smoke test (server-side routing)
+        run: |
+          python - <<'PY'
+          import os, django
+          os.environ.setdefault("DJANGO_SETTINGS_MODULE", "richesreach.settings_production")
+          django.setup()
+          from django.urls import resolve
+          for p in [
+              "/api/tax/optimization-summary",
+              "/api/tax/loss-harvesting",
+              "/api/tax/smart-lot-optimizer-v2",
+              "/api/tax/two-year-gains-planner",
+              "/api/tax/wash-sale-guard-v2",
+          ]:
+              resolve(p)
+              print("OK", p)
+          PY

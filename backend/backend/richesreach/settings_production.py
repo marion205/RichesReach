@@ -209,7 +209,13 @@ EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@richesreach.com')
 
-# Logging configuration
+# Logging configuration - bulletproof with directory creation
+import os
+from pathlib import Path
+
+LOG_DIR = Path(os.getenv("LOG_DIR", "/app/logs"))
+LOG_DIR.mkdir(parents=True, exist_ok=True)  # Ensure directory exists
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -226,8 +232,10 @@ LOGGING = {
     'handlers': {
         'file': {
             'level': 'INFO',
-            'class': 'logging.FileHandler',
-            'filename': '/app/logs/django.log',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': str(LOG_DIR / 'django.log'),
+            'maxBytes': 1024*1024*10,  # 10MB
+            'backupCount': 3,
             'formatter': 'verbose',
         },
         'console': {
@@ -270,3 +278,12 @@ RATELIMIT_USE_CACHE = 'default'
 
 # Custom user model
 AUTH_USER_MODEL = 'core.User'
+
+# Build SHA logging for deployment verification
+import logging
+logger = logging.getLogger(__name__)
+logger.info(
+    "Booting backend: sha=%s settings=%s",
+    os.getenv("GIT_SHA", "unknown"),
+    os.getenv("DJANGO_SETTINGS_MODULE", "unknown"),
+)
