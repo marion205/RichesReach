@@ -71,15 +71,36 @@ jobs:
         uses: docker/setup-buildx-action@v2
       - name: Build Docker image
         run: |
-          cd backend
-          docker build -f backend/Dockerfile.production -t riches-reach-ai:test .
+          docker build -f backend/backend/Dockerfile.production -t riches-reach-ai:test .
       - name: Test Docker image
         run: |
-          cd backend
           docker run --rm -d --name test-container -p 8000:8000 riches-reach-ai:test
           sleep 10
           curl -f http://localhost:8000/health || exit 1
           docker stop test-container
+      - name: URL smoke test (in container)
+        run: |
+          docker run --rm -e DJANGO_SETTINGS_MODULE=richesreach.settings_production riches-reach-ai:test \
+          python - <<'PY'
+          import os
+          os.environ.setdefault("DJANGO_SETTINGS_MODULE","richesreach.settings_production")
+          import django; django.setup()
+          from django.urls import resolve, Resolver404
+          def check(path):
+              try:
+                  print(path, "->", resolve(path).url_name or "OK")
+              except Resolver404:
+                  raise SystemExit(f"404 (resolver): {path}")
+          for p in [
+            "/api/tax/optimization-summary/",
+            "/api/tax/loss-harvesting/",
+            "/api/tax/smart-lot-optimizer-v2/",
+            "/api/tax/two-year-gains-planner/",
+            "/api/tax/wash-sale-guard-v2/",
+          ]:
+              check(p)
+          print("URL smoke OK")
+          PY
 
   # Security Scan
   security:
@@ -126,8 +147,7 @@ jobs:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          cd backend
-          docker build -f backend/Dockerfile.production -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker build -f backend/backend/Dockerfile.production -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
       - name: Deploy to ECS
@@ -162,17 +182,23 @@ jobs:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          cd backend
-          docker build -f backend/Dockerfile.production -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker build -f backend/backend/Dockerfile.production -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
-      - name: Deploy to ECS
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
-        with:
-          task-definition: backend/backend/task-definition-production.json
-          service: ${{ env.ECS_SERVICE }}
-          cluster: ${{ env.ECS_CLUSTER }}
-          wait-for-service-stability: true
+      - name: Render task definition with new image
+        run: |
+          IMAGE=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+          jq --arg IMG "$IMAGE" '.containerDefinitions[0].image = $IMG' backend/backend/task-definition-production.json > backend/backend/task-definition-rendered.json
+      - name: Register task definition
+        run: |
+          aws ecs register-task-definition --cli-input-json file://backend/backend/task-definition-rendered.json
+      - name: Update service (force new deployment)
+        run: |
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ env.ECS_SERVICE }} \
+            --force-new-deployment \
+            --wait-for-service-stability
       - name: Run smoke tests
         run: |
           # Wait for service to be ready
