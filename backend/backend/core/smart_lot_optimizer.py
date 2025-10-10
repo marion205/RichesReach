@@ -13,7 +13,7 @@ import json
 import logging
 from datetime import date, timedelta
 from typing import List, Dict, Any, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal, ROUND_HALF_UP
 
 logger = logging.getLogger(__name__)
@@ -38,10 +38,10 @@ class OptimizeRequest:
     state_st_rate: float = 0.0    # state short-term rate
     state_lt_rate: float = 0.0    # state long-term rate
     forbid_wash_sale: bool = True
-    recent_buys_30d: Dict[str, float] = {}  # symbol -> shares bought in last 30 days
+    recent_buys_30d: Dict[str, float] = field(default_factory=dict)  # symbol -> shares bought in last 30 days
     max_portfolio_drift: float = 0.05  # max 5% drift from target allocation
-    target_allocation: Dict[str, float] = {}  # symbol -> target weight
-    current_allocation: Dict[str, float] = {}  # symbol -> current weight
+    target_allocation: Dict[str, float] = field(default_factory=dict)  # symbol -> target weight
+    current_allocation: Dict[str, float] = field(default_factory=dict)  # symbol -> current weight
     total_portfolio_value: float = 0.0
 
 @dataclass

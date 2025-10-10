@@ -12,7 +12,7 @@ import json
 import logging
 from datetime import date, timedelta
 from typing import List, Dict, Any, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal, ROUND_HALF_UP
 
 logger = logging.getLogger(__name__)
@@ -37,12 +37,12 @@ class OptimizeRequestV2:
     state_st_rate: float = 0.0
     state_lt_rate: float = 0.0
     loss_budget: float = 0.0  # max losses to realize (abs)
-    recent_buys_30d: Dict[str, float] = {}
+    recent_buys_30d: Dict[str, float] = field(default_factory=dict)
     forbid_wash_sale: bool = True
     bracket_target: float = 0.0  # target tax bracket (0.0 = no constraint)
     max_portfolio_drift: float = 0.05
-    target_allocation: Dict[str, float] = {}
-    current_allocation: Dict[str, float] = {}
+    target_allocation: Dict[str, float] = field(default_factory=dict)
+    current_allocation: Dict[str, float] = field(default_factory=dict)
     total_portfolio_value: float = 0.0
     prefer_long_term: bool = True
     min_holding_period: int = 0  # minimum days to hold before selling

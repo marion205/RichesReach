@@ -12,7 +12,7 @@ import json
 import logging
 from datetime import date, timedelta
 from typing import List, Dict, Any, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import math
 
 logger = logging.getLogger(__name__)
@@ -24,8 +24,8 @@ class GuardRequestV2:
     shares_to_sell: float
     recent_buys_30d: Dict[str, float]
     recent_sells_30d: Dict[str, float]
-    substitutes: Dict[str, List[str]] = None
-    portfolio_positions: Dict[str, float] = None
+    substitutes: Dict[str, List[str]] = field(default_factory=dict)
+    portfolio_positions: Dict[str, float] = field(default_factory=dict)
     wash_sale_threshold: float = 0.0
     correlation_threshold: float = 0.95
     risk_tolerance: str = "moderate"
