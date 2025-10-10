@@ -84,6 +84,11 @@ DATABASES = {
     }
 }
 
+# Yodlee Configuration
+YODLEE_BASE_URL = os.getenv('YODLEE_BASE_URL', 'https://api.yodlee.com/ysl')
+YODLEE_CLIENT_ID = os.getenv('YODLEE_CLIENT_ID', '')
+YODLEE_CLIENT_SECRET = os.getenv('YODLEE_CLIENT_SECRET', '')
+
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
     {
