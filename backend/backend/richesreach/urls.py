@@ -7,6 +7,7 @@ import time
 import json
 from core.schema import schema
 from core.mock_tools import dev_sbloc_advance
+from core.views_misc import version
 
 def healthz(_):
     return JsonResponse({"ok": True, "app": "richesreach"}, status=200)
@@ -261,6 +262,7 @@ urlpatterns = [
     # Note: auth/ will be added conditionally below
     path("me/", me_view),
     path("signals/", signals_view),
+    path("__version__", version, name="version"),  # <-- Version endpoint
 ]
 
 if settings.GRAPHQL_MODE == "simple":

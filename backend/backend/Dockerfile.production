@@ -11,14 +11,14 @@ WORKDIR /app
 COPY backend/backend/requirements.txt /app/requirements.txt
 RUN pip install --upgrade pip && pip install -r /app/requirements.txt
 
-# Copy the full repo (we use context: . in the workflow)
-COPY . /app
+# Copy backend source
+COPY backend/backend/ /app/
 
 # Set Django settings for production
 ARG GIT_SHA=unknown
 ENV DJANGO_SETTINGS_MODULE=richesreach.settings_production \
     PORT=8000 \
-    GIT_SHA=$GIT_SHA \
+    APP_GIT_SHA=$GIT_SHA \
     GUNICORN_CMD_ARGS="--bind 0.0.0.0:8000 --workers 3 --timeout 60 --access-logfile - --error-logfile -"
 
 # Create logs directory

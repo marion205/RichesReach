@@ -1,0 +1,72 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/deploy.yml'
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPO: 498606688292.dkr.ecr.us-east-1.amazonaws.com/riches-reach-ai
+  SERVICE: riches-reach-backend
+  CLUSTER: riches-reach-prod
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_GH_ACTIONS_ROLE_ARN }}
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build & push image (correct Dockerfile path)
+        uses: docker/build-push-action@v5
+        with:
+          context: .                                   # repo root
+          file: backend/backend/Dockerfile.production  # <- important
+          push: true
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+          tags: |
+            ${{ env.ECR_REPO }}:${{ github.sha }}
+            ${{ env.ECR_REPO }}:prod-${{ github.run_id }}
+
+      - name: Force new ECS deployment
+        run: |
+          aws ecs update-service \
+            --cluster "${CLUSTER}" \
+            --service "${SERVICE}" \
+            --force-new-deployment >/dev/null
+
+      - name: Wait for service stability
+        run: |
+          aws ecs wait services-stable \
+            --cluster "${CLUSTER}" \
+            --services "${SERVICE}"
+
+      - name: Smoke test deployed endpoints
+        env:
+          PROD_URL: http://riches-reach-alb-1199497064.us-east-1.elb.amazonaws.com
+        run: |
+          set -e
+          curl -sf "${PROD_URL}/" >/dev/null
+          # make 404 a failure (ensures image includes tax routes)
+          curl -sf "${PROD_URL}/api/tax/optimization-summary" >/dev/null
+          echo "✅ Smoke test passed"
