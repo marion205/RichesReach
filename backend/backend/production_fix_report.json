@@ -1,0 +1,21 @@
+{
+  "fixes_applied": [
+    "Enabled Yodlee in production config",
+    "Added SBLOC configuration",
+    "Collected static files",
+    "Created environment template",
+    "Created deployment script"
+  ],
+  "errors_found": [
+    "Missing environment variable: FINNHUB_API_KEY",
+    "Missing environment variable: POLYGON_API_KEY",
+    "Missing environment variable: OPENAI_API_KEY",
+    "Missing environment variable: SECRET_KEY",
+    "Missing Docker file: Dockerfile.prod",
+    "Missing Nginx config: nginx/nginx.conf",
+    "Endpoint /health/ returned 502",
+    "Endpoint /graphql/ returned 404",
+    "Endpoint /api/ai-options/recommendations returned 502"
+  ],
+  "timestamp": "2025-10-09T20:46:35.822949"
+}

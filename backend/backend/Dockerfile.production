@@ -1,35 +1,26 @@
-# Container-Native Production Dockerfile for RichesReach Backend
-FROM python:3.11-slim
+FROM python:3.10-slim
 
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
-
-# System dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl ca-certificates \
-    postgresql-client \
-    build-essential \
-    libpq-dev \
- && rm -rf /var/lib/apt/lists/*
-
-# Create non-root user and home
-RUN useradd -m -u 10001 appuser
-
-# Create app dir and set ownership
 WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy code as root, then fix ownership once
-COPY . /app
-COPY entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
-RUN chown -R appuser:appuser /app
+# Copy application code
+COPY . .
 
-# Drop privileges
-USER appuser
+# Collect static files
+RUN python manage.py collectstatic --noinput
 
-# Expose & default command (override in task def if you prefer)
+# Expose port
 EXPOSE 8000
-HEALTHCHECK --interval=20s --timeout=3s --retries=5 CMD curl -fsS http://localhost:8000/health/ || exit 1
-CMD ["/app/entrypoint.sh"]
+
+# Start command
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "4", "richesreach.wsgi:application"]

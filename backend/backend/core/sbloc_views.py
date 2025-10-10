@@ -11,7 +11,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.conf import settings
 from django.utils import timezone
-from .models import SBLOCReferral
+from .models import SblocReferral
 
 logger = logging.getLogger(__name__)
 
@@ -38,13 +38,10 @@ def sbloc_webhook(request):
         "withdrawn": "WITHDRAWN",
         "funded": "FUNDED",
     }
-    ref = SBLOCReferral.objects.filter(aggregator_app_id=app_id).first()
+    ref = SblocReferral.objects.filter(external_ref=app_id).first()
     if ref:
         ref.status = status_map.get(vendor_status, ref.status)
-        tl = ref.timeline
-        tl.append({"ts": timezone.now().isoformat(), "event": vendor_status})
-        ref.timeline = tl
-        ref.save(update_fields=["status", "timeline", "updated_at"])
+        ref.save(update_fields=["status"])
     return JsonResponse({"ok": True})
 
 
