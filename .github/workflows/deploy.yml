@@ -1,11 +1,12 @@
 name: Deploy Backend
 
 on:
-  push:
-    branches: [ main ]
-    paths:
-      - 'backend/**'
-      - '.github/workflows/deploy.yml'
+  workflow_dispatch:  # Disabled until AWS secrets are configured
+  # push:
+  #   branches: [ main ]
+  #   paths:
+  #     - 'backend/**'
+  #     - '.github/workflows/deploy.yml'
 
 env:
   AWS_REGION: us-east-1

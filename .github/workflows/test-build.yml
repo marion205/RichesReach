@@ -1,0 +1,74 @@
+name: Test Build and Tax Optimization Features
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/test-build.yml'
+
+jobs:
+  test-build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        
+      - name: Build Docker image (test only)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: backend/backend/Dockerfile.production
+          push: false
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+          tags: |
+            riches-reach-ai:test-${{ github.sha }}
+            
+      - name: Test Docker image locally
+        run: |
+          # Start the container
+          docker run -d --name test-container -p 8000:8000 riches-reach-ai:test-${{ github.sha }}
+          
+          # Wait for startup
+          sleep 10
+          
+          # Test basic endpoints
+          echo "Testing basic endpoints..."
+          curl -f http://localhost:8000/ || exit 1
+          curl -f http://localhost:8000/health || exit 1
+          
+          # Test version endpoint
+          echo "Testing version endpoint..."
+          curl -f http://localhost:8000/__version__ || exit 1
+          
+          # Test tax optimization endpoints (should return 403 for unauthenticated, not 404)
+          echo "Testing tax optimization endpoints..."
+          response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/api/tax/optimization-summary)
+          if [ "$response" = "404" ]; then
+            echo "❌ Tax optimization endpoints returning 404 - not included in image"
+            exit 1
+          elif [ "$response" = "403" ]; then
+            echo "✅ Tax optimization endpoints returning 403 - correctly included (auth required)"
+          else
+            echo "✅ Tax optimization endpoints returning $response - included in image"
+          fi
+          
+          # Test other tax endpoints
+          response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/api/tax/smart-lot-optimizer-v2)
+          if [ "$response" = "404" ]; then
+            echo "❌ Smart Lot Optimizer V2 returning 404"
+            exit 1
+          else
+            echo "✅ Smart Lot Optimizer V2 returning $response - included in image"
+          fi
+          
+          # Cleanup
+          docker stop test-container
+          docker rm test-container
+          
+          echo "✅ All tests passed! Tax optimization features are included in the image."
