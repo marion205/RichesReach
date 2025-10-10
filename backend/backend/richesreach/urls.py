@@ -655,8 +655,14 @@ urlpatterns.append(path("accounts/login/", auth_view, name='login'))
 
 # Tax Optimization Premium URLs
 if TAX_OPTIMIZATION_AVAILABLE:
+    # Original tax optimization endpoints
     urlpatterns.append(path("api/tax/loss-harvesting", tax_loss_harvesting, name='tax_loss_harvesting'))
     urlpatterns.append(path("api/tax/capital-gains-optimization", capital_gains_optimization, name='capital_gains_optimization'))
     urlpatterns.append(path("api/tax/efficient-rebalancing", tax_efficient_rebalancing, name='tax_efficient_rebalancing'))
     urlpatterns.append(path("api/tax/bracket-analysis", tax_bracket_analysis, name='tax_bracket_analysis'))
     urlpatterns.append(path("api/tax/optimization-summary", tax_optimization_summary, name='tax_optimization_summary'))
+    
+    # Best-in-market premium endpoints
+    urlpatterns.append(path("api/tax/smart-lot-optimizer", smart_lot_optimizer, name='smart_lot_optimizer'))
+    urlpatterns.append(path("api/tax/wash-sale-guard", wash_sale_guard, name='wash_sale_guard'))
+    urlpatterns.append(path("api/tax/borrow-vs-sell", borrow_vs_sell_advisor, name='borrow_vs_sell_advisor'))
