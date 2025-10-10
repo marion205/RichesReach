@@ -1,31 +1,36 @@
-FROM python:3.11-slim AS base
+FROM python:3.11-slim
+
+# OS deps
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential libpq-dev curl ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
-RUN apt-get update && apt-get install -y --no-install-recommends \
-      build-essential libpq-dev curl ca-certificates \
-  && rm -rf /var/lib/apt/lists/*
+    PYTHONPATH=/app \
+    DJANGO_SETTINGS_MODULE=richesreach.settings_production \
+    PORT=8000
+
 WORKDIR /app
 
-# Copy only requirement files first for better caching
+# Install Python deps
 COPY backend/backend/requirements.txt /app/requirements.txt
 RUN pip install --upgrade pip && pip install -r /app/requirements.txt
 
-# Copy backend source
+# App code
 COPY backend/backend/ /app/
 
-# Set Django settings for production
+# Build SHA for deployment verification
 ARG GIT_SHA=unknown
-ENV DJANGO_SETTINGS_MODULE=richesreach.settings_production \
-    PORT=8000 \
-    APP_GIT_SHA=$GIT_SHA \
-    GUNICORN_CMD_ARGS="--bind 0.0.0.0:8000 --workers 3 --timeout 60 --access-logfile - --error-logfile -"
+ENV APP_GIT_SHA=$GIT_SHA
 
-# Create logs directory
-RUN mkdir -p /app/logs
+# Folders needed at runtime
+RUN mkdir -p /app/logs /app/staticfiles
 
-# Collect static files
+# Collect static (manage.py is in /app)
 RUN python manage.py collectstatic --noinput
 
 EXPOSE 8000
-CMD ["gunicorn", "richesreach.wsgi:application"]
+
+# Use gunicorn for production (WSGI)
+CMD ["gunicorn", "richesreach.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3", "--timeout", "60", "--access-logfile", "-", "--error-logfile", "-"]
