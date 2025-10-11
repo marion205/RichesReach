@@ -18,7 +18,16 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'your-production-secret-key-here')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+# Host / CSRF
+ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS","riches-reach-alb-1199497064.us-east-1.elb.amazonaws.com").split(",")
+CSRF_TRUSTED_ORIGINS = [f"http://{h}" for h in ALLOWED_HOSTS] + [f"https://{h}" for h in ALLOWED_HOSTS]
+
+# If you do NOT have a 443 listener yet:
+SECURE_SSL_REDIRECT = False  # flip to True only when 443 is live
+
+# Correct client IP/host when behind ALB
+USE_X_FORWARDED_HOST = True
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 # Application definition
 INSTALLED_APPS = [
@@ -88,6 +97,12 @@ DATABASES = {
 YODLEE_BASE_URL = os.getenv('YODLEE_BASE_URL', 'https://api.yodlee.com/ysl')
 YODLEE_CLIENT_ID = os.getenv('YODLEE_CLIENT_ID', '')
 YODLEE_CLIENT_SECRET = os.getenv('YODLEE_CLIENT_SECRET', '')
+YODLEE_SECRET = YODLEE_CLIENT_SECRET  # Alias for compatibility
+YODLEE_LOGIN_NAME = os.getenv('YODLEE_LOGIN_NAME', 'test-login-name')
+YODLEE_FASTLINK_URL = os.getenv('YODLEE_FASTLINK_URL', 'https://test.fastlink.yodlee.com')
+
+# GraphQL Configuration
+GRAPHQL_MODE = os.getenv('GRAPHQL_MODE', 'simple')
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -227,48 +242,14 @@ except (OSError, PermissionError):
     LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'formatters': {
-        'verbose': {
-            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
-            'style': '{',
-        },
-        'simple': {
-            'format': '{levelname} {message}',
-            'style': '{',
-        },
-    },
-    'handlers': {
-        'file': {
-            'level': 'INFO',
-            'class': 'logging.handlers.RotatingFileHandler',
-            'filename': str(LOG_DIR / 'django.log'),
-            'maxBytes': 1024*1024*10,  # 10MB
-            'backupCount': 3,
-            'formatter': 'verbose',
-        },
-        'console': {
-            'level': 'DEBUG',
-            'class': 'logging.StreamHandler',
-            'formatter': 'simple',
-        },
-    },
-    'root': {
-        'handlers': ['console', 'file'],
-        'level': 'INFO',
-    },
-    'loggers': {
-        'django': {
-            'handlers': ['console', 'file'],
-            'level': 'INFO',
-            'propagate': False,
-        },
-        'core': {
-            'handlers': ['console', 'file'],
-            'level': 'DEBUG',
-            'propagate': False,
-        },
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {"console": {"class": "logging.StreamHandler"}},
+    "root": {"handlers": ["console"], "level": "INFO"},
+    "loggers": {
+        "django.request": {"handlers": ["console"], "level": "WARNING"},
+        "richesreach": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        "core": {"handlers": ["console"], "level": "INFO", "propagate": False},
     },
 }
 

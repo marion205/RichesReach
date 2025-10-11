@@ -1,22 +1,16 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/usr/bin/env sh
+set -e
 
-echo "[BOOT] GRAPHQL_MODE=${GRAPHQL_MODE:-simple}"
+# Optional but useful diagnostics
+echo "ENV: DJANGO_SETTINGS_MODULE=$DJANGO_SETTINGS_MODULE PORT=$PORT"
+python - <<'PY' || true
+import os, django
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", os.environ.get("DJANGO_SETTINGS_MODULE","richesreach.settings_production"))
+try:
+    django.setup()
+    print("django.setup() OK")
+except Exception as e:
+    print("django.setup() FAILED:", e)
+PY
 
-# Simple mode defaults to SQLite at /tmp/simple.sqlite3
-if [ "${GRAPHQL_MODE:-simple}" = "simple" ]; then
-  echo "[BOOT] Using SQLite (simple mode)"
-else
-  echo "[BOOT] Using Postgres (production mode)"
-fi
-
-# Run DB migrations and collect static (idempotent, works for SQLite and Postgres)
-echo "[BOOT] Running migrations..."
-python manage.py migrate --noinput
-
-echo "[BOOT] Collecting static files..."
-python manage.py collectstatic --noinput || true
-
-# Start server
-echo "[BOOT] Starting Gunicorn server..."
-exec gunicorn richesreach.wsgi:application --bind 0.0.0.0:8000 --workers "${WEB_WORKERS:-3}" --timeout 90 --access-logfile - --error-logfile -
+exec "$@"
