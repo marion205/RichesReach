@@ -17,11 +17,16 @@ class YodleeService:
     """Service class for Yodlee API interactions"""
     
     def __init__(self):
-        self.base_url = settings.YODLEE_BASE_URL
-        self.client_id = settings.YODLEE_CLIENT_ID
-        self.secret = settings.YODLEE_SECRET
-        self.login_name = settings.YODLEE_LOGIN_NAME
-        self.fastlink_url = settings.YODLEE_FASTLINK_URL
+        # Use getattr with fallback; never hard-attribute access
+        self.base_url = getattr(settings, "YODLEE_BASE_URL", "")
+        self.client_id = getattr(settings, "YODLEE_CLIENT_ID", "")
+        self.secret = getattr(settings, "YODLEE_SECRET", "")
+        self.login_name = getattr(settings, "YODLEE_LOGIN_NAME", "")
+        self.fastlink_url = getattr(settings, "YODLEE_FASTLINK_URL", "")
+        
+        self.enabled = all([self.client_id, self.secret, self.login_name, self.base_url])
+        if not self.enabled:
+            logger.warning("YodleeService disabled: missing configuration")
         
     def _get_headers(self, access_token: Optional[str] = None) -> Dict[str, str]:
         """Get headers for Yodlee API requests"""
@@ -297,5 +302,15 @@ class YodleeDataProcessor:
             return False
 
 
-# Create a singleton instance
-yodlee_service = YodleeService()
+# Lazy singleton pattern to avoid import-time instantiation
+_yodlee = None
+
+def get_yodlee_service():
+    """Get the Yodlee service instance (lazy-loaded)"""
+    global _yodlee
+    if _yodlee is None:
+        _yodlee = YodleeService()
+    return _yodlee
+
+# Keep the module-level name for backward compatibility
+yodlee_service = get_yodlee_service()

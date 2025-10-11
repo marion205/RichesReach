@@ -2,10 +2,10 @@ from django.contrib import admin
 from django.urls import path
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from graphene_django.views import GraphQLView
+from django.views import View
+from django.utils.decorators import method_decorator
 import time
 import json
-from core.schema import schema
 from core.mock_tools import dev_sbloc_advance
 from core.views_misc import version
 from core.billing_views import (
@@ -18,6 +18,15 @@ def healthz(_):
 
 def health(_):
     return JsonResponse({"ok": True, "mode": "simple"}, status=200)
+
+class GraphQLLazyView(View):
+    """Lazy GraphQL view that only imports schema when accessed"""
+    @method_decorator(csrf_exempt)
+    def dispatch(self, request, *args, **kwargs):
+        # Import ONLY when /graphql is hit
+        from graphene_django.views import GraphQLView
+        from core.schema import schema
+        return GraphQLView.as_view(schema=schema, graphiql=False)(request, *args, **kwargs)
 
 def home(_):
     return JsonResponse({"message": "Hello from RichesReach!", "status": "running"}, status=200)
@@ -259,7 +268,8 @@ urlpatterns = [
     path("", home),  # <-- Root endpoint
     path("admin/", admin.site.urls),
     path("healthz", healthz),  # <-- ALB target health
-    path("health/", health),   # <-- Docker health check
+    path("health", health),   # <-- Health check (no trailing slash)
+    path("health/", health),   # <-- Health check (with trailing slash)
     path("prices/", prices_view),  # <-- Prices endpoint for crypto/stocks
     path("user-profile/", user_profile_view),  # <-- User profile endpoint
     path("discussions/", discussions_view),  # <-- Stock discussions endpoint
@@ -278,12 +288,10 @@ if settings.GRAPHQL_MODE == "simple":
         path("auth/", mock_login, name="mock_auth"),  # Override auth with mock JWT
     ]
 else:
-    print("DEBUG: Using standard GraphQLView")
-    # Import schema lazily only in standard mode
-    from core.schema import schema
-    # Standard GraphQLView (original behavior)
+    print("DEBUG: Using lazy GraphQLView")
+    # Use lazy GraphQL view to avoid import-time side effects
     urlpatterns += [
-        path("graphql/", csrf_exempt(GraphQLView.as_view(schema=schema, graphiql=False))),
+        path("graphql/", GraphQLLazyView.as_view()),
         path("auth/", auth_view),  # Use original auth view
     ]
 
@@ -402,6 +410,7 @@ from .views_auth import login_view
 from core.views_ai import ai_status, cache_status
 from core.views.health import health_check, health_detailed, health_ready, health_live
 from core.views import ai_options_recommendations
+from .views_diag import echo, netcheck
 from core.views_yodlee import (
     start_fastlink, fastlink_callback, fetch_accounts, 
     refresh_account, get_transactions, yodlee_webhook, delete_bank_link
@@ -692,3 +701,7 @@ urlpatterns.append(path("api/billing/cancel/", CancelSubscriptionView.as_view(),
 urlpatterns.append(path("api/billing/feature-access/", FeatureAccessView.as_view(), name='feature_access'))
 urlpatterns.append(path("api/billing/webhooks/stripe/", stripe_webhook, name='stripe_webhook'))
 urlpatterns.append(path("api/billing/webhooks/revenuecat/", revenuecat_webhook, name='revenuecat_webhook'))
+
+# Diagnostic endpoints
+urlpatterns.append(path("echo", echo, name='echo'))
+urlpatterns.append(path("netcheck", netcheck, name='netcheck'))

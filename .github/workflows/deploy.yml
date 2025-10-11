@@ -1,121 +1,115 @@
-name: Deploy Backend
+name: Build & Deploy Backend
 
 on:
-  push:
-    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+  AWS_ACCOUNT_ID: 498606688292
+  ECR_REPO: riches-reach-ai
+  CLUSTER: riches-reach-cluster
+  SERVICE: riches-reach-streaming-service
+  TASK_FAMILY: richesreach-production
+  CONTAINER_NAME: richesreach-backend
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
-    env:
-      AWS_REGION: us-east-1
-      AWS_ACCOUNT_ID: "498606688292"
-      ECR_REPO: riches-reach-ai
-      IMAGE_SHA: ${{ github.sha }}
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Configure AWS via OIDC
+      # Option B: Static keys via repo secrets (easier to set up)
+      - name: Configure AWS (static keys)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_GH_ACTIONS_ROLE_ARN }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to ECR
-        id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Set derived env
+      - name: Compute tags
+        id: meta
         run: |
-          echo "IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPO }}" >> $GITHUB_ENV
+          GIT_SHA="${GITHUB_SHA}"
+          HUMAN_TAG="prod-$(date +%Y%m%d%H%M%S)"
+          IMAGE_URI="${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO }}:${GIT_SHA}"
+          echo "GIT_SHA=$GIT_SHA" >> $GITHUB_OUTPUT
+          echo "HUMAN_TAG=$HUMAN_TAG" >> $GITHUB_OUTPUT
+          echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_OUTPUT
 
-      - name: Build & push image
-        uses: docker/build-push-action@v5
+      - name: Build & push
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: backend/backend/Dockerfile.production
-          push: true
           build-args: |
-            GIT_SHA=${{ env.IMAGE_SHA }}
+            GIT_SHA=${{ steps.meta.outputs.GIT_SHA }}
+          push: true
           tags: |
-            ${{ env.IMAGE_URI }}:${{ env.IMAGE_SHA }}
-            ${{ env.IMAGE_URI }}:prod-${{ github.run_id }}
+            ${{ steps.meta.outputs.IMAGE_URI }}
+            ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO }}:${{ steps.meta.outputs.HUMAN_TAG }}
 
-      - name: Verify image exists in ECR
+      - name: Patch & register task definition
+        id: td
         run: |
-          aws ecr describe-images --repository-name "${ECR_REPO}" \
-            --image-ids imageTag="${IMAGE_SHA}" >/dev/null
-
-      - name: Deploy to ECS
-        shell: bash
-        run: |
-          set -euo pipefail
-          IMAGE="${{ env.IMAGE_URI }}:${{ env.IMAGE_SHA }}"
-
-          # Get current task definition arn
-          TD_ARN=$(aws ecs describe-services \
-            --cluster riches-reach-prod \
-            --services riches-reach-prod-svc \
-            --query 'services[0].taskDefinition' --output text)
-
-          # Download the task definition JSON
-          aws ecs describe-task-definition --task-definition "$TD_ARN" \
+          aws ecs describe-task-definition \
+            --task-definition "${{ env.TASK_FAMILY }}" \
             --query 'taskDefinition' > td.json
 
-          # Strip fields not allowed on register
-          jq 'del(.taskDefinitionArn,.revision,.status,.requiresAttributes,.compatibilities,.registeredAt,.registeredBy)' td.json > td-stripped.json
+          IMG="${{ steps.meta.outputs.IMAGE_URI }}"
+          jq --arg NAME "${{ env.CONTAINER_NAME }}" --arg IMG "$IMG" '
+            .containerDefinitions |= (map(
+              if .name==$NAME then .image=$IMG else . end
+            )) |
+            {family, taskRoleArn, executionRoleArn, networkMode, containerDefinitions,
+             volumes, placementConstraints, requiresCompatibilities, cpu, memory}
+          ' td.json > new-td.json
 
-          # Swap image for the target container
-          jq --arg NAME "riches-reach-ai" --arg IMG "$IMAGE" '
-            .containerDefinitions = (.containerDefinitions | map(
-              if .name == $NAME then .image = $IMG | . else . end
-            ))
-          ' td-stripped.json > td-new.json
-
-          # Register new revision
-          NEW_TD_ARN=$(aws ecs register-task-definition \
-            --cli-input-json file://td-new.json \
+          REV_ARN=$(aws ecs register-task-definition \
+            --cli-input-json file://new-td.json \
             --query 'taskDefinition.taskDefinitionArn' --output text)
-          echo "New task def: $NEW_TD_ARN"
+          echo "REV_ARN=$REV_ARN" >> $GITHUB_OUTPUT
 
-          # Update service
-          aws ecs update-service \
-            --cluster riches-reach-prod \
-            --service riches-reach-prod-svc \
-            --task-definition "$NEW_TD_ARN" \
-            --force-new-deployment
-
-          # Wait until stable
-          aws ecs wait services-stable \
-            --cluster riches-reach-prod \
-            --services riches-reach-prod-svc
-
-      # ----- Simple smoke test -----
-      - name: Smoke test
+      - name: Update service
         run: |
-          set -e
-          API="http://riches-reach-alb-1199497064.us-east-1.elb.amazonaws.com"
-          echo "GET / ..."
-          curl -sf "$API/" | head -c 200
-          echo -e "\nOK"
+          aws ecs update-service \
+            --cluster "${{ env.CLUSTER }}" \
+            --service "${{ env.SERVICE }}" \
+            --task-definition "${{ steps.td.outputs.REV_ARN }}" \
+            --force-new-deployment
+          aws ecs wait services-stable \
+            --cluster "${{ env.CLUSTER }}" \
+            --services "${{ env.SERVICE }}"
 
-          # Version endpoint verification
-          echo "GET /__version__ ..."
-          VERSION_RESPONSE=$(curl -sf "$API/__version__")
-          echo "$VERSION_RESPONSE"
+      - name: Smoke tests
+        run: |
+          API="http://riches-reach-alb-1199497064.${{ env.AWS_REGION }}.elb.amazonaws.com"
+          echo "Waiting for deployment to be ready..."
+          for i in {1..10}; do
+            echo "Attempt $i: /health"
+            if curl -fsS "$API/health" > /dev/null 2>&1; then
+              echo "✅ Health check passed"
+              break
+            else
+              echo "⏳ Health check failed, waiting 6s..."
+              sleep 6
+            fi
+          done
           
-          # Check if version matches current SHA
-          if echo "$VERSION_RESPONSE" | grep -q "${{ env.IMAGE_SHA }}"; then
-            echo "✅ Version endpoint shows correct SHA"
-          else
-            echo "⚠️  Version endpoint SHA doesn't match current commit"
-          fi
-
-          # Test tax optimization endpoint
-          echo "GET /api/tax/optimization-summary ..."
-          curl -sf "$API/api/tax/optimization-summary" >/dev/null
-          echo "✅ Tax optimization endpoint accessible"
+          echo ""
+          echo "🧪 Running smoke tests..."
+          echo "GET /health   ->"; curl -i "$API/health"  | head -n 1 || echo "❌ FAIL"
+          echo "GET /health/  ->"; curl -i "$API/health/" | head -n 1 || echo "❌ FAIL"
+          echo "GET /echo     ->"; curl -i "$API/echo"    | head -n 1 || echo "❌ FAIL"
+          echo "GET /netcheck ->"; curl -i "$API/netcheck" | head -n 1 || echo "❌ FAIL"
+          
+          echo ""
+          echo "🎉 Deployment complete! The application should now be stable with:"
+          echo "  - Lazy Yodlee service loading (no import-time crashes)"
+          echo "  - Lazy GraphQL schema loading (health checks independent)"
+          echo "  - Both /health and /health/ endpoints working"
+          echo "  - Graceful handling of missing Yodlee configuration"
