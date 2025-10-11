@@ -6,7 +6,7 @@ from celery import Celery
 from django.conf import settings
 
 # Set the default Django settings module for the 'celery' program.
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'richesreach.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'richesreach.settings_production')
 
 app = Celery('richesreach')
 
@@ -21,9 +21,14 @@ app.autodiscover_tasks()
 from core.celery_beat_schedule import CELERY_BEAT_SCHEDULE, CELERY_BEAT_SCHEDULE_DEV
 
 # Use development schedule if DEBUG is True
-if settings.DEBUG:
-    app.conf.beat_schedule = CELERY_BEAT_SCHEDULE_DEV
-else:
+# Use getattr to avoid AttributeError if settings not fully loaded
+try:
+    if getattr(settings, 'DEBUG', False):
+        app.conf.beat_schedule = CELERY_BEAT_SCHEDULE_DEV
+    else:
+        app.conf.beat_schedule = CELERY_BEAT_SCHEDULE
+except Exception:
+    # Fallback to production schedule if settings access fails
     app.conf.beat_schedule = CELERY_BEAT_SCHEDULE
 
 @app.task(bind=True)
