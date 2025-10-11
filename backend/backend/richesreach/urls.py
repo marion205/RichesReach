@@ -279,27 +279,11 @@ urlpatterns = [
     path("__version__", version, name="version"),  # <-- Version endpoint
 ]
 
-# Lazy GraphQL configuration to avoid import-time settings access
-def get_graphql_urls():
-    from django.conf import settings
-    if getattr(settings, 'GRAPHQL_MODE', None) == "simple":
-        print("DEBUG: Using SimpleGraphQLView and Mock Auth")
-        from core.views_gql_simple import SimpleGraphQLView
-        from core.mock_auth import mock_login
-        return [
-            path("graphql/", SimpleGraphQLView.as_view(), name="graphql"),
-            path("auth/", mock_login, name="mock_auth"),  # Override auth with mock JWT
-        ]
-    else:
-        print("DEBUG: Using lazy GraphQLView")
-        # Use lazy GraphQL view to avoid import-time side effects
-        return [
-            path("graphql/", GraphQLLazyView.as_view()),
-            path("auth/", auth_view),  # Use original auth view
-        ]
-
-# Add GraphQL URLs lazily
-urlpatterns += get_graphql_urls()
+# Add GraphQL URLs directly - use lazy view which checks settings when accessed
+urlpatterns += [
+    path("graphql/", GraphQLLazyView.as_view()),
+    path("auth/", auth_view),
+]
 
 # Always add the mock GraphQL endpoint for testing
 # (mock_graphql function is defined later in the file)
