@@ -12,7 +12,7 @@ env:
   CLUSTER: riches-reach-cluster
   SERVICE: riches-reach-streaming-service
   TASK_FAMILY: riches-reach-streaming-pipeline-optimized
-  CONTAINER_NAME: richesreach-backend
+  CONTAINER_NAME: streaming-pipeline
 
 jobs:
   deploy:
