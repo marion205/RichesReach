@@ -1,4 +1,9 @@
-FROM python:3.10-slim
+# syntax=docker/dockerfile:1
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    DJANGO_SETTINGS_MODULE=richesreach.settings_production
 
 WORKDIR /app
 
@@ -9,26 +14,19 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install Python dependencies
+# 1) Install deps
 COPY backend/backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY backend/backend/ .
+# 2) Copy ONLY the Django app explicitly from repo root context
+#    (this avoids surprises with context vs Dockerfile location)
+COPY backend/backend/ ./          # -> /app/manage.py and /app/richesreach/...
 
-# Collect static files
-RUN python manage.py collectstatic --noinput
+# (Optional) Embed build metadata
+ARG GIT_SHA=dev
+LABEL org.opencontainers.image.revision=$GIT_SHA
+RUN echo "$GIT_SHA" > .build-commit
 
-# Expose port
+# 3) Runtime
 EXPOSE 8000
-
-# Environment variables for debugging
-ENV PYTHONUNBUFFERED=1 PORT=8000 DJANGO_SETTINGS_MODULE=richesreach.settings_production
-
-# Copy and setup entrypoint
-COPY backend/backend/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
-
-# Use entrypoint for better debugging
-ENTRYPOINT ["/entrypoint.sh"]
-CMD ["gunicorn","richesreach.wsgi:application","--bind","0.0.0.0:8000","--workers","2","--threads","2","--timeout","120","--access-logfile","-","--error-logfile","-"]
+CMD ["gunicorn","richesreach.wsgi:application","--bind","0.0.0.0:8000","--workers","2","--timeout","120","--access-logfile","-","--error-logfile","-","--forwarded-allow-ips","*"]

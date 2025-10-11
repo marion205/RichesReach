@@ -56,6 +56,22 @@ jobs:
             ${{ steps.meta.outputs.IMAGE_URI }}
             ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO }}:${{ steps.meta.outputs.HUMAN_TAG }}
 
+      - name: Verify code inside image
+        run: |
+          ECR_URI="${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO }}"
+          IMG="$ECR_URI:${{ steps.meta.outputs.GIT_SHA }}"
+          aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin "${ECR_URI%/*}"
+          docker pull "$IMG"
+          id=$(docker create "$IMG")
+          docker cp "$id:/app/richesreach/wsgi.py" wsgi.from.image.py || true
+          docker cp "$id:/app/richesreach/settings_production.py" settings_prod.from.image.py || true
+          docker rm "$id"
+          echo "---- wsgi.py head ----"; head -n 40 wsgi.from.image.py || true
+          echo "---- settings_production.py head ----"; head -n 40 settings_prod.from.image.py || true
+
+          # Assert the sentinel is present (the setdefault line you added)
+          grep -q "os.environ.setdefault(\"DJANGO_SETTINGS_MODULE\", \"richesreach.settings_production\")" wsgi.from.image.py
+
       - name: Patch & register task definition
         id: td
         run: |
