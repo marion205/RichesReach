@@ -20,6 +20,13 @@ app.autodiscover_tasks()
 # Celery Beat schedule for real-time data updates
 from core.celery_beat_schedule import CELERY_BEAT_SCHEDULE, CELERY_BEAT_SCHEDULE_DEV
 
+# Avoid touching settings attributes at import time
+try:
+    _ = getattr(settings, "DEBUG", False)
+except Exception:
+    # If settings aren't ready, don't explode during import
+    pass
+
 # Use development schedule if DEBUG is True
 # Use getattr to avoid AttributeError if settings not fully loaded
 try:
