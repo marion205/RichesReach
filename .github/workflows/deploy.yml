@@ -65,7 +65,13 @@ jobs:
           IMG="${{ steps.meta.outputs.IMAGE_URI }}"
           jq --arg NAME "${{ env.CONTAINER_NAME }}" --arg IMG "$IMG" '
             .containerDefinitions |= (map(
-              if .name==$NAME then .image=$IMG else . end
+              if .name==$NAME then 
+                .image=$IMG | 
+                .environment |= (
+                  map(select(.name != "DJANGO_SETTINGS_MODULE")) + 
+                  [{name: "DJANGO_SETTINGS_MODULE", value: "richesreach.settings_production"}]
+                )
+              else . end
             )) |
             {family, taskRoleArn, executionRoleArn, networkMode, containerDefinitions,
              volumes, placementConstraints, requiresCompatibilities, cpu, memory}
