@@ -9,7 +9,7 @@ env:
   ECR_REPO: riches-reach-ai
   CLUSTER: riches-reach-cluster
   SERVICE: riches-reach-streaming-service
-  TASK_FAMILY: richesreach-production
+      TASK_FAMILY: riches-reach-streaming-pipeline-optimized
   CONTAINER_NAME: richesreach-backend
 
 jobs:
