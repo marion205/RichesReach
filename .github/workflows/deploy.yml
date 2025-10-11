@@ -51,6 +51,7 @@ jobs:
           build-args: |
             GIT_SHA=${{ steps.meta.outputs.GIT_SHA }}
           push: true
+          no-cache: true
           tags: |
             ${{ steps.meta.outputs.IMAGE_URI }}
             ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO }}:${{ steps.meta.outputs.HUMAN_TAG }}
