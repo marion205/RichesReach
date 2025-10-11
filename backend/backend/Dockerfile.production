@@ -20,7 +20,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # 2) Copy ONLY the Django app explicitly from repo root context
 #    (this avoids surprises with context vs Dockerfile location)
-COPY backend/backend/ ./          # -> /app/manage.py and /app/richesreach/...
+COPY backend/backend/ ./
 
 # (Optional) Embed build metadata
 ARG GIT_SHA=dev
