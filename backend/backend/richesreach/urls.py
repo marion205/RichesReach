@@ -802,9 +802,11 @@ def mock_graphql(request):
 # urlpatterns.append(path("debug-env/", debug_env))
 # urlpatterns.append(path("mock-graphql/", mock_graphql))
 from .views_auth import login_view
-from core.views_ai import ai_status, cache_status
+# Lazy import to avoid settings access at import time
+# from core.views_ai import ai_status, cache_status
 from core.views.health import health_check, health_detailed, health_ready, health_live
-from core.views import ai_options_recommendations
+# Lazy import to avoid settings access at import time
+# from core.views import ai_options_recommendations
 from .views_diag import echo, netcheck
 from core.views_yodlee import (
     start_fastlink, fastlink_callback, fetch_accounts, 
@@ -813,12 +815,25 @@ from core.views_yodlee import (
 # from marketdata.urls import urlpatterns as marketdata_urls
 
 urlpatterns.append(path("api/auth/login/", login_view))
-# AI Options endpoints (both with and without trailing slash)
-urlpatterns.append(path("api/ai-options/recommendations", ai_options_recommendations, name='ai_opts_recs_no_slash'))
-urlpatterns.append(path("api/ai-options/recommendations/", ai_options_recommendations, name='ai_opts_recs'))
+# AI Options endpoints (both with and without trailing slash) - lazy import
+def ai_options_recommendations_lazy(request):
+    from core.views_ai import ai_options_recommendations
+    return ai_options_recommendations(request)
+
+urlpatterns.append(path("api/ai-options/recommendations", ai_options_recommendations_lazy, name='ai_opts_recs_no_slash'))
+urlpatterns.append(path("api/ai-options/recommendations/", ai_options_recommendations_lazy, name='ai_opts_recs'))
 # AI Status endpoint for feature flag checking
-urlpatterns.append(path("api/ai-status", ai_status, name='ai_status'))
-urlpatterns.append(path("api/cache-status", cache_status, name='cache_status'))
+# Lazy imports for AI endpoints to avoid settings access at import time
+def ai_status_lazy(request):
+    from core.views_ai import ai_status
+    return ai_status(request)
+
+def cache_status_lazy(request):
+    from core.views_ai import cache_status
+    return cache_status(request)
+
+urlpatterns.append(path("api/ai-status", ai_status_lazy, name='ai_status'))
+urlpatterns.append(path("api/cache-status", cache_status_lazy, name='cache_status'))
 
 # Health check endpoints
 urlpatterns.append(path("health/", health_check, name='health_check'))
