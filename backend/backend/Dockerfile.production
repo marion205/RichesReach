@@ -24,8 +24,16 @@ COPY . .
 
 # Prove the code that got copied is EXACTLY what we built from
 RUN set -eux; \
-    sha256sum richesreach/celery.py | awk '{print $1}' | grep -qx "$CELERY_SHA"; \
-    sha256sum richesreach/__init__.py | awk '{print $1}' | grep -qx "$INIT_SHA"
+    echo "Verifying content hashes..."; \
+    sha256sum richesreach/celery.py | awk '{print $1}' | tee /tmp/celery.sha; \
+    echo "Expected CELERY_SHA: $CELERY_SHA"; \
+    echo "Actual CELERY_SHA: $(cat /tmp/celery.sha)"; \
+    test "$(cat /tmp/celery.sha)" = "$CELERY_SHA" || (echo "CELERY HASH MISMATCH!" && exit 1); \
+    sha256sum richesreach/__init__.py | awk '{print $1}' | tee /tmp/init.sha; \
+    echo "Expected INIT_SHA: $INIT_SHA"; \
+    echo "Actual INIT_SHA: $(cat /tmp/init.sha)"; \
+    test "$(cat /tmp/init.sha)" = "$INIT_SHA" || (echo "INIT HASH MISMATCH!" && exit 1); \
+    echo "✅ All content hashes match!"
 
 # cache-buster + provenance
 LABEL org.opencontainers.image.revision=$GIT_SHA
