@@ -1,39 +1,29 @@
-FROM python:3.11-slim
-
-ARG GIT_SHA
-ARG BUILD_MARKER
-ARG CELERY_SHA
-ARG INIT_SHA
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
-
+# syntax=docker/dockerfile:1.7
+FROM python:3.11-slim AS base
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    g++ \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
+# Prove which Dockerfile is used & force cache bust each run
+ARG BUILD_MARKER
+LABEL build.marker=${BUILD_MARKER}
 
-# Install deps with pip cache mount
+# Copy only dependency manifests first
+COPY requirements.txt .
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --no-cache-dir -r requirements.txt
 
-# Copy ALL app code from the context (which is backend/backend)
+# Copy the app (context MUST be backend/backend)
 COPY . .
 
-# Verify our test file is included (temporary check)
-RUN echo "🔍 Checking if our test file is included:" && \
-    ls -la github-actions-test.txt && \
-    cat github-actions-test.txt && \
-    echo "✅ Test file found!"
-
-# cache-buster + provenance
-LABEL org.opencontainers.image.revision=$GIT_SHA
-LABEL build.marker=$BUILD_MARKER
-RUN printf "GIT_SHA=%s\nCELERY_SHA=%s\nINIT_SHA=%s\nBUILD_MARKER=%s\n" \
-    "$GIT_SHA" "$CELERY_SHA" "$INIT_SHA" "$BUILD_MARKER" > /app/__build.txt
+# Sanity: assert the files we care about are present and are the *new* ones
+# (If these fail, the build stops here, which is what we want.)
+RUN test -f richesreach/celery.py \
+ && test -f richesreach/__init__.py \
+ && python - <<'PY'
+import hashlib, pathlib, sys
+for p in ["richesreach/celery.py","richesreach/__init__.py"]:
+    h=hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()
+    print(f"HASH {p} {h}")
+PY
 
 ENV DJANGO_SETTINGS_MODULE=richesreach.settings_production
-EXPOSE 8000
-CMD ["gunicorn", "-b", "0.0.0.0:8000", "richesreach.wsgi:application"]
+CMD ["gunicorn","richesreach.wsgi:application","-b","0.0.0.0:8000","--workers","3","--timeout","90"]

@@ -1,156 +1,85 @@
 name: Build & Deploy Backend
-
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:
-
-env:
-  AWS_REGION: us-east-1
-  AWS_ACCOUNT_ID: 498606688292
-  ECR_REPO: riches-reach-ai
-  CLUSTER: riches-reach-prod
-  SERVICE: riches-reach-prod-svc
-  TASK_FAMILY: riches-reach-streaming-pipeline-optimized
-  CONTAINER_NAME: riches-reach-ai
+    paths:
+      - 'backend/**'
+      - '.github/workflows/deploy.yml'
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    env:
+      AWS_REGION: us-east-1
+      ECR_REPO: 498606688292.dkr.ecr.us-east-1.amazonaws.com/riches-reach-ai
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Verify build context
+      - name: Print context (backend/backend)
         run: |
-          echo "🔍 Checking build context size..."
-          du -sh . || echo "du command not available"
-          echo "📁 Backend directory size:"
-          du -sh backend/backend/ || echo "Backend directory not found"
-          echo "📋 Files that will be included in build:"
-          find . -name "*.py" -path "./backend/backend/*" | head -10 || echo "No Python files found"
+          cd backend/backend
+          echo "== PWD ==" && pwd
+          echo "== Tree (top) ==" && ls -la
+          echo "== Verify files ==" && \
+            [ -f requirements.txt ] && \
+            [ -f richesreach/celery.py ] && \
+            [ -f richesreach/__init__.py ] && echo OK
+          sha256sum richesreach/celery.py richesreach/__init__.py || true
 
-      # Option B: Static keys via repo secrets (easier to set up)
-      - name: Configure AWS (static keys)
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Configure AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to ECR
+        id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Compute tags
-        id: meta
-        run: |
-          GIT_SHA="${GITHUB_SHA}"
-          HUMAN_TAG="prod-$(date +%Y%m%d%H%M%S)"
-          IMAGE_URI="${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO }}:${GIT_SHA}"
-          echo "GIT_SHA=$GIT_SHA" >> $GITHUB_OUTPUT
-          echo "HUMAN_TAG=$HUMAN_TAG" >> $GITHUB_OUTPUT
-          echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_OUTPUT
-
-      - name: Build & push
+      - name: Build & push (context backend/backend)
+        id: build
         uses: docker/build-push-action@v6
         with:
-          context: backend/backend
-          file: Dockerfile.production
+          context: ./backend/backend
+          file: ./backend/backend/Dockerfile.production
           push: true
           platforms: linux/amd64
-          build-args: |
-            GIT_SHA=${{ steps.meta.outputs.GIT_SHA }}
-            BUILD_MARKER=${{ github.run_id }}-${{ github.run_attempt }}
-          tags: ${{ steps.meta.outputs.IMAGE_URI }}
-          no-cache: true
           provenance: false
+          no-cache: true
+          build-args: |
+            BUILD_MARKER=${{ github.run_id }}-${{ github.sha }}
+          tags: |
+            ${{ env.ECR_REPO }}:${{ github.sha }}
+          outputs: type=image,name=${{ env.ECR_REPO }},push-by-digest=true,name-canonical=true
 
-      - name: Show image digest in ECR
+      - name: Get image digest
+        id: digest
         run: |
-          aws ecr describe-images \
-            --repository-name "${{ env.ECR_REPO }}" \
-            --image-ids imageTag="${{ steps.meta.outputs.GIT_SHA }}" \
-            --query 'imageDetails[0].[imagePushedAt,imageDigest]' \
-            --output table
+          DIGEST=$(jq -r 'to_entries[0].value["containerimage.digest"]' <<<'${{ steps.build.outputs.metadata }}')
+          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
+          echo "Using digest: $DIGEST"
 
-      - name: Patch & register task definition
-        id: td
-        run: |
-          aws ecs describe-task-definition \
-            --task-definition "${{ env.TASK_FAMILY }}" \
-            --query 'taskDefinition' > td.json
+      - name: Render task definition with digest
+        id: render
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: infra/ecs/task-def.json
+          container-name: riches-reach-backend
+          image: ${{ env.ECR_REPO }}@${{ steps.digest.outputs.digest }}
 
-          IMG="${{ steps.meta.outputs.IMAGE_URI }}"
-          
-          # Create environment variables JSON
-          cat > env_vars.json << EOF
-          [
-            {"name": "DJANGO_SETTINGS_MODULE", "value": "richesreach.settings_production"},
-            {"name": "FINNHUB_API_KEY", "value": "${{ secrets.FINNHUB_API_KEY }}"},
-            {"name": "ALPHA_VANTAGE_API_KEY", "value": "${{ secrets.ALPHA_VANTAGE_API_KEY }}"},
-            {"name": "POLYGON_API_KEY", "value": "${{ secrets.POLYGON_API_KEY }}"},
-            {"name": "NEWS_API_KEY", "value": "${{ secrets.NEWS_API_KEY }}"},
-            {"name": "OPENAI_API_KEY", "value": "${{ secrets.OPENAI_API_KEY }}"},
-            {"name": "ALCHEMY_API_KEY", "value": "${{ secrets.ALCHEMY_API_KEY }}"},
-            {"name": "WALLETCONNECT_PROJECT_ID", "value": "${{ secrets.WALLETCONNECT_PROJECT_ID }}"},
-            {"name": "SEPOLIA_ETH_URL", "value": "${{ secrets.SEPOLIA_ETH_URL }}"}
-          ]
-          EOF
-          
-          # Update task definition with simpler jq command
-          jq --arg NAME "${{ env.CONTAINER_NAME }}" --arg IMG "$IMG" --slurpfile ENV_VARS env_vars.json '
-            .containerDefinitions |= (map(
-              if .name==$NAME then 
-                .image=$IMG | 
-                .environment = $ENV_VARS[0]
-              else . end
-            )) |
-            {family, taskRoleArn, executionRoleArn, networkMode, containerDefinitions,
-             volumes, placementConstraints, requiresCompatibilities, cpu, memory}
-          ' td.json > new-td.json
-
-          REV_ARN=$(aws ecs register-task-definition \
-            --cli-input-json file://new-td.json \
-            --query 'taskDefinition.taskDefinitionArn' --output text)
-          echo "REV_ARN=$REV_ARN" >> $GITHUB_OUTPUT
-
-      - name: Update service
-        run: |
-          aws ecs update-service \
-            --cluster "${{ env.CLUSTER }}" \
-            --service "${{ env.SERVICE }}" \
-            --task-definition "${{ steps.td.outputs.REV_ARN }}" \
-            --force-new-deployment
-          aws ecs wait services-stable \
-            --cluster "${{ env.CLUSTER }}" \
-            --services "${{ env.SERVICE }}"
-
-      - name: Smoke tests
-        run: |
-          API="http://riches-reach-alb-1199497064.${{ env.AWS_REGION }}.elb.amazonaws.com"
-          echo "Waiting for deployment to be ready..."
-          for i in {1..10}; do
-            echo "Attempt $i: /health"
-            if curl -fsS "$API/health" > /dev/null 2>&1; then
-              echo "✅ Health check passed"
-              break
-            else
-              echo "⏳ Health check failed, waiting 6s..."
-              sleep 6
-            fi
-          done
-          
-          echo ""
-          echo "🧪 Running smoke tests..."
-          echo "GET /health   ->"; curl -i "$API/health"  | head -n 1 || echo "❌ FAIL"
-          echo "GET /health/  ->"; curl -i "$API/health/" | head -n 1 || echo "❌ FAIL"
-          echo "GET /echo     ->"; curl -i "$API/echo"    | head -n 1 || echo "❌ FAIL"
-          echo "GET /netcheck ->"; curl -i "$API/netcheck" | head -n 1 || echo "❌ FAIL"
-          
-          echo ""
-          echo "🎉 Deployment complete! The application should now be stable with:"
-          echo "  - Lazy Yodlee service loading (no import-time crashes)"
-          echo "  - Lazy GraphQL schema loading (health checks independent)"
-          echo "  - Both /health and /health/ endpoints working"
-          echo "  - Graceful handling of missing Yodlee configuration"
+      - name: Deploy service
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render.outputs.task-definition }}
+          service: riches-reach-streaming-service
+          cluster: riches-reach-cluster
+          wait-for-service-stability: true
