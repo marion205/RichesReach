@@ -1,8 +1,8 @@
 {
-    "taskDefinitionArn": "arn:aws:ecs:us-east-1:498606688292:task-definition/riches-reach-streaming-pipeline-optimized:34",
+    "taskDefinitionArn": "arn:aws:ecs:us-east-1:498606688292:task-definition/riches-reach-streaming-pipeline-optimized:33",
     "containerDefinitions": [
         {
-            "name": "riches-reach-ai",
+            "name": "streaming-pipeline",
             "image": "498606688292.dkr.ecr.us-east-1.amazonaws.com/riches-reach-ai:f1f65fe",
             "cpu": 0,
             "memoryReservation": 1536,
@@ -106,7 +106,7 @@
     "taskRoleArn": "arn:aws:iam::498606688292:role/riches-reach-streaming-role",
     "executionRoleArn": "arn:aws:iam::498606688292:role/ecsTaskExecutionRole",
     "networkMode": "awsvpc",
-    "revision": 34,
+    "revision": 33,
     "volumes": [],
     "status": "ACTIVE",
     "requiresAttributes": [
@@ -153,14 +153,14 @@
     "placementConstraints": [],
     "compatibilities": [
         "EC2",
-        "FARGATE",
-        "MANAGED_INSTANCES"
+        "MANAGED_INSTANCES",
+        "FARGATE"
     ],
     "requiresCompatibilities": [
         "FARGATE"
     ],
     "cpu": "1024",
     "memory": "2048",
-    "registeredAt": "2025-10-12T10:35:54.182000-04:00",
+    "registeredAt": "2025-10-11T22:27:52.069000-04:00",
     "registeredBy": "arn:aws:iam::498606688292:user/riches-reach-ai-user"
 }

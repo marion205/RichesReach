@@ -465,117 +465,15 @@ class TradingService:
             logger.error(f"❌ Order validation failed: {e}")
             return False
     
-    # Mock data methods for development/testing
-    def _get_mock_account(self) -> Account:
-        """Get mock account data"""
-        return Account(
-            id="mock-account-123",
-            buying_power=10000.0,
-            cash=10000.0,
-            portfolio_value=40125.9,
-            equity=40125.9,
-            day_trade_count=0,
-            pattern_day_trader=False,
-            trading_blocked=False,
-            created_at=datetime.now() - timedelta(days=30)
-        )
-    
-    def _get_mock_positions(self) -> List[Position]:
-        """Get mock positions data"""
-        return [
-            Position(
-                symbol="AAPL",
-                quantity=50,
-                market_value=11894.0,
-                cost_basis=7500.0,
-                unrealized_pl=4394.0,
-                unrealized_plpc=58.59,
-                current_price=237.88
-            ),
-            Position(
-                symbol="MSFT",
-                quantity=30,
-                market_value=15253.5,
-                cost_basis=10000.0,
-                unrealized_pl=5253.5,
-                unrealized_plpc=52.54,
-                current_price=508.45
-            )
-        ]
-    
-    def _create_mock_order(self, symbol: str, quantity: int, side: str, order_type: OrderType, price: float = None, stop_price: float = None) -> Order:
-        """Create mock order"""
-        return Order(
-            id=f"mock-order-{datetime.now().timestamp()}",
-            symbol=symbol,
-            side=OrderSide(side.lower()),
-            order_type=order_type,
-            quantity=quantity,
-            price=price,
-            stop_price=stop_price,
-            status=OrderStatus.PENDING,
-            created_at=datetime.now(),
-            notes="Mock order for development"
-        )
-    
-    def _get_mock_order_status(self, order_id: str) -> Order:
-        """Get mock order status"""
-        return Order(
-            id=order_id,
-            symbol="AAPL",
-            side=OrderSide.BUY,
-            order_type=OrderType.MARKET,
-            quantity=10,
-            status=OrderStatus.FILLED,
-            created_at=datetime.now() - timedelta(minutes=5),
-            filled_at=datetime.now() - timedelta(minutes=4),
-            filled_quantity=10,
-            average_fill_price=237.88,
-            commission=1.0
-        )
-    
-    def _get_mock_orders(self, limit: int) -> List[Order]:
-        """Get mock orders"""
-        orders = []
-        for i in range(min(limit, 5)):
-            order = Order(
-                id=f"mock-order-{i}",
-                symbol=["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA"][i % 5],
-                side=OrderSide.BUY if i % 2 == 0 else OrderSide.SELL,
-                order_type=OrderType.MARKET if i % 3 == 0 else OrderType.LIMIT,
-                quantity=10 + i * 5,
-                price=200.0 + i * 10 if i % 3 != 0 else None,
-                status=OrderStatus.FILLED if i < 3 else OrderStatus.PENDING,
-                created_at=datetime.now() - timedelta(hours=i),
-                filled_at=datetime.now() - timedelta(hours=i-1) if i < 3 else None,
-                filled_quantity=10 + i * 5 if i < 3 else 0,
+    # Mock data methods removed for production
+    # These methods were used for development/testing only
                 average_fill_price=200.0 + i * 10 if i < 3 else None,
                 commission=1.0 + i * 0.5
             )
             orders.append(order)
         return orders
     
-    def _get_mock_quote(self, symbol: str) -> Dict[str, Any]:
-        """Get mock quote data"""
-        base_prices = {
-            "AAPL": 237.88,
-            "MSFT": 508.45,
-            "GOOGL": 252.03,
-            "AMZN": 231.23,
-            "TSLA": 416.85
-        }
-        
-        base_price = base_prices.get(symbol, 100.0)
-        spread = base_price * 0.001  # 0.1% spread
-        
-        return {
-            'symbol': symbol,
-            'bid': base_price - spread,
-            'ask': base_price + spread,
-            'bid_size': 1000,
-            'ask_size': 1000,
-            'timestamp': datetime.now()
-        }
+    # All mock methods removed for production
 
 # Global trading service instance
 trading_service = TradingService()

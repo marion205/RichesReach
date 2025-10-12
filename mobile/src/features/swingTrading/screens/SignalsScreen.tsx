@@ -16,7 +16,7 @@ import { useQuery, useMutation } from '@apollo/client';
 import { gql } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
 // import { useNavigation } from '@react-navigation/native'; // Removed - using custom navigation
-import { mockSignals } from '../../../mockData/swingTradingMockData';
+// Mock data removed - using real API data
 import {
   GET_SWING_SIGNALS,
   LIKE_SIGNAL,
@@ -92,7 +92,7 @@ const SignalsScreen: React.FC<SignalsScreenProps> = ({ navigateTo }) => {
   const [commentSignal] = useMutation(COMMENT_SIGNAL);
 
   // Use real data from GraphQL or fallback to mock data
-  const signals: SwingSignal[] = data?.swingSignals || (error ? mockSignals : []);
+  const signals: SwingSignal[] = data?.swingSignals || [];
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);

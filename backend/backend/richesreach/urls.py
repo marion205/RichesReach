@@ -431,9 +431,10 @@ def mock_graphql(request):
     else:
         return JsonResponse({'error': 'Method not allowed'}, status=405)
 
-urlpatterns.append(path("simple-graphql/", simple_graphql_test))
-urlpatterns.append(path("debug-env/", debug_env))
-urlpatterns.append(path("mock-graphql/", mock_graphql))
+# Mock endpoints removed for production
+# urlpatterns.append(path("simple-graphql/", simple_graphql_test))
+# urlpatterns.append(path("debug-env/", debug_env))
+# urlpatterns.append(path("mock-graphql/", mock_graphql))
 from .views_auth import login_view
 from core.views_ai import ai_status, cache_status
 from core.views.health import health_check, health_detailed, health_ready, health_live

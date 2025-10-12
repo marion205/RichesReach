@@ -1,5 +1,8 @@
 {
-  "taskDefinitionArn": "arn:aws:ecs:us-east-1:498606688292:task-definition/riches-reach-streaming-pipeline-optimized:33",
+  "family": "riches-reach-streaming-pipeline-optimized",
+  "taskRoleArn": "arn:aws:iam::498606688292:role/riches-reach-streaming-role",
+  "executionRoleArn": "arn:aws:iam::498606688292:role/ecsTaskExecutionRole",
+  "networkMode": "awsvpc",
   "containerDefinitions": [
     {
       "name": "riches-reach-ai",
@@ -102,65 +105,11 @@
       "systemControls": []
     }
   ],
-  "family": "riches-reach-streaming-pipeline-optimized",
-  "taskRoleArn": "arn:aws:iam::498606688292:role/riches-reach-streaming-role",
-  "executionRoleArn": "arn:aws:iam::498606688292:role/ecsTaskExecutionRole",
-  "networkMode": "awsvpc",
-  "revision": 33,
   "volumes": [],
-  "status": "ACTIVE",
-  "requiresAttributes": [
-    {
-      "name": "ecs.capability.execution-role-awslogs"
-    },
-    {
-      "name": "com.amazonaws.ecs.capability.ecr-auth"
-    },
-    {
-      "name": "com.amazonaws.ecs.capability.docker-remote-api.1.21"
-    },
-    {
-      "name": "com.amazonaws.ecs.capability.task-iam-role"
-    },
-    {
-      "name": "ecs.capability.container-health-check"
-    },
-    {
-      "name": "ecs.capability.execution-role-ecr-pull"
-    },
-    {
-      "name": "com.amazonaws.ecs.capability.docker-remote-api.1.18"
-    },
-    {
-      "name": "ecs.capability.task-eni"
-    },
-    {
-      "name": "com.amazonaws.ecs.capability.docker-remote-api.1.29"
-    },
-    {
-      "name": "com.amazonaws.ecs.capability.logging-driver.awslogs"
-    },
-    {
-      "name": "com.amazonaws.ecs.capability.docker-remote-api.1.19"
-    },
-    {
-      "name": "ecs.capability.secrets.asm.environment-variables"
-    },
-    {
-      "name": "ecs.capability.container-ordering"
-    }
-  ],
   "placementConstraints": [],
-  "compatibilities": [
-    "EC2",
-    "MANAGED_INSTANCES",
-    "FARGATE"
-  ],
   "requiresCompatibilities": [
     "FARGATE"
   ],
   "cpu": "1024",
-  "memory": "2048",
-  "registeredAt": "2025-10-11T22:27:52.069000-04:00",
-  "registeredBy": "arn:aws:iam::498606688292:user/riches-reach-ai-user"
+  "memory": "2048"
 }

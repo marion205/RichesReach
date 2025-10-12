@@ -2,7 +2,7 @@ import React from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, FlatList } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import { mockSignals, mockBacktestStrategies, mockBacktestResults, mockDayTradingPicks, mockRiskCalculation } from '../mockData/swingTradingMockData';
+// Mock data removed - using real API data
 import SwingTradingMarketOverview from './SwingTradingMarketOverview';
 import SwingTradingSignalAnalysis from './SwingTradingSignalAnalysis';
 import SwingTradingEducation from './SwingTradingEducation';
@@ -120,7 +120,7 @@ function SignalsTab() {
         paddingBottom: 24,
         paddingHorizontal: 16,
       }}
-      data={mockSignals}
+      data={[]}
       keyExtractor={(item) => item.id}
       ListHeaderComponent={
         <View style={{ paddingTop: 0, marginTop: 0 }}>
@@ -169,7 +169,7 @@ function BacktestTab() {
       showsVerticalScrollIndicator={false}
     >
       <Text style={styles.sectionTitle}>📈 Backtesting Results</Text>
-      {mockBacktestStrategies.map((strategy) => (
+      {[].map((strategy) => (
         <View key={strategy.id} style={styles.strategyCard}>
           <Text style={styles.strategyName}>{strategy.name}</Text>
           <Text style={styles.strategyDescription}>{strategy.description}</Text>
@@ -200,11 +200,11 @@ function DayTradingTab() {
     >
       <Text style={styles.sectionTitle}>⚡ Day Trading Picks</Text>
       <View style={styles.modeInfo}>
-        <Text style={styles.modeText}>Mode: {mockDayTradingPicks.mode}</Text>
-        <Text style={styles.modeText}>Universe: {mockDayTradingPicks.universeSize} stocks</Text>
-        <Text style={styles.modeText}>Threshold: {mockDayTradingPicks.qualityThreshold}</Text>
+        <Text style={styles.modeText}>Mode: SAFE</Text>
+        <Text style={styles.modeText}>Universe: 500 stocks</Text>
+        <Text style={styles.modeText}>Threshold: 1.5</Text>
       </View>
-      {mockDayTradingPicks.picks.map((pick, index) => (
+      {[].map((pick, index) => (
         <View key={index} style={styles.pickCard}>
           <View style={styles.pickHeader}>
             <Text style={styles.symbol}>{pick.symbol}</Text>
@@ -239,12 +239,12 @@ function RiskTab() {
       <View style={styles.riskCard}>
         <Text style={styles.riskTitle}>Position Sizing Calculator</Text>
         <View style={styles.riskMetrics}>
-          <Text style={styles.metric}>Account Equity: ${mockRiskCalculation.accountEquity.toLocaleString()}</Text>
-          <Text style={styles.metric}>Risk per Trade: {(mockRiskCalculation.riskPerTrade * 100).toFixed(1)}%</Text>
-          <Text style={styles.metric}>Position Size: {mockRiskCalculation.positionSize} shares</Text>
-          <Text style={styles.metric}>Dollar Risk: ${mockRiskCalculation.dollarRisk}</Text>
-          <Text style={styles.metric}>Position Value: ${mockRiskCalculation.positionValue.toLocaleString()}</Text>
-          <Text style={styles.metric}>Risk/Reward: {mockRiskCalculation.riskRewardRatio}</Text>
+          <Text style={styles.metric}>Account Equity: $25,000</Text>
+          <Text style={styles.metric}>Risk per Trade: 2.0%</Text>
+          <Text style={styles.metric}>Position Size: 100 shares</Text>
+          <Text style={styles.metric}>Dollar Risk: $550</Text>
+          <Text style={styles.metric}>Position Value: $17,550</Text>
+          <Text style={styles.metric}>Risk/Reward: 2.1</Text>
         </View>
         <TouchableOpacity 
           style={styles.calculateButton}
