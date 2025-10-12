@@ -44,7 +44,7 @@ export default function ApolloProvider({ children }: { children: React.ReactNode
 
   try {
     const baseUrl = getApiBase();
-    console.log('[API_BASE]', baseUrl, 'graphql ->', `${baseUrl}/graphql`);
+    console.log('[API_BASE]', baseUrl, 'graphql ->', `${baseUrl}/graphql/`);
   } catch (error) {
     console.log('[API_BASE] Error getting base URL:', error);
   }

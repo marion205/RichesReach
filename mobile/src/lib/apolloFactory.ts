@@ -11,7 +11,7 @@ export const getApiBase = () => {
 
 export function makeApolloClient() {
   const base = getApiBase();
-  const httpUri = `${base}/graphql`;
+  const httpUri = `${base}/graphql/`; // Add trailing slash for backend compatibility
 
   console.log('[ApolloFactory] Creating client with base:', base);
   console.log('[ApolloFactory] GraphQL URI:', httpUri);
