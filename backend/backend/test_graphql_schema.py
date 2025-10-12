@@ -10,7 +10,7 @@ import django
 from django.conf import settings
 
 # Setup Django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'richesreach.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'richesreach.settings_test')
 django.setup()
 
 from graphene.test import Client
@@ -90,7 +90,6 @@ class GraphQLSchemaTester:
                 peRatio
                 dividendYield
                 beginnerFriendlyScore
-                dividendScore
             }
         }
         """
@@ -109,7 +108,6 @@ class GraphQLSchemaTester:
                 peRatio
                 dividendYield
                 beginnerFriendlyScore
-                dividendScore
             }
         }
         """
@@ -145,7 +143,6 @@ class GraphQLSchemaTester:
                     growthScore
                     stabilityScore
                     debtScore
-                    dividendScore
                 }
                 reasoning
             }
@@ -166,7 +163,6 @@ class GraphQLSchemaTester:
                 peRatio
                 dividendYield
                 beginnerFriendlyScore
-                dividendScore
             }
         }
         """
@@ -194,10 +190,10 @@ class GraphQLSchemaTester:
         query = """
         query {
             cryptoPrices(symbols: ["BTC", "ETH"]) {
-                symbol
-                price
-                change24h
-                changePercent24h
+                priceUsd
+                priceBtc
+                priceChange24h
+                priceChangePercentage24h
             }
         }
         """
@@ -220,12 +216,12 @@ class GraphQLSchemaTester:
         # Test 3: Stock Discussions
         query = """
         query {
-            stockDiscussions(stockSymbol: "AAPL", limit: 5) {
+            stockDiscussions(limit: 5) {
                 id
                 content
                 createdAt
                 user {
-                    username
+                    name
                 }
                 stock {
                     symbol

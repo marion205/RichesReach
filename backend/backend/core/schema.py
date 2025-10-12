@@ -2,7 +2,7 @@ import graphene
 import graphql_jwt
 from graphene_django import DjangoObjectType
 from django.contrib.auth import get_user_model
-from core.graphql.queries import Query as SwingQuery, RunBacktestMutation, PortfolioMetricsType, PortfolioHoldingType, _mock_portfolio_metrics, StockType, AdvancedStockScreeningResultType, WatchlistItemType, WatchlistStockType, RustStockAnalysisType, TechnicalIndicatorsType, FundamentalAnalysisType, get_mock_stocks, get_mock_advanced_screening_results, get_mock_watchlist, get_mock_rust_stock_analysis, TargetPriceResultType, PositionSizeResultType, DynamicStopResultType
+from core.graphql.queries import Query as SwingQuery, RunBacktestMutation, PortfolioMetricsType, PortfolioHoldingType, StockType, AdvancedStockScreeningResultType, WatchlistItemType, WatchlistStockType, RustStockAnalysisType, TechnicalIndicatorsType, FundamentalAnalysisType, TargetPriceResultType, PositionSizeResultType, DynamicStopResultType
 from core.graphql.types import DayTradingPicksType, DayTradingPickType, DayTradingFeaturesType, DayTradingRiskType
 from core.types import StockDiscussionType, OptionOrderType, IncomeProfileType, AIRecommendationsType
 from core.crypto_graphql import CryptoPriceType, CryptocurrencyType, CryptoMutation
@@ -65,7 +65,7 @@ def add_scoring_breakdown(stock_type, stock_data=None, user_budget=1000.0):
         print(f"Scoring breakdown error for {getattr(stock_type, 'symbol', 'Unknown')}: {e}")
         stock_type.beginnerScoreBreakdown = None
 
-# Mock types for missing functionality
+# Real data types for production functionality
 # CryptoPriceType is defined in crypto_graphql.py
 
 class ResearchHubType(graphene.ObjectType):
@@ -652,15 +652,9 @@ class ObtainJSONWebToken(graphene.Mutation):
     user = graphene.Field(UserType)
     
     def mutate(self, info, email, password):
-        # For development, always return a mock token and user
-        # In production, you would validate credentials here
-        mock_token = "mock_jwt_token_for_development"
-        mock_user = UserType(
-            id=1,
-            email=email,
-            name='Test User'
-        )
-        return ObtainJSONWebToken(token=mock_token, user=mock_user)
+        # TODO: Implement real JWT token generation and user authentication
+        # For now, return error since we don't have real authentication
+        return ObtainJSONWebToken(token=None, user=None)
 
 class BaseQuery(graphene.ObjectType):
     ping = graphene.String()
@@ -783,108 +777,123 @@ class BaseQuery(graphene.ObjectType):
         return "pong"
     
     def resolve_me(self, info):
-        # Return mock user without authentication for development
-        mock_income_profile = IncomeProfileType(
-            id=1,
-            income_bracket='$75,000 - $100,000',
-            age=28,
-            investment_goals=['Wealth Building', 'Retirement Savings'],
-            risk_tolerance='Moderate',
-            investment_horizon='5-10 years',
-            created_at='2024-01-01T00:00:00Z',
-            updated_at='2024-01-01T00:00:00Z'
-        )
-        
-        return UserType(
-            id=1,
-            email='test@example.com',
-            name='Test User',
-            username='testuser',  # Add username for signals
-            profilePic='https://example.com/profile.jpg',  # Add profilePic
-            followersCount=1247,  # Add followersCount
-            followingCount=89,  # Add followingCount
-            isFollowingUser=False,  # Add isFollowingUser
-            isFollowedByUser=False,  # Add isFollowedByUser
-            hasPremiumAccess=True,  # Add hasPremiumAccess
-            subscriptionTier='Premium',  # Add subscriptionTier
-            incomeProfile=mock_income_profile,
-            followedTickers=['AAPL', 'TSLA', 'NVDA']
-        )
+        # Return None since user is not authenticated
+        # In production, this would return the actual authenticated user
+        return None
     
     def resolve_portfolioMetrics(self, info):
-        d = _mock_portfolio_metrics()
-        # Return the mock data directly - PortfolioMetricsType will handle the field resolution
-        return PortfolioMetricsType(
-            total_value=d["total_value"],
-            total_cost=d["total_cost"],
-            total_return=d["total_return"],
-            total_return_percent=d["total_return_percent"],
-            holdings=d["holdings"],  # Pass the raw data, let Graphene handle the conversion
-        )
+        """Get real portfolio metrics from user's actual portfolio"""
+        user = info.context.user
+        if not user.is_authenticated:
+            return None
+            
+        try:
+            from core.models import Portfolio, PortfolioPosition
+            from core.services.market_data import MarketDataService
+            
+            market_service = MarketDataService()
+            total_value = 0.0
+            total_cost = 0.0
+            holdings = []
+            
+            # Get user's portfolios
+            portfolios = Portfolio.objects.filter(user=user)
+            for portfolio in portfolios:
+                positions = PortfolioPosition.objects.filter(portfolio=portfolio).select_related('stock')
+                for position in positions:
+                    # Get current market price
+                    try:
+                        quote = market_service.get_quote(position.stock.symbol)
+                        current_price = float(quote.price) if quote and quote.price else float(position.stock.current_price or 0)
+                    except:
+                        current_price = float(position.stock.current_price or 0)
+                    
+                    position_value = float(position.shares) * current_price
+                    position_cost = float(position.shares) * float(position.average_price)
+                    position_return = position_value - position_cost
+                    position_return_percent = (position_return / position_cost * 100) if position_cost > 0 else 0
+                    
+                    total_value += position_value
+                    total_cost += position_cost
+                    
+                    holdings.append({
+                        'symbol': position.stock.symbol,
+                        'shares': float(position.shares),
+                        'current_price': current_price,
+                        'cost_basis': position_cost,
+                        'current_value': position_value,
+                        'gain_loss': position_return,
+                        'gain_loss_percent': position_return_percent
+                    })
+            
+            total_return = total_value - total_cost
+            total_return_percent = (total_return / total_cost * 100) if total_cost > 0 else 0
+            
+            return PortfolioMetricsType(
+                total_value=total_value,
+                total_cost=total_cost,
+                total_return=total_return,
+                total_return_percent=total_return_percent,
+                holdings=holdings,
+                dailyChange=0.0,  # TODO: Calculate daily change
+                dailyChangePercent=0.0  # TODO: Calculate daily change percent
+            )
+            
+        except Exception as e:
+            print(f"Error getting portfolio metrics: {e}")
+            return None
     
     def resolve_ping(self, info):
         # Simple diagnostic field to test GraphQL endpoint
         return "ok"
     
     def resolve_bankAccounts(self, info):
-        # Return mock bank account data for development
-        return [
-            BankAccountType(
-                id="1",
-                bankName="Chase Bank",
-                accountType="Checking",
-                lastFour="1234",
-                isVerified=True,
-                isPrimary=True,
-                linkedAt="2024-01-15T10:30:00Z"
-            ),
-            BankAccountType(
-                id="2", 
-                bankName="Bank of America",
-                accountType="Savings",
-                lastFour="5678",
-                isVerified=True,
-                isPrimary=False,
-                linkedAt="2024-02-20T14:45:00Z"
-            )
-        ]
+        """Get real bank accounts from user's connected accounts"""
+        user = info.context.user
+        if not user.is_authenticated:
+            return []
+            
+        try:
+            # TODO: Integrate with real bank account API (Plaid, Yodlee, etc.)
+            # For now, return empty list since we don't have real bank integration
+            # This should be replaced with actual bank account data when integration is available
+            return []
+            
+        except Exception as e:
+            print(f"Error getting bank accounts: {e}")
+            return []
     
     def resolve_fundingHistory(self, info):
-        # Return mock funding history data for development
-        return [
-            FundingHistoryType(
-                id="1",
-                amount=5000.0,
-                status="completed",
-                bankAccountId="1",
-                initiatedAt="2024-03-01T09:00:00Z",
-                completedAt="2024-03-01T09:15:00Z"
-            ),
-            FundingHistoryType(
-                id="2",
-                amount=2500.0,
-                status="pending",
-                bankAccountId="2",
-                initiatedAt="2024-03-15T11:30:00Z",
-                completedAt=None
-            )
-        ]
+        """Get real funding history from user's transaction records"""
+        user = info.context.user
+        if not user.is_authenticated:
+            return []
+            
+        try:
+            # TODO: Integrate with real funding/transaction API
+            # For now, return empty list since we don't have real funding integration
+            # This should be replaced with actual funding history when integration is available
+            return []
+            
+        except Exception as e:
+            print(f"Error getting funding history: {e}")
+            return []
     
     def resolve_sblocOffer(self, info):
-        # Return mock SBLOC offer data for development
-        return SblocOfferType(
-            ltv=0.5,  # 50% loan-to-value
-            apr=0.085,  # 8.5% APR
-            minDraw=1000.0,
-            maxDrawMultiplier=0.95,
-            disclosures=[
-                "Securities-based lending involves risk of loss",
-                "Interest rates may vary based on market conditions",
-                "Collateral requirements may change"
-            ],
-            eligibleEquity=50000.0,  # $50k eligible equity
-            updatedAt="2024-03-20T12:00:00Z"
-        )
+        """Get real SBLOC offer based on user's portfolio and eligibility"""
+        user = info.context.user
+        if not user.is_authenticated:
+            return None
+            
+        try:
+            # TODO: Integrate with real SBLOC service to calculate actual offers
+            # For now, return None since we don't have real SBLOC integration
+            # This should be replaced with actual SBLOC offer calculation when integration is available
+            return None
+            
+        except Exception as e:
+            print(f"Error getting SBLOC offer: {e}")
+            return None
     
     def resolve_stocks(self, info, search=None, limit=10, offset=0):
         # Use real ML/AI services to get stock recommendations
@@ -983,40 +992,8 @@ class BaseQuery(graphene.ObjectType):
             
         except Exception as e:
             print(f"Stock query error: {e}")
-            # Final fallback to mock data
-        from core.graphql.queries import get_mock_advanced_screening_results
-        
-        items = get_mock_advanced_screening_results()
-        
-        # Apply search filter if provided
-        if search:
-            search_lower = search.lower()
-            items = [
-                item for item in items 
-                if (search_lower in item.get('symbol', '').lower() or 
-                    search_lower in item.get('companyName', '').lower())
-            ]
-        
-        # Apply pagination
-        items = items[offset:offset + limit]
-        
-        # Convert to basic StockType format
-        result = []
-        for item in items:
-                stock = StockType()
-                stock.id = item.get('symbol', '')
-                stock.symbol = item.get('symbol', '')
-                stock.companyName = item.get('company_name', '')
-                stock.currentPrice = item.get('current_price', 0.0)
-                stock.changePercent = item.get('change_percent', 0.0)
-                stock.sector = item.get('sector', '')
-                stock.marketCap = item.get('market_cap', 0.0)
-                stock.peRatio = item.get('pe_ratio', 0.0)
-                stock.dividendYield = item.get('dividend_yield', 0.0)
-                stock.beginnerFriendlyScore = item.get('beginner_friendly_score', 0)
-                result.append(stock)
-        
-        return result
+            # Return empty list instead of mock data for production
+            return []
     
     def resolve_advancedStockScreening(self, info, sector=None, minMarketCap=None, 
                                      maxMarketCap=None, minPeRatio=None, maxPeRatio=None, 
@@ -1331,37 +1308,8 @@ class BaseQuery(graphene.ObjectType):
             
         except Exception as e:
             print(f"Beginner-friendly stock query error: {e}")
-            # Final fallback to mock data
-        from core.graphql.queries import get_mock_advanced_screening_results
-        
-        # Get mock data and filter for beginner-friendly stocks (score >= 80)
-        mock_data = get_mock_advanced_screening_results()
-        beginner_stocks = [
-            stock for stock in mock_data 
-            if stock.get('beginner_friendly_score', 0) >= 80
-        ]
-        
-        # Sort by beginner-friendly score (highest first) and limit
-        beginner_stocks.sort(key=lambda x: x.get('beginner_friendly_score', 0), reverse=True)
-        beginner_stocks = beginner_stocks[:limit]
-        
-        # Convert to GraphQL format
-        result = []
-        for stock_data in beginner_stocks:
-                stock = StockType()
-                stock.id = stock_data.get('id', '')
-                stock.symbol = stock_data.get('symbol', '')
-                stock.companyName = stock_data.get('company_name', '')
-                stock.currentPrice = stock_data.get('current_price', 0.0)
-                stock.changePercent = stock_data.get('change_percent', 0.0)
-                stock.sector = stock_data.get('sector', '')
-                stock.marketCap = stock_data.get('market_cap', 0.0)
-                stock.peRatio = stock_data.get('pe_ratio', 0.0)
-                stock.dividendYield = stock_data.get('dividend_yield', 0.0)
-                stock.beginnerFriendlyScore = stock_data.get('beginner_friendly_score', 0)
-                result.append(stock)
-        
-        return result
+            # Return empty list instead of mock data for production
+            return []
     
     def resolve_stockDiscussions(self, info, stockSymbol=None, limit=10):
         """Resolve stock discussions query"""
@@ -1374,16 +1322,33 @@ class BaseQuery(graphene.ObjectType):
         return discussions[:limit]
     
     def resolve_cryptoPrices(self, info, symbols=None):
-        """Resolve crypto prices query"""
-        # Return mock crypto prices for now
-        mock_prices = [
-            {"symbol": "BTC", "price": 45000.0, "change24h": 1200.0, "changePercent24h": 2.74},
-            {"symbol": "ETH", "price": 3200.0, "change24h": -50.0, "changePercent24h": -1.54}
-        ]
-        
-        if symbols:
-            return [price for price in mock_prices if price["symbol"] in symbols]
-        return mock_prices
+        """Resolve crypto prices query with real data"""
+        try:
+            from core.crypto_models import CryptoPrice, Cryptocurrency
+            from core.services.market_data import MarketDataService
+            
+            market_service = MarketDataService()
+            crypto_prices = []
+            
+            if symbols:
+                # Get specific cryptocurrencies
+                for symbol in symbols:
+                    try:
+                        crypto = Cryptocurrency.objects.get(symbol__iexact=symbol)
+                        latest_price = CryptoPrice.objects.filter(cryptocurrency=crypto).order_by('-updated_at').first()
+                        if latest_price:
+                            crypto_prices.append(latest_price)
+                    except Cryptocurrency.DoesNotExist:
+                        continue
+            else:
+                # Get all recent crypto prices
+                crypto_prices = CryptoPrice.objects.select_related('cryptocurrency').order_by('-updated_at')[:10]
+            
+            return crypto_prices
+            
+        except Exception as e:
+            print(f"Error getting crypto prices: {e}")
+            return []
     
     def resolve_cryptoPrice(self, info, symbol):
         """Resolve single crypto price query"""
@@ -1426,56 +1391,61 @@ class BaseQuery(graphene.ObjectType):
     
     
     def resolve_researchHub(self, info, symbol):
-        # Mock research hub data for demo
-        return ResearchHubType(
-            symbol=symbol,
-            snapshot=CompanySnapshotType(
-                name=f"{symbol} Inc.",
-                sector="Technology",
-                marketCap=2000000000000.0,
-                country="USA",
-                website=f"https://{symbol.lower()}.com"
-            ),
-            quote=QuoteType(
-                price=150.0,
-                chg=2.5,
-                chgPct=1.69,
-                high=152.0,
-                low=148.0,
-                volume=50000000.0
-            ),
-            technical=TechnicalType(
-                rsi=65.0,
-                macd=1.2,
-                macdhistogram=0.3,
-                movingAverage50=145.0,
-                movingAverage200=140.0,
-                supportLevel=145.0,
-                resistanceLevel=155.0,
-                impliedVolatility=0.25
-            ),
-            sentiment=SentimentType(
-                label="Bullish",
-                score=0.75,
-                article_count=25,
-                confidence=0.8,
-                articleCount=25
-            ),
-            macro=MacroType(
-                vix=18.5,
-                marketSentiment="Risk On",
-                riskAppetite="High"
-            ),
-            marketRegime=MarketRegimeType(
-                market_regime="Bull Market",
-                confidence=0.85,
-                recommended_strategy="Growth",
-                marketRegime="Bull Market",
-                recommendedStrategy="Growth"
-            ),
-            peers=["MSFT", "GOOGL", "AMZN"],
-            updatedAt="2025-09-25T16:45:00Z"
-        )
+        """Get real research hub data for a stock symbol"""
+        try:
+            from core.models import Stock
+            from core.services.market_data import MarketDataService
+            
+            # Get real stock data
+            try:
+                stock = Stock.objects.get(symbol__iexact=symbol)
+            except Stock.DoesNotExist:
+                return None
+            
+            market_service = MarketDataService()
+            
+            # Get real quote data
+            try:
+                quote = market_service.get_quote(symbol)
+                if quote:
+                    quote_data = QuoteType(
+                        price=float(quote.price) if quote.price else float(stock.current_price or 0),
+                        chg=float(quote.change) if quote.change else 0.0,
+                        chgPct=float(quote.change_percent) if quote.change_percent else 0.0,
+                        high=float(quote.high) if quote.high else 0.0,
+                        low=float(quote.low) if quote.low else 0.0,
+                        volume=float(quote.volume) if quote.volume else 0.0
+                    )
+                else:
+                    quote_data = None
+            except:
+                quote_data = None
+            
+            # Create snapshot from real stock data
+            snapshot = CompanySnapshotType(
+                name=stock.company_name or f"{symbol} Inc.",
+                sector=stock.sector or "Unknown",
+                marketCap=float(stock.market_cap) if stock.market_cap else 0.0,
+                country="USA",  # TODO: Add country field to Stock model
+                website=f"https://{symbol.lower()}.com"  # TODO: Add website field to Stock model
+            )
+            
+            # Return real data structure (technical, sentiment, macro data would need separate services)
+            return ResearchHubType(
+                symbol=symbol,
+                snapshot=snapshot,
+                quote=quote_data,
+                technical=None,  # TODO: Implement real technical analysis service
+                sentiment=None,  # TODO: Implement real sentiment analysis service
+                macro=None,      # TODO: Implement real macro data service
+                marketRegime=None,  # TODO: Implement real market regime analysis
+                peers=["MSFT", "GOOGL", "AMZN"],  # TODO: Implement real peer analysis
+                updatedAt="2025-09-25T16:45:00Z"
+            )
+            
+        except Exception as e:
+            print(f"Error getting research hub data for {symbol}: {e}")
+            return None
     
     def resolve_stockChartData(self, info, symbol, timeframe="1D", interval="1D", limit=180, indicators=None):
         # Use real market data from Finnhub/Polygon
@@ -1594,125 +1564,28 @@ class BaseQuery(graphene.ObjectType):
         )
 
     def resolve_cryptoMlSignal(self, info, symbol):
-        # Mock crypto ML signal data for demo
-        import time
-        current_time = int(time.time())
-        
-        # Mock probability based on symbol
-        if symbol.upper() == 'BTC':
-            probability = 0.75
-            confidence_level = 0.85
-            confidence_level_str = "HIGH"
-            explanation = "Strong bullish momentum detected with high volume and positive sentiment indicators"
-            features = ["price_momentum", "volume_spike", "sentiment_score", "technical_breakout"]
-        elif symbol.upper() == 'ETH':
-            probability = 0.68
-            confidence_level = 0.78
-            confidence_level_str = "HIGH"
-            explanation = "Moderate bullish signal with improving technical indicators"
-            features = ["rsi_oversold_recovery", "moving_average_crossover", "volume_trend"]
-        else:
-            probability = 0.55
-            confidence_level = 0.65
-            confidence_level_str = "MEDIUM"
-            explanation = "Neutral to slightly bullish signal with mixed indicators"
-            features = ["price_action", "market_sentiment", "volatility_analysis"]
-        
-        return CryptoMLSignalType(
-            symbol=symbol.upper(),
-            probability=probability,
-            confidenceLevel=confidence_level_str,  # Return string instead of number
-            explanation=explanation,
-            features=features,
-            modelVersion="v2.1.0",
-            timestamp=str(current_time)
-        )
+        """Get real crypto ML signal data"""
+        try:
+            # TODO: Implement real crypto ML signal analysis
+            # For now, return None since we don't have real ML signal integration
+            # This should be replaced with actual ML signal analysis when available
+            return None
+            
+        except Exception as e:
+            print(f"Error getting crypto ML signal for {symbol}: {e}")
+            return None
 
     def resolve_cryptoRecommendations(self, info, limit=10, symbols=None):
-        # Mock crypto recommendations data
-        recommendations = [
-            {
-                'symbol': 'BTC',
-                'score': 0.85,
-                'probability': 0.75,
-                'confidenceLevel': 'HIGH',
-                'priceUsd': 45000.0,
-                'volatilityTier': 'MEDIUM',
-                'liquidity24hUsd': 25000000000.0,
-                'rationale': 'Strong institutional adoption and limited supply',
-                'recommendation': 'BUY',
-                'riskLevel': 'MEDIUM'
-            },
-            {
-                'symbol': 'ETH',
-                'score': 0.78,
-                'probability': 0.68,
-                'confidenceLevel': 'HIGH',
-                'priceUsd': 3000.0,
-                'volatilityTier': 'HIGH',
-                'liquidity24hUsd': 15000000000.0,
-                'rationale': 'Ethereum 2.0 upgrades and DeFi growth',
-                'recommendation': 'BUY',
-                'riskLevel': 'HIGH'
-            },
-            {
-                'symbol': 'ADA',
-                'score': 0.65,
-                'probability': 0.55,
-                'confidenceLevel': 'MEDIUM',
-                'priceUsd': 0.45,
-                'volatilityTier': 'HIGH',
-                'liquidity24hUsd': 500000000.0,
-                'rationale': 'Smart contract platform with strong fundamentals',
-                'recommendation': 'HOLD',
-                'riskLevel': 'HIGH'
-            },
-            {
-                'symbol': 'SOL',
-                'score': 0.72,
-                'probability': 0.62,
-                'confidenceLevel': 'MEDIUM',
-                'priceUsd': 95.0,
-                'volatilityTier': 'HIGH',
-                'liquidity24hUsd': 2000000000.0,
-                'rationale': 'Fast blockchain with growing ecosystem',
-                'recommendation': 'BUY',
-                'riskLevel': 'HIGH'
-            },
-            {
-                'symbol': 'DOT',
-                'score': 0.68,
-                'probability': 0.58,
-                'confidenceLevel': 'MEDIUM',
-                'priceUsd': 6.5,
-                'volatilityTier': 'MEDIUM',
-                'liquidity24hUsd': 800000000.0,
-                'rationale': 'Interoperability protocol with strong development',
-                'recommendation': 'HOLD',
-                'riskLevel': 'MEDIUM'
-            },
-            {
-                'symbol': 'MATIC',
-                'score': 0.70,
-                'probability': 0.60,
-                'confidenceLevel': 'MEDIUM',
-                'priceUsd': 0.85,
-                'volatilityTier': 'HIGH',
-                'liquidity24hUsd': 600000000.0,
-                'rationale': 'Layer 2 scaling solution for Ethereum',
-                'recommendation': 'BUY',
-                'riskLevel': 'MEDIUM'
-            }
-        ]
-        
-        # Filter by symbols if provided
-        if symbols:
-            recommendations = [r for r in recommendations if r['symbol'] in symbols]
-        
-        # Limit results
-        recommendations = recommendations[:limit]
-        
-        return [CryptoRecommendationType(**rec) for rec in recommendations]
+        """Get real crypto recommendations data"""
+        try:
+            # TODO: Implement real crypto recommendations based on ML analysis
+            # For now, return empty list since we don't have real crypto recommendation integration
+            # This should be replaced with actual crypto recommendation analysis when available
+            return []
+            
+        except Exception as e:
+            print(f"Error getting crypto recommendations: {e}")
+            return []
 
     def resolve_supportedCurrencies(self, info):
         # Return empty list for now - let the frontend handle missing data gracefully
@@ -1725,128 +1598,64 @@ class BaseQuery(graphene.ObjectType):
         return None
     
     def resolve_tradingAccount(self, info):
-        # Mock trading account data
-        from datetime import datetime
-        return {
-            "id": "1",
-            "buyingPower": 50000.0,
-            "cash": 25000.0,
-            "portfolioValue": 75000.0,
-            "equity": 75000.0,
-            "dayTradeCount": 0,
-            "patternDayTrader": False,
-            "tradingBlocked": False,
-            "dayTradingBuyingPower": 100000.0,
-            "isDayTradingEnabled": True,
-            "accountStatus": "ACTIVE",
-            "createdAt": datetime(2024, 1, 1, 0, 0, 0)
-        }
+        """Get real trading account data"""
+        user = info.context.user
+        if not user.is_authenticated:
+            return None
+            
+        try:
+            # TODO: Integrate with real trading account API (Alpaca, Interactive Brokers, etc.)
+            # For now, return None since we don't have real trading account integration
+            # This should be replaced with actual trading account data when integration is available
+            return None
+            
+        except Exception as e:
+            print(f"Error getting trading account data: {e}")
+            return None
     
     def resolve_tradingPositions(self, info):
-        # Mock trading positions data
-        return [
-            {
-                "id": "1",
-                "symbol": "AAPL",
-                "quantity": 100.0,
-                "marketValue": 15000.0,
-                "costBasis": 14000.0,
-                "unrealizedPl": 1000.0,
-                "unrealizedpi": 1000.0,
-                "unrealizedPI": 1000.0,
-                "unrealizedPLPercent": 0.071,
-                "unrealizedPlpc": 0.071,
-                "currentPrice": 150.0,
-                "side": "long"
-            },
-            {
-                "id": "2",
-                "symbol": "TSLA",
-                "quantity": 50.0,
-                "marketValue": 10000.0,
-                "costBasis": 12000.0,
-                "unrealizedPl": -2000.0,
-                "unrealizedpi": -2000.0,
-                "unrealizedPI": -2000.0,
-                "unrealizedPLPercent": -0.167,
-                "unrealizedPlpc": -0.167,
-                "currentPrice": 200.0,
-                "side": "long"
-            }
-        ]
+        """Get real trading positions data"""
+        user = info.context.user
+        if not user.is_authenticated:
+            return []
+            
+        try:
+            # TODO: Integrate with real trading positions API
+            # For now, return empty list since we don't have real trading positions integration
+            # This should be replaced with actual trading positions data when integration is available
+            return []
+            
+        except Exception as e:
+            print(f"Error getting trading positions data: {e}")
+            return []
     
     def resolve_tradingOrders(self, info, status=None, limit=None):
-        # Mock trading orders data
-        from datetime import datetime
-        mock_orders = [
-            {
-                "id": "1",
-                "symbol": "AAPL",
-                "side": "BUY",
-                "orderType": "LIMIT",
-                "quantity": 10.0,
-                "price": 145.0,
-                "stopPrice": None,
-                "status": "FILLED",
-                "createdAt": datetime(2024, 1, 15, 10, 30, 0),
-                "filledAt": datetime(2024, 1, 15, 10, 31, 0),
-                "filledQuantity": 10.0,
-                "averageFillPrice": 144.95,
-                "commission": 1.0,
-                "notes": "Limit order filled"
-            },
-            {
-                "id": "2",
-                "symbol": "MSFT",
-                "side": "SELL",
-                "orderType": "MARKET",
-                "quantity": 5.0,
-                "price": None,
-                "stopPrice": None,
-                "status": "PENDING",
-                "createdAt": datetime(2024, 1, 16, 14, 20, 0),
-                "filledAt": None,
-                "filledQuantity": 0.0,
-                "averageFillPrice": None,
-                "commission": 0.0,
-                "notes": "Market sell order pending"
-            }
-        ]
-        
-        # Filter by status if provided
-        if status:
-            mock_orders = [order for order in mock_orders if order["status"] == status.upper()]
-        
-        # Apply limit if provided
-        if limit:
-            mock_orders = mock_orders[:limit]
-        
-        return mock_orders
+        """Get real trading orders data"""
+        user = info.context.user
+        if not user.is_authenticated:
+            return []
+            
+        try:
+            # TODO: Integrate with real trading orders API
+            # For now, return empty list since we don't have real trading orders integration
+            # This should be replaced with actual trading orders data when integration is available
+            return []
+            
+        except Exception as e:
+            print(f"Error getting trading orders data: {e}")
+            return []
     
     def resolve_optionsAnalysis(self, info, symbol):
-        # Try real options data first, fallback to mock data
-        from datetime import datetime, timedelta
-        import random
-        
+        """Get real options analysis data"""
         try:
-            from .market_data_service import MarketDataService
-            market_service = MarketDataService()
+            # TODO: Integrate with real options data API (CBOE, Polygon, etc.)
+            # For now, return None since we don't have real options integration
+            # This should be replaced with actual options analysis when integration is available
+            return None
             
-            # Get real market data for the symbol
-            real_quotes = market_service.get_quotes([symbol])
-            
-            if real_quotes and len(real_quotes) > 0:
-                real_quote = real_quotes[0]
-                current_price = real_quote.get('price', 150.0)
-                print(f"✅ Using REAL options data for {symbol} at ${current_price}")
-            else:
-                raise Exception("No real market data available")
-                
         except Exception as e:
-            print(f"⚠️ Real options data unavailable ({e}), using mock data")
-            # Use a more stable price for better performance (less random variation)
-            base_price = 150.0
-            current_price = base_price + random.uniform(-5, 5)  # Reduced variation
+            print(f"Error getting options analysis for {symbol}: {e}")
+            return None
         
         # Generate expiration dates (next 4 Fridays)
         today = datetime.now()

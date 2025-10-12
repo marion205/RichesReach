@@ -84,13 +84,31 @@ jobs:
             --query 'taskDefinition' > td.json
 
           IMG="${{ steps.meta.outputs.IMAGE_URI }}"
-          jq --arg NAME "${{ env.CONTAINER_NAME }}" --arg IMG "$IMG" '
+          jq --arg NAME "${{ env.CONTAINER_NAME }}" --arg IMG "$IMG" \
+             --arg FINNHUB_API_KEY "${{ secrets.FINNHUB_API_KEY }}" \
+             --arg ALPHA_VANTAGE_API_KEY "${{ secrets.ALPHA_VANTAGE_API_KEY }}" \
+             --arg POLYGON_API_KEY "${{ secrets.POLYGON_API_KEY }}" \
+             --arg NEWS_API_KEY "${{ secrets.NEWS_API_KEY }}" \
+             --arg OPENAI_API_KEY "${{ secrets.OPENAI_API_KEY }}" \
+             --arg ALCHEMY_API_KEY "${{ secrets.ALCHEMY_API_KEY }}" \
+             --arg WALLETCONNECT_PROJECT_ID "${{ secrets.WALLETCONNECT_PROJECT_ID }}" \
+             --arg SEPOLIA_ETH_URL "${{ secrets.SEPOLIA_ETH_URL }}" '
             .containerDefinitions |= (map(
               if .name==$NAME then 
                 .image=$IMG | 
                 .environment |= (
-                  map(select(.name != "DJANGO_SETTINGS_MODULE")) + 
-                  [{name: "DJANGO_SETTINGS_MODULE", value: "richesreach.settings_production"}]
+                  map(select(.name != "DJANGO_SETTINGS_MODULE" and .name != "FINNHUB_API_KEY" and .name != "ALPHA_VANTAGE_API_KEY" and .name != "POLYGON_API_KEY" and .name != "NEWS_API_KEY" and .name != "OPENAI_API_KEY" and .name != "ALCHEMY_API_KEY" and .name != "WALLETCONNECT_PROJECT_ID" and .name != "SEPOLIA_ETH_URL")) + 
+                  [
+                    {name: "DJANGO_SETTINGS_MODULE", value: "richesreach.settings_production"},
+                    {name: "FINNHUB_API_KEY", value: $FINNHUB_API_KEY},
+                    {name: "ALPHA_VANTAGE_API_KEY", value: $ALPHA_VANTAGE_API_KEY},
+                    {name: "POLYGON_API_KEY", value: $POLYGON_API_KEY},
+                    {name: "NEWS_API_KEY", value: $NEWS_API_KEY},
+                    {name: "OPENAI_API_KEY", value: $OPENAI_API_KEY},
+                    {name: "ALCHEMY_API_KEY", value: $ALCHEMY_API_KEY},
+                    {name: "WALLETCONNECT_PROJECT_ID", value: $WALLETCONNECT_PROJECT_ID},
+                    {name: "SEPOLIA_ETH_URL", value: $SEPOLIA_ETH_URL}
+                  ]
                 )
               else . end
             )) |

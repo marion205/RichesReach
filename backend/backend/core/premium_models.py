@@ -97,6 +97,7 @@ class PremiumSubscription(models.Model):
                 'capital_gains_optimization',
                 'tax_efficient_rebalancing',
                 'tax_bracket_analysis',
+                'tax_optimization_summary',
                 'priority_support',
             ],
             'pro': [
@@ -108,6 +109,7 @@ class PremiumSubscription(models.Model):
                 'capital_gains_optimization',
                 'tax_efficient_rebalancing',
                 'tax_bracket_analysis',
+                'tax_optimization_summary',
                 'priority_support',
                 'advanced_analytics',
                 'custom_portfolio_models',
@@ -122,6 +124,7 @@ class PremiumSubscription(models.Model):
                 'capital_gains_optimization',
                 'tax_efficient_rebalancing',
                 'tax_bracket_analysis',
+                'tax_optimization_summary',
                 'priority_support',
                 'advanced_analytics',
                 'custom_portfolio_models',

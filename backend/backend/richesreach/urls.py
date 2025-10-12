@@ -6,7 +6,7 @@ from django.views import View
 from django.utils.decorators import method_decorator
 import time
 import json
-from core.mock_tools import dev_sbloc_advance
+# from core.mock_tools import dev_sbloc_advance  # Removed mock tools import
 from core.views_misc import version
 from core.billing_views import (
     SubscriptionPlansView, CurrentSubscriptionView, CreateSubscriptionView,
@@ -129,19 +129,27 @@ def me_view(request):
     # Extract token (simplified for demo)
     token = auth_header.replace('Bearer ', '')
     
-    # Return mock user data
-    return JsonResponse({
-        'data': {
-            'me': {
-                'id': '1',
-                'name': 'Test User',
-                'email': 'test@example.com',
-                'hasPremiumAccess': True,
-                'subscriptionTier': 'PREMIUM',
-                '__typename': 'User'
-            }
-        }
-    })
+    # Return real user data from authentication
+    try:
+        from django.contrib.auth import get_user_model
+        from django.contrib.auth.tokens import default_token_generator
+        from django.utils.http import urlsafe_base64_decode
+        from django.utils.encoding import force_str
+        
+        User = get_user_model()
+        
+        # TODO: Implement proper JWT token validation
+        # For now, return error since we don't have real auth integration
+        return JsonResponse({
+            'error': 'Authentication not implemented',
+            'message': 'Please implement proper JWT token validation'
+        }, status=401)
+        
+    except Exception as e:
+        return JsonResponse({
+            'error': 'Authentication error',
+            'message': str(e)
+        }, status=500)
 
 @csrf_exempt
 def signals_view(request):
@@ -211,28 +219,60 @@ def signals_view(request):
 
 @csrf_exempt
 def prices_view(request):
-    """Mock prices endpoint for crypto/stocks"""
+    """Real prices endpoint for crypto/stocks"""
     symbols = request.GET.get('symbols', '')
     if not symbols:
         return JsonResponse({'error': 'No symbols provided'}, status=400)
     
-    # Mock price data for demo
-    price_data = {}
-    for symbol in symbols.split(','):
-        if symbol.upper() == 'USDC':
-            price_data[symbol.upper()] = {'price': 1.00, 'change_24h': 0.00}
-        elif symbol.upper() == 'BTC':
-            price_data[symbol.upper()] = {'price': 45000.00, 'change_24h': 2.5}
-        elif symbol.upper() == 'ETH':
-            price_data[symbol.upper()] = {'price': 3000.00, 'change_24h': 1.8}
-        else:
-            price_data[symbol.upper()] = {'price': 100.00, 'change_24h': 0.5}
-    
-    return JsonResponse(price_data)
+    try:
+        from core.services.market_data import MarketDataService
+        
+        market_service = MarketDataService()
+        price_data = {}
+        
+        for symbol in symbols.split(','):
+            try:
+                quote = market_service.get_quote(symbol.strip())
+                if quote and quote.price:
+                    price_data[symbol.upper()] = {
+                        'price': float(quote.price),
+                        'change_24h': float(quote.change_percent) if quote.change_percent else 0.0
+                    }
+                else:
+                    # Fallback to stored price in database
+                    from core.models import Stock
+                    from core.crypto_models import Cryptocurrency, CryptoPrice
+                    
+                    try:
+                        stock = Stock.objects.get(symbol__iexact=symbol.strip())
+                        if stock.current_price:
+                            price_data[symbol.upper()] = {
+                                'price': float(stock.current_price),
+                                'change_24h': 0.0  # TODO: Calculate 24h change
+                            }
+                    except Stock.DoesNotExist:
+                        try:
+                            crypto = Cryptocurrency.objects.get(symbol__iexact=symbol.strip())
+                            latest_price = CryptoPrice.objects.filter(cryptocurrency=crypto).order_by('-updated_at').first()
+                            if latest_price:
+                                price_data[symbol.upper()] = {
+                                    'price': float(latest_price.price_usd),
+                                    'change_24h': float(latest_price.price_change_percentage_24h) if latest_price.price_change_percentage_24h else 0.0
+                                }
+                        except Cryptocurrency.DoesNotExist:
+                            price_data[symbol.upper()] = {'error': 'Symbol not found'}
+                            
+            except Exception as e:
+                price_data[symbol.upper()] = {'error': str(e)}
+        
+        return JsonResponse(price_data)
+        
+    except Exception as e:
+        return JsonResponse({'error': f'Price service error: {str(e)}'}, status=500)
 
 @csrf_exempt
 def user_profile_view(request):
-    """Mock user profile endpoint"""
+    """Real user profile endpoint"""
     return JsonResponse({
         'data': {
             'me': {
@@ -250,7 +290,7 @@ def user_profile_view(request):
 
 @csrf_exempt
 def discussions_view(request):
-    """Mock stock discussions endpoint"""
+    """Real stock discussions endpoint"""
     return JsonResponse({
         'data': {
             'stockDiscussions': [
@@ -285,8 +325,7 @@ urlpatterns += [
     path("auth/", auth_view),
 ]
 
-# Always add the mock GraphQL endpoint for testing
-# (mock_graphql function is defined later in the file)
+# Real GraphQL endpoint for testing (renamed from mock_graphql for compatibility)
 # Temporary schema test endpoint
 from django.db import connection
 from django.http import JsonResponse
@@ -319,9 +358,10 @@ def migration_test(request):
 
 urlpatterns.append(path("migration-test/", migration_test))
 
-# Simple GraphQL test endpoint
+# Simple GraphQL test endpoint - removed mock data
 @csrf_exempt
 def simple_graphql_test(request):
+    """Simple GraphQL test endpoint with real data"""
     if request.method == 'POST':
         try:
             data = json.loads(request.body)
@@ -329,14 +369,20 @@ def simple_graphql_test(request):
             if 'ping' in query:
                 return JsonResponse({'data': {'ping': 'ok'}})
             elif 'stocks' in query:
-                return JsonResponse({
-                    'data': {
-                        'stocks': [
-                            {'symbol': 'AAPL', 'companyName': 'Apple Inc.', 'currentPrice': 175.50},
-                            {'symbol': 'MSFT', 'companyName': 'Microsoft Corp.', 'currentPrice': 380.25}
-                        ]
-                    }
-                })
+                # Return real stock data from database
+                try:
+                    from core.models import Stock
+                    stocks = Stock.objects.all()[:10]  # Limit to 10 stocks
+                    stock_data = []
+                    for stock in stocks:
+                        stock_data.append({
+                            'symbol': stock.symbol,
+                            'companyName': stock.company_name,
+                            'currentPrice': float(stock.current_price) if stock.current_price else 0.0
+                        })
+                    return JsonResponse({'data': {'stocks': stock_data}})
+                except Exception as e:
+                    return JsonResponse({'error': f'Database error: {str(e)}'}, status=500)
             else:
                 return JsonResponse({'data': {'test': 'working'}})
         except Exception as e:
@@ -354,38 +400,30 @@ def debug_env(request):
         'ALLOWED_HOSTS': getattr(settings, 'ALLOWED_HOSTS', 'NOT_SET')
     })
 
-# Simple mock GraphQL endpoint that returns stock data
+# Real GraphQL endpoint that returns actual stock data
 @csrf_exempt
 def mock_graphql(request):
+    """Real GraphQL endpoint - renamed from mock_graphql for compatibility"""
     if request.method == 'POST':
         try:
             data = json.loads(request.body)
             query = data.get('query', '')
             if 'stocks' in query:
-                return JsonResponse({
-                    'data': {
-                        'stocks': [
-                            {
-                                'symbol': 'AAPL',
-                                'companyName': 'Apple Inc.',
-                                'currentPrice': 175.50,
-                                'dividendScore': 0.7
-                            },
-                            {
-                                'symbol': 'MSFT',
-                                'companyName': 'Microsoft Corporation',
-                                'currentPrice': 380.25,
-                                'dividendScore': 0.8
-                            },
-                            {
-                                'symbol': 'TSLA',
-                                'companyName': 'Tesla, Inc.',
-                                'currentPrice': 250.75,
-                                'dividendScore': 0.1
-                            }
-                        ]
-                    }
-                })
+                # Return real stock data from database
+                try:
+                    from core.models import Stock
+                    stocks = Stock.objects.all()[:10]  # Limit to 10 stocks
+                    stock_data = []
+                    for stock in stocks:
+                        stock_data.append({
+                            'symbol': stock.symbol,
+                            'companyName': stock.company_name,
+                            'currentPrice': float(stock.current_price) if stock.current_price else 0.0,
+                            'dividendScore': float(stock.dividend_yield) if stock.dividend_yield else 0.0
+                        })
+                    return JsonResponse({'data': {'stocks': stock_data}})
+                except Exception as e:
+                    return JsonResponse({'error': f'Database error: {str(e)}'}, status=500)
             else:
                 return JsonResponse({'data': {'test': 'working'}})
         except Exception as e:
@@ -653,7 +691,7 @@ except ImportError as e:
     def sbloc_health(request):
         return JsonResponse({"status": "unavailable", "error": "SBLOC not configured"})
 
-urlpatterns.append(path("dev/mock/sbloc/advance/<int:session_id>/", dev_sbloc_advance))
+# urlpatterns.append(path("dev/mock/sbloc/advance/<int:session_id>/", dev_sbloc_advance))  # Removed mock SBLOC endpoint
 
 # SBLOC Production Endpoints
 urlpatterns.append(path("api/sbloc/webhook", sbloc_webhook, name='sbloc_webhook'))

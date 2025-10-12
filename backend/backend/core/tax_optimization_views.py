@@ -10,6 +10,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import login_required
 from django.utils.decorators import method_decorator
 from .premium_models import require_premium_feature
+from .tax_service import TaxService
 import json
 import logging
 from datetime import datetime, timedelta
@@ -26,42 +27,37 @@ def tax_loss_harvesting(request):
     Identifies opportunities to realize losses to offset gains
     """
     try:
-        # Mock implementation - replace with real tax logic
-        user_portfolio = {
-            "positions": [
-                {"symbol": "AAPL", "shares": 100, "cost_basis": 150.00, "current_price": 140.00, "unrealized_loss": -1000.00},
-                {"symbol": "TSLA", "shares": 50, "cost_basis": 200.00, "current_price": 180.00, "unrealized_loss": -1000.00},
-                {"symbol": "MSFT", "shares": 75, "cost_basis": 300.00, "current_price": 320.00, "unrealized_gain": 1500.00},
-            ],
-            "realized_gains": 5000.00,
-            "tax_bracket": 0.22
-        }
+        tax_service = TaxService()
+        user = request.user
         
-        recommendations = []
+        # Get real portfolio data
+        portfolio_data = tax_service.get_user_portfolio_data(user)
+        if "error" in portfolio_data:
+            return JsonResponse({
+                "status": "error", 
+                "message": f"Could not retrieve portfolio data: {portfolio_data['error']}"
+            }, status=500)
         
-        # Find positions with unrealized losses
-        for position in user_portfolio["positions"]:
-            if position["unrealized_loss"] < 0:
-                potential_tax_savings = abs(position["unrealized_loss"]) * user_portfolio["tax_bracket"]
-                recommendations.append({
-                    "symbol": position["symbol"],
-                    "action": "SELL",
-                    "shares": position["shares"],
-                    "unrealized_loss": position["unrealized_loss"],
-                    "potential_tax_savings": potential_tax_savings,
-                    "reason": f"Realize loss to offset ${position['unrealized_loss']:,.2f} in gains",
-                    "priority": "HIGH" if abs(position["unrealized_loss"]) > 1000 else "MEDIUM"
-                })
+        # Get tax loss harvesting opportunities
+        opportunities = tax_service.get_tax_loss_harvesting_opportunities(user)
         
-        # Sort by potential tax savings
-        recommendations.sort(key=lambda x: x["potential_tax_savings"], reverse=True)
+        # Calculate total potential savings
+        total_potential_savings = sum(opp["potential_tax_savings"] for opp in opportunities)
+        
+        # Get user's tax bracket (using default income for now)
+        tax_bracket = tax_service.calculate_tax_bracket(85000)  # TODO: Get real user income
         
         return JsonResponse({
             "status": "success",
-            "recommendations": recommendations,
-            "total_potential_savings": sum(r["potential_tax_savings"] for r in recommendations),
-            "tax_bracket": user_portfolio["tax_bracket"],
-            "realized_gains": user_portfolio["realized_gains"]
+            "recommendations": opportunities,
+            "total_potential_savings": total_potential_savings,
+            "tax_bracket": tax_bracket["marginal_rate"],
+            "realized_gains": portfolio_data.get("realized_gains", {}).get("total_realized_gains", 0),
+            "portfolio_summary": {
+                "total_value": portfolio_data["total_portfolio_value"],
+                "stock_positions": len(portfolio_data.get("stock_positions", [])),
+                "crypto_positions": len(portfolio_data.get("crypto_positions", []))
+            }
         })
         
     except Exception as e:
@@ -77,50 +73,76 @@ def capital_gains_optimization(request):
     Optimizes timing and method of realizing gains
     """
     try:
-        # Mock implementation - replace with real optimization logic
-        user_data = {
-            "income": 100000,
-            "tax_bracket": 0.22,
-            "long_term_positions": [
-                {"symbol": "AAPL", "shares": 100, "cost_basis": 100.00, "current_price": 150.00, "holding_period": 400},
-                {"symbol": "GOOGL", "shares": 50, "cost_basis": 2000.00, "current_price": 2500.00, "holding_period": 200},
-            ],
-            "short_term_positions": [
-                {"symbol": "TSLA", "shares": 25, "cost_basis": 200.00, "current_price": 220.00, "holding_period": 100},
-            ]
-        }
+        tax_service = TaxService()
+        user = request.user
+        
+        # Get real portfolio data
+        portfolio_data = tax_service.get_user_portfolio_data(user)
+        if "error" in portfolio_data:
+            return JsonResponse({
+                "status": "error", 
+                "message": f"Could not retrieve portfolio data: {portfolio_data['error']}"
+            }, status=500)
         
         strategies = []
         
-        # Long-term vs short-term optimization
-        for position in user_data["long_term_positions"]:
-            if position["holding_period"] < 365:
-                days_to_long_term = 365 - position["holding_period"]
-                strategies.append({
-                    "symbol": position["symbol"],
-                    "strategy": "WAIT_FOR_LONG_TERM",
-                    "current_tax_rate": 0.22,  # Short-term rate
-                    "long_term_tax_rate": 0.15,  # Long-term rate
-                    "days_to_wait": days_to_long_term,
-                    "tax_savings": (position["current_price"] - position["cost_basis"]) * position["shares"] * (0.22 - 0.15),
-                    "recommendation": f"Wait {days_to_long_term} days to qualify for long-term capital gains rate"
-                })
+        # Analyze all positions for optimization opportunities
+        all_positions = portfolio_data.get("stock_positions", []) + portfolio_data.get("crypto_positions", [])
+        
+        for position in all_positions:
+            if position["unrealized_gain"] > 0:  # Only analyze gain positions
+                # Check if position is close to long-term status
+                if not position["is_long_term"] and position["holding_period"] > 300:  # Close to 1 year
+                    days_to_long_term = 365 - position["holding_period"]
+                    if days_to_long_term > 0:
+                        # Calculate tax savings from waiting
+                        current_tax = tax_service.calculate_capital_gains_tax(
+                            position["unrealized_gain"], 
+                            False,  # Short-term
+                            85000  # Default income
+                        )
+                        long_term_tax = tax_service.calculate_capital_gains_tax(
+                            position["unrealized_gain"], 
+                            True,  # Long-term
+                            85000  # Default income
+                        )
+                        
+                        tax_savings = current_tax["tax_amount"] - long_term_tax["tax_amount"]
+                        
+                        if tax_savings > 0:
+                            strategies.append({
+                                "symbol": position["symbol"],
+                                "type": position.get("type", "STOCK"),
+                                "strategy": "WAIT_FOR_LONG_TERM",
+                                "current_tax_rate": current_tax["tax_rate"],
+                                "long_term_tax_rate": long_term_tax["tax_rate"],
+                                "days_to_wait": days_to_long_term,
+                                "tax_savings": tax_savings,
+                                "unrealized_gain": position["unrealized_gain"],
+                                "recommendation": f"Wait {days_to_long_term} days to qualify for long-term capital gains rate (save ${tax_savings:,.2f})"
+                            })
         
         # Tax bracket optimization
-        current_income = user_data["income"]
-        if current_income < 40000:  # 0% long-term rate
+        tax_bracket = tax_service.calculate_tax_bracket(85000)  # TODO: Get real user income
+        
+        if tax_bracket["room_for_gains"] > 0:
             strategies.append({
                 "strategy": "TAX_BRACKET_OPTIMIZATION",
-                "recommendation": "Consider realizing gains while in 0% long-term capital gains bracket",
-                "current_bracket": "0%",
-                "potential_savings": "Up to 15% on long-term gains"
+                "recommendation": f"Consider realizing gains while in {tax_bracket['marginal_rate']*100:.0f}% bracket",
+                "current_bracket": f"{tax_bracket['marginal_rate']*100:.0f}%",
+                "room_for_gains": tax_bracket["room_for_gains"],
+                "potential_savings": f"Up to {tax_bracket['marginal_rate']*100:.0f}% on additional gains"
             })
         
         return JsonResponse({
             "status": "success",
             "strategies": strategies,
-            "current_tax_bracket": user_data["tax_bracket"],
-            "income": user_data["income"]
+            "current_tax_bracket": tax_bracket["marginal_rate"],
+            "portfolio_summary": {
+                "total_value": portfolio_data["total_portfolio_value"],
+                "total_positions": len(all_positions),
+                "gain_positions": len([p for p in all_positions if p["unrealized_gain"] > 0])
+            }
         })
         
     except Exception as e:
@@ -136,78 +158,34 @@ def tax_efficient_rebalancing(request):
     Minimizes tax impact while maintaining target allocation
     """
     try:
-        # Mock implementation - replace with real rebalancing logic
-        portfolio = {
-            "current_allocation": {
-                "stocks": 0.70,
-                "bonds": 0.20,
-                "cash": 0.10
-            },
-            "target_allocation": {
-                "stocks": 0.60,
-                "bonds": 0.30,
-                "cash": 0.10
-            },
-            "positions": [
-                {"symbol": "VTI", "type": "stocks", "value": 70000, "cost_basis": 60000, "unrealized_gain": 10000},
-                {"symbol": "BND", "type": "bonds", "value": 20000, "cost_basis": 20000, "unrealized_gain": 0},
-                {"symbol": "CASH", "type": "cash", "value": 10000, "cost_basis": 10000, "unrealized_gain": 0},
-            ],
-            "total_value": 100000
+        tax_service = TaxService()
+        user = request.user
+        
+        # Get target allocation from request parameters or use default
+        target_allocation = {
+            "stocks": float(request.GET.get("stocks", 0.60)),
+            "crypto": float(request.GET.get("crypto", 0.20)),
+            "cash": float(request.GET.get("cash", 0.20))
         }
         
-        rebalancing_actions = []
+        # Get real portfolio data
+        portfolio_data = tax_service.get_user_portfolio_data(user)
+        if "error" in portfolio_data:
+            return JsonResponse({
+                "status": "error", 
+                "message": f"Could not retrieve portfolio data: {portfolio_data['error']}"
+            }, status=500)
         
-        # Calculate rebalancing needs
-        target_stocks = portfolio["total_value"] * portfolio["target_allocation"]["stocks"]
-        target_bonds = portfolio["total_value"] * portfolio["target_allocation"]["bonds"]
-        
-        current_stocks = sum(p["value"] for p in portfolio["positions"] if p["type"] == "stocks")
-        current_bonds = sum(p["value"] for p in portfolio["positions"] if p["type"] == "bonds")
-        
-        stocks_to_sell = current_stocks - target_stocks
-        bonds_to_buy = target_bonds - current_bonds
-        
-        if stocks_to_sell > 0:
-            # Find positions with lowest tax impact
-            stock_positions = [p for p in portfolio["positions"] if p["type"] == "stocks"]
-            stock_positions.sort(key=lambda x: x["unrealized_gain"])  # Sell lowest gains first
-            
-            for position in stock_positions:
-                if stocks_to_sell <= 0:
-                    break
-                
-                sell_amount = min(stocks_to_sell, position["value"])
-                sell_percentage = sell_amount / position["value"]
-                shares_to_sell = int(position["value"] / position["value"] * sell_percentage * 100)  # Mock calculation
-                
-                rebalancing_actions.append({
-                    "action": "SELL",
-                    "symbol": position["symbol"],
-                    "shares": shares_to_sell,
-                    "value": sell_amount,
-                    "tax_impact": position["unrealized_gain"] * sell_percentage * 0.15,  # Long-term rate
-                    "reason": "Rebalance to target allocation"
-                })
-                
-                stocks_to_sell -= sell_amount
-        
-        if bonds_to_buy > 0:
-            rebalancing_actions.append({
-                "action": "BUY",
-                "symbol": "BND",
-                "value": bonds_to_buy,
-                "tax_impact": 0,
-                "reason": "Rebalance to target allocation"
-            })
+        # Get tax-efficient rebalancing recommendations
+        rebalancing_data = tax_service.get_tax_efficient_rebalancing(user, target_allocation)
         
         return JsonResponse({
             "status": "success",
-            "rebalancing_actions": rebalancing_actions,
-            "current_allocation": portfolio["current_allocation"],
-            "target_allocation": portfolio["target_allocation"],
-            "total_tax_impact": sum(action["tax_impact"] for action in rebalancing_actions),
-            "rebalancing_efficiency": "HIGH" if sum(action["tax_impact"] for action in rebalancing_actions) < 1000 else "MEDIUM"
+            "rebalancing_actions": rebalancing_data.get("rebalancing_actions", []),
+            "current_allocation": rebalancing_data.get("current_allocation", {}),
+            "target_allocation": rebalancing_data.get("target_allocation", {}),
+            "total_tax_impact": rebalancing_data.get("tax_impact", {}).get("total_taxes", 0),
+            "rebalancing_efficiency": "HIGH" if rebalancing_data.get("tax_impact", {}).get("total_taxes", 0) < 1000 else "MEDIUM"
         })
         
     except Exception as e:
@@ -223,61 +201,62 @@ def tax_bracket_analysis(request):
     Analyzes current tax situation and provides optimization strategies
     """
     try:
-        # Mock implementation - replace with real tax analysis
-        user_data = {
-            "income": 85000,
-            "filing_status": "single",
-            "deductions": 12000,
-            "taxable_income": 73000,
-            "current_tax_bracket": 0.22,
-            "marginal_rate": 0.22,
-            "effective_rate": 0.15,
-            "projected_gains": 15000,
-            "projected_dividends": 3000
-        }
+        tax_service = TaxService()
+        user = request.user
         
-        # Tax bracket thresholds for 2024 (single filer)
-        brackets = [
-            {"min": 0, "max": 11000, "rate": 0.10},
-            {"min": 11000, "max": 44725, "rate": 0.12},
-            {"min": 44725, "max": 95375, "rate": 0.22},
-            {"min": 95375, "max": 182050, "rate": 0.24},
-        ]
+        # Get user income from request or use default
+        user_income = float(request.GET.get("income", 85000))  # TODO: Get from user profile
+        
+        # Get real portfolio data
+        portfolio_data = tax_service.get_user_portfolio_data(user)
+        if "error" in portfolio_data:
+            return JsonResponse({
+                "status": "error", 
+                "message": f"Could not retrieve portfolio data: {portfolio_data['error']}"
+            }, status=500)
+        
+        # Calculate projected gains from portfolio
+        all_positions = portfolio_data.get("stock_positions", []) + portfolio_data.get("crypto_positions", [])
+        projected_gains = sum(pos["unrealized_gain"] for pos in all_positions if pos["unrealized_gain"] > 0)
+        
+        # Calculate tax bracket information
+        tax_bracket = tax_service.calculate_tax_bracket(user_income)
         
         analysis = {
             "current_situation": {
-                "taxable_income": user_data["taxable_income"],
-                "current_bracket": f"{user_data['current_tax_bracket']*100:.0f}%",
-                "marginal_rate": f"{user_data['marginal_rate']*100:.0f}%",
-                "effective_rate": f"{user_data['effective_rate']*100:.0f}%"
+                "taxable_income": user_income,
+                "current_bracket": f"{tax_bracket['marginal_rate']*100:.0f}%",
+                "marginal_rate": f"{tax_bracket['marginal_rate']*100:.0f}%",
+                "effective_rate": f"{tax_bracket['effective_rate']*100:.0f}%"
             },
             "bracket_proximity": {
-                "next_bracket_threshold": 95375,
-                "distance_to_next": 95375 - user_data["taxable_income"],
-                "room_for_gains": max(0, 95375 - user_data["taxable_income"])
+                "next_bracket_threshold": tax_bracket.get("next_bracket_threshold"),
+                "distance_to_next": tax_bracket.get("room_for_gains", 0),
+                "room_for_gains": tax_bracket.get("room_for_gains", 0)
             },
             "optimization_strategies": []
         }
         
-        # Generate optimization strategies
-        if user_data["taxable_income"] + user_data["projected_gains"] > 95375:
-            analysis["optimization_strategies"].append({
-                "strategy": "DEFER_GAINS",
-                "description": "Consider deferring some gains to next year to stay in current bracket",
-                "potential_savings": (user_data["projected_gains"] - analysis["bracket_proximity"]["room_for_gains"]) * (0.24 - 0.22),
-                "priority": "HIGH"
-            })
-        
-        if user_data["taxable_income"] < 44725:
-            analysis["optimization_strategies"].append({
-                "strategy": "REALIZE_GAINS",
-                "description": "Consider realizing gains while in lower tax bracket",
-                "potential_savings": min(user_data["projected_gains"], 44725 - user_data["taxable_income"]) * (0.22 - 0.12),
-                "priority": "HIGH"
-            })
+        # Generate optimization strategies based on real data
+        if projected_gains > 0:
+            if user_income + projected_gains > (tax_bracket.get("next_bracket_threshold") or float('inf')):
+                analysis["optimization_strategies"].append({
+                    "strategy": "DEFER_GAINS",
+                    "description": "Consider deferring some gains to next year to stay in current bracket",
+                    "potential_savings": min(projected_gains, tax_bracket.get("room_for_gains", 0)) * 0.02,  # 2% bracket difference
+                    "priority": "HIGH"
+                })
+            
+            if user_income < 44725:  # Lower bracket threshold
+                analysis["optimization_strategies"].append({
+                    "strategy": "REALIZE_GAINS",
+                    "description": "Consider realizing gains while in lower tax bracket",
+                    "potential_savings": min(projected_gains, 44725 - user_income) * 0.10,  # 10% bracket difference
+                    "priority": "HIGH"
+                })
         
         # Roth IRA optimization
-        if user_data["income"] < 138000:  # Roth IRA income limit
+        if user_income < 138000:  # Roth IRA income limit
             analysis["optimization_strategies"].append({
                 "strategy": "ROTH_CONVERSION",
                 "description": "Consider Roth IRA conversion while in current tax bracket",
@@ -288,8 +267,13 @@ def tax_bracket_analysis(request):
         return JsonResponse({
             "status": "success",
             "analysis": analysis,
-            "tax_brackets": brackets,
-            "recommendations": analysis["optimization_strategies"]
+            "tax_brackets": tax_service.tax_brackets_2024,
+            "recommendations": analysis["optimization_strategies"],
+            "portfolio_summary": {
+                "total_value": portfolio_data["total_portfolio_value"],
+                "projected_gains": projected_gains,
+                "total_positions": len(all_positions)
+            }
         })
         
     except Exception as e:
@@ -305,38 +289,74 @@ def tax_optimization_summary(request):
     Provides overview of all tax optimization opportunities
     """
     try:
-        # Mock implementation - replace with real summary logic
+        tax_service = TaxService()
+        user = request.user
+        
+        # Get real portfolio data
+        portfolio_data = tax_service.get_user_portfolio_data(user)
+        if "error" in portfolio_data:
+            return JsonResponse({
+                "status": "error", 
+                "message": f"Could not retrieve portfolio data: {portfolio_data['error']}"
+            }, status=500)
+        
+        # Get all optimization opportunities
+        loss_harvesting_opps = tax_service.get_tax_loss_harvesting_opportunities(user)
+        rebalancing_data = tax_service.get_tax_efficient_rebalancing(user, {"stocks": 0.60, "crypto": 0.20, "cash": 0.20})
+        
+        # Calculate total potential savings
+        loss_harvesting_savings = sum(opp["potential_tax_savings"] for opp in loss_harvesting_opps)
+        rebalancing_tax_impact = rebalancing_data.get("tax_impact", {}).get("total_taxes", 0)
+        
+        # Count opportunities by priority
+        high_priority = len([opp for opp in loss_harvesting_opps if opp["priority"] == "HIGH"])
+        medium_priority = len([opp for opp in loss_harvesting_opps if opp["priority"] == "MEDIUM"])
+        low_priority = len([opp for opp in loss_harvesting_opps if opp["priority"] == "LOW"])
+        
+        # Calculate tax efficiency score
+        total_value = portfolio_data["total_portfolio_value"]
+        total_gains = sum(pos["unrealized_gain"] for pos in portfolio_data.get("stock_positions", []) + portfolio_data.get("crypto_positions", []) if pos["unrealized_gain"] > 0)
+        tax_efficiency_score = min(100, max(0, 100 - (total_gains / total_value * 100) if total_value > 0 else 100))
+        
+        # Build key opportunities list
+        key_opportunities = []
+        
+        # Add loss harvesting opportunities
+        for opp in loss_harvesting_opps[:3]:  # Top 3
+            key_opportunities.append({
+                "type": "TAX_LOSS_HARVESTING",
+                "description": f"Realize ${abs(opp['unrealized_loss']):,.2f} loss on {opp['symbol']}",
+                "potential_savings": opp["potential_tax_savings"],
+                "priority": opp["priority"],
+                "deadline": "December 31, 2024"
+            })
+        
+        # Add rebalancing opportunities
+        rebalancing_actions = rebalancing_data.get("rebalancing_actions", [])
+        if rebalancing_actions:
+            key_opportunities.append({
+                "type": "TAX_EFFICIENT_REBALANCING",
+                "description": f"Rebalance portfolio with ${rebalancing_tax_impact:,.2f} tax impact",
+                "potential_savings": -rebalancing_tax_impact,  # Negative because it's a cost
+                "priority": "MEDIUM",
+                "deadline": "Ongoing"
+            })
+        
         summary = {
-            "total_potential_savings": 3500,
-            "high_priority_actions": 3,
-            "medium_priority_actions": 2,
-            "low_priority_actions": 1,
+            "total_potential_savings": loss_harvesting_savings,
+            "high_priority_actions": high_priority,
+            "medium_priority_actions": medium_priority,
+            "low_priority_actions": low_priority,
             "next_deadline": "December 31, 2024",
-            "key_opportunities": [
-                {
-                    "type": "TAX_LOSS_HARVESTING",
-                    "description": "Realize $2,000 in losses to offset gains",
-                    "potential_savings": 440,
-                    "priority": "HIGH",
-                    "deadline": "December 31, 2024"
-                },
-                {
-                    "type": "CAPITAL_GAINS_OPTIMIZATION",
-                    "description": "Wait 45 days for long-term capital gains rate",
-                    "potential_savings": 1200,
-                    "priority": "HIGH",
-                    "deadline": "45 days"
-                },
-                {
-                    "type": "TAX_BRACKET_OPTIMIZATION",
-                    "description": "Defer $5,000 in gains to next year",
-                    "potential_savings": 100,
-                    "priority": "MEDIUM",
-                    "deadline": "December 31, 2024"
-                }
-            ],
-            "estimated_annual_savings": 3500,
-            "tax_efficiency_score": 85
+            "key_opportunities": key_opportunities,
+            "estimated_annual_savings": loss_harvesting_savings,
+            "tax_efficiency_score": tax_efficiency_score,
+            "portfolio_summary": {
+                "total_value": total_value,
+                "total_positions": len(portfolio_data.get("stock_positions", []) + portfolio_data.get("crypto_positions", [])),
+                "unrealized_gains": total_gains,
+                "unrealized_losses": sum(pos["unrealized_gain"] for pos in portfolio_data.get("stock_positions", []) + portfolio_data.get("crypto_positions", []) if pos["unrealized_gain"] < 0)
+            }
         }
         
         return JsonResponse({

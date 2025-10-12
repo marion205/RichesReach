@@ -46,7 +46,7 @@ def ai_options_recommendations(request):
     portfolio_value = payload.get("portfolio_value", 10000)
     risk_tolerance = payload.get("risk_tolerance", "moderate")
     
-    # Mock AI recommendations (replace with real service call when ready)
+    # TODO: Implement real AI recommendations service
     recommendations = [
         {
             "strategy": "Covered Call",

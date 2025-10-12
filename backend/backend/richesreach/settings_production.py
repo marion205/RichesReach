@@ -212,6 +212,16 @@ GRAPHQL_JWT = {
 FINNHUB_API_KEY = os.getenv('FINNHUB_API_KEY', '')
 ALPHA_VANTAGE_API_KEY = os.getenv('ALPHA_VANTAGE_API_KEY', '')
 POLYGON_API_KEY = os.getenv('POLYGON_API_KEY', '')
+NEWS_API_KEY = os.getenv('NEWS_API_KEY', '')
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
+ALCHEMY_API_KEY = os.getenv('ALCHEMY_API_KEY', '')
+WALLETCONNECT_PROJECT_ID = os.getenv('WALLETCONNECT_PROJECT_ID', '')
+SEPOLIA_ETH_URL = os.getenv('SEPOLIA_ETH_URL', '')
+
+# API Service Configuration
+DISABLE_ALPHA_VANTAGE = os.getenv('DISABLE_ALPHA_VANTAGE', 'false').lower() == 'true'
+DISABLE_FINNHUB = os.getenv('DISABLE_FINNHUB', 'false').lower() == 'true'
+DISABLE_POLYGON = os.getenv('DISABLE_POLYGON', 'false').lower() == 'true'
 
 # ML Service Configuration
 ML_SERVICE_CONFIG = {
