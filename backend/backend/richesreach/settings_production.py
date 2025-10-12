@@ -225,6 +225,13 @@ DISABLE_ALPHA_VANTAGE = os.getenv('DISABLE_ALPHA_VANTAGE', 'false').lower() == '
 DISABLE_FINNHUB = os.getenv('DISABLE_FINNHUB', 'false').lower() == 'true'
 DISABLE_POLYGON = os.getenv('DISABLE_POLYGON', 'false').lower() == 'true'
 
+# AI Service Configuration
+USE_OPENAI = bool(OPENAI_API_KEY)
+OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-4')
+OPENAI_ENABLE_FALLBACK = os.getenv('OPENAI_ENABLE_FALLBACK', 'true').lower() == 'true'
+OPENAI_MAX_TOKENS = int(os.getenv('OPENAI_MAX_TOKENS', '4000'))
+OPENAI_TEMPERATURE = float(os.getenv('OPENAI_TEMPERATURE', '0.7'))
+
 # ML Service Configuration
 ML_SERVICE_CONFIG = {
     'ENABLED': True,
