@@ -99,6 +99,11 @@ MOCK_STOCKS = [
 class Query(ObjectType):
     stocks = graphene.List(StockType)
     beginnerFriendlyStocks = graphene.List(StockType)
+    simpleSchemaTest = graphene.String()  # Unique field to verify simple schema is being used
+    
+    def resolve_simpleSchemaTest(self, info):
+        """Test resolver to verify simple schema is active"""
+        return "SIMPLE_SCHEMA_IS_ACTIVE"
     
     def resolve_stocks(self, info, search=None, limit=10, offset=0):
         """Return mock stock data - no database queries"""
