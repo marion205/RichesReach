@@ -265,6 +265,8 @@ import FinancialChatbotService, { AlphaVantageRecommendationProvider } from '../
     const client = useApolloClient();
   
     // GraphQL
+    // TEMPORARILY DISABLED: Portfolio metrics query causing slow login due to Alpha Vantage rate limits
+    // Will be re-enabled once the new market data endpoints are deployed
     const {
       data: portfolioData,
       loading: portfolioLoading,
@@ -274,6 +276,7 @@ import FinancialChatbotService, { AlphaVantageRecommendationProvider } from '../
       errorPolicy: 'ignore',
       fetchPolicy: 'cache-first',
       notifyOnNetworkStatusChange: true,
+      skip: true, // TEMPORARILY SKIP THIS QUERY TO FIX SLOW LOGIN
     });
   
     const {
