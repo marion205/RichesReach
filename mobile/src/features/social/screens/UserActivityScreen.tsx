@@ -9,7 +9,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import MockUserService from '../../user/services/MockUserService';
+// Mock service removed - using real API
 
 interface UserActivityScreenProps {
   userId: string;

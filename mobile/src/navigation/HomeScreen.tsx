@@ -6,7 +6,6 @@ import React, {
     FlatList, TextInput, RefreshControl,
   } from 'react-native';
   import { useApolloClient, useQuery, gql } from '@apollo/client';
-  import { useFocusEffect } from '@react-navigation/native';
   import Icon from 'react-native-vector-icons/Feather';
   import AsyncStorage from '@react-native-async-storage/async-storage';
   
@@ -299,57 +298,55 @@ import { API_BASE } from '../config/api';
       notifyOnNetworkStatusChange: false,
     });
 
-    // Smart portfolio metrics: Check market data health when screen is focused
-    useFocusEffect(
-      useCallback(() => {
-        let active = true;
+    // Smart portfolio metrics: Check market data health when component mounts
+    useEffect(() => {
+      let active = true;
+      
+      const checkMarketDataHealth = async () => {
+        if (!FEATURE_PORTFOLIO_METRICS) {
+          console.log('[HomeScreen] Portfolio metrics feature disabled');
+          return;
+        }
         
-        const checkMarketDataHealth = async () => {
-          if (!FEATURE_PORTFOLIO_METRICS) {
-            console.log('[HomeScreen] Portfolio metrics feature disabled');
-            return;
-          }
+        const stop = mark(PerformanceMarkers.MARKET_DATA_FETCH);
+        
+        try {
+          const health = await isMarketDataHealthy(API_BASE);
           
-          const stop = mark(PerformanceMarkers.MARKET_DATA_FETCH);
-          
-          try {
-            const health = await isMarketDataHealthy(API_BASE);
+          if (active) {
+            setMarketDataHealth(health);
             
-            if (active) {
-              setMarketDataHealth(health);
-              
-              if (health.isHealthy) {
-                console.log('[HomeScreen] Market data is healthy, enabling portfolio metrics');
-                // Small delay to let UI settle after navigation
-                setTimeout(() => {
-                  if (active) {
-                    setCanQueryMetrics(true);
-                  }
-                }, 300);
-              } else {
-                console.warn('[HomeScreen] Market data is unhealthy:', health.error);
-                setCanQueryMetrics(false);
-              }
-            }
-            
-            stop();
-          } catch (error) {
-            console.error('[HomeScreen] Error checking market data health:', error);
-            if (active) {
+            if (health.isHealthy) {
+              console.log('[HomeScreen] Market data is healthy, enabling portfolio metrics');
+              // Small delay to let UI settle after navigation
+              setTimeout(() => {
+                if (active) {
+                  setCanQueryMetrics(true);
+                }
+              }, 300);
+            } else {
+              console.warn('[HomeScreen] Market data is unhealthy:', health.error);
               setCanQueryMetrics(false);
             }
-            stop();
           }
-        };
-        
-        checkMarketDataHealth();
-        
-        return () => {
-          active = false;
-          setCanQueryMetrics(false);
-        };
-      }, [])
-    );
+          
+          stop();
+        } catch (error) {
+          console.error('[HomeScreen] Error checking market data health:', error);
+          if (active) {
+            setCanQueryMetrics(false);
+          }
+          stop();
+        }
+      };
+      
+      checkMarketDataHealth();
+      
+      return () => {
+        active = false;
+        setCanQueryMetrics(false);
+      };
+    }, []); // Run once when component mounts
   
     // Profile
     const [userProfile, setUserProfile] = useState<ExtendedUserProfile | null>(null);

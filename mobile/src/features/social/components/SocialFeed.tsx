@@ -11,7 +11,7 @@ Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { gql, useQuery, useMutation } from '@apollo/client';
-import MockUserService from '../../user/services/MockUserService';
+// Mock service removed - using real API
 // GraphQL Queries
 const GET_SOCIAL_FEED = gql`
 query GetSocialFeed($limit: Int, $offset: Int) {
@@ -135,7 +135,7 @@ const [showComments, setShowComments] = useState<{ [key: string]: boolean }>({})
 const [posts, setPosts] = useState<any[]>([]);
 const [loading, setLoading] = useState(false);
 const [error, setError] = useState<string | null>(null);
-const mockUserService = MockUserService.getInstance();
+// Mock service removed - using real API
 // Load posts from mock service
 const loadPosts = () => {
 setLoading(true);

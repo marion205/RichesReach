@@ -13,9 +13,7 @@ class AIScansService {
   private tokenProvider: TokenProvider;
 
   constructor(tokenProvider?: TokenProvider) {
-    this.baseUrl = process.env.NODE_ENV === 'production'
-      ? 'https://app.richesreach.net'
-      : 'http://192.168.1.236:8000';
+    this.baseUrl = 'http://riches-reach-alb-1199497064.us-east-1.elb.amazonaws.com';
     this.tokenProvider = tokenProvider ?? (async () => 'your-auth-token');
   }
 
