@@ -60,7 +60,6 @@ jobs:
             BUILD_MARKER=${{ github.run_id }}-${{ github.sha }}
           tags: |
             ${{ env.ECR_REPO }}:${{ github.sha }}
-          outputs: type=image,name=${{ env.ECR_REPO }},push-by-digest=true,name-canonical=true
 
       - name: Get image digest
         id: digest
