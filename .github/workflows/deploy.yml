@@ -76,23 +76,6 @@ jobs:
             --query 'imageDetails[0].[imagePushedAt,imageDigest]' \
             --output table
 
-      - name: Pull and verify code inside image
-        run: |
-          ECR_URI="${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO }}"
-          IMG="$ECR_URI:${{ steps.meta.outputs.GIT_SHA }}"
-          aws ecr get-login-password --region "${{ env.AWS_REGION }}" \
-            | docker login --username AWS --password-stdin "${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
-          docker pull "$IMG"
-
-          echo "== __build.txt =="
-          docker run --rm "$IMG" cat /app/__build.txt || echo "Build file not found"
-
-          echo "== test-docker-build.txt =="
-          docker run --rm "$IMG" cat /app/test-docker-build.txt || echo "Test file not found"
-
-          echo "== __init__.py first 10 lines =="
-          docker run --rm "$IMG" head -10 /app/richesreach/__init__.py || echo "File not found"
-
       - name: Patch & register task definition
         id: td
         run: |
