@@ -25,7 +25,14 @@ class GraphQLLazyView(View):
     def dispatch(self, request, *args, **kwargs):
         # Import ONLY when /graphql is hit
         from graphene_django.views import GraphQLView
-        from core.schema import schema
+        from django.conf import settings
+        
+        # Use simple schema if in simple mode, otherwise use main schema
+        if getattr(settings, 'GRAPHQL_MODE', '') == 'simple':
+            from core.schema_simple import schema
+        else:
+            from core.schema import schema
+            
         return GraphQLView.as_view(schema=schema, graphiql=False)(request, *args, **kwargs)
 
 def home(_):
