@@ -21,8 +21,10 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'your-production-secret-key-here')
 DEBUG = False
 
 # Host / CSRF
-ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS","riches-reach-alb-1199497064.us-east-1.elb.amazonaws.com").split(",")
-CSRF_TRUSTED_ORIGINS = [f"http://{h}" for h in ALLOWED_HOSTS] + [f"https://{h}" for h in ALLOWED_HOSTS]
+ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS","riches-reach-alb-1199497064.us-east-1.elb.amazonaws.com,localhost,127.0.0.1").split(",")
+# Add wildcard support for ALB internal IPs
+ALLOWED_HOSTS.append("*")
+CSRF_TRUSTED_ORIGINS = [f"http://{h}" for h in ALLOWED_HOSTS if h != "*"] + [f"https://{h}" for h in ALLOWED_HOSTS if h != "*"]
 
 # If you do NOT have a 443 listener yet:
 SECURE_SSL_REDIRECT = False  # flip to True only when 443 is live
