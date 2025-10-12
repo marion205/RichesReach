@@ -1,0 +1,49 @@
+name: Build Only
+
+on:
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+  AWS_ACCOUNT_ID: 498606688292
+  ECR_REPO: riches-reach-ai
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build & push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: backend/backend/Dockerfile.production
+          push: true
+          platforms: linux/amd64
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+            BUILD_MARKER=${{ github.run_id }}-${{ github.run_attempt }}
+          tags: ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO }}:${{ github.sha }}
+          no-cache: true
+          provenance: false
+
+      - name: Show image digest
+        run: |
+          aws ecr describe-images \
+            --repository-name "${{ env.ECR_REPO }}" \
+            --image-ids imageTag="${{ github.sha }}" \
+            --query 'imageDetails[0].[imagePushedAt,imageDigest]' \
+            --output table
