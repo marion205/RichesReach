@@ -667,6 +667,46 @@ def populate_simple_stocks(request):
 
 urlpatterns.append(path("populate-simple-stocks/", populate_simple_stocks))
 
+# Ultra-simple test endpoint
+@csrf_exempt
+def test_stock_creation(request):
+    """Ultra-simple test to create one stock record"""
+    try:
+        from core.models import Stock
+        
+        # Create just one stock record
+        stock = Stock.objects.create(
+            symbol='AAPL',
+            company_name='Apple Inc.',
+            sector='Technology',
+            current_price=175.50,
+            market_cap=2800000000000,
+            pe_ratio=28.5,
+            dividend_yield=0.44,
+            beginner_friendly_score=90
+        )
+        
+        return JsonResponse({
+            "success": True,
+            "message": "Created test stock record",
+            "stock": {
+                "id": stock.id,
+                "symbol": stock.symbol,
+                "company_name": stock.company_name,
+                "sector": stock.sector,
+                "current_price": float(stock.current_price),
+                "beginner_friendly_score": float(stock.beginner_friendly_score)
+            }
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            "success": False,
+            "error": str(e)
+        }, status=500)
+
+urlpatterns.append(path("test-stock-creation/", test_stock_creation))
+
 # Temporary migration test endpoint
 import os
 from django.http import JsonResponse
