@@ -102,7 +102,7 @@ class Query(ObjectType):
     
     def resolve_stocks(self, info, search=None, limit=10, offset=0):
         """Return mock stock data - no database queries"""
-        print("DEBUG: resolve_stocks called - returning mock data")
+        print("DEBUG: resolve_stocks called - returning mock data - SIMPLE SCHEMA ACTIVE")
         return [StockType(**stock) for stock in MOCK_STOCKS]
     
     def resolve_beginnerFriendlyStocks(self, info, limit=10):
