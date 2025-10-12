@@ -521,6 +521,152 @@ def populate_real_stocks(request):
 
 urlpatterns.append(path("populate-real-stocks/", populate_real_stocks))
 
+# Simple stock population endpoint (fallback)
+@csrf_exempt
+def populate_simple_stocks(request):
+    """Populate database with simple stock data for testing"""
+    try:
+        from core.models import Stock
+        
+        # Clear existing stocks
+        Stock.objects.all().delete()
+        
+        # Create basic stock data
+        stocks_data = [
+            {
+                'symbol': 'AAPL',
+                'company_name': 'Apple Inc.',
+                'sector': 'Technology',
+                'current_price': 175.50,
+                'market_cap': 2800000000000,
+                'pe_ratio': 28.5,
+                'dividend_yield': 0.44,
+                'beginner_friendly_score': 90
+            },
+            {
+                'symbol': 'MSFT',
+                'company_name': 'Microsoft Corporation',
+                'sector': 'Technology',
+                'current_price': 380.25,
+                'market_cap': 2800000000000,
+                'pe_ratio': 32.1,
+                'dividend_yield': 0.68,
+                'beginner_friendly_score': 85
+            },
+            {
+                'symbol': 'GOOGL',
+                'company_name': 'Alphabet Inc.',
+                'sector': 'Technology',
+                'current_price': 140.85,
+                'market_cap': 1800000000000,
+                'pe_ratio': 24.3,
+                'dividend_yield': 0.0,
+                'beginner_friendly_score': 80
+            },
+            {
+                'symbol': 'AMZN',
+                'company_name': 'Amazon.com Inc.',
+                'sector': 'Consumer Discretionary',
+                'current_price': 150.20,
+                'market_cap': 1600000000000,
+                'pe_ratio': 45.2,
+                'dividend_yield': 0.0,
+                'beginner_friendly_score': 75
+            },
+            {
+                'symbol': 'TSLA',
+                'company_name': 'Tesla, Inc.',
+                'sector': 'Automotive',
+                'current_price': 250.75,
+                'market_cap': 800000000000,
+                'pe_ratio': 45.2,
+                'dividend_yield': 0.0,
+                'beginner_friendly_score': 60
+            },
+            {
+                'symbol': 'NVDA',
+                'company_name': 'NVIDIA Corporation',
+                'sector': 'Technology',
+                'current_price': 450.30,
+                'market_cap': 1100000000000,
+                'pe_ratio': 65.8,
+                'dividend_yield': 0.04,
+                'beginner_friendly_score': 70
+            },
+            {
+                'symbol': 'JPM',
+                'company_name': 'JPMorgan Chase & Co.',
+                'sector': 'Financial Services',
+                'current_price': 180.45,
+                'market_cap': 520000000000,
+                'pe_ratio': 12.5,
+                'dividend_yield': 2.8,
+                'beginner_friendly_score': 85
+            },
+            {
+                'symbol': 'JNJ',
+                'company_name': 'Johnson & Johnson',
+                'sector': 'Healthcare',
+                'current_price': 160.80,
+                'market_cap': 420000000000,
+                'pe_ratio': 15.2,
+                'dividend_yield': 2.9,
+                'beginner_friendly_score': 90
+            },
+            {
+                'symbol': 'PG',
+                'company_name': 'Procter & Gamble Co.',
+                'sector': 'Consumer Staples',
+                'current_price': 155.30,
+                'market_cap': 370000000000,
+                'pe_ratio': 25.8,
+                'dividend_yield': 2.4,
+                'beginner_friendly_score': 88
+            },
+            {
+                'symbol': 'KO',
+                'company_name': 'The Coca-Cola Company',
+                'sector': 'Consumer Staples',
+                'current_price': 60.25,
+                'market_cap': 260000000000,
+                'pe_ratio': 22.1,
+                'dividend_yield': 3.1,
+                'beginner_friendly_score': 85
+            }
+        ]
+        
+        created_stocks = []
+        for stock_data in stocks_data:
+            stock = Stock.objects.create(**stock_data)
+            created_stocks.append(stock)
+        
+        return JsonResponse({
+            "success": True,
+            "message": f"Populated database with {len(created_stocks)} stocks",
+            "stocks_count": len(created_stocks),
+            "stocks": [
+                {
+                    "symbol": stock.symbol,
+                    "company_name": stock.company_name,
+                    "sector": stock.sector,
+                    "current_price": float(stock.current_price) if stock.current_price else 0,
+                    "market_cap": float(stock.market_cap) if stock.market_cap else 0,
+                    "pe_ratio": float(stock.pe_ratio) if stock.pe_ratio else 0,
+                    "dividend_yield": float(stock.dividend_yield) if stock.dividend_yield else 0,
+                    "beginner_friendly_score": float(stock.beginner_friendly_score) if stock.beginner_friendly_score else 0
+                }
+                for stock in created_stocks
+            ]
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            "success": False,
+            "error": str(e)
+        }, status=500)
+
+urlpatterns.append(path("populate-simple-stocks/", populate_simple_stocks))
+
 # Temporary migration test endpoint
 import os
 from django.http import JsonResponse
