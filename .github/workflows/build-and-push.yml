@@ -17,6 +17,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Compute content fingerprints
+        run: |
+          echo "Compute content fingerprints..."
+          CELERY_SHA=$(sha256sum backend/backend/richesreach/celery.py | cut -d' ' -f1)
+          INIT_SHA=$(sha256sum backend/backend/richesreach/__init__.py | cut -d' ' -f1)
+          echo "CELERY_SHA=$CELERY_SHA" >> $GITHUB_ENV
+          echo "INIT_SHA=$INIT_SHA" >> $GITHUB_ENV
+          echo "Computed hashes:"
+          echo "  celery.py: $CELERY_SHA"
+          echo "  __init__.py: $INIT_SHA"
+
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -43,6 +54,8 @@ jobs:
           build-args: |
             GIT_SHA=${{ github.sha }}
             BUILD_MARKER=${{ github.run_id }}-${{ github.run_attempt }}
+            CELERY_SHA=${{ env.CELERY_SHA }}
+            INIT_SHA=${{ env.INIT_SHA }}
 
       - name: Show digest
         id: digest
@@ -61,7 +74,7 @@ jobs:
           docker pull "$IMG"
           echo "== __build.txt =="
           docker run --rm "$IMG" cat /app/__build.txt || true
-          echo "== test-docker-build.txt =="
-          docker run --rm "$IMG" cat /app/test-docker-build.txt || true
-          echo "== __init__.py first 10 lines =="
-          docker run --rm "$IMG" head -10 /app/richesreach/__init__.py || true
+          echo "== celery.py head =="
+          docker run --rm "$IMG" /bin/sh -lc 'sed -n "1,50p" /app/richesreach/celery.py || true'
+          echo "== __init__.py head =="
+          docker run --rm "$IMG" /bin/sh -lc 'sed -n "1,50p" /app/richesreach/__init__.py || true'

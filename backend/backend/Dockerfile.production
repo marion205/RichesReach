@@ -2,6 +2,8 @@ FROM python:3.11-slim
 
 ARG GIT_SHA
 ARG BUILD_MARKER
+ARG CELERY_SHA
+ARG INIT_SHA
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 
 WORKDIR /app
@@ -16,6 +18,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # COPY from repo root into /app
 COPY backend/backend/ ./
 
+# Prove the code that got copied is EXACTLY what we built from
+RUN set -eux; \
+    sha256sum richesreach/celery.py | awk '{print $1}' | tee /tmp/celery.sha; \
+    test "$(cat /tmp/celery.sha)" = "$CELERY_SHA"; \
+    sha256sum richesreach/__init__.py | awk '{print $1}' | tee /tmp/init.sha; \
+    test "$(cat /tmp/init.sha)" = "$INIT_SHA"
+
 # Install deps with pip cache mount
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --no-cache-dir -r requirements.txt
@@ -23,7 +32,8 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # cache-buster + provenance
 LABEL org.opencontainers.image.revision=$GIT_SHA
 LABEL build.marker=$BUILD_MARKER
-RUN printf "sha=%s\nbuilt=%s\n" "$GIT_SHA" "$BUILD_MARKER" > /app/__build.txt
+RUN printf "GIT_SHA=%s\nCELERY_SHA=%s\nINIT_SHA=%s\nBUILD_MARKER=%s\n" \
+    "$GIT_SHA" "$CELERY_SHA" "$INIT_SHA" "$BUILD_MARKER" > /app/__build.txt
 
 ENV DJANGO_SETTINGS_MODULE=richesreach.settings_production
 EXPOSE 8000
