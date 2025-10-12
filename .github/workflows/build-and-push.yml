@@ -19,30 +19,6 @@ jobs:
 
       - name: Compute content fingerprints
         run: |
-          echo "== GIT REV =="
-          git rev-parse HEAD
-          git status
-          printf "\n== SHOW TARGET FILES FROM RUNNER ==\n"
-          sed -n '1,80p' backend/backend/richesreach/__init__.py || true
-          sed -n '1,80p' backend/backend/richesreach/celery.py   || true
-          sha256sum backend/backend/richesreach/__init__.py | tee /tmp/init.sha.runner
-          sha256sum backend/backend/richesreach/celery.py   | tee /tmp/celery.sha.runner
-          
-          echo "== TREE (context subset) =="
-          ls -al backend/backend | head -n 50
-          echo "== .dockerignore at repo root =="
-          [ -f .dockerignore ] && sed -n '1,120p' .dockerignore || echo "(no .dockerignore at root)"
-          echo "== .dockerignore under backend/backend =="
-          [ -f backend/backend/.dockerignore ] && sed -n '1,120p' backend/backend/.dockerignore || echo "(no .dockerignore in backend/backend)"
-          
-          echo "== PACK CONTEXT TAR (backend/backend) =="
-          tar -C backend/backend -czf /tmp/context.tgz .
-          wc -c /tmp/context.tgz
-          tar -tzf /tmp/context.tgz | grep -E 'richesreach/(celery\.py|__init__\.py)' -n || true
-          
-          echo "== COPY/GIT in Dockerfile =="
-          grep -nE '^(COPY|ADD)|git clone' backend/backend/Dockerfile.production || true
-          
           echo "Compute content fingerprints..."
           CELERY_SHA=$(sha256sum backend/backend/richesreach/celery.py | cut -d' ' -f1)
           INIT_SHA=$(sha256sum backend/backend/richesreach/__init__.py | cut -d' ' -f1)
@@ -69,7 +45,7 @@ jobs:
       - name: Build & Push
         uses: docker/build-push-action@v6
         with:
-          context: .
+          context: backend/backend
           file: backend/backend/Dockerfile.production
           push: true
           platforms: linux/amd64

@@ -15,19 +15,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# COPY from repo root into /app
-COPY backend/backend/ ./
-
-# Prove the code that got copied is EXACTLY what we built from
-RUN set -eux; \
-    sha256sum richesreach/celery.py | awk '{print $1}' | tee /tmp/celery.sha; \
-    test "$(cat /tmp/celery.sha)" = "$CELERY_SHA"; \
-    sha256sum richesreach/__init__.py | awk '{print $1}' | tee /tmp/init.sha; \
-    test "$(cat /tmp/init.sha)" = "$INIT_SHA"
-
 # Install deps with pip cache mount
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --no-cache-dir -r requirements.txt
+
+# Copy ALL app code from the context (which is backend/backend)
+COPY . .
+
+# Prove the code that got copied is EXACTLY what we built from
+RUN set -eux; \
+    sha256sum richesreach/celery.py | awk '{print $1}' | grep -qx "$CELERY_SHA"; \
+    sha256sum richesreach/__init__.py | awk '{print $1}' | grep -qx "$INIT_SHA"
 
 # cache-buster + provenance
 LABEL org.opencontainers.image.revision=$GIT_SHA
