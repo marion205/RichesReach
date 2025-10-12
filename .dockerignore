@@ -19,3 +19,40 @@ docs/
 *.ipa
 .terraform/
 terraform.tfstate*
+
+# Large directories that shouldn't be in build context
+deployment/
+rust_crypto_engine/
+models/
+deployment_package/
+assets/
+infrastructure/
+scripts/
+advanced_ml_models/
+monitoring/
+tests/
+server/
+
+# Python virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Logs and temporary files
+backend/logs/
+*.log
+logs/
+temp/
+tmp/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db

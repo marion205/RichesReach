@@ -43,18 +43,20 @@ jobs:
           echo "HUMAN_TAG=$HUMAN_TAG" >> $GITHUB_OUTPUT
           echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_OUTPUT
 
-      - name: Build & push
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: backend/backend/Dockerfile.production
-          build-args: |
-            GIT_SHA=${{ steps.meta.outputs.GIT_SHA }}
-          push: true
-          no-cache: true
-          tags: |
-            ${{ steps.meta.outputs.IMAGE_URI }}
-            ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO }}:${{ steps.meta.outputs.HUMAN_TAG }}
+          - name: Build & push
+            uses: docker/build-push-action@v6
+            with:
+              context: .
+              file: backend/backend/Dockerfile.production
+              build-args: |
+                GIT_SHA=${{ steps.meta.outputs.GIT_SHA }}
+              push: true
+              no-cache: false
+              cache-from: type=gha
+              cache-to: type=gha,mode=max
+              tags: |
+                ${{ steps.meta.outputs.IMAGE_URI }}
+                ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO }}:${{ steps.meta.outputs.HUMAN_TAG }}
 
       - name: Verify code inside image
         run: |
