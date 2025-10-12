@@ -1,38 +1,30 @@
-# syntax=docker/dockerfile:1.6
 FROM python:3.11-slim
 
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    DJANGO_SETTINGS_MODULE=richesreach.settings_production
+ARG GIT_SHA
+ARG BUILD_MARKER
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Install system dependencies in one layer
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# 1) Install deps with pip cache mount for faster builds
-COPY backend/backend/requirements.txt /tmp/requirements.txt
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --no-cache-dir -r /tmp/requirements.txt
-
-# 2) Copy ONLY the Django app explicitly from repo root context
-#    (this avoids surprises with context vs Dockerfile location)
+# COPY from repo root into /app
 COPY backend/backend/ ./
 
-# Embed build metadata with cache-busting
-ARG GIT_SHA
-ARG BUILD_MARKER
+# Install deps with pip cache mount
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --no-cache-dir -r requirements.txt
+
+# cache-buster + provenance
 LABEL org.opencontainers.image.revision=$GIT_SHA
 LABEL build.marker=$BUILD_MARKER
-
-# Write version file for verification
 RUN printf "sha=%s\nbuilt=%s\n" "$GIT_SHA" "$BUILD_MARKER" > /app/__build.txt
 
-# 3) Runtime
+ENV DJANGO_SETTINGS_MODULE=richesreach.settings_production
 EXPOSE 8000
-CMD ["gunicorn","richesreach.wsgi:application","--bind","0.0.0.0:8000","--workers","2","--timeout","120","--access-logfile","-","--error-logfile","-","--forwarded-allow-ips","*"]
+CMD ["gunicorn", "-b", "0.0.0.0:8000", "richesreach.wsgi:application"]
