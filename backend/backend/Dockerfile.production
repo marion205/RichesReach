@@ -24,10 +24,14 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 #    (this avoids surprises with context vs Dockerfile location)
 COPY backend/backend/ ./
 
-# (Optional) Embed build metadata
-ARG GIT_SHA=dev
+# Embed build metadata with cache-busting
+ARG GIT_SHA
+ARG BUILD_MARKER
 LABEL org.opencontainers.image.revision=$GIT_SHA
-RUN echo "$GIT_SHA" > .build-commit
+LABEL build.marker=$BUILD_MARKER
+
+# Write version file for verification
+RUN printf "sha=%s\nbuilt=%s\n" "$GIT_SHA" "$BUILD_MARKER" > /app/__build.txt
 
 # 3) Runtime
 EXPOSE 8000

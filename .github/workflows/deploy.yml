@@ -57,26 +57,51 @@ jobs:
         with:
           context: .
           file: backend/backend/Dockerfile.production
+          push: true
+          platforms: linux/amd64
           build-args: |
             GIT_SHA=${{ steps.meta.outputs.GIT_SHA }}
-          push: true
+            BUILD_MARKER=${{ github.run_id }}-${{ github.run_attempt }}
           tags: ${{ steps.meta.outputs.IMAGE_URI }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          no-cache: true
+          provenance: false
 
-      - name: Verify code inside image
+      - name: Show image digest in ECR
+        run: |
+          aws ecr describe-images \
+            --repository-name "${{ env.ECR_REPO }}" \
+            --image-ids imageTag="${{ steps.meta.outputs.GIT_SHA }}" \
+            --query 'imageDetails[0].[imagePushedAt,imageDigest]' \
+            --output table
+
+      - name: Pull and verify code inside image
         run: |
           ECR_URI="${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO }}"
           IMG="$ECR_URI:${{ steps.meta.outputs.GIT_SHA }}"
-          aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin "${ECR_URI%/*}"
+          aws ecr get-login-password --region "${{ env.AWS_REGION }}" \
+            | docker login --username AWS --password-stdin "${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
           docker pull "$IMG"
-          id=$(docker create "$IMG")
-          docker cp "$id:/app/richesreach/wsgi.py" wsgi.from.image.py || true
-          docker cp "$id:/app/richesreach/settings_production.py" settings_prod.from.image.py || true
-          docker rm "$id"
-          echo "---- wsgi.py head ----"; head -n 40 wsgi.from.image.py || true
-          echo "---- settings_production.py head ----"; head -n 40 settings_prod.from.image.py || true
 
-          # Assert the sentinel is present (the setdefault line you added)
-          grep -q "os.environ.setdefault(\"DJANGO_SETTINGS_MODULE\", \"richesreach.settings_production\")" wsgi.from.image.py
+          echo "== __build.txt =="
+          docker run --rm "$IMG" cat /app/__build.txt || true
+
+          echo "== celery header =="
+          docker run --rm "$IMG" /bin/sh -lc 'sed -n "1,40p" /app/richesreach/celery.py || true'
+
+          echo "== __init__.py header =="
+          docker run --rm "$IMG" /bin/sh -lc 'sed -n "1,40p" /app/richesreach/__init__.py || true'
+
+          echo "== import test (should not crash) =="
+          docker run --rm -e DJANGO_SETTINGS_MODULE=richesreach.settings_production "$IMG" python - <<'PY'
+import importlib, os
+print("DJANGO_SETTINGS_MODULE=", os.environ.get("DJANGO_SETTINGS_MODULE"))
+importlib.import_module("richesreach.celery")
+print("celery import OK")
+importlib.import_module("richesreach.settings_production")
+print("settings_production import OK")
+PY
 
       - name: Patch & register task definition
         id: td
