@@ -14,6 +14,7 @@ redis>=4.6.0
 requests>=2.31.0
 django-environ>=0.11.0
 python-dotenv>=1.0.0
+stripe>=7.0.0
 dj-database-url>=2.1.0
 gunicorn>=21.2
 uvicorn[standard]>=0.24
