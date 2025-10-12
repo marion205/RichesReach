@@ -501,6 +501,26 @@ def stocks_data(request):
 
 urlpatterns.append(path("stocks-data/", stocks_data))
 
+# Real stock data population endpoint
+@csrf_exempt
+def populate_real_stocks(request):
+    """Populate database with real stock data from external APIs"""
+    try:
+        from core.stock_data_populator import StockDataPopulator
+        
+        populator = StockDataPopulator()
+        result = populator.populate_database(limit=50)
+        
+        return JsonResponse(result)
+        
+    except Exception as e:
+        return JsonResponse({
+            "success": False,
+            "error": str(e)
+        }, status=500)
+
+urlpatterns.append(path("populate-real-stocks/", populate_real_stocks))
+
 # Temporary migration test endpoint
 import os
 from django.http import JsonResponse

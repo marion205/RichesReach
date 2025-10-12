@@ -221,7 +221,8 @@ class Query(graphene.ObjectType):
     # Stocks
     # -------------------------
     def resolve_stocks(self, info, search=None, limit=100, offset=0):
-        limit = max(1, min(limit or 100, 200))
+        """Browse All stocks with pagination - shows all stocks, 5+ at a time"""
+        limit = max(5, min(limit or 20, 200))  # Minimum 5 stocks per page
         offset = max(0, offset or 0)
         
         # If there's a search term, try to use the stock service to search and sync real data
@@ -239,7 +240,9 @@ class Query(graphene.ObjectType):
                 djmodels.Q(symbol__icontains=search.upper()) |
                 djmodels.Q(company_name__icontains=search)
             )
-        return qs.order_by('symbol')[offset:offset+limit]
+        
+        # Order by beginner-friendly score (highest first) for better user experience
+        return qs.order_by('-beginner_friendly_score', 'symbol')[offset:offset+limit]
 
     def resolve_stock(self, info, symbol):
         try:
@@ -311,39 +314,34 @@ class Query(graphene.ObjectType):
         return discussions
 
     def resolve_beginner_friendly_stocks(self, info, limit=20, offset=0):
-        limit = max(1, min(limit or 20, 50))
+        """Beginner Friendly stocks using user profile + ML/AI for personalized recommendations"""
+        limit = max(5, min(limit or 20, 50))  # Minimum 5 stocks per page
         offset = max(0, offset or 0)
         
-        # Get stocks from database and calculate AI/ML beginner scores
-        stocks = Stock.objects.all()[:100]  # Get more stocks to score
+        # Get current user for personalized recommendations
+        user = _require_auth(info)
         
-        # Use AI/ML to calculate beginner-friendly scores
-        stock_service = SimpleStockSearchService()
-        scored_stocks = []
-        
-        for stock in stocks:
-            # Calculate or update beginner-friendly score using AI/ML
+        if user:
+            # Use ML recommender for personalized recommendations
             try:
-                # This would use the AI/ML scoring system
-                beginner_score = stock_service._calculate_beginner_score({
-                    'MarketCapitalization': str(stock.market_cap) if stock.market_cap else 'None',
-                    'PERatio': str(stock.pe_ratio) if stock.pe_ratio else 'None',
-                    'DividendYield': f"{stock.dividend_yield * 100}%" if stock.dividend_yield else 'None',
-                    'Sector': stock.sector or '',
-                    'Name': stock.company_name or ''
-                })
-                if beginner_score >= 65:  # Only include stocks with good beginner scores
-                    stock.beginner_friendly_score = beginner_score
-                    stock.save()
-                    scored_stocks.append(stock)
+                from core.ml_stock_recommender import MLStockRecommender
+                ml_recommender = MLStockRecommender()
+                recommendations = ml_recommender.get_beginner_friendly_stocks(user, limit=limit + offset)
+                
+                # Convert recommendations to stock objects
+                stocks = [rec.stock for rec in recommendations[offset:offset+limit] if rec.stock]
+                return stocks
+                
             except Exception as e:
-                # Fallback to existing score
-                if stock.beginner_friendly_score and stock.beginner_friendly_score >= 65:
-                    scored_stocks.append(stock)
+                print(f"ML recommender error: {e}")
+                # Fallback to database query
         
-        # Sort by beginner score and return paginated results
-        scored_stocks.sort(key=lambda x: x.beginner_friendly_score or 0, reverse=True)
-        return scored_stocks[offset:offset+limit]
+        # Fallback: Get stocks with high beginner-friendly scores from database
+        qs = Stock.objects.filter(
+            beginner_friendly_score__gte=70  # Only high-scoring beginner-friendly stocks
+        ).order_by('-beginner_friendly_score', 'symbol')
+        
+        return qs[offset:offset+limit]
 
     def resolve_advanced_stock_screening(self, info, sector=None, min_market_cap=None, max_market_cap=None, 
                                        min_pe_ratio=None, max_pe_ratio=None, min_beginner_score=None, 
