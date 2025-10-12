@@ -16,8 +16,7 @@ LogBox.ignoreLogs([
 
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { ApolloProvider } from '@apollo/client';
-import { client } from './ApolloProvider';
+import ApolloProvider from './ApolloProvider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import JWTAuthService from './features/auth/services/JWTAuthService';
 import Toast from 'react-native-toast-message';
@@ -75,11 +74,12 @@ import TaxOptimizationScreen from './screens/TaxOptimizationScreen';
 import SmartLotsScreen from './screens/SmartLotsScreen';
 import BorrowVsSellScreen from './screens/BorrowVsSellScreen';
 import WashGuardScreen from './screens/WashGuardScreen';
-import SubscriptionScreen from './screens/SubscriptionScreen';
 // Components
 import { BottomTabBar, TopHeader, PersonalizedDashboard } from './components';
 // Services
 import UserProfileService from './features/user/services/UserProfileService';
+// Contexts
+import { AuthProvider } from './contexts/AuthContext';
 export default function App() {
 const [currentScreen, setCurrentScreen] = useState('home');
 // Track currentScreen changes for analytics (production)
@@ -391,7 +391,8 @@ return <SubscriptionScreen />;
 }
 };
 return (
-<ApolloProvider client={client}>
+<AuthProvider>
+<ApolloProvider>
 <View style={styles.container}>
 {isLoggedIn && currentScreen !== 'login' && currentScreen !== 'signup' && currentScreen !== 'onboarding' && (
 <TopHeader currentScreen={currentScreen} onNavigate={navigateTo} />
@@ -403,6 +404,7 @@ return (
 </View>
 <Toast />
 </ApolloProvider>
+</AuthProvider>
 );
 }
 const styles = StyleSheet.create({
