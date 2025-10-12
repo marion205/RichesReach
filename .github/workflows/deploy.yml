@@ -73,7 +73,7 @@ jobs:
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
           task-definition: ecs_task_definition_optimized.json
-          container-name: riches-reach-ai
+          container-name: streaming-pipeline
           image: ${{ env.ECR_REPO }}:${{ github.sha }}
 
       - name: Deploy service
