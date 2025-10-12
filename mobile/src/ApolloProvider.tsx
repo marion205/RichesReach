@@ -23,14 +23,32 @@ const getGraphQLURL = () => {
 
 const HTTP_URL = getGraphQLURL();
 
+// Runtime probe to diagnose network issues
+console.log('[API] GraphQL URL:', HTTP_URL);
+console.log('[API] Base URL:', API_GRAPHQL.replace('/graphql/', ''));
+
+// Quick health check probe
+(async () => {
+  try {
+    const baseUrl = API_GRAPHQL.replace('/graphql/', '');
+    const response = await fetch(`${baseUrl}/health`, { 
+      method: 'GET',
+      timeout: 5000 
+    });
+    console.log('[health] Status:', response.status, 'Text:', await response.text());
+  } catch (e: any) {
+    console.log('[health:error]', e?.message || 'Unknown error');
+  }
+})();
+
 const httpLink = createHttpLink({ 
   uri: HTTP_URL,
   fetch,
   credentials: "omit" 
 });
 
-// Simple retry link that skips auth operations
-const retryLink = new ApolloLink((operation, forward) => {
+// Simple retry link that skips auth operations (replaced by comprehensive retryLink from timeoutLink.ts)
+const simpleRetryLink = new ApolloLink((operation, forward) => {
   const isAuth = operation.operationName === "TokenAuth" || operation.getContext()?.noRetry;
   if (isAuth) {
     // No retry for auth operations
@@ -106,10 +124,16 @@ const errorLink = onError(({ graphQLErrors, networkError, operation, forward }) 
 // wsLink,
 // authLink.concat(httpLink)
 // );
+// Diagnostic link to log all GraphQL operations
+const diagnosticLink = new ApolloLink((operation, forward) => {
+  console.log('[GQL]', operation.operationName, '->', HTTP_URL);
+  return forward(operation);
+});
+
 // Create link chain with timeout protection
 const linkChain = ENABLE_GRAPHQL_TIMEOUTS 
-  ? from([timeoutLink(GRAPHQL_TIMEOUT_MS), retryLink, errorHandlingLink, errorLink, authLink, httpLink])
-  : from([retryLink, errorLink, authLink, httpLink]);
+  ? from([diagnosticLink, timeoutLink(GRAPHQL_TIMEOUT_MS), retryLink, errorHandlingLink, errorLink, authLink, httpLink])
+  : from([diagnosticLink, simpleRetryLink, errorLink, authLink, httpLink]);
 
 const client = new ApolloClient({
   link: linkChain, // Production-safe link chain with timeout protection

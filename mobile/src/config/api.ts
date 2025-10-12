@@ -6,9 +6,10 @@
 const devHost = process.env.EXPO_PUBLIC_API_BASE
   ?? "http://192.168.1.236:8000"; // Your current network IP
 
-const prodHost = "http://riches-reach-alb-1199497064.us-east-1.elb.amazonaws.com";
+const prodHost = "https://riches-reach-alb-1199497064.us-east-1.elb.amazonaws.com";
 
-export const API_BASE = __DEV__ ? devHost : prodHost;
+// Force production mode for testing
+export const API_BASE = prodHost;
 
 export const API_HTTP    = API_BASE;
 export const API_GRAPHQL = `${API_BASE}/graphql/`;
