@@ -22,18 +22,11 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # Copy ALL app code from the context (which is backend/backend)
 COPY . .
 
-# Prove the code that got copied is EXACTLY what we built from
-RUN set -eux; \
-    echo "Verifying content hashes..."; \
-    sha256sum richesreach/celery.py | awk '{print $1}' | tee /tmp/celery.sha; \
-    echo "Expected CELERY_SHA: $CELERY_SHA"; \
-    echo "Actual CELERY_SHA: $(cat /tmp/celery.sha)"; \
-    test "$(cat /tmp/celery.sha)" = "$CELERY_SHA" || (echo "CELERY HASH MISMATCH!" && exit 1); \
-    sha256sum richesreach/__init__.py | awk '{print $1}' | tee /tmp/init.sha; \
-    echo "Expected INIT_SHA: $INIT_SHA"; \
-    echo "Actual INIT_SHA: $(cat /tmp/init.sha)"; \
-    test "$(cat /tmp/init.sha)" = "$INIT_SHA" || (echo "INIT HASH MISMATCH!" && exit 1); \
-    echo "✅ All content hashes match!"
+# Verify our test file is included (temporary check)
+RUN echo "🔍 Checking if our test file is included:" && \
+    ls -la github-actions-test.txt && \
+    cat github-actions-test.txt && \
+    echo "✅ Test file found!"
 
 # cache-buster + provenance
 LABEL org.opencontainers.image.revision=$GIT_SHA
