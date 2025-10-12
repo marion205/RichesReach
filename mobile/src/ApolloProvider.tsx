@@ -27,7 +27,7 @@ const HTTP_URL = getGraphQLURL();
 console.log('[API] GraphQL URL:', HTTP_URL);
 console.log('[API] Base URL:', API_GRAPHQL.replace('/graphql/', ''));
 
-// Quick health check probe
+// Quick health check probe before creating Apollo client
 (async () => {
   try {
     const baseUrl = API_GRAPHQL.replace('/graphql/', '');

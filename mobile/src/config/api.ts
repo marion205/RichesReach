@@ -3,13 +3,20 @@
  * Single source of truth for all API endpoints
  */
 
+// Check environment variable first, then fallback to hardcoded values
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
+
 const devHost = process.env.EXPO_PUBLIC_API_BASE
   ?? "http://192.168.1.236:8000"; // Your current network IP
 
-const prodHost = "https://riches-reach-alb-1199497064.us-east-1.elb.amazonaws.com";
+const prodHost = "http://riches-reach-alb-1199497064.us-east-1.elb.amazonaws.com";
 
-// Force production mode for testing
-export const API_BASE = prodHost;
+// Use environment variable if available, otherwise use hardcoded prod host
+export const API_BASE = API_BASE_URL || prodHost;
+
+// Debug logging to see what URL is actually being used
+console.log('[API_BASE]', API_BASE_URL, '-> resolved to:', API_BASE);
+console.log('[API_BASE] graphql ->', `${API_BASE}/graphql`);
 
 export const API_HTTP    = API_BASE;
 export const API_GRAPHQL = `${API_BASE}/graphql/`;
