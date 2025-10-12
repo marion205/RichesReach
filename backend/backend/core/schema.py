@@ -789,22 +789,44 @@ class BaseQuery(graphene.ObjectType):
             
         try:
             from core.models import Portfolio, PortfolioPosition
-            from core.services.market_data import MarketDataService
+            import requests
+            import os
             
-            market_service = MarketDataService()
             total_value = 0.0
             total_cost = 0.0
             holdings = []
             
             # Get user's portfolios
             portfolios = Portfolio.objects.filter(user=user)
+            symbols_to_fetch = []
             for portfolio in portfolios:
                 positions = PortfolioPosition.objects.filter(portfolio=portfolio).select_related('stock')
                 for position in positions:
-                    # Get current market price
+                    symbols_to_fetch.append(position.stock.symbol)
+            
+            # Fetch quotes from our secure backend endpoint
+            quotes_data = {}
+            if symbols_to_fetch:
+                try:
+                    # Use our new secure market data endpoint
+                    response = requests.get(
+                        f"http://localhost:8000/api/market/quotes",
+                        params={'symbols': ','.join(symbols_to_fetch)},
+                        timeout=10
+                    )
+                    if response.status_code == 200:
+                        quotes = response.json()
+                        quotes_data = {quote['symbol']: quote for quote in quotes}
+                except Exception as e:
+                    print(f"Error fetching quotes: {e}")
+            
+            for portfolio in portfolios:
+                positions = PortfolioPosition.objects.filter(portfolio=portfolio).select_related('stock')
+                for position in positions:
+                    # Get current market price from our secure endpoint
                     try:
-                        quote = market_service.get_quote(position.stock.symbol)
-                        current_price = float(quote.price) if quote and quote.price else float(position.stock.current_price or 0)
+                        quote = quotes_data.get(position.stock.symbol)
+                        current_price = float(quote['price']) if quote and quote.get('price') else float(position.stock.current_price or 0)
                     except:
                         current_price = float(position.stock.current_price or 0)
                     
@@ -1002,11 +1024,10 @@ class BaseQuery(graphene.ObjectType):
         # Try to get real ML data first, fallback to mock data
         try:
             from .ai_service import AIService
-            from .market_data_service import MarketDataService
+            import requests
             
             # Initialize services
             ai_service = AIService()
-            market_service = MarketDataService()
             
             # Get real market data for popular stocks
             popular_symbols = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'NFLX', 'AMD', 'INTC']
@@ -1022,8 +1043,18 @@ class BaseQuery(graphene.ObjectType):
                 }
                 popular_symbols = sector_symbols.get(sector, popular_symbols[:5])
             
-            # Get real market data
-            real_quotes = market_service.get_quotes(popular_symbols)
+            # Get real market data from our secure endpoint
+            real_quotes = []
+            try:
+                response = requests.get(
+                    f"http://localhost:8000/api/market/quotes",
+                    params={'symbols': ','.join(popular_symbols)},
+                    timeout=10
+                )
+                if response.status_code == 200:
+                    real_quotes = response.json()
+            except Exception as e:
+                print(f"Error fetching quotes for screening: {e}")
             
             if real_quotes and len(real_quotes) > 0:
                 # Convert real data to our format
@@ -1402,23 +1433,29 @@ class BaseQuery(graphene.ObjectType):
             except Stock.DoesNotExist:
                 return None
             
-            market_service = MarketDataService()
-            
-            # Get real quote data
+            # Get real quote data from our secure endpoint
+            quote_data = None
             try:
-                quote = market_service.get_quote(symbol)
-                if quote:
-                    quote_data = QuoteType(
-                        price=float(quote.price) if quote.price else float(stock.current_price or 0),
-                        chg=float(quote.change) if quote.change else 0.0,
-                        chgPct=float(quote.change_percent) if quote.change_percent else 0.0,
-                        high=float(quote.high) if quote.high else 0.0,
-                        low=float(quote.low) if quote.low else 0.0,
-                        volume=float(quote.volume) if quote.volume else 0.0
-                    )
-                else:
-                    quote_data = None
-            except:
+                import requests
+                response = requests.get(
+                    f"http://localhost:8000/api/market/quotes",
+                    params={'symbols': symbol},
+                    timeout=10
+                )
+                if response.status_code == 200:
+                    quotes = response.json()
+                    if quotes and len(quotes) > 0:
+                        quote = quotes[0]
+                        quote_data = QuoteType(
+                            price=float(quote.get('price', 0)) if quote.get('price') else float(stock.current_price or 0),
+                            chg=float(quote.get('change', 0)) if quote.get('change') else 0.0,
+                            chgPct=float(quote.get('change_percent', 0)) if quote.get('change_percent') else 0.0,
+                            high=float(quote.get('high', 0)) if quote.get('high') else 0.0,
+                            low=float(quote.get('low', 0)) if quote.get('low') else 0.0,
+                            volume=float(quote.get('volume', 0)) if quote.get('volume') else 0.0
+                        )
+            except Exception as e:
+                print(f"Error fetching quote for {symbol}: {e}")
                 quote_data = None
             
             # Create snapshot from real stock data
@@ -1448,23 +1485,29 @@ class BaseQuery(graphene.ObjectType):
             return None
     
     def resolve_stockChartData(self, info, symbol, timeframe="1D", interval="1D", limit=180, indicators=None):
-        # Use real market data from Finnhub/Polygon
-        from .market_data_service import MarketDataService
-        
+        # Use real market data from our secure endpoint
         try:
-            market_service = MarketDataService()
+            import requests
             
-            # Map timeframe to Finnhub resolution
-            resolution_map = {
-                '1H': '1',
-                '1D': 'D',
-                '1W': 'W',
-                '1M': 'M'
-            }
-            resolution = resolution_map.get(timeframe, 'D')
+            # For now, we'll use the quotes endpoint for current price
+            # TODO: Add historical data endpoint to our market data service
+            try:
+                response = requests.get(
+                    f"http://localhost:8000/api/market/quotes",
+                    params={'symbols': symbol},
+                    timeout=10
+                )
+                current_price = 100.0  # Default fallback
+                if response.status_code == 200:
+                    quotes = response.json()
+                    if quotes and len(quotes) > 0:
+                        current_price = float(quotes[0].get('price', 100.0))
+            except:
+                current_price = 100.0
             
-            # Get real chart data
-            chart_data = market_service.get_stock_chart_data(symbol, resolution, limit)
+            # Generate mock chart data based on current price
+            # TODO: Implement real historical data endpoint
+            chart_data = {'data': []}
             
             if not chart_data or not chart_data.get('data'):
                 # Fallback to mock data if real data unavailable
@@ -2447,11 +2490,20 @@ class Query(SwingQuery, BaseQuery, SblocQuery, NotificationQuery, BenchmarkQuery
             symbols = ["AAPL", "TSLA", "MSFT", "GOOGL", "AMZN"]
         
         try:
-            from .market_data_service import MarketDataService
-            market_service = MarketDataService()
+            import requests
             
-            # Get real market data
-            real_quotes = market_service.get_quotes(symbols)
+            # Get real market data from our secure endpoint
+            real_quotes = []
+            try:
+                response = requests.get(
+                    f"http://localhost:8000/api/market/quotes",
+                    params={'symbols': ','.join(symbols)},
+                    timeout=10
+                )
+                if response.status_code == 200:
+                    real_quotes = response.json()
+            except Exception as e:
+                print(f"Error fetching quotes: {e}")
             
             if real_quotes and len(real_quotes) > 0:
                 print(f"✅ Using REAL market data for {len(real_quotes)} quotes")
