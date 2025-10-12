@@ -46,7 +46,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: backend/backend
-          file: backend/backend/Dockerfile.production
+          file: backend/backend/Dockerfile.minimal
           push: true
           platforms: linux/amd64
           no-cache: true
@@ -54,8 +54,6 @@ jobs:
           build-args: |
             GIT_SHA=${{ github.sha }}
             BUILD_MARKER=${{ github.run_id }}-${{ github.run_attempt }}
-            CELERY_SHA=${{ env.CELERY_SHA }}
-            INIT_SHA=${{ env.INIT_SHA }}
 
       - name: Show digest
         id: digest
