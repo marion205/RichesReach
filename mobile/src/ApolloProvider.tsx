@@ -1,36 +1,13 @@
 // ApolloProvider.tsx
-import React from 'react';
-import { ApolloClient, InMemoryCache, ApolloProvider as Provider, createHttpLink, split, ApolloLink, from } from '@apollo/client';
-import { setContext } from '@apollo/client/link/context';
-import { onError } from '@apollo/client/link/error';
-import { Platform } from 'react-native';
-// import { RetryLink } from '@apollo/client/link/retry';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getMainDefinition } from '@apollo/client/utilities';
+import React, { useMemo } from 'react';
+import { ApolloProvider as Provider } from '@apollo/client';
+import { makeApolloClient, getApiBase } from './lib/apolloFactory';
 import JWTAuthService from './features/auth/services/JWTAuthService';
-// If you'll add subscriptions later:
-// import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
-// import { createClient } from 'graphql-ws';
 
-// Import from single source of truth
-import { API_GRAPHQL } from '../config/api';
-import { timeoutLink, retryLink, errorHandlingLink } from './graphql/links/timeoutLink';
-import { ENABLE_GRAPHQL_TIMEOUTS, GRAPHQL_TIMEOUT_MS } from './config/flags';
-
-const getGraphQLURL = () => {
-  return API_GRAPHQL;
-};
-
-const HTTP_URL = getGraphQLURL();
-
-// Runtime probe to diagnose network issues
-console.log('[API] GraphQL URL:', HTTP_URL);
-console.log('[API] Base URL:', API_GRAPHQL.replace('/graphql/', ''));
-
-// Quick health check probe before creating Apollo client
+// Quick health check probe
 (async () => {
   try {
-    const baseUrl = API_GRAPHQL.replace('/graphql/', '');
+    const baseUrl = getApiBase();
     const response = await fetch(`${baseUrl}/health`, { 
       method: 'GET',
       timeout: 5000 
@@ -41,221 +18,15 @@ console.log('[API] Base URL:', API_GRAPHQL.replace('/graphql/', ''));
   }
 })();
 
-const httpLink = createHttpLink({ 
-  uri: HTTP_URL,
-  fetch,
-  credentials: "omit" 
-});
+export default function ApolloProvider({ children }: { children: React.ReactNode }) {
+  const client = useMemo(() => {
+    const apolloClient = makeApolloClient();
+    // Initialize the JWT service with the Apollo client
+    JWTAuthService.getInstance().setApolloClient(apolloClient);
+    return apolloClient;
+  }, [getApiBase()]);
 
-// Simple retry link that skips auth operations (replaced by comprehensive retryLink from timeoutLink.ts)
-const simpleRetryLink = new ApolloLink((operation, forward) => {
-  const isAuth = operation.operationName === "TokenAuth" || operation.getContext()?.noRetry;
-  if (isAuth) {
-    // No retry for auth operations
-    return forward(operation);
-  }
-  // For other operations, just forward (no retry logic for now)
-  return forward(operation);
-});
+  console.log('[API_BASE]', getApiBase(), 'graphql ->', `${getApiBase()}/graphql`);
 
-const authLink = setContext(async (_, { headers }) => {
-  try {
-    const jwtService = JWTAuthService.getInstance();
-    const token = await jwtService.getValidToken();
-    return {
-      headers: {
-        ...headers,
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-    };
-  } catch (error) {
-    console.error('Error getting token for request:', error);
-    return { headers };
-  }
-});
-
-// Error link to handle token expiration and network errors
-const errorLink = onError(({ graphQLErrors, networkError, operation, forward }) => {
-  if (graphQLErrors) {
-    graphQLErrors.forEach(({ message, locations, path }) => {
-      console.error(`GraphQL error: Message: ${message}, Location: ${locations}, Path: ${path}`);
-      if (message.includes('Signature has expired') || message.includes('Token is invalid')) {
-        console.log('Token expired, attempting refresh...');
-        // Try to refresh the token
-        JWTAuthService.getInstance().refreshToken().then((newToken) => {
-          if (newToken) {
-            console.log('Token refreshed successfully');
-            // Retry the operation
-            return forward(operation);
-          } else {
-            console.log('Token refresh failed, user needs to login again');
-            // Clear the token and redirect to login
-            JWTAuthService.getInstance().logout();
-          }
-        });
-      }
-    });
-  }
-
-  if (networkError) {
-    console.error(`Network error: ${networkError}`);
-    
-    // Handle 404 errors gracefully
-    if ((networkError as any).statusCode === 404) {
-      console.warn('GraphQL endpoint not found (404) - this is expected if using REST fallback');
-      // Don't throw the error, just log it
-      return;
-    }
-  }
-});
-// (optional) subscriptions—leave commented out if not using yet
-// const wsLink = new GraphQLWsLink(createClient({
-// url: HTTP_URL.replace('http', 'ws'),
-// connectionParams: async () => {
-// const token = await AsyncStorage.getItem('token');
-// return token ? { headers: { Authorization: `Bearer ${token}` } } : {};
-// },
-// }));
-// const link = split(
-// ({ query }) => {
-// const def = getMainDefinition(query);
-// return def.kind === 'OperationDefinition' && def.operation === 'subscription';
-// },
-// wsLink,
-// authLink.concat(httpLink)
-// );
-// Diagnostic link to log all GraphQL operations
-const diagnosticLink = new ApolloLink((operation, forward) => {
-  console.log('[GQL]', operation.operationName, '->', HTTP_URL);
-  return forward(operation);
-});
-
-// Create link chain with timeout protection
-const linkChain = ENABLE_GRAPHQL_TIMEOUTS 
-  ? from([diagnosticLink, timeoutLink(GRAPHQL_TIMEOUT_MS), retryLink, errorHandlingLink, errorLink, authLink, httpLink])
-  : from([diagnosticLink, simpleRetryLink, errorLink, authLink, httpLink]);
-
-const client = new ApolloClient({
-  link: linkChain, // Production-safe link chain with timeout protection
-cache: new InMemoryCache({
-// Optimize cache for better performance
-typePolicies: {
-Query: {
-fields: {
-// Cache user queries for better performance
-me: {
-merge: true,
-},
-},
-},
-        OptionsRecommendation: {
-          fields: {
-            sentimentDescription: {
-              read(existing, { readField }) {
-                if (existing) return existing;
-                const raw = readField<string>('sentiment');
-                if (!raw) return 'Neutral outlook';
-                const upperRaw = raw.toUpperCase();
-                const confidence = readField<number>('confidence');
-                const map: Record<string, string> = {
-                  BULLISH: 'Bullish — model expects upside',
-                  BEARISH: 'Bearish — model expects downside',
-                  NEUTRAL: 'Neutral — limited directional edge',
-                };
-                const base = map[upperRaw] || 'Unknown';
-                return typeof confidence === 'number'
-                  ? `${base} (confidence ${Math.round(confidence * 100)}%)`
-                  : base;
-              }
-            },
-            daysToExpiration: {
-              read(existing) {
-                // Provide a default value if the field is missing
-                return existing ?? 30; // Default to 30 days if missing
-              }
-            }
-          }
-        },
-        Option: {
-          fields: {
-            timeValue: {
-              read(existing) {
-                // Provide a default value if the field is missing
-                return existing ?? 0.0;
-              }
-            },
-            intrinsicValue: {
-              read(existing) {
-                // Provide a default value if the field is missing
-                return existing ?? 0.0;
-              }
-            },
-            daysToExpiration: {
-              read(existing) {
-                // Provide a default value if the field is missing
-                return existing ?? 30;
-              }
-            }
-          }
-        },
-        RecommendedStrategy: {
-          fields: {
-            daysToExpiration: {
-              read(existing) {
-                // Provide a default value if the field is missing
-                return existing ?? 30; // Default to 30 days if missing
-              }
-            },
-            marketOutlook: {
-              read(existing) {
-                // Handle both string and object formats for marketOutlook
-                if (typeof existing === 'string') {
-                  return {
-                    sentiment: existing.toUpperCase(),
-                    sentimentDescription: `Market outlook: ${existing}`
-                  };
-                }
-                return existing ?? { sentiment: 'NEUTRAL', sentimentDescription: 'Neutral outlook' };
-              }
-            }
-          }
-        },
-      },
-    }),
-// Production-safe default options
-defaultOptions: {
-  watchQuery: {
-    errorPolicy: 'all',
-    fetchPolicy: 'cache-and-network',
-  },
-  query: {
-    errorPolicy: 'all',
-    fetchPolicy: 'network-only',
-  },
-  mutate: {
-    errorPolicy: 'all',
-  },
-},
-// Prevent "Store reset while query was in flight" errors
-assumeImmutableResults: true,
-});
-
-// Initialize the JWT service with the Apollo client
-JWTAuthService.getInstance().setApolloClient(client);
-
-// Safe cache clearing utility to prevent "Store reset while query was in flight" errors
-export const safeClearCache = async () => {
-  try {
-    // Wait for any pending queries to complete
-    await client.clearStore();
-  } catch (error) {
-    console.warn('Cache clear failed, using fallback method:', error);
-    // Fallback: just clear the cache without resetting the store
-    client.cache.reset();
-  }
-};
-
-export { client };
-export default function ApolloWrapper({ children }: { children: React.ReactNode }) {
-return <Provider client={client}>{children}</Provider>;
+  return <Provider client={client}>{children}</Provider>;
 }

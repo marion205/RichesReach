@@ -6,13 +6,15 @@
 // Check environment variable first, then fallback to hardcoded values
 const ENV_API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 
-const devHost = process.env.EXPO_PUBLIC_API_BASE
-  ?? "http://192.168.1.236:8000"; // Your current network IP
-
 const prodHost = "https://grounds-firewall-thereafter-bracelets.trycloudflare.com";
 
 // Use environment variable if available, otherwise use hardcoded prod host
 export const API_BASE = ENV_API_BASE_URL || prodHost;
+
+// Fail fast if no API base URL is configured
+if (!API_BASE) {
+  throw new Error('EXPO_PUBLIC_API_BASE_URL is required in Expo Go');
+}
 
 // Debug logging to see what URL is actually being used
 console.log('[API_BASE]', ENV_API_BASE_URL, '-> resolved to:', API_BASE);
