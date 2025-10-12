@@ -18,25 +18,12 @@ app.config_from_object('django.conf:settings', namespace='CELERY')
 app.autodiscover_tasks()
 
 # Celery Beat schedule for real-time data updates
+# Note: Import beat schedules but don't access settings at module level
+# The beat schedule will be configured when Celery actually starts
 from core.celery_beat_schedule import CELERY_BEAT_SCHEDULE, CELERY_BEAT_SCHEDULE_DEV
 
-# Avoid touching settings attributes at import time
-try:
-    _ = getattr(settings, "DEBUG", False)
-except Exception:
-    # If settings aren't ready, don't explode during import
-    pass
-
-# Use development schedule if DEBUG is True
-# Use getattr to avoid AttributeError if settings not fully loaded
-try:
-    if getattr(settings, 'DEBUG', False):
-        app.conf.beat_schedule = CELERY_BEAT_SCHEDULE_DEV
-    else:
-        app.conf.beat_schedule = CELERY_BEAT_SCHEDULE
-except Exception:
-    # Fallback to production schedule if settings access fails
-    app.conf.beat_schedule = CELERY_BEAT_SCHEDULE
+# Use production schedule by default (settings will be loaded when Celery starts)
+app.conf.beat_schedule = CELERY_BEAT_SCHEDULE
 
 @app.task(bind=True)
 def debug_task(self):
