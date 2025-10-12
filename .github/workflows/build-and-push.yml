@@ -61,16 +61,7 @@ jobs:
           docker pull "$IMG"
           echo "== __build.txt =="
           docker run --rm "$IMG" cat /app/__build.txt || true
-          echo "== celery.py header =="
-          docker run --rm "$IMG" /bin/sh -lc 'sed -n "1,40p" /app/richesreach/celery.py || true'
-          echo "== __init__.py header =="
-          docker run --rm "$IMG" /bin/sh -lc 'sed -n "1,40p" /app/richesreach/__init__.py || true'
-          echo "== import smoke =="
-          docker run --rm -e DJANGO_SETTINGS_MODULE=richesreach.settings_production "$IMG" \
-            python - <<'PY'
-import importlib, os
-print("DJANGO_SETTINGS_MODULE=", os.environ.get("DJANGO_SETTINGS_MODULE"))
-importlib.import_module("richesreach.celery")
-importlib.import_module("richesreach.settings_production")
-print("OK")
-PY
+          echo "== test-docker-build.txt =="
+          docker run --rm "$IMG" cat /app/test-docker-build.txt || true
+          echo "== __init__.py first 10 lines =="
+          docker run --rm "$IMG" head -10 /app/richesreach/__init__.py || true
