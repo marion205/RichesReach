@@ -21,7 +21,16 @@
         "NSUserTrackingUsageDescription": "This app uses tracking to provide personalized financial insights and recommendations.",
         "NSCameraUsageDescription": "This app uses the camera to scan financial documents and QR codes.",
         "NSPhotoLibraryUsageDescription": "This app accesses your photo library to upload profile pictures and financial documents.",
-        "NSLocationWhenInUseUsageDescription": "This app uses location to provide location-based financial services and market data."
+        "NSLocationWhenInUseUsageDescription": "This app uses location to provide location-based financial services and market data.",
+        "NSAppTransportSecurity": {
+          "NSExceptionDomains": {
+            "riches-reach-alb-1199497064.us-east-1.elb.amazonaws.com": {
+              "NSIncludesSubdomains": true,
+              "NSTemporaryExceptionAllowsInsecureHTTPLoads": true,
+              "NSTemporaryExceptionMinimumTLSVersion": "TLSv1.2"
+            }
+          }
+        }
       },
       "config": {
         "usesNonExemptEncryption": false
