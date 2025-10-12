@@ -106,7 +106,7 @@ YODLEE_LOGIN_NAME = os.getenv('YODLEE_LOGIN_NAME', 'test-login-name')
 YODLEE_FASTLINK_URL = os.getenv('YODLEE_FASTLINK_URL', 'https://test.fastlink.yodlee.com')
 
 # GraphQL Configuration
-GRAPHQL_MODE = os.getenv('GRAPHQL_MODE', 'simple')
+GRAPHQL_MODE = os.getenv('GRAPHQL_MODE', 'full')
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
