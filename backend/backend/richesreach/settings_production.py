@@ -196,7 +196,7 @@ CHANNEL_LAYERS = {
 
 # GraphQL configuration
 GRAPHENE = {
-    'SCHEMA': 'core.schema.schema',
+    'SCHEMA': 'core.schema_simple.schema' if GRAPHQL_MODE == 'simple' else 'core.schema.schema',
     'MIDDLEWARE': [
         'graphql_jwt.middleware.JSONWebTokenMiddleware',
     ],
