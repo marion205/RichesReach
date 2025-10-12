@@ -72,14 +72,14 @@ jobs:
         id: render
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
-          task-definition: infra/ecs/task-def.json
-          container-name: riches-reach-backend
-          image: ${{ env.ECR_REPO }}@${{ steps.digest.outputs.digest }}
+          task-definition: ecs_task_definition_optimized.json
+          container-name: riches-reach-ai
+          image: ${{ env.ECR_REPO }}:${{ github.sha }}
 
       - name: Deploy service
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
           task-definition: ${{ steps.render.outputs.task-definition }}
-          service: riches-reach-streaming-service
-          cluster: riches-reach-cluster
+          service: riches-reach-prod-svc
+          cluster: riches-reach-prod
           wait-for-service-stability: true
