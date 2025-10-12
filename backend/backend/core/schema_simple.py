@@ -4,7 +4,7 @@ from graphene import ObjectType, String, Float, Int, List
 
 class StockType(graphene.ObjectType):
     id = graphene.ID()
-    ticker = graphene.String()  # Changed from symbol to ticker
+    symbol = graphene.String()  # Mobile app expects 'symbol', not 'ticker'
     companyName = graphene.String()  # Changed from company_name to companyName (camelCase)
     sector = graphene.String()
     industry = graphene.String()
@@ -21,7 +21,7 @@ class StockType(graphene.ObjectType):
 MOCK_STOCKS = [
     {
         "id": "1",
-        "ticker": "AAPL",
+        "symbol": "AAPL",
         "companyName": "Apple Inc.",
         "sector": "Technology",
         "industry": "Consumer Electronics",
@@ -36,7 +36,7 @@ MOCK_STOCKS = [
     },
     {
         "id": "2",
-        "ticker": "MSFT",
+        "symbol": "MSFT",
         "companyName": "Microsoft Corporation",
         "sector": "Technology",
         "industry": "Software",
@@ -51,7 +51,7 @@ MOCK_STOCKS = [
     },
     {
         "id": "3",
-        "ticker": "TSLA",
+        "symbol": "TSLA",
         "companyName": "Tesla, Inc.",
         "sector": "Automotive",
         "industry": "Electric Vehicles",
@@ -66,7 +66,7 @@ MOCK_STOCKS = [
     },
     {
         "id": "4",
-        "ticker": "NVDA",
+        "symbol": "NVDA",
         "companyName": "NVIDIA Corporation",
         "sector": "Technology",
         "industry": "Semiconductors",
@@ -81,7 +81,7 @@ MOCK_STOCKS = [
     },
     {
         "id": "5",
-        "ticker": "GOOGL",
+        "symbol": "GOOGL",
         "companyName": "Alphabet Inc.",
         "sector": "Technology",
         "industry": "Internet Services",
@@ -98,10 +98,18 @@ MOCK_STOCKS = [
 
 class Query(ObjectType):
     stocks = graphene.List(StockType)
+    beginnerFriendlyStocks = graphene.List(StockType)
     
-    def resolve_stocks(self, info):
+    def resolve_stocks(self, info, search=None, limit=10, offset=0):
         """Return mock stock data - no database queries"""
         print("DEBUG: resolve_stocks called - returning mock data")
         return [StockType(**stock) for stock in MOCK_STOCKS]
+    
+    def resolve_beginnerFriendlyStocks(self, info, limit=10):
+        """Return beginner-friendly stocks from mock data"""
+        print("DEBUG: resolve_beginnerFriendlyStocks called - returning mock data")
+        # Filter stocks with high beginner-friendly scores
+        beginner_stocks = [stock for stock in MOCK_STOCKS if stock.get('beginnerFriendlyScore', 0) >= 0.7]
+        return [StockType(**stock) for stock in beginner_stocks[:limit]]
 
 schema = graphene.Schema(query=Query)
