@@ -105,8 +105,8 @@ YODLEE_SECRET = YODLEE_CLIENT_SECRET  # Alias for compatibility
 YODLEE_LOGIN_NAME = os.getenv('YODLEE_LOGIN_NAME', 'test-login-name')
 YODLEE_FASTLINK_URL = os.getenv('YODLEE_FASTLINK_URL', 'https://test.fastlink.yodlee.com')
 
-# GraphQL Configuration
-GRAPHQL_MODE = os.getenv('GRAPHQL_MODE', 'full')
+# GraphQL Configuration - FORCE PRODUCTION MODE
+GRAPHQL_MODE = 'full'  # Force full schema for real ML/AI data
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [

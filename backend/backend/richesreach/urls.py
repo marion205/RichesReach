@@ -19,7 +19,7 @@ def healthz(_):
 def health(_):
     from django.conf import settings
     mode = getattr(settings, 'GRAPHQL_MODE', 'full')
-    return JsonResponse({"ok": True, "mode": mode}, status=200)
+    return JsonResponse({"ok": True, "mode": mode, "production": True}, status=200)
 
 class GraphQLLazyView(View):
     """Lazy GraphQL view that only imports schema when accessed"""
