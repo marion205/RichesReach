@@ -9,10 +9,10 @@ env:
   AWS_REGION: us-east-1
   AWS_ACCOUNT_ID: 498606688292
   ECR_REPO: riches-reach-ai
-  CLUSTER: riches-reach-cluster
-  SERVICE: riches-reach-streaming-service
+  CLUSTER: riches-reach-prod
+  SERVICE: riches-reach-prod-svc
   TASK_FAMILY: riches-reach-streaming-pipeline-optimized
-  CONTAINER_NAME: streaming-pipeline
+  CONTAINER_NAME: riches-reach-ai
 
 jobs:
   deploy:
