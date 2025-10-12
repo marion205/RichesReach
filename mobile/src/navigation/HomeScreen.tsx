@@ -6,6 +6,7 @@ import React, {
     FlatList, TextInput, RefreshControl,
   } from 'react-native';
   import { useApolloClient, useQuery, gql } from '@apollo/client';
+  import { useFocusEffect } from '@react-navigation/native';
   import Icon from 'react-native-vector-icons/Feather';
   import AsyncStorage from '@react-native-async-storage/async-storage';
   
@@ -19,7 +20,13 @@ import RealTimePortfolioService, { PortfolioMetrics } from '../features/portfoli
 import webSocketService, { PortfolioUpdate } from '../services/WebSocketService';
 import UserProfileService, { ExtendedUserProfile } from '../features/user/services/UserProfileService';
 import FinancialChatbotService, { AlphaVantageRecommendationProvider } from '../services/FinancialChatbotService';
-  import { usePortfolioHistory, setPortfolioHistory } from '../shared/portfolioHistory';
+import { usePortfolioHistory, setPortfolioHistory } from '../shared/portfolioHistory';
+
+// New imports for smart portfolio metrics
+import { FEATURE_PORTFOLIO_METRICS } from '../config/flags';
+import { isMarketDataHealthy } from '../services/healthService';
+import { mark, PerformanceMarkers } from '../utils/timing';
+import { API_BASE } from '../config/api';
   
   /* ===================== GraphQL ===================== */
   const GET_PORTFOLIO_METRICS = gql`
@@ -263,20 +270,23 @@ import FinancialChatbotService, { AlphaVantageRecommendationProvider } from '../
   /* ===================== Home Screen ===================== */
   const HomeScreen = ({ navigateTo }: { navigateTo: (screen: string, data?: any) => void }) => {
     const client = useApolloClient();
+    
+    // Smart portfolio metrics state
+    const [canQueryMetrics, setCanQueryMetrics] = useState(false);
+    const [marketDataHealth, setMarketDataHealth] = useState<any>(null);
   
     // GraphQL
-    // TEMPORARILY DISABLED: Portfolio metrics query causing slow login due to Alpha Vantage rate limits
-    // Will be re-enabled once the new market data endpoints are deployed
     const {
       data: portfolioData,
       loading: portfolioLoading,
       error: portfolioError,
       refetch: refetchPortfolio,
     } = useQuery(GET_PORTFOLIO_METRICS, {
-      errorPolicy: 'ignore',
+      errorPolicy: 'all',
       fetchPolicy: 'cache-first',
+      nextFetchPolicy: 'cache-first',
       notifyOnNetworkStatusChange: true,
-      skip: true, // TEMPORARILY SKIP THIS QUERY TO FIX SLOW LOGIN
+      skip: !canQueryMetrics, // Only run when market data is healthy
     });
   
     const {
@@ -288,6 +298,58 @@ import FinancialChatbotService, { AlphaVantageRecommendationProvider } from '../
       fetchPolicy: 'cache-first',
       notifyOnNetworkStatusChange: false,
     });
+
+    // Smart portfolio metrics: Check market data health when screen is focused
+    useFocusEffect(
+      useCallback(() => {
+        let active = true;
+        
+        const checkMarketDataHealth = async () => {
+          if (!FEATURE_PORTFOLIO_METRICS) {
+            console.log('[HomeScreen] Portfolio metrics feature disabled');
+            return;
+          }
+          
+          const stop = mark(PerformanceMarkers.MARKET_DATA_FETCH);
+          
+          try {
+            const health = await isMarketDataHealthy(API_BASE);
+            
+            if (active) {
+              setMarketDataHealth(health);
+              
+              if (health.isHealthy) {
+                console.log('[HomeScreen] Market data is healthy, enabling portfolio metrics');
+                // Small delay to let UI settle after navigation
+                setTimeout(() => {
+                  if (active) {
+                    setCanQueryMetrics(true);
+                  }
+                }, 300);
+              } else {
+                console.warn('[HomeScreen] Market data is unhealthy:', health.error);
+                setCanQueryMetrics(false);
+              }
+            }
+            
+            stop();
+          } catch (error) {
+            console.error('[HomeScreen] Error checking market data health:', error);
+            if (active) {
+              setCanQueryMetrics(false);
+            }
+            stop();
+          }
+        };
+        
+        checkMarketDataHealth();
+        
+        return () => {
+          active = false;
+          setCanQueryMetrics(false);
+        };
+      }, [])
+    );
   
     // Profile
     const [userProfile, setUserProfile] = useState<ExtendedUserProfile | null>(null);

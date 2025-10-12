@@ -14,6 +14,8 @@ import JWTAuthService from './features/auth/services/JWTAuthService';
 
 // Import from single source of truth
 import { API_GRAPHQL } from '../config/api';
+import { timeoutLink, retryLink, errorHandlingLink } from './graphql/links/timeoutLink';
+import { ENABLE_GRAPHQL_TIMEOUTS, GRAPHQL_TIMEOUT_MS } from './config/flags';
 
 const getGraphQLURL = () => {
   return API_GRAPHQL;
@@ -104,8 +106,13 @@ const errorLink = onError(({ graphQLErrors, networkError, operation, forward }) 
 // wsLink,
 // authLink.concat(httpLink)
 // );
+// Create link chain with timeout protection
+const linkChain = ENABLE_GRAPHQL_TIMEOUTS 
+  ? from([timeoutLink(GRAPHQL_TIMEOUT_MS), retryLink, errorHandlingLink, errorLink, authLink, httpLink])
+  : from([retryLink, errorLink, authLink, httpLink]);
+
 const client = new ApolloClient({
-link: from([retryLink, errorLink, authLink, httpLink]), // Production-safe link chain
+  link: linkChain, // Production-safe link chain with timeout protection
 cache: new InMemoryCache({
 // Optimize cache for better performance
 typePolicies: {

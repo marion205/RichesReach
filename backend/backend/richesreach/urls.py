@@ -731,6 +731,13 @@ urlpatterns.append(path("api/billing/feature-access/", FeatureAccessView.as_view
 urlpatterns.append(path("api/billing/webhooks/stripe/", stripe_webhook, name='stripe_webhook'))
 urlpatterns.append(path("api/billing/webhooks/revenuecat/", revenuecat_webhook, name='revenuecat_webhook'))
 
+# Market Data endpoints
+from core.views_market import market_quotes, market_status, market_health, options_quotes
+urlpatterns.append(path("api/market/quotes", market_quotes, name='market_quotes'))
+urlpatterns.append(path("api/market/status", market_status, name='market_status'))
+urlpatterns.append(path("api/market/options", options_quotes, name='options_quotes'))
+urlpatterns.append(path("health/marketdata", market_health, name='market_health'))
+
 # Diagnostic endpoints
 urlpatterns.append(path("echo", echo, name='echo'))
 urlpatterns.append(path("netcheck", netcheck, name='netcheck'))
