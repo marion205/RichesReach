@@ -431,6 +431,76 @@ def populate_stocks(request):
 
 urlpatterns.append(path("populate-stocks/", populate_stocks))
 
+# Direct stock data endpoint for testing
+@csrf_exempt
+def stocks_data(request):
+    """Return stock data directly for testing"""
+    real_stocks = [
+        {
+            "id": "1",
+            "symbol": "AAPL",
+            "companyName": "Apple Inc.",
+            "sector": "Technology",
+            "currentPrice": 175.50,
+            "marketCap": 2800000000000,
+            "peRatio": 28.5,
+            "dividendYield": 0.44,
+            "beginnerFriendlyScore": 90
+        },
+        {
+            "id": "2",
+            "symbol": "MSFT",
+            "companyName": "Microsoft Corporation",
+            "sector": "Technology",
+            "currentPrice": 380.25,
+            "marketCap": 2800000000000,
+            "peRatio": 32.1,
+            "dividendYield": 0.68,
+            "beginnerFriendlyScore": 85
+        },
+        {
+            "id": "3",
+            "symbol": "TSLA",
+            "companyName": "Tesla, Inc.",
+            "sector": "Automotive",
+            "currentPrice": 250.75,
+            "marketCap": 800000000000,
+            "peRatio": 45.2,
+            "dividendYield": 0.0,
+            "beginnerFriendlyScore": 60
+        },
+        {
+            "id": "4",
+            "symbol": "NVDA",
+            "companyName": "NVIDIA Corporation",
+            "sector": "Technology",
+            "currentPrice": 450.30,
+            "marketCap": 1100000000000,
+            "peRatio": 65.8,
+            "dividendYield": 0.04,
+            "beginnerFriendlyScore": 70
+        },
+        {
+            "id": "5",
+            "symbol": "GOOGL",
+            "companyName": "Alphabet Inc.",
+            "sector": "Technology",
+            "currentPrice": 140.85,
+            "marketCap": 1800000000000,
+            "peRatio": 24.3,
+            "dividendYield": 0.0,
+            "beginnerFriendlyScore": 80
+        }
+    ]
+    
+    return JsonResponse({
+        "success": True,
+        "stocks": real_stocks,
+        "count": len(real_stocks)
+    })
+
+urlpatterns.append(path("stocks-data/", stocks_data))
+
 # Temporary migration test endpoint
 import os
 from django.http import JsonResponse
