@@ -63,8 +63,6 @@ jobs:
             GIT_SHA=${{ steps.meta.outputs.GIT_SHA }}
             BUILD_MARKER=${{ github.run_id }}-${{ github.run_attempt }}
           tags: ${{ steps.meta.outputs.IMAGE_URI }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
           no-cache: true
           provenance: false
 
