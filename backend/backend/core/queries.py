@@ -221,28 +221,44 @@ class Query(graphene.ObjectType):
     # Stocks
     # -------------------------
     def resolve_stocks(self, info, search=None, limit=100, offset=0):
-        """Browse All stocks with pagination - shows all stocks, 5+ at a time"""
+        """Browse All stocks with pagination - fetches real-time data from external APIs"""
         limit = max(5, min(limit or 20, 200))  # Minimum 5 stocks per page
         offset = max(0, offset or 0)
         
-        # If there's a search term, try to use the stock service to search and sync real data
-        if search and search.strip():
-            stock_service = SimpleStockSearchService()
-            # Search and sync stocks from external APIs
-            searched_stocks = stock_service.search_and_sync_stocks(search.strip())
-            if searched_stocks:
-                return searched_stocks[offset:offset+limit]
-        
-        # Fallback to database query (either no search term or API failed)
-        qs = Stock.objects.all()
-        if search:
-            qs = qs.filter(
-                djmodels.Q(symbol__icontains=search.upper()) |
-                djmodels.Q(company_name__icontains=search)
-            )
-        
-        # Order by beginner-friendly score (highest first) for better user experience
-        return qs.order_by('-beginner_friendly_score', 'symbol')[offset:offset+limit]
+        try:
+            # Use external API to fetch real-time stock data
+            from core.stock_data_populator import StockDataPopulator
+            populator = StockDataPopulator()
+            
+            # Get popular stock symbols for Browse All
+            popular_symbols = populator._get_popular_stock_symbols()
+            
+            # Apply search filter if provided
+            if search and search.strip():
+                search_upper = search.strip().upper()
+                popular_symbols = [symbol for symbol in popular_symbols 
+                                 if search_upper in symbol or search_upper in symbol]
+            
+            # Fetch real-time data for the requested symbols
+            stocks_data = []
+            for symbol in popular_symbols[offset:offset+limit]:
+                try:
+                    stock_data = populator._fetch_stock_data(symbol)
+                    if stock_data:
+                        # Convert to Stock model instance for GraphQL
+                        from core.models import Stock
+                        stock = Stock(**stock_data)
+                        stocks_data.append(stock)
+                except Exception as e:
+                    print(f"Failed to fetch data for {symbol}: {e}")
+                    continue
+            
+            return stocks_data
+            
+        except Exception as e:
+            print(f"Error fetching stocks from API: {e}")
+            # Fallback to empty list if API fails
+            return []
 
     def resolve_stock(self, info, symbol):
         try:
@@ -318,30 +334,63 @@ class Query(graphene.ObjectType):
         limit = max(5, min(limit or 20, 50))  # Minimum 5 stocks per page
         offset = max(0, offset or 0)
         
-        # Get current user for personalized recommendations
-        user = _require_auth(info)
-        
-        if user:
-            # Use ML recommender for personalized recommendations
-            try:
-                from core.ml_stock_recommender import MLStockRecommender
-                ml_recommender = MLStockRecommender()
-                recommendations = ml_recommender.get_beginner_friendly_stocks(user, limit=limit + offset)
-                
-                # Convert recommendations to stock objects
-                stocks = [rec.stock for rec in recommendations[offset:offset+limit] if rec.stock]
-                return stocks
-                
-            except Exception as e:
-                print(f"ML recommender error: {e}")
-                # Fallback to database query
-        
-        # Fallback: Get stocks with high beginner-friendly scores from database
-        qs = Stock.objects.filter(
-            beginner_friendly_score__gte=70  # Only high-scoring beginner-friendly stocks
-        ).order_by('-beginner_friendly_score', 'symbol')
-        
-        return qs[offset:offset+limit]
+        try:
+            # Get current user for personalized recommendations
+            user = _require_auth(info)
+            
+            # Use external API to fetch real-time stock data
+            from core.stock_data_populator import StockDataPopulator
+            populator = StockDataPopulator()
+            
+            # Get popular stock symbols
+            popular_symbols = populator._get_popular_stock_symbols()
+            
+            # Fetch real-time data and calculate beginner-friendly scores
+            stocks_data = []
+            for symbol in popular_symbols:
+                try:
+                    stock_data = populator._fetch_stock_data(symbol)
+                    if stock_data and stock_data.get('beginner_friendly_score', 0) >= 70:
+                        # Convert to Stock model instance for GraphQL
+                        from core.models import Stock
+                        stock = Stock(**stock_data)
+                        stocks_data.append(stock)
+                except Exception as e:
+                    print(f"Failed to fetch data for {symbol}: {e}")
+                    continue
+            
+            # Sort by beginner-friendly score (highest first)
+            stocks_data.sort(key=lambda x: x.beginner_friendly_score or 0, reverse=True)
+            
+            # Apply user profile-based filtering if user is authenticated
+            if user:
+                try:
+                    # Use ML recommender for personalized recommendations
+                    from core.ml_stock_recommender import MLStockRecommender
+                    ml_recommender = MLStockRecommender()
+                    
+                    # Get user profile and apply ML filtering
+                    user_profile = ml_recommender.get_user_profile(user)
+                    
+                    # Filter stocks based on user profile (risk tolerance, investment goals, etc.)
+                    filtered_stocks = []
+                    for stock in stocks_data:
+                        # Apply ML-based filtering based on user profile
+                        if ml_recommender._is_stock_suitable_for_user(stock, user_profile):
+                            filtered_stocks.append(stock)
+                    
+                    stocks_data = filtered_stocks
+                    
+                except Exception as e:
+                    print(f"ML recommender error: {e}")
+                    # Continue with basic filtering if ML fails
+            
+            return stocks_data[offset:offset+limit]
+            
+        except Exception as e:
+            print(f"Error fetching beginner-friendly stocks: {e}")
+            # Fallback to empty list if API fails
+            return []
 
     def resolve_advanced_stock_screening(self, info, sector=None, min_market_cap=None, max_market_cap=None, 
                                        min_pe_ratio=None, max_pe_ratio=None, min_beginner_score=None, 

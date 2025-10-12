@@ -294,3 +294,7 @@ class StockDataPopulator:
             score += 15
         
         return min(100.0, max(0.0, score))  # Clamp between 0 and 100
+
+    def _calculate_beginner_friendly_score(self, stock_data):
+        """Calculate beginner-friendly score based on stock characteristics (alias for compatibility)"""
+        return self._calculate_beginner_score(stock_data)
