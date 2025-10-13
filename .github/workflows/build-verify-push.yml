@@ -45,6 +45,9 @@ jobs:
           role-session-name: gha-build
           audience: sts.amazonaws.com
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: ECR login
         run: aws ecr get-login-password --region $AWS_REGION | \
              docker login --username AWS --password-stdin $ECR_REPO
