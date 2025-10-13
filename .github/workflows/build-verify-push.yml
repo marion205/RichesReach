@@ -7,6 +7,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     env:
       AWS_REGION: us-east-1
       ECR_REPO: 498606688292.dkr.ecr.us-east-1.amazonaws.com/riches-reach-streaming
