@@ -8,4 +8,5 @@ def get_celery_app():
     from .celery import app
     return app
 
+# Remove eager import completely - only use lazy accessor
 __all__ = ("get_celery_app",)
