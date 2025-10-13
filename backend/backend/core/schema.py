@@ -272,6 +272,16 @@ class StockType(graphene.ObjectType):
     dividendYield = graphene.Float()
     beginnerFriendlyScore = graphene.Int()
     beginnerScoreBreakdown = graphene.Field(BeginnerScoreBreakdownType)
+    
+    # Mobile app aliases
+    name = graphene.String()
+    price = graphene.Float()
+    
+    def resolve_name(self, info):
+        return self.companyName
+    
+    def resolve_price(self, info):
+        return self.currentPrice
 
 class CommentType(graphene.ObjectType):
     id = graphene.ID()
