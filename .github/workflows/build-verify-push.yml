@@ -48,9 +48,8 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: ECR login
-        run: aws ecr get-login-password --region $AWS_REGION | \
-             docker login --username AWS --password-stdin $ECR_REPO
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
 
       # Build a local image and VERIFY file content BEFORE push
       - name: Build (no-cache) and verify locally
