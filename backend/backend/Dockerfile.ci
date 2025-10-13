@@ -13,18 +13,20 @@ COPY . /app
 
 # --- Build-time verification: ensure new celery.py is present and safe ---
 # Fail if the old pattern exists or the hash doesn't match what we expect
-ARG CELERY_SHA=""
+ARG CELERY_SHA
+ENV CELERY_SHA=$CELERY_SHA
 RUN test -f /app/richesreach/celery.py
-RUN ! grep -n "settings\.DEBUG" /app/richesreach/celery.py
-RUN python - <<'PY' && exit 0 || exit 1
-import hashlib, sys, pathlib, os
-p = pathlib.Path("/app/richesreach/celery.py")
-h = hashlib.sha256(p.read_bytes()).hexdigest()
-expected = os.environ.get("CELERY_SHA") or os.getenv("CELERY_SHA_ARG") or ""
-print("celery.py sha256:", h)
-if expected and h != expected:
-    print("SHA MISMATCH:", h, "!=", expected)
-    sys.exit(1)
+RUN sed -n '1,30p' /app/richesreach/celery.py || true
+RUN python - <<'PY'
+import hashlib, os, pathlib, sys
+p = pathlib.Path('/app/richesreach/celery.py')
+b = p.read_bytes()
+sha = hashlib.sha256(b).hexdigest()
+expected = os.environ.get("CELERY_SHA","")
+print("celery.py sha256:", sha)
+if expected:
+    assert sha == expected, f"celery.py SHA mismatch: {sha} != {expected}"
+assert b"settings.DEBUG" not in b, "Forbidden pattern 'settings.DEBUG' found in celery.py"
 PY
 
 ENV DJANGO_SETTINGS_MODULE=richesreach.settings_production
