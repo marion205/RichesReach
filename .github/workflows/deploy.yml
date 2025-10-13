@@ -1,10 +1,17 @@
 name: Build & Deploy Backend
+
 on:
   push:
     branches: [ main ]
-    paths:
-      - 'backend/**'
-      - '.github/workflows/deploy.yml'
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: 498606688292.dkr.ecr.us-east-1.amazonaws.com
+  ECR_REPOSITORY: riches-reach-streaming
+  CONTAINER_NAME: streaming-pipeline
+  ECS_CLUSTER: riches-reach-prod
+  ECS_SERVICE: riches-reach-prod-svc
+  TASK_DEF_PATH: ecs_task_definition_optimized.json
 
 jobs:
   deploy:
@@ -13,27 +20,9 @@ jobs:
       id-token: write
       contents: read
 
-    env:
-      AWS_REGION: us-east-1
-      ECR_REPO: 498606688292.dkr.ecr.us-east-1.amazonaws.com/riches-reach-streaming
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Print context (backend/backend)
-        run: |
-          cd backend/backend
-          echo "== PWD ==" && pwd
-          echo "== Tree (top) ==" && ls -la
-          echo "== Verify files ==" && \
-            [ -f requirements.txt ] && \
-            [ -f richesreach/celery.py ] && \
-            [ -f richesreach/__init__.py ] && echo OK
-          sha256sum richesreach/celery.py richesreach/__init__.py || true
-
-      - name: Set up Buildx
-        uses: docker/setup-buildx-action@v3
 
       - name: Configure AWS
         uses: aws-actions/configure-aws-credentials@v4
@@ -43,43 +32,60 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to ECR
-        id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build & push (context backend/backend)
-        id: build
+      - name: Build & Push image
         uses: docker/build-push-action@v6
         with:
-          context: ./backend/backend
-          file: ./backend/backend/Dockerfile.production
+          context: backend/backend
+          file: backend/backend/Dockerfile.production
           push: true
-          platforms: linux/amd64
           provenance: false
-          no-cache: true
+          # tag both by commit and latest
+          tags: |
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest
           build-args: |
             BUILD_MARKER=${{ github.run_id }}-${{ github.sha }}
-          tags: |
-            ${{ env.ECR_REPO }}:${{ github.sha }}
 
-      - name: Get image digest
-        id: digest
+      # Sanity: prove the tag exists in ECR
+      - name: Verify image is in ECR
         run: |
-          DIGEST=$(jq -r 'to_entries[0].value["containerimage.digest"]' <<<'${{ steps.build.outputs.metadata }}')
-          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
-          echo "Using digest: $DIGEST"
+          aws ecr describe-images \
+            --repository-name "${ECR_REPOSITORY}" \
+            --image-ids imageTag="${GITHUB_SHA}" >/dev/null
+          echo "✅ Found image tag ${GITHUB_SHA} in ${ECR_REPOSITORY}"
 
-      - name: Render task definition with digest
+      # Render task def with the **correct** container name
+      - name: Render task definition (update image)
         id: render
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
-          task-definition: ecs_task_definition_optimized.json
-          container-name: streaming-pipeline
-          image: ${{ env.ECR_REPO }}:${{ github.sha }}
+          task-definition: ${{ env.TASK_DEF_PATH }}
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
 
-      - name: Deploy service
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+      # Sanity: prove the container name exists in the rendered file
+      - name: Assert container name exists in rendered task def
+        run: |
+          cat "${{ steps.render.outputs.task-definition }}" | jq -r '.containerDefinitions[].name' | tee /tmp/containers.txt
+          grep -x "${CONTAINER_NAME}" /tmp/containers.txt
+          echo "✅ Rendered task def contains container '${CONTAINER_NAME}'"
+
+      # Deploy
+      - name: Deploy to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
         with:
           task-definition: ${{ steps.render.outputs.task-definition }}
-          service: riches-reach-prod-svc
-          cluster: riches-reach-prod
-          wait-for-service-stability: true
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          # (no container-name here; we're supplying a fully-rendered task def)
+
+      # Optional: force a new deployment so service picks the new revision immediately
+      - name: Force new deployment
+        run: |
+          aws ecs update-service \
+            --cluster "${ECS_CLUSTER}" \
+            --service "${ECS_SERVICE}" \
+            --force-new-deployment >/dev/null
+          echo "🔁 Forced new deployment"
