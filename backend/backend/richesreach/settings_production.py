@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 from datetime import timedelta
 from dotenv import load_dotenv
+from django.core.exceptions import ImproperlyConfigured
 
 print("[BOOT] settings file =", __file__)
 
@@ -82,18 +83,29 @@ TEMPLATES = [
 WSGI_APPLICATION = 'richesreach.wsgi.application'
 ASGI_APPLICATION = 'richesreach.asgi.application'
 
-# Database
+# Database - Production Configuration
+def get_env_variable(var_name, default=None):
+    """Get environment variable or raise error if required"""
+    try:
+        return os.environ[var_name]
+    except KeyError:
+        if default is not None:
+            return default
+        error_msg = f"Set the {var_name} environment variable"
+        raise ImproperlyConfigured(error_msg)
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('DB_NAME', 'richesreach_prod'),
-        'USER': os.getenv('DB_USER', 'postgres'),
-        'PASSWORD': os.getenv('DB_PASSWORD', ''),
-        'HOST': os.getenv('DB_HOST', 'localhost'),
-        'PORT': os.getenv('DB_PORT', '5432'),
+        'NAME': get_env_variable('DB_NAME', 'appdb'),
+        'USER': get_env_variable('DB_USER', 'appuser'),
+        'PASSWORD': get_env_variable('DB_PASSWORD'),
+        'HOST': get_env_variable('DB_HOST'),
+        'PORT': get_env_variable('DB_PORT', '5432'),
         'OPTIONS': {
             'sslmode': 'require',
         },
+        'CONN_MAX_AGE': 600,  # Reuse connections for 10 minutes
     }
 }
 
@@ -163,36 +175,60 @@ SECURE_HSTS_PRELOAD = True
 # CSRF_COOKIE_SECURE = True
 
 # Redis configuration for caching and Celery
-REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+# For now, disable Redis in production until we set up ElastiCache
+# REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+REDIS_URL = None  # Disable Redis until ElastiCache is configured
 
-# Cache configuration
-CACHES = {
-    'default': {
-        'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': REDIS_URL,
-        'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+# Cache configuration - Use local memory cache if Redis is not available
+if REDIS_URL:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': REDIS_URL,
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            }
         }
     }
-}
+else:
+    # Fallback to local memory cache for production
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'unique-snowflake',
+        }
+    }
 
-# Celery configuration
-CELERY_BROKER_URL = REDIS_URL
-CELERY_RESULT_BACKEND = REDIS_URL
-CELERY_ACCEPT_CONTENT = ['json']
-CELERY_TASK_SERIALIZER = 'json'
-CELERY_RESULT_SERIALIZER = 'json'
-CELERY_TIMEZONE = TIME_ZONE
+# Celery configuration - Disable if Redis is not available
+if REDIS_URL:
+    CELERY_BROKER_URL = REDIS_URL
+    CELERY_RESULT_BACKEND = REDIS_URL
+    CELERY_ACCEPT_CONTENT = ['json']
+    CELERY_TASK_SERIALIZER = 'json'
+    CELERY_RESULT_SERIALIZER = 'json'
+    CELERY_TIMEZONE = TIME_ZONE
+else:
+    # Disable Celery if Redis is not available
+    CELERY_TASK_ALWAYS_EAGER = True  # Execute tasks synchronously
+    CELERY_TASK_EAGER_PROPAGATES = True
 
-# Channels configuration
-CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels_redis.core.RedisChannelLayer',
-        'CONFIG': {
-            'hosts': [REDIS_URL],
+# Channels configuration - Disable if Redis is not available
+if REDIS_URL:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {
+                'hosts': [REDIS_URL],
+            },
         },
-    },
-}
+    }
+else:
+    # Use in-memory channel layer if Redis is not available
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels.layers.InMemoryChannelLayer',
+        },
+    }
 
 # GraphQL configuration
 GRAPHENE = {
