@@ -14,16 +14,16 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # Copy the app (context MUST be backend/backend)
 COPY . .
 
-# Sanity: assert the files we care about are present and are the *new* ones
-# (If these fail, the build stops here, which is what we want.)
-RUN test -f richesreach/celery.py \
- && test -f richesreach/__init__.py \
- && python - <<'PY'
-import hashlib, pathlib, sys
-for p in ["richesreach/celery.py","richesreach/__init__.py"]:
-    h=hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()
-    print(f"HASH {p} {h}")
-PY
+# --- Content verification & build marker ---
+ARG GIT_SHA
+ARG CELERY_SHA
+RUN set -eux; \
+    echo "BUILD GIT_SHA=$GIT_SHA"; \
+    ACTUAL=$(sha256sum richesreach/celery.py | awk '{print $1}'); \
+    echo "CELERY_SHA(expected)=$CELERY_SHA"; \
+    echo "CELERY_SHA(actual)=$ACTUAL"; \
+    test "$ACTUAL" = "$CELERY_SHA"; \
+    printf "git=%s\ncelery=%s\n" "$GIT_SHA" "$ACTUAL" > /__build.txt
 
 ENV DJANGO_SETTINGS_MODULE=richesreach.settings_production
 CMD ["gunicorn","richesreach.wsgi:application","-b","0.0.0.0:8000","--workers","3","--timeout","90"]

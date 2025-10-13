@@ -15,6 +15,7 @@ jobs:
     permissions: { id-token: write, contents: read }
     steps:
       - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -24,18 +25,22 @@ jobs:
 
       - uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build & push
+      - name: Hash celery.py
+        id: hash
+        run: |
+          echo "celery_sha=$(shasum -a 256 backend/backend/richesreach/celery.py | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+
+      - name: Build & Push
         uses: docker/build-push-action@v6
         with:
           context: backend/backend
           file: backend/backend/Dockerfile.production
           push: true
-          provenance: false
-          tags: |
-            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
-            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest
+          no-cache: true
+          tags: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
           build-args: |
-            BUILD_MARKER=${{ github.run_id }}-${{ github.sha }}
+            GIT_SHA=${{ github.sha }}
+            CELERY_SHA=${{ steps.hash.outputs.celery_sha }}
 
       - name: Verify tag exists
         run: |
