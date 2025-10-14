@@ -103,7 +103,7 @@ DATABASES = {
         'HOST': get_env_variable('DB_HOST'),
         'PORT': get_env_variable('DB_PORT', '5432'),
         'OPTIONS': {
-            'sslmode': 'require',
+            'sslmode': 'disable',
         },
         'CONN_MAX_AGE': 600,  # Reuse connections for 10 minutes
     }
