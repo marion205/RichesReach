@@ -2,7 +2,7 @@ import graphene
 import graphql_jwt
 from graphene_django import DjangoObjectType
 from django.contrib.auth import get_user_model
-from core.graphql.queries import Query as SwingQuery, RunBacktestMutation, PortfolioMetricsType, PortfolioHoldingType, StockType, AdvancedStockScreeningResultType, WatchlistItemType, WatchlistStockType, RustStockAnalysisType, TechnicalIndicatorsType, FundamentalAnalysisType, TargetPriceResultType, PositionSizeResultType, DynamicStopResultType
+from core.graphql.queries import Query as SwingQuery, RunBacktestMutation, PortfolioMetricsType, PortfolioHoldingType, _mock_portfolio_metrics, StockType, AdvancedStockScreeningResultType, WatchlistItemType, WatchlistStockType, RustStockAnalysisType, TechnicalIndicatorsType, FundamentalAnalysisType, get_mock_stocks, get_mock_advanced_screening_results, get_mock_watchlist, get_mock_rust_stock_analysis, TargetPriceResultType, PositionSizeResultType, DynamicStopResultType
 from core.graphql.types import DayTradingPicksType, DayTradingPickType, DayTradingFeaturesType, DayTradingRiskType
 from core.types import StockDiscussionType, OptionOrderType, IncomeProfileType, AIRecommendationsType
 from core.crypto_graphql import CryptoPriceType, CryptocurrencyType, CryptoMutation
@@ -11,6 +11,7 @@ from core.sbloc_mutations import SblocMutation
 from core.notification_graphql import NotificationQuery, NotificationMutation
 from core.benchmark_graphql import BenchmarkQuery, BenchmarkMutation
 from core.swing_trading_graphql import SwingTradingQuery, SwingTradingMutation
+from core.mutations import AddToWatchlist, RemoveFromWatchlist
 
 User = get_user_model()
 
@@ -2911,6 +2912,10 @@ class Mutation(SblocMutation, NotificationMutation, BenchmarkMutation, SwingTrad
     verify_token = graphql_jwt.Verify.Field()
     refresh_token = graphql_jwt.Refresh.Field()
     runBacktest = RunBacktestMutation.Field()
+    
+    # Watchlist mutations
+    addToWatchlist = AddToWatchlist.Field()
+    removeFromWatchlist = RemoveFromWatchlist.Field()
     
     # SBLOC mutations
     create_sbloc_session = SblocMutation.create_sbloc_session
