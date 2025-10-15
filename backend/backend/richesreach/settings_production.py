@@ -33,7 +33,7 @@ def _db_cfg():
             "PASSWORD": parsed.password,
             "HOST": parsed.hostname,
             "PORT": parsed.port or "5432",
-            "OPTIONS": {"sslmode": _env("SSLMODE", "require")},
+            "OPTIONS": {"sslmode": _env("SSLMODE","PGSSLMODE","POSTGRES_SSLMODE","DJANGO_DB_SSLMODE", "require")},
         }
 
     # Normalize keys from multiple naming conventions
@@ -53,8 +53,8 @@ def _db_cfg():
     pwd  = pick("PGPASSWORD","POSTGRES_PASSWORD","DJANGO_DB_PASSWORD", required=True)
     name = pick("PGDATABASE","POSTGRES_DB","DJANGO_DB_NAME", required=True)
     
-    # CRITICAL: Use PGSSLMODE if available, fallback to SSLMODE, then default to require
-    sslm = pick("PGSSLMODE","SSLMODE","DJANGO_DB_SSLMODE", default="require")
+    # CRITICAL: Use multiple SSL mode environment variables, default to require
+    sslm = pick("PGSSLMODE","SSLMODE","POSTGRES_SSLMODE","DJANGO_DB_SSLMODE", default="require")
 
     return {
         "ENGINE": "django.db.backends.postgresql",
