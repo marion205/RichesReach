@@ -6,7 +6,7 @@ on:
     branches: [ main ]
     paths:
       - "backend/backend/**"
-      - "backend/backend/Dockerfile.production"
+      - "Dockerfile"
       - ".github/workflows/build-and-push.yml"
 
 permissions:
@@ -26,51 +26,46 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure AWS creds (OIDC)
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
 
-      - name: Login to ECR
+      - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Hash celery.py
-        id: hash
+      # Sanity checks so this never breaks silently
+      - name: Verify build context & Dockerfile exist
         run: |
-          echo "celery_sha=$(shasum -a 256 backend/backend/richesreach/celery.py | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+          echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
+          ls -al
+          test -f Dockerfile || (echo "Dockerfile missing at repo root"; exit 1)
+          test -f backend/backend/requirements.txt || (echo "backend/backend/requirements.txt missing"; exit 1)
+          test -f backend/backend/richesreach/settings_production.py || (echo "settings_production.py missing"; exit 1)
 
-      - name: Build image
-        run: |
-          docker build -t $ECR_REPOSITORY:$IMAGE_TAG \
-            -f Dockerfile \
-            --build-arg GIT_SHA=${{ github.sha }} \
-            --build-arg CELERY_SHA=${{ steps.hash.outputs.celery_sha }} \
-            --no-cache \
-            .
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Create repo if missing (optional)
-        run: |
-          aws ecr describe-repositories --repository-names "$ECR_REPOSITORY" || \
-          aws ecr create-repository --repository-name "$ECR_REPOSITORY" >/dev/null
+      - name: Build & Push (new Dockerfile at repo root, correct context)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          platforms: linux/amd64
+          tags: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+          build-args: |
+            BUILD_SHA=${{ github.sha }}
+          no-cache: true
 
-      - name: Tag & Push
-        run: |
-          docker tag $ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-
-      - name: Output pushed digest
+      - name: Resolve and print image digest
         id: digest
         run: |
-          DIGEST=$(aws ecr describe-images --repository-name "$ECR_REPOSITORY" \
-            --image-ids imageTag="$IMAGE_TAG" --query 'imageDetails[0].imageDigest' --output text)
+          DIGEST=$(aws ecr describe-images \
+            --repository-name riches-reach-streaming \
+            --image-ids imageTag=sha-${{ github.sha }} \
+            --query 'imageDetails[0].imageDigest' \
+            --output text --region us-east-1)
           echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
           echo "✅ Image pushed with digest: $DIGEST"
-
-      - name: Persist digest (artifact)
-        uses: actions/upload-artifact@v4
-        with:
-          name: image-digest
-          path: |
-            ./  # optional if you want to capture additional metadata
