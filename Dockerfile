@@ -5,32 +5,27 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# ---- system deps first (psycopg2, cryptography, etc.)
+# 1) deps first (path is RELATIVE TO REPO ROOT)
+COPY backend/backend/requirements.txt /tmp/requirements.txt
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      build-essential gcc \
-      libpq-dev \
-      libssl-dev \
-    && rm -rf /var/lib/apt/lists/*
+      build-essential gcc libpq-dev \
+    && rm -rf /var/lib/apt/lists/* \
+ && pip install --no-cache-dir --upgrade pip setuptools wheel \
+ && pip install --no-cache-dir -r /tmp/requirements.txt
 
-# ---- copy requirements only (better cache), then install
-COPY backend/backend/backend/requirements.txt /app/requirements.txt
-RUN set -eux; \
-    python -V; pip -V; ls -al /app; \
-    test -f /app/requirements.txt || (echo "requirements.txt missing in /app" && exit 2); \
-    pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir -r /app/requirements.txt
+# 2) app code (copy the actual Django project folder)
+COPY backend/backend/ /app/
 
-# ---- copy the app code
-COPY backend/backend/backend/ /app/
+# 3) sanity guards (fail early if paths are wrong)
+RUN test -f /app/manage.py || (echo "❌ /app/manage.py missing. Check COPY path backend/backend/ → /app"; ls -al /app; exit 3)
+RUN test -f /app/richesreach/settings.py || (echo "❌ /app/richesreach/settings.py missing"; ls -al /app/richesreach; exit 3)
 
-# ensure prod settings ends up in image (explicit!)
-RUN test -f /app/richesreach/settings_production.py || (echo "settings_production.py missing!" && ls -R /app && exit 3)
+# 4) build-safe static collection (no DB/S3)
+ENV DJANGO_SETTINGS_MODULE=richesreach.settings_build
+RUN mkdir -p /app/staticfiles && python manage.py collectstatic --noinput
 
-# Set Django settings module
+# 5) runtime settings
 ENV DJANGO_SETTINGS_MODULE=richesreach.settings_production
 
-# Collect static files (no database required during build)
-RUN python manage.py collectstatic --noinput
-
-# default command (adjust to yours)
-CMD ["gunicorn", "richesreach.wsgi:application", "-b", "0.0.0.0:8000", "--workers", "3"]
+EXPOSE 8000
+CMD ["gunicorn","richesreach.wsgi:application","--bind","0.0.0.0:8000","--workers","3"]

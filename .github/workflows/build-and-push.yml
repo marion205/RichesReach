@@ -34,11 +34,9 @@ jobs:
       # Sanity checks so this never breaks silently
       - name: Verify build inputs
         run: |
-          echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
-          ls -al
           test -f Dockerfile || (echo "Dockerfile missing at repo root"; exit 1)
-          test -f backend/backend/backend/requirements.txt || (echo "backend/backend/backend/requirements.txt missing"; exit 1)
-          test -f backend/backend/backend/richesreach/settings_production.py || (echo "settings_production.py missing"; exit 1)
+          test -f backend/backend/requirements.txt || (echo "backend/backend/requirements.txt missing"; exit 1)
+          test -f backend/backend/manage.py || (echo "backend/backend/manage.py missing"; exit 1)
           echo "✅ All build inputs verified"
 
       # Generate consistent tags (sha + latest on main)
@@ -73,6 +71,15 @@ jobs:
           echo "${{ steps.meta.outputs.tags }}"
           echo "Digest:"
           echo "${{ steps.build.outputs.digest }}"
+
+      # Verify app paths inside image
+      - name: Verify app paths inside image
+        run: |
+          ID=$(docker create ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:sha-${{ github.sha }})
+          docker cp "$ID":/app/manage.py /tmp/manage.py || (echo "❌ /app/manage.py missing in image"; exit 3)
+          docker cp "$ID":/app/richesreach/settings_production.py /tmp/ || (echo "❌ settings_production.py missing in image"; exit 3)
+          docker rm "$ID"
+          echo "✅ App files present in the image"
 
     outputs:
       digest: ${{ steps.build.outputs.digest }}
