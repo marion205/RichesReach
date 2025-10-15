@@ -6,7 +6,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 # 1) deps first (path is RELATIVE TO REPO ROOT)
-COPY backend/backend/requirements.txt /tmp/requirements.txt
+COPY backend/backend/backend/requirements.txt /tmp/requirements.txt
 RUN apt-get update && apt-get install -y --no-install-recommends \
       build-essential gcc libpq-dev \
     && rm -rf /var/lib/apt/lists/* \
@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && pip install --no-cache-dir -r /tmp/requirements.txt
 
 # 2) app code (copy the actual Django project folder)
-COPY backend/backend/ /app/
+COPY backend/backend/backend/ /app/
 
 # 3) sanity guards (fail early if paths are wrong)
 RUN test -f /app/manage.py || (echo "❌ /app/manage.py missing. Check COPY path backend/backend/ → /app"; ls -al /app; exit 3)
