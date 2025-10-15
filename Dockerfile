@@ -23,6 +23,7 @@ COPY backend/backend/backend/backend/ /app/
 
 # ensure prod settings ends up in image (explicit!)
 COPY backend/backend/backend/backend/richesreach/settings_production.py /app/richesreach/settings_production.py
+COPY backend/backend/richesreach/settings_build.py /app/richesreach/settings_build.py
 
 # optional: fail fast if file missing
 RUN test -f /app/richesreach/settings_production.py || (echo "settings_production.py missing!" && ls -R /app && exit 3)
