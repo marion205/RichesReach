@@ -15,6 +15,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY . .
+# Copy manage.py from the correct location
+COPY backend/manage.py .
 
 # Verify settings_production.py is present
 RUN python -c "import os; assert os.path.exists('richesreach/settings_production.py'), 'settings_production.py not found!'; print('✅ settings_production.py found')"
