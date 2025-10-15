@@ -35,8 +35,8 @@ jobs:
       - name: Verify build inputs
         run: |
           test -f Dockerfile || (echo "Dockerfile missing at repo root"; exit 1)
-          test -f backend/backend/requirements.txt || (echo "backend/backend/requirements.txt missing"; exit 1)
-          test -f backend/backend/manage.py || (echo "backend/backend/manage.py missing"; exit 1)
+          test -f backend/backend/backend/requirements.txt || (echo "backend/backend/backend/requirements.txt missing"; exit 1)
+          test -f backend/backend/backend/manage.py || (echo "backend/backend/backend/manage.py missing"; exit 1)
           echo "✅ All build inputs verified"
 
       # Generate consistent tags (sha + latest on main)
