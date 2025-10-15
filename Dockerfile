@@ -14,7 +14,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # ---- copy requirements only (better cache), then install
 COPY backend/backend/requirements.txt /app/requirements.txt
-RUN python -V && pip -V && \
+RUN set -eux; \
+    python -V; pip -V; ls -al /app; \
+    test -f /app/requirements.txt || (echo "requirements.txt missing in /app" && exit 2); \
     pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --no-cache-dir -r /app/requirements.txt
 
