@@ -110,7 +110,6 @@ jobs:
           platforms: linux/amd64
           build-args: |
             APP_DIR=${{ env.APP_DIR }}
-            BUILD_DATE=${{ github.run_number }}  # Cache busting
           tags: |
             ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ steps.tags.outputs.raw }}
             ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ steps.tags.outputs.pref }}
@@ -118,7 +117,6 @@ jobs:
             ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ steps.tags.outputs.latest }}
           cache-from: type=registry,ref=${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:buildcache
           cache-to: type=registry,ref=${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:buildcache,mode=max
-          no-cache: true            # Force fresh build to avoid cached layers
 
       # Show pushed image info
       - name: Show pushed image info
