@@ -58,6 +58,7 @@ jobs:
           GIT_SHA=$(git rev-parse --short=12 HEAD)
           IMG_LOCAL="rr-verify:$GIT_SHA"
           docker build --pull --no-cache \
+            --platform linux/amd64 \
             -f "$DOCKERFILE" "$CONTEXT_DIR" \
             --build-arg GIT_SHA="$GIT_SHA" \
             --build-arg CELERY_SHA="${{ steps.cel.outputs.sha }}" \
