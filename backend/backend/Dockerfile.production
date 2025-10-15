@@ -10,19 +10,12 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install Python dependencies
-COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt /app/
+RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir -r /app/requirements.txt
 
 # Copy application code
-COPY . .
-# Copy manage.py from the correct location
-COPY backend/backend/manage.py .
-
-# Verify settings_production.py is present
-RUN python -c "import os; assert os.path.exists('richesreach/settings_production.py'), 'settings_production.py not found!'; print('✅ settings_production.py found')"
-
-# Collect static files
-RUN python manage.py collectstatic --noinput
+COPY . /app/
+RUN python /app/manage.py collectstatic --noinput
 
 # Set Django settings module
 ENV DJANGO_SETTINGS_MODULE=richesreach.settings_production
