@@ -5,8 +5,8 @@ on:
   push:
     branches: [ main ]
     paths:
-      - "backend/**"
-      - "Dockerfile"
+      - "backend/backend/backend/**"
+      - "backend/backend/backend/Dockerfile.production"
       - ".github/workflows/build-and-push.yml"
 
 permissions:
@@ -38,7 +38,7 @@ jobs:
 
       - name: Build image
         run: |
-          docker build -t $ECR_REPOSITORY:$IMAGE_TAG -f backend/backend/Dockerfile.production backend/backend
+          docker build -t $ECR_REPOSITORY:$IMAGE_TAG -f backend/backend/backend/Dockerfile.production backend/backend/backend
 
       - name: Create repo if missing (optional)
         run: |
