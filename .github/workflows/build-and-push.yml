@@ -4,10 +4,6 @@ on:
   workflow_dispatch:
   push:
     branches: [ main ]
-    paths:
-      - "backend/backend/**"
-      - "Dockerfile"
-      - ".github/workflows/build-and-push.yml"
 
 permissions:
   id-token: write
@@ -17,7 +13,6 @@ env:
   AWS_REGION: us-east-1
   ECR_REGISTRY: 498606688292.dkr.ecr.us-east-1.amazonaws.com
   ECR_REPOSITORY: riches-reach-streaming
-  IMAGE_TAG: sha-${{ github.sha }}
 
 jobs:
   build:
@@ -31,7 +26,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
@@ -46,63 +41,46 @@ jobs:
           test -f backend/backend/richesreach/settings_production.py || (echo "settings_production.py missing"; exit 1)
           echo "✅ All build inputs verified"
 
+      # Generate consistent tags (sha + latest on main)
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}
+          tags: |
+            type=sha,format=long
+            type=raw,value=latest,enable={{is_default_branch}}
+
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build & Push (new Dockerfile at repo root, correct context)
+      - name: Build & Push
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile
           push: true
           platforms: linux/amd64
-          tags: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
-          build-args: |
-            BUILD_SHA=${{ github.sha }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           no-cache: true
 
-      - name: Verify requirements inside image
+      # Use the digest output directly (don't "describe-images" by tag)
+      - name: Show pushed image info
         run: |
-          ID=$(docker create ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }})
-          docker cp "$ID":/app/requirements.txt /tmp/requirements.txt || (echo "❌ /app/requirements.txt missing in image" && exit 3)
-          head -n 20 /tmp/requirements.txt || true
-          docker rm "$ID"
-          echo "✅ requirements.txt found in image"
-
-      - name: Verify settings_production.py present inside image
-        run: |
-          ID=$(docker create ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }})
-          docker cp "$ID":/app/richesreach/settings_production.py /tmp/settings_production.py || (echo "❌ settings_production.py missing in image" && exit 3)
-          test -s /tmp/settings_production.py || (echo "❌ settings_production.py is empty" && exit 3)
-          docker rm "$ID"
-          echo "✅ settings_production.py found in image"
-
-      - name: Resolve and print image digest
-        id: digest
-        run: |
-          DIGEST=$(aws ecr describe-images \
-            --repository-name ${{ env.ECR_REPOSITORY }} \
-            --image-ids imageTag=${{ env.IMAGE_TAG }} \
-            --query 'imageDetails[0].imageDigest' \
-            --output text --region ${{ env.AWS_REGION }})
-          if [ -z "$DIGEST" ] || [ "$DIGEST" = "None" ]; then
-            echo "❌ Could not resolve digest for ${{ env.IMAGE_TAG }}"
-            exit 1
-          fi
-          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
-          echo "✅ Image pushed: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}"
-          echo "✅ Digest: $DIGEST"
+          echo "Tags pushed:"
+          echo "${{ steps.meta.outputs.tags }}"
+          echo "Digest:"
+          echo "${{ steps.build.outputs.digest }}"
 
     outputs:
-      image: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
-      digest: ${{ steps.digest.outputs.digest }}
+      digest: ${{ steps.build.outputs.digest }}
+      image_repo: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}
 
   deploy:
     needs: build
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
     steps:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -111,21 +89,32 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Fetch current task definition
+      - name: Fail if digest missing
         run: |
-          TD_ARN=$(aws ecs describe-services \
+          if [ -z "${{ needs.build.outputs.digest }}" ]; then
+            echo "No digest from build step"; exit 1
+          fi
+          echo "Digest OK: ${{ needs.build.outputs.digest }}"
+
+      - name: Fetch current ECS task definition
+        run: |
+          aws ecs describe-services \
             --cluster riches-reach-cluster \
             --services riches-reach-streaming-service \
+            --region ${{ env.AWS_REGION }} \
             --query 'services[0].taskDefinition' \
-            --output text --region ${{ env.AWS_REGION }})
-          aws ecs describe-task-definition --task-definition "$TD_ARN" --region ${{ env.AWS_REGION }} > td.json
-          echo "Current TD: $TD_ARN"
+            --output text > td_arn.txt
+          aws ecs describe-task-definition \
+            --task-definition "$(cat td_arn.txt)" \
+            --region ${{ env.AWS_REGION }} > td.json
 
-      - name: Swap container image to digest
+      - name: Swap container image to immutable digest
         run: |
-          IMG="${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}@${{ needs.build.outputs.digest }}"
-          jq --arg IMG "$IMG" '.taskDefinition.containerDefinitions[0].image = $IMG
-            | .taskDefinition.containerDefinitions' td.json > container-defs.json
+          IMG="${{ needs.build.outputs.image_repo }}@${{ needs.build.outputs.digest }}"
+          jq --arg IMG "$IMG" '
+            .taskDefinition.containerDefinitions[0].image = $IMG
+            | .taskDefinition.containerDefinitions
+          ' td.json > container-defs.json
 
           CPU=$(jq -r '.taskDefinition.cpu' td.json)
           MEM=$(jq -r '.taskDefinition.memory' td.json)
@@ -136,21 +125,22 @@ jobs:
           VOLUMES=$(jq -c '.taskDefinition.volumes' td.json)
           FAMILY=$(jq -r '.taskDefinition.family' td.json)
 
-          NEW_TD=$(aws ecs register-task-definition \
-            --family "$FAMILY" \
-            --network-mode "$NET" \
-            --execution-role-arn "$EXEC_ROLE" \
-            --task-role-arn "$TASK_ROLE" \
-            --cpu "$CPU" \
-            --memory "$MEM" \
-            --requires-compatibilities "$REQUIRES" \
-            --container-definitions file://container-defs.json \
-            --volumes "$VOLUMES" \
-            --region ${{ env.AWS_REGION }} \
-            --query 'taskDefinition.taskDefinitionArn' --output text)
-
+          NEW_TD=$(
+            aws ecs register-task-definition \
+              --family "$FAMILY" \
+              --network-mode "$NET" \
+              --execution-role-arn "$EXEC_ROLE" \
+              --task-role-arn "$TASK_ROLE" \
+              --cpu "$CPU" \
+              --memory "$MEM" \
+              --requires-compatibilities "$REQUIRES" \
+              --container-definitions file://container-defs.json \
+              --volumes "$VOLUMES" \
+              --region ${{ env.AWS_REGION }} \
+              --query 'taskDefinition.taskDefinitionArn' --output text
+          )
           echo "NEW_TD=$NEW_TD" >> $GITHUB_ENV
-          echo "✅ Registered TD: $NEW_TD"
+          echo "Registered TD: $NEW_TD"
 
       - name: Update ECS service
         run: |
@@ -163,4 +153,4 @@ jobs:
             --cluster riches-reach-cluster \
             --services riches-reach-streaming-service \
             --region ${{ env.AWS_REGION }}
-          echo "✅ Service updated to $NEW_TD"
+          echo "Service updated to $NEW_TD"
