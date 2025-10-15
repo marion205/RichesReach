@@ -1,73 +1,45 @@
 # syntax=docker/dockerfile:1.7
 
-# ---- base with build deps ----
-FROM python:3.12-slim AS base
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=on \
-    PIP_NO_CACHE_DIR=1
+FROM python:3.12-slim
 
-# Install system deps (psycopg2, Pillow, etc. adjust as needed)
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+# Where your Django app actually lives:
+ARG APP_DIR=backend/backend/backend/backend
+
+WORKDIR /app
+
+# Install OS deps as needed
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential gcc libpq-dev libjpeg62-turbo-dev zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# ---- deps layer (better cache) ----
-FROM base AS deps
-# This ARG lets us avoid hardcoding the weird path
-ARG APP_DIR=backend/backend/backend/backend
-WORKDIR /app
-# ✅ Copy requirements first (correct nested path) for cache-friendly installs
-COPY ${APP_DIR}/requirements.txt /app/requirements.txt
-RUN python -m pip install --upgrade pip && \
-    pip install --no-cache-dir -r /app/requirements.txt
+# Install Python deps with cache-friendly layering
+COPY ${APP_DIR}/requirements.txt /tmp/requirements.txt
+RUN python -m pip install --upgrade pip && pip install --no-cache-dir -r /tmp/requirements.txt
 
-# ---- runtime image ----
-FROM base AS runtime
-# Copy installed site-packages and scripts from deps
-COPY --from=deps /usr/local/lib/python3.12 /usr/local/lib/python3.12
-COPY --from=deps /usr/local/bin /usr/local/bin
-
-WORKDIR /app
-# ✅ Now copy the rest of your app (correct nested path)
-ARG APP_DIR=backend/backend/backend/backend
+# ✅ Copy ONLY the Django app (so manage.py is at /app/manage.py)
 COPY ${APP_DIR}/ /app/
-
-# Create a non-root user
-RUN useradd -m appuser
 
 # Sanity guards (fail early if paths are wrong)
 RUN test -f /app/manage.py || (echo "❌ /app/manage.py missing. Check COPY path ${APP_DIR} → /app"; ls -al /app; exit 3)
 RUN test -f /app/richesreach/settings.py || (echo "❌ /app/richesreach/settings.py missing"; ls -al /app/richesreach; exit 3)
 
-# Configure Django for build-time operations (if needed)
-ENV DJANGO_SETTINGS_MODULE=richesreach.settings \
-    PYTHONPATH=/app \
-    SECRET_KEY=dummy
-
-# Optional: collect static in image build (default OFF to avoid build failures)
-ARG RUN_COLLECTSTATIC=false
-RUN if [ "$RUN_COLLECTSTATIC" = "true" ]; then \
-      python manage.py check --deploy && \
-      python manage.py collectstatic --noinput; \
-    else \
-      echo "Skipping collectstatic during build (set RUN_COLLECTSTATIC=true to enable)"; \
-    fi
+# Create a non-root user
+RUN useradd -m appuser
+USER appuser
 
 # Runtime settings
 ENV DJANGO_SETTINGS_MODULE=richesreach.settings_production
 
-# Security: run as non-root
-USER appuser
-
-# Healthcheck: exec form, no heredoc
-ENV HEALTHCHECK_URL=http://127.0.0.1:8000/healthz
+# Healthcheck: simple and reliable
 HEALTHCHECK --interval=30s --timeout=3s --start-period=30s --retries=3 \
-  CMD python -c "import os,sys,urllib.request; u=os.getenv('HEALTHCHECK_URL','http://127.0.0.1:8000/healthz'); urllib.request.urlopen(u, timeout=2); print('OK')" || exit 1
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2)" || exit 1
 
 # Expose port
 EXPOSE 8000
 
-# Default command; override in compose/k8s as needed
-# For prod, prefer gunicorn:
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "3", "richesreach.wsgi:application"]
+# For prod, prefer gunicorn; dev server shown for simplicity
+# CMD ["gunicorn", "--bind", "0.0.0.0:8000", "richesreach.wsgi:application"]
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
