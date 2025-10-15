@@ -1,10 +1,10 @@
 {
     "taskDefinition": {
-        "taskDefinitionArn": "arn:aws:ecs:us-east-1:498606688292:task-definition/riches-reach-streaming-pipeline-optimized:78",
+        "taskDefinitionArn": "arn:aws:ecs:us-east-1:498606688292:task-definition/riches-reach-streaming-pipeline-optimized:79",
         "containerDefinitions": [
             {
                 "name": "streaming-pipeline",
-                "image": "498606688292.dkr.ecr.us-east-1.amazonaws.com/riches-reach-streaming:439054706e335b19269b22822af753d8dfe849fc",
+                "image": "498606688292.dkr.ecr.us-east-1.amazonaws.com/riches-reach-streaming:37066ff481ea@sha256:28e2c3f780154dacf4e4316ca4ca33e83bcd56b6438388cf1589497989ee40c6",
                 "cpu": 0,
                 "memoryReservation": 1024,
                 "portMappings": [
@@ -152,7 +152,7 @@
         "taskRoleArn": "arn:aws:iam::498606688292:role/riches-reach-streaming-role",
         "executionRoleArn": "arn:aws:iam::498606688292:role/ecsTaskExecutionRole",
         "networkMode": "awsvpc",
-        "revision": 78,
+        "revision": 79,
         "volumes": [],
         "status": "ACTIVE",
         "requiresAttributes": [
@@ -199,15 +199,15 @@
         "placementConstraints": [],
         "compatibilities": [
             "EC2",
-            "FARGATE",
-            "MANAGED_INSTANCES"
+            "MANAGED_INSTANCES",
+            "FARGATE"
         ],
         "requiresCompatibilities": [
             "FARGATE"
         ],
         "cpu": "512",
         "memory": "2048",
-        "registeredAt": "2025-10-14T14:42:39.846000-04:00",
+        "registeredAt": "2025-10-14T20:38:47.548000-04:00",
         "registeredBy": "arn:aws:iam::498606688292:user/riches-reach-ai-user"
     },
     "tags": []
