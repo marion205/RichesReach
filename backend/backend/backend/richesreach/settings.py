@@ -167,9 +167,7 @@ else:
             }
     else:
         # Check for DJANGO_DB_* environment variables first (from ECS secrets)
-        django_db_engine = os.getenv("DJANGO_DB_ENGINE")
-        print(f"[BOOT] DJANGO_DB_ENGINE={django_db_engine}", flush=True)
-        if django_db_engine:
+        if os.getenv("DJANGO_DB_ENGINE"):
             # Production mode with DJANGO_DB_* environment variables
             DATABASES = {
                 "default": {
@@ -183,10 +181,8 @@ else:
                     "OPTIONS": {"sslmode": os.getenv("SSLMODE", "require")},
                 }
             }
-            print(f"[BOOT] Using production database config: {DATABASES['default']['HOST']}", flush=True)
         else:
             # Local development defaults
-            print(f"[BOOT] Falling back to local development defaults", flush=True)
             DB_NAME = os.getenv("PGDATABASE", "dev")
             DB_USER = os.getenv("PGUSER", os.getenv("USER", "dev"))  # Use current user
             DB_PASS = os.getenv("PGPASSWORD", "")  # No password for local dev

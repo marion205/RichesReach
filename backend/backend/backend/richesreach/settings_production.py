@@ -97,13 +97,13 @@ def get_env_variable(var_name, default=None):
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': get_env_variable('DB_NAME', 'appdb'),
-        'USER': get_env_variable('DB_USER', 'appuser'),
-        'PASSWORD': get_env_variable('DB_PASSWORD'),
-        'HOST': get_env_variable('DB_HOST'),
-        'PORT': get_env_variable('DB_PORT', '5432'),
+        'NAME': get_env_variable('DJANGO_DB_NAME', 'appdb'),
+        'USER': get_env_variable('DJANGO_DB_USER', 'appuser'),
+        'PASSWORD': get_env_variable('DJANGO_DB_PASSWORD'),
+        'HOST': get_env_variable('DJANGO_DB_HOST'),
+        'PORT': get_env_variable('DJANGO_DB_PORT', '5432'),
         'OPTIONS': {
-            'sslmode': 'disable',
+            'sslmode': os.getenv('SSLMODE', 'require'),
         },
         'CONN_MAX_AGE': 600,  # Reuse connections for 10 minutes
     }
