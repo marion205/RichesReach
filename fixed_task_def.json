@@ -2,7 +2,7 @@
   "containerDefinitions": [
     {
       "name": "streaming-pipeline",
-      "image": "498606688292.dkr.ecr.us-east-1.amazonaws.com/riches-reach-streaming:37066ff481ea@sha256:28e2c3f780154dacf4e4316ca4ca33e83bcd56b6438388cf1589497989ee40c6",
+      "image": "498606688292.dkr.ecr.us-east-1.amazonaws.com/riches-reach-streaming:4d8cb6e400c9f01418157f00ad29c11050f3cb9c@sha256:bfe7a1eaecd3f0bb5b62bc07ec00a1c3d1a14eb910045264639f395e84803237",
       "cpu": 0,
       "memoryReservation": 1024,
       "portMappings": [

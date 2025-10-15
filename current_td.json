@@ -1,108 +1,161 @@
 {
     "taskDefinition": {
-        "taskDefinitionArn": "arn:aws:ecs:us-east-1:498606688292:task-definition/riches-reach-ai-task:312",
+        "taskDefinitionArn": "arn:aws:ecs:us-east-1:498606688292:task-definition/riches-reach-streaming-pipeline-optimized:79",
         "containerDefinitions": [
             {
-                "name": "riches-reach-ai",
-                "image": "498606688292.dkr.ecr.us-east-1.amazonaws.com/riches-reach-ai:65c68050ea03e1249927b8ab5fcd89084c05f72e",
+                "name": "streaming-pipeline",
+                "image": "498606688292.dkr.ecr.us-east-1.amazonaws.com/riches-reach-streaming:37066ff481ea@sha256:28e2c3f780154dacf4e4316ca4ca33e83bcd56b6438388cf1589497989ee40c6",
                 "cpu": 0,
+                "memoryReservation": 1024,
                 "portMappings": [
                     {
                         "containerPort": 8000,
                         "hostPort": 8000,
-                        "protocol": "tcp"
+                        "protocol": "tcp",
+                        "name": "web"
                     }
                 ],
                 "essential": true,
-                "entryPoint": [
-                    "/bin/sh",
-                    "-c"
-                ],
-                "command": [
-                    "cd /app && python manage.py migrate --noinput && python manage.py collectstatic --noinput || true && exec gunicorn richesreach.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120"
-                ],
                 "environment": [
                     {
                         "name": "DJANGO_SETTINGS_MODULE",
-                        "value": "richesreach.settings"
+                        "value": "richesreach.settings_production"
                     },
                     {
-                        "name": "DJANGO_DB_ENGINE",
-                        "value": "django.db.backends.postgresql"
+                        "name": "AWS_REGION",
+                        "value": "us-east-1"
                     },
                     {
                         "name": "GRAPHQL_MODE",
                         "value": "full"
                     },
                     {
-                        "name": "DEBUG",
-                        "value": "False"
+                        "name": "PYTHONUNBUFFERED",
+                        "value": "1"
                     },
                     {
-                        "name": "STATIC_ROOT",
-                        "value": "/app/staticfiles"
+                        "name": "YODLEE_LOGIN_NAME",
+                        "value": "test-login-name"
                     },
                     {
-                        "name": "ALLOWED_HOSTS",
-                        "value": "*"
+                        "name": "KINESIS_STREAM_NAME",
+                        "value": "riches-reach-market-data"
+                    },
+                    {
+                        "name": "ENVIRONMENT",
+                        "value": "production"
+                    },
+                    {
+                        "name": "KAFKA_CLUSTER_ARN",
+                        "value": "arn:aws:kafka:us-east-1:498606688292:cluster/riches-reach-kafka/c49fce44-4eb5-4644-b4d9-bd802b6c75bd-4"
+                    },
+                    {
+                        "name": "YODLEE_SECRET",
+                        "value": "dummy-secret"
+                    },
+                    {
+                        "name": "PYTHONDONTWRITEBYTECODE",
+                        "value": "1"
+                    },
+                    {
+                        "name": "YODLEE_FASTLINK_URL",
+                        "value": "https://test.fastlink.yodlee.com"
                     }
                 ],
                 "mountPoints": [],
                 "volumesFrom": [],
                 "secrets": [
                     {
-                        "name": "DJANGO_DB_HOST",
-                        "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/prod/db:PGHOST::"
+                        "name": "SECRET_KEY",
+                        "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr-django-secret-key-IdsacH"
                     },
                     {
-                        "name": "DJANGO_DB_PORT",
-                        "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/prod/db:PGPORT::"
+                        "name": "POSTGRES_PASSWORD",
+                        "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/final-credentials-1759159508:PASSWORD::"
                     },
                     {
-                        "name": "DJANGO_DB_USER",
-                        "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/prod/db:PGUSER::"
+                        "name": "POSTGRES_USER",
+                        "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/final-credentials-1759159508:USER::"
                     },
                     {
-                        "name": "DJANGO_DB_PASSWORD",
-                        "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/prod/db:PGPASSWORD::"
+                        "name": "POSTGRES_HOST",
+                        "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/final-credentials-1759159508:HOST::"
                     },
                     {
-                        "name": "DJANGO_DB_NAME",
-                        "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/prod/db:PGDATABASE::"
+                        "name": "POSTGRES_DB",
+                        "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/final-credentials-1759159508:NAME::"
+                    },
+                    {
+                        "name": "POSTGRES_PORT",
+                        "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/final-credentials-1759159508:PORT::"
+                    },
+                    {
+                        "name": "POLYGON_API_KEY",
+                        "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:richesreach/polygon-api-key-cuwyhr"
+                    },
+                    {
+                        "name": "FINNHUB_API_KEY",
+                        "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:richesreach/finnhub-api-key-LqpWaB"
+                    },
+                    {
+                        "name": "DB_NAME",
+                        "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/final-credentials-1759159508:NAME::"
+                    },
+                    {
+                        "name": "DB_USER",
+                        "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/final-credentials-1759159508:USER::"
+                    },
+                    {
+                        "name": "DB_PASSWORD",
+                        "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/final-credentials-1759159508:PASSWORD::"
+                    },
+                    {
+                        "name": "DB_HOST",
+                        "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/final-credentials-1759159508:HOST::"
+                    },
+                    {
+                        "name": "DB_PORT",
+                        "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/final-credentials-1759159508:PORT::"
+                    }
+                ],
+                "stopTimeout": 30,
+                "ulimits": [
+                    {
+                        "name": "nofile",
+                        "softLimit": 65536,
+                        "hardLimit": 65536
                     }
                 ],
                 "logConfiguration": {
                     "logDriver": "awslogs",
                     "options": {
-                        "awslogs-group": "/ecs/riches-reach-ai",
+                        "awslogs-group": "/aws/riches-reach/streaming",
+                        "awslogs-create-group": "true",
                         "awslogs-region": "us-east-1",
-                        "awslogs-stream-prefix": "ecs"
+                        "awslogs-stream-prefix": "streaming-pipeline"
                     }
                 },
                 "healthCheck": {
                     "command": [
                         "CMD-SHELL",
-                        "curl -f http://localhost:8000/health/ || exit 1"
+                        "exit 0"
                     ],
                     "interval": 30,
                     "timeout": 5,
                     "retries": 3,
-                    "startPeriod": 120
+                    "startPeriod": 60
                 },
                 "systemControls": []
             }
         ],
-        "family": "riches-reach-ai-task",
-        "taskRoleArn": "arn:aws:iam::498606688292:role/ecsTaskRole",
+        "family": "riches-reach-streaming-pipeline-optimized",
+        "taskRoleArn": "arn:aws:iam::498606688292:role/riches-reach-streaming-role",
         "executionRoleArn": "arn:aws:iam::498606688292:role/ecsTaskExecutionRole",
         "networkMode": "awsvpc",
-        "revision": 312,
+        "revision": 79,
         "volumes": [],
         "status": "ACTIVE",
         "requiresAttributes": [
-            {
-                "name": "com.amazonaws.ecs.capability.logging-driver.awslogs"
-            },
             {
                 "name": "ecs.capability.execution-role-awslogs"
             },
@@ -110,10 +163,7 @@
                 "name": "com.amazonaws.ecs.capability.ecr-auth"
             },
             {
-                "name": "com.amazonaws.ecs.capability.docker-remote-api.1.19"
-            },
-            {
-                "name": "ecs.capability.secrets.asm.environment-variables"
+                "name": "com.amazonaws.ecs.capability.docker-remote-api.1.21"
             },
             {
                 "name": "com.amazonaws.ecs.capability.task-iam-role"
@@ -132,20 +182,32 @@
             },
             {
                 "name": "com.amazonaws.ecs.capability.docker-remote-api.1.29"
+            },
+            {
+                "name": "com.amazonaws.ecs.capability.logging-driver.awslogs"
+            },
+            {
+                "name": "com.amazonaws.ecs.capability.docker-remote-api.1.19"
+            },
+            {
+                "name": "ecs.capability.secrets.asm.environment-variables"
+            },
+            {
+                "name": "ecs.capability.container-ordering"
             }
         ],
         "placementConstraints": [],
         "compatibilities": [
             "EC2",
-            "FARGATE",
-            "MANAGED_INSTANCES"
+            "MANAGED_INSTANCES",
+            "FARGATE"
         ],
         "requiresCompatibilities": [
             "FARGATE"
         ],
         "cpu": "512",
-        "memory": "1024",
-        "registeredAt": "2025-10-14T15:35:16.006000-04:00",
+        "memory": "2048",
+        "registeredAt": "2025-10-14T20:38:47.548000-04:00",
         "registeredBy": "arn:aws:iam::498606688292:user/riches-reach-ai-user"
     },
     "tags": []
