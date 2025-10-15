@@ -209,7 +209,8 @@ else:
     import logging
     logging.getLogger(__name__).warning("DB_ENGINE=%s, DB_NAME=%s", DATABASES["default"]["ENGINE"], DATABASES["default"]["NAME"])
     print(f"[BOOT] Database configuration loaded successfully: {DATABASES['default']['HOST']}", flush=True)
-    # Force new build with corrected settings - DJANGO_DB_* variables supported
+    # CRITICAL FIX: This image now supports DJANGO_DB_* environment variables
+    # Previous images failed because they only checked POSTGRES_* variables
 # Email Configuration
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
