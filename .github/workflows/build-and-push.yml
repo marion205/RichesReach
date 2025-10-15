@@ -1,4 +1,4 @@
-name: Build & Push to ECR
+name: Production Deploy
 
 on:
   workflow_dispatch:
@@ -8,8 +8,6 @@ on:
       - "Dockerfile"
       - "backend/**"
       - ".github/workflows/build-and-push.yml"
-  pull_request:
-    branches: [ main ]
 
 permissions:
   id-token: write
@@ -23,7 +21,7 @@ env:
   APP_DIR: "backend/backend/backend/backend"  # Single source of truth
 
 jobs:
-  test-and-build:
+  production-deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -151,7 +149,7 @@ jobs:
       image_repo: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}
 
   deploy:
-    needs: test-and-build
+    needs: production-deploy
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     steps:
@@ -164,10 +162,10 @@ jobs:
 
       - name: Fail if digest missing
         run: |
-          if [ -z "${{ needs.test-and-build.outputs.digest }}" ]; then
+          if [ -z "${{ needs.production-deploy.outputs.digest }}" ]; then
             echo "No digest from build step"; exit 1
           fi
-          echo "Digest OK: ${{ needs.test-and-build.outputs.digest }}"
+          echo "Digest OK: ${{ needs.production-deploy.outputs.digest }}"
 
       - name: Fetch current ECS task definition
         run: |
@@ -184,7 +182,7 @@ jobs:
       - name: Swap container image to immutable digest
         run: |
           # Use the raw SHA tag that we know exists
-          IMG="${{ needs.test-and-build.outputs.image_repo }}:${{ github.sha }}"
+          IMG="${{ needs.production-deploy.outputs.image_repo }}:${{ github.sha }}"
           echo "Using image: $IMG"
           jq --arg IMG "$IMG" '
             .taskDefinition.containerDefinitions[0].image = $IMG
