@@ -43,7 +43,7 @@ jobs:
           --platform linux/amd64 \
           --no-cache \  # Bust all layers for fresh code
           --build-arg CELERY_SHA=$CELERY_SHA \
-          -f backend/backend/Dockerfile.production \
+          -f Dockerfile \
           -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
           -t $ECR_REGISTRY/$ECR_REPOSITORY:latest \
-          --push backend/backend
+          --push .
