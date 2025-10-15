@@ -293,9 +293,19 @@ class AddToWatchlist(graphene.Mutation):
         notes = graphene.String()
 
     def mutate(self, info, symbol, company_name=None, notes=""):
-        user = info.context.user
-        if not user.is_authenticated:
-            raise GraphQLError("You must be logged in to add stocks to watchlist.")
+        # Better error handling for user authentication
+        try:
+            user = info.context.user
+            if not user or not hasattr(user, 'is_authenticated') or not user.is_authenticated:
+                return AddToWatchlist(
+                    success=False,
+                    message="You must be logged in to add stocks to watchlist."
+                )
+        except Exception as auth_error:
+            return AddToWatchlist(
+                success=False,
+                message=f"Authentication error: {str(auth_error)}"
+            )
         
         try:
             # Get or create the stock
@@ -341,6 +351,11 @@ class AddToWatchlist(graphene.Mutation):
             )
             
         except Exception as e:
+            # Log the full error for debugging
+            import traceback
+            error_details = traceback.format_exc()
+            print(f"Watchlist mutation error: {error_details}")
+            
             return AddToWatchlist(
                 success=False,
                 message=f"Failed to add {symbol} to watchlist: {str(e)}"
@@ -356,9 +371,19 @@ class RemoveFromWatchlist(graphene.Mutation):
         symbol = graphene.String(required=True)
 
     def mutate(self, info, symbol):
-        user = info.context.user
-        if not user.is_authenticated:
-            raise GraphQLError("You must be logged in to remove stocks from watchlist.")
+        # Better error handling for user authentication
+        try:
+            user = info.context.user
+            if not user or not hasattr(user, 'is_authenticated') or not user.is_authenticated:
+                return RemoveFromWatchlist(
+                    success=False,
+                    message="You must be logged in to remove stocks from watchlist."
+                )
+        except Exception as auth_error:
+            return RemoveFromWatchlist(
+                success=False,
+                message=f"Authentication error: {str(auth_error)}"
+            )
         
         try:
             # Find the stock
