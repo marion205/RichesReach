@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
 View, 
 TextInput, 
@@ -16,6 +16,7 @@ SafeAreaView
 import { gql, useMutation, useApolloClient } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
 import * as ImagePicker from 'expo-image-picker';
+import { StableNumberInput } from '../../../components/StableNumberInput';
 const { width } = Dimensions.get('window');
 // Income Profile Constants
 const incomeBrackets = [
@@ -171,7 +172,8 @@ profilePic: profilePic || null
 } 
 });
 // User created successfully - go directly to onboarding
-await client.resetStore();
+// Clear cache safely without resetting store while queries are in flight
+await client.cache.reset();
 onSignUp();
 } catch (err) {
 console.error('Signup error:', err);
@@ -289,8 +291,14 @@ size={20}
 color="#666" 
 />
 </TouchableOpacity>
-{showIncomeProfile && (
-<View style={styles.incomeProfileForm}>
+<View style={[
+  styles.incomeProfileForm,
+  { 
+    opacity: showIncomeProfile ? 1 : 0,
+    height: showIncomeProfile ? 'auto' : 0,
+    overflow: 'hidden'
+  }
+]}>
 <Text style={styles.incomeProfileSubtitle}>
 Help us provide personalized AI investment recommendations
 </Text>
@@ -317,17 +325,21 @@ incomeBracket === bracket && styles.selectedOptionText
 ))}
 </View>
 </View>
-{/* Age */}
-<View style={styles.formGroup}>
-<Text style={styles.label}>Age</Text>
-<TextInput
-style={styles.input}
-value={age}
-onChangeText={setAge}
-placeholder="Enter your age"
-keyboardType="numeric"
-/>
-</View>
+      {/* Age - MINIMAL TEST INPUT */}
+      <View style={styles.formGroup}>
+        <Text style={styles.label}>Age</Text>
+        <TextInput
+          style={[styles.input, { borderWidth: 1, borderColor: '#ccc' }]}
+          value={age}
+          onChangeText={setAge}
+          placeholder="Enter your age (minimum 18)"
+          keyboardType="number-pad"
+          blurOnSubmit={false}
+          autoCorrect={false}
+          autoCapitalize="none"
+          maxLength={3}
+        />
+      </View>
 {/* Investment Goals */}
 <View style={styles.formGroup}>
 <Text style={styles.label}>Investment Goals (Select all that apply)</Text>
@@ -398,7 +410,6 @@ investmentHorizon === option && styles.selectedOptionText
 </View>
 </View>
 </View>
-)}
 </View>
 {/* Sign Up Button */}
 <TouchableOpacity 

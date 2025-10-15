@@ -13,23 +13,8 @@ psycopg2-binary>=2.9.7
 redis>=4.6.0
 requests>=2.31.0
 django-environ>=0.11.0
-python-dotenv>=1.0.0
-stripe>=7.0.0
 dj-database-url>=2.1.0
 gunicorn>=21.2
 uvicorn[standard]>=0.24
 whitenoise>=6
 pandas~=2.2
-scikit-learn~=1.3
-yfinance~=0.2
-aiohttp~=3.9
-psutil~=5.9
-# AI/ML packages
-openai>=1.0.0
-anthropic>=0.7.0
-google-generativeai>=0.3.0
-numpy>=1.24.0
-statsmodels>=0.14.0
-joblib>=1.3.0
-# Optional deep learning (commented out to avoid large image size)
-# tensorflow>=2.13.0

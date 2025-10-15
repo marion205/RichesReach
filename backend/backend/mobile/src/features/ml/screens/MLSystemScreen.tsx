@@ -18,27 +18,27 @@ import {
 } from '../../../graphql/mlLearning';
 
 interface MLSystemStatus {
-  outcome_tracking: {
-    total_outcomes: number;
-    recent_outcomes: number;
+  outcomeTracking: {
+    totalOutcomes: number;
+    recentOutcomes: number;
   };
   models: {
-    safe_model: string | null;
-    aggressive_model: string | null;
+    safeModel: string | null;
+    aggressiveModel: string | null;
   };
   bandit: {
     [strategy: string]: {
-      win_rate: number;
+      winRate: number;
       confidence: number;
       alpha: number;
       beta: number;
     };
   };
-  last_training: {
+  lastTraining: {
     SAFE: string | null;
     AGGRESSIVE: string | null;
   };
-  ml_available: boolean;
+  mlAvailable: boolean;
 }
 
 interface MLSystemScreenProps {
@@ -227,17 +227,17 @@ export default function MLSystemScreen({ navigateTo }: MLSystemScreenProps) {
         </View>
         <View style={styles.statusRow}>
           <Text style={styles.statusLabel}>ML Available:</Text>
-          <Text style={[styles.statusValue, { color: mlStatus?.ml_available ? '#4CAF50' : '#F44336' }]}>
-            {mlStatus?.ml_available ? 'Yes' : 'No'}
+          <Text style={[styles.statusValue, { color: mlStatus?.mlAvailable ? '#4CAF50' : '#F44336' }]}>
+            {mlStatus?.mlAvailable ? 'Yes' : 'No'}
           </Text>
         </View>
         <View style={styles.statusRow}>
           <Text style={styles.statusLabel}>Total Outcomes:</Text>
-          <Text style={styles.statusValue}>{mlStatus?.outcome_tracking.total_outcomes || 0}</Text>
+          <Text style={styles.statusValue}>{mlStatus?.outcomeTracking.totalOutcomes || 0}</Text>
         </View>
         <View style={styles.statusRow}>
           <Text style={styles.statusLabel}>Recent Outcomes (7d):</Text>
-          <Text style={styles.statusValue}>{mlStatus?.outcome_tracking.recent_outcomes || 0}</Text>
+          <Text style={styles.statusValue}>{mlStatus?.outcomeTracking.recentOutcomes || 0}</Text>
         </View>
       </View>
 
@@ -247,25 +247,25 @@ export default function MLSystemScreen({ navigateTo }: MLSystemScreenProps) {
         <View style={styles.modelRow}>
           <Text style={styles.modelLabel}>SAFE Model:</Text>
           <Text style={styles.modelValue}>
-            {mlStatus?.models.safe_model ? 'Active' : 'Not Available'}
+            {mlStatus?.models.safeModel ? 'Active' : 'Not Available'}
           </Text>
         </View>
         <View style={styles.modelRow}>
           <Text style={styles.modelLabel}>AGGRESSIVE Model:</Text>
           <Text style={styles.modelValue}>
-            {mlStatus?.models.aggressive_model ? 'Active' : 'Not Available'}
+            {mlStatus?.models.aggressiveModel ? 'Active' : 'Not Available'}
           </Text>
         </View>
         <View style={styles.modelRow}>
           <Text style={styles.modelLabel}>Last Training (SAFE):</Text>
           <Text style={styles.modelValue}>
-            {formatDate(mlStatus?.last_training.SAFE)}
+            {formatDate(mlStatus?.lastTraining.SAFE)}
           </Text>
         </View>
         <View style={styles.modelRow}>
           <Text style={styles.modelLabel}>Last Training (AGGRESSIVE):</Text>
           <Text style={styles.modelValue}>
-            {formatDate(mlStatus?.last_training.AGGRESSIVE)}
+            {formatDate(mlStatus?.lastTraining.AGGRESSIVE)}
           </Text>
         </View>
       </View>
@@ -277,8 +277,8 @@ export default function MLSystemScreen({ navigateTo }: MLSystemScreenProps) {
           <View key={strategy} style={styles.strategyRow}>
             <View style={styles.strategyInfo}>
               <Text style={styles.strategyName}>{strategy.replace('_', ' ').toUpperCase()}</Text>
-              <Text style={[styles.winRate, { color: getWinRateColor(performance.win_rate) }]}>
-                {(performance.win_rate * 100).toFixed(1)}%
+              <Text style={[styles.winRate, { color: getWinRateColor(performance.winRate) }]}>
+                {(performance.winRate * 100).toFixed(1)}%
               </Text>
             </View>
             <View style={styles.strategyActions}>

@@ -11,17 +11,17 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent / 'core'))
 from advanced_market_data_service import AdvancedMarketDataService
 async def test_alpha_vantage():
-"""Test Alpha Vantage API connection specifically"""
-print(" Testing Alpha Vantage API Connection...")
-print("=" * 50)
-# Set the API key directly for testing
-os.environ['ALPHA_VANTAGE_API_KEY'] = 'K0A7XYLDNXHNQ1WI'
-# Initialize service
-service = AdvancedMarketDataService()
-print(" Advanced Market Data Service initialized")
-print(f" API Key: {os.environ.get('ALPHA_VANTAGE_API_KEY', 'Not set')[:8]}...")
-try:
-# Test VIX data (most important)
+    """Test Alpha Vantage API connection specifically"""
+    print(" Testing Alpha Vantage API Connection...")
+    print("=" * 50)
+    # Set the API key directly for testing
+    os.environ['ALPHA_VANTAGE_API_KEY'] = 'K0A7XYLDNXHNQ1WI'
+    # Initialize service
+    service = AdvancedMarketDataService()
+    print(" Advanced Market Data Service initialized")
+    print(f" API Key: {os.environ.get('ALPHA_VANTAGE_API_KEY', 'Not set')[:8]}...")
+    try:
+        # Test VIX data (most important)
 print("\n Testing VIX (Volatility Index)...")
 vix_data = await service.get_real_time_vix()
 if vix_data and vix_data.source != 'synthetic':

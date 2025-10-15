@@ -19,7 +19,6 @@ const GET_STOCK_CHART_DATA = gql`
   query GetStockChartData($symbol: String!, $timeframe: String!) {
     stockChartData(symbol: $symbol, timeframe: $timeframe) {
       symbol
-      timeframe
       currentPrice
       change
       changePercent

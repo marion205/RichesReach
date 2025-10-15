@@ -1,0 +1,159 @@
+{
+  "containerDefinitions": [
+    {
+      "name": "streaming-pipeline",
+      "image": "498606688292.dkr.ecr.us-east-1.amazonaws.com/riches-reach-streaming:4d8cb6e400c9f01418157f00ad29c11050f3cb9c@sha256:bfe7a1eaecd3f0bb5b62bc07ec00a1c3d1a14eb910045264639f395e84803237",
+      "cpu": 0,
+      "memoryReservation": 1024,
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "hostPort": 8000,
+          "protocol": "tcp",
+          "name": "web"
+        }
+      ],
+      "essential": true,
+      "environment": [
+        {
+          "name": "DJANGO_SETTINGS_MODULE",
+          "value": "richesreach.settings_production"
+        },
+        {
+          "name": "AWS_REGION",
+          "value": "us-east-1"
+        },
+        {
+          "name": "GRAPHQL_MODE",
+          "value": "full"
+        },
+        {
+          "name": "PYTHONUNBUFFERED",
+          "value": "1"
+        },
+        {
+          "name": "YODLEE_LOGIN_NAME",
+          "value": "test-login-name"
+        },
+        {
+          "name": "KINESIS_STREAM_NAME",
+          "value": "riches-reach-market-data"
+        },
+        {
+          "name": "ENVIRONMENT",
+          "value": "production"
+        },
+        {
+          "name": "KAFKA_CLUSTER_ARN",
+          "value": "arn:aws:kafka:us-east-1:498606688292:cluster/riches-reach-kafka/c49fce44-4eb5-4644-b4d9-bd802b6c75bd-4"
+        },
+        {
+          "name": "YODLEE_SECRET",
+          "value": "dummy-secret"
+        },
+        {
+          "name": "PYTHONDONTWRITEBYTECODE",
+          "value": "1"
+        },
+        {
+          "name": "YODLEE_FASTLINK_URL",
+          "value": "https://test.fastlink.yodlee.com"
+        }
+      ],
+      "mountPoints": [],
+      "volumesFrom": [],
+      "secrets": [
+        {
+          "name": "SECRET_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr-django-secret-key-IdsacH"
+        },
+        {
+          "name": "POSTGRES_PASSWORD",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/final-credentials-1759159508:PASSWORD::"
+        },
+        {
+          "name": "POSTGRES_USER",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/final-credentials-1759159508:USER::"
+        },
+        {
+          "name": "POSTGRES_HOST",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/final-credentials-1759159508:HOST::"
+        },
+        {
+          "name": "POSTGRES_DB",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/final-credentials-1759159508:NAME::"
+        },
+        {
+          "name": "POSTGRES_PORT",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/final-credentials-1759159508:PORT::"
+        },
+        {
+          "name": "POLYGON_API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:richesreach/polygon-api-key-cuwyhr"
+        },
+        {
+          "name": "FINNHUB_API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:richesreach/finnhub-api-key-LqpWaB"
+        },
+        {
+          "name": "DB_NAME",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/final-credentials-1759159508:NAME::"
+        },
+        {
+          "name": "DB_USER",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/final-credentials-1759159508:USER::"
+        },
+        {
+          "name": "DB_PASSWORD",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/final-credentials-1759159508:PASSWORD::"
+        },
+        {
+          "name": "DB_HOST",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/final-credentials-1759159508:HOST::"
+        },
+        {
+          "name": "DB_PORT",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/final-credentials-1759159508:PORT::"
+        }
+      ],
+      "stopTimeout": 30,
+      "ulimits": [
+        {
+          "name": "nofile",
+          "softLimit": 65536,
+          "hardLimit": 65536
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/aws/riches-reach/streaming",
+          "awslogs-create-group": "true",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "streaming-pipeline"
+        }
+      },
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "exit 0"
+        ],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 60
+      },
+      "systemControls": []
+    }
+  ],
+  "family": "riches-reach-streaming-pipeline-optimized",
+  "taskRoleArn": "arn:aws:iam::498606688292:role/riches-reach-streaming-role",
+  "executionRoleArn": "arn:aws:iam::498606688292:role/ecsTaskExecutionRole",
+  "networkMode": "awsvpc",
+  "volumes": [],
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "512",
+  "memory": "2048"
+}

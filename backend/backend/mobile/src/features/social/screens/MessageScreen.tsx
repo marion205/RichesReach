@@ -10,7 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import MockUserService from '../../user/services/MockUserService';
+// Mock service removed - using real API
 
 interface MessageScreenProps {
   userId: string;

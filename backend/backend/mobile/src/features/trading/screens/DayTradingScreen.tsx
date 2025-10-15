@@ -20,29 +20,29 @@ interface DayTradingPick {
   side: Side;
   score: number;
   features: {
-    momentum_15m: number;
-    rvol_10m: number;
-    vwap_dist: number;
-    breakout_pct: number;
-    spread_bps: number;
-    catalyst_score: number;
+    momentum15m: number;
+    rvol10m: number;
+    vwapDist: number;
+    breakoutPct: number;
+    spreadBps: number;
+    catalystScore: number;
   };
   risk: {
-    atr_5m: number;
-    size_shares: number;
+    atr5m: number;
+    sizeShares: number;
     stop: number;
     targets: number[];
-    time_stop_min: number;
+    timeStopMin: number;
   };
   notes: string;
 }
 
 interface DayTradingData {
-  as_of: string;
+  asOf: string;
   mode: TradingMode;
   picks: DayTradingPick[];
-  universe_size: number;
-  quality_threshold: number;
+  universeSize: number;
+  qualityThreshold: number;
 }
 
 export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen: string) => void }) {
@@ -143,7 +143,7 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
 
   // robust entry computation (use atr around stop; invert for SHORT)
   const computeEntry = (pick: DayTradingPick) =>
-    pick.side === 'LONG' ? pick.risk.stop + pick.risk.atr_5m : Math.max(0, pick.risk.stop - pick.risk.atr_5m);
+    pick.side === 'LONG' ? pick.risk.stop + pick.risk.atr5m : Math.max(0, pick.risk.stop - pick.risk.atr5m);
 
   const handleTradeExecution = useCallback(
     (pick: DayTradingPick) => {
@@ -170,7 +170,7 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
                       entryPrice: entry,
                       stopPrice: pick.risk.stop,
                       targetPrice: primaryTarget,
-                      sizeShares: pick.risk.size_shares,
+                      sizeShares: pick.risk.sizeShares,
                       features: pick.features,
                       score: pick.score,
                       executedAt: new Date().toISOString(),
@@ -218,10 +218,10 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
           <View style={styles.block}>
             <Text style={[styles.blockTitle, { color: C.text }]}>Key Features</Text>
             <View style={styles.grid}>
-              <KV label="Momentum" value={item.features.momentum_15m.toFixed(3)} />
-              <KV label="RVOL" value={`${item.features.rvol_10m.toFixed(2)}x`} />
-              <KV label="VWAP" value={item.features.vwap_dist.toFixed(3)} />
-              <KV label="Breakout" value={item.features.breakout_pct.toFixed(3)} />
+              <KV label="Momentum" value={item.features.momentum15m.toFixed(3)} />
+              <KV label="RVOL" value={`${item.features.rvol10m.toFixed(2)}x`} />
+              <KV label="VWAP" value={item.features.vwapDist.toFixed(3)} />
+              <KV label="Breakout" value={item.features.breakoutPct.toFixed(3)} />
             </View>
           </View>
 
@@ -229,12 +229,12 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
           <View style={styles.block}>
             <Text style={[styles.blockTitle, { color: C.text }]}>Risk Management</Text>
             <View style={styles.grid}>
-              <KV label="Size" value={`${item.risk.size_shares} shares`} />
+              <KV label="Size" value={`${item.risk.sizeShares} shares`} />
               <KV label="Entry" value={`$${entry.toFixed(2)}`} />
               <KV label="Stop" value={`$${item.risk.stop.toFixed(2)}`} />
               <KV label="Target" value={`$${Number(target).toFixed(2)}`} />
-              <KV label="Time Stop" value={`${item.risk.time_stop_min} min`} />
-              <KV label="ATR(5m)" value={`${item.risk.atr_5m.toFixed(2)}`} />
+              <KV label="Time Stop" value={`${item.risk.timeStopMin} min`} />
+              <KV label="ATR(5m)" value={`${item.risk.atr5m.toFixed(2)}`} />
             </View>
           </View>
 
@@ -332,10 +332,10 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
       {dayTradingData && (
         <View style={[styles.marketBox, { backgroundColor: C.card }]}>
           <Text style={[styles.marketText, { color: C.sub }]}>
-            Last Updated: {new Date(dayTradingData.as_of).toLocaleTimeString()}
+            Last Updated: {new Date(dayTradingData.asOf).toLocaleTimeString()}
           </Text>
           <Text style={[styles.marketText, { color: C.sub }]}>
-            Universe: {dayTradingData.universe_size} • Threshold: {dayTradingData.quality_threshold}
+            Universe: {dayTradingData.universeSize} • Threshold: {dayTradingData.qualityThreshold}
           </Text>
         </View>
       )}

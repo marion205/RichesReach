@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { NewsPreferences } from '../graphql/newsPreferences';
 // News API Configuration
 const NEWS_API_KEY = '94a335c7316145f79840edd62f77e11e';
 const NEWS_API_BASE_URL = 'https://newsapi.org/v2';
@@ -40,6 +41,7 @@ categories: [NEWS_CATEGORIES.ALL],
 sources: [],
 keywords: [],
 };
+private newsPreferences: NewsPreferences | null = null;
 // Cache for news articles to reduce API calls
 private newsCache: {
 [category: string]: {
@@ -53,6 +55,7 @@ private readonly CACHE_DURATION = 2 * 60 * 60 * 1000;
 constructor() {
 this.loadSavedArticles();
 this.loadUserPreferences();
+this.loadNewsPreferences();
 }
 // Load saved articles from storage
 private async loadSavedArticles() {
@@ -74,6 +77,28 @@ this.userPreferences = JSON.parse(prefs);
 }
 } catch (error) {
 console.error('Error loading news preferences:', error);
+}
+}
+
+// Load news preferences from storage
+private async loadNewsPreferences() {
+try {
+const prefs = await AsyncStorage.getItem('newsPreferences');
+if (prefs) {
+this.newsPreferences = JSON.parse(prefs);
+}
+} catch (error) {
+console.error('Error loading news preferences:', error);
+}
+}
+
+// Update news preferences
+async updateNewsPreferences(preferences: NewsPreferences) {
+this.newsPreferences = preferences;
+try {
+await AsyncStorage.setItem('newsPreferences', JSON.stringify(preferences));
+} catch (error) {
+console.error('Error saving news preferences:', error);
 }
 }
 // Save articles to storage
@@ -255,6 +280,64 @@ return expiredCache.articles;
 return this.getFallbackNews();
 }
 }
+// Filter news based on user preferences
+private filterNewsByPreferences(articles: NewsArticle[]): NewsArticle[] {
+if (!this.newsPreferences) {
+return articles;
+}
+
+let filtered = articles;
+
+// Filter by news type preferences
+if (!this.newsPreferences.breakingNews) {
+filtered = filtered.filter(article => 
+!article.title.toLowerCase().includes('breaking') &&
+!article.title.toLowerCase().includes('urgent') &&
+!article.title.toLowerCase().includes('alert')
+);
+}
+
+if (!this.newsPreferences.marketNews) {
+filtered = filtered.filter(article => 
+article.category !== NEWS_CATEGORIES.MARKETS &&
+!article.title.toLowerCase().includes('market') &&
+!article.title.toLowerCase().includes('stock')
+);
+}
+
+if (!this.newsPreferences.companyNews) {
+filtered = filtered.filter(article => 
+!article.title.toLowerCase().includes('earnings') &&
+!article.title.toLowerCase().includes('quarterly') &&
+!article.title.toLowerCase().includes('corporate')
+);
+}
+
+if (!this.newsPreferences.earningsNews) {
+filtered = filtered.filter(article => 
+!article.title.toLowerCase().includes('earnings') &&
+!article.title.toLowerCase().includes('quarterly') &&
+!article.title.toLowerCase().includes('revenue')
+);
+}
+
+if (!this.newsPreferences.cryptoNews) {
+filtered = filtered.filter(article => 
+article.category !== NEWS_CATEGORIES.CRYPTO &&
+!article.title.toLowerCase().includes('bitcoin') &&
+!article.title.toLowerCase().includes('crypto') &&
+!article.title.toLowerCase().includes('blockchain')
+);
+}
+
+if (!this.newsPreferences.personalStocks) {
+// This would need portfolio data to filter by personal holdings
+// For now, we'll skip this filter
+}
+
+return filtered;
+}
+
 // Get personalized news based on user preferences
 async getPersonalizedNews(): Promise<NewsArticle[]> {
 try {
@@ -275,6 +358,10 @@ article.description.toLowerCase().includes(keyword.toLowerCase())
 )
 );
 }
+
+// Apply news preferences filtering
+personalized = this.filterNewsByPreferences(personalized);
+
 return personalized;
 } catch (error) {
 console.error('Error fetching personalized news:', error);
@@ -290,7 +377,8 @@ return personalizedNews;
 } else {
 // Get real news from API
 const realTimeNews = await this.getRealTimeNews(category);
-return realTimeNews;
+// Apply news preferences filtering even for non-personalized news
+return this.filterNewsByPreferences(realTimeNews);
 }
 } catch (error) {
 console.error('Error fetching news:', error);

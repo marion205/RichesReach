@@ -1,0 +1,43 @@
+# ---- build ----
+FROM rust:1.79-slim AS builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    pkg-config \
+    libssl-dev \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+WORKDIR /src
+
+# Copy Cargo files first for better caching
+COPY Cargo.toml Cargo.lock ./
+
+# Create a dummy main.rs to build dependencies
+RUN mkdir src && \
+    echo "fn main() {}" > src/main.rs && \
+    cargo build --release && \
+    rm -rf src
+
+# Copy source code
+COPY . .
+
+# Build the actual application
+RUN cargo build --release
+
+# ---- tiny runtime ----
+FROM gcr.io/distroless/cc-debian12
+
+# Copy the binary
+COPY --from=builder /src/target/release/crypto_analysis_engine /usr/local/bin/crypto_analysis_engine
+
+# Set the entrypoint
+ENTRYPOINT ["crypto_analysis_engine"]
+
+# Expose port
+EXPOSE 3002
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD ["/usr/local/bin/crypto_analysis_engine", "--health-check"]

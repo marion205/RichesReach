@@ -14,7 +14,8 @@ Alert,
 import Icon from 'react-native-vector-icons/Feather';
 import { gql, useQuery, useMutation } from '@apollo/client';
 import UserProfileCard from '../../UserProfileCard';
-import MockUserService, { MockUser } from '../../user/services/MockUserService';
+import { User } from '../../../types/social';
+// Mock data removed - using real API data
 // GraphQL Queries
 const GET_DISCOVER_USERS = gql`
 query GetDiscoverUsers($limit: Int, $offset: Int, $searchTerm: String, $experienceLevel: String, $sortBy: String) {

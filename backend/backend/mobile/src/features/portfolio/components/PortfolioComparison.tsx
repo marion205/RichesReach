@@ -11,6 +11,8 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { LineChart } from 'react-native-chart-kit';
+import { useQuery } from '@apollo/client';
+import { GET_BENCHMARK_SERIES, GET_AVAILABLE_BENCHMARKS, BenchmarkSeries } from '../../../graphql/benchmarkQueries';
 // Optional gradient (falls back if not installed)
 let LinearGradient: any = View;
 try {
@@ -37,6 +39,7 @@ interface Benchmark {
   icon: string;
   description: string;
   spark?: number[]; // optional mini-series for sparkline
+  data?: BenchmarkSeries; // real benchmark data
 }
 
 // ---------- Component ----------
@@ -54,28 +57,105 @@ const PortfolioComparison: React.FC<PortfolioComparisonProps> = ({
   // ---- Skeleton (very light) ----
   const isLoading = !portfolioHistory || portfolioHistory.length === 0;
 
-  // ---- Benchmarks (mock) ----
-  const benchmarks: Benchmark[] = [
-    { id: 'sp500', name: 'S&P 500', symbol: 'SPY', returnPercent: 12.3, color: '#0A84FF', icon: 'trending-up',
-      description: 'The 500 largest US companies',
-      spark: [100, 102, 101, 104, 106, 108, 109, 112]
-    },
-    { id: 'nasdaq', name: 'NASDAQ', symbol: 'QQQ', returnPercent: 18.7, color: '#34C759', icon: 'activity',
-      description: 'Technology-heavy index',
-      spark: [100, 103, 105, 107, 110, 115, 118, 120]
-    },
-    { id: 'dow', name: 'Dow Jones', symbol: 'DIA', returnPercent: 8.9, color: '#FF9F0A', icon: 'bar-chart',
-      description: '30 large US companies',
-      spark: [100, 101, 101, 102, 103, 104, 105, 106]
-    },
-    { id: 'total', name: 'Total Market', symbol: 'VTI', returnPercent: 11.2, color: '#AF52DE', icon: 'pie-chart',
-      description: 'Entire US stock market',
-      spark: [100, 101, 102, 103, 105, 107, 108, 110]
-    },
-  ];
+  // ---- Real Benchmark Data ----
+  const benchmarkSymbols = ['SPY', 'QQQ', 'DIA', 'VTI'];
+  
+  // Map selected timeframe to GraphQL timeframe
+  const getGraphQLTimeframe = (timeframe: string) => {
+    switch (timeframe) {
+      case '1M': return '1M';
+      case '3M': return '3M';
+      case '6M': return '6M';
+      case '1Y': return '1Y';
+      default: return '1Y';
+    }
+  };
+
+  const graphQLTimeframe = getGraphQLTimeframe(selectedTimeframe);
+
+  // Fetch real benchmark data for each symbol
+  const { data: spyData } = useQuery(GET_BENCHMARK_SERIES, {
+    variables: { symbol: 'SPY', timeframe: graphQLTimeframe },
+    skip: !selectedTimeframe,
+  });
+  
+  const { data: qqqData } = useQuery(GET_BENCHMARK_SERIES, {
+    variables: { symbol: 'QQQ', timeframe: graphQLTimeframe },
+    skip: !selectedTimeframe,
+  });
+  
+  const { data: diaData } = useQuery(GET_BENCHMARK_SERIES, {
+    variables: { symbol: 'DIA', timeframe: graphQLTimeframe },
+    skip: !selectedTimeframe,
+  });
+  
+  const { data: vtiData } = useQuery(GET_BENCHMARK_SERIES, {
+    variables: { symbol: 'VTI', timeframe: graphQLTimeframe },
+    skip: !selectedTimeframe,
+  });
+
+  // Create benchmarks with real data
+  const benchmarks: Benchmark[] = useMemo(() => {
+    const benchmarkConfigs = [
+      { 
+        id: 'sp500', 
+        name: 'S&P 500', 
+        symbol: 'SPY', 
+        color: '#0A84FF', 
+        icon: 'trending-up',
+        description: 'The 500 largest US companies',
+        data: spyData?.benchmarkSeries
+      },
+      { 
+        id: 'nasdaq', 
+        name: 'NASDAQ', 
+        symbol: 'QQQ', 
+        color: '#34C759', 
+        icon: 'activity',
+        description: 'Technology-heavy index',
+        data: qqqData?.benchmarkSeries
+      },
+      { 
+        id: 'dow', 
+        name: 'Dow Jones', 
+        symbol: 'DIA', 
+        color: '#FF9F0A', 
+        icon: 'bar-chart',
+        description: '30 large US companies',
+        data: diaData?.benchmarkSeries
+      },
+      { 
+        id: 'total', 
+        name: 'Total Market', 
+        symbol: 'VTI', 
+        color: '#AF52DE', 
+        icon: 'pie-chart',
+        description: 'Entire US stock market',
+        data: vtiData?.benchmarkSeries
+      },
+    ];
+
+    return benchmarkConfigs.map(config => {
+      const realReturn = config.data?.totalReturnPercent || 0;
+      const sparkData = config.data?.dataPoints?.map(dp => dp.value) || [];
+      
+      return {
+        ...config,
+        returnPercent: realReturn,
+        spark: sparkData.length > 0 ? sparkData : undefined,
+      };
+    });
+  }, [spyData, qqqData, diaData, vtiData]);
 
   // ---- Helpers ----
-  const getBenchmarkReturn = (annualReturn: number) => {
+  const getBenchmarkReturn = (benchmark: Benchmark) => {
+    // Use real data if available, otherwise fallback to calculated values
+    if (benchmark.data?.totalReturnPercent !== undefined) {
+      return benchmark.data.totalReturnPercent;
+    }
+    
+    // Fallback calculation (shouldn't be needed with real data)
+    const annualReturn = benchmark.returnPercent;
     switch (selectedTimeframe) {
       case '1M': return annualReturn / 12;
       case '3M': return annualReturn / 4;
@@ -122,21 +202,37 @@ const PortfolioComparison: React.FC<PortfolioComparisonProps> = ({
     });
 
     const portfolio = filteredSeries.map(p => p.value);
-    const makeRef = (annual: number) => {
-      const tfPct = getBenchmarkReturn(annual) / 100;
+    const makeRef = (benchmark: Benchmark) => {
+      const tfPct = getBenchmarkReturn(benchmark) / 100;
       const L = filteredSeries.length;
       return filteredSeries.map((_, i) => start * (1 + tfPct * (i / Math.max(1, L - 1))));
     };
+
+    // Create benchmark datasets from real data
+    const benchmarkDatasets = benchmarks.slice(0, 2).map((benchmark, index) => {
+      const color = benchmark.color;
+      const rgb = color.startsWith('#') ? 
+        parseInt(color.slice(1), 16) : 
+        parseInt(color, 16);
+      const r = (rgb >> 16) & 255;
+      const g = (rgb >> 8) & 255;
+      const b = rgb & 255;
+      
+      return {
+        data: makeRef(benchmark),
+        color: (o = 1) => `rgba(${r},${g},${b},${o})`,
+        strokeWidth: 2,
+      };
+    });
 
     return {
       labels,
       datasets: [
         { data: portfolio, color: (o = 1) => `rgba(10,132,255,${o})`, strokeWidth: 3 },
-        { data: makeRef(12.3), color: (o = 1) => `rgba(52,199,89,${o})`, strokeWidth: 2 },
-        { data: makeRef(18.7), color: (o = 1) => `rgba(255,159,10,${o})`, strokeWidth: 2 },
+        ...benchmarkDatasets,
       ],
     };
-  }, [filteredSeries, selectedTimeframe]);
+  }, [filteredSeries, selectedTimeframe, benchmarks]);
 
   // ---- Animate on timeframe change ----
   const flipFade = () => {
@@ -150,16 +246,20 @@ const PortfolioComparison: React.FC<PortfolioComparisonProps> = ({
   const bestBenchmark = useMemo(() => {
     const mapped = benchmarks.map(b => ({
       ...b,
-      tf: getBenchmarkReturn(b.returnPercent),
-      diff: timeframePerf.pct - getBenchmarkReturn(b.returnPercent),
+      tf: getBenchmarkReturn(b),
+      diff: timeframePerf.pct - getBenchmarkReturn(b),
     }));
     return mapped.sort((a, b) => b.tf - a.tf)[0];
   }, [benchmarks, selectedTimeframe, timeframePerf.pct]);
 
-  const beating = timeframePerf.pct > getBenchmarkReturn(12.3); // vs S&P by default
+  // Get SPY benchmark for comparison
+  const spyBenchmark = benchmarks.find(b => b.symbol === 'SPY');
+  const spyReturn = spyBenchmark ? getBenchmarkReturn(spyBenchmark) : 0;
+  
+  const beating = timeframePerf.pct > spyReturn;
   const insightText = beating
-    ? `Outperforming S&P 500 by ${fmtPct(timeframePerf.pct - getBenchmarkReturn(12.3))}. Staying diversified is working.`
-    : `Lagging S&P 500 by ${fmtPct(getBenchmarkReturn(12.3) - timeframePerf.pct)}. Consider tilting toward leaders or rebalancing.`;
+    ? `Outperforming S&P 500 by ${fmtPct(timeframePerf.pct - spyReturn)}. Staying diversified is working.`
+    : `Lagging S&P 500 by ${fmtPct(spyReturn - timeframePerf.pct)}. Consider tilting toward leaders or rebalancing.`;
 
   // ---- Simple error guard for the chart ----
   const ChartSafe = () => {
@@ -291,7 +391,7 @@ const PortfolioComparison: React.FC<PortfolioComparisonProps> = ({
         decelerationRate="fast"
         contentContainerStyle={{ paddingHorizontal: 12 }}
         renderItem={({ item }) => {
-          const adj = getBenchmarkReturn(item.returnPercent);
+          const adj = getBenchmarkReturn(item);
           const diff = timeframePerf.pct - adj;
           const outperform = diff > 0.01;
           return (

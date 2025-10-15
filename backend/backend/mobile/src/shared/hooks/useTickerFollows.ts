@@ -6,7 +6,7 @@ import { Alert } from 'react-native';
 export default function useTickerFollows() {
   const { data, loading, refetch } = useQuery(GET_MY_FOLLOWS, { fetchPolicy: 'cache-and-network' });
   const symbols = useMemo(
-    () => ((data?.me?.followedTickers || []).map((t: any) => t.symbol) as string[]),
+    () => (data?.me?.followedTickers || []) as string[],
     [data]
   );
 

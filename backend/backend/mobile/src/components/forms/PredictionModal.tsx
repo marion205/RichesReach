@@ -201,7 +201,11 @@ export default function PredictionModal({ visible, onClose, onCreated, defaultTi
           {/* Horizon */}
           <Text style={st.label}>Time Horizon</Text>
           <View style={st.row}>
-            {[7, 14, 30, 60, 90].map((d) => chip(`${d}d`, horizon === d, () => setHorizon(d)))}
+            {[7, 14, 30, 60, 90].map((d) => (
+              <View key={d}>
+                {chip(`${d}d`, horizon === d, () => setHorizon(d))}
+              </View>
+            ))}
           </View>
 
           {/* Target price & confidence */}

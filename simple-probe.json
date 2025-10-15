@@ -1,0 +1,6 @@
+[
+  {
+    "name": "streaming-pipeline",
+    "command": ["python", "-c", "import os; print('DJANGO_SETTINGS_MODULE=', os.getenv('DJANGO_SETTINGS_MODULE')); import importlib; m = importlib.import_module(os.getenv('DJANGO_SETTINGS_MODULE','richesreach.settings')); print('Loaded settings from:', getattr(m,'__file__','<no file>'))"]
+  }
+]

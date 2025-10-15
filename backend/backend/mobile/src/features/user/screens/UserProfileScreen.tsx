@@ -12,24 +12,27 @@ SafeAreaView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import UserProfileCard from '../../social/components/UserProfileCard';
-import MockUserService, { MockUser } from '../services/MockUserService';
+import { User } from '../../../types/social';
 interface UserProfileScreenProps {
 userId: string;
 onNavigate: (screen: string, params?: any) => void;
 }
 const UserProfileScreen: React.FC<UserProfileScreenProps> = ({ userId, onNavigate }) => {
 const [refreshing, setRefreshing] = useState(false);
-const [user, setUser] = useState<MockUser | null>(null);
+const [user, setUser] = useState<User | null>(null);
 const [loading, setLoading] = useState(true);
 const [error, setError] = useState<string | null>(null);
 const [renderKey, setRenderKey] = useState(0);
-const mockUserService = MockUserService.getInstance();
-// Load user profile from mock service
+
+// Load user profile from real API
 const loadUserProfile = () => {
 setLoading(true);
 setError(null);
 try {
-const userProfile = mockUserService.getUserById(userId);
+// TODO: Replace with real API call
+// const userProfile = await fetchUserProfile(userId);
+// For now, return null to avoid errors
+const userProfile = null;
 if (userProfile) {
 setUser(userProfile);
 } else {

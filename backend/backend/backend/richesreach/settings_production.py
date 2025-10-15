@@ -94,20 +94,36 @@ def get_env_variable(var_name, default=None):
         error_msg = f"Set the {var_name} environment variable"
         raise ImproperlyConfigured(error_msg)
 
-DATABASES = {
-    'default': {
+# Database configuration - support both DJANGO_DB_* and POSTGRES_* environment variables
+def get_db_config():
+    """Get database configuration from environment variables with fallbacks"""
+    # Try DJANGO_DB_* first, then fall back to POSTGRES_*
+    def get_db_var(django_name, postgres_name, default=None, required=False):
+        value = os.getenv(django_name) or os.getenv(postgres_name)
+        if not value and required:
+            raise ImproperlyConfigured(f"Missing required environment variable: {django_name} or {postgres_name}")
+        return value or default
+    
+    return {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': get_env_variable('DJANGO_DB_NAME', 'appdb'),
-        'USER': get_env_variable('DJANGO_DB_USER', 'appuser'),
-        'PASSWORD': get_env_variable('DJANGO_DB_PASSWORD'),
-        'HOST': get_env_variable('DJANGO_DB_HOST'),
-        'PORT': get_env_variable('DJANGO_DB_PORT', '5432'),
+        'NAME': get_db_var('DJANGO_DB_NAME', 'POSTGRES_DB', 'appdb'),
+        'USER': get_db_var('DJANGO_DB_USER', 'POSTGRES_USER', 'appuser'),
+        'PASSWORD': get_db_var('DJANGO_DB_PASSWORD', 'POSTGRES_PASSWORD', required=True),
+        'HOST': get_db_var('DJANGO_DB_HOST', 'POSTGRES_HOST', required=True),
+        'PORT': get_db_var('DJANGO_DB_PORT', 'POSTGRES_PORT', '5432'),
         'OPTIONS': {
             'sslmode': os.getenv('SSLMODE', 'require'),
         },
         'CONN_MAX_AGE': 600,  # Reuse connections for 10 minutes
     }
+
+DATABASES = {
+    'default': get_db_config()
 }
+
+# Debug logging for database configuration
+print(f"[BOOT] Database configuration: {DATABASES['default']['HOST']}:{DATABASES['default']['PORT']} DB={DATABASES['default']['NAME']} USER={DATABASES['default']['USER']} SSL={DATABASES['default']['OPTIONS']['sslmode']}")
+print(f"[BOOT] Environment variables: DJANGO_DB_HOST={os.getenv('DJANGO_DB_HOST')}, POSTGRES_HOST={os.getenv('POSTGRES_HOST')}, SSLMODE={os.getenv('SSLMODE')}")
 
 # Yodlee Configuration
 YODLEE_BASE_URL = os.getenv('YODLEE_BASE_URL', 'https://api.yodlee.com/ysl')

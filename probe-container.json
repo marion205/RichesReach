@@ -1,0 +1,8 @@
+[
+  {
+    "name": "streaming-pipeline",
+    "command": ["sh","-lc",
+      "python - <<'PY'\nimport os, importlib, sys\nprint('DJANGO_SETTINGS_MODULE=', os.getenv('DJANGO_SETTINGS_MODULE'))\ntry:\n  m = importlib.import_module(os.getenv('DJANGO_SETTINGS_MODULE','richesreach.settings'))\n  print('Loaded settings from:', getattr(m,'__file__','<no file>'))\nexcept Exception as e:\n  print('IMPORT ERROR:', e); sys.exit(2)\nPY"
+    ]
+  }
+]

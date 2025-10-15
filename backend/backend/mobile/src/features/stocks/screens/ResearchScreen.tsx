@@ -131,7 +131,7 @@ const CHART_QUERY = gql`
     $tf: String = "1D",
     $iv: String = "1D",
     $limit: Int = 180,
-    $inds: [String!] = ["SMA20","SMA50","EMA12","EMA26","RSI","MACD","MACD_hist","BB"]
+    $inds: [String!] = ["SMA20","SMA50","EMA12","EMA26","RSI","MACD","MACDHist","BB"]
   ) {
     stockChartData(
       symbol: $s,
@@ -159,13 +159,13 @@ const CHART_QUERY = gql`
         SMA50
         EMA12
         EMA26
-        BB_upper
-        BB_middle
-        BB_lower
+        BBUpper
+        BBMiddle
+        BBLower
         RSI14
         MACD
-        MACD_signal
-        MACD_hist
+        MACDSignal
+        MACDHist
       }
     }
   }
@@ -186,7 +186,7 @@ const ResearchScreen: React.FC = () => {
       tf: chartInterval,
       iv: chartInterval,
       limit: 180,
-      inds: ["SMA20","SMA50","EMA12","EMA26","RSI","MACD","MACD_hist","BB"],
+      inds: ["SMA20","SMA50","EMA12","EMA26","RSI","MACD","MACDHist","BB"],
     },
     skip: !symbol,
     fetchPolicy: 'cache-and-network',

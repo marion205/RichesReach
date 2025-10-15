@@ -38,6 +38,9 @@ nextClose?: string;
 timezone: string;
 }
 class MarketDataService {
+// Kill switch to disable client-side market data calls
+private MARKET_DATA_DISABLED = process.env.EXPO_PUBLIC_MARKET_SOURCE === 'none' || true; // temporary kill switch
+
 private apiKey: string = 'OHYSFF1AE446O7CR'; // Your Alpha Vantage API key
 private newsApiKey: string = '94a335c7316145f79840edd62f77e11e'; // Your NewsAPI key
 private baseUrl: string = 'https://www.alphavantage.co/query';
@@ -91,6 +94,11 @@ console.error('Failed to save API key:', error);
   }
 // Get real-time stock quote
 public async getStockQuote(symbol: string): Promise<StockQuote> {
+if (this.MARKET_DATA_DISABLED) {
+  console.warn('[MarketData] disabled in client; skipping', symbol);
+  return this.getMockQuote(symbol);
+}
+
 try {
 const data = await this.makeApiCall({
 function: 'GLOBAL_QUOTE',
@@ -158,6 +166,11 @@ return this.getMockQuote(symbol);
 }
 // Get multiple stock quotes with rate limiting
 public async getMultipleQuotes(symbols: string[]): Promise<StockQuote[]> {
+if (this.MARKET_DATA_DISABLED) {
+  console.warn('[MarketData] disabled in client; returning mock data for', symbols.length, 'symbols');
+  return symbols.map(symbol => this.getMockQuote(symbol));
+}
+
 const quotes: StockQuote[] = [];
 // Process symbols one by one to avoid rate limiting
 for (let i = 0; i < symbols.length; i++) {

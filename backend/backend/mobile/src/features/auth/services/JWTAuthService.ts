@@ -7,7 +7,6 @@ const REFRESH_TOKEN_MUTATION = gql`
   mutation RefreshToken {
     refreshToken {
       token
-      payload
     }
   }
 `;
@@ -16,7 +15,6 @@ const LOGIN_MUTATION = gql`
   mutation Login($email: String!, $password: String!) {
     tokenAuth(email: $email, password: $password) {
       token
-      payload
     }
   }
 `;
@@ -55,7 +53,20 @@ class JWTAuthService {
    */
   private decodeToken(token: string): TokenPayload | null {
     try {
-      const base64Url = token.split('.')[1];
+      // Check if token exists and is a string
+      if (!token || typeof token !== 'string') {
+        console.warn('Token is undefined or not a string:', token);
+        return null;
+      }
+      
+      // Check if token has the expected JWT format (3 parts separated by dots)
+      const parts = token.split('.');
+      if (parts.length !== 3) {
+        console.warn('Invalid JWT format - expected 3 parts, got:', parts.length);
+        return null;
+      }
+      
+      const base64Url = parts[1];
       const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
       const jsonPayload = decodeURIComponent(
         atob(base64)
@@ -74,6 +85,10 @@ class JWTAuthService {
    * Check if token is expired or will expire soon (within 5 minutes)
    */
   private isTokenExpiredOrExpiringSoon(token: string): boolean {
+    if (!token || typeof token !== 'string') {
+      return true; // No token means expired
+    }
+    
     const payload = this.decodeToken(token);
     if (!payload) return true;
 

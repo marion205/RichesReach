@@ -1,0 +1,145 @@
+{
+  "models": {
+    "price_prediction": {
+      "model_type": "regression",
+      "features": [
+        "sma_20",
+        "sma_50",
+        "ema_12",
+        "ema_26",
+        "rsi",
+        "macd",
+        "bollinger_upper",
+        "bollinger_lower",
+        "volume_sma",
+        "price_change_1m",
+        "price_change_5m",
+        "price_change_15m",
+        "volume_change_1m",
+        "volatility_1h"
+      ],
+      "target": "next_price_change",
+      "prediction_horizon": "1m",
+      "confidence_threshold": 0.7
+    },
+    "trend_classification": {
+      "model_type": "classification",
+      "features": [
+        "sma_20",
+        "sma_50",
+        "ema_12",
+        "ema_26",
+        "rsi",
+        "macd",
+        "bollinger_position",
+        "volume_ratio",
+        "price_momentum",
+        "volatility_1h",
+        "volatility_4h"
+      ],
+      "target": "trend_direction",
+      "classes": [
+        "bearish",
+        "neutral",
+        "bullish"
+      ],
+      "confidence_threshold": 0.6
+    },
+    "volatility_prediction": {
+      "model_type": "regression",
+      "features": [
+        "current_volatility",
+        "volume_ratio",
+        "price_momentum",
+        "rsi",
+        "bollinger_width",
+        "market_hours"
+      ],
+      "target": "next_volatility",
+      "prediction_horizon": "15m",
+      "confidence_threshold": 0.65
+    },
+    "anomaly_detection": {
+      "model_type": "anomaly_detection",
+      "features": [
+        "price_change_1m",
+        "volume_ratio",
+        "rsi",
+        "macd",
+        "bollinger_position",
+        "volatility_1h"
+      ],
+      "target": "anomaly_score",
+      "threshold": 0.8,
+      "confidence_threshold": 0.9
+    }
+  },
+  "model_serving": {
+    "framework": "scikit-learn",
+    "version": "1.3.0",
+    "deployment_type": "streaming",
+    "batch_size": 100,
+    "prediction_interval": 60,
+    "model_update_interval": 86400,
+    "fallback_enabled": true
+  },
+  "feature_engineering": {
+    "real_time_features": [
+      "sma_20",
+      "sma_50",
+      "ema_12",
+      "ema_26",
+      "rsi",
+      "macd",
+      "bollinger_upper",
+      "bollinger_lower",
+      "volume_sma"
+    ],
+    "derived_features": [
+      "price_change_1m",
+      "price_change_5m",
+      "price_change_15m",
+      "volume_change_1m",
+      "volatility_1h",
+      "bollinger_position",
+      "volume_ratio",
+      "price_momentum",
+      "bollinger_width"
+    ],
+    "feature_scaling": {
+      "method": "standard_scaler",
+      "fit_on": "rolling_window",
+      "window_size": 1000
+    }
+  },
+  "model_performance": {
+    "monitoring": {
+      "accuracy_threshold": 0.7,
+      "drift_detection": true,
+      "performance_tracking": true,
+      "alert_on_degradation": true
+    },
+    "metrics": [
+      "accuracy",
+      "precision",
+      "recall",
+      "f1_score",
+      "mae",
+      "rmse",
+      "r2_score"
+    ]
+  },
+  "streaming_integration": {
+    "input_topics": [
+      "market-data",
+      "technical-indicators"
+    ],
+    "output_topics": [
+      "ml-predictions",
+      "anomaly-alerts"
+    ],
+    "processing_mode": "real_time",
+    "checkpointing": true,
+    "exactly_once": true
+  }
+}

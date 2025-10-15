@@ -200,7 +200,8 @@ console.log('Portfolio Data Debug:', {
 
 const handleLogout = async () => {
 try {
-await client.clearStore();
+    // Clear cache safely without resetting store while queries are in flight
+    await client.cache.reset();
 await AsyncStorage.removeItem('token');
 if (onLogout) {
 onLogout();
@@ -342,7 +343,7 @@ showsVerticalScrollIndicator={false}
 <Icon name="chevron-right" size={18} color="#CBD5E1" />
 </TouchableOpacity>
 
-<TouchableOpacity style={styles.rowItem} onPress={() => navigateTo?.('home')}>
+<TouchableOpacity style={styles.rowItem} onPress={() => navigateTo?.('news-preferences')}>
 <View style={[styles.rowIcon, { backgroundColor: '#F0F9FF', borderColor: '#BAE6FD' }]}>
 <Icon name="settings" size={16} color={UI.accent} />
 </View>

@@ -1,0 +1,11 @@
+venv/
+
+# ML Models and Data Files
+*.pkl
+*.db
+*.sqlite3
+*.backup
+ml_models/
+advanced_ml_models/
+rust_stock_engine/
+*.html

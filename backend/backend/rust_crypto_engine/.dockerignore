@@ -1,0 +1,50 @@
+# Git and version control
+.git
+.gitignore
+
+# Rust build artifacts
+target/
+Cargo.lock
+*.pdb
+
+# IDEs and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+
+# Logs
+*.log
+logs/
+
+# Documentation
+*.md
+README*
+
+# Test files
+tests/
+test_*
+*_test.rs
+
+# Development files
+docker-compose*.yml
+Dockerfile*
+.dockerignore
+deploy*.sh
+*.sh
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+
+# Data and cache directories
+data/
+cache/
+.cache/

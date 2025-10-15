@@ -1,0 +1,73 @@
+{
+  "family": "riches-reach-streaming-pipeline",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "2048",
+  "memory": "4096",
+  "executionRoleArn": "arn:aws:iam::498606688292:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::498606688292:role/riches-reach-streaming-role",
+  "containerDefinitions": [
+    {
+      "name": "streaming-pipeline",
+      "image": "498606688292.dkr.ecr.us-east-1.amazonaws.com/riches-reach-streaming:latest",
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "ENVIRONMENT",
+          "value": "production"
+        },
+        {
+          "name": "AWS_REGION",
+          "value": "us-east-1"
+        },
+        {
+          "name": "KINESIS_STREAM_NAME",
+          "value": "riches-reach-market-data"
+        },
+        {
+          "name": "KAFKA_CLUSTER_ARN",
+          "value": "arn:aws:kafka:us-east-1:498606688292:cluster/riches-reach-kafka/c49fce44-4eb5-4644-b4d9-bd802b6c75bd-4"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "POLYGON_API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:richesreach/production/polygon_api_key"
+        },
+        {
+          "name": "FINNHUB_API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:richesreach/production/finnhub_api_key"
+        },
+        {
+          "name": "ALPHA_VANTAGE_API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:richesreach/production/alpha_vantage_key"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/aws/riches-reach/streaming",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "streaming-pipeline"
+        }
+      },
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "curl -f http://localhost:8000/health || exit 1"
+        ],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 60
+      }
+    }
+  ]
+}
