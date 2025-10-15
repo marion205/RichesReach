@@ -209,6 +209,7 @@ else:
     import logging
     logging.getLogger(__name__).warning("DB_ENGINE=%s, DB_NAME=%s", DATABASES["default"]["ENGINE"], DATABASES["default"]["NAME"])
     print(f"[BOOT] Database configuration loaded successfully: {DATABASES['default']['HOST']}", flush=True)
+    # Trigger new build with corrected settings
 # Email Configuration
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
