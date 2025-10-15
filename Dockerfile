@@ -27,7 +27,11 @@ COPY backend/backend/richesreach/settings_production.py /app/richesreach/setting
 # optional: fail fast if file missing
 RUN test -f /app/richesreach/settings_production.py || (echo "settings_production.py missing!" && ls -R /app && exit 3)
 
+# Set Django settings module
 ENV DJANGO_SETTINGS_MODULE=richesreach.settings_production
+
+# Collect static files using build settings (no database required)
+RUN python manage.py collectstatic --noinput --settings=richesreach.settings_build
 
 # default command (adjust to yours)
 CMD ["gunicorn", "richesreach.wsgi:application", "-b", "0.0.0.0:8000", "--workers", "3"]
