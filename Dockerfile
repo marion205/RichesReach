@@ -38,9 +38,19 @@ COPY ${APP_DIR}/ /app/
 RUN test -f /app/manage.py || (echo "❌ /app/manage.py missing. Check COPY path ${APP_DIR} → /app"; ls -al /app; exit 3)
 RUN test -f /app/richesreach/settings.py || (echo "❌ /app/richesreach/settings.py missing"; ls -al /app/richesreach; exit 3)
 
-# Optional: collect static in image build (if DEBUG off & STATICFILES configured)
-ENV DJANGO_SETTINGS_MODULE=richesreach.settings_build
-RUN mkdir -p /app/staticfiles && python manage.py collectstatic --noinput
+# Configure Django for build-time operations (if needed)
+ENV DJANGO_SETTINGS_MODULE=richesreach.settings \
+    PYTHONPATH=/app \
+    SECRET_KEY=dummy
+
+# Optional: collect static in image build (default OFF to avoid build failures)
+ARG RUN_COLLECTSTATIC=false
+RUN if [ "$RUN_COLLECTSTATIC" = "true" ]; then \
+      python manage.py check --deploy && \
+      python manage.py collectstatic --noinput; \
+    else \
+      echo "Skipping collectstatic during build (set RUN_COLLECTSTATIC=true to enable)"; \
+    fi
 
 # Runtime settings
 ENV DJANGO_SETTINGS_MODULE=richesreach.settings_production
@@ -48,14 +58,10 @@ ENV DJANGO_SETTINGS_MODULE=richesreach.settings_production
 # Security: run as non-root
 USER appuser
 
-# Healthcheck: adjust endpoint to your app
-HEALTHCHECK --interval=30s --timeout=3s --start-period=30s CMD python - <<'PY'
-import urllib.request, sys
-try:
-    urllib.request.urlopen("http://127.0.0.1:8000/healthz", timeout=2)
-except Exception:
-    sys.exit(1)
-PY
+# Healthcheck: exec form, no heredoc
+ENV HEALTHCHECK_URL=http://127.0.0.1:8000/healthz
+HEALTHCHECK --interval=30s --timeout=3s --start-period=30s --retries=3 \
+  CMD python -c "import os,sys,urllib.request; u=os.getenv('HEALTHCHECK_URL','http://127.0.0.1:8000/healthz'); urllib.request.urlopen(u, timeout=2); print('OK')" || exit 1
 
 # Expose port
 EXPOSE 8000
