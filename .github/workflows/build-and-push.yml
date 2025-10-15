@@ -75,16 +75,26 @@ jobs:
             type=sha,format=long
             type=raw,value=latest,enable={{is_default_branch}}
 
+      - name: Show workspace & Dockerfile
+        run: |
+          pwd
+          ls -la
+          test -f ./Dockerfile || (echo "Dockerfile not found in $(pwd)"; exit 1)
+          echo "Build context will be: ."
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Build & Push
         id: build
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
-          context: .
+          context: .                # Explicit context - no variables
           file: ./Dockerfile
-          push: true
+          push: true                # Avoids "No output specified" warning
           platforms: linux/amd64
           build-args: |
             APP_DIR=${{ env.APP_DIR }}
