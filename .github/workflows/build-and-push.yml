@@ -37,8 +37,8 @@ jobs:
           echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
           ls -al
           test -f Dockerfile || (echo "Dockerfile missing at repo root"; exit 1)
-          test -f backend/backend/requirements.txt || (echo "backend/backend/requirements.txt missing"; exit 1)
-          test -f backend/backend/richesreach/settings_production.py || (echo "settings_production.py missing"; exit 1)
+          test -f backend/backend/backend/requirements.txt || (echo "backend/backend/backend/requirements.txt missing"; exit 1)
+          test -f backend/backend/backend/richesreach/settings_production.py || (echo "settings_production.py missing"; exit 1)
           echo "✅ All build inputs verified"
 
       # Generate consistent tags (sha + latest on main)
