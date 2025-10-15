@@ -1,10 +1,22 @@
+// Import Reanimated first (required for worklets)
+import 'react-native-reanimated';
+
 // Import URL polyfill first to fix React Native URL.protocol issues
 import 'react-native-url-polyfill/auto';
 
+// Suppress React Native warnings in development
+import { LogBox } from 'react-native';
+LogBox.ignoreLogs([
+  'SafeAreaView has been deprecated',
+  'NetInfo not available',
+  'Store reset while query was in flight',
+  'Network request failed',
+  'Network request timed out'
+]);
+
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { ApolloProvider } from '@apollo/client';
-import { client } from './ApolloProvider';
+import ApolloProvider from './ApolloProvider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import JWTAuthService from './features/auth/services/JWTAuthService';
 import Toast from 'react-native-toast-message';
@@ -39,17 +51,35 @@ import TradingScreen from './features/stocks/screens/TradingScreen';
 import DayTradingScreen from './features/trading/screens/DayTradingScreen';
 import MLSystemScreen from './features/ml/screens/MLSystemScreen';
 import RiskManagementScreen from './features/risk/screens/RiskManagementScreen';
+// Swing Trading Screens
+import { SignalsScreen, RiskCoachScreen, BacktestingScreen } from './features/swingTrading';
+import LeaderboardScreen from './features/swingTrading/screens/LeaderboardScreen';
+import SwingTradingTestScreen from './components/SwingTradingTestScreen';
 import AIOptionsScreen from './features/options/screens/AIOptionsScreen';
+import OptionsCopilotScreen from './features/options/screens/OptionsCopilotScreen';
+import AIScansScreen from './features/aiScans/screens/AIScansScreen';
+import ScanPlaybookScreen from './features/aiScans/screens/ScanPlaybookScreen';
 import BankAccountScreen from './features/user/screens/BankAccountScreen';
 import NotificationsScreen from './features/notifications/screens/NotificationsScreen';
 import CryptoScreen from './navigation/CryptoScreen';
 import OptionsLearningScreen from './features/options/screens/OptionsLearningScreen';
 import SBLOCLearningScreen from './features/learning/screens/SBLOCLearningScreen';
+import SBLOCBankSelectionScreen from './features/sbloc/screens/SBLOCBankSelectionScreen';
+import SBLOCApplicationScreen from './features/sbloc/screens/SBLOCApplicationScreen';
+import SBLOCStatusScreen from './features/sbloc/screens/SBLOCStatusScreen';
+import NewsPreferencesScreen from './features/news/screens/NewsPreferencesScreen';
 import PortfolioLearningScreen from './features/learning/screens/PortfolioLearningScreen';
+// Tax Optimization Screens
+import TaxOptimizationScreen from './screens/TaxOptimizationScreen';
+import SmartLotsScreen from './screens/SmartLotsScreen';
+import BorrowVsSellScreen from './screens/BorrowVsSellScreen';
+import WashGuardScreen from './screens/WashGuardScreen';
 // Components
 import { BottomTabBar, TopHeader, PersonalizedDashboard } from './components';
 // Services
 import UserProfileService from './features/user/services/UserProfileService';
+// Contexts
+import { AuthProvider } from './contexts/AuthContext';
 export default function App() {
 const [currentScreen, setCurrentScreen] = useState('home');
 // Track currentScreen changes for analytics (production)
@@ -236,7 +266,7 @@ return <ProfileScreen navigateTo={navigateTo} onLogout={handleLogout} />;
 case 'stock':
 return <StockScreen navigateTo={navigateTo} />;
 case 'crypto':
-return <CryptoScreen navigation={{ navigate: navigateTo }} />;
+return <CryptoScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('home') }} />;
 case 'ai-portfolio':
 return <AIPortfolioScreen navigateTo={navigateTo} />;
 case 'portfolio':
@@ -286,7 +316,13 @@ return <DiscoverUsersScreen onNavigate={navigateTo} />;
 case 'social-feed':
 return <SocialScreen onNavigate={navigateTo} />;
 case 'ai-options':
-return <AIOptionsScreen navigation={{ goBack: () => setCurrentScreen('home') }} />;
+return <AIOptionsScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('home') }} />;
+case 'options-copilot':
+return <OptionsCopilotScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('ai-options') }} />;
+case 'ai-scans':
+return <AIScansScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('home') }} />;
+case 'scan-playbook':
+return <ScanPlaybookScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('ai-scans') }} route={{ params: { scan: {} } }} />;
 case 'trading':
 return <TradingScreen navigateTo={navigateTo} />;
 case 'day-trading':
@@ -295,16 +331,44 @@ return <DayTradingScreen navigateTo={navigateTo} />;
           return <MLSystemScreen navigateTo={navigateTo} />;
         case 'risk-management':
           return <RiskManagementScreen navigateTo={navigateTo} />;
+        case 'swing-trading-test':
+          return <SwingTradingTestScreen navigateTo={navigateTo} />;
+        case 'swing-signals':
+          return <SignalsScreen navigateTo={navigateTo} />;
+        case 'swing-risk-coach':
+          return <RiskCoachScreen navigateTo={navigateTo} />;
+        case 'swing-backtesting':
+          return <BacktestingScreen navigateTo={navigateTo} />;
+        case 'swing-leaderboard':
+          return <LeaderboardScreen navigateTo={navigateTo} />;
         case 'bank-accounts':
-return <BankAccountScreen navigateTo={navigateTo} />;
+return <BankAccountScreen navigateTo={navigateTo} navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('home') }} />;
 case 'notifications':
 return <NotificationsScreen navigateTo={navigateTo} />;
 case 'options-learning':
-return <OptionsLearningScreen navigation={{ goBack: () => setCurrentScreen('home') }} />;
+return <OptionsLearningScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('home') }} />;
 case 'sbloc-learning':
-return <SBLOCLearningScreen navigation={{ goBack: () => setCurrentScreen('home') }} />;
+return <SBLOCLearningScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('home') }} />;
 case 'portfolio-learning':
-return <PortfolioLearningScreen navigation={{ goBack: () => setCurrentScreen('home') }} />;
+return <PortfolioLearningScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('home') }} />;
+case 'SBLOCBankSelection':
+return <SBLOCBankSelectionScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('bank-accounts') }} route={{ params: { amountUsd: 25000 } }} />;
+case 'SBLOCApplication':
+return <SBLOCApplicationScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('SBLOCBankSelection') }} route={{ params: { sessionUrl: '', referral: { id: '', bank: { id: '', name: '', minLtv: 0, maxLtv: 0, minLineUsd: 0, maxLineUsd: 0, typicalAprMin: 0, typicalAprMax: 0, isActive: true, priority: 0 } } } }} />;
+case 'SblocStatus':
+return <SBLOCStatusScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('SBLOCBankSelection') }} route={{ params: { sessionId: '' } }} />;
+case 'news-preferences':
+return <NewsPreferencesScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('profile') }} />;
+case 'tax-optimization':
+return <TaxOptimizationScreen />;
+case 'smart-lots':
+return <SmartLotsScreen />;
+case 'borrow-vs-sell':
+return <BorrowVsSellScreen />;
+case 'wash-guard':
+return <WashGuardScreen />;
+case 'subscription':
+return <SubscriptionScreen />;
     default:
       // Handle user-profile and user-portfolios with userId pattern
       if (currentScreen.startsWith('user-profile-')) {
@@ -327,7 +391,8 @@ return <PortfolioLearningScreen navigation={{ goBack: () => setCurrentScreen('ho
 }
 };
 return (
-<ApolloProvider client={client}>
+<AuthProvider>
+<ApolloProvider>
 <View style={styles.container}>
 {isLoggedIn && currentScreen !== 'login' && currentScreen !== 'signup' && currentScreen !== 'onboarding' && (
 <TopHeader currentScreen={currentScreen} onNavigate={navigateTo} />
@@ -339,6 +404,7 @@ return (
 </View>
 <Toast />
 </ApolloProvider>
+</AuthProvider>
 );
 }
 const styles = StyleSheet.create({

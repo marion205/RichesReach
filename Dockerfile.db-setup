@@ -1,0 +1,16 @@
+FROM python:3.11-slim
+
+# Install PostgreSQL client
+RUN apt-get update && apt-get install -y \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install psycopg2
+RUN pip install psycopg2-binary
+
+# Copy setup script
+COPY setup_db.py /setup_db.py
+RUN chmod +x /setup_db.py
+
+# Run the setup script
+CMD ["python", "/setup_db.py"]

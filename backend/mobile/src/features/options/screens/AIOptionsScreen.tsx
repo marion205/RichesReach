@@ -286,6 +286,14 @@ onPress={() => navigation.goBack()}
 <Icon name="arrow-back" size={24} color="#000" />
 </TouchableOpacity>
 <Text style={styles.headerTitle}>AI Options</Text>
+<View style={styles.headerActions}>
+<TouchableOpacity
+style={styles.copilotButton}
+onPress={() => navigation.navigate('options-copilot')}
+>
+                <Icon name="flash-on" size={20} color="#00cc99" />
+<Text style={styles.copilotButtonText}>Copilot</Text>
+</TouchableOpacity>
 <TouchableOpacity
 style={styles.refreshButton}
 onPress={loadRecommendations}
@@ -293,6 +301,7 @@ disabled={loading}
 >
 <Icon name="refresh" size={24} color="#007AFF" />
 </TouchableOpacity>
+</View>
 </View>
 {selectedRecommendation ? (
 renderDetailedRecommendation()
@@ -428,6 +437,25 @@ headerTitle: {
 fontSize: 18,
 fontWeight: '600',
 color: '#000',
+},
+headerActions: {
+flexDirection: 'row',
+alignItems: 'center',
+},
+copilotButton: {
+flexDirection: 'row',
+alignItems: 'center',
+backgroundColor: '#E8F5E8',
+paddingHorizontal: 12,
+paddingVertical: 6,
+borderRadius: 16,
+marginRight: 8,
+},
+copilotButtonText: {
+fontSize: 12,
+fontWeight: '600',
+color: '#00cc99',
+marginLeft: 4,
 },
 refreshButton: {
 padding: 8,

@@ -1,3 +1,6 @@
+// Import Reanimated first (required for worklets)
+import 'react-native-reanimated';
+
 // Import URL polyfill first to fix React Native URL.protocol issues
 import 'react-native-url-polyfill/auto';
 

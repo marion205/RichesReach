@@ -1,0 +1,46 @@
+# syntax=docker/dockerfile:1.6
+FROM python:3.11-slim
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+WORKDIR /app
+
+# Install system dependencies in one layer
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Copy only requirements first for better caching
+COPY requirements.txt /app/requirements.txt
+
+# Install Python dependencies with cache mount
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --upgrade pip && \
+    pip install -r requirements.txt
+
+# Copy application code (this layer will be cached if code doesn't change)
+COPY manage.py /app/
+COPY richesreach/ /app/richesreach/
+COPY core/ /app/core/
+
+# Create necessary directories
+RUN mkdir -p /app/logs /app/staticfiles /app/media
+
+# Collect static files (can be cached)
+RUN python manage.py collectstatic --noinput || true
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health/ || exit 1
+
+# Use daphne for ASGI support
+CMD ["daphne", "-b", "0.0.0.0", "-p", "8000", "richesreach.asgi:application"]

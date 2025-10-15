@@ -10,6 +10,7 @@ Image,
 RefreshControl,
 Alert,
 SafeAreaView,
+FlatList,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { gql, useQuery, useMutation } from '@apollo/client';

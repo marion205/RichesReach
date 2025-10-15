@@ -10,7 +10,7 @@ import {
   SafeAreaView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import MockUserService, { MockUser } from '../../user/services/MockUserService';
+import { User } from '../../../types/social';
 
 interface UserPortfoliosScreenProps {
   userId: string;
@@ -19,10 +19,10 @@ interface UserPortfoliosScreenProps {
 
 const UserPortfoliosScreen: React.FC<UserPortfoliosScreenProps> = ({ userId, onNavigate }) => {
   const [refreshing, setRefreshing] = useState(false);
-  const [user, setUser] = useState<MockUser | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const mockUserService = MockUserService.getInstance();
+  const mockUserService = UserService.getInstance();
 
   // Load user profile from mock service
   const loadUserProfile = () => {

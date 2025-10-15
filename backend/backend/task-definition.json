@@ -4,23 +4,30 @@
 "requiresCompatibilities": [
 "FARGATE"
 ],
-"cpu": "512",
-"memory": "1024",
+"cpu": "256",
+"memory": "512",
 "executionRoleArn": "arn:aws:iam::498606688292:role/ecsTaskExecutionRole",
 "taskRoleArn": "arn:aws:iam::498606688292:role/ecsTaskRole",
 "containerDefinitions": [
 {
 "name": "riches-reach-ai",
-"image": "498606688292.dkr.ecr.us-east-1.amazonaws.com/riches-reach-ai:latest",
+"image": "python:3.10-slim",
+"essential": true,
 "portMappings": [
 {
 "containerPort": 8000,
 "protocol": "tcp"
 }
 ],
-"essential": true,
-"workingDirectory": "/app",
 "environment": [
+{
+"name": "S3_BUCKET",
+"value": "riches-reach-ai-deployment"
+},
+{
+"name": "S3_KEY",
+"value": "deployments/richesreach_deployment.zip"
+},
 {
 "name": "ENVIRONMENT",
 "value": "production"
@@ -30,11 +37,10 @@
 "value": "us-east-1"
 }
 ],
-"secrets": [
-{
-"name": "DATABASE_URL",
-"valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:richesreach/DATABASE_URL-3FiSbV"
-}
+"command": [
+"/bin/bash",
+"-c",
+"pip install fastapi uvicorn && mkdir -p /app && cd /app && python -c \"import urllib.request; urllib.request.urlretrieve('https://riches-reach-ai-deployment.s3.amazonaws.com/deployments/richesreach_deployment.zip', '/tmp/code.zip'); import zipfile; zipfile.ZipFile('/tmp/code.zip').extractall('.'); import subprocess; subprocess.run(['uvicorn', 'main:app', '--host', '0.0.0.0', '--port', '8000'])\""
 ],
 "logConfiguration": {
 "logDriver": "awslogs",

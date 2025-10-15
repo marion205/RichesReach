@@ -12,9 +12,21 @@ export type StockCardProps = {
   peRatio?: number | null;
   dividendYield?: number | null;
   beginnerFriendlyScore: number;
+  beginnerScoreBreakdown?: {
+    score: number;
+    factors: Array<{
+      name: string;
+      weight: number;
+      value: number;
+      contrib: number;
+      detail: string;
+    }>;
+    notes: string[];
+  };
   onPressAdd: () => void;
   onPressAnalysis: () => void;
   onPressMetric: (k: 'marketCap' | 'peRatio' | 'dividendYield') => void;
+  onPressBudgetImpact?: () => void;
   onPress?: () => void;
   isSelected?: boolean;
 };
@@ -38,6 +50,14 @@ function StockCard(props: StockCardProps) {
             <View style={[styles.recBadge, { backgroundColor: rec.backgroundColor, borderColor: rec.color }]}>
               <Text style={[styles.recText, { color: rec.color }]}>{rec.text}</Text>
             </View>
+            <TouchableOpacity style={styles.watchlistBtnTop} onPress={props.onPressAdd} activeOpacity={0.85}>
+              <Icon name="plus" size={16} color="#007AFF" />
+            </TouchableOpacity>
+            {props.beginnerScoreBreakdown && (
+              <TouchableOpacity style={styles.budgetBtn} onPress={props.onPressBudgetImpact} activeOpacity={0.85}>
+                <Icon name="dollar-sign" size={14} color="#FF6B35" />
+              </TouchableOpacity>
+            )}
           </View>
         </View>
         <Text style={styles.name}>{props.companyName}</Text>
@@ -62,7 +82,11 @@ function StockCard(props: StockCardProps) {
         {props.dividendYield != null && (
           <TouchableOpacity style={styles.metric} onPress={() => props.onPressMetric('dividendYield')} activeOpacity={0.7}>
             <Text style={styles.metricLabel}>Dividend</Text>
-            <Text style={styles.metricValue}>{Number.isFinite(Number(props.dividendYield)) ? `${n(props.dividendYield, 1)}%` : 'N/A'}</Text>
+            <Text style={styles.metricValue}>
+              {Number.isFinite(Number(props.dividendYield)) 
+                ? `${(Number(props.dividendYield) * 100).toFixed(2)}%` 
+                : 'N/A'}
+            </Text>
             <Icon name="info" size={16} color="#00cc99" style={styles.info} />
           </TouchableOpacity>
         )}
@@ -97,6 +121,16 @@ const styles = StyleSheet.create({
   metricLabel: { fontSize: 12, color: '#999', marginBottom: 4 },
   metricValue: { fontSize: 14, fontWeight: '600', color: '#333' },
   info: { marginLeft: 8 },
+  watchlistBtnTop: { 
+    backgroundColor: '#F0F8FF', paddingHorizontal: 8, paddingVertical: 6, borderRadius: 8, 
+    alignItems: 'center', justifyContent: 'center', 
+    borderWidth: 1, borderColor: '#007AFF', marginLeft: 8
+  },
+  budgetBtn: { 
+    backgroundColor: '#FFF5F0', paddingHorizontal: 8, paddingVertical: 6, borderRadius: 8, 
+    alignItems: 'center', justifyContent: 'center', 
+    borderWidth: 1, borderColor: '#FF6B35', marginLeft: 8
+  },
   analysisBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#6366f1',
     paddingVertical: 12, borderRadius: 12, marginTop: 16, shadowColor: '#6366f1',

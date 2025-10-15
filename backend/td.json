@@ -1,10 +1,11 @@
 {
-    "taskDefinitionArn": "arn:aws:ecs:us-east-1:498606688292:task-definition/riches-reach-ai-task:139",
+    "taskDefinitionArn": "arn:aws:ecs:us-east-1:498606688292:task-definition/riches-reach-streaming-pipeline-optimized:19",
     "containerDefinitions": [
         {
-            "name": "riches-reach-ai",
-            "image": "498606688292.dkr.ecr.us-east-1.amazonaws.com/riches-reach-ai-ai-service:final-fixed-20250925224019",
+            "name": "streaming-pipeline",
+            "image": "498606688292.dkr.ecr.us-east-1.amazonaws.com/riches-reach-ai:5ad8e7afdc436f29b165604d13ad82bccfa2d02e",
             "cpu": 0,
+            "memoryReservation": 1536,
             "portMappings": [
                 {
                     "containerPort": 8000,
@@ -13,95 +14,102 @@
                 }
             ],
             "essential": true,
-            "entryPoint": [
-                "/bin/sh",
-                "-c"
-            ],
-            "command": [
-                "cd /app && echo '=== PRODUCTION DEPLOYMENT ===' && echo 'Environment check:' && echo 'DJANGO_DB_ENGINE:' $DJANGO_DB_ENGINE && echo 'DJANGO_DB_HOST:' $DJANGO_DB_HOST && echo 'DJANGO_DB_NAME:' $DJANGO_DB_NAME && echo 'DJANGO_DB_USER:' $DJANGO_DB_USER && echo 'DJANGO_DB_PASSWORD:' 'SET' && echo 'DJANGO_DB_PORT:' $DJANGO_DB_PORT && python - <<'PY'\nimport os\nimport psycopg2\nimport django\nfrom django.conf import settings\n\nprint('\\n=== Testing Database Connection ===')\ntry:\n    # Test direct PostgreSQL connection\n    conn = psycopg2.connect(\n        host=os.environ['DJANGO_DB_HOST'],\n        port=os.environ['DJANGO_DB_PORT'],\n        database=os.environ['DJANGO_DB_NAME'],\n        user=os.environ['DJANGO_DB_USER'],\n        password=os.environ['DJANGO_DB_PASSWORD'],\n        sslmode='require'\n    )\n    print('✅ Direct PostgreSQL connection successful!')\n    \n    with conn.cursor() as cur:\n        cur.execute('SELECT version();')\n        version = cur.fetchone()[0]\n        print(f'PostgreSQL version: {version}')\n    \n    conn.close()\nexcept Exception as e:\n    print(f'❌ Direct PostgreSQL connection failed: {e}')\n\nprint('\\n=== Testing Django Database Configuration ===')\ntry:\n    django.setup()\n    print('Django setup complete')\n    print('Database engine:', settings.DATABASES['default']['ENGINE'])\n    print('Database host:', settings.DATABASES['default']['HOST'])\n    print('Database name:', settings.DATABASES['default']['NAME'])\n    print('Database user:', settings.DATABASES['default']['USER'])\n    \n    from django.db import connection\n    with connection.cursor() as cursor:\n        cursor.execute('SELECT 1')\n        result = cursor.fetchone()\n        print(f'✅ Django database connection successful! Result: {result}')\nexcept Exception as e:\n    print(f'❌ Django database connection failed: {e}')\n    import traceback\n    traceback.print_exc()\n\nprint('\\n=== Running Migrations ===')\ntry:\n    from django.core.management import execute_from_command_line\n    execute_from_command_line(['manage.py', 'migrate', '--noinput'])\n    print('✅ Migrations completed successfully!')\nexcept Exception as e:\n    print(f'❌ Migrations failed: {e}')\n    import traceback\n    traceback.print_exc()\n\nprint('\\n=== Collecting Static Files ===')\ntry:\n    from django.core.management import execute_from_command_line\n    execute_from_command_line(['manage.py', 'collectstatic', '--noinput'])\n    print('✅ Static files collected successfully!')\nexcept Exception as e:\n    print(f'⚠️ Static files collection failed: {e}')\n\nprint('\\n=== Starting Gunicorn Server ===')\nPY\n\necho 'Starting Gunicorn server...'\nexec gunicorn richesreach.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120"
-            ],
             "environment": [
                 {
                     "name": "DJANGO_SETTINGS_MODULE",
-                    "value": "richesreach.settings"
+                    "value": "richesreach.settings_production"
                 },
                 {
-                    "name": "DEBUG",
-                    "value": "False"
+                    "name": "AWS_REGION",
+                    "value": "us-east-1"
                 },
                 {
-                    "name": "STATIC_ROOT",
-                    "value": "/app/staticfiles"
+                    "name": "GRAPHQL_MODE",
+                    "value": "simple"
                 },
                 {
-                    "name": "ALLOWED_HOSTS",
-                    "value": "*"
+                    "name": "PYTHONUNBUFFERED",
+                    "value": "1"
+                },
+                {
+                    "name": "YODLEE_LOGIN_NAME",
+                    "value": "test-login-name"
+                },
+                {
+                    "name": "KINESIS_STREAM_NAME",
+                    "value": "riches-reach-market-data"
+                },
+                {
+                    "name": "ENVIRONMENT",
+                    "value": "production"
+                },
+                {
+                    "name": "KAFKA_CLUSTER_ARN",
+                    "value": "arn:aws:kafka:us-east-1:498606688292:cluster/riches-reach-kafka/c49fce44-4eb5-4644-b4d9-bd802b6c75bd-4"
+                },
+                {
+                    "name": "YODLEE_SECRET",
+                    "value": "dummy-secret"
+                },
+                {
+                    "name": "PYTHONDONTWRITEBYTECODE",
+                    "value": "1"
+                },
+                {
+                    "name": "YODLEE_FASTLINK_URL",
+                    "value": "https://test.fastlink.yodlee.com"
                 }
             ],
             "mountPoints": [],
             "volumesFrom": [],
             "secrets": [
                 {
-                    "name": "DJANGO_DB_ENGINE",
-                    "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/appuser-PE1IS5:ENGINE::"
+                    "name": "POLYGON_API_KEY",
+                    "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:richesreach/polygon-api-key-cuwyhr"
                 },
                 {
-                    "name": "DJANGO_DB_NAME",
-                    "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/appuser-PE1IS5:NAME::"
-                },
+                    "name": "FINNHUB_API_KEY",
+                    "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:richesreach/finnhub-api-key-LqpWaB"
+                }
+            ],
+            "stopTimeout": 30,
+            "ulimits": [
                 {
-                    "name": "DJANGO_DB_USER",
-                    "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/appuser-PE1IS5:USER::"
-                },
-                {
-                    "name": "DJANGO_DB_PASSWORD",
-                    "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/appuser-PE1IS5:PASSWORD::"
-                },
-                {
-                    "name": "DJANGO_DB_HOST",
-                    "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/appuser-PE1IS5:HOST::"
-                },
-                {
-                    "name": "DJANGO_DB_PORT",
-                    "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/appuser-PE1IS5:PORT::"
-                },
-                {
-                    "name": "SECRET_KEY",
-                    "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr-django-secret-key-IdsacH"
+                    "name": "nofile",
+                    "softLimit": 65536,
+                    "hardLimit": 65536
                 }
             ],
             "logConfiguration": {
                 "logDriver": "awslogs",
                 "options": {
-                    "awslogs-group": "/ecs/riches-reach-ai",
+                    "awslogs-group": "/aws/riches-reach/streaming",
+                    "awslogs-create-group": "true",
                     "awslogs-region": "us-east-1",
-                    "awslogs-stream-prefix": "ecs"
+                    "awslogs-stream-prefix": "streaming-pipeline"
                 }
             },
             "healthCheck": {
                 "command": [
                     "CMD-SHELL",
-                    "curl -fsS http://localhost:8000/health/ || exit 1"
+                    "/bin/true"
                 ],
                 "interval": 30,
                 "timeout": 5,
                 "retries": 3,
-                "startPeriod": 60
+                "startPeriod": 10
             },
             "systemControls": []
         }
     ],
-    "family": "riches-reach-ai-task",
-    "taskRoleArn": "arn:aws:iam::498606688292:role/ecsTaskRole",
+    "family": "riches-reach-streaming-pipeline-optimized",
+    "taskRoleArn": "arn:aws:iam::498606688292:role/riches-reach-streaming-role",
     "executionRoleArn": "arn:aws:iam::498606688292:role/ecsTaskExecutionRole",
     "networkMode": "awsvpc",
-    "revision": 139,
+    "revision": 19,
     "volumes": [],
     "status": "ACTIVE",
     "requiresAttributes": [
-        {
-            "name": "com.amazonaws.ecs.capability.logging-driver.awslogs"
-        },
         {
             "name": "ecs.capability.execution-role-awslogs"
         },
@@ -109,10 +117,7 @@
             "name": "com.amazonaws.ecs.capability.ecr-auth"
         },
         {
-            "name": "com.amazonaws.ecs.capability.docker-remote-api.1.19"
-        },
-        {
-            "name": "ecs.capability.secrets.asm.environment-variables"
+            "name": "com.amazonaws.ecs.capability.docker-remote-api.1.21"
         },
         {
             "name": "com.amazonaws.ecs.capability.task-iam-role"
@@ -131,6 +136,18 @@
         },
         {
             "name": "com.amazonaws.ecs.capability.docker-remote-api.1.29"
+        },
+        {
+            "name": "com.amazonaws.ecs.capability.logging-driver.awslogs"
+        },
+        {
+            "name": "com.amazonaws.ecs.capability.docker-remote-api.1.19"
+        },
+        {
+            "name": "ecs.capability.secrets.asm.environment-variables"
+        },
+        {
+            "name": "ecs.capability.container-ordering"
         }
     ],
     "placementConstraints": [],
@@ -142,8 +159,8 @@
     "requiresCompatibilities": [
         "FARGATE"
     ],
-    "cpu": "512",
-    "memory": "1024",
-    "registeredAt": "2025-09-28T13:27:59.985000-04:00",
+    "cpu": "1024",
+    "memory": "2048",
+    "registeredAt": "2025-10-11T17:52:55.473000-04:00",
     "registeredBy": "arn:aws:iam::498606688292:user/riches-reach-ai-user"
 }

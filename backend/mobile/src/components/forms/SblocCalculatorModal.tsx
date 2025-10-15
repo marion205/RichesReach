@@ -24,12 +24,16 @@ type Props = {
 };
 
 const clamp = (v:number, lo:number, hi:number) => Math.max(lo, Math.min(hi, v));
-const toMoney = (n:number) => `$${Math.round(n).toLocaleString()}`;
-const to2 = (n:number) => n.toFixed(2);
+const toNum = (v:any, def:number = 0) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : def;
+};
+const toMoney = (n:any) => `$${Math.round(toNum(n)).toLocaleString()}`;
+const to2 = (n:any) => toNum(n).toFixed(2);
 
 const SblocCalculatorModal: React.FC<Props> = ({
   visible, onClose,
-  apr, eligibleEquity,
+  apr = 0, eligibleEquity = 0,
   maxLtvPct = 50,
   currentDebt = 0,
   initialAmount = 0,

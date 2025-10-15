@@ -7,11 +7,12 @@ type Props = {
   onPress: () => void;
   maxBorrow: number;
   aprPct: number;
+  portfolioValue?: number;
 };
 
 const fmt = (n:number) => `$${Math.max(0, Math.round(n)).toLocaleString()}`;
 
-const SblocFundingCard: React.FC<Props> = ({ onPress, maxBorrow, aprPct }) => {
+const SblocFundingCard: React.FC<Props> = ({ onPress, maxBorrow, aprPct, portfolioValue }) => {
   return (
     <View style={styles.card}>
       <View style={styles.row}>

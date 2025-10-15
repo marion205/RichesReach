@@ -1,5 +1,6 @@
 // Apollo Client Factory - Single source of truth for all GraphQL clients
 import { ApolloClient, InMemoryCache, HttpLink, ApolloLink } from '@apollo/client';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const getApiBase = () => {
   const base = process.env.EXPO_PUBLIC_API_BASE_URL;
@@ -21,6 +22,22 @@ export function makeApolloClient() {
     return forward!(operation);
   });
 
+  // Auth link to add JWT token to requests
+  const authLink = new ApolloLink((operation, forward) => {
+    return new Promise((resolve, reject) => {
+      AsyncStorage.getItem('token').then((token) => {
+        if (token) {
+          operation.setContext({
+            headers: {
+              authorization: `Bearer ${token}`,
+            },
+          });
+        }
+        resolve(forward!(operation));
+      }).catch(reject);
+    });
+  });
+
   const httpLink = new HttpLink({ 
     uri: httpUri, 
     fetch,
@@ -28,7 +45,7 @@ export function makeApolloClient() {
   });
 
   return new ApolloClient({
-    link: logLink.concat(httpLink),
+    link: logLink.concat(authLink).concat(httpLink),
     cache: new InMemoryCache({
       typePolicies: {
         Query: {

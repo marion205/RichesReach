@@ -226,17 +226,17 @@ onPress={() => onNavigate('portfolio')}
 </TouchableOpacity>
 <TouchableOpacity 
 style={styles.actionCard}
-onPress={() => onNavigate('social')}
+onPress={() => onNavigate('ai-scans')}
 >
-<Icon name="globe" size={24} color="#FF9500" />
-<Text style={styles.actionText}>News</Text>
+<Icon name="search" size={24} color="#00cc99" />
+<Text style={styles.actionText}>AI Scans</Text>
 </TouchableOpacity>
 <TouchableOpacity 
 style={styles.actionCard}
-onPress={() => onNavigate('discuss')}
+onPress={() => onNavigate('ai-options')}
 >
-<Icon name="message-circle" size={24} color="#AF52DE" />
-<Text style={styles.actionText}>Discuss</Text>
+<Icon name="zap" size={24} color="#FF3B30" />
+<Text style={styles.actionText}>AI Options</Text>
 </TouchableOpacity>
 </View>
 </View>

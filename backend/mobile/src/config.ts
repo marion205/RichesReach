@@ -1,17 +1,8 @@
-import Constants from "expo-constants";
+// Import from single source of truth
+import { API_HTTP, API_GRAPHQL, API_AUTH, API_WS } from './config/api';
 
-// Production server (AWS)
-const PROD = "https://54.226.87.216";
+// Re-export for other modules
+export { API_HTTP, API_GRAPHQL, API_AUTH, API_WS };
 
-// Local development servers
-const IOS_SIM = "http://127.0.0.1:8000";
-const ANDROID_EMU = "http://10.0.2.2:8000";
-const LAN = "http://192.168.1.151:8000"; // Your Mac's IP from the terminal
-
-// Use local production server (full backend with all resolvers)
-export const API_BASE = IOS_SIM;
-
-// Alternative: Use local server based on platform
-// export const API_BASE = Constants.platform?.ios ? IOS_SIM : ANDROID_EMU;
-
-console.log("🔗 API_BASE configured as:", API_BASE);
+// Debug logging
+console.log("🔧 API Configuration:", { API_HTTP, API_GRAPHQL, API_AUTH, API_WS });
