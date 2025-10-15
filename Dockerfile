@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # ---- copy requirements only (better cache), then install
-COPY backend/backend/requirements.txt /app/requirements.txt
+COPY backend/backend/backend/requirements.txt /app/requirements.txt
 RUN set -eux; \
     python -V; pip -V; ls -al /app; \
     test -f /app/requirements.txt || (echo "requirements.txt missing in /app" && exit 2); \
@@ -21,7 +21,7 @@ RUN set -eux; \
     pip install --no-cache-dir -r /app/requirements.txt
 
 # ---- copy the app code
-COPY backend/backend/ /app/
+COPY backend/backend/backend/ /app/
 
 # ensure prod settings ends up in image (explicit!)
 RUN test -f /app/richesreach/settings_production.py || (echo "settings_production.py missing!" && ls -R /app && exit 3)
