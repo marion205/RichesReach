@@ -44,11 +44,11 @@ jobs:
       - name: Build image
         run: |
           docker build -t $ECR_REPOSITORY:$IMAGE_TAG \
-            -f backend/backend/Dockerfile.production \
+            -f Dockerfile \
             --build-arg GIT_SHA=${{ github.sha }} \
             --build-arg CELERY_SHA=${{ steps.hash.outputs.celery_sha }} \
             --no-cache \
-            backend/backend
+            .
 
       - name: Create repo if missing (optional)
         run: |
