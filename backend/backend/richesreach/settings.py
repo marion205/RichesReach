@@ -14,6 +14,10 @@ import environ
 env = environ.Env()
 environ.Env.read_env()
 
+# Check if we're using production settings to avoid DB config conflicts
+DJANGO_SETTINGS = os.getenv("DJANGO_SETTINGS_MODULE", "")
+IS_PROD_SETTINGS = DJANGO_SETTINGS.endswith("settings_production")
+
 # Read GRAPHQL_MODE early and log it
 GRAPHQL_MODE = os.getenv("GRAPHQL_MODE", "standard").lower()
 print(f"[BOOT] GRAPHQL_MODE={GRAPHQL_MODE}", flush=True)
@@ -147,13 +151,12 @@ if GRAPHQL_MODE == "simple":
 
 else:
     # Production / standard mode - enforce PostgreSQL with SSL
-    # Skip database configuration if using settings_production (it will handle it)
-    if os.getenv('DJANGO_SETTINGS_MODULE') != 'richesreach.settings_production':
+    # Skip base DB config when prod settings are active; prod module will define DATABASES.
+    if not IS_PROD_SETTINGS:
         import urllib.parse as _urlparse
 
         def _env(name, default=None):
-            v = os.getenv(name, default)
-            return v
+            return os.getenv(name, default)
 
         def _req(name):
             v = os.getenv(name)
@@ -161,30 +164,32 @@ else:
                 raise RuntimeError(f"Missing required env var: {name}")
             return v
 
-        # Accept DATABASE_URL (postgres://) or PG*/POSTGRES*/DJANGO_DB_* variants.
         def _db_cfg():
             url = _env("DATABASE_URL")
             if url:
                 parsed = _urlparse.urlparse(url)
                 return {
                     "ENGINE": "django.db.backends.postgresql",
-                    "NAME": parsed.path.lstrip("/") or "postgres",
-                    "USER": parsed.username,
-                    "PASSWORD": parsed.password,
-                    "HOST": parsed.hostname,
-                    "PORT": parsed.port or "5432",
-                    "OPTIONS": {"sslmode": _env("SSLMODE", "require")},
+                    "NAME": (parsed.path.lstrip("/") or _env("DJANGO_DB_NAME","PGDATABASE","POSTGRES_DB")),
+                    "USER": (parsed.username or _env("DJANGO_DB_USER","PGUSER","POSTGRES_USER")),
+                    "PASSWORD": (parsed.password or _env("DJANGO_DB_PASSWORD","PGPASSWORD","POSTGRES_PASSWORD")),
+                    "HOST": (parsed.hostname or _env("DJANGO_DB_HOST","PGHOST","POSTGRES_HOST")),
+                    "PORT": (parsed.port or _env("DJANGO_DB_PORT","PGPORT","POSTGRES_PORT","5432")),
+                    "OPTIONS": {
+                        "sslmode": _env("SSLMODE","PGSSLMODE","POSTGRES_SSLMODE","DJANGO_DB_SSLMODE","require")
+                    },
                 }
 
-            # Normalize keys from multiple naming conventions
             def pick(*names, default=None, required=False):
                 for n in names:
                     v = os.getenv(n)
-                    if v:
+                    if v not in (None, ""):
                         return v
                 if required:
-                    raise RuntimeError(f"No production database configuration found. "
-                                       f"Set PG*/POSTGRES*/DJANGO_DB_* or DATABASE_URL.")
+                    raise RuntimeError(
+                        "No production database configuration found. "
+                        "Set PG*/POSTGRES*/DJANGO_DB_* or DATABASE_URL."
+                    )
                 return default
 
             host = pick("PGHOST","POSTGRES_HOST","DJANGO_DB_HOST", required=True)
@@ -192,7 +197,7 @@ else:
             user = pick("PGUSER","POSTGRES_USER","DJANGO_DB_USER", required=True)
             pwd  = pick("PGPASSWORD","POSTGRES_PASSWORD","DJANGO_DB_PASSWORD", required=True)
             name = pick("PGDATABASE","POSTGRES_DB","DJANGO_DB_NAME", required=True)
-            sslm = pick("SSLMODE","DJANGO_DB_SSLMODE", default="require")
+            sslm = pick("SSLMODE","PGSSLMODE","POSTGRES_SSLMODE","DJANGO_DB_SSLMODE", default="require")
 
             return {
                 "ENGINE": "django.db.backends.postgresql",
@@ -203,18 +208,17 @@ else:
 
         DATABASES = {"default": _db_cfg()}
 
-        # Kill SQLite fallback in prod
         if DATABASES["default"]["ENGINE"] != "django.db.backends.postgresql":
             raise RuntimeError("Production must use PostgreSQL")
 
-        # Log database engine for debugging
         import logging
-        logging.getLogger(__name__).warning("DB_ENGINE=%s, DB_NAME=%s", DATABASES["default"]["ENGINE"], DATABASES["default"]["NAME"])
+        logging.getLogger(__name__).warning(
+            "DB_ENGINE=%s, DB_NAME=%s",
+            DATABASES["default"]["ENGINE"], DATABASES["default"]["NAME"]
+        )
         print(f"[BOOT] Database configuration loaded successfully: {DATABASES['default']['HOST']}", flush=True)
-        # CRITICAL FIX: This image now supports DJANGO_DB_* environment variables
-        # Previous images failed because they only checked POSTGRES_* variables
     else:
-        print("[BOOT] Skipping database configuration - will be handled by settings_production.py", flush=True)
+        print("[BOOT] Skipping base DB config (settings_production will define DATABASES)", flush=True)
 # Email Configuration
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
