@@ -110,7 +110,6 @@ jobs:
           platforms: linux/amd64
           build-args: |
             APP_DIR=${{ env.APP_DIR }}
-            RUN_COLLECTSTATIC=false
           tags: |
             ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ steps.tags.outputs.raw }}
             ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ steps.tags.outputs.pref }}
