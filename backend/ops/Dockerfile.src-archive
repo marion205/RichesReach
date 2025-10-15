@@ -1,0 +1,40 @@
+# ops/Dockerfile.src-archive
+FROM python:3.11-slim
+
+ARG CELERY_SHA
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    DJANGO_SETTINGS_MODULE=richesreach.settings_production
+
+WORKDIR /app
+
+# bring in only the archived HEAD snapshot (no accidental parent dirs)
+COPY rr-src.tgz /tmp/rr-src.tgz
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
+ && rm -rf /var/lib/apt/lists/*
+
+# unpack code
+RUN tar -xzf /tmp/rr-src.tgz -C /app && rm /tmp/rr-src.tgz
+
+# install deps (adjust path to requirements if different inside /app)
+RUN pip install --no-cache-dir --upgrade pip \
+ && pip install --no-cache-dir -r /app/requirements.txt
+
+# --- HARD VERIFICATION: celery.py must match the expected SHA and contain no settings.DEBUG
+RUN python - <<'PY'
+import hashlib, sys, pathlib
+p = pathlib.Path('/app/richesreach/celery.py')
+b = p.read_bytes()
+sha = hashlib.sha256(b).hexdigest()
+print('celery.py sha256:', sha)
+assert sha == "${CELERY_SHA}", f"celery.py SHA mismatch: {sha}"
+assert b'settings.DEBUG' not in b, "Forbidden pattern 'settings.DEBUG' found in celery.py"
+PY
+
+# optional: embed build proof for later inspection
+LABEL rr.celery_sha="${CELERY_SHA}"
+RUN printf "build_celery_sha=%s\n" "${CELERY_SHA}" > /BUILD_PROOF.txt
+
+# launch
+CMD ["gunicorn", "--workers", "3", "--bind", "0.0.0.0:8000", "richesreach.wsgi:application"]

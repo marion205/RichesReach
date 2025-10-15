@@ -258,12 +258,14 @@ public connect() {
   
   // Try to connect to WebSockets, but don't fail if server is not available
   try {
+    // Temporarily disable WebSocket connections until server endpoints are implemented
     // Connect to stock prices WebSocket
-    this.connectStockPrices(WS_STOCK_PRICES);
+    // this.connectStockPrices(WS_STOCK_PRICES);
     // Connect to discussions WebSocket
-    this.connectDiscussions(WS_DISCUSSIONS);
+    // this.connectDiscussions(WS_DISCUSSIONS);
     // Connect to portfolio WebSocket (disabled for now - using mock data)
     // this.connectPortfolio(WS_PORTFOLIO);
+    console.log('WebSocket connections disabled - using polling only');
   } catch (error) {
     console.log('WebSocket server not available, using polling only');
     // Continue with polling-only mode

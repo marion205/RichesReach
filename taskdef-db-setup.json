@@ -1,0 +1,35 @@
+{
+  "family": "rr-db-setup-once",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "executionRoleArn": "arn:aws:iam::498606688292:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::498606688292:role/ecsTaskRole",
+  "containerDefinitions": [
+    {
+      "name": "runner",
+      "image": "postgres:16-alpine",
+      "essential": true,
+      "command": [
+        "sh",
+        "-c",
+        "set -euo pipefail; export PGPASSWORD=\"$MASTER_PASSWORD\"; cat > /tmp/pg_init_1.sql <<'SQL1'\nDO $$\nBEGIN\n  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='appuser') THEN\n    CREATE ROLE appuser LOGIN PASSWORD 'AppPass2025Simple';\n  ELSE\n    ALTER ROLE appuser WITH LOGIN PASSWORD 'AppPass2025Simple';\n  END IF;\n  ALTER ROLE appuser SET search_path = public;\nEND $$;\nDO $$ BEGIN\n  IF NOT EXISTS (SELECT 1 FROM pg_database WHERE datname='appdb') THEN\n    CREATE DATABASE \"appdb\" OWNER appuser;\n  END IF;\nEND $$;\nSQL1\npsql \"host=$PGHOST port=$PGPORT dbname=postgres user=$MASTER_USERNAME sslmode=require\" -v ON_ERROR_STOP=1 -f /tmp/pg_init_1.sql; cat > /tmp/pg_init_2.sql <<'SQL2'\nALTER SCHEMA public OWNER TO appuser;\nGRANT CONNECT ON DATABASE appdb TO appuser;\nGRANT USAGE, CREATE ON SCHEMA public TO appuser;\nALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO appuser;\nALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO appuser;\nREVOKE CREATE ON SCHEMA public FROM PUBLIC;\nSQL2\npsql \"host=$PGHOST port=$PGPORT dbname=appdb user=$MASTER_USERNAME sslmode=require\" -v ON_ERROR_STOP=1 -f /tmp/pg_init_2.sql; echo 'DB setup complete ✅'"
+      ],
+      "secrets": [
+        { "name": "PGHOST",          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/prod/db:PGHOST::" },
+        { "name": "PGPORT",          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/prod/db:PGPORT::" },
+        { "name": "MASTER_USERNAME", "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/master-user-final:USER::" },
+        { "name": "MASTER_PASSWORD", "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/master-user-final:PASSWORD::" }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-region": "us-east-1",
+          "awslogs-group": "/ecs/rr-db-setup-once",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ]
+}

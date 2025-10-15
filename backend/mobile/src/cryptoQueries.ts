@@ -10,7 +10,7 @@ import { gql } from '@apollo/client';
 /* ========= Fragments ========= */
 
 export const CURRENCY_FIELDS = gql`
-  fragment CurrencyFields on Cryptocurrency {
+  fragment CurrencyFields on CryptocurrencyType {
     id
     symbol
     name
@@ -25,7 +25,7 @@ export const CURRENCY_FIELDS = gql`
 `;
 
 export const PRICE_FIELDS = gql`
-  fragment PriceFields on CryptoPrice {
+  fragment PriceFields on CryptoPriceType {
     id
     priceUsd
     priceBtc
@@ -301,12 +301,14 @@ export const CREATE_SBLOC_LOAN = gql`
 
 export const GENERATE_ML_PREDICTION = gql`
   mutation GenerateMLPrediction($symbol: String!) {
-    generateMlPrediction(symbol: $symbol) {
-      success
-      predictionId
-      probability
-      explanation
-      message
+    crypto {
+      generateMlPrediction(symbol: $symbol) {
+        success
+        predictionId
+        probability
+        explanation
+        message
+      }
     }
   }
 `;
@@ -383,13 +385,13 @@ export const GET_ADVANCED_CHART_DATA = gql`
         SMA50
         EMA12
         EMA26
-        BB_upper
-        BB_middle
-        BB_lower
+        BBUpper
+        BBMiddle
+        BBLower
         RSI14
         MACD
-        MACD_signal
-        MACD_hist
+        MACDSignal
+        MACDHist
       }
     }
   }
@@ -514,7 +516,6 @@ export const GET_BATCH_CHART_DATA = gql`
       indicators: $indicators
     ) {
       symbol
-      timeframe
       currentPrice
       change
       changePercent
@@ -531,13 +532,13 @@ export const GET_BATCH_CHART_DATA = gql`
         SMA50
         EMA12
         EMA26
-        BB_upper
-        BB_middle
-        BB_lower
+        BBUpper
+        BBMiddle
+        BBLower
         RSI14
         MACD
-        MACD_signal
-        MACD_hist
+        MACDSignal
+        MACDHist
       }
     }
   }

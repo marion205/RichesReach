@@ -9,10 +9,10 @@ Alert,
 Dimensions,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import { MockUser } from '../../user/services/MockUserService';
+import { User } from '../../../types/social';
 const { width } = Dimensions.get('window');
 interface UserProfileCardProps {
-user: MockUser;
+user: User;
 onNavigate: (screen: string, params?: any) => void;
 showFullProfile?: boolean;
 onFollowChange?: (isFollowing: boolean) => void;

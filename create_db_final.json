@@ -1,0 +1,30 @@
+{
+    "family": "create-db-final",
+    "networkMode": "awsvpc",
+    "requiresCompatibilities": ["FARGATE"],
+    "cpu": "256",
+    "memory": "512",
+    "executionRoleArn": "arn:aws:iam::498606688292:role/ecsTaskExecutionRole",
+    "taskRoleArn": "arn:aws:iam::498606688292:role/ecsTaskRole",
+    "containerDefinitions": [
+        {
+            "name": "create-db",
+            "image": "postgres:15",
+            "cpu": 0,
+            "essential": true,
+            "command": [
+                "sh",
+                "-c",
+                "PGPASSWORD='1pq72qovvWr4z6dR3Qax76ikzukfRwZs' psql -h riches-reach-postgres.cmhsue8oy30k.us-east-1.rds.amazonaws.com -p 5432 -U richesreach -d postgres -v ON_ERROR_STOP=1 -c \"DO \\$\\$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='appuser') THEN CREATE ROLE appuser LOGIN PASSWORD 'StrongAppPass2025!'; END IF; END\\$\\$; DO \\$\\$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_database WHERE datname='appdb') THEN CREATE DATABASE appdb OWNER appuser TEMPLATE template1; END IF; END\\$\\$; GRANT ALL ON SCHEMA public TO appuser; ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO appuser; ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO appuser;\" && echo 'Database setup completed successfully!'"
+            ],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/ecs/create-db-final",
+                    "awslogs-region": "us-east-1",
+                    "awslogs-stream-prefix": "ecs"
+                }
+            }
+        }
+    ]
+}

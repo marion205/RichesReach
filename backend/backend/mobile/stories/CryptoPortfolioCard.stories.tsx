@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
-import CryptoPortfolioCard from '../components/crypto/CryptoPortfolioCard';
+import CryptoPortfolioCard from '../src/components/crypto/CryptoPortfolioCard';
 
 type Props = React.ComponentProps<typeof CryptoPortfolioCard>;
 

@@ -1,0 +1,34 @@
+{
+  "kafka_enabled": true,
+  "kinesis_enabled": true,
+  "kinesis": {
+    "region": "us-east-1",
+    "stream_name": "riches-reach-market-data"
+  },
+  "kafka": {
+    "bootstrap_servers": [
+      "b-3.richesreachkafka.kbr9fv.c4.kafka.us-east-1.amazonaws.com:9094",
+      "b-2.richesreachkafka.kbr9fv.c4.kafka.us-east-1.amazonaws.com:9094",
+      "b-1.richesreachkafka.kbr9fv.c4.kafka.us-east-1.amazonaws.com:9094"
+    ],
+    "group_id": "riches-reach-producer"
+  },
+  "symbols": [
+    "AAPL", "GOOGL", "MSFT", "TSLA", "AMZN", "META", "NVDA", "NFLX",
+    "SPY", "QQQ", "IWM", "VTI", "VEA", "VWO", "BND", "GLD"
+  ],
+  "sources": ["polygon", "finnhub", "alpha_vantage"],
+  "ingestion_interval": 60,
+  "max_history": 1000,
+  "data_quality": {
+    "validate_prices": true,
+    "validate_volume": true,
+    "outlier_detection": true,
+    "missing_data_handling": "interpolate"
+  },
+  "performance": {
+    "batch_size": 100,
+    "parallel_requests": 5,
+    "connection_pool_size": 10
+  }
+}

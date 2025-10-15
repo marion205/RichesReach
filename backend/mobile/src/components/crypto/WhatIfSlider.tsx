@@ -1,6 +1,7 @@
 // What-if stress test slider for SBLOC risk analysis
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Slider } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import Slider from '@react-native-community/slider';
 import { fmtUsd, fmtPercent } from '../../shared/utils/format';
 
 interface WhatIfSliderProps {

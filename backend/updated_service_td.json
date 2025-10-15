@@ -1,0 +1,111 @@
+{
+  "family": "riches-reach-streaming-pipeline-optimized",
+  "taskRoleArn": "arn:aws:iam::498606688292:role/riches-reach-streaming-role",
+  "executionRoleArn": "arn:aws:iam::498606688292:role/ecsTaskExecutionRole",
+  "networkMode": "awsvpc",
+  "containerDefinitions": [
+    {
+      "name": "streaming-pipeline",
+      "image": "498606688292.dkr.ecr.us-east-1.amazonaws.com/riches-reach-streaming:latest",
+      "cpu": 0,
+      "memoryReservation": 1536,
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "hostPort": 8000,
+          "protocol": "tcp"
+        }
+      ],
+      "essential": true,
+      "environment": [
+        {
+          "name": "AWS_REGION",
+          "value": "us-east-1"
+        },
+        {
+          "name": "PYTHONUNBUFFERED",
+          "value": "1"
+        },
+        {
+          "name": "KAFKA_CLUSTER_ARN",
+          "value": "arn:aws:kafka:us-east-1:498606688292:cluster/riches-reach-kafka/c49fce44-4eb5-4644-b4d9-bd802b6c75bd-4"
+        },
+        {
+          "name": "KINESIS_STREAM_NAME",
+          "value": "riches-reach-market-data"
+        },
+        {
+          "name": "ENVIRONMENT",
+          "value": "production"
+        },
+        {
+          "name": "PYTHONDONTWRITEBYTECODE",
+          "value": "1"
+        },
+        {
+          "name": "YODLEE_SECRET",
+          "value": "dummy-secret"
+        },
+        {
+          "name": "YODLEE_LOGIN_NAME",
+          "value": "test-login-name"
+        },
+        {
+          "name": "YODLEE_FASTLINK_URL",
+          "value": "https://test.fastlink.yodlee.com"
+        },
+        {
+          "name": "GRAPHQL_MODE",
+          "value": "simple"
+        }
+      ],
+      "mountPoints": [],
+      "volumesFrom": [],
+      "secrets": [
+        {
+          "name": "POLYGON_API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:richesreach/polygon-api-key-cuwyhr"
+        },
+        {
+          "name": "FINNHUB_API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:richesreach/finnhub-api-key-LqpWaB"
+        }
+      ],
+      "stopTimeout": 30,
+      "ulimits": [
+        {
+          "name": "nofile",
+          "softLimit": 65536,
+          "hardLimit": 65536
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/aws/riches-reach/streaming",
+          "awslogs-create-group": "true",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "streaming-pipeline"
+        }
+      },
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "curl -f http://localhost:8000/health || exit 1"
+        ],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 60
+      },
+      "systemControls": []
+    }
+  ],
+  "volumes": [],
+  "placementConstraints": [],
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "1024",
+  "memory": "2048"
+}

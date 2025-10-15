@@ -4,20 +4,20 @@ import { gql } from '@apollo/client';
 export const GET_RISK_SUMMARY = gql`
   query GetRiskSummary {
     riskSummary {
-      account_value
-      daily_pnl
-      daily_pnl_pct
-      daily_trades
-      active_positions
-      total_exposure
-      exposure_pct
-      sector_exposure
-      risk_level
-      risk_limits {
-        max_position_size
-        max_daily_loss
-        max_concurrent_trades
-        max_sector_exposure
+      accountValue
+      dailyPnl
+      dailyPnlPct
+      dailyTrades
+      activePositions
+      totalExposure
+      exposurePct
+      sectorExposure
+      riskLevel
+      riskLimits {
+        maxPositionSize
+        maxDailyLoss
+        maxConcurrentTrades
+        maxSectorExposure
       }
     }
   }
@@ -28,15 +28,15 @@ export const GET_ACTIVE_POSITIONS = gql`
     getActivePositions {
       symbol
       side
-      entry_price
+      entryPrice
       quantity
-      entry_time
-      stop_loss_price
-      take_profit_price
-      max_hold_until
-      atr_stop_price
-      current_pnl
-      time_remaining_minutes
+      entryTime
+      stopLossPrice
+      takeProfitPrice
+      maxHoldUntil
+      atrStopPrice
+      currentPnl
+      timeRemainingMinutes
     }
   }
 `;
@@ -66,13 +66,13 @@ export const CREATE_POSITION = gql`
       position {
         symbol
         side
-        entry_price
+        entryPrice
         quantity
-        entry_time
-        stop_loss_price
-        take_profit_price
-        max_hold_until
-        atr_stop_price
+        entryTime
+        stopLossPrice
+        takeProfitPrice
+        maxHoldUntil
+        atrStopPrice
       }
     }
   }
@@ -83,15 +83,15 @@ export const CHECK_POSITION_EXITS = gql`
     checkPositionExits(currentPrices: $currentPrices) {
       success
       message
-      exited_positions {
+      exitedPositions {
         symbol
         side
-        entry_price
-        exit_price
+        entryPrice
+        exitPrice
         quantity
         pnl
-        exit_reason
-        exit_time
+        exitReason
+        exitTime
       }
     }
   }
@@ -108,21 +108,21 @@ export const UPDATE_RISK_SETTINGS = gql`
     ) {
       success
       message
-      current_settings {
-        account_value
-        daily_pnl
-        daily_pnl_pct
-        daily_trades
-        active_positions
-        total_exposure
-        exposure_pct
-        sector_exposure
-        risk_level
-        risk_limits {
-          max_position_size
-          max_daily_loss
-          max_concurrent_trades
-          max_sector_exposure
+      currentSettings {
+        accountValue
+        dailyPnl
+        dailyPnlPct
+        dailyTrades
+        activePositions
+        totalExposure
+        exposurePct
+        sectorExposure
+        riskLevel
+        riskLimits {
+          maxPositionSize
+          maxDailyLoss
+          maxConcurrentTrades
+          maxSectorExposure
         }
       }
     }
@@ -131,46 +131,46 @@ export const UPDATE_RISK_SETTINGS = gql`
 
 // Risk Management Types
 export interface RiskSummary {
-  account_value: number;
-  daily_pnl: number;
-  daily_pnl_pct: number;
-  daily_trades: number;
-  active_positions: number;
-  total_exposure: number;
-  exposure_pct: number;
-  sector_exposure: Record<string, number>;
-  risk_level: string;
-  risk_limits: {
-    max_position_size: number;
-    max_daily_loss: number;
-    max_concurrent_trades: number;
-    max_sector_exposure: number;
+  accountValue: number;
+  dailyPnl: number;
+  dailyPnlPct: number;
+  dailyTrades: number;
+  activePositions: number;
+  totalExposure: number;
+  exposurePct: number;
+  sectorExposure: Record<string, number>;
+  riskLevel: string;
+  riskLimits: {
+    maxPositionSize: number;
+    maxDailyLoss: number;
+    maxConcurrentTrades: number;
+    maxSectorExposure: number;
   };
 }
 
 export interface Position {
   symbol: string;
   side: string;
-  entry_price: number;
+  entryPrice: number;
   quantity: number;
-  entry_time: string;
-  stop_loss_price: number;
-  take_profit_price: number;
-  max_hold_until: string;
-  atr_stop_price: number;
-  current_pnl?: number;
-  time_remaining_minutes: number;
+  entryTime: string;
+  stopLossPrice: number;
+  takeProfitPrice: number;
+  maxHoldUntil: string;
+  atrStopPrice: number;
+  currentPnl?: number;
+  timeRemainingMinutes: number;
 }
 
 export interface ExitedPosition {
   symbol: string;
   side: string;
-  entry_price: number;
-  exit_price: number;
+  entryPrice: number;
+  exitPrice: number;
   quantity: number;
   pnl: number;
-  exit_reason: string;
-  exit_time: string;
+  exitReason: string;
+  exitTime: string;
 }
 
 export interface CreatePositionResponse {
@@ -182,11 +182,11 @@ export interface CreatePositionResponse {
 export interface CheckExitsResponse {
   success: boolean;
   message: string;
-  exited_positions: ExitedPosition[];
+  exitedPositions: ExitedPosition[];
 }
 
 export interface UpdateRiskSettingsResponse {
   success: boolean;
   message: string;
-  current_settings: RiskSummary;
+  currentSettings: RiskSummary;
 }

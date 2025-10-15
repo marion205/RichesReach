@@ -1,0 +1,43 @@
+{
+  "serviceName": "riches-reach-streaming-service",
+  "cluster": "riches-reach-cluster",
+  "taskDefinition": "riches-reach-streaming-pipeline",
+  "desiredCount": 2,
+  "launchType": "FARGATE",
+  "networkConfiguration": {
+    "awsvpcConfiguration": {
+      "subnets": [
+        "subnet-02425582bcf709123",
+        "subnet-04dac76fa8a69130d",
+        "subnet-07ffaac96ec01fdb7"
+      ],
+      "securityGroups": [
+        "sg-0c9973ce8922df3a5"
+      ],
+      "assignPublicIp": "ENABLED"
+    }
+  },
+  "deploymentConfiguration": {
+    "maximumPercent": 200,
+    "minimumHealthyPercent": 50,
+    "deploymentCircuitBreaker": {
+      "enable": true,
+      "rollback": true
+    }
+  },
+  "enableExecuteCommand": true,
+  "tags": [
+    {
+      "key": "Environment",
+      "value": "production"
+    },
+    {
+      "key": "Service",
+      "value": "streaming-pipeline"
+    },
+    {
+      "key": "Version",
+      "value": "1.0.0"
+    }
+  ]
+}

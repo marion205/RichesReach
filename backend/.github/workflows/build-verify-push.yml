@@ -1,0 +1,99 @@
+name: Build, Verify & Push Image (bulletproof)
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      AWS_REGION: us-east-1
+      ECR_REPO: 498606688292.dkr.ecr.us-east-1.amazonaws.com/riches-reach-streaming
+      CONTEXT_DIR: backend/backend
+      DOCKERFILE: backend/backend/Dockerfile.production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Compute celery.py SHA
+        id: cel
+        run: |
+          set -e
+          CEL_SHA=$(sha256sum $CONTEXT_DIR/richesreach/celery.py | awk '{print $1}')
+          echo "sha=$CEL_SHA" >> $GITHUB_OUTPUT
+          echo "CELERY_SHA=$CEL_SHA"
+          echo "✅ Celery.py SHA: $CEL_SHA"
+
+      - name: Verify no DEBUG access
+        run: |
+          set -e
+          if grep -nE 'if[[:space:]]+settings\.DEBUG' $CONTEXT_DIR/richesreach/celery.py; then
+            echo "❌ Found problematic settings.DEBUG access in celery.py"
+            exit 1
+          fi
+          echo "✅ No settings.DEBUG access found in celery.py"
+
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_GH_ACTIONS_ROLE_ARN }}
+          role-session-name: gha-build
+          audience: sts.amazonaws.com
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # Build a local image and VERIFY file content BEFORE push
+      - name: Build (no-cache) and verify locally
+        run: |
+          set -eux
+          GIT_SHA=$(git rev-parse --short=12 HEAD)
+          IMG_LOCAL="rr-verify:$GIT_SHA"
+          docker build --pull --no-cache \
+            -f "$DOCKERFILE" "$CONTEXT_DIR" \
+            --build-arg GIT_SHA="$GIT_SHA" \
+            --build-arg CELERY_SHA="${{ steps.cel.outputs.sha }}" \
+            -t "$IMG_LOCAL"
+          echo "✅ Build completed successfully"
+          
+          # Verify inside the built image again (belt & suspenders)
+          echo "🔍 Verifying celery.py content in built image..."
+          docker run --rm "$IMG_LOCAL" sh -lc '
+            echo "Celery.py SHA in image:"
+            sha256sum richesreach/celery.py;
+            echo "Checking for settings.DEBUG access:"
+            if grep -nE "if[[:space:]]+settings\.DEBUG" richesreach/celery.py; then
+              echo "❌ Found settings.DEBUG access in image!"
+              exit 1
+            fi
+            echo "✅ No settings.DEBUG access found in image"
+          '
+
+      - name: Tag & Push to ECR
+        id: push
+        run: |
+          set -eux
+          GIT_SHA=$(git rev-parse --short=12 HEAD)
+          IMG_LOCAL="rr-verify:$GIT_SHA"
+          REMOTE_TAG="$ECR_REPO:$GIT_SHA"
+          docker tag "$IMG_LOCAL" "$REMOTE_TAG"
+          docker push "$REMOTE_TAG"
+          DIGEST=$(aws ecr describe-images --repository-name riches-reach-streaming \
+            --image-ids imageTag="$GIT_SHA" \
+            --query 'imageDetails[0].imageDigest' --output text)
+          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
+          echo "IMAGE=$REMOTE_TAG@${DIGEST}" >> $GITHUB_OUTPUT
+          echo "✅ Pushed image: $REMOTE_TAG@${DIGEST}"
+
+      - name: Output image ref
+        run: |
+          echo "🎯 Final image reference: ${{ steps.push.outputs.IMAGE }}"
+          echo "📋 Use this exact digest for deployment: ${{ steps.push.outputs.digest }}"

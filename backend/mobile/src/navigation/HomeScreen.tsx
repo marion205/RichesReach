@@ -9,7 +9,7 @@ import React, {
   import Icon from 'react-native-vector-icons/Feather';
   import AsyncStorage from '@react-native-async-storage/async-storage';
   
-import PortfolioGraph from '../features/portfolio/components/PortfolioGraph';
+import PortfolioPerformanceCard from '../features/portfolio/components/PortfolioPerformanceCard';
 import PortfolioHoldings from '../features/portfolio/components/PortfolioHoldings';
 import { BasicRiskMetrics } from '../components';
 import PortfolioComparison from '../features/portfolio/components/PortfolioComparison';
@@ -19,7 +19,13 @@ import RealTimePortfolioService, { PortfolioMetrics } from '../features/portfoli
 import webSocketService, { PortfolioUpdate } from '../services/WebSocketService';
 import UserProfileService, { ExtendedUserProfile } from '../features/user/services/UserProfileService';
 import FinancialChatbotService, { AlphaVantageRecommendationProvider } from '../services/FinancialChatbotService';
-  import { usePortfolioHistory, setPortfolioHistory } from '../shared/portfolioHistory';
+import { usePortfolioHistory, setPortfolioHistory } from '../shared/portfolioHistory';
+
+// New imports for smart portfolio metrics
+import { FEATURE_PORTFOLIO_METRICS } from '../config/flags';
+import { isMarketDataHealthy } from '../services/healthService';
+import { mark, PerformanceMarkers } from '../utils/timing';
+import { API_BASE } from '../config/api';
   
   /* ===================== GraphQL ===================== */
   const GET_PORTFOLIO_METRICS = gql`
@@ -185,7 +191,7 @@ import FinancialChatbotService, { AlphaVantageRecommendationProvider } from '../
       <View style={styles.chatModal} accessibilityViewIsModal>
         <View style={styles.chatHeader}>
           <View style={styles.chatTitleContainer}>
-            <Icon name="zap" size={20} color="#00cc99" style={styles.chatTitleIcon} />
+            <Icon name="flash-on" size={20} color="#00cc99" style={styles.chatTitleIcon} />
             <Text style={styles.chatTitle}>Financial Education Assistant</Text>
           </View>
           <View style={styles.chatHeaderActions}>
@@ -263,6 +269,10 @@ import FinancialChatbotService, { AlphaVantageRecommendationProvider } from '../
   /* ===================== Home Screen ===================== */
   const HomeScreen = ({ navigateTo }: { navigateTo: (screen: string, data?: any) => void }) => {
     const client = useApolloClient();
+    
+    // Smart portfolio metrics state
+    const [canQueryMetrics, setCanQueryMetrics] = useState(false);
+    const [marketDataHealth, setMarketDataHealth] = useState<any>(null);
   
     // GraphQL
     const {
@@ -271,9 +281,11 @@ import FinancialChatbotService, { AlphaVantageRecommendationProvider } from '../
       error: portfolioError,
       refetch: refetchPortfolio,
     } = useQuery(GET_PORTFOLIO_METRICS, {
-      errorPolicy: 'ignore',
+      errorPolicy: 'all',
       fetchPolicy: 'cache-first',
+      nextFetchPolicy: 'cache-first',
       notifyOnNetworkStatusChange: true,
+      skip: !canQueryMetrics, // Only run when market data is healthy
     });
   
     const {
@@ -285,6 +297,56 @@ import FinancialChatbotService, { AlphaVantageRecommendationProvider } from '../
       fetchPolicy: 'cache-first',
       notifyOnNetworkStatusChange: false,
     });
+
+    // Smart portfolio metrics: Check market data health when component mounts
+    useEffect(() => {
+      let active = true;
+      
+      const checkMarketDataHealth = async () => {
+        if (!FEATURE_PORTFOLIO_METRICS) {
+          console.log('[HomeScreen] Portfolio metrics feature disabled');
+          return;
+        }
+        
+        const stop = mark(PerformanceMarkers.MARKET_DATA_FETCH);
+        
+        try {
+          const health = await isMarketDataHealthy(API_BASE);
+          
+          if (active) {
+            setMarketDataHealth(health);
+            
+            if (health.isHealthy) {
+              console.log('[HomeScreen] Market data is healthy, enabling portfolio metrics');
+              // Small delay to let UI settle after navigation
+              setTimeout(() => {
+                if (active) {
+                  setCanQueryMetrics(true);
+                }
+              }, 300);
+            } else {
+              console.warn('[HomeScreen] Market data is unhealthy:', health.error);
+              setCanQueryMetrics(false);
+            }
+          }
+          
+          stop();
+        } catch (error) {
+          console.error('[HomeScreen] Error checking market data health:', error);
+          if (active) {
+            setCanQueryMetrics(false);
+          }
+          stop();
+        }
+      };
+      
+      checkMarketDataHealth();
+      
+      return () => {
+        active = false;
+        setCanQueryMetrics(false);
+      };
+    }, []); // Run once when component mounts
   
     // Profile
     const [userProfile, setUserProfile] = useState<ExtendedUserProfile | null>(null);
@@ -487,18 +549,12 @@ import FinancialChatbotService, { AlphaVantageRecommendationProvider } from '../
             </>
           ) : (
             <>
-              <PortfolioGraph
+              <PortfolioPerformanceCard
                 totalValue={resolved.totalValue}
                 totalReturn={resolved.totalReturn}
                 totalReturnPercent={resolved.totalReturnPercent}
-                onPress={() =>
-                  navigateTo('PortfolioEducation', {
-                    clickedElement: 'chart',
-                    totalValue: resolved.totalValue,
-                    totalReturn: resolved.totalReturn,
-                    totalReturnPercent: resolved.totalReturnPercent,
-                  })
-                }
+                benchmarkSymbol="SPY"
+                useRealBenchmarkData={true}
               />
 
               {resolved.holdings?.length > 0 ? (
@@ -533,7 +589,111 @@ import FinancialChatbotService, { AlphaVantageRecommendationProvider } from '../
               portfolioHistory={portfolioHistory}
             />
           )}
+
+          {/* AI Tools Section */}
+          <View style={styles.learningSection}>
+            <View style={styles.learningHeader}>
+              <View style={styles.learningHeaderLeft}>
+                <Icon name="zap" size={20} color="#00cc99" />
+                <Text style={styles.learningTitle}>AI Tools</Text>
+              </View>
+              <TouchableOpacity style={styles.learningButton} onPress={() => navigateTo('ai-scans')}>
+                <Text style={styles.learningButtonText}>Explore All</Text>
+                <Icon name="chevron-right" size={16} color="#00cc99" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.learningCards}>
+              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('ai-scans')}>
+                <View style={styles.learningCardIcon}>
+                  <Icon name="search" size={24} color="#00cc99" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={styles.learningCardTitle}>AI Scans</Text>
+                  <Text style={styles.learningCardDescription}>Market intelligence & scanning</Text>
+                  <Text style={styles.learningCardMeta}>Hedge-fund grade analysis</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('ai-options')}>
+                <View style={styles.learningCardIcon}>
+                  <Icon name="trending-up" size={24} color="#FF3B30" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={styles.learningCardTitle}>AI Options</Text>
+                  <Text style={styles.learningCardDescription}>Options strategy recommendations</Text>
+                  <Text style={styles.learningCardMeta}>Advanced options analysis</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+            </View>
+          </View>
   
+          {/* Swing Trading Section */}
+          <View style={styles.learningSection}>
+            <View style={styles.learningHeader}>
+              <View style={styles.learningHeaderLeft}>
+                <Icon name="trending-up" size={20} color="#FF6B35" />
+                <Text style={styles.learningTitle}>Swing Trading</Text>
+              </View>
+              <TouchableOpacity style={styles.learningButton} onPress={() => navigateTo('swing-trading-test')}>
+                <Text style={styles.learningButtonText}>Test All</Text>
+                <Icon name="chevron-right" size={16} color="#AF52DE" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.learningCards}>
+              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('swing-signals')}>
+                <View style={styles.learningCardIcon}>
+                  <Icon name="activity" size={24} color="#FF6B35" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={styles.learningCardTitle}>Live Signals</Text>
+                  <Text style={styles.learningCardDescription}>AI-powered trading signals</Text>
+                  <Text style={styles.learningCardMeta}>ML scores • Real-time</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('swing-risk-coach')}>
+                <View style={styles.learningCardIcon}>
+                  <Icon name="shield" size={24} color="#10B981" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={styles.learningCardTitle}>Risk Coach</Text>
+                  <Text style={styles.learningCardDescription}>Position sizing & risk management</Text>
+                  <Text style={styles.learningCardMeta}>Calculator • Analysis</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('swing-backtesting')}>
+                <View style={styles.learningCardIcon}>
+                  <Icon name="bar-chart-2" size={24} color="#3B82F6" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={styles.learningCardTitle}>Backtesting</Text>
+                  <Text style={styles.learningCardDescription}>Test strategies with historical data</Text>
+                  <Text style={styles.learningCardMeta}>Performance • Analytics</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('swing-leaderboard')}>
+                <View style={styles.learningCardIcon}>
+                  <Icon name="award" size={24} color="#F59E0B" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={styles.learningCardTitle}>Leaderboard</Text>
+                  <Text style={styles.learningCardDescription}>Top traders & performance rankings</Text>
+                  <Text style={styles.learningCardMeta}>Community • Competition</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
           {/* Learn section (unchanged aside from tiny spacing tweaks) */}
           <View style={styles.learningSection}>
             <View style={styles.learningHeader}>
@@ -597,6 +757,7 @@ import FinancialChatbotService, { AlphaVantageRecommendationProvider } from '../
               </TouchableOpacity>
             </View>
           </View>
+
         </ScrollView>
   
         {/* Floating chat button */}

@@ -214,7 +214,7 @@ const CryptoMLSignalsCard: React.FC<Props> = ({ initialSymbol = 'BTC', pollInter
 
   // build a price lookup for auto-selection
   const symbolToPrice: Record<string, number> = Object.fromEntries(
-    (currenciesData?.supportedCurrencies ?? []).map((c: any) => [c.symbol, c.priceUsd ?? 0])
+    (currenciesData?.supportedCurrencies ?? []).map((c: any) => [c.symbol, 0]) // CryptocurrencyType doesn't have priceUsd
   );
 
   // auto-pick on mount / holdings change
@@ -281,13 +281,13 @@ const CryptoMLSignalsCard: React.FC<Props> = ({ initialSymbol = 'BTC', pollInter
     try {
       setGenerating(true);
       const res = await generatePrediction({ variables: { symbol: selectedSymbol } });
-      const ok = res.data?.generateMlPrediction?.success;
+      const ok = res.data?.crypto?.generateMlPrediction?.success;
       if (ok) {
-        const p = clamp01(res.data.generateMlPrediction.probability);
+        const p = clamp01(res.data.crypto.generateMlPrediction.probability);
         Alert.alert('Prediction Generated', `${selectedSymbol}: ${pctStr(p)} probability`);
         await refetchSignal();
       } else {
-        Alert.alert('Error', res.data?.generateMlPrediction?.message || 'Failed to generate prediction.');
+        Alert.alert('Error', res.data?.crypto?.generateMlPrediction?.message || 'Failed to generate prediction.');
       }
     } catch (e) {
       Alert.alert('Error', 'Failed to generate prediction. Please try again.');

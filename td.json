@@ -1,16 +1,17 @@
 {
-    "taskDefinitionArn": "arn:aws:ecs:us-east-1:498606688292:task-definition/riches-reach-streaming-pipeline-optimized:19",
+    "taskDefinitionArn": "arn:aws:ecs:us-east-1:498606688292:task-definition/riches-reach-streaming-pipeline-optimized:70",
     "containerDefinitions": [
         {
             "name": "streaming-pipeline",
-            "image": "498606688292.dkr.ecr.us-east-1.amazonaws.com/riches-reach-ai:5ad8e7afdc436f29b165604d13ad82bccfa2d02e",
+            "image": "498606688292.dkr.ecr.us-east-1.amazonaws.com/riches-reach-streaming@sha256:e9fbfea0975d1a0f8593a9f1c0d3f850755a06ce839b2999c527f56974a11494",
             "cpu": 0,
-            "memoryReservation": 1536,
+            "memoryReservation": 1024,
             "portMappings": [
                 {
                     "containerPort": 8000,
                     "hostPort": 8000,
-                    "protocol": "tcp"
+                    "protocol": "tcp",
+                    "name": "web"
                 }
             ],
             "essential": true,
@@ -64,12 +65,56 @@
             "volumesFrom": [],
             "secrets": [
                 {
+                    "name": "SECRET_KEY",
+                    "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr-django-secret-key-IdsacH"
+                },
+                {
+                    "name": "POSTGRES_PASSWORD",
+                    "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/appuser-postgres-db-fBFuAP:PASSWORD::"
+                },
+                {
+                    "name": "POSTGRES_USER",
+                    "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/appuser-postgres-db-fBFuAP:USER::"
+                },
+                {
+                    "name": "POSTGRES_HOST",
+                    "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/appuser-postgres-db-fBFuAP:HOST::"
+                },
+                {
+                    "name": "POSTGRES_DB",
+                    "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/appuser-postgres-db-fBFuAP:NAME::"
+                },
+                {
+                    "name": "POSTGRES_PORT",
+                    "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/appuser-postgres-db-fBFuAP:PORT::"
+                },
+                {
                     "name": "POLYGON_API_KEY",
                     "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:richesreach/polygon-api-key-cuwyhr"
                 },
                 {
                     "name": "FINNHUB_API_KEY",
                     "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:richesreach/finnhub-api-key-LqpWaB"
+                },
+                {
+                    "name": "DB_NAME",
+                    "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/appuser-postgres-db-fBFuAP:NAME::"
+                },
+                {
+                    "name": "DB_USER",
+                    "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/appuser-postgres-db-fBFuAP:USER::"
+                },
+                {
+                    "name": "DB_PASSWORD",
+                    "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/appuser-postgres-db-fBFuAP:PASSWORD::"
+                },
+                {
+                    "name": "DB_HOST",
+                    "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/appuser-postgres-db-fBFuAP:HOST::"
+                },
+                {
+                    "name": "DB_PORT",
+                    "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/appuser-postgres-db-fBFuAP:PORT::"
                 }
             ],
             "stopTimeout": 30,
@@ -92,12 +137,12 @@
             "healthCheck": {
                 "command": [
                     "CMD-SHELL",
-                    "/bin/true"
+                    "exit 0"
                 ],
                 "interval": 30,
                 "timeout": 5,
                 "retries": 3,
-                "startPeriod": 10
+                "startPeriod": 60
             },
             "systemControls": []
         }
@@ -106,7 +151,7 @@
     "taskRoleArn": "arn:aws:iam::498606688292:role/riches-reach-streaming-role",
     "executionRoleArn": "arn:aws:iam::498606688292:role/ecsTaskExecutionRole",
     "networkMode": "awsvpc",
-    "revision": 19,
+    "revision": 70,
     "volumes": [],
     "status": "ACTIVE",
     "requiresAttributes": [
@@ -153,14 +198,14 @@
     "placementConstraints": [],
     "compatibilities": [
         "EC2",
-        "MANAGED_INSTANCES",
-        "FARGATE"
+        "FARGATE",
+        "MANAGED_INSTANCES"
     ],
     "requiresCompatibilities": [
         "FARGATE"
     ],
-    "cpu": "1024",
+    "cpu": "512",
     "memory": "2048",
-    "registeredAt": "2025-10-11T17:52:55.473000-04:00",
+    "registeredAt": "2025-10-13T16:40:57.050000-04:00",
     "registeredBy": "arn:aws:iam::498606688292:user/riches-reach-ai-user"
 }

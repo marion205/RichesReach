@@ -1,0 +1,68 @@
+name: Deploy Backend (Static Keys)
+
+on:
+  workflow_dispatch:  # Manual trigger only
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPO: 498606688292.dkr.ecr.us-east-1.amazonaws.com/riches-reach-streaming
+  CLUSTER: riches-reach-prod
+  SERVICE: riches-reach-backend
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS (static keys)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Who am I?
+        run: aws sts get-caller-identity
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build & push image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: backend/backend/Dockerfile.production
+          push: true
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+          tags: |
+            ${{ env.ECR_REPO }}:${{ github.sha }}
+            ${{ env.ECR_REPO }}:prod-${{ github.run_id }}
+
+      - name: Force ECS deploy
+        run: |
+          aws ecs update-service \
+            --cluster ${{ env.CLUSTER }} \
+            --service ${{ env.SERVICE }} \
+            --force-new-deployment
+          aws ecs wait services-stable \
+            --cluster ${{ env.CLUSTER }} \
+            --services ${{ env.SERVICE }}
+
+      - name: Smoke test
+        env:
+          PROD_URL: http://riches-reach-alb-1199497064.us-east-1.elb.amazonaws.com
+        run: |
+          set -e
+          curl -sf "${PROD_URL}/" >/dev/null
+          curl -sf "${PROD_URL}/__version__" >/dev/null
+          curl -sf "${PROD_URL}/api/tax/optimization-summary" >/dev/null
+          echo "✅ Smoke test passed"

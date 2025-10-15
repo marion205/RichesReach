@@ -1,0 +1,30 @@
+{
+    "family": "test-db-connection-final",
+    "networkMode": "awsvpc",
+    "requiresCompatibilities": ["FARGATE"],
+    "cpu": "256",
+    "memory": "512",
+    "executionRoleArn": "arn:aws:iam::498606688292:role/ecsTaskExecutionRole",
+    "taskRoleArn": "arn:aws:iam::498606688292:role/ecsTaskRole",
+    "containerDefinitions": [
+        {
+            "name": "test-db",
+            "image": "postgres:15",
+            "cpu": 0,
+            "essential": true,
+            "command": [
+                "sh",
+                "-c",
+                "echo 'Testing connection as appuser with SSL...' && PGPASSWORD='StrongAppPass2025!' psql -h riches-reach-postgres.cmhsue8oy30k.us-east-1.rds.amazonaws.com -p 5432 -U appuser -d appdb -c \"SELECT current_user, current_database(), version();\" && echo 'Connection successful!'"
+            ],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/ecs/test-db-connection-final",
+                    "awslogs-region": "us-east-1",
+                    "awslogs-stream-prefix": "ecs"
+                }
+            }
+        }
+    ]
+}
