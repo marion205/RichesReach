@@ -11,6 +11,7 @@ const tabs = [
   { id: 'stock', label: 'Stocks', icon: 'trending-up' },
   { id: 'crypto', label: 'Crypto', icon: 'zap' },
   { id: 'ai-portfolio', label: 'AI Portfolio', icon: 'cpu' },
+  { id: 'ai-scans', label: 'AI Scans', icon: 'search' },
   { id: 'trading', label: 'Trading', icon: 'dollar-sign' },
   { id: 'portfolio', label: 'Portfolio', icon: 'bar-chart-2' },
   { id: 'social', label: 'Discuss', icon: 'users' },

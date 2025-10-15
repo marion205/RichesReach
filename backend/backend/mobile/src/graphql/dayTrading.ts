@@ -1,53 +1,74 @@
-import { gql } from "@apollo/client";
+import { gql } from '@apollo/client';
 
 export const GET_DAY_TRADING_PICKS = gql`
-  query GetDayTradingPicks($mode: String, $maxPositions: Int, $minScore: Float) {
-    dayTradingPicks {
-      as_of
+  query GetDayTradingPicks($mode: String!) {
+    dayTradingPicks(mode: $mode) {
+      asOf
       mode
       picks {
         symbol
         side
         score
         features {
-          momentum_15m
-          rvol_10m
-          vwap_dist
-          breakout_pct
-          spread_bps
-          catalyst_score
+          momentum15m
+          rvol10m
+          vwapDist
+          breakoutPct
+          spreadBps
+          catalystScore
         }
         risk {
-          atr_5m
-          size_shares
+          atr5m
+          sizeShares
           stop
           targets
-          time_stop_min
+          timeStopMin
         }
         notes
       }
-      universe_size
-      quality_threshold
+      universeSize
+      qualityThreshold
     }
   }
 `;
 
 export const LOG_DAY_TRADING_OUTCOME = gql`
   mutation LogDayTradingOutcome($input: DayTradingOutcomeInput!) {
-    dayTradingOutcome(input: $input) {
+    logDayTradingOutcome(input: $input) {
       success
       message
-      record {
+    }
+  }
+`;
+
+export const SUBSCRIBE_DAY_TRADING_UPDATES = gql`
+  subscription SubscribeDayTradingUpdates($mode: String!) {
+    dayTradingUpdates(mode: $mode) {
+      asOf
+      mode
+      picks {
         symbol
         side
-        entry_price
-        exit_price
-        entry_time
-        exit_time
-        mode
-        outcome
-        timestamp
+        score
+        features {
+          momentum15m
+          rvol10m
+          vwapDist
+          breakoutPct
+          spreadBps
+          catalystScore
+        }
+        risk {
+          atr5m
+          sizeShares
+          stop
+          targets
+          timeStopMin
+        }
+        notes
       }
+      universeSize
+      qualityThreshold
     }
   }
 `;

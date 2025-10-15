@@ -1,57 +1,62 @@
 {
-"expo": {
-"name": "RichesReach",
-"slug": "richesreach-ai",
-"version": "1.0.0",
-"orientation": "portrait",
-"icon": "./assets/icon.png",
-"userInterfaceStyle": "light",
-"newArchEnabled": true,
-"splash": {
-"image": "./assets/splash-icon.png",
-"resizeMode": "contain",
-"backgroundColor": "#ffffff"
-},
-"ios": {
-"supportsTablet": true,
-"bundleIdentifier": "com.richesreach.app",
-"buildNumber": "1",
-"infoPlist": {
-"NSUserTrackingUsageDescription": "This app uses tracking to provide personalized financial insights and recommendations.",
-"NSCameraUsageDescription": "This app uses the camera to scan financial documents and QR codes.",
-"NSPhotoLibraryUsageDescription": "This app accesses your photo library to upload profile pictures and financial documents.",
-"NSLocationWhenInUseUsageDescription": "This app uses location to provide location-based financial services and market data."
-},
-"config": {
-"usesNonExemptEncryption": false
-}
-},
-"android": {
-"package": "com.richesreach.app",
-"versionCode": 1,
-"adaptiveIcon": {
-"foregroundImage": "./assets/adaptive-icon.png",
-"backgroundColor": "#ffffff"
-},
-"edgeToEdgeEnabled": true,
-"permissions": [
-"CAMERA",
-"READ_EXTERNAL_STORAGE",
-"WRITE_EXTERNAL_STORAGE",
-"ACCESS_FINE_LOCATION",
-"ACCESS_COARSE_LOCATION"
-]
-},
-"web": {
-"favicon": "./assets/favicon.png"
-},
-"extra": {
-"eas": {
-"projectId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
-}
-},
-"plugins": [
-"expo-image-picker"
-]
-}
+  "expo": {
+    "name": "RichesReach",
+    "slug": "richesreach-ai",
+    "version": "1.0.2",
+    "sdkVersion": "54.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.richesreach.app",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSUserTrackingUsageDescription": "This app uses tracking to provide personalized financial insights and recommendations.",
+        "NSCameraUsageDescription": "This app uses the camera to scan financial documents and QR codes.",
+        "NSPhotoLibraryUsageDescription": "This app accesses your photo library to upload profile pictures and financial documents.",
+        "NSLocationWhenInUseUsageDescription": "This app uses location to provide location-based financial services and market data.",
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        }
+      },
+      "config": {
+        "usesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.richesreach.app",
+      "versionCode": 3,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "48317b83-0094-4d6b-8315-c0c2f3a373fa"
+      }
+    },
+    "plugins": [
+      "expo-image-picker"
+    ]
+  }
 }

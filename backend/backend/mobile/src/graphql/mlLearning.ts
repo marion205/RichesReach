@@ -3,45 +3,45 @@ import { gql } from "@apollo/client";
 export const GET_ML_SYSTEM_STATUS = gql`
   query GetMLSystemStatus {
     mlSystemStatus {
-      outcome_tracking {
-        total_outcomes
-        recent_outcomes
+      outcomeTracking {
+        totalOutcomes
+        recentOutcomes
       }
       models {
-        safe_model
-        aggressive_model
+        safeModel
+        aggressiveModel
       }
       bandit {
         breakout {
-          win_rate
+          winRate
           confidence
           alpha
           beta
         }
-        mean_reversion {
-          win_rate
+        meanReversion {
+          winRate
           confidence
           alpha
           beta
         }
         momentum {
-          win_rate
+          winRate
           confidence
           alpha
           beta
         }
-        etf_rotation {
-          win_rate
+        etfRotation {
+          winRate
           confidence
           alpha
           beta
         }
       }
-      last_training {
+      lastTraining {
         SAFE
         AGGRESSIVE
       }
-      ml_available
+      mlAvailable
     }
   }
 `;

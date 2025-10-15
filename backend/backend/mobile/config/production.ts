@@ -5,9 +5,9 @@
 export const PRODUCTION_CONFIG = {
 // API Configuration
 API: {
-BASE_URL: process.env.EXPO_PUBLIC_API_URL || 'https://api.richesreach.com',
-GRAPHQL_URL: process.env.EXPO_PUBLIC_GRAPHQL_URL || 'https://api.richesreach.com/graphql',
-WS_URL: process.env.EXPO_PUBLIC_WS_URL || 'wss://api.richesreach.com/ws',
+BASE_URL: process.env.EXPO_PUBLIC_API_URL || 'http://riches-reach-alb-1199497064.us-east-1.elb.amazonaws.com',
+GRAPHQL_URL: process.env.EXPO_PUBLIC_GRAPHQL_URL || 'http://riches-reach-alb-1199497064.us-east-1.elb.amazonaws.com/graphql',
+WS_URL: process.env.EXPO_PUBLIC_WS_URL || 'ws://riches-reach-alb-1199497064.us-east-1.elb.amazonaws.com/ws',
 TIMEOUT: 30000, // 30 seconds
 RETRY_ATTEMPTS: 3,
 RETRY_DELAY: 1000, // 1 second

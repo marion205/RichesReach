@@ -2,7 +2,7 @@
 * AI Options Service
 * Hedge Fund-Level Options Strategy Recommendations
 */
-import { PRODUCTION_CONFIG } from '../../../config/production';
+import { API_HTTP } from '../../../config';
 export interface OptionsRecommendation {
 strategy_name: string;
 strategy_type: 'income' | 'hedge' | 'speculation' | 'arbitrage';
@@ -73,11 +73,35 @@ predicted_outcomes: Record<string, any>;
 generated_at: string;
 }
 export class AIOptionsService {
-private static instance: AIOptionsService;
-private baseUrl: string;
-private constructor() {
-this.baseUrl = `${PRODUCTION_CONFIG.API_BASE_URL}/api/ai-options`;
-}
+  private static instance: AIOptionsService;
+  private baseUrl: string;
+  private constructor() {
+    this.baseUrl = `${API_HTTP}/api/ai-options`;
+  }
+
+  /**
+   * React Native-safe timeout helper
+   */
+  private fetchWithTimeout(url: string, init: RequestInit, ms: number): Promise<Response> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), ms);
+
+    return fetch(url, { ...init, signal: controller.signal })
+      .finally(() => clearTimeout(timer));
+  }
+
+  /**
+   * Retry helper for spotty network connections
+   */
+  private async retry<T>(fn: () => Promise<T>, attempts = 2, baseDelayMs = 400): Promise<T> {
+    try { 
+      return await fn(); 
+    } catch (e) {
+      if (attempts <= 0) throw e;
+      await new Promise(r => setTimeout(r, baseDelayMs));
+      return this.retry(fn, attempts - 1, baseDelayMs * 2);
+    }
+  }
 public static getInstance(): AIOptionsService {
 if (!AIOptionsService.instance) {
 AIOptionsService.instance = new AIOptionsService();
@@ -94,34 +118,63 @@ portfolioValue: number = 10000,
 timeHorizon: number = 30,
 maxRecommendations: number = 5
 ): Promise<AIOptionsResponse> {
-try {
-console.log({
-  symbol: (symbol || 'UNKNOWN').toUpperCase(),
-  user_risk_tolerance: userRiskTolerance,
-  portfolio_value: portfolioValue,
-  time_horizon: timeHorizon,
-  max_recommendations: maxRecommendations,
-});
-const requestBody = {
-symbol: (symbol || 'UNKNOWN').toUpperCase(),
-user_risk_tolerance: userRiskTolerance,
-portfolio_value: portfolioValue,
-time_horizon: timeHorizon,
-max_recommendations: maxRecommendations,
-};
-const response = await fetch(`${this.baseUrl}/recommendations`, {
-method: 'POST',
-headers: {
-'Content-Type': 'application/json',
-},
-body: JSON.stringify(requestBody),
-});
-if (!response.ok) {
-const errorText = await response.text();
-console.error(' HTTP Error Response:', errorText);
-throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
-}
-const data = await response.json();
+    try {
+      console.log({
+        symbol: (symbol || 'UNKNOWN').toUpperCase(),
+        user_risk_tolerance: userRiskTolerance,
+        portfolio_value: portfolioValue,
+        time_horizon: timeHorizon,
+        max_recommendations: maxRecommendations,
+      });
+      const requestBody = {
+        symbol: (symbol || 'UNKNOWN').toUpperCase(),
+        user_risk_tolerance: userRiskTolerance,
+        portfolio_value: portfolioValue,
+        time_horizon: timeHorizon,
+        max_recommendations: maxRecommendations,
+      };
+      
+      const response = await this.retry(async () => {
+        return await this.fetchWithTimeout(`${this.baseUrl}/recommendations`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody),
+        }, 12000);
+      });
+      
+      console.log('Response status:', response.status);
+      console.log('Response headers:', response.headers);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('HTTP Error Response:', errorText);
+        throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+      }
+      
+      // Check if response is actually JSON
+      const contentType = response.headers.get('content-type');
+      console.log('Content-Type:', contentType);
+      
+      // Get the response text first to debug
+      const responseText = await response.text();
+      console.log('Raw response text (first 200 chars):', responseText.substring(0, 200));
+      
+      if (!contentType || !contentType.includes('application/json')) {
+        console.error('Non-JSON response:', responseText);
+        throw new Error(`Expected JSON response but got: ${contentType}`);
+      }
+      
+      // Try to parse the JSON
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('JSON Parse Error:', parseError);
+        console.error('Response text that failed to parse:', responseText);
+        throw new Error(`JSON Parse error: ${parseError.message}`);
+      }
 console.log({
   symbol: data.symbol,
   total_recommendations: data.total_recommendations,

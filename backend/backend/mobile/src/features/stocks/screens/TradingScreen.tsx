@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Modal,
-  ActivityIndicator, RefreshControl, SafeAreaView, Dimensions,
+  ActivityIndicator, RefreshControl, SafeAreaView, Dimensions, FlatList,
 } from 'react-native';
 import { useQuery, useMutation, NetworkStatus } from '@apollo/client';
 import { gql } from '@apollo/client';
@@ -89,7 +89,6 @@ const GET_STOCK_CHART_DATA = gql`
   query GetStockChartData($symbol: String!, $timeframe: String!) {
     stockChartData(symbol: $symbol, timeframe: $timeframe) {
       symbol
-      timeframe
       data {
         timestamp
         open
@@ -413,125 +412,137 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
 
   /* ------------------------------- TABS -------------------------------- */
 
-  const renderOverview = () => (
-    <ScrollView
-      style={styles.scroller}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      showsVerticalScrollIndicator={false}
-    >
-      {/* Account Summary */}
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>Account Summary</Text>
-          {account?.accountStatus ? (
-            <Chip
-              label={account.accountStatus.toUpperCase()}
-              tone={account.accountStatus?.toLowerCase() === 'active' ? 'success' : 'warning'}
-            />
-          ) : null}
-        </View>
-
-        {accountLoading && (
-          <View style={styles.centerRow}>
-            <ActivityIndicator color={C.primary} />
-            <Text style={styles.sub}>  Loading account…</Text>
+  const renderOverview = () => {
+    // Create header component with account summary
+    const ListHeaderComponent = () => (
+      <>
+        {/* Account Summary */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>Account Summary</Text>
+            {account?.accountStatus ? (
+              <Chip
+                label={account.accountStatus.toUpperCase()}
+                tone={account.accountStatus?.toLowerCase() === 'active' ? 'success' : 'warning'}
+              />
+            ) : null}
           </View>
-        )}
 
-        {!accountLoading && account && (
-          <>
-            <View style={styles.grid}>
-              <View style={[styles.gridCell, styles.gridCellTopLeft]}>
-                <Text style={styles.label}>Portfolio Value</Text>
-                <Money>{account.portfolioValue}</Money>
-              </View>
-              <View style={[styles.gridCell, styles.gridCellTopRight]}>
-                <Text style={styles.label}>Equity</Text>
-                <Money>{account.equity}</Money>
-              </View>
-              <View style={[styles.gridCell, styles.gridCellMiddleLeft]}>
-                <Text style={styles.label}>Buying Power</Text>
-                <Money>{account.buyingPower}</Money>
-              </View>
-              <View style={[styles.gridCell, styles.gridCellMiddleRight]}>
-                <Text style={styles.label}>Cash</Text>
-                <Money>{account.cash}</Money>
-              </View>
-              <View style={[styles.gridCell, styles.gridCellBottomLeft]}>
-                <Text style={styles.label}>DT Buying Power</Text>
-                <Money>{account.dayTradingBuyingPower}</Money>
-              </View>
-              <View style={[styles.gridCell, styles.gridCellBottomRight]}>
-                <Text style={styles.label}>Day Trading</Text>
-                <Text style={[styles.value, { color: account.isDayTradingEnabled ? C.green : C.red }]}>
-                  {account.isDayTradingEnabled ? 'Enabled' : 'Disabled'}
-                </Text>
-              </View>
+          {accountLoading && (
+            <View style={styles.centerRow}>
+              <ActivityIndicator color={C.primary} />
+              <Text style={styles.sub}>  Loading account…</Text>
             </View>
+          )}
 
-            {account.tradingBlocked && (
-              <View style={styles.alertSoft}>
-                <Icon name="alert-triangle" size={16} color={C.amber} />
-                <Text style={[styles.sub, { marginLeft: 8 }]}>Trading is currently blocked</Text>
-              </View>
-            )}
-
-            {/* Day Trading Button */}
-            {account.isDayTradingEnabled && (
-              <TouchableOpacity 
-                style={styles.dayTradingButton}
-                onPress={() => navigateTo('day-trading')}
-              >
-                <View style={styles.dayTradingButtonContent}>
-                  <Icon name="trending-up" size={20} color="#fff" />
-                  <View style={styles.dayTradingButtonText}>
-                    <Text style={styles.dayTradingButtonTitle}>Daily Top-3 Picks</Text>
-                    <Text style={styles.dayTradingButtonSubtitle}>AI-powered intraday opportunities</Text>
-                  </View>
-                  <Icon name="chevron-right" size={20} color="#fff" />
+          {!accountLoading && account && (
+            <>
+              <View style={styles.grid}>
+                <View style={[styles.gridCell, styles.gridCellTopLeft]}>
+                  <Text style={styles.label}>Portfolio Value</Text>
+                  <Money>{account.portfolioValue}</Money>
                 </View>
-              </TouchableOpacity>
-            )}
-          </>
-        )}
-        {!accountLoading && !account && <Text style={[styles.sub,{textAlign:'center'}]}>Unable to load account data.</Text>}
-      </View>
+                <View style={[styles.gridCell, styles.gridCellTopRight]}>
+                  <Text style={styles.label}>Equity</Text>
+                  <Money>{account.equity}</Money>
+                </View>
+                <View style={[styles.gridCell, styles.gridCellMiddleLeft]}>
+                  <Text style={styles.label}>Buying Power</Text>
+                  <Money>{account.buyingPower}</Money>
+                </View>
+                <View style={[styles.gridCell, styles.gridCellMiddleRight]}>
+                  <Text style={styles.label}>Cash</Text>
+                  <Money>{account.cash}</Money>
+                </View>
+                <View style={[styles.gridCell, styles.gridCellBottomLeft]}>
+                  <Text style={styles.label}>DT Buying Power</Text>
+                  <Money>{account.dayTradingBuyingPower}</Money>
+                </View>
+                <View style={[styles.gridCell, styles.gridCellBottomRight]}>
+                  <Text style={styles.label}>Day Trading</Text>
+                  <Text style={[styles.value, { color: account.isDayTradingEnabled ? C.green : C.red }]}>
+                    {account.isDayTradingEnabled ? 'Enabled' : 'Disabled'}
+                  </Text>
+                </View>
+              </View>
 
-      {/* Positions */}
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>Positions</Text>
-          <TouchableOpacity onPress={onRefresh}>
-            <Icon name="refresh-ccw" size={18} color={C.sub} />
-          </TouchableOpacity>
+              {account.tradingBlocked && (
+                <View style={styles.alertSoft}>
+                  <Icon name="alert-triangle" size={16} color={C.amber} />
+                  <Text style={[styles.sub, { marginLeft: 8 }]}>Trading is currently blocked</Text>
+                </View>
+              )}
+
+              {/* Day Trading Button */}
+              {account.isDayTradingEnabled && (
+                <TouchableOpacity 
+                  style={styles.dayTradingButton}
+                  onPress={() => navigateTo('day-trading')}
+                >
+                  <View style={styles.dayTradingButtonContent}>
+                    <Icon name="trending-up" size={20} color="#fff" />
+                    <View style={styles.dayTradingButtonText}>
+                      <Text style={styles.dayTradingButtonTitle}>Daily Top-3 Picks</Text>
+                      <Text style={styles.dayTradingButtonSubtitle}>AI-powered intraday opportunities</Text>
+                    </View>
+                    <Icon name="chevron-right" size={20} color="#fff" />
+                  </View>
+                </TouchableOpacity>
+              )}
+            </>
+          )}
+          {!accountLoading && !account && <Text style={[styles.sub,{textAlign:'center'}]}>Unable to load account data.</Text>}
         </View>
 
-        {positionsLoading && (
-          <View style={styles.centerRow}>
-            <ActivityIndicator color={C.primary} />
-            <Text style={styles.sub}>  Loading positions…</Text>
+        {/* Positions Header */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>Positions</Text>
+            <TouchableOpacity onPress={onRefresh}>
+              <Icon name="refresh-ccw" size={18} color={C.sub} />
+            </TouchableOpacity>
           </View>
-        )}
 
-        {!positionsLoading && positions.length === 0 && (
-          <View style={styles.emptyBlock}>
-            <Icon name="briefcase" size={40} color={C.sub} />
-            <Text style={styles.emptyTitle}>No positions yet</Text>
-            <Text style={styles.emptySub}>Start trading to see positions here.</Text>
-          </View>
-        )}
+          {positionsLoading && (
+            <View style={styles.centerRow}>
+              <ActivityIndicator color={C.primary} />
+              <Text style={styles.sub}>  Loading positions…</Text>
+            </View>
+          )}
 
-        {!positionsLoading && positions.map((p: any, idx: number) => {
-          const up = p.unrealizedPl >= 0;
-          return (
-            <PositionRow key={p.id || p.symbol || `position-${idx}`} position={p} isUp={up} />
-          );
-        })}
-      </View>
+          {!positionsLoading && positions.length === 0 && (
+            <View style={styles.emptyBlock}>
+              <Icon name="briefcase" size={40} color={C.sub} />
+              <Text style={styles.emptyTitle}>No positions yet</Text>
+              <Text style={styles.emptySub}>Start trading to see positions here.</Text>
+            </View>
+          )}
+        </View>
+      </>
+    );
 
+    // Create footer component
+    const ListFooterComponent = () => (
       <View style={{ height: 16 }} />
-    </ScrollView>
-  );
+    );
+
+    return (
+      <FlatList
+        style={styles.scroller}
+        data={!positionsLoading && positions.length > 0 ? positions : []}
+        keyExtractor={(p) => p.id || p.symbol}
+        renderItem={({ item }) => <MemoPositionRow position={item} />}
+        ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: C.line }} />}
+        ListHeaderComponent={ListHeaderComponent}
+        ListFooterComponent={ListFooterComponent}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        showsVerticalScrollIndicator={false}
+        initialNumToRender={6}
+        windowSize={7}
+        removeClippedSubviews
+      />
+    );
+  };
 
   const renderOrders = () => {
     const all = ordersData?.tradingOrders || [];
@@ -852,7 +863,8 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
 
 /* ----------------------------- Position Row Component ----------------------------- */
 
-const PositionRow = ({ position, isUp }: { position: any; isUp: boolean }) => {
+const PositionRow = ({ position }: { position: any }) => {
+  const isUp = (Number(position?.unrealizedPl) ?? 0) >= 0;
   const { data: chartData } = useQuery(GET_STOCK_CHART_DATA, {
     variables: { symbol: position.symbol, timeframe: '1D' },
     errorPolicy: 'all',
@@ -860,6 +872,9 @@ const PositionRow = ({ position, isUp }: { position: any; isUp: boolean }) => {
   });
 
   const chartPrices = chartData?.stockChartData?.data?.map((d: any) => d.close) || [];
+  
+  // Normalize inconsistent server fields
+  const plPct = Number(position.unrealizedPlpc ?? position.unrealizedPLPercent ?? 0);
 
   return (
     <View style={styles.positionRow}>
@@ -880,7 +895,7 @@ const PositionRow = ({ position, isUp }: { position: any; isUp: boolean }) => {
               neutralColor={C.sub}
             />
             <Chip 
-              label={`${isUp?'+':''}${position.unrealizedPlpc?.toFixed(2)}%`} 
+              label={`${isUp?'+':''}${plPct.toFixed(2)}%`} 
               tone={isUp ? 'success' : 'danger'} 
             />
           </View>
@@ -1197,5 +1212,8 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.8)',
   },
 });
+
+// Memoized version for performance
+const MemoPositionRow = React.memo(PositionRow);
 
 export default TradingScreen;

@@ -6,7 +6,7 @@
 // Check environment variable first, then fallback to hardcoded values
 const ENV_API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 
-const prodHost = "https://grounds-firewall-thereafter-bracelets.trycloudflare.com";
+const prodHost = "http://riches-reach-alb-1199497064.us-east-1.elb.amazonaws.com";
 
 // Use environment variable if available, otherwise use hardcoded prod host
 export const API_BASE = ENV_API_BASE_URL || prodHost;

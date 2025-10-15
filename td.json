@@ -1,6 +1,6 @@
 {
     "taskDefinition": {
-        "taskDefinitionArn": "arn:aws:ecs:us-east-1:498606688292:task-definition/riches-reach-streaming-pipeline-optimized:79",
+        "taskDefinitionArn": "arn:aws:ecs:us-east-1:498606688292:task-definition/riches-reach-streaming-pipeline-optimized:95",
         "containerDefinitions": [
             {
                 "name": "streaming-pipeline",
@@ -71,23 +71,23 @@
                     },
                     {
                         "name": "POSTGRES_PASSWORD",
-                        "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/final-credentials-1759159508:PASSWORD::"
+                        "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/prod/db:PGPASSWORD::"
                     },
                     {
                         "name": "POSTGRES_USER",
-                        "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/final-credentials-1759159508:USER::"
+                        "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/prod/db:PGUSER::"
                     },
                     {
                         "name": "POSTGRES_HOST",
-                        "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/final-credentials-1759159508:HOST::"
+                        "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/prod/db:PGHOST::"
                     },
                     {
                         "name": "POSTGRES_DB",
-                        "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/final-credentials-1759159508:NAME::"
+                        "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/prod/db:PGDATABASE::"
                     },
                     {
                         "name": "POSTGRES_PORT",
-                        "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/final-credentials-1759159508:PORT::"
+                        "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/prod/db:PGPORT::"
                     },
                     {
                         "name": "POLYGON_API_KEY",
@@ -116,6 +116,14 @@
                     {
                         "name": "DB_PORT",
                         "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/db/final-credentials-1759159508:PORT::"
+                    },
+                    {
+                        "name": "SSLMODE",
+                        "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/prod/db:SSLMODE::"
+                    },
+                    {
+                        "name": "DATABASE_URL",
+                        "valueFrom": "arn:aws:secretsmanager:us-east-1:498606688292:secret:rr/prod/db:DATABASE_URL::"
                     }
                 ],
                 "stopTimeout": 30,
@@ -152,7 +160,7 @@
         "taskRoleArn": "arn:aws:iam::498606688292:role/riches-reach-streaming-role",
         "executionRoleArn": "arn:aws:iam::498606688292:role/ecsTaskExecutionRole",
         "networkMode": "awsvpc",
-        "revision": 79,
+        "revision": 95,
         "volumes": [],
         "status": "ACTIVE",
         "requiresAttributes": [
@@ -207,7 +215,7 @@
         ],
         "cpu": "512",
         "memory": "2048",
-        "registeredAt": "2025-10-14T20:38:47.548000-04:00",
+        "registeredAt": "2025-10-15T11:21:21.126000-04:00",
         "registeredBy": "arn:aws:iam::498606688292:user/riches-reach-ai-user"
     },
     "tags": []

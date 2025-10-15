@@ -13,5 +13,4 @@ export * from './types';
 // Shared Data
 export * from './financialTerms';
 export * from './learningPaths';
-export * from './mockSocialData';
 export * from './portfolioHistory';

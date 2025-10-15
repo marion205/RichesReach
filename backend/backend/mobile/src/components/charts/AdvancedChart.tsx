@@ -10,9 +10,9 @@ type Props = {
     SMA50?: (number|null)[];
     EMA12?: (number|null)[];
     EMA26?: (number|null)[];
-    BB_upper?: (number|null)[];
-    BB_middle?: (number|null)[];
-    BB_lower?: (number|null)[];
+    BBUpper?: (number|null)[];
+    BBMiddle?: (number|null)[];
+    BBLower?: (number|null)[];
   };
   width: number;
   height: number;
@@ -24,9 +24,9 @@ const AdvancedChart: React.FC<Props> = ({ data, indicators, width, height }) => 
   const [min, max] = useMemo(() => {
     const vals:number[] = [];
     data.forEach(c => vals.push(c.low, c.high));
-    ["SMA20","SMA50","EMA12","EMA26","BB_upper","BB_lower"].forEach(k=>{
+    ["SMA20","SMA50","EMA12","EMA26","BBUpper","BBLower"].forEach(k=>{
       const arr = (indicators as any)?.[k];
-      if (arr) arr.forEach((v:number|null)=>{ if(v!=null) vals.push(v); });
+      if (arr && Array.isArray(arr)) arr.forEach((v:number|null)=>{ if(v!=null) vals.push(v); });
     });
     const mn = Math.min(...vals), mx = Math.max(...vals);
     return [mn, mx];
@@ -35,7 +35,8 @@ const AdvancedChart: React.FC<Props> = ({ data, indicators, width, height }) => 
   const y = (v:number)=> pad + (height - pad*2) * (1 - (v - min)/(max - min + 1e-6));
   const x = (i:number)=> pad + i * candleW + Math.floor(candleW*0.5);
 
-  const linePath = (arr:(number|null)[])=>{
+  const linePath = (arr:(number|null)[] | undefined)=>{
+    if (!arr || !Array.isArray(arr)) return '';
     let d = '';
     arr.forEach((v, i) => {
       if (v==null) return;
@@ -72,9 +73,9 @@ const AdvancedChart: React.FC<Props> = ({ data, indicators, width, height }) => 
         {indicators?.SMA50 && <Path d={linePath(indicators.SMA50)} stroke="#6366f1" fill="none" />}
         {indicators?.EMA12 && <Path d={linePath(indicators.EMA12)} stroke="#f59e0b" fill="none" />}
         {indicators?.EMA26 && <Path d={linePath(indicators.EMA26)} stroke="#84cc16" fill="none" />}
-        {indicators?.BB_upper && <Path d={linePath(indicators.BB_upper)} stroke="#94a3b8" fill="none" />}
-        {indicators?.BB_middle && <Path d={linePath(indicators.BB_middle)} stroke="#cbd5e1" fill="none" />}
-        {indicators?.BB_lower && <Path d={linePath(indicators.BB_lower)} stroke="#94a3b8" fill="none" />}
+        {indicators?.BBUpper && <Path d={linePath(indicators.BBUpper)} stroke="#94a3b8" fill="none" />}
+        {indicators?.BBMiddle && <Path d={linePath(indicators.BBMiddle)} stroke="#cbd5e1" fill="none" />}
+        {indicators?.BBLower && <Path d={linePath(indicators.BBLower)} stroke="#94a3b8" fill="none" />}
       </Svg>
     </View>
   );

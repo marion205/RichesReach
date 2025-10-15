@@ -1,0 +1,75 @@
+name: Build & Push to ECR
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - "backend/backend/backend/**"
+      - "backend/backend/backend/Dockerfile.production"
+      - ".github/workflows/build-and-push.yml"
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: 498606688292.dkr.ecr.us-east-1.amazonaws.com
+  ECR_REPOSITORY: riches-reach-streaming
+  IMAGE_TAG: sha-${{ github.sha }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS creds (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Hash celery.py
+        id: hash
+        run: |
+          echo "celery_sha=$(shasum -a 256 backend/backend/backend/richesreach/celery.py | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+
+      - name: Build image
+        run: |
+          docker build -t $ECR_REPOSITORY:$IMAGE_TAG \
+            -f backend/backend/backend/Dockerfile.production \
+            --build-arg GIT_SHA=${{ github.sha }} \
+            --build-arg CELERY_SHA=${{ steps.hash.outputs.celery_sha }} \
+            backend/backend/backend
+
+      - name: Create repo if missing (optional)
+        run: |
+          aws ecr describe-repositories --repository-names "$ECR_REPOSITORY" || \
+          aws ecr create-repository --repository-name "$ECR_REPOSITORY" >/dev/null
+
+      - name: Tag & Push
+        run: |
+          docker tag $ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+      - name: Output pushed digest
+        id: digest
+        run: |
+          DIGEST=$(aws ecr describe-images --repository-name "$ECR_REPOSITORY" \
+            --image-ids imageTag="$IMAGE_TAG" --query 'imageDetails[0].imageDigest' --output text)
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "✅ Image pushed with digest: $DIGEST"
+
+      - name: Persist digest (artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-digest
+          path: |
+            ./  # optional if you want to capture additional metadata

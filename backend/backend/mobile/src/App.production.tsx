@@ -4,8 +4,7 @@
 */
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, StatusBar } from 'react-native';
-import { ApolloProvider } from '@apollo/client';
-import { client } from './ApolloProvider';
+import ApolloProvider from './ApolloProvider';
 // Import production services
 import { PRODUCTION_CONFIG, PRODUCTION_UTILS } from './config/production';
 import productionErrorService from './services/ProductionErrorService';
@@ -254,7 +253,7 @@ return (
 }
 return (
 <ErrorBoundary>
-<ApolloProvider client={client}>
+<ApolloProvider>
 <View style={styles.container}>
 <StatusBar barStyle="light-content" backgroundColor="#00cc99" />
 {renderScreen()}

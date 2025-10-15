@@ -23,6 +23,7 @@ export type StockCardProps = {
     }>;
     notes: string[];
   };
+  isGoodForIncomeProfile?: boolean;
   onPressAdd: () => void;
   onPressAnalysis: () => void;
   onPressMetric: (k: 'marketCap' | 'peRatio' | 'dividendYield') => void;
@@ -53,7 +54,7 @@ function StockCard(props: StockCardProps) {
             <TouchableOpacity style={styles.watchlistBtnTop} onPress={props.onPressAdd} activeOpacity={0.85}>
               <Icon name="plus" size={16} color="#007AFF" />
             </TouchableOpacity>
-            {props.beginnerScoreBreakdown && (
+            {props.isGoodForIncomeProfile && (
               <TouchableOpacity style={styles.budgetBtn} onPress={props.onPressBudgetImpact} activeOpacity={0.85}>
                 <Icon name="dollar-sign" size={14} color="#FF6B35" />
               </TouchableOpacity>
@@ -87,7 +88,7 @@ function StockCard(props: StockCardProps) {
                 ? `${(Number(props.dividendYield) * 100).toFixed(2)}%` 
                 : 'N/A'}
             </Text>
-            <Icon name="info" size={16} color="#00cc99" style={styles.info} />
+            <Icon name="trending-up" size={16} color="#00cc99" style={styles.info} />
           </TouchableOpacity>
         )}
       </View>
