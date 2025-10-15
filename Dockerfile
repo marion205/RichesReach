@@ -19,10 +19,10 @@ RUN python -V && pip -V && \
     pip install --no-cache-dir -r /app/requirements.txt
 
 # ---- copy the app code
-COPY backend/backend/backend/ /app/
+COPY backend/backend/backend/backend/ /app/
 
 # ensure prod settings ends up in image (explicit!)
-COPY backend/backend/backend/richesreach/settings_production.py /app/richesreach/settings_production.py
+COPY backend/backend/backend/backend/richesreach/settings_production.py /app/richesreach/settings_production.py
 
 # optional: fail fast if file missing
 RUN test -f /app/richesreach/settings_production.py || (echo "settings_production.py missing!" && ls -R /app && exit 3)
