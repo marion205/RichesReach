@@ -36,9 +36,18 @@ jobs:
       - name: Login to ECR
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Hash celery.py
+        id: hash
+        run: |
+          echo "celery_sha=$(shasum -a 256 backend/backend/backend/richesreach/celery.py | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+
       - name: Build image
         run: |
-          docker build -t $ECR_REPOSITORY:$IMAGE_TAG -f backend/backend/backend/Dockerfile.production backend/backend/backend
+          docker build -t $ECR_REPOSITORY:$IMAGE_TAG \
+            -f backend/backend/backend/Dockerfile.production \
+            --build-arg GIT_SHA=${{ github.sha }} \
+            --build-arg CELERY_SHA=${{ steps.hash.outputs.celery_sha }} \
+            backend/backend/backend
 
       - name: Create repo if missing (optional)
         run: |
