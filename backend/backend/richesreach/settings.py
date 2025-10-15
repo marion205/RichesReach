@@ -147,70 +147,74 @@ if GRAPHQL_MODE == "simple":
 
 else:
     # Production / standard mode - enforce PostgreSQL with SSL
-    import urllib.parse as _urlparse
+    # Skip database configuration if using settings_production (it will handle it)
+    if os.getenv('DJANGO_SETTINGS_MODULE') != 'richesreach.settings_production':
+        import urllib.parse as _urlparse
 
-    def _env(name, default=None):
-        v = os.getenv(name, default)
-        return v
+        def _env(name, default=None):
+            v = os.getenv(name, default)
+            return v
 
-    def _req(name):
-        v = os.getenv(name)
-        if not v:
-            raise RuntimeError(f"Missing required env var: {name}")
-        return v
+        def _req(name):
+            v = os.getenv(name)
+            if not v:
+                raise RuntimeError(f"Missing required env var: {name}")
+            return v
 
-    # Accept DATABASE_URL (postgres://) or PG*/POSTGRES*/DJANGO_DB_* variants.
-    def _db_cfg():
-        url = _env("DATABASE_URL")
-        if url:
-            parsed = _urlparse.urlparse(url)
+        # Accept DATABASE_URL (postgres://) or PG*/POSTGRES*/DJANGO_DB_* variants.
+        def _db_cfg():
+            url = _env("DATABASE_URL")
+            if url:
+                parsed = _urlparse.urlparse(url)
+                return {
+                    "ENGINE": "django.db.backends.postgresql",
+                    "NAME": parsed.path.lstrip("/") or "postgres",
+                    "USER": parsed.username,
+                    "PASSWORD": parsed.password,
+                    "HOST": parsed.hostname,
+                    "PORT": parsed.port or "5432",
+                    "OPTIONS": {"sslmode": _env("SSLMODE", "require")},
+                }
+
+            # Normalize keys from multiple naming conventions
+            def pick(*names, default=None, required=False):
+                for n in names:
+                    v = os.getenv(n)
+                    if v:
+                        return v
+                if required:
+                    raise RuntimeError(f"No production database configuration found. "
+                                       f"Set PG*/POSTGRES*/DJANGO_DB_* or DATABASE_URL.")
+                return default
+
+            host = pick("PGHOST","POSTGRES_HOST","DJANGO_DB_HOST", required=True)
+            port = pick("PGPORT","POSTGRES_PORT","DJANGO_DB_PORT", default="5432")
+            user = pick("PGUSER","POSTGRES_USER","DJANGO_DB_USER", required=True)
+            pwd  = pick("PGPASSWORD","POSTGRES_PASSWORD","DJANGO_DB_PASSWORD", required=True)
+            name = pick("PGDATABASE","POSTGRES_DB","DJANGO_DB_NAME", required=True)
+            sslm = pick("SSLMODE","DJANGO_DB_SSLMODE", default="require")
+
             return {
                 "ENGINE": "django.db.backends.postgresql",
-                "NAME": parsed.path.lstrip("/") or "postgres",
-                "USER": parsed.username,
-                "PASSWORD": parsed.password,
-                "HOST": parsed.hostname,
-                "PORT": parsed.port or "5432",
-                "OPTIONS": {"sslmode": _env("SSLMODE", "require")},
+                "NAME": name, "USER": user, "PASSWORD": pwd,
+                "HOST": host, "PORT": port,
+                "OPTIONS": {"sslmode": sslm},
             }
 
-        # Normalize keys from multiple naming conventions
-        def pick(*names, default=None, required=False):
-            for n in names:
-                v = os.getenv(n)
-                if v:
-                    return v
-            if required:
-                raise RuntimeError(f"No production database configuration found. "
-                                   f"Set PG*/POSTGRES*/DJANGO_DB_* or DATABASE_URL.")
-            return default
+        DATABASES = {"default": _db_cfg()}
 
-        host = pick("PGHOST","POSTGRES_HOST","DJANGO_DB_HOST", required=True)
-        port = pick("PGPORT","POSTGRES_PORT","DJANGO_DB_PORT", default="5432")
-        user = pick("PGUSER","POSTGRES_USER","DJANGO_DB_USER", required=True)
-        pwd  = pick("PGPASSWORD","POSTGRES_PASSWORD","DJANGO_DB_PASSWORD", required=True)
-        name = pick("PGDATABASE","POSTGRES_DB","DJANGO_DB_NAME", required=True)
-        sslm = pick("SSLMODE","DJANGO_DB_SSLMODE", default="require")
+        # Kill SQLite fallback in prod
+        if DATABASES["default"]["ENGINE"] != "django.db.backends.postgresql":
+            raise RuntimeError("Production must use PostgreSQL")
 
-        return {
-            "ENGINE": "django.db.backends.postgresql",
-            "NAME": name, "USER": user, "PASSWORD": pwd,
-            "HOST": host, "PORT": port,
-            "OPTIONS": {"sslmode": sslm},
-        }
-
-    DATABASES = {"default": _db_cfg()}
-
-    # Kill SQLite fallback in prod
-    if DATABASES["default"]["ENGINE"] != "django.db.backends.postgresql":
-        raise RuntimeError("Production must use PostgreSQL")
-
-    # Log database engine for debugging
-    import logging
-    logging.getLogger(__name__).warning("DB_ENGINE=%s, DB_NAME=%s", DATABASES["default"]["ENGINE"], DATABASES["default"]["NAME"])
-    print(f"[BOOT] Database configuration loaded successfully: {DATABASES['default']['HOST']}", flush=True)
-    # CRITICAL FIX: This image now supports DJANGO_DB_* environment variables
-    # Previous images failed because they only checked POSTGRES_* variables
+        # Log database engine for debugging
+        import logging
+        logging.getLogger(__name__).warning("DB_ENGINE=%s, DB_NAME=%s", DATABASES["default"]["ENGINE"], DATABASES["default"]["NAME"])
+        print(f"[BOOT] Database configuration loaded successfully: {DATABASES['default']['HOST']}", flush=True)
+        # CRITICAL FIX: This image now supports DJANGO_DB_* environment variables
+        # Previous images failed because they only checked POSTGRES_* variables
+    else:
+        print("[BOOT] Skipping database configuration - will be handled by settings_production.py", flush=True)
 # Email Configuration
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')

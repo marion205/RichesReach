@@ -2,6 +2,9 @@
 Production settings for RichesReach
 """
 import os
+from django.core.exceptions import ImproperlyConfigured
+
+# Import everything except database configuration
 from .settings import *
 
 # Override database configuration for production
