@@ -16,23 +16,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 FROM base AS deps
 # This ARG lets us avoid hardcoding the weird path
 ARG APP_DIR=backend/backend/backend/backend
-WORKDIR /opt/app
-# Copy only requirements first for caching
-COPY ${APP_DIR}/requirements.txt ./requirements.txt
-RUN python -m pip install --upgrade pip && pip install -r requirements.txt
+WORKDIR /app
+# ✅ Copy requirements first (correct nested path) for cache-friendly installs
+COPY ${APP_DIR}/requirements.txt /app/requirements.txt
+RUN python -m pip install --upgrade pip && \
+    pip install --no-cache-dir -r /app/requirements.txt
 
 # ---- runtime image ----
 FROM base AS runtime
-# Create a non-root user
-RUN useradd -m appuser
-WORKDIR /app
-# Copy installed packages from deps
+# Copy installed site-packages and scripts from deps
 COPY --from=deps /usr/local/lib/python3.12 /usr/local/lib/python3.12
 COPY --from=deps /usr/local/bin /usr/local/bin
 
-# Copy application source
+WORKDIR /app
+# ✅ Now copy the rest of your app (correct nested path)
 ARG APP_DIR=backend/backend/backend/backend
 COPY ${APP_DIR}/ /app/
+
+# Create a non-root user
+RUN useradd -m appuser
 
 # Sanity guards (fail early if paths are wrong)
 RUN test -f /app/manage.py || (echo "❌ /app/manage.py missing. Check COPY path ${APP_DIR} → /app"; ls -al /app; exit 3)

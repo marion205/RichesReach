@@ -82,6 +82,15 @@ jobs:
           test -f ./Dockerfile || (echo "Dockerfile not found in $(pwd)"; exit 1)
           echo "Build context will be: ."
 
+      - name: Verify expected files exist
+        run: |
+          APP_DIR="${{ env.APP_DIR }}"
+          echo "Checking files in: $APP_DIR"
+          test -f "$APP_DIR/requirements.txt" || { echo "❌ Missing $APP_DIR/requirements.txt"; exit 1; }
+          test -f "$APP_DIR/manage.py" || { echo "❌ Missing $APP_DIR/manage.py"; exit 1; }
+          test -d "$APP_DIR/richesreach" || { echo "❌ Missing $APP_DIR/richesreach/ directory"; exit 1; }
+          echo "✅ All required files found"
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
