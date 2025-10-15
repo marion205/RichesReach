@@ -5,8 +5,8 @@ on:
   push:
     branches: [ main ]
     paths:
-      - "backend/backend/backend/**"
-      - "backend/backend/backend/Dockerfile.production"
+      - "backend/backend/**"
+      - "backend/backend/Dockerfile.production"
       - ".github/workflows/build-and-push.yml"
 
 permissions:
