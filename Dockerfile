@@ -13,26 +13,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # ---- copy requirements only (better cache), then install
-COPY backend/backend/backend/requirements.txt /app/requirements.txt
+COPY backend/backend/requirements.txt /app/requirements.txt
 RUN python -V && pip -V && \
     pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --no-cache-dir -r /app/requirements.txt
 
 # ---- copy the app code
-COPY backend/backend/backend/backend/ /app/
+COPY backend/backend/ /app/
 
 # ensure prod settings ends up in image (explicit!)
-COPY backend/backend/backend/backend/richesreach/settings_production.py /app/richesreach/settings_production.py
-COPY backend/backend/richesreach/settings_build.py /app/richesreach/settings_build.py
-
-# optional: fail fast if file missing
 RUN test -f /app/richesreach/settings_production.py || (echo "settings_production.py missing!" && ls -R /app && exit 3)
 
 # Set Django settings module
 ENV DJANGO_SETTINGS_MODULE=richesreach.settings_production
 
-# Collect static files using build settings (no database required)
-RUN python manage.py collectstatic --noinput --settings=richesreach.settings_build
+# Collect static files (no database required during build)
+RUN python manage.py collectstatic --noinput
 
 # default command (adjust to yours)
 CMD ["gunicorn", "richesreach.wsgi:application", "-b", "0.0.0.0:8000", "--workers", "3"]
