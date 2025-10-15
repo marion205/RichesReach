@@ -59,13 +59,97 @@ jobs:
             BUILD_SHA=${{ github.sha }}
           no-cache: true
 
+      - name: Verify settings_production.py present inside image
+        run: |
+          ID=$(docker create ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }})
+          docker cp "$ID":/app/richesreach/settings_production.py /tmp/settings_production.py || (echo "❌ settings_production.py missing in image" && exit 3)
+          test -s /tmp/settings_production.py || (echo "❌ settings_production.py is empty" && exit 3)
+          docker rm "$ID"
+          echo "✅ settings_production.py found in image"
+
       - name: Resolve and print image digest
         id: digest
         run: |
           DIGEST=$(aws ecr describe-images \
-            --repository-name riches-reach-streaming \
-            --image-ids imageTag=sha-${{ github.sha }} \
+            --repository-name ${{ env.ECR_REPOSITORY }} \
+            --image-ids imageTag=${{ env.IMAGE_TAG }} \
             --query 'imageDetails[0].imageDigest' \
-            --output text --region us-east-1)
+            --output text --region ${{ env.AWS_REGION }})
+          if [ -z "$DIGEST" ] || [ "$DIGEST" = "None" ]; then
+            echo "❌ Could not resolve digest for ${{ env.IMAGE_TAG }}"
+            exit 1
+          fi
           echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
-          echo "✅ Image pushed with digest: $DIGEST"
+          echo "✅ Image pushed: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}"
+          echo "✅ Digest: $DIGEST"
+
+    outputs:
+      image: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+      digest: ${{ steps.digest.outputs.digest }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Fetch current task definition
+        run: |
+          TD_ARN=$(aws ecs describe-services \
+            --cluster riches-reach-cluster \
+            --services riches-reach-streaming-service \
+            --query 'services[0].taskDefinition' \
+            --output text --region ${{ env.AWS_REGION }})
+          aws ecs describe-task-definition --task-definition "$TD_ARN" --region ${{ env.AWS_REGION }} > td.json
+          echo "Current TD: $TD_ARN"
+
+      - name: Swap container image to digest
+        run: |
+          IMG="${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}@${{ needs.build.outputs.digest }}"
+          jq --arg IMG "$IMG" '.taskDefinition.containerDefinitions[0].image = $IMG
+            | .taskDefinition.containerDefinitions' td.json > container-defs.json
+
+          CPU=$(jq -r '.taskDefinition.cpu' td.json)
+          MEM=$(jq -r '.taskDefinition.memory' td.json)
+          NET=$(jq -r '.taskDefinition.networkMode' td.json)
+          EXEC_ROLE=$(jq -r '.taskDefinition.executionRoleArn' td.json)
+          TASK_ROLE=$(jq -r '.taskDefinition.taskRoleArn' td.json)
+          REQUIRES=$(jq -c '.taskDefinition.requiresCompatibilities' td.json)
+          VOLUMES=$(jq -c '.taskDefinition.volumes' td.json)
+          FAMILY=$(jq -r '.taskDefinition.family' td.json)
+
+          NEW_TD=$(aws ecs register-task-definition \
+            --family "$FAMILY" \
+            --network-mode "$NET" \
+            --execution-role-arn "$EXEC_ROLE" \
+            --task-role-arn "$TASK_ROLE" \
+            --cpu "$CPU" \
+            --memory "$MEM" \
+            --requires-compatibilities "$REQUIRES" \
+            --container-definitions file://container-defs.json \
+            --volumes "$VOLUMES" \
+            --region ${{ env.AWS_REGION }} \
+            --query 'taskDefinition.taskDefinitionArn' --output text)
+
+          echo "NEW_TD=$NEW_TD" >> $GITHUB_ENV
+          echo "✅ Registered TD: $NEW_TD"
+
+      - name: Update ECS service
+        run: |
+          aws ecs update-service \
+            --cluster riches-reach-cluster \
+            --service riches-reach-streaming-service \
+            --task-definition "$NEW_TD" \
+            --region ${{ env.AWS_REGION }}
+          aws ecs wait services-stable \
+            --cluster riches-reach-cluster \
+            --services riches-reach-streaming-service \
+            --region ${{ env.AWS_REGION }}
+          echo "✅ Service updated to $NEW_TD"
