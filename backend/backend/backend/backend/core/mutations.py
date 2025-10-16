@@ -692,3 +692,4 @@ class Mutation(graphene.ObjectType):
         
         from .ticker_follows import unfollow_ticker
         return unfollow_ticker(user.id, symbol)
+# Trigger new deployment - Wed Oct 15 20:48:58 EDT 2025
