@@ -17,7 +17,7 @@ from .models import User, Post, Comment, ChatSession, ChatMessage, IncomeProfile
 from .types import UserType, PostType, CommentType, ChatSessionType, ChatMessageType
 from .portfolio_types import CreatePortfolio, CreatePortfolioHolding, UpdatePortfolioHolding, UpdateHoldingShares, RemovePortfolioHolding
 from .auth_utils import RateLimiter, SecurityUtils
-from .websocket_service import websocket_service
+# from .websocket_service import websocket_service  # Temporarily disabled for local development
 from .ml_mutations import GenerateMLPortfolioRecommendation, GetMLMarketAnalysis, GetMLServiceStatus, GenerateInstitutionalPortfolioRecommendation
 from .monitoring_types import MonitoringMutations
 
