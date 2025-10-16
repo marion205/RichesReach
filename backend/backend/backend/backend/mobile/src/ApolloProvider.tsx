@@ -6,17 +6,18 @@ import { onError } from '@apollo/client/link/error';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getMainDefinition } from '@apollo/client/utilities';
 import JWTAuthService from '../services/JWTAuthService';
+import CSRFService from '../services/CSRFService';
 // If you’ll add subscriptions later:
 // import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
 // import { createClient } from 'graphql-ws';
 // Determine the correct URL based on the environment
 const getGraphQLURL = () => {
   if (__DEV__) {
-    // In development, use the local IP address for device connectivity
-    return 'http://192.168.1.151:8123/graphql/';
+    // In development, use the local server (replace with your computer's IP)
+    return 'http://192.168.1.236:8000/graphql/';  // Your computer's IP
   }
   // In production, use the production URL
-  return 'https://your-production-url.com/graphql/';
+  return 'http://54.160.139.56:8000/graphql/';
 };
 
 const HTTP_URL = getGraphQLURL();
@@ -27,11 +28,14 @@ const httpLink = createHttpLink({ uri: HTTP_URL });
 const authLink = setContext(async (_, { headers }) => {
 try {
 const jwtService = JWTAuthService.getInstance();
+const csrfService = CSRFService.getInstance();
 const token = await jwtService.getValidToken();
+const csrfToken = await csrfService.getCSRFToken();
 return {
 headers: {
 ...headers,
 ...(token ? { Authorization: `JWT ${token}` } : {}),
+...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
 },
 };
 } catch (error) {

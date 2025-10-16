@@ -21,8 +21,8 @@ export const GET_MY_WATCHLIST = gql`
 `;
 
 const ADD_TO_WATCHLIST = gql`
-  mutation AddToWatchlist($stockSymbol: String!, $notes: String) {
-    addToWatchlist(stockSymbol: $stockSymbol, notes: $notes) {
+  mutation AddToWatchlist($symbol: String!, $notes: String) {
+    addToWatchlist(symbol: $symbol, notes: $notes) {
       success
       message
     }
@@ -30,8 +30,8 @@ const ADD_TO_WATCHLIST = gql`
 `;
 
 const REMOVE_FROM_WATCHLIST = gql`
-  mutation RemoveFromWatchlist($stockSymbol: String!) {
-    removeFromWatchlist(stockSymbol: $stockSymbol) {
+  mutation RemoveFromWatchlist($symbol: String!) {
+    removeFromWatchlist(symbol: $symbol) {
       success
       message
     }
@@ -67,7 +67,7 @@ export function useWatchlist(skip = false) {
       cache.writeQuery({
         query: GET_MY_WATCHLIST,
         data: {
-          myWatchlist: prev.myWatchlist.filter((w: any) => w.stock.symbol !== variables?.stockSymbol),
+          myWatchlist: prev.myWatchlist.filter((w: any) => w.stock.symbol !== variables?.symbol),
         },
       });
     },
@@ -75,7 +75,7 @@ export function useWatchlist(skip = false) {
 
   return {
     list,
-    addToWatchlist: (symbol: string, notes?: string) => add({ variables: { stockSymbol: symbol, notes } }),
-    removeFromWatchlist: (symbol: string) => remove({ variables: { stockSymbol: symbol } }),
+    addToWatchlist: (symbol: string, notes?: string) => add({ variables: { symbol: symbol, notes } }),
+    removeFromWatchlist: (symbol: string) => remove({ variables: { symbol: symbol } }),
   };
 }

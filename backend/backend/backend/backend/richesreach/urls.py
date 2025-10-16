@@ -16,6 +16,13 @@ from core.billing_views import (
 def healthz(_):
     return JsonResponse({"ok": True, "app": "richesreach"}, status=200)
 
+@csrf_exempt
+def csrf_token_view(request):
+    """Provide CSRF token for mobile app"""
+    from django.middleware.csrf import get_token
+    token = get_token(request)
+    return JsonResponse({"csrfToken": token}, status=200)
+
 def health(_):
     from django.conf import settings
     mode = getattr(settings, 'GRAPHQL_MODE', 'full')
@@ -319,6 +326,7 @@ urlpatterns = [
     path("healthz", healthz),  # <-- ALB target health
     path("health", health),   # <-- Health check (no trailing slash)
     path("health/", health),   # <-- Health check (with trailing slash)
+    path("csrf-token/", csrf_token_view),  # <-- CSRF token endpoint for mobile
     path("prices/", prices_view),  # <-- Prices endpoint for crypto/stocks
     path("user-profile/", user_profile_view),  # <-- User profile endpoint
     path("discussions/", discussions_view),  # <-- Stock discussions endpoint
