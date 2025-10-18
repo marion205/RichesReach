@@ -266,60 +266,103 @@ jobs:
           echo "NEW_TD=$NEW_TD" >> $GITHUB_ENV
           echo "Registered TD: $NEW_TD"
 
-      - name: Run database migrations
+      - name: Run database migrations (with DB secrets and logs)
+        env:
+          AWS_REGION: us-east-1
+          CLUSTER: riches-reach-cluster
+          SERVICE: riches-reach-streaming-service
+          CONTAINER_NAME: streaming-pipeline
+          # RDS connection (non-sensitive)
+          DJANGO_DB_HOST: richesreach-prod.c8kqj2x3x3x3.us-east-1.rds.amazonaws.com
+          DJANGO_DB_PORT: "5432"
+          DJANGO_DB_NAME: richesreach_prod
+          DJANGO_DB_USER: django_user
+          # Name/ARN of the password secret (value is the password string)
+          DJANGO_DB_PASSWORD_SECRET_ID: django-db-password
         run: |
-          echo "Running database migrations before service update..."
-          # Get secret ARN (assume you have one; create if not)
-          SECRET_ARN=$(aws secretsmanager describe-secret --secret-id django-db-password --query SecretArn --output text)
-          
-          aws ecs run-task \
-            --cluster riches-reach-cluster \
+          set -euo pipefail
+
+          echo "🔑 Resolving DB password secret ARN…"
+          SECRET_ARN=$(aws secretsmanager describe-secret \
+            --secret-id "$DJANGO_DB_PASSWORD_SECRET_ID" \
+            --query 'ARN' --output text --region "$AWS_REGION")
+
+          echo "🧾 Using task definition $NEW_TD for migration…"
+          # Build JSON overrides safely
+          OVERRIDES=$(jq -n --arg cn "$CONTAINER_NAME" \
+                           --arg host "$DJANGO_DB_HOST" \
+                           --arg port "$DJANGO_DB_PORT" \
+                           --arg name "$DJANGO_DB_NAME" \
+                           --arg user "$DJANGO_DB_USER" \
+                           --arg sa "$SECRET_ARN" '
+            {
+              containerOverrides: [
+                {
+                  name: $cn,
+                  command: ["python","manage.py","migrate","--verbosity=2","--noinput"],
+                  environment: [
+                    {name:"DJANGO_DB_HOST",  value:$host},
+                    {name:"DJANGO_DB_PORT",  value:$port},
+                    {name:"DJANGO_DB_NAME",  value:$name},
+                    {name:"DJANGO_DB_USER",  value:$user}
+                  ],
+                  secrets: [
+                    {name:"DJANGO_DB_PASSWORD", valueFrom:$sa}
+                  ]
+                }
+              ]
+            }')
+
+          echo "🚀 Starting one-off migration task…"
+          TASK_ARN=$(aws ecs run-task \
+            --cluster "$CLUSTER" \
             --task-definition "$NEW_TD" \
-            --overrides '{
-              "containerOverrides": [{
-                "name": "streaming-pipeline",
-                "command": ["python", "manage.py", "migrate", "--verbosity=2"],
-                "environment": [
-                  {"name": "DJANGO_DB_HOST", "value": "richesreach-prod.c8kqj2x3x3x3.us-east-1.rds.amazonaws.com"},
-                  {"name": "DJANGO_DB_PORT", "value": "5432"},
-                  {"name": "DJANGO_DB_NAME", "value": "richesreach_prod"},
-                  {"name": "DJANGO_DB_USER", "value": "django_user"},
-                  {"name": "DJANGO_DB_PASSWORD", "valueFrom": "'${SECRET_ARN}'"}
-                ]
-              }]
+            --launch-type FARGATE \
+            --overrides "$OVERRIDES" \
+            --network-configuration '{
+              "awsvpcConfiguration":{
+                "subnets":["subnet-02425582bcf709123","subnet-04dac76fa8a69130d","subnet-07ffaac96ec01fdb7"],
+                "securityGroups":["sg-0c9973ce8922df3a5"],
+                "assignPublicIp":"ENABLED"
+              }
             }' \
-            --network-configuration '{"awsvpcConfiguration":{"subnets":["subnet-02425582bcf709123","subnet-04dac76fa8a69130d","subnet-07ffaac96ec01fdb7"],"securityGroups":["sg-0c9973ce8922df3a5"],"assignPublicIp":"ENABLED"}}' \
-            --region ${{ env.AWS_REGION }} \
-            --query 'tasks[0].taskArn' --output text > migration-task-arn.txt
-          
-          MIGRATION_TASK_ARN=$(cat migration-task-arn.txt)
-          echo "Migration task started: $MIGRATION_TASK_ARN"
-          
-          # Wait for migration to complete
-          aws ecs wait tasks-stopped \
-            --cluster riches-reach-cluster \
-            --tasks "$MIGRATION_TASK_ARN" \
-            --region ${{ env.AWS_REGION }}
-          
-          # Check migration exit code
+            --region "$AWS_REGION" \
+            --query 'tasks[0].taskArn' --output text)
+
+          echo "⏳ Waiting for task to stop: $TASK_ARN"
+          aws ecs wait tasks-stopped --cluster "$CLUSTER" --tasks "$TASK_ARN" --region "$AWS_REGION"
+
+          echo "📦 Reading container exit code…"
           EXIT_CODE=$(aws ecs describe-tasks \
-            --cluster riches-reach-cluster \
-            --tasks "$MIGRATION_TASK_ARN" \
-            --region ${{ env.AWS_REGION }} \
-            --query 'tasks[0].containers[0].exitCode' --output text)
-          
+            --cluster "$CLUSTER" --tasks "$TASK_ARN" --region "$AWS_REGION" \
+            --query "tasks[0].containers[?name=='$CONTAINER_NAME'].exitCode | [0]" --output text)
+
+          # Get the precise CloudWatch log stream for this container
+          LOG_STREAM=$(aws ecs describe-tasks \
+            --cluster "$CLUSTER" --tasks "$TASK_ARN" --region "$AWS_REGION" \
+            --query "tasks[0].containers[?name=='$CONTAINER_NAME'].logStreamName | [0]" --output text)
+
+          # Derive the log group from the task definition (safer than guessing)
+          LOG_GROUP=$(aws ecs describe-task-definition --task-definition "$NEW_TD" --region "$AWS_REGION" \
+            --query "taskDefinition.containerDefinitions[?name=='$CONTAINER_NAME'].logConfiguration.options.\"awslogs-group\" | [0]" \
+            --output text)
+
+          echo "🧾 Logs: group=$LOG_GROUP stream=$LOG_STREAM"
+          aws logs get-log-events \
+            --log-group-name "$LOG_GROUP" \
+            --log-stream-name "$LOG_STREAM" \
+            --limit 200 \
+            --start-from-head \
+            --region "$AWS_REGION" >/tmp/migrate.log || true
+
+          tail -n 80 /tmp/migrate.log || true
+
           if [ "$EXIT_CODE" != "0" ]; then
             echo "❌ Migration failed with exit code: $EXIT_CODE"
-            echo "Fetching logs for debug..."
-            aws logs get-log-events \
-              --log-group-name /ecs/riches-reach-streaming-pipeline-optimized \
-              --log-stream-name $MIGRATION_TASK_ARN/streaming-pipeline/* \
-              --limit 50 \
-              --start-from-head
             exit 1
           fi
-          
-          echo "✅ Database migrations completed successfully"
+
+          echo "✅ Database migrations completed successfully."
 
       - name: Update ECS service
         run: |
