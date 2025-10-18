@@ -7,7 +7,7 @@ from django.contrib.auth import get_user_model
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-from graphql_jwt.shortcuts import get_token
+from rest_framework_simplejwt.tokens import RefreshToken
 import json
 import logging
 
@@ -65,8 +65,9 @@ def rest_login(request):
                 'error': 'Invalid email or password'
             }, status=401)
         
-        # Generate JWT token using the same method as GraphQL
-        token = get_token(user)
+        # Generate JWT token using SimpleJWT
+        refresh = RefreshToken.for_user(user)
+        token = str(refresh.access_token)
         logger.info(f"REST login successful for: {identifier}")
         
         return JsonResponse({

@@ -109,8 +109,9 @@ class TestCryptoTradeExecution(TestCase):
     
     def create_authenticated_context(self):
         """Create authenticated GraphQL context"""
-        from graphql_jwt.shortcuts import get_token
-        token = get_token(self.user)
+        from rest_framework_simplejwt.tokens import RefreshToken
+        refresh = RefreshToken.for_user(self.user)
+        token = str(refresh.access_token)
         return {
             'user': self.user,
             'META': {
