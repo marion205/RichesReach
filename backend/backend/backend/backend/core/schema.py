@@ -14,9 +14,8 @@ from core.sbloc_mutations import SblocMutation
 from core.notification_graphql import NotificationQuery, NotificationMutation
 from core.benchmark_graphql import BenchmarkQuery, BenchmarkMutation
 from core.swing_trading_graphql import SwingTradingQuery, SwingTradingMutation
-from core.mutations import AddToWatchlist, RemoveFromWatchlist, AIRebalancePortfolio, PlaceStockOrder
+from core.mutations import AddToWatchlist, RemoveFromWatchlist, AIRebalancePortfolio, PlaceStockOrder, GenerateAIRecommendations
 from core.stock_comprehensive import StockComprehensiveQuery
-from core.mutations_clean_test import GenerateAIRecommendations
 # from core.schema_defi import DeFiQuery, DeFiMutation  # Temporarily disabled due to pydantic issues
 # from core.schema_defi_analytics import DeFiAnalyticsQuery  # Temporarily disabled due to pydantic issues
 from .models import Watchlist, WatchlistItem
