@@ -27,8 +27,8 @@ USE_SBLOC_AGGREGATOR = os.getenv('USE_SBLOC_AGGREGATOR', 'false').lower() == 'tr
 
 # SimpleJWT Configuration
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
 }
 
@@ -267,18 +267,9 @@ else:
 # GraphQL configuration
 GRAPHENE = {
     'SCHEMA': 'core.schema_simple.schema' if GRAPHQL_MODE == 'simple' else 'core.schema.schema',
-    'MIDDLEWARE': [
-        'graphql_jwt.middleware.JSONWebTokenMiddleware',
-    ],
 }
 
-# JWT configuration
-GRAPHQL_JWT = {
-    'JWT_VERIFY_EXPIRATION': True,
-    'JWT_LONG_RUNNING_REFRESH_TOKEN': True,
-    'JWT_EXPIRATION_DELTA': timedelta(minutes=60),
-    'JWT_REFRESH_EXPIRATION_DELTA': timedelta(days=7),
-}
+# JWT configuration removed - using SimpleJWT instead
 
 # API Keys
 FINNHUB_API_KEY = os.getenv('FINNHUB_API_KEY', '')
