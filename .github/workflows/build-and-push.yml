@@ -181,15 +181,11 @@ jobs:
 
       - name: Fetch current ECS task definition
         run: |
-          aws ecs describe-services \
-            --cluster riches-reach-cluster \
-            --services riches-reach-streaming-service \
-            --region ${{ env.AWS_REGION }} \
-            --query 'services[0].taskDefinition' \
-            --output text > td_arn.txt
+          # Use the working task definition revision 121 that has the correct environment variables
           aws ecs describe-task-definition \
-            --task-definition "$(cat td_arn.txt)" \
+            --task-definition riches-reach-streaming-pipeline-optimized:121 \
             --region ${{ env.AWS_REGION }} > td.json
+          echo "Using task definition: riches-reach-streaming-pipeline-optimized:121"
 
       - name: Swap container image to immutable digest
         run: |
