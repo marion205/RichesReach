@@ -1,6 +1,6 @@
 import graphene
 import graphql_jwt
-from graphql_jwt.refresh_token.mutations import RefreshToken, Revoke
+# from graphql_jwt.refresh_token.mutations import RefreshToken, Revoke  # Disabled - using stateless approach
 from graphene_django import DjangoObjectType
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
@@ -3523,8 +3523,8 @@ class Query(SwingQuery, BaseQuery, SblocQuery, NotificationQuery, BenchmarkQuery
 class Mutation(SblocMutation, NotificationMutation, BenchmarkMutation, SwingTradingMutation, CryptoMutation, graphene.ObjectType):
     token_auth = graphql_jwt.ObtainJSONWebToken.Field()
     verify_token = graphql_jwt.Verify.Field()
-    refresh_token = RefreshToken.Field()  # Use persisted refresh token
-    revoke_token = Revoke.Field()  # Add revoke functionality
+    refresh_token = graphql_jwt.Refresh.Field()  # Use stateless refresh token
+    revoke_token = graphql_jwt.Revoke.Field()  # Use stateless revoke
     runBacktest = RunBacktestMutation.Field()
     
     # Watchlist mutations

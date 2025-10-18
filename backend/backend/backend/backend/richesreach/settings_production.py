@@ -25,12 +25,10 @@ DEBUG = False
 USE_SBLOC_MOCK = os.getenv('USE_SBLOC_MOCK', 'true').lower() == 'true'
 USE_SBLOC_AGGREGATOR = os.getenv('USE_SBLOC_AGGREGATOR', 'false').lower() == 'true'
 
-# JWT Configuration (using correct GRAPHQL_JWT settings for django-graphql-jwt)
+# JWT Configuration (stateless approach - no persisted refresh tokens)
 GRAPHQL_JWT = {
     'JWT_VERIFY_EXPIRATION': True,
     'JWT_EXPIRATION_DELTA': timedelta(minutes=60),   # access token
-    'JWT_REFRESH_EXPIRATION_DELTA': timedelta(days=7),
-    'JWT_LONG_RUNNING_REFRESH_TOKEN': True,          # persisted refresh pattern
     'JWT_ALGORITHM': 'HS256',
     'JWT_SECRET_KEY': SECRET_KEY,
     'JWT_LEEWAY': 0,
@@ -72,7 +70,7 @@ INSTALLED_APPS = [
     'django_celery_results',
     'rest_framework',
     'rest_framework.authtoken',
-    'graphql_jwt.refresh_token',  # Required for persisted refresh tokens
+    # 'graphql_jwt.refresh_token',  # Disabled - using stateless JWT approach
 ]
 
 MIDDLEWARE = [
