@@ -51,6 +51,7 @@ jobs:
               --generate-hashes \
               --resolver=backtracking \
               --upgrade \
+              --allow-unsafe \
               --output-file constraints.lock \
               requirements.in constraints.in
           else
@@ -58,6 +59,7 @@ jobs:
               --generate-hashes \
               --resolver=backtracking \
               --upgrade \
+              --allow-unsafe \
               --output-file constraints.lock \
               requirements.in
           fi

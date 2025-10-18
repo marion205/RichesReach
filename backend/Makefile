@@ -4,6 +4,8 @@
 #   make sync          # Install exact deps from constraints.lock (dev/CI-friendly)
 #   make check-lock    # Fail if constraints.lock is out-of-date (build guard)
 #   make upgrade       # Lock + upgrade all deps (use sparingly)
+#
+# Note: --allow-unsafe is used for setuptools (required for hashed installs)
 
 .PHONY: lock sync check-lock upgrade clean
 
@@ -23,9 +25,9 @@ endif
 lock:
 	@echo "🔒 Compiling lockfile..."
 	@if [ -f $(CONSTRAINTS_IN) ]; then \
-		pip-compile --generate-hashes --resolver=backtracking --upgrade --output-file $(LOCK_FILE) $(INPUT_FILES); \
+		pip-compile --generate-hashes --resolver=backtracking --upgrade --allow-unsafe --output-file $(LOCK_FILE) $(INPUT_FILES); \
 	else \
-		pip-compile --generate-hashes --resolver=backtracking --upgrade --output-file $(LOCK_FILE) $(REQUIREMENTS_IN); \
+		pip-compile --generate-hashes --resolver=backtracking --upgrade --allow-unsafe --output-file $(LOCK_FILE) $(REQUIREMENTS_IN); \
 	fi
 	@echo "✅ $(LOCK_FILE) updated!"
 
@@ -51,9 +53,9 @@ check-lock:
 upgrade:
 	@echo "🚀 Upgrading all deps in lockfile..."
 	@if [ -f $(CONSTRAINTS_IN) ]; then \
-		pip-compile --generate-hashes --resolver=backtracking --upgrade-package all --output-file $(LOCK_FILE) $(INPUT_FILES); \
+		pip-compile --generate-hashes --resolver=backtracking --upgrade-package all --allow-unsafe --output-file $(LOCK_FILE) $(INPUT_FILES); \
 	else \
-		pip-compile --generate-hashes --resolver=backtracking --upgrade-package all --output-file $(LOCK_FILE) $(REQUIREMENTS_IN); \
+		pip-compile --generate-hashes --resolver=backtracking --upgrade-package all --allow-unsafe --output-file $(LOCK_FILE) $(REQUIREMENTS_IN); \
 	fi
 	@echo "✅ Lockfile upgraded! Run 'make sync' to apply."
 
