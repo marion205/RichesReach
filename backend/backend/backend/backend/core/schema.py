@@ -1,6 +1,5 @@
 import graphene
-import graphql_jwt
-# from graphql_jwt.refresh_token.mutations import RefreshToken, Revoke  # Disabled - using stateless approach
+from core.graphql_mutations_auth import ObtainTokenPair, RefreshToken, VerifyToken
 from graphene_django import DjangoObjectType
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
@@ -2334,6 +2333,15 @@ class Query(SwingQuery, BaseQuery, SblocQuery, NotificationQuery, BenchmarkQuery
     # merging by multiple inheritance; keep simple to avoid MRO issues
     optionOrders = graphene.List(OptionOrderType, status=graphene.String())
     
+    # Authentication test query
+    ping = graphene.String()
+
+    def resolve_ping(root, info):
+        # Demonstrates authenticated user is available
+        u = getattr(info.context, "user", None)
+        who = u.email if (u and u.is_authenticated) else "anonymous"
+        return f"pong ({who})"
+    
     # Options Analysis
     optionsAnalysis = graphene.Field(lambda: OptionsAnalysisType, symbol=graphene.String(required=True))
     
@@ -3521,10 +3529,9 @@ class Query(SwingQuery, BaseQuery, SblocQuery, NotificationQuery, BenchmarkQuery
         }
 
 class Mutation(SblocMutation, NotificationMutation, BenchmarkMutation, SwingTradingMutation, CryptoMutation, graphene.ObjectType):
-    token_auth = graphql_jwt.ObtainJSONWebToken.Field()
-    verify_token = graphql_jwt.Verify.Field()
-    refresh_token = graphql_jwt.Refresh.Field()  # Use stateless refresh token
-    revoke_token = graphql_jwt.Revoke.Field()  # Use stateless revoke
+    token_auth = ObtainTokenPair.Field()
+    verify_token = VerifyToken.Field()
+    refresh_token = RefreshToken.Field()
     runBacktest = RunBacktestMutation.Field()
     
     # Watchlist mutations

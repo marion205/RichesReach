@@ -25,20 +25,25 @@ DEBUG = False
 USE_SBLOC_MOCK = os.getenv('USE_SBLOC_MOCK', 'true').lower() == 'true'
 USE_SBLOC_AGGREGATOR = os.getenv('USE_SBLOC_AGGREGATOR', 'false').lower() == 'true'
 
-# JWT Configuration (stateless approach - no persisted refresh tokens)
-GRAPHQL_JWT = {
-    'JWT_VERIFY_EXPIRATION': True,
-    'JWT_EXPIRATION_DELTA': timedelta(minutes=60),   # access token
-    'JWT_ALGORITHM': 'HS256',
-    'JWT_SECRET_KEY': SECRET_KEY,
-    'JWT_LEEWAY': 0,
-    'JWT_AUTH_HEADER_PREFIX': 'Bearer',
-    'JWT_AUTH_COOKIE': None,
+# SimpleJWT Configuration
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+}
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "ALGORITHM": "HS256",
+    "SIGNING_KEY": SECRET_KEY,
+    "AUTH_HEADER_TYPES": ("Bearer",),
 }
 
 # Authentication backends
 AUTHENTICATION_BACKENDS = [
-    'graphql_jwt.backends.JSONWebTokenBackend',
     'django.contrib.auth.backends.ModelBackend',
 ]
 
@@ -70,7 +75,8 @@ INSTALLED_APPS = [
     'django_celery_results',
     'rest_framework',
     'rest_framework.authtoken',
-    # 'graphql_jwt.refresh_token',  # Disabled - using stateless JWT approach
+    'rest_framework_simplejwt.token_blacklist',  # For token blacklisting
+    # 'graphql_jwt.refresh_token',  # Disabled - using SimpleJWT approach
 ]
 
 MIDDLEWARE = [
@@ -80,6 +86,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'core.graphql_auth.attach_user',  # SimpleJWT auth for GraphQL
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -89,9 +96,6 @@ ROOT_URLCONF = 'richesreach.urls'
 # GraphQL Configuration
 GRAPHENE = {
     'SCHEMA': 'core.schema.schema',
-    'MIDDLEWARE': [
-        'graphql_jwt.middleware.JSONWebTokenMiddleware',
-    ],
 }
 
 TEMPLATES = [
