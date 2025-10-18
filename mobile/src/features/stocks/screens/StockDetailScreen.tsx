@@ -909,7 +909,7 @@ const TrendsRoute = React.memo(({ symbol, insiderData, institutionalData, sentim
       {/* Institutional Ownership */}
       <View style={styles.card}>
         <View style={styles.cardHeader}>
-          <Icon name="home" size={20} color={theme.colors.accent} />
+          <Icon name="building" size={20} color={theme.colors.accent} />
           <Text style={styles.sectionTitle}>Institutional Ownership</Text>
         </View>
         {institutionalData && institutionalData.length > 0 ? (
