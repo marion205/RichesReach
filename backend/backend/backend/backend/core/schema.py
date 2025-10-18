@@ -14,7 +14,7 @@ from core.sbloc_mutations import SblocMutation
 from core.notification_graphql import NotificationQuery, NotificationMutation
 from core.benchmark_graphql import BenchmarkQuery, BenchmarkMutation
 from core.swing_trading_graphql import SwingTradingQuery, SwingTradingMutation
-from core.mutations import AddToWatchlist, RemoveFromWatchlist, AIRebalancePortfolio, PlaceStockOrder, GenerateAIRecommendations
+from core.mutations import AddToWatchlist, RemoveFromWatchlist, AIRebalancePortfolio, PlaceStockOrder, GenerateAIRecommendations, WithdrawFunds
 from core.stock_comprehensive import StockComprehensiveQuery
 # from core.schema_defi import DeFiQuery, DeFiMutation  # Temporarily disabled due to pydantic issues
 # from core.schema_defi_analytics import DeFiAnalyticsQuery  # Temporarily disabled due to pydantic issues
@@ -3540,6 +3540,9 @@ class Mutation(SblocMutation, NotificationMutation, BenchmarkMutation, SwingTrad
     
     # Stock trading mutations
     placeStockOrder = PlaceStockOrder.Field()
+    
+    # Financial mutations
+    withdrawFunds = WithdrawFunds.Field()
     
     # SBLOC mutations
     create_sbloc_session = SblocMutation.create_sbloc_session
