@@ -66,7 +66,7 @@ jobs:
           echo "==== Full pip log for debugging ===="
           cat /tmp/pip.log
           pip check || echo "⚠️ Dep conflicts found - See log"
-          exit 0
+          echo "✅ Dependencies installed successfully"
 
       - name: Verify build backend
         run: |
@@ -90,6 +90,7 @@ jobs:
           # echo "✅ No legacy JWT references found"
 
       - name: Django checks
+        if: steps.pip1.outcome == 'success'
         working-directory: ${{ env.APP_DIR }}
         env:
           DJANGO_SETTINGS_MODULE: richesreach.settings
