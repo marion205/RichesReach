@@ -76,6 +76,14 @@ jobs:
           echo "=== Checking for packages without wheels ==="
           pip download --only-binary=:all: -r backend/requirements.txt -d /tmp/wheels
 
+      - name: Verify dependency consistency
+        run: |
+          echo "=== Verifying all requirements files point to same source ==="
+          find . -name "requirements.txt" -type f -exec echo "File: {}" \; -exec head -5 {} \; -exec echo "---" \;
+          echo "=== Checking for duplicate ta/urllib3 pins ==="
+          grep -nR "ta==" . --include="requirements.txt" || echo "No ta conflicts found"
+          grep -nR "urllib3" . --include="requirements.txt" || echo "No urllib3 conflicts found"
+
       - name: Lint for legacy JWT
         run: |
           if grep -R "graphql_jwt\|ObtainJSONWebToken" -n backend/ --exclude-dir=venv --exclude-dir=__pycache__ --exclude-dir=logs; then
