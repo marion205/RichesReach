@@ -65,6 +65,25 @@
 - **News API**: ✅ **ACTIVE** - Market sentiment and news analysis
 - **Alpha Vantage**: ✅ **ACTIVE** - Backup data source
 
+#### **✅ Smart Alerts Service**
+- **Status**: ✅ **ENABLED** and working
+- **GraphQL Integration**: ✅ **ACTIVE**
+- **Available Queries**: `smartAlerts`, `alertCategories`, `alertPreferences`, `mlAnomalies`
+- **Test Result**: ✅ **SUCCESS** - Alert categories working
+```json
+{
+  "alertCategories": [
+    {"category": "performance", "name": "Performance Alerts"},
+    {"category": "risk", "name": "Risk Management"},
+    {"category": "allocation", "name": "Asset Allocation"},
+    {"category": "attribution", "name": "Performance Attribution"},
+    {"category": "market_regime", "name": "Market Conditions"},
+    {"category": "rebalancing", "name": "Rebalancing"},
+    {"category": "opportunity", "name": "Opportunities"}
+  ]
+}
+```
+
 #### **✅ Additional Services**
 - **Crypto Services**: ✅ **ACTIVE** - Full crypto trading and analytics
 - **Notification Services**: ✅ **ACTIVE** - Smart alerts and notifications
@@ -83,7 +102,10 @@
 - `bankAccounts` - User bank accounts (Yodlee)
 - `cryptoPortfolio` - Crypto portfolio data
 - `benchmarkSeries` - Portfolio benchmarking
-- `smartAlerts` - Intelligent alerts
+- `smartAlerts` - Intelligent portfolio coaching alerts
+- `alertCategories` - Available alert categories
+- `alertPreferences` - User alert preferences
+- `mlAnomalies` - ML-detected anomalies
 - `notifications` - User notifications
 - And 40+ more specialized queries
 
@@ -139,6 +161,14 @@ curl -X POST http://localhost:8000/graphql/ \
   -d '{"query": "{ bankAccounts { accountType } }"}'
 ```
 **Result**: ✅ **SUCCESS** - Service responding (empty with mock data)
+
+### **✅ Smart Alerts Service Test**
+```bash
+curl -X POST http://localhost:8000/graphql/ \
+  -H "Content-Type: application/json" \
+  -d '{"query": "{ alertCategories }"}'
+```
+**Result**: ✅ **SUCCESS** - Alert categories working with 7 categories
 
 ### **✅ Market Data Test**
 ```bash
@@ -254,6 +284,7 @@ curl http://localhost:8000/health
 - ✅ **OpenAI**: AI recommendations and analysis working
 - ✅ **Yodlee**: Bank account linking service ready
 - ✅ **SBLOC**: Securities-based lending service ready
+- ✅ **Smart Alerts**: Intelligent portfolio coaching alerts working
 - ✅ **Market Data**: All APIs providing real-time data
 - ✅ **GraphQL**: Complete API with 80+ endpoints
 - ✅ **Production Ready**: All systems tested and operational
