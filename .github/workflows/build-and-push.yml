@@ -17,8 +17,8 @@ env:
   AWS_REGION: us-east-1
   ECR_REGISTRY: 498606688292.dkr.ecr.us-east-1.amazonaws.com
   ECR_REPOSITORY: riches-reach-streaming
-  PYTHON_VERSION: "3.11"  # Quick unblock; switch back to 3.12 once deps are stable
-  APP_DIR: "backend/backend/backend/backend"  # Django app location - use main requirements.txt
+  PYTHON_VERSION: "3.11" # Quick unblock
+  APP_DIR: "backend/backend/backend/backend" # Django app path
 
 jobs:
   production-deploy:
@@ -27,12 +27,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-    - name: Set up Python (Fallback Approach)
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'  # FastAPI supports Python 3.11
-        cache: "pip"
-        cache-dependency-path: backend/requirements.txt
+      - name: Set up Python (Fallback Approach)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
 
       - name: Verify project layout
         run: bash scripts/verify-layout.sh
@@ -89,7 +89,6 @@ jobs:
           DJANGO_SETTINGS_MODULE: richesreach.settings
         run: |
           python manage.py check
-          # Run tests if available
           if [ -f "manage.py" ]; then
             python manage.py test --noinput || echo "⚠️ Tests failed but continuing..."
           fi
@@ -104,13 +103,12 @@ jobs:
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      # Compute consistent tags (single source of truth)
       - name: Compute tags and requirements hash
         id: tags
         run: |
           RAW_SHA="${GITHUB_SHA}"
-          SHA_TAG="${RAW_SHA}"              # raw sha (no prefix)
-          SHA_TAG_PREFIXED="sha-${RAW_SHA}" # prefixed variant
+          SHA_TAG="${RAW_SHA}"
+          SHA_TAG_PREFIXED="sha-${RAW_SHA}"
           BRANCH_TAG="${GITHUB_REF_NAME//\//-}"
           REQUIREMENTS_SHA=$(sha256sum backend/requirements.txt | cut -d' ' -f1)
           echo "raw=${SHA_TAG}" >> $GITHUB_OUTPUT
@@ -157,9 +155,9 @@ jobs:
         id: build
         uses: docker/build-push-action@v6
         with:
-          context: .                # Explicit context - no variables
+          context: .
           file: backend/Dockerfile.prod
-          push: true                # Avoids "No output specified" warning
+          push: true
           platforms: linux/amd64
           build-args: |
             REQUIREMENTS_SHA=${{ steps.tags.outputs.reqs_sha }}
@@ -171,7 +169,6 @@ jobs:
           cache-from: type=registry,ref=${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:buildcache
           cache-to: type=registry,ref=${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:buildcache,mode=max
 
-      # Show pushed image info
       - name: Show pushed image info
         run: |
           echo "Tags pushed:"
@@ -182,7 +179,6 @@ jobs:
           echo "Digest:"
           echo "${{ steps.build.outputs.digest }}"
 
-      # ✅ Verify the exact tag(s) we just pushed
       - name: Verify pushed image exists
         run: |
           echo "Verifying pushed images exist in ECR..."
@@ -190,7 +186,6 @@ jobs:
           aws ecr describe-images --repository-name "${{ env.ECR_REPOSITORY }}" --image-ids imageTag="${{ steps.tags.outputs.pref }}"
           echo "✅ Both raw and prefixed SHA tags verified in ECR"
 
-      # Verify app paths inside image
       - name: Verify app paths inside image
         run: |
           ID=$(docker create ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ steps.tags.outputs.raw }})
@@ -215,6 +210,9 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
       - name: Fail if digest missing
         run: |
           if [ -z "${{ needs.production-deploy.outputs.digest }}" ]; then
@@ -224,7 +222,6 @@ jobs:
 
       - name: Fetch current ECS task definition
         run: |
-          # Use the working task definition revision 121 that has the correct environment variables
           aws ecs describe-task-definition \
             --task-definition riches-reach-streaming-pipeline-optimized:121 \
             --region ${{ env.AWS_REGION }} > td.json
@@ -232,14 +229,12 @@ jobs:
 
       - name: Swap container image to immutable digest
         run: |
-          # Use the raw SHA tag that we know exists
           IMG="${{ needs.production-deploy.outputs.image_repo }}:${{ github.sha }}"
           echo "Using image: $IMG"
           jq --arg IMG "$IMG" '
             .taskDefinition.containerDefinitions[0].image = $IMG
             | .taskDefinition.containerDefinitions
           ' td.json > container-defs.json
-
           CPU=$(jq -r '.taskDefinition.cpu' td.json)
           MEM=$(jq -r '.taskDefinition.memory' td.json)
           NET=$(jq -r '.taskDefinition.networkMode' td.json)
@@ -248,7 +243,6 @@ jobs:
           REQUIRES=$(jq -c '.taskDefinition.requiresCompatibilities' td.json)
           VOLUMES=$(jq -c '.taskDefinition.volumes' td.json)
           FAMILY=$(jq -r '.taskDefinition.family' td.json)
-
           NEW_TD=$(
             aws ecs register-task-definition \
               --family "$FAMILY" \
@@ -273,16 +267,13 @@ jobs:
           CLUSTER: riches-reach-cluster
           SERVICE: riches-reach-streaming-service
           CONTAINER_NAME: streaming-pipeline
-          # RDS connection (non-sensitive)
           DJANGO_DB_HOST: richesreach-prod.c8kqj2x3x3x3.us-east-1.rds.amazonaws.com
           DJANGO_DB_PORT: "5432"
           DJANGO_DB_NAME: richesreach_prod
           DJANGO_DB_USER: django_user
-          # Secrets Manager id (NOT the password itself)
           DJANGO_DB_PASSWORD_SECRET_ID: django-db-password
         run: |
           set -euo pipefail
-
           echo "🔑 Resolving DB password secret ARN…"
           SECRET_ARN=$(aws secretsmanager describe-secret \
             --secret-id "$DJANGO_DB_PASSWORD_SECRET_ID" \
@@ -352,7 +343,6 @@ jobs:
             --limit 200 \
             --start-from-head \
             --region "$AWS_REGION" >/tmp/migrate.log || true
-
           tail -n 80 /tmp/migrate.log || true
 
           if [ "$EXIT_CODE" != "0" ]; then
@@ -368,9 +358,5 @@ jobs:
             --cluster riches-reach-cluster \
             --service riches-reach-streaming-service \
             --task-definition "$NEW_TD" \
+            --force-new-deployment \
             --region ${{ env.AWS_REGION }}
-          aws ecs wait services-stable \
-            --cluster riches-reach-cluster \
-            --services riches-reach-streaming-service \
-            --region ${{ env.AWS_REGION }}
-          echo "Service updated to $NEW_TD"
