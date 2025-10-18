@@ -111,6 +111,7 @@ INSTALLED_APPS = [
     'core',
     'graphene_django',
     'django_celery_results',
+    'graphql_jwt.refresh_token',
     # 'marketdata',  # New market data microservice - temporarily disabled due to migration issues
 ]
 
@@ -353,6 +354,7 @@ GRAPHQL_JWT = {
     'JWT_LEEWAY': 0,
     'JWT_AUTH_HEADER_PREFIX': 'Bearer',
     'JWT_AUTH_COOKIE': None,
+    'JWT_ALLOW_REFRESH': True,
 }
 # Market Data Configuration
 REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
