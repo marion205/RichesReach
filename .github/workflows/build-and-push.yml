@@ -17,7 +17,7 @@ env:
   AWS_REGION: us-east-1
   ECR_REGISTRY: 498606688292.dkr.ecr.us-east-1.amazonaws.com
   ECR_REPOSITORY: riches-reach-streaming
-  PYTHON_VERSION: "3.11"  # Switch to stable Python 3.11 (fewer backend quirks)
+  PYTHON_VERSION: "3.11"  # Quick unblock; switch back to 3.12 once deps are stable
   APP_DIR: "backend/backend/backend/backend"  # Single source of truth
 
 jobs:
@@ -37,20 +37,44 @@ jobs:
       - name: Verify project layout
         run: bash scripts/verify-layout.sh
 
-      - name: Install dependencies (Build Tool Method)
+      - name: Prepare pip build env
         run: |
+          echo "=== Preparing pip build environment ==="
           python -m pip install --upgrade pip
           python -m pip install --upgrade setuptools wheel build
-          # Use build tool for sdist-heavy packages
-          python -m pip install -r "${APP_DIR}/requirements.txt" --verbose
+
+      - name: Install dependencies (binary-only first)
+        id: pip1
+        continue-on-error: true
+        env:
+          PIP_DISABLE_PIP_VERSION_CHECK: '1'
+          PIP_NO_INPUT: '1'
+          PIP_DEFAULT_TIMEOUT: '100'
+        run: |
+          echo "=== Attempting binary-only install ==="
+          pip install -r "${APP_DIR}/requirements.txt" --only-binary=:all: -vvv
+
+      - name: Retry without binary constraint & print culprit
+        if: steps.pip1.outcome != 'success'
+        run: |
+          set -e
+          echo "=== Binary-only failed, retrying with verbose output ==="
+          pip install -r "${APP_DIR}/requirements.txt" -vvv |& tee /tmp/pip.log
+          echo "==== packages that triggered build from sdist ===="
+          grep -E "Building wheel for|Preparing metadata|Running setup.py" /tmp/pip.log || true
+          echo "==== Full pip log for debugging ===="
+          cat /tmp/pip.log
+          exit 1
 
       - name: Verify build backend
         run: |
-          python -c "
-          import setuptools
-          from setuptools.build_meta import get_requires_for_build_wheel
-          print('✅ Build backend working:', get_requires_for_build_wheel({}))
-          "
+          echo "=== Verifying build backend ==="
+          python -c "import setuptools.build_meta; print('✅ setuptools.build_meta available')"
+
+      - name: Dry-run wheel check
+        run: |
+          echo "=== Checking for packages without wheels ==="
+          pip download --only-binary=:all: -r "${APP_DIR}/requirements.txt" -d /tmp/wheels
 
       - name: Lint for legacy JWT
         run: |
