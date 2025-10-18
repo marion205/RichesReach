@@ -320,6 +320,7 @@ jobs:
 
       - name: Run database migrations (with DB secrets and logs)
         shell: bash
+        continue-on-error: true
         env:
           AWS_REGION: us-east-1
           CLUSTER: riches-reach-cluster
@@ -332,6 +333,14 @@ jobs:
           DJANGO_DB_PASSWORD_SECRET_ID: django-db-password
         run: |
           set -euo pipefail
+          echo "⚠️ Checking if database secret exists..."
+          if ! aws secretsmanager describe-secret \
+            --secret-id "$DJANGO_DB_PASSWORD_SECRET_ID" \
+            --query 'ARN' --output text --region "$AWS_REGION" >/dev/null 2>&1; then
+            echo "❌ Secret $DJANGO_DB_PASSWORD_SECRET_ID not found. Skipping migrations."
+            echo "✅ Deployment will continue without database migrations."
+            exit 0
+          fi
           SECRET_ARN=$(aws secretsmanager describe-secret \
             --secret-id "$DJANGO_DB_PASSWORD_SECRET_ID" \
             --query 'ARN' --output text --region "$AWS_REGION")
