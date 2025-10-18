@@ -17,7 +17,7 @@ env:
   AWS_REGION: us-east-1
   ECR_REGISTRY: 498606688292.dkr.ecr.us-east-1.amazonaws.com
   ECR_REPOSITORY: riches-reach-streaming
-  PYTHON_VERSION: "3.11" # Quick unblock
+  PYTHON_VERSION: "3.10" # Stable version with all package compatibility
   APP_DIR: "backend/backend/backend/backend" # Django app path
 
 jobs:
