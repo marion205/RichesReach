@@ -21,6 +21,23 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'your-production-secret-key-here')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
+# SBLOC Configuration
+USE_SBLOC_MOCK = os.getenv('USE_SBLOC_MOCK', 'true').lower() == 'true'
+USE_SBLOC_AGGREGATOR = os.getenv('USE_SBLOC_AGGREGATOR', 'false').lower() == 'true'
+
+# JWT Configuration
+GRAPHQL_JWT = {
+    'JWT_ALGORITHM': 'HS256',
+    'JWT_SECRET_KEY': SECRET_KEY,
+    'JWT_EXPIRATION_DELTA': timedelta(minutes=60),
+    'JWT_REFRESH_EXPIRATION_DELTA': timedelta(days=7),
+    'JWT_VERIFY_EXPIRATION': True,
+    'JWT_LEEWAY': 0,
+    'JWT_AUTH_HEADER_PREFIX': 'Bearer',
+    'JWT_AUTH_COOKIE': None,
+    'JWT_ALLOW_REFRESH': True,
+}
+
 # Host / CSRF
 ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS","riches-reach-alb-1199497064.us-east-1.elb.amazonaws.com,localhost,127.0.0.1").split(",")
 # Add wildcard support for ALB internal IPs
@@ -49,6 +66,7 @@ INSTALLED_APPS = [
     'django_celery_results',
     'rest_framework',
     'rest_framework.authtoken',
+    'graphql_jwt.refresh_token',
 ]
 
 MIDDLEWARE = [
