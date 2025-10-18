@@ -223,6 +223,40 @@ jobs:
           echo "NEW_TD=$NEW_TD" >> $GITHUB_ENV
           echo "Registered TD: $NEW_TD"
 
+      - name: Run database migrations
+        run: |
+          echo "Running database migrations before service update..."
+          aws ecs run-task \
+            --cluster riches-reach-cluster \
+            --task-definition "$NEW_TD" \
+            --overrides '{"containerOverrides":[{"name":"streaming-pipeline","command":["python","manage.py","migrate"]}]}' \
+            --network-configuration '{"awsvpcConfiguration":{"subnets":["subnet-02425582bcf709123","subnet-04dac76fa8a69130d","subnet-07ffaac96ec01fdb7"],"securityGroups":["sg-0c9973ce8922df3a5"],"assignPublicIp":"ENABLED"}}' \
+            --region ${{ env.AWS_REGION }} \
+            --query 'tasks[0].taskArn' --output text > migration-task-arn.txt
+          
+          MIGRATION_TASK_ARN=$(cat migration-task-arn.txt)
+          echo "Migration task started: $MIGRATION_TASK_ARN"
+          
+          # Wait for migration to complete
+          aws ecs wait tasks-stopped \
+            --cluster riches-reach-cluster \
+            --tasks "$MIGRATION_TASK_ARN" \
+            --region ${{ env.AWS_REGION }}
+          
+          # Check migration exit code
+          EXIT_CODE=$(aws ecs describe-tasks \
+            --cluster riches-reach-cluster \
+            --tasks "$MIGRATION_TASK_ARN" \
+            --region ${{ env.AWS_REGION }} \
+            --query 'tasks[0].containers[0].exitCode' --output text)
+          
+          if [ "$EXIT_CODE" != "0" ]; then
+            echo "❌ Migration failed with exit code: $EXIT_CODE"
+            exit 1
+          fi
+          
+          echo "✅ Database migrations completed successfully"
+
       - name: Update ECS service
         run: |
           aws ecs update-service \
