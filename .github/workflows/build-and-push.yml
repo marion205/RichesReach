@@ -18,7 +18,7 @@ env:
   ECR_REGISTRY: 498606688292.dkr.ecr.us-east-1.amazonaws.com
   ECR_REPOSITORY: riches-reach-streaming
   PYTHON_VERSION: "3.11"  # Quick unblock; switch back to 3.12 once deps are stable
-  APP_DIR: "backend/backend/backend"  # Django app location - use main requirements.txt
+  APP_DIR: "backend/backend/backend/backend"  # Django app location - use main requirements.txt
 
 jobs:
   production-deploy:
