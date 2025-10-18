@@ -124,7 +124,7 @@ prometheus-client==0.17.1
 prompt_toolkit==3.0.52
 propcache==0.3.2
 prophet==1.1.7
-protobuf==4.25.8
+protobuf>=5.28.0
 psutil==7.1.0
 psycopg2-binary==2.9.7
 pyasn1==0.6.1
@@ -150,7 +150,7 @@ regex>=2023.0.0
 requests>=2.32.0,<2.33.0
 rich==14.1.0
 rlp==4.1.0
-s3transfer==0.6.2
+# s3transfer removed - keep transitive deps in constraints.txt only
 scikit-learn==1.3.0
 scipy==1.11.1
 scs==3.2.8
@@ -161,7 +161,7 @@ sniffio==1.3.1
 soupsieve==2.8
 sqlparse==0.5.3
 stanio==0.5.1
-starlette==0.27.0
+# starlette removed - let fastapi manage its own starlette dependency
 statsmodels==0.14.5
 stripe==13.0.1
 structlog==23.1.0

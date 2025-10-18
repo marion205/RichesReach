@@ -1,0 +1,25 @@
+# Hard constraints - packages that must never drift beyond these bounds
+# Use sparingly - only for packages with known compatibility windows
+
+# Django ecosystem - keep stable
+Django<5.2
+djangorestframework<4.0
+
+# Pydantic - keep in v2 range
+pydantic<2.10
+
+# AWS SDK - keep in v1 range
+boto3<2.0
+botocore<2.0
+
+# Database - keep stable
+psycopg2-binary<3.2
+
+# NumPy - keep in v1 range (many packages not ready for v2)
+numpy<2.0
+
+# TensorFlow - keep in v2 range
+tensorflow<3.0
+
+# Python compatibility
+python-dateutil<3.0

@@ -37,46 +37,41 @@ jobs:
       - name: Verify project layout
         run: bash scripts/verify-layout.sh
 
-      - name: Prepare pip build env
+      - name: Install pip-tools
         run: |
-          echo "=== Preparing pip build environment ==="
           python -m pip install --upgrade pip
-          python -m pip install --upgrade setuptools wheel build
+          pip install pip-tools
 
-      - name: Install dependencies (binary-only first)
-        id: pip1
-        continue-on-error: true
-        env:
-          PIP_DISABLE_PIP_VERSION_CHECK: '1'
-          PIP_NO_INPUT: '1'
-          PIP_DEFAULT_TIMEOUT: '100'
+      - name: Compile lock (deterministic, hashed)
+        working-directory: backend
         run: |
-          echo "=== Attempting binary-only install ==="
-          pip install -r backend/requirements.txt --only-binary=:all: -vvv
+          # Merge requirements.in (+ optional constraints.in) into one locked file with hashes
+          if [ -f constraints.in ]; then
+            pip-compile \
+              --generate-hashes \
+              --resolver=backtracking \
+              --upgrade \
+              --output-file constraints.lock \
+              requirements.in constraints.in
+          else
+            pip-compile \
+              --generate-hashes \
+              --resolver=backtracking \
+              --upgrade \
+              --output-file constraints.lock \
+              requirements.in
+          fi
+          echo "✅ Generated backend/constraints.lock"
 
-      - name: Retry without binary constraint & print culprit
-        id: pip2
-        if: steps.pip1.outcome != 'success'
-        timeout-minutes: 5
+      - name: Sanity install using lock (no resolver)
         run: |
-          set -e
-          echo "=== Binary-only failed, retrying with verbose output ==="
-          timeout 300 pip install -r backend/requirements.txt -vvv |& tee /tmp/pip.log || (echo "Timeout!"; exit 1)
-          echo "==== packages that triggered build from sdist ===="
-          grep -E "Building wheel for|Preparing metadata|Running setup.py" /tmp/pip.log || true
-          echo "==== Full pip log for debugging ===="
-          cat /tmp/pip.log
-          pip check || echo "⚠️ Dep conflicts found - See log"
-          echo "✅ Dependencies installed successfully"
+          pip install --no-deps --require-hashes -r backend/constraints.lock
+          pip check
 
       - name: Mark deps installed
         id: deps_ok
         run: |
-          if [ "${{ steps.pip1.outcome }}" = "success" ] || [ "${{ steps.pip2.outcome }}" = "success" ]; then
-            echo "ok=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "ok=false" >> "$GITHUB_OUTPUT"
-          fi
+          echo "ok=true" >> "$GITHUB_OUTPUT"
 
       - name: Verify build backend
         run: |
@@ -156,12 +151,9 @@ jobs:
           echo "DOCKER_BUILDKIT=1" >> $GITHUB_ENV
           echo "COMPOSE_DOCKER_CLI_BUILD=1" >> $GITHUB_ENV
 
-      - name: Dependency sanity check
+      - name: Dependency sanity check (from lock)
         run: |
-          python -m pip install --upgrade pip
-          pip install --prefer-binary \
-            --constraint backend/constraints.txt \
-            -r backend/requirements.txt
+          pip install --no-deps --require-hashes -r backend/constraints.lock
           python -m pip check
           python - <<'PY'
 import fastapi, sys
