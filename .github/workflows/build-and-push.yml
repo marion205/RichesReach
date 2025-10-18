@@ -17,7 +17,7 @@ env:
   AWS_REGION: us-east-1
   ECR_REGISTRY: 498606688292.dkr.ecr.us-east-1.amazonaws.com
   ECR_REPOSITORY: riches-reach-streaming
-  PYTHON_VERSION: "3.10"  # Match log; 3.11 for future
+  PYTHON_VERSION: "3.10"
   APP_DIR: "backend/backend/backend/backend"
 
 jobs:
@@ -30,7 +30,7 @@ jobs:
       - name: Set up Python (Fallback Approach)
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'  # Match log for deps
+          python-version: '3.10'
           cache: "pip"
           cache-dependency-path: backend/requirements.txt
 
@@ -55,6 +55,7 @@ jobs:
           pip install -r backend/requirements.txt --only-binary=:all: -vvv
 
       - name: Retry without binary constraint & print culprit
+        id: pip2
         if: steps.pip1.outcome != 'success'
         timeout-minutes: 5
         run: |
@@ -68,6 +69,15 @@ jobs:
           pip check || echo "⚠️ Dep conflicts found - See log"
           echo "✅ Dependencies installed successfully"
 
+      - name: Mark deps installed
+        id: deps_ok
+        run: |
+          if [ "${{ steps.pip1.outcome }}" = "success" ] || [ "${{ steps.pip2.outcome }}" = "success" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Verify build backend
         run: |
           echo "=== Verifying build backend ==="
@@ -77,20 +87,15 @@ jobs:
         continue-on-error: true
         run: |
           echo "=== Checking for packages without wheels ==="
-          pip download --only-binary=:all: -r backend/requirements.txt -d /tmp/wheels || echo "⚠️ Some packages require source builds (this is OK)"
+          pip download --only-binary=:all: -r backend/requirements.txt -d /tmp/wheels || echo "⚠️ Some packages require source builds (OK)"
 
       - name: Lint for legacy JWT
         continue-on-error: true
         run: |
           echo "⚠️ Legacy JWT lint check disabled during migration"
-          echo "Found legacy references but continuing deployment..."
-          # if grep -R "graphql_jwt\|ObtainJSONWebToken" -n backend/ --exclude-dir=venv --exclude-dir=__pycache__ --exclude-dir=logs; then
-          #   echo "❌ Legacy graphql_jwt references found"; exit 1; 
-          # fi
-          # echo "✅ No legacy JWT references found"
 
       - name: Django checks
-        if: steps.pip1.outcome == 'success'
+        if: steps.deps_ok.outputs.ok == 'true'
         working-directory: ${{ env.APP_DIR }}
         env:
           DJANGO_SETTINGS_MODULE: richesreach.settings
@@ -100,11 +105,11 @@ jobs:
             python manage.py test --noinput || echo "⚠️ Tests failed but continuing..."
           fi
 
-      - name: Configure AWS credentials
+      # --------- OIDC auth (no static keys) ----------
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
@@ -116,11 +121,11 @@ jobs:
           RAW_SHA="${GITHUB_SHA}"
           SHA_TAG="${RAW_SHA}"
           SHA_TAG_PREFIXED="sha-${RAW_SHA}"
-          BRANCH_TAG="${GITHUB_REF_NAME//\//-}"
+          BRANCH="${GITHUB_REF_NAME:-manual}"   # fallback for workflow_dispatch
           REQUIREMENTS_SHA=$(sha256sum backend/requirements.txt | cut -d' ' -f1)
           echo "raw=${SHA_TAG}" >> $GITHUB_OUTPUT
           echo "pref=${SHA_TAG_PREFIXED}" >> $GITHUB_OUTPUT
-          echo "branch=${BRANCH_TAG}" >> $GITHUB_OUTPUT
+          echo "branch=${BRANCH}" >> $GITHUB_OUTPUT
           echo "latest=latest" >> $GITHUB_OUTPUT
           echo "reqs_sha=${REQUIREMENTS_SHA}" >> $GITHUB_OUTPUT
 
@@ -210,11 +215,14 @@ PY
           echo "Verifying pushed images exist in ECR..."
           aws ecr describe-images --repository-name "${{ env.ECR_REPOSITORY }}" --image-ids imageTag="${{ steps.tags.outputs.raw }}"
           aws ecr describe-images --repository-name "${{ env.ECR_REPOSITORY }}" --image-ids imageTag="${{ steps.tags.outputs.pref }}"
-          echo "✅ Both raw and prefixed SHA tags verified in ECR"
+          aws ecr describe-images --repository-name "${{ env.ECR_REPOSITORY }}" --image-ids imageTag="${{ steps.tags.outputs.branch }}"
+          aws ecr describe-images --repository-name "${{ env.ECR_REPOSITORY }}" --image-ids imageTag="${{ steps.tags.outputs.latest }}"
+          echo "✅ All tags verified in ECR"
 
       - name: Verify app paths inside image
         run: |
-          ID=$(docker create ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ steps.tags.outputs.raw }})
+          IMG="${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ steps.tags.outputs.raw }}"
+          ID=$(docker create "$IMG")
           docker cp "$ID":/app/manage.py /tmp/manage.py || (echo "❌ /app/manage.py missing in image"; exit 3)
           docker cp "$ID":/app/richesreach/settings_production.py /tmp/ || (echo "❌ settings_production.py missing in image"; exit 3)
           docker rm "$ID"
@@ -229,11 +237,10 @@ PY
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     steps:
-      - name: Configure AWS credentials
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Fail if digest missing
@@ -243,17 +250,27 @@ PY
           fi
           echo "Digest OK: ${{ needs.production-deploy.outputs.digest }}"
 
-      - name: Fetch current ECS task definition
+      - name: Fetch current service task definition (dynamic)
         run: |
+          aws ecs describe-services \
+            --cluster riches-reach-cluster \
+            --services riches-reach-streaming-service \
+            --region ${{ env.AWS_REGION }} \
+            --query 'services[0].taskDefinition' \
+            --output text > td_arn.txt
+          TD_ARN=$(cat td_arn.txt)
+          echo "Current TD: $TD_ARN"
           aws ecs describe-task-definition \
-            --task-definition riches-reach-streaming-pipeline-optimized:121 \
+            --task-definition "$TD_ARN" \
             --region ${{ env.AWS_REGION }} > td.json
-          echo "Using task definition: riches-reach-streaming-pipeline-optimized:121"
+          echo "Using task definition: $TD_ARN"
 
       - name: Swap container image to immutable digest
         run: |
-          IMG="${{ needs.production-deploy.outputs.image_repo }}:${{ github.sha }}"
-          echo "Using image: $IMG"
+          DIGEST="${{ needs.production-deploy.outputs.digest }}"
+          REPO="${{ needs.production-deploy.outputs.image_repo }}"
+          IMG="${REPO}@${DIGEST}"
+          echo "Using immutable image: $IMG"
           jq --arg IMG "$IMG" '
             .taskDefinition.containerDefinitions[0].image = $IMG
             | .taskDefinition.containerDefinitions
@@ -264,9 +281,15 @@ PY
           NET=$(jq -r '.taskDefinition.networkMode' td.json)
           EXEC_ROLE=$(jq -r '.taskDefinition.executionRoleArn' td.json)
           TASK_ROLE=$(jq -r '.taskDefinition.taskRoleArn' td.json)
-          REQUIRES=$(jq -c '.taskDefinition.requiresCompatibilities' td.json)
-          VOLUMES=$(jq -c '.taskDefinition.volumes' td.json)
           FAMILY=$(jq -r '.taskDefinition.family' td.json)
+
+          # Extract requiresCompatibilities as array and pass as separate args
+          mapfile -t REQS < <(jq -r '.taskDefinition.requiresCompatibilities[]' td.json)
+          REQS_ARGS=()
+          for r in "${REQS[@]}"; do REQS_ARGS+=(--requires-compatibilities "$r"); done
+
+          # Preserve volumes exactly as JSON
+          echo "$(jq -c '.taskDefinition.volumes' td.json)" > volumes.json
 
           NEW_TD=$(
             aws ecs register-task-definition \
@@ -276,9 +299,9 @@ PY
               --task-role-arn "$TASK_ROLE" \
               --cpu "$CPU" \
               --memory "$MEM" \
-              --requires-compatibilities "$REQUIRES" \
+              "${REQS_ARGS[@]}" \
               --container-definitions file://container-defs.json \
-              --volumes "$VOLUMES" \
+              --volumes file://volumes.json \
               --region ${{ env.AWS_REGION }} \
               --query 'taskDefinition.taskDefinitionArn' --output text
           )
