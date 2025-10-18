@@ -185,7 +185,7 @@ const API_CONFIGS = {
 };
 
 // Flag to enable/disable API calls (set to false to use only mock data)
-const USE_REAL_APIS = false; // Temporarily disabled to use mock data
+const USE_REAL_APIS = true; // Enabled to use real API data
 
 // Cache for API responses (5-minute TTL)
 const cache = new Map<string, { data: any; timestamp: number }>();
