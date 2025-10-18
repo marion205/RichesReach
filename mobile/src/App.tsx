@@ -1,6 +1,9 @@
 // Import Reanimated first (required for worklets)
 import 'react-native-reanimated';
 
+// Import gesture handler (required for react-native-tab-view)
+import 'react-native-gesture-handler';
+
 // Import URL polyfill first to fix React Native URL.protocol issues
 import 'react-native-url-polyfill/auto';
 
@@ -15,7 +18,8 @@ LogBox.ignoreLogs([
 ]);
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import ApolloProvider from './ApolloProvider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import JWTAuthService from './features/auth/services/JWTAuthService';
@@ -34,6 +38,8 @@ import ForgotPasswordScreen from './features/auth/screens/ForgotPasswordScreen';
 import SignUpScreen from './features/auth/screens/SignUpScreen';
 import ProfileScreen from './features/user/screens/ProfileScreen';
 import StockScreen from './features/stocks/screens/StockScreen';
+import PriceChartScreen from './features/stocks/screens/PriceChartScreen';
+import StockDetailScreen from './features/stocks/screens/StockDetailScreen';
 import SocialScreen from './features/social/screens/SocialScreen';
 import AIPortfolioScreen from './features/portfolio/screens/AIPortfolioScreen';
 import PortfolioScreen from './features/portfolio/screens/PortfolioScreen';
@@ -79,9 +85,11 @@ import { BottomTabBar, TopHeader, PersonalizedDashboard } from './components';
 // Services
 import UserProfileService from './features/user/services/UserProfileService';
 // Contexts
-import { AuthProvider } from './contexts/AuthContext';
-export default function App() {
-const [currentScreen, setCurrentScreen] = useState('home');
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+function AppContent() {
+const { user, isAuthenticated, loading } = useAuth();
+const [currentScreen, setCurrentScreen] = useState('login');
+
 // Track currentScreen changes for analytics (production)
 useEffect(() => {
 // Track screen changes for analytics in production
@@ -89,30 +97,28 @@ if (!__DEV__) {
 // Analytics tracking would go here
 }
 }, [currentScreen]);
-const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+// Handle authentication state changes
+useEffect(() => {
+  console.log('🔐 Auth state changed:', { isAuthenticated, currentScreen, user });
+  if (isAuthenticated && currentScreen === 'login') {
+    console.log('🔐 User is authenticated, navigating to home');
+    setCurrentScreen('home');
+  } else if (!isAuthenticated && currentScreen !== 'login' && currentScreen !== 'forgot-password' && currentScreen !== 'signup') {
+    console.log('🔐 User is not authenticated, navigating to login');
+    setCurrentScreen('login');
+  }
+}, [isAuthenticated, currentScreen, user]);
+
+const isLoggedIn = isAuthenticated;
 const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
 const [isLoading, setIsLoading] = useState(true);
 // Initialize services and check onboarding status
 useEffect(() => {
   const initializeServices = async () => {
     try {
-      // Check if user is already logged in using JWT service
-      const jwtService = JWTAuthService.getInstance();
-      
-      // Set up token refresh failure callback
-      jwtService.setTokenRefreshFailureCallback(() => {
-        console.log('Token refresh failed, logging out user');
-        setIsLoggedIn(false);
-        setCurrentScreen('login');
-      });
-      
-      const isAuthenticated = await jwtService.isAuthenticated();
-      
-      if (isAuthenticated) {
-        setIsLoggedIn(true);
-        // Set initial screen to home if logged in
-        setCurrentScreen('home');
-      }
+      // Authentication state is now handled by AuthContext
+      // No need to check JWT service here
       
       // Check if user has completed onboarding
       const userProfileService = UserProfileService.getInstance();
@@ -155,7 +161,14 @@ setIsLoading(false);
 initializeServices();
 }, []);
 const navigateTo = (screen: string, params?: any) => {
-  if (screen === 'user-profile' && params?.userId) {
+  console.log('🔍 navigateTo called:', { screen, params });
+  if (screen === 'StockDetail') {
+    console.log('🔍 Navigating to StockDetail with params:', params);
+    // Store params for StockDetail screen
+    setCurrentScreen('StockDetail');
+    // Store params in a way that the screen can access them
+    (window as any).__stockDetailParams = params || {};
+  } else if (screen === 'user-profile' && params?.userId) {
     const newScreen = `user-profile-${params.userId}`;
     setCurrentScreen(newScreen);
   } else if (screen === 'user-portfolios' && params?.userId) {
@@ -173,12 +186,12 @@ setCurrentScreen(screen);
 };
 const handleLogin = (token?: string) => {
 console.log('🎉 App handleLogin called with token:', token);
-setIsLoggedIn(true);
+// Navigate to home screen after successful login
+setCurrentScreen('home');
 // Check if user needs onboarding after login
 checkOnboardingStatus();
 };
 const handleSignUp = () => {
-setIsLoggedIn(true);
 // New users always need onboarding
 setHasCompletedOnboarding(false);
 setCurrentScreen('onboarding');
@@ -188,9 +201,7 @@ try {
 const userProfileService = UserProfileService.getInstance();
 const onboardingCompleted = await userProfileService.isOnboardingCompleted();
 setHasCompletedOnboarding(onboardingCompleted);
-if (onboardingCompleted) {
-setCurrentScreen('home');
-} else {
+if (!onboardingCompleted) {
 setCurrentScreen('onboarding');
 }
 } catch (error) {
@@ -216,11 +227,11 @@ await jwtService.logout();
 } catch (error) {
 console.error('Logout error:', error);
 } finally {
-setIsLoggedIn(false);
 setCurrentScreen('login');
 }
 };
 const renderScreen = () => {
+console.log('🔍 renderScreen called:', { currentScreen, isLoggedIn, isLoading });
 // Show loading screen while initializing
 if (isLoading) {
 return (
@@ -230,6 +241,7 @@ return (
 );
 }
 if (!isLoggedIn) {
+console.log('🔍 User not logged in, showing login screen');
 switch (currentScreen) {
 case 'login':
 return <LoginScreen 
@@ -240,7 +252,7 @@ onNavigateToForgotPassword={() => setCurrentScreen('forgot-password')}
 case 'forgot-password':
 return <ForgotPasswordScreen 
 onNavigateToLogin={() => setCurrentScreen('login')} 
-onNavigateToResetPassword={(email) => setCurrentScreen('reset-password')} 
+onNavigateToResetPassword={(email) => setCurrentScreen('login')} 
 />;
 case 'signup':
 return <SignUpScreen navigateTo={navigateTo} onSignUp={handleSignUp} onNavigateToLogin={() => setCurrentScreen('login')} />;
@@ -256,16 +268,23 @@ onNavigateToForgotPassword={() => setCurrentScreen('forgot-password')}
 if (isLoggedIn && !hasCompletedOnboarding) {
 return <OnboardingScreen onComplete={handleOnboardingComplete} />;
 }
+console.log('🔍 Main switch statement, currentScreen:', currentScreen);
 switch (currentScreen) {
 case 'home':
+console.log('🔍 Rendering HomeScreen');
 return <HomeScreen navigateTo={navigateTo} />;
 case 'onboarding':
 return <OnboardingScreen onComplete={handleOnboardingComplete} />;
 case 'profile':
 return <ProfileScreen navigateTo={navigateTo} onLogout={handleLogout} />;
-case 'stock':
-return <StockScreen navigateTo={navigateTo} />;
-case 'crypto':
+        case 'stock':
+          return <StockScreen navigateTo={navigateTo} />;
+        case 'StockDetail':
+          console.log('🔍 Rendering StockDetailScreen');
+          const stockDetailParams = (window as any).__stockDetailParams || {};
+          console.log('🔍 StockDetail params:', stockDetailParams);
+          return <StockDetailScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('stock'), setParams: (params: any) => {} }} route={{ params: stockDetailParams }} />;
+        case 'crypto':
 return <CryptoScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('home') }} />;
 case 'ai-portfolio':
 return <AIPortfolioScreen navigateTo={navigateTo} />;
@@ -391,9 +410,7 @@ return <SubscriptionScreen />;
 }
 };
 return (
-<AuthProvider>
-<ApolloProvider>
-<View style={styles.container}>
+<GestureHandlerRootView style={styles.container}>
 {isLoggedIn && currentScreen !== 'login' && currentScreen !== 'signup' && currentScreen !== 'onboarding' && (
 <TopHeader currentScreen={currentScreen} onNavigate={navigateTo} />
 )}
@@ -401,10 +418,18 @@ return (
 {isLoggedIn && currentScreen !== 'login' && currentScreen !== 'signup' && (
 <BottomTabBar currentScreen={currentScreen} onNavigate={navigateTo} />
 )}
-</View>
 <Toast />
-</ApolloProvider>
+</GestureHandlerRootView>
+);
+}
+
+export default function App() {
+return (
+<ApolloProvider>
+<AuthProvider>
+<AppContent />
 </AuthProvider>
+</ApolloProvider>
 );
 }
 const styles = StyleSheet.create({

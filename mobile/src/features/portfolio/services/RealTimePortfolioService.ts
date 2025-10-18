@@ -1,4 +1,4 @@
-import MarketDataService, { StockQuote } from '../../stocks/services/MarketDataService';
+import { SecureMarketDataService } from '../../stocks/services/SecureMarketDataService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 export interface PortfolioHolding {
 symbol: string;
@@ -36,8 +36,6 @@ private updateFrequency: number = 30000; // 30 seconds
 // Get portfolio data (simplified - no real-time tracking)
 public async getPortfolioData(): Promise<PortfolioMetrics | null> {
 try {
-// Pre-load data to avoid rate limits
-await MarketDataService.preloadPortfolioData();
 // Get current portfolio data
 const portfolioData = await this.getCurrentPortfolio();
 if (!portfolioData) {
@@ -45,7 +43,8 @@ return null;
 }
 // Get real-time quotes for all holdings
 const symbols = portfolioData.holdings.map(holding => holding.symbol);
-const quotes = await MarketDataService.getMultipleQuotes(symbols);
+const service = SecureMarketDataService.getInstance();
+const quotes = await service.fetchQuotes(symbols);
 // Update holdings with real-time prices
 const updatedHoldings: PortfolioHolding[] = portfolioData.holdings.map(holding => {
 const quote = quotes.find(q => q.symbol === holding.symbol);
@@ -129,7 +128,8 @@ return;
 }
 // Get real-time quotes for all holdings
 const symbols = portfolioData.holdings.map(holding => holding.symbol);
-const quotes = await MarketDataService.getMultipleQuotes(symbols);
+const service = SecureMarketDataService.getInstance();
+const quotes = await service.fetchQuotes(symbols);
 // Update holdings with real-time prices
 const updatedHoldings: PortfolioHolding[] = portfolioData.holdings.map(holding => {
 const quote = quotes.find(q => q.symbol === holding.symbol);
@@ -281,7 +281,9 @@ try {
 const portfolio = await this.getCurrentPortfolio();
 if (!portfolio) return;
 // Get current price for the new holding
-const quote = await MarketDataService.getStockQuote(holding.symbol);
+const service = SecureMarketDataService.getInstance();
+const quotes = await service.fetchQuotes([holding.symbol]);
+const quote = quotes[0];
 const currentPrice = quote.price;
 const totalValue = holding.shares * currentPrice;
 const returnAmount = totalValue - holding.costBasis;

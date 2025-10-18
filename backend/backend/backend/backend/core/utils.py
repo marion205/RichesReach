@@ -11,7 +11,8 @@ def get_user_or_mock(info):
     """
     user = getattr(info.context, "user", None)
     
-    if settings.DEBUG and (not user or isinstance(user, AnonymousUser) or not user.is_authenticated):
+    # Only return a mock user if explicitly enabled
+    if getattr(settings, "USE_MOCK_USER", False) and settings.DEBUG and (not user or isinstance(user, AnonymousUser) or not user.is_authenticated):
         # Create a mock user for development
         class MockUser:
             def __init__(self):

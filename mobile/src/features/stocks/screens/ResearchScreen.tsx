@@ -1,721 +1,728 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
   TextInput,
+  FlatList,
+  TouchableOpacity,
+  StyleSheet,
   ActivityIndicator,
-  Alert,
+  ScrollView,
 } from 'react-native';
-import { useQuery, gql } from '@apollo/client';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useLazyQuery, useQuery } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
-import AdvancedChart from '../../../components/charts/AdvancedChart';
-import { UI } from '../../../constants';
+import { SEARCH_STOCKS, TOP_STOCKS, RESEARCH_HUB } from '../../../graphql/queries_actual_schema';
+import StockTradingModal from '../../../components/forms/StockTradingModal';
 
-// Null-safe helper functions
-const safeFixed = (val: any, dp = 2, fallback = '—') =>
-  Number.isFinite(val) ? Number(val).toFixed(dp) : fallback;
+const RECENTS_KEY = 'research_recent_symbols';
 
-const safePct = (val: any, dp = 0, fallback = '—') =>
-  Number.isFinite(val) ? `${Number(val * 100).toFixed(dp)}%` : fallback;
+// Debounce hook for search
+const useDebounce = (value: string, ms = 300) => {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-const safeMoney = (val: any, dp = 2, fallback = '—') =>
-  Number.isFinite(val) ? `$${Number(val).toFixed(dp)}` : fallback;
+  useEffect(() => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => setDebouncedValue(value), ms);
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, [value, ms]);
 
-// UI Primitives
-const SectionCard: React.FC<{title?: string; right?: React.ReactNode; children: React.ReactNode}> = ({ title, right, children }) => (
-  <View style={styles.card}>
-    {(title || right) && (
-      <View style={styles.sectionHeader}>
-        {title ? <Text style={styles.sectionTitle}>{title}</Text> : <View />}
-        {right}
-      </View>
-    )}
-    {children}
-  </View>
-);
-
-const Badge: React.FC<{label: string; tone?: 'neutral'|'success'|'danger'|'warn'}> = ({ label, tone='neutral' }) => {
-  const bg = tone==='success' ? '#DCFCE7' : tone==='danger' ? '#FEE2E2' : tone==='warn' ? '#FEF3C7' : '#E5E7EB';
-  const fg = tone==='success' ? '#166534' : tone==='danger' ? '#991B1B' : tone==='warn' ? '#92400E' : '#374151';
-  return (
-    <View style={[styles.badge, { backgroundColor: bg }]}>
-      <Text style={[styles.badgeText, { color: fg }]}>{label}</Text>
-    </View>
-  );
+  return debouncedValue;
 };
 
-const Segmented: React.FC<{options: string[]; value: string; onChange: (v: string)=>void}> = ({ options, value, onChange }) => (
-  <View style={styles.segmented}>
-    {options.map(opt => {
-      const active = opt === value;
-      return (
-        <TouchableOpacity key={opt} onPress={() => onChange(opt)} style={[styles.segment, active && styles.segmentActive]}>
-          <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{opt}</Text>
-        </TouchableOpacity>
-      );
-    })}
-  </View>
-);
+// Helper functions
+const safeNum = (n?: number) => (n && n > 0 ? n.toFixed(2) : 'N/A');
+const safePct = (n?: number) => (n ? `${n.toFixed(2)}%` : 'N/A');
+const safeMoney = (n?: number) => (n ? `$${n.toFixed(2)}` : 'N/A');
 
-const MetricRow: React.FC<{label: string; value?: string | number; monospace?: boolean}> = ({ label, value='—', monospace }) => (
-  <View style={styles.metricRow}>
-    <Text style={styles.metricLabel}>{label}</Text>
-    <Text style={[styles.metricValue, monospace && { fontVariant: ['tabular-nums'] }]} numberOfLines={1}>{value}</Text>
-  </View>
-);
+export default function ResearchScreen() {
+  const [selectedSymbol, setSelectedSymbol] = useState('AAPL');
+  const [searchQuery, setSearchQuery] = useState('');
+  const debouncedQuery = useDebounce(searchQuery, 250);
+  const [recents, setRecents] = useState<string[]>([]);
+  const [tradingModalVisible, setTradingModalVisible] = useState(false);
+  const [selectedStock, setSelectedStock] = useState<any>(null);
 
-const RESEARCH_QUERY = gql`
-  query Research($s: String!) {
-    researchHub(symbol: $s) {
-      symbol
-
-      company: snapshot {
-        name
-        sector
-        marketCap
-        country
-        website
+  // Load/save recent symbols
+  useEffect(() => {
+    const loadRecents = async () => {
+      try {
+        const raw = await AsyncStorage.getItem(RECENTS_KEY);
+        setRecents(raw ? JSON.parse(raw) : []);
+      } catch (error) {
+        console.error('Error loading recent symbols:', error);
       }
+    };
+    loadRecents();
+  }, []);
 
-      quote {
-        currentPrice: price
-        change: chg
-        changePercent: chgPct
-        high
-        low
-        volume
-      }
-
-      technicals: technical {
-        rsi
-        macd
-        macdhistogram
-        movingAverage50
-        movingAverage200
-        supportLevel
-        resistanceLevel
-        impliedVolatility
-      }
-
-      sentiment {
-        sentiment_label: label
-        sentiment_score: score
-        article_count
-        confidence
-      }
-
-      macro {
-        vix
-        market_sentiment: marketSentiment
-        risk_appetite: riskAppetite
-      }
-
-      marketRegime {
-        market_regime
-        confidence
-        recommended_strategy
-      }
-
-      peers
-      updatedAt
+  const pushRecent = async (symbol: string) => {
+    try {
+      const next = [symbol, ...recents.filter(x => x !== symbol)].slice(0, 8);
+      setRecents(next);
+      await AsyncStorage.setItem(RECENTS_KEY, JSON.stringify(next));
+    } catch (error) {
+      console.error('Error saving recent symbol:', error);
     }
-  }
-`;
+  };
 
-const CHART_QUERY = gql`
-  query Chart(
-    $s: String!,
-    $tf: String = "1D",
-    $iv: String = "1D",
-    $limit: Int = 180,
-    $inds: [String!] = ["SMA20","SMA50","EMA12","EMA26","RSI","MACD","MACDHist","BB"]
-  ) {
-    stockChartData(
-      symbol: $s,
-      timeframe: $tf,
-      interval: $iv,
-      limit: $limit,
-      indicators: $inds
-    ) {
-      symbol
-      interval
-      limit
-      currentPrice
-      change
-      changePercent
-      data {
-        timestamp
-        open
-        high
-        low
-        close
-        volume
-      }
-      indicators {
-        SMA20
-        SMA50
-        EMA12
-        EMA26
-        BBUpper
-        BBMiddle
-        BBLower
-        RSI14
-        MACD
-        MACDSignal
-        MACDHist
-      }
-    }
-  }
-`;
-
-const ResearchScreen: React.FC = () => {
-  const [symbol, setSymbol] = useState('AAPL');
-  const [chartInterval, setChartInterval] = useState('1D');
-
-  const { data: researchData, loading: researchLoading, error: researchError, refetch: refetchResearch } = useQuery(RESEARCH_QUERY, {
-    variables: { s: symbol },
-    skip: !symbol,
+  // Search functionality
+  const [runSearch, { data: searchData, loading: searching }] = useLazyQuery(SEARCH_STOCKS, { 
+    fetchPolicy: 'network-only' 
   });
 
-  const { data: chartData, loading: chartLoading, error: chartError, refetch: refetchChart } = useQuery(CHART_QUERY, {
-    variables: {
-      s: symbol,
-      tf: chartInterval,
-      iv: chartInterval,
-      limit: 180,
-      inds: ["SMA20","SMA50","EMA12","EMA26","RSI","MACD","MACDHist","BB"],
-    },
-    skip: !symbol,
-    fetchPolicy: 'cache-and-network',
+  useEffect(() => {
+    const term = debouncedQuery.trim();
+    if (term.length >= 2) {
+      runSearch({ variables: { term, limit: 10 } });
+    }
+  }, [debouncedQuery, runSearch]);
+
+  // Top stocks for initial display
+  const { data: topStocksData, loading: topStocksLoading } = useQuery(TOP_STOCKS, {
+    variables: { limit: 10 },
+    skip: !!searchQuery
+  });
+
+  // Research data for selected symbol
+  const { data: researchData, loading: researchLoading, error: researchError, refetch } = useQuery(RESEARCH_HUB, {
+    variables: { symbol: selectedSymbol },
+    fetchPolicy: 'network-only',
     nextFetchPolicy: 'cache-first',
-    errorPolicy: 'all',
   });
 
-  const research = researchData?.researchHub;
-  const chart = chartData?.stockChartData;
-
-  const formatMarketCap = (cap: number) => {
-    if (cap >= 1e12) return `$${(cap / 1e12).toFixed(1)}T`;
-    if (cap >= 1e9) return `$${(cap / 1e9).toFixed(1)}B`;
-    if (cap >= 1e6) return `$${(cap / 1e6).toFixed(1)}M`;
-    return `$${cap.toLocaleString()}`;
+  // Change symbol handler
+  const openSymbol = (symbol: string) => {
+    const upperSymbol = symbol.toUpperCase();
+    setSelectedSymbol(upperSymbol);
+    setSearchQuery('');
+    pushRecent(upperSymbol);
+    refetch({ symbol: upperSymbol });
   };
 
-  const getSentimentColor = (label: string) => {
-    switch (label) {
-      case 'BULLISH': return '#22C55E';
-      case 'BEARISH': return '#EF4444';
-      default: return '#6B7280';
-    }
+  // Open trading modal
+  const openTradingModal = (stock: any) => {
+    setSelectedStock(stock);
+    setTradingModalVisible(true);
   };
 
-  const getRegimeColor = (regime: string) => {
-    switch (regime) {
-      case 'BULL': return '#22C55E';
-      case 'BEAR': return '#EF4444';
-      default: return '#F59E0B';
-    }
-  };
+  const searchResults = searchData?.searchStocks ?? [];
+  const topStocks = topStocksData?.topStocks ?? [];
+  const displayStocks = searchQuery ? searchResults : topStocks;
 
-  if (researchLoading) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Research Hub</Text>
+  const renderStockItem = ({ item }: { item: any }) => (
+    <View style={styles.stockItem}>
+      <TouchableOpacity 
+        style={styles.stockItemContent} 
+        onPress={() => openSymbol(item.symbol)}
+      >
+        <View style={styles.stockInfo}>
+          <Text style={styles.symbol}>{item.symbol}</Text>
+          <Text style={styles.company} numberOfLines={1}>{item.companyName}</Text>
         </View>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={UI.colors.accent} />
-          <Text style={styles.loadingText}>Loading research data...</Text>
+        <View style={styles.stockMetrics}>
+          <Text style={styles.price}>{safeMoney(item.currentPrice)}</Text>
+          <Text style={[
+            styles.change, 
+            { color: (item.changePercent || 0) >= 0 ? '#10B981' : '#EF4444' }
+          ]}>
+            {safePct(item.changePercent)}
+          </Text>
         </View>
-      </View>
-    );
-  }
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={styles.tradeButton}
+        onPress={() => openTradingModal(item)}
+      >
+        <Icon name="trending-up" size={16} color="white" />
+        <Text style={styles.tradeButtonText}>Trade</Text>
+      </TouchableOpacity>
+    </View>
+  );
 
-  if (researchError) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Research Hub</Text>
-        </View>
-        <View style={styles.errorContainer}>
-          <Icon name="alert-circle" size={48} color={UI.colors.error} />
-          <Text style={styles.errorText}>Failed to load research data</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={() => refetchResearch()}>
-            <Icon name="refresh-cw" size={16} color={UI.colors.accent} />
-            <Text style={styles.retryText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
+  const renderRecentChip = (symbol: string) => (
+    <TouchableOpacity
+      key={symbol}
+      style={styles.recentChip}
+      onPress={() => openSymbol(symbol)}
+    >
+      <Text style={styles.recentChipText}>{symbol}</Text>
+    </TouchableOpacity>
+  );
 
   return (
-    <ScrollView style={styles.container}>
+    <View style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Research Hub</Text>
-        <View style={styles.searchContainer}>
-          <TextInput
-            style={styles.searchInput}
-            value={symbol}
-            onChangeText={(t) => setSymbol(t.toUpperCase().trim())}
-            placeholder="Enter symbol (e.g., AAPL)"
-            placeholderTextColor={UI.colors.sub}
-            autoCapitalize="characters"
-          />
-          <TouchableOpacity style={styles.searchButton} onPress={() => refetchResearch()}>
-            <Icon name="search" size={20} color={UI.colors.accent} />
+        <Text style={styles.title}>Research Explorer</Text>
+        <Text style={styles.subtitle}>Discover and analyze any stock</Text>
+      </View>
+
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <Icon name="search" size={20} color="#6B7280" style={styles.searchIcon} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search any stock (e.g., AMZN, GOOGL, META)..."
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          autoCapitalize="characters"
+          placeholderTextColor="#9CA3AF"
+        />
+        {searchQuery.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
+            <Icon name="x" size={20} color="#6B7280" />
           </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Recent Symbols */}
+      {!searchQuery && recents.length > 0 && (
+        <View style={styles.recentsContainer}>
+          <Text style={styles.recentsTitle}>Recent</Text>
+          <View style={styles.recentsList}>
+            {recents.map(renderRecentChip)}
+          </View>
+        </View>
+      )}
+
+      {/* Stocks List */}
+      <View style={styles.listContainer}>
+        <Text style={styles.sectionTitle}>
+          {searchQuery ? `Search Results (${searchResults.length})` : 'Top Movers'}
+        </Text>
+        
+        {searching || topStocksLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="small" color="#3B82F6" />
+            <Text style={styles.loadingText}>Loading stocks...</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={displayStocks}
+            keyExtractor={(item) => item.symbol}
+            renderItem={renderStockItem}
+            style={styles.list}
+            showsVerticalScrollIndicator={false}
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Icon name="search" size={48} color="#D1D5DB" />
+                <Text style={styles.emptyTitle}>No stocks found</Text>
+                <Text style={styles.emptySubtitle}>
+                  {searchQuery ? 'Try a different search term' : 'Unable to load top stocks'}
+                </Text>
+              </View>
+            }
+          />
+        )}
+      </View>
+
+      {/* Divider */}
+      <View style={styles.divider} />
+
+      {/* Selected Stock Research Detail */}
+      <View style={styles.detailContainer}>
+        <View style={styles.detailHeader}>
+          <Text style={styles.detailTitle}>Research: {selectedSymbol}</Text>
+          <TouchableOpacity onPress={() => refetch()} style={styles.refreshButton}>
+            <Icon name="refresh-cw" size={16} color="#3B82F6" />
+          </TouchableOpacity>
+        </View>
+
+        {researchLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="small" color="#3B82F6" />
+            <Text style={styles.loadingText}>Loading research data...</Text>
+          </View>
+        ) : researchError ? (
+          <View style={styles.errorContainer}>
+            <Icon name="alert-circle" size={24} color="#EF4444" />
+            <Text style={styles.errorText}>Error loading research data</Text>
+            <Text style={styles.errorSubtext}>{researchError.message}</Text>
+          </View>
+        ) : !researchData?.researchHub ? (
+          <View style={styles.errorContainer}>
+            <Icon name="search" size={24} color="#6B7280" />
+            <Text style={styles.errorText}>Symbol not found</Text>
+            <Text style={styles.errorSubtext}>Try another ticker or check the spelling.</Text>
+          </View>
+        ) : (
+          <ResearchBody data={researchData.researchHub} />
+        )}
+      </View>
+
+      {/* Trading Modal */}
+      {selectedStock && (
+        <StockTradingModal
+          visible={tradingModalVisible}
+          onClose={() => setTradingModalVisible(false)}
+          symbol={selectedStock.symbol}
+          currentPrice={selectedStock.currentPrice || 0}
+          companyName={selectedStock.companyName || selectedStock.symbol}
+        />
+      )}
+    </View>
+  );
+}
+
+function ResearchBody({ data }: { data: any }) {
+  const quote = data.quote;
+  const technical = data.technical;
+  const sentiment = data.sentiment;
+  const macro = data.macro;
+  const marketRegime = data.marketRegime;
+
+  return (
+    <ScrollView style={styles.researchBody} showsVerticalScrollIndicator={false}>
+      {/* Price Overview */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Price Overview</Text>
+        <View style={styles.priceContainer}>
+          <Text style={styles.priceLarge}>{safeMoney(quote?.price)}</Text>
+          <View style={styles.changeContainer}>
+            <Text style={[
+              styles.change, 
+              { color: (quote?.chg || 0) >= 0 ? '#10B981' : '#EF4444' }
+            ]}>
+              {quote?.chg ? `${quote.chg >= 0 ? '+' : ''}${safeMoney(quote.chg)}` : '—'}
+            </Text>
+            <Text style={[
+              styles.changePercent, 
+              { color: (quote?.chg || 0) >= 0 ? '#10B981' : '#EF4444' }
+            ]}>
+              {safePct(quote?.chgPct)}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.priceDetails}>
+          <Text style={styles.priceDetail}>High: {safeMoney(quote?.high)}</Text>
+          <Text style={styles.priceDetail}>Low: {safeMoney(quote?.low)}</Text>
+          <Text style={styles.priceDetail}>Volume: {quote?.volume ? quote.volume.toLocaleString() : '—'}</Text>
         </View>
       </View>
 
-      {research && (
-        <>
-          {/* Company Header */}
-          <SectionCard>
-            <View style={styles.companyHeader}>
-              <View style={{ flex: 1, paddingRight: 12 }}>
-                <Text style={styles.companyName}>
-                  {research?.company?.name ?? 'N/A'} <Text style={styles.symbol}>({research?.symbol ?? 'N/A'})</Text>
-                </Text>
-                <Text style={styles.sector}>
-                  {research?.company?.sector ?? 'N/A'} • {formatMarketCap(research?.company?.marketCap ?? 0)}
-                </Text>
-                {!!research?.company?.website && (
-                  <Text style={styles.website} numberOfLines={1}>{research.company.website}</Text>
-                )}
-              </View>
-              <View style={styles.priceContainer}>
-                <Text style={styles.currentPrice}>
-                  {safeMoney(research?.quote?.currentPrice, 2)}
-                </Text>
-                <Text style={[
-                  styles.change,
-                  { color: (research?.quote?.change ?? 0) >= 0 ? '#22C55E' : '#EF4444' }
-                ]}>
-                  {(research?.quote?.change ?? 0) >= 0 ? '+' : ''}
-                  {safeFixed(research?.quote?.change, 2)} ({safeFixed(research?.quote?.changePercent, 2)}%)
-                </Text>
-              </View>
-            </View>
-          </SectionCard>
-
-          {/* Advanced Chart */}
-          <SectionCard
-            title="Price Chart"
-            right={
-              <Segmented
-                options={['1D','1W','1M','3M','1Y']}
-                value={chartInterval}
-                onChange={(v) => setChartInterval(v)}
-              />
-            }
-          >
-            {chartLoading ? (
-              <View style={styles.chartLoading}>
-                <ActivityIndicator size="small" color={UI.colors.accent} />
-              </View>
-            ) : chart && chart.data?.length ? (
-              <>
-                <AdvancedChart data={chart.data} indicators={chart.indicators || {}} width={350} height={220} />
-                <View style={styles.legend}>
-                  <View style={styles.legendDot} />
-                  <Text style={styles.legendText}>SMA20</Text>
-                  <View style={styles.legendDot} />
-                  <Text style={styles.legendText}>SMA50</Text>
-                  <View style={styles.legendDot} />
-                  <Text style={styles.legendText}>EMA12</Text>
-                  <View style={styles.legendDot} />
-                  <Text style={styles.legendText}>EMA26</Text>
-                  <View style={styles.legendDot} />
-                  <Text style={styles.legendText}>BB</Text>
-                </View>
-              </>
-            ) : (
-              <View style={styles.chartLoading}>
-                <Text style={{ color: UI.colors.sub }}>No chart data</Text>
-              </View>
-            )}
-            {chartError && <Text style={styles.errorInline}>{chartError.message}</Text>}
-          </SectionCard>
-
-          {/* Key Metrics Cards */}
+      {/* Technical Analysis */}
+      {technical && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Technical Analysis</Text>
           <View style={styles.metricsGrid}>
-            <SectionCard title="Technicals">
-              <MetricRow label="RSI (14)" value={safeFixed(research?.technicals?.rsi, 1)} />
-              <MetricRow label="MACD" value={safeFixed(research?.technicals?.macd, 3)} monospace />
-              <MetricRow label="MA 50" value={safeMoney(research?.technicals?.movingAverage50)} />
-            </SectionCard>
-
-            <SectionCard title="Sentiment" right={
-              <Badge
-                label={research?.sentiment?.sentiment_label || 'NEUTRAL'}
-                tone={research?.sentiment?.sentiment_label === 'BULLISH' ? 'success' : research?.sentiment?.sentiment_label === 'BEARISH' ? 'danger' : 'neutral'}
-              />
-            }>
-              <MetricRow label="Score" value={safeFixed(research?.sentiment?.sentiment_score, 2)} />
-              <MetricRow label="Articles" value={research?.sentiment?.article_count ?? '—'} />
-              <MetricRow label="Confidence" value={safePct(research?.sentiment?.confidence, 0)} />
-            </SectionCard>
-
-            <SectionCard title="Macro">
-              <MetricRow label="VIX" value={safeFixed(research?.macro?.vix, 1)} />
-              <MetricRow label="Market Sentiment" value={research?.macro?.market_sentiment ?? '—'} />
-              <MetricRow label="Risk Appetite" value={safePct(research?.macro?.risk_appetite, 0)} />
-            </SectionCard>
-
-            <SectionCard title="Market Regime" right={
-              <Badge
-                label={research?.marketRegime?.market_regime || 'NEUTRAL'}
-                tone={research?.marketRegime?.market_regime === 'BULL' ? 'success' : research?.marketRegime?.market_regime === 'BEAR' ? 'danger' : 'warn'}
-              />
-            }>
-              <MetricRow label="Confidence" value={safePct(research?.marketRegime?.confidence, 0)} />
-              <MetricRow label="Strategy" value={research?.marketRegime?.recommended_strategy ?? '—'} />
-            </SectionCard>
-
-            <SectionCard title="Options Snapshot">
-              <MetricRow label="Implied Vol" value={safePct(research?.technicals?.impliedVolatility, 1)} />
-              <MetricRow label="Support" value={safeMoney(research?.technicals?.supportLevel)} />
-              <MetricRow label="Resistance" value={safeMoney(research?.technicals?.resistanceLevel)} />
-            </SectionCard>
-          </View>
-
-          {/* Peers */}
-          <SectionCard title="Peer Companies">
-            <View style={styles.peersContainer}>
-              {(research?.peers || []).map((peer: string) => (
-                <TouchableOpacity
-                  key={peer}
-                  style={styles.peerChip}
-                  onPress={() => {
-                    setSymbol(peer);
-                    refetchResearch({ s: peer });
-                    refetchChart?.({ s: peer, tf: chartInterval, iv: chartInterval, limit: 180 });
-                  }}
-                >
-                  <Text style={styles.peerText}>{peer}</Text>
-                </TouchableOpacity>
-              ))}
+            <View style={styles.metricItem}>
+              <Text style={styles.metricLabel}>RSI (14)</Text>
+              <Text style={styles.metricValue}>{safeNum(technical.rsi)}</Text>
             </View>
-          </SectionCard>
-
-          {/* Last Updated */}
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>
-              Last updated: {research?.updatedAt ? new Date(research.updatedAt).toLocaleString() : '—'}
-            </Text>
+            <View style={styles.metricItem}>
+              <Text style={styles.metricLabel}>MACD</Text>
+              <Text style={styles.metricValue}>{safeNum(technical.macd)}</Text>
+            </View>
+            <View style={styles.metricItem}>
+              <Text style={styles.metricLabel}>MA 50</Text>
+              <Text style={styles.metricValue}>{safeMoney(technical.movingAverage50)}</Text>
+            </View>
+            <View style={styles.metricItem}>
+              <Text style={styles.metricLabel}>MA 200</Text>
+              <Text style={styles.metricValue}>{safeMoney(technical.movingAverage200)}</Text>
+            </View>
+            <View style={styles.metricItem}>
+              <Text style={styles.metricLabel}>Support</Text>
+              <Text style={styles.metricValue}>{safeMoney(technical.supportLevel)}</Text>
+            </View>
+            <View style={styles.metricItem}>
+              <Text style={styles.metricLabel}>Resistance</Text>
+              <Text style={styles.metricValue}>{safeMoney(technical.resistanceLevel)}</Text>
+            </View>
           </View>
-        </>
+        </View>
+      )}
+
+      {/* Sentiment Analysis */}
+      {sentiment && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Sentiment Analysis</Text>
+          <View style={styles.sentimentContainer}>
+            <View style={[
+              styles.sentimentBadge, 
+              { backgroundColor: sentiment.label === 'BULLISH' ? '#DCFCE7' : 
+                                sentiment.label === 'BEARISH' ? '#FEE2E2' : '#F3F4F6' }
+            ]}>
+              <Text style={[
+                styles.sentimentLabel,
+                { color: sentiment.label === 'BULLISH' ? '#166534' : 
+                         sentiment.label === 'BEARISH' ? '#991B1B' : '#374151' }
+              ]}>
+                {sentiment.label || 'NEUTRAL'}
+              </Text>
+            </View>
+            <View style={styles.sentimentMetrics}>
+              <Text style={styles.sentimentMetric}>Score: {safeNum(sentiment.score)}</Text>
+              <Text style={styles.sentimentMetric}>Articles: {sentiment.articleCount || '—'}</Text>
+              <Text style={styles.sentimentMetric}>Confidence: {safePct(sentiment.confidence)}</Text>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {/* Market Context */}
+      {macro && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Market Context</Text>
+          <View style={styles.metricsGrid}>
+            <View style={styles.metricItem}>
+              <Text style={styles.metricLabel}>VIX</Text>
+              <Text style={styles.metricValue}>{safeNum(macro.vix)}</Text>
+            </View>
+            <View style={styles.metricItem}>
+              <Text style={styles.metricLabel}>Market Sentiment</Text>
+              <Text style={styles.metricValue}>{macro.marketSentiment || '—'}</Text>
+            </View>
+            <View style={styles.metricItem}>
+              <Text style={styles.metricLabel}>Risk Appetite</Text>
+              <Text style={styles.metricValue}>{safePct(macro.riskAppetite)}</Text>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {/* Market Regime */}
+      {marketRegime && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Market Regime</Text>
+          <View style={styles.regimeContainer}>
+            <Text style={styles.regimeText}>Regime: {marketRegime.market_regime || '—'}</Text>
+            <Text style={styles.regimeText}>Confidence: {safePct(marketRegime.confidence)}</Text>
+            <Text style={styles.regimeText}>Strategy: {marketRegime.recommended_strategy || '—'}</Text>
+          </View>
+        </View>
+      )}
+
+      {/* Peers */}
+      {data.peers && data.peers.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Peer Companies</Text>
+          <View style={styles.peersContainer}>
+            {data.peers.map((peer: string, index: number) => (
+              <TouchableOpacity key={index} style={styles.peerChip}>
+                <Text style={styles.peerText}>{peer}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
       )}
     </ScrollView>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: UI.colors.background,
+    backgroundColor: '#F9FAFB',
   },
   header: {
     padding: 16,
-    backgroundColor: UI.colors.background,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: UI.colors.border,
+    borderBottomColor: '#E5E7EB',
   },
   title: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: UI.colors.text,
-    marginBottom: 16,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  subtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginTop: 4,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    margin: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  searchIcon: {
+    marginRight: 8,
   },
   searchInput: {
     flex: 1,
-    height: 40,
-    borderWidth: 1,
-    borderColor: UI.colors.border,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    color: UI.colors.text,
-    backgroundColor: UI.colors.secondary,
+    fontSize: 16,
+    color: '#111827',
   },
-  searchButton: {
-    marginLeft: 8,
-    padding: 8,
-    backgroundColor: UI.colors.accent,
-    borderRadius: 8,
+  clearButton: {
+    padding: 4,
+  },
+  recentsContainer: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+  },
+  recentsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  recentsList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  recentChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 16,
+  },
+  recentChipText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#374151',
+  },
+  listContainer: {
+    flex: 1,
+    marginHorizontal: 16,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 12,
   },
   loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
+    flexDirection: 'row',
     alignItems: 'center',
-    padding: 32,
+    justifyContent: 'center',
+    padding: 20,
   },
   loadingText: {
-    marginTop: 16,
-    color: UI.colors.sub,
-    fontSize: 16,
+    marginLeft: 8,
+    fontSize: 14,
+    color: '#6B7280',
   },
-  errorContainer: {
+  list: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 32,
   },
-  errorText: {
-    marginTop: 16,
-    color: UI.colors.error,
-    fontSize: 16,
-    textAlign: 'center',
-  },
-  retryButton: {
+  stockItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 16,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    backgroundColor: UI.colors.secondary,
-    borderRadius: 8,
-  },
-  retryText: {
-    marginLeft: 8,
-    color: UI.colors.accent,
-    fontWeight: '600',
-  },
-  card: {
-    backgroundColor: UI.colors.background,
-    margin: 16,
     padding: 16,
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 1.41,
-    elevation: 2,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
-  companyHeader: {
+  stockItemContent: {
+    flex: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
   },
-  companyName: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: UI.colors.text,
+  stockInfo: {
+    flex: 1,
   },
-  sector: {
+  symbol: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  company: {
     fontSize: 14,
-    color: UI.colors.sub,
-    marginTop: 4,
-  },
-  marketCap: {
-    fontSize: 14,
-    color: UI.colors.sub,
+    color: '#6B7280',
     marginTop: 2,
   },
-  priceContainer: {
+  stockMetrics: {
     alignItems: 'flex-end',
   },
-  currentPrice: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: UI.colors.text,
+  price: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
   },
   change: {
     fontSize: 14,
-    fontWeight: '600',
-    marginTop: 4,
+    fontWeight: '500',
+    marginTop: 2,
   },
-  chartHeader: {
+  emptyContainer: {
+    alignItems: 'center',
+    padding: 40,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginTop: 12,
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#E5E7EB',
+    marginHorizontal: 16,
+  },
+  detailContainer: {
+    flex: 1,
+    padding: 16,
+  },
+  detailHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 16,
   },
-  chartTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: UI.colors.text,
+  detailTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#111827',
   },
-  intervalSelector: {
-    flexDirection: 'row',
+  refreshButton: {
+    padding: 8,
   },
-  intervalButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginLeft: 4,
-    borderRadius: 6,
-    backgroundColor: UI.colors.secondary,
-  },
-  intervalButtonActive: {
-    backgroundColor: UI.colors.accent,
-  },
-  intervalText: {
-    fontSize: 12,
-    color: UI.colors.sub,
-    fontWeight: '600',
-  },
-  intervalTextActive: {
-    color: UI.colors.background,
-  },
-  chartLoading: {
-    height: 200,
-    justifyContent: 'center',
+  errorContainer: {
     alignItems: 'center',
+    padding: 20,
+  },
+  errorText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#EF4444',
+    marginTop: 8,
+  },
+  errorSubtext: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  researchBody: {
+    flex: 1,
+  },
+  section: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  priceContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  priceLarge: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#111827',
+    marginRight: 16,
+  },
+  changeContainer: {
+    alignItems: 'flex-end',
+  },
+  changePercent: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  priceDetails: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  priceDetail: {
+    fontSize: 14,
+    color: '#6B7280',
   },
   metricsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    paddingHorizontal: 16,
-  },
-  metricCard: {
-    width: '48%',
-    backgroundColor: UI.colors.background,
-    margin: '1%',
-    padding: 16,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 1.41,
-    elevation: 2,
-  },
-  metricTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: UI.colors.text,
-    marginBottom: 12,
+    gap: 12,
   },
   metricItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
+    width: '48%',
+    padding: 12,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   metricLabel: {
-    fontSize: 14,
-    color: UI.colors.sub,
+    fontSize: 12,
+    color: '#6B7280',
+    marginBottom: 4,
   },
   metricValue: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
-    color: UI.colors.text,
+    color: '#111827',
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: UI.colors.text,
+  sentimentContainer: {
+    alignItems: 'center',
+  },
+  sentimentBadge: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
     marginBottom: 12,
+  },
+  sentimentLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  sentimentMetrics: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
+  },
+  sentimentMetric: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  regimeContainer: {
+    gap: 8,
+  },
+  regimeText: {
+    fontSize: 14,
+    color: '#374151',
   },
   peersContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    gap: 8,
   },
   peerChip: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    marginRight: 8,
-    marginBottom: 8,
-    backgroundColor: UI.colors.secondary,
+    backgroundColor: '#E5E7EB',
     borderRadius: 16,
   },
   peerText: {
     fontSize: 14,
-    color: UI.colors.accent,
-    fontWeight: '600',
+    fontWeight: '500',
+    color: '#374151',
   },
-  footer: {
-    padding: 16,
-    alignItems: 'center',
-  },
-  footerText: {
-    fontSize: 12,
-    color: UI.colors.sub,
-  },
-  // New UI component styles
-  sectionHeader: {
+  tradeButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  symbol: { 
-    color: UI.colors.sub, 
-    fontSize: 16, 
-    fontWeight: '600' 
-  },
-  website: { 
-    color: UI.colors.accent, 
-    fontSize: 12, 
-    marginTop: 6 
-  },
-  segmented: {
-    flexDirection: 'row',
-    backgroundColor: UI.colors.secondary,
+    backgroundColor: '#3B82F6',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: 8,
-    padding: 2,
+    marginLeft: 12,
   },
-  segment: { 
-    paddingVertical: 6, 
-    paddingHorizontal: 10, 
-    borderRadius: 6 
-  },
-  segmentActive: { 
-    backgroundColor: UI.colors.accent 
-  },
-  segmentText: { 
-    fontSize: 12, 
-    color: UI.colors.sub, 
-    fontWeight: '600' 
-  },
-  segmentTextActive: { 
-    color: UI.colors.background 
-  },
-  legend: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    marginTop: 10, 
-    flexWrap: 'wrap' 
-  },
-  legendDot: { 
-    width: 8, 
-    height: 8, 
-    borderRadius: 4, 
-    backgroundColor: UI.colors.sub, 
-    marginRight: 6, 
-    marginLeft: 12 
-  },
-  legendText: { 
-    color: UI.colors.sub, 
-    fontSize: 12, 
-    marginRight: 6 
-  },
-  badge: { 
-    paddingHorizontal: 8, 
-    paddingVertical: 4, 
-    borderRadius: 999 
-  },
-  badgeText: { 
-    fontSize: 12, 
-    fontWeight: '700' 
-  },
-  metricRow: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    paddingVertical: 6 
-  },
-  errorInline: { 
-    color: UI.colors.error, 
-    marginTop: 8, 
-    fontSize: 12 
+  tradeButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 4,
   },
 });
-
-export default ResearchScreen;

@@ -194,12 +194,13 @@ export const GET_CRYPTO_ML_SIGNAL = gql`
   query GetCryptoMLSignal($symbol: String!) {
     cryptoMlSignal(symbol: $symbol) {
       symbol
+      predictionType
       probability
       confidenceLevel
       explanation
-      features
-      modelVersion
-      timestamp
+      featuresUsed
+      createdAt
+      expiresAt
     }
   }
 `;
@@ -257,26 +258,33 @@ export const EXECUTE_CRYPTO_TRADE = gql`
     $symbol: String!
     $tradeType: String!
     $quantity: Float!
-    $orderType: OrderType!
-    $timeInForce: TimeInForce!
+    $orderType: String!
     $pricePerUnit: Float
-    $triggerPrice: Float
-    $clientOrderId: String
+    $maxSlippageBps: Int
   ) {
     executeCryptoTrade(
       symbol: $symbol
       tradeType: $tradeType
       quantity: $quantity
       orderType: $orderType
-      timeInForce: $timeInForce
       pricePerUnit: $pricePerUnit
-      triggerPrice: $triggerPrice
-      clientOrderId: $clientOrderId
+      maxSlippageBps: $maxSlippageBps
     ) {
-      success
-      tradeId
-      orderId
-      message
+      ok
+      trade {
+        id
+        tradeType
+        quantity
+        pricePerUnit
+        totalAmount
+        orderId
+        status
+        executionTime
+      }
+      error {
+        code
+        message
+      }
     }
   }
 `;
@@ -301,14 +309,12 @@ export const CREATE_SBLOC_LOAN = gql`
 
 export const GENERATE_ML_PREDICTION = gql`
   mutation GenerateMLPrediction($symbol: String!) {
-    crypto {
-      generateMlPrediction(symbol: $symbol) {
-        success
-        predictionId
-        probability
-        explanation
-        message
-      }
+    generateMlPrediction(symbol: $symbol) {
+      success
+      predictionId
+      probability
+      explanation
+      message
     }
   }
 `;

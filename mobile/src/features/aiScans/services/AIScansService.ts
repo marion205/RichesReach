@@ -13,7 +13,7 @@ class AIScansService {
   private tokenProvider: TokenProvider;
 
   constructor(tokenProvider?: TokenProvider) {
-    this.baseUrl = 'http://riches-reach-alb-1199497064.us-east-1.elb.amazonaws.com';
+    this.baseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8000';
     this.tokenProvider = tokenProvider ?? (async () => 'your-auth-token');
   }
 

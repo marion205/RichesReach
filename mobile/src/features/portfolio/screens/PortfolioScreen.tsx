@@ -11,7 +11,7 @@ TouchableOpacity,
 import { useQuery } from '@apollo/client';
 import { gql } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
-import MarketDataService from '../../stocks/services/MarketDataService';
+import { SecureMarketDataService } from '../../stocks/services/SecureMarketDataService';
 const GET_MY_WATCHLIST = gql`
 query GetMyWatchlist {
 myWatchlist {
@@ -48,7 +48,8 @@ if (watchlistItems.length === 0) return;
 setLoadingPrices(true);
 try {
 const symbols = watchlistItems.map(item => item.stock.symbol);
-const quotes = await MarketDataService.getMultipleQuotes(symbols);
+const service = SecureMarketDataService.getInstance();
+const quotes = await service.fetchQuotes(symbols);
 const prices: { [key: string]: number } = {};
 quotes.forEach((quote) => {
 if (quote.price > 0) {

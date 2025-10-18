@@ -3,8 +3,8 @@ import { Alert } from 'react-native';
 import expoGoCompatiblePriceAlertService from '../features/stocks/services/ExpoGoCompatiblePriceAlertService';
 // Import intelligent price alert service for "big day" detection
 import intelligentPriceAlertService from '../features/stocks/services/IntelligentPriceAlertService';
-// Import real market data service
-import MarketDataService, { StockQuote } from '../features/stocks/services/MarketDataService';
+// Import secure market data service that uses backend API
+import { SecureMarketDataService } from '../features/stocks/services/SecureMarketDataService';
 // Import endpoint configuration to avoid URL mutation issues
 import { WS_STOCK_PRICES, WS_DISCUSSIONS, WS_PORTFOLIO } from '../api/endpoints';
 export interface StockPrice {
@@ -608,13 +608,14 @@ this.fetchAndUpdateRealMarketData();
 }
 private async fetchAndUpdateRealMarketData() {
 try {
-const quotes = await MarketDataService.getMultipleQuotes(this.watchedSymbols);
+const service = SecureMarketDataService.getInstance();
+const quotes = await service.fetchQuotes(this.watchedSymbols);
 quotes.forEach(quote => {
 const stockPrice: StockPrice = {
 symbol: quote.symbol,
 price: quote.price,
 change: quote.change,
-change_percent: quote.changePercent,
+change_percent: quote.change_percent,
 volume: quote.volume,
 timestamp: Date.now()
 };

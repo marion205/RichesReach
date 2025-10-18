@@ -3,22 +3,28 @@
  * Main screen for crypto trading functionality
  */
 
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
+  Pressable,
   RefreshControl,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
+import { useQuery } from '@apollo/client';
+
+// GraphQL Queries
+import { GET_CRYPTO_PORTFOLIO, GET_CRYPTO_ANALYTICS } from '../cryptoQueries';
 
 // Components
 import ProAaveCard from '../components/forms/ProAaveCard';
 import CryptoPortfolioCard from '../components/crypto/CryptoPortfolioCard';
 import CryptoTradingCardPro from '../components/crypto/CryptoTradingCardPro';
 import CryptoMLSignalsCard from '../components/crypto/CryptoMLSignalsCard';
+import DeFiYieldsScreen from '../screens/DeFiYieldsScreen';
+import YieldOptimizerScreen from '../screens/YieldOptimizerScreen';
 
 interface CryptoScreenProps {
   navigation: any;
@@ -26,67 +32,49 @@ interface CryptoScreenProps {
 
 const CryptoScreen: React.FC<CryptoScreenProps> = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'portfolio' | 'trading' | 'aave' | 'signals'>('aave');
+  const [activeTab, setActiveTab] = useState<'portfolio' | 'trading' | 'aave' | 'signals' | 'yields' | 'optimizer'>('portfolio');
   const [hideBalances, setHideBalances] = useState(false);
+  const [tabsLoaded, setTabsLoaded] = useState<Set<string>>(new Set(['portfolio'])); // Track which tabs have been loaded
 
-  const onRefresh = async () => {
+  // Real GraphQL queries for crypto data
+  const { data: portfolioData, loading: portfolioLoading, error: portfolioError, refetch: refetchPortfolio } = useQuery(GET_CRYPTO_PORTFOLIO, {
+    fetchPolicy: 'cache-and-network',
+    errorPolicy: 'all',
+  });
+
+  const { data: analyticsData, loading: analyticsLoading, error: analyticsError, refetch: refetchAnalytics } = useQuery(GET_CRYPTO_ANALYTICS, {
+    fetchPolicy: 'cache-and-network',
+    errorPolicy: 'all',
+  });
+
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    // Simulate refresh delay
-    setTimeout(() => {
+    try {
+      // Refetch real data from GraphQL
+      await Promise.all([
+        refetchPortfolio(),
+        refetchAnalytics(),
+      ]);
+    } catch (error) {
+      console.error('Error refreshing crypto data:', error);
+    } finally {
       setRefreshing(false);
-    }, 1000);
-  };
+    }
+  }, [refetchPortfolio, refetchAnalytics]);
 
-  const renderTabContent = () => {
+  const handleTabChange = useCallback((tab: string) => {
+    setActiveTab(tab as any);
+    setTabsLoaded(prev => new Set([...prev, tab]));
+  }, []);
+
+  const renderTabContent = useMemo(() => {
     switch (activeTab) {
       case 'portfolio':
         return (
           <CryptoPortfolioCard 
-            portfolio={{
-              total_value_usd: 12547.50,
-              total_pnl: 1247.50,
-              total_pnl_percentage: 11.05,
-              total_pnl_1d: 125.30,
-              total_pnl_pct_1d: 1.01,
-              total_pnl_1w: 847.20,
-              total_pnl_pct_1w: 7.25,
-              total_pnl_1m: 1247.50,
-              total_pnl_pct_1m: 11.05,
-              holdings: [
-                {
-                  cryptocurrency: { symbol: 'BTC' },
-                  quantity: 0.25,
-                  current_value: 8750.00,
-                  unrealized_pnl_percentage: 8.5
-                },
-                {
-                  cryptocurrency: { symbol: 'ETH' },
-                  quantity: 2.5,
-                  current_value: 2897.50,
-                  unrealized_pnl_percentage: 12.3
-                },
-                {
-                  cryptocurrency: { symbol: 'SOL' },
-                  quantity: 15.0,
-                  current_value: 900.00,
-                  unrealized_pnl_percentage: -2.1
-                }
-              ]
-            }}
-            analytics={{
-              portfolio_volatility: 0.15,
-              sharpe_ratio: 1.8,
-              max_drawdown: 8.2,
-              diversification_score: 75,
-              sector_allocation: {
-                'LOW': 25,
-                'MEDIUM': 40,
-                'HIGH': 35
-              },
-              best_performer: { symbol: 'ETH', pnl_percentage: 12.3 },
-              worst_performer: { symbol: 'SOL', pnl_percentage: -2.1 }
-            }}
-            loading={false}
+            portfolio={portfolioData?.cryptoPortfolio}
+            analytics={analyticsData?.cryptoAnalytics}
+            loading={portfolioLoading || analyticsLoading}
             onRefresh={onRefresh}
             onPressHolding={(symbol) => console.log('Pressed holding:', symbol)}
             onStartTrading={() => setActiveTab('trading')}
@@ -120,7 +108,7 @@ const CryptoScreen: React.FC<CryptoScreenProps> = ({ navigation }) => {
             brand="RichesReach"
             networkName="Sepolia"
             walletAddress={null} // TODO: Connect to wallet address when available
-            backendBaseUrl={process.env.EXPO_PUBLIC_API_URL || "http://54.162.138.209:8000"} // Your backend URL
+            backendBaseUrl={process.env.EXPO_PUBLIC_API_URL || "http://localhost:8000"} // Updated to localhost
             explorerTxUrl={(hash) => `https://sepolia.etherscan.io/tx/${hash}`}
             getBalance={async (symbol) => {
               // Mock balance - in production, read from wallet
@@ -154,57 +142,131 @@ const CryptoScreen: React.FC<CryptoScreenProps> = ({ navigation }) => {
         );
       case 'signals':
         return <CryptoMLSignalsCard initialSymbol="BTC" />;
+      case 'yields':
+        return <DeFiYieldsScreen navigation={navigation} onTabChange={handleTabChange} />;
+      case 'optimizer':
+        return <YieldOptimizerScreen navigation={navigation} />;
       default:
         return null;
     }
-  };
+  }, [activeTab, portfolioData, analyticsData, navigation]);
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Crypto DeFi</Text>
-        <TouchableOpacity onPress={() => setHideBalances(!hideBalances)} style={styles.hideButton}>
+        <Pressable onPress={() => setHideBalances(!hideBalances)} style={styles.hideButton}>
           <Icon name={hideBalances ? 'eye-off' : 'eye'} size={20} color="#fff" />
-        </TouchableOpacity>
+        </Pressable>
       </View>
 
       <View style={styles.tabContainer}>
-        <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'portfolio' && styles.activeTab]}
-          onPress={() => setActiveTab('portfolio')}
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabContentContainer}
         >
-          <Icon name="pie-chart" size={16} color={activeTab === 'portfolio' ? '#007bff' : '#6c757d'} />
-          <Text style={[styles.tabText, activeTab === 'portfolio' && styles.activeTabText]}>Portfolio</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'trading' && styles.activeTab]}
-          onPress={() => setActiveTab('trading')}
-        >
-          <Icon name="trending-up" size={16} color={activeTab === 'trading' ? '#007bff' : '#6c757d'} />
-          <Text style={[styles.tabText, activeTab === 'trading' && styles.activeTabText]}>Trading</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'aave' && styles.activeTab]}
-          onPress={() => setActiveTab('aave')}
-        >
-          <Icon name="activity" size={16} color={activeTab === 'aave' ? '#007bff' : '#6c757d'} />
-          <Text style={[styles.tabText, activeTab === 'aave' && styles.activeTabText]}>AAVE</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'signals' && styles.activeTab]}
-          onPress={() => setActiveTab('signals')}
-        >
-          <Icon name="activity" size={16} color={activeTab === 'signals' ? '#007bff' : '#6c757d'} />
-          <Text style={[styles.tabText, activeTab === 'signals' && styles.activeTabText]}>Signals</Text>
-        </TouchableOpacity>
+          <Pressable
+            style={[styles.tabButton, activeTab === 'portfolio' && styles.activeTab]}
+            onPress={() => handleTabChange('portfolio')}
+            hitSlop={10}
+          >
+            <Icon name="pie-chart" size={16} color={activeTab === 'portfolio' ? '#2563EB' : '#6B7280'} />
+            <Text 
+              style={[styles.tabText, activeTab === 'portfolio' && styles.activeTabText]}
+              numberOfLines={1}
+              allowFontScaling={false}
+            >
+              Portfolio
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.tabButton, activeTab === 'trading' && styles.activeTab]}
+            onPress={() => handleTabChange('trading')}
+            hitSlop={10}
+          >
+            <Icon name="trending-up" size={16} color={activeTab === 'trading' ? '#2563EB' : '#6B7280'} />
+            <Text 
+              style={[styles.tabText, activeTab === 'trading' && styles.activeTabText]}
+              numberOfLines={1}
+              allowFontScaling={false}
+            >
+              Trading
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.tabButton, activeTab === 'aave' && styles.activeTab]}
+            onPress={() => handleTabChange('aave')}
+            hitSlop={10}
+          >
+            <Icon name="activity" size={16} color={activeTab === 'aave' ? '#2563EB' : '#6B7280'} />
+            <Text 
+              style={[styles.tabText, activeTab === 'aave' && styles.activeTabText]}
+              numberOfLines={1}
+              allowFontScaling={false}
+            >
+              AAVE
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.tabButton, activeTab === 'signals' && styles.activeTab]}
+            onPress={() => handleTabChange('signals')}
+            hitSlop={10}
+          >
+            <Icon name="activity" size={16} color={activeTab === 'signals' ? '#2563EB' : '#6B7280'} />
+            <Text 
+              style={[styles.tabText, activeTab === 'signals' && styles.activeTabText]}
+              numberOfLines={1}
+              allowFontScaling={false}
+            >
+              Signals
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.tabButton, activeTab === 'yields' && styles.activeTab]}
+            onPress={() => handleTabChange('yields')}
+            hitSlop={10}
+          >
+            <Icon name="trending-up" size={16} color={activeTab === 'yields' ? '#2563EB' : '#6B7280'} />
+            <Text 
+              style={[styles.tabText, activeTab === 'yields' && styles.activeTabText]}
+              numberOfLines={1}
+              allowFontScaling={false}
+            >
+              Yields
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.tabButton, activeTab === 'optimizer' && styles.activeTab]}
+            onPress={() => handleTabChange('optimizer')}
+            hitSlop={10}
+          >
+            <Icon name="cpu" size={16} color={activeTab === 'optimizer' ? '#2563EB' : '#6B7280'} />
+            <Text 
+              style={[styles.tabText, activeTab === 'optimizer' && styles.activeTabText]}
+              numberOfLines={1}
+              allowFontScaling={false}
+            >
+              AI Optimizer
+            </Text>
+          </Pressable>
+        </ScrollView>
       </View>
 
-      <ScrollView
-        style={styles.contentContainer}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      >
-        {renderTabContent()}
-      </ScrollView>
+      {activeTab === 'yields' || activeTab === 'optimizer' ? (
+        // Use View for tabs with FlatList to avoid VirtualizedList nesting
+        <View style={styles.contentContainer}>
+          {renderTabContent}
+        </View>
+      ) : (
+        // Use ScrollView for other tabs
+        <ScrollView
+          style={styles.contentContainer}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        >
+          {renderTabContent}
+        </ScrollView>
+      )}
     </View>
   );
 };
@@ -230,31 +292,36 @@ const styles = StyleSheet.create({
     padding: 5,
   },
   tabContainer: {
+    paddingVertical: 8,
+    backgroundColor: 'transparent',
+  },
+  tabContentContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    backgroundColor: '#e9ecef',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#dee2e6',
+    gap: 8,
+    paddingHorizontal: 8,
   },
   tabButton: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 8,
-    paddingHorizontal: 15,
-    borderRadius: 20,
+    paddingHorizontal: 12,
+    borderRadius: 12,
   },
   activeTab: {
-    backgroundColor: '#e7f1ff',
+    backgroundColor: 'rgba(37, 99, 235, 0.10)',
   },
   tabText: {
-    marginLeft: 5,
+    marginLeft: 6,
+    marginTop: 1,
     fontSize: 14,
-    fontWeight: '600',
-    color: '#6c757d',
+    fontWeight: '500',
+    color: '#6B7280',
+    includeFontPadding: false,
+    textAlignVertical: 'center',
   },
   activeTabText: {
-    color: '#007bff',
+    color: '#2563EB',
+    fontWeight: '600',
   },
   contentContainer: {
     flex: 1,

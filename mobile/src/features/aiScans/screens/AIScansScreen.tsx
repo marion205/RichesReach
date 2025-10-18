@@ -165,7 +165,7 @@ const AIScansScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         <ScanCard
           key={scan.id}
           scan={scan}
-          onPress={() => navigation.navigate('ScanPlaybook', { scan })}
+          onPress={() => navigation.navigate('scan-playbook', { scan })}
           onRun={() => handleRunScan(scan)}
         />
       )),

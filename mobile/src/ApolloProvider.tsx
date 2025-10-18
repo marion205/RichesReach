@@ -24,29 +24,16 @@ import JWTAuthService from './features/auth/services/JWTAuthService';
 
 export default function ApolloProvider({ children }: { children: React.ReactNode }) {
   const client = useMemo(() => {
-    try {
-      console.log('[ApolloProvider] Creating Apollo client...');
-      const apolloClient = makeApolloClient();
-      // Initialize the JWT service with the Apollo client
-      JWTAuthService.getInstance().setApolloClient(apolloClient);
-      console.log('[ApolloProvider] Apollo client created successfully');
-      return apolloClient;
-    } catch (error) {
-      console.error('[ApolloProvider] Failed to create Apollo client:', error);
-      // Return a minimal client to prevent the app from crashing
-      const { ApolloClient, InMemoryCache, HttpLink } = require('@apollo/client');
-      return new ApolloClient({
-        link: new HttpLink({ uri: 'https://grounds-firewall-thereafter-bracelets.trycloudflare.com/graphql' }),
-        cache: new InMemoryCache(),
-      });
-    }
+    console.log('[ApolloProvider] Creating Apollo client...');
+    const apolloClient = makeApolloClient();
+    // Initialize the JWT service with the Apollo client
+    JWTAuthService.getInstance().setApolloClient(apolloClient);
+    console.log('[ApolloProvider] Apollo client created successfully');
+    return apolloClient;
   }, []);
 
-  try {
-    const baseUrl = getApiBase();
-    console.log('[API_BASE]', baseUrl, 'graphql ->', `${baseUrl}/graphql/`);
-  } catch (error) {
-    console.log('[API_BASE] Error getting base URL:', error);
+  if (__DEV__) {
+    console.log('🔌 GRAPHQL_URL:', process.env.EXPO_PUBLIC_GRAPHQL_URL);
   }
 
   return <Provider client={client}>{children}</Provider>;

@@ -67,9 +67,56 @@ const CryptoTradingCardPro: React.FC<CryptoTradingCardProps> = ({
 
   const { data: currenciesData, loading: currenciesLoading } = useQuery(GET_SUPPORTED_CURRENCIES);
   const { data: priceData, loading: priceLoading, refetch: refetchPrice } = useQuery(
-    GET_CRYPTO_PRICE, { variables: { symbol: selectedSymbol }, skip: !selectedSymbol }
+    GET_CRYPTO_PRICE, { 
+      variables: { symbol: selectedSymbol }, 
+      skip: !selectedSymbol,
+      fetchPolicy: 'cache-and-network',
+      nextFetchPolicy: 'cache-first',
+      errorPolicy: 'all'
+    }
   );
-  const [executeTrade] = useMutation(EXECUTE_CRYPTO_TRADE);
+
+  // Force refresh price data when component mounts or symbol changes
+  useEffect(() => {
+    if (selectedSymbol) {
+      console.log(`[Crypto Trading] Refreshing price for ${selectedSymbol}`);
+      refetchPrice();
+    }
+  }, [selectedSymbol, refetchPrice]);
+  const [executeTrade] = useMutation(EXECUTE_CRYPTO_TRADE, {
+    optimisticResponse: (variables) => ({
+      executeCryptoTrade: {
+        __typename: 'ExecuteCryptoTradeResponse',
+        ok: true,
+        trade: {
+          __typename: 'CryptoTrade',
+          id: `temp-${Date.now()}`,
+          orderId: `temp-order-${Date.now()}`,
+          symbol: variables.symbol,
+          tradeType: variables.tradeType,
+          quantity: variables.quantity,
+          pricePerUnit: orderType === 'LIMIT' ? variables.pricePerUnit : (priceData?.cryptoPrice?.price || 0),
+          totalAmount: variables.quantity * (orderType === 'LIMIT' ? variables.pricePerUnit : (priceData?.cryptoPrice?.price || 0)),
+          status: 'PENDING',
+          createdAt: new Date().toISOString(),
+        },
+        error: null,
+      },
+    }),
+    update: (cache, { data }) => {
+      if (data?.executeCryptoTrade?.ok) {
+        // Update portfolio cache optimistically
+        cache.modify({
+          fields: {
+            cryptoPortfolio(existing) {
+              // Add the new trade to the portfolio
+              return existing;
+            },
+          },
+        });
+      }
+    },
+  });
 
   // Enhanced symbol handling with sorting and icons
   type CurrencyMeta = { symbol: string; name?: string; iconUrl?: string; qtyDecimals?: number; priceDecimals?: number };
@@ -105,8 +152,8 @@ const CryptoTradingCardPro: React.FC<CryptoTradingCardProps> = ({
     };
   }, [allSymbols, selectedSymbol]);
 
-  const currentPrice = priceData?.cryptoPrice?.priceUsd || 0;
-  const change24h = priceData?.cryptoPrice?.priceChangePercentage24h ?? null;
+  const currentPrice = parseFloat(priceData?.cryptoPrice?.priceUsd || '0');
+  const change24h = parseFloat(priceData?.cryptoPrice?.priceChangePercentage24h || '0');
 
   // Keep limitPrice seeded to live when symbol/price changes (handy as a starting value)
   useEffect(() => {
@@ -265,32 +312,45 @@ const CryptoTradingCardPro: React.FC<CryptoTradingCardProps> = ({
     setConfirmOpen(false);
     setIsSubmitting(true);
     try {
-      // Send: pricePerUnit = effective execution price field (limit price for limit types; live for market/stop-market)
-      // Send: triggerPrice only for STOP_* (server can ignore otherwise)
+      // Server-authoritative pricing: don't send price for MARKET orders
+      // Server will fetch fresh quote and use that for execution
       const variables: any = {
         symbol: selectedSymbol,
         tradeType,
         quantity: parseFloat(qty),
-        pricePerUnit: Number(
-          orderType === 'MARKET' || orderType === 'STOP_MARKET'
-            ? currentPrice
-            : limitPrice
-        ),
         orderType,
-        timeInForce,
-        triggerPrice: (orderType === 'STOP_MARKET' || orderType === 'STOP_LIMIT') ? Number(triggerPrice) : null,
+        // Only send pricePerUnit for LIMIT orders
+        pricePerUnit: orderType === 'LIMIT' ? Number(limitPrice) : undefined,
+        // Optional slippage protection for MARKET orders (1% = 100 bps)
+        maxSlippageBps: orderType === 'MARKET' ? 100 : undefined,
       };
 
+      console.log('Submitting trade with variables:', variables);
+
       const { data } = await executeTrade({ variables });
-      if (data?.executeCryptoTrade?.success) {
-        Alert.alert('Success', `Trade executed!\nOrder ID: ${data.executeCryptoTrade.orderId}`, [
-          { text: 'OK', onPress: () => onTradeSuccess() },
-        ]);
-        setQty(''); setUsd(''); // keep price fields
-        if (orderType !== 'LIMIT' && orderType !== 'TAKE_PROFIT_LIMIT') setLimitPrice('');
+      
+      if (data?.executeCryptoTrade?.ok) {
+        const trade = data.executeCryptoTrade.trade;
+        Alert.alert(
+          'Trade Executed!', 
+          `Order ID: ${trade.orderId}\n` +
+          `Type: ${trade.tradeType} ${trade.quantity} ${selectedSymbol}\n` +
+          `Price: $${trade.pricePerUnit}\n` +
+          `Total: $${trade.totalAmount}\n` +
+          `Status: ${trade.status}`,
+          [
+            { text: 'OK', onPress: () => onTradeSuccess() },
+          ]
+        );
+        
+        // Clear form
+        setQty(''); 
+        setUsd(''); 
+        if (orderType !== 'LIMIT') setLimitPrice('');
         setTriggerPrice('');
       } else {
-        Alert.alert('Error', data?.executeCryptoTrade?.message || 'Trade failed');
+        const error = data?.executeCryptoTrade?.error;
+        Alert.alert('Trade Failed', error?.message || 'Unknown error occurred');
       }
     } catch (e) {
       console.error('Trade error:', e);
@@ -431,19 +491,19 @@ const CryptoTradingCardPro: React.FC<CryptoTradingCardProps> = ({
         </View>
         <View style={styles.priceRow}>
           <Text style={styles.priceValue}>{fmtUSD(currentPrice)}</Text>
-          {change24h !== null && (
+          {change24h !== 0 && (
             <View style={[
               styles.changePill,
-              { backgroundColor: (change24h ?? 0) >= 0 ? '#ECFDF5' : '#FEF2F2',
-                borderColor:   (change24h ?? 0) >= 0 ? '#A7F3D0' : '#FECACA' }
+              { backgroundColor: change24h >= 0 ? '#ECFDF5' : '#FEF2F2',
+                borderColor:   change24h >= 0 ? '#A7F3D0' : '#FECACA' }
             ]}>
-              <Icon name={(change24h ?? 0) >= 0 ? 'trending-up' : 'trending-down'}
-                    size={12} color={(change24h ?? 0) >= 0 ? '#10B981' : '#EF4444'} />
+              <Icon name={change24h >= 0 ? 'trending-up' : 'trending-down'}
+                    size={12} color={change24h >= 0 ? '#10B981' : '#EF4444'} />
               <Text style={[
                 styles.changeText,
-                { color: (change24h ?? 0) >= 0 ? '#10B981' : '#EF4444' }
+                { color: change24h >= 0 ? '#10B981' : '#EF4444' }
               ]}>
-                {(change24h ?? 0) >= 0 ? '+' : ''}{(change24h ?? 0).toFixed(2)}%
+                {change24h >= 0 ? '+' : ''}{change24h.toFixed(2)}%
               </Text>
             </View>
           )}
@@ -867,8 +927,11 @@ const styles = StyleSheet.create({
   notice: { flexDirection: 'row', gap: 8, backgroundColor: '#FFFBEB', borderColor: '#FCD34D', borderWidth: 1, padding: 12, borderRadius: 10, marginBottom: 20 },
   noticeText: { color: '#92400E', fontSize: 14, flex: 1 },
 
-  sheetOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  sheetOverlay: { flex: 1, backgroundColor: '#000000', justifyContent: 'flex-end', paddingBottom: 100 },
   sheet: { backgroundColor: '#fff', padding: 16, borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: '80%' },
+  confirmSheet: { backgroundColor: '#fff', padding: 16, borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: '50%', marginBottom: 50 },
+  sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  confirmContent: { paddingBottom: 20 },
   sheetTitle: { fontSize: 18, fontWeight: '700', color: '#111827' },
   sheetBtns: { flexDirection: 'row', gap: 10 },
   sheetBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center' },

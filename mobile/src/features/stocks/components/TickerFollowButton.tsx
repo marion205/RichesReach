@@ -23,10 +23,11 @@ export default function TickerFollowButton({ symbol, size = 'small' }: { symbol:
     update(cache) {
       const prev = cache.readQuery<any>({ query: GET_MY_FOLLOWS });
       if (!prev?.me) return;
-      if (prev.me.followedTickers.includes(symbol)) return;
+      const followedTickers = prev.me.followedTickers || [];
+      if (followedTickers.includes(symbol)) return;
       cache.writeQuery({
         query: GET_MY_FOLLOWS,
-        data: { me: { ...prev.me, followedTickers: [...prev.me.followedTickers, symbol] } },
+        data: { me: { ...prev.me, followedTickers: [...followedTickers, symbol] } },
       });
     },
   });
@@ -39,9 +40,10 @@ export default function TickerFollowButton({ symbol, size = 'small' }: { symbol:
     update(cache) {
       const prev = cache.readQuery<any>({ query: GET_MY_FOLLOWS });
       if (!prev?.me) return;
+      const followedTickers = prev.me.followedTickers || [];
       cache.writeQuery({
         query: GET_MY_FOLLOWS,
-        data: { me: { ...prev.me, followedTickers: prev.me.followedTickers.filter((s: string) => s !== symbol) } },
+        data: { me: { ...prev.me, followedTickers: followedTickers.filter((s: string) => s !== symbol) } },
       });
     },
   });

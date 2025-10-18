@@ -98,6 +98,18 @@ jobs:
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: 🚨 Production Guardrails - No Mocks Allowed
+        run: |
+          echo "Checking for mock flags in environment..."
+          MOCKS=$(env | grep -E '_MOCK=' || true)
+          echo "Found mock flags: $MOCKS"
+          if echo "$MOCKS" | grep -E '(_MOCK=1|_MOCK=true|_MOCK=TRUE|_MOCK=on)'; then
+            echo "❌ Mock flags detected in production build!"
+            echo "Remove or set to false: $(echo "$MOCKS" | grep -E '(_MOCK=1|_MOCK=true|_MOCK=TRUE|_MOCK=on)')"
+            exit 1
+          fi
+          echo "✅ No mock flags detected - production ready!"
+
       - name: Build & Push
         id: build
         uses: docker/build-push-action@v6

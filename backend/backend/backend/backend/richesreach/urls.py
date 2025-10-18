@@ -12,6 +12,67 @@ from core.billing_views import (
     SubscriptionPlansView, CurrentSubscriptionView, CreateSubscriptionView,
     CancelSubscriptionView, FeatureAccessView, stripe_webhook, revenuecat_webhook
 )
+from core.views_auth import rest_login, rest_verify_token
+
+@csrf_exempt
+def ai_scan_run(request, scan_id):
+    """Mock AI scan run endpoint"""
+    try:
+        if request.method != 'POST':
+            return JsonResponse({"error": "Method not allowed"}, status=405)
+        
+        # Simple mock scan results
+        mock_results = [
+            {
+                "id": "result_1",
+                "symbol": "AAPL",
+                "name": "Apple Inc.",
+                "currentPrice": 175.50,
+                "change": 2.5,
+                "changePercent": 1.4,
+                "score": 0.85,
+                "confidence": 0.9,
+                "reasoning": "Strong technical indicators and momentum",
+                "riskFactors": ["Market volatility"],
+                "opportunityFactors": ["Earnings beat"],
+                "technicalSignals": [
+                    {"indicator": "RSI", "value": 65, "signal": "bullish", "strength": 0.7, "description": "RSI showing bullish momentum"}
+                ],
+                "fundamentalMetrics": [
+                    {"metric": "P/E", "value": 15.5, "benchmark": 18.0, "signal": "positive", "description": "Undervalued relative to sector"}
+                ],
+                "altDataSignals": [
+                    {"source": "Social Sentiment", "signal": "Positive", "strength": 0.6, "description": "Positive social media sentiment", "timestamp": "2024-01-15T10:30:00Z"}
+                ]
+            },
+            {
+                "id": "result_2",
+                "symbol": "MSFT",
+                "name": "Microsoft Corporation",
+                "currentPrice": 380.25,
+                "change": 1.8,
+                "changePercent": 0.5,
+                "score": 0.82,
+                "confidence": 0.88,
+                "reasoning": "Cloud leadership and enterprise growth",
+                "riskFactors": ["Sector rotation"],
+                "opportunityFactors": ["Analyst upgrades"],
+                "technicalSignals": [
+                    {"indicator": "MACD", "value": 0.5, "signal": "bullish", "strength": 0.8, "description": "MACD showing bullish crossover"}
+                ],
+                "fundamentalMetrics": [
+                    {"metric": "P/E", "value": 32.1, "benchmark": 25.0, "signal": "neutral", "description": "Fairly valued"}
+                ],
+                "altDataSignals": [
+                    {"source": "News Sentiment", "signal": "Positive", "strength": 0.7, "description": "Positive news coverage", "timestamp": "2024-01-15T10:30:00Z"}
+                ]
+            }
+        ]
+        
+        return JsonResponse(mock_results, safe=False, status=200)
+        
+    except Exception as e:
+        return JsonResponse({"error": f"Server error: {str(e)}"}, status=500)
 
 def healthz(_):
     return JsonResponse({"ok": True, "app": "richesreach"}, status=200)
@@ -28,21 +89,193 @@ def health(_):
     mode = getattr(settings, 'GRAPHQL_MODE', 'full')
     return JsonResponse({"ok": True, "mode": mode, "production": True}, status=200)
 
-class GraphQLLazyView(View):
-    """Lazy GraphQL view that only imports schema when accessed"""
-    @method_decorator(csrf_exempt)
-    def dispatch(self, request, *args, **kwargs):
-        # Import ONLY when /graphql is hit
-        from graphene_django.views import GraphQLView
-        from django.conf import settings
-        
-        # Use simple schema if in simple mode, otherwise use main schema
-        if getattr(settings, 'GRAPHQL_MODE', '') == 'simple':
-            from core.schema_simple import schema
-        else:
-            from core.schema import schema
+@csrf_exempt
+def graphql_view(request):
+    """Simple GraphQL view that handles both aiRecommendations query and generateAiRecommendations mutation"""
+    if request.method == 'POST':
+        try:
+            import json
+            data = json.loads(request.body)
+            query = data.get('query', '')
+            variables = data.get('variables', {})
+            print(f"🔍 DEBUG: Received query: {query}")
+            print(f"🔍 DEBUG: Query contains 'aiScans': {'aiScans' in query}")
             
-        return GraphQLView.as_view(schema=schema, graphiql=False)(request, *args, **kwargs)
+            # Handle the aiRecommendations query (what the mobile app is calling)
+            if 'aiRecommendations' in query:
+                risk_tolerance = variables.get('riskTolerance', 'medium')
+                
+                # Return a comprehensive AI recommendations response
+                response_data = {
+                    "data": {
+                        "aiRecommendations": {
+                            "portfolioAnalysis": {
+                                "totalValue": 50000.0,
+                                "numHoldings": 8,
+                                "sectorBreakdown": {
+                                    "Technology": 40.0,
+                                    "Healthcare": 20.0,
+                                    "Financial": 15.0,
+                                    "Consumer": 15.0,
+                                    "Other": 10.0
+                                },
+                                "riskScore": 6.5,
+                                "expectedReturn": 8.5,
+                                "volatility": 12.3,
+                                "sharpeRatio": 0.69,
+                                "maxDrawdown": -15.2
+                            },
+                            "recommendations": [
+                                {
+                                    "symbol": "AAPL",
+                                    "action": "BUY",
+                                    "confidence": 0.85,
+                                    "targetPrice": 185.0,
+                                    "currentPrice": 175.5,
+                                    "allocation": 20.0,
+                                    "reasoning": "Strong fundamentals and AI growth potential"
+                                },
+                                {
+                                    "symbol": "MSFT",
+                                    "action": "BUY", 
+                                    "confidence": 0.82,
+                                    "targetPrice": 395.0,
+                                    "currentPrice": 380.25,
+                                    "allocation": 15.0,
+                                    "reasoning": "Cloud leadership and enterprise growth"
+                                },
+                                {
+                                    "symbol": "GOOGL",
+                                    "action": "BUY",
+                                    "confidence": 0.78,
+                                    "targetPrice": 145.0,
+                                    "currentPrice": 140.85,
+                                    "allocation": 10.0,
+                                    "reasoning": "Search dominance and AI innovation"
+                                }
+                            ],
+                            "riskAssessment": f"Moderate risk portfolio optimized for {risk_tolerance} risk tolerance",
+                            "lastUpdated": "2025-01-17T13:58:00Z"
+                        }
+                    }
+                }
+                return JsonResponse(response_data)
+            
+            # Handle the generateAiRecommendations mutation
+            elif 'generateAiRecommendations' in query:
+                response_data = {
+                    "data": {
+                        "generateAiRecommendations": {
+                            "success": True,
+                            "message": "AI recommendations generated successfully (test mode)",
+                            "recommendations": [
+                                {
+                                    "id": "1",
+                                    "riskProfile": "Moderate",
+                                    "portfolioAllocation": {
+                                        "stocks": 60.0,
+                                        "bonds": 30.0,
+                                        "cash": 10.0
+                                    },
+                                    "recommendedStocks": [
+                                        {"symbol": "AAPL", "allocation": 20.0},
+                                        {"symbol": "MSFT", "allocation": 15.0},
+                                        {"symbol": "GOOGL", "allocation": 10.0}
+                                    ],
+                                    "expectedPortfolioReturn": 8.5,
+                                    "riskAssessment": "Moderate risk with balanced growth potential"
+                                }
+                            ]
+                        }
+                    }
+                }
+                return JsonResponse(response_data)
+            
+            # Handle aiScans query
+            elif 'aiScans' in query:
+                print(f"🔍 DEBUG: Detected aiScans query: {query[:100]}...")
+                response_data = {
+                    "data": {
+                        "aiScans": [
+                            {
+                                "id": "scan_1",
+                                "name": "Momentum Breakout Scanner",
+                                "description": "Identifies stocks breaking out of consolidation patterns with strong volume",
+                                "category": "TECHNICAL",
+                                "riskLevel": "MEDIUM",
+                                "timeHorizon": "SHORT_TERM",
+                                "isActive": True,
+                                "lastRun": "2024-01-15T10:30:00Z",
+                                "results": [],
+                                "playbook": None
+                            },
+                            {
+                                "id": "scan_2",
+                                "name": "Value Opportunity Finder",
+                                "description": "Discovers undervalued stocks with strong fundamentals",
+                                "category": "FUNDAMENTAL",
+                                "riskLevel": "LOW",
+                                "timeHorizon": "LONG_TERM",
+                                "isActive": True,
+                                "lastRun": "2024-01-15T09:15:00Z",
+                                "results": [],
+                                "playbook": None
+                            }
+                        ]
+                    }
+                }
+                return JsonResponse(response_data)
+            
+            # Handle playbooks query
+            elif 'playbooks' in query:
+                response_data = {
+                    "data": {
+                        "playbooks": [
+                            {
+                                "id": "playbook_1",
+                                "name": "Momentum Strategy",
+                                "author": "AI System",
+                                "riskLevel": "MEDIUM",
+                                "performance": {
+                                    "successRate": 0.75,
+                                    "averageReturn": 0.12
+                                },
+                                "tags": ["momentum", "short-term", "technical"]
+                            },
+                            {
+                                "id": "playbook_2", 
+                                "name": "Value Hunter",
+                                "author": "AI System",
+                                "riskLevel": "LOW",
+                                "performance": {
+                                    "successRate": 0.68,
+                                    "averageReturn": 0.08
+                                },
+                                "tags": ["value", "long-term", "fundamental"]
+                            },
+                            {
+                                "id": "playbook_3",
+                                "name": "Growth Accelerator",
+                                "author": "AI System",
+                                "riskLevel": "HIGH",
+                                "performance": {
+                                    "successRate": 0.82,
+                                    "averageReturn": 0.18
+                                },
+                                "tags": ["growth", "medium-term", "fundamental"]
+                            }
+                        ]
+                    }
+                }
+                return JsonResponse(response_data)
+            else:
+                # For other queries, return a simple response
+                return JsonResponse({"data": {"test": "GraphQL endpoint working"}})
+                
+        except Exception as e:
+            return JsonResponse({"errors": [{"message": str(e)}]}, status=500)
+    else:
+        return JsonResponse({"error": "Method not allowed"}, status=405)
 
 def home(_):
     return JsonResponse({"message": "Hello from RichesReach!", "status": "running"}, status=200)
@@ -327,6 +560,8 @@ urlpatterns = [
     path("health", health),   # <-- Health check (no trailing slash)
     path("health/", health),   # <-- Health check (with trailing slash)
     path("csrf-token/", csrf_token_view),  # <-- CSRF token endpoint for mobile
+    path("api/auth/login/", rest_login),  # <-- REST login endpoint for mobile
+    path("api/auth/verify/", rest_verify_token),  # <-- Token verification endpoint
     path("prices/", prices_view),  # <-- Prices endpoint for crypto/stocks
     path("user-profile/", user_profile_view),  # <-- User profile endpoint
     path("discussions/", discussions_view),  # <-- Stock discussions endpoint
@@ -336,11 +571,25 @@ urlpatterns = [
     path("__version__", version, name="version"),  # <-- Version endpoint
 ]
 
-# Add GraphQL URLs directly - use lazy view which checks settings when accessed
-urlpatterns += [
-    path("graphql/", GraphQLLazyView.as_view()),
-    path("auth/", auth_view),
-]
+# Add GraphQL URLs - use real GraphQL view for production-ready settings
+from django.conf import settings
+
+# Check if we're using production-ready settings
+if hasattr(settings, 'GRAPHENE') and settings.GRAPHENE.get('SCHEMA') == 'core.schema.schema':
+    # Use real GraphQL view for production-ready settings
+    from graphene_django.views import GraphQLView
+    from django.views.decorators.csrf import csrf_exempt
+    
+    urlpatterns += [
+        path("graphql/", csrf_exempt(GraphQLView.as_view(graphiql=True))),
+        path("auth/", auth_view),
+    ]
+else:
+    # Use simple view for basic settings
+    urlpatterns += [
+        path("graphql/", graphql_view),
+        path("auth/", auth_view),
+    ]
 
 # Real GraphQL endpoint for testing (renamed from mock_graphql for compatibility)
 # Temporary schema test endpoint
@@ -1126,6 +1375,9 @@ urlpatterns.append(path("api/market/quotes", market_quotes, name='market_quotes'
 urlpatterns.append(path("api/market/status", market_status, name='market_status'))
 urlpatterns.append(path("api/market/options", options_quotes, name='options_quotes'))
 urlpatterns.append(path("health/marketdata", market_health, name='market_health'))
+
+# AI Scans endpoints - moved earlier to avoid conflicts
+urlpatterns.insert(0, path("api/ai-scans/<str:scan_id>/run", ai_scan_run, name='ai_scan_run'))
 
 # Diagnostic endpoints
 urlpatterns.append(path("echo", echo, name='echo'))

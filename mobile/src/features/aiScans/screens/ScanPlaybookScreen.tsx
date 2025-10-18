@@ -77,10 +77,14 @@ const ScanPlaybookScreen: React.FC<ScanPlaybookScreenProps> = ({ navigation, rou
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const { data, loading: queryLoading, refetch } = useQuery(GET_SCAN_DETAILS, {
-    variables: { scanId: scan.id },
-    errorPolicy: 'all',
-  });
+  // Skip GraphQL query for now since we're using mock data
+  // const { data, loading: queryLoading, refetch } = useQuery(GET_SCAN_DETAILS, {
+  //   variables: { scanId: scan.id },
+  //   errorPolicy: 'all',
+  // });
+  const data = null; // No additional data needed since we have scan from params
+  const queryLoading = false;
+  const refetch = async () => {}; // No-op for now
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -213,7 +217,7 @@ const ScanPlaybookScreen: React.FC<ScanPlaybookScreenProps> = ({ navigation, rou
         >
           <Icon name="arrow-left" size={24} color="#000" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{scanData.name}</Text>
+        <Text style={styles.headerTitle}>{scanData.name || 'Untitled Scan'}</Text>
         <TouchableOpacity
           style={[styles.runButton, loading && styles.runButtonDisabled]}
           onPress={handleRunScan}
@@ -235,25 +239,25 @@ const ScanPlaybookScreen: React.FC<ScanPlaybookScreenProps> = ({ navigation, rou
       >
         {/* Scan Info */}
         <View style={styles.infoCard}>
-          <Text style={styles.description}>{scanData.description}</Text>
+          <Text style={styles.description}>{scanData.description || 'No description available'}</Text>
           
           <View style={styles.metrics}>
             <View style={styles.metric}>
               <Text style={styles.metricLabel}>Category</Text>
               <Text style={styles.metricValue}>
-                {scanData.category.charAt(0).toUpperCase() + scanData.category.slice(1)}
+                {scanData.category ? scanData.category.charAt(0).toUpperCase() + scanData.category.slice(1) : 'Unknown'}
               </Text>
             </View>
             <View style={styles.metric}>
               <Text style={styles.metricLabel}>Risk Level</Text>
               <Text style={styles.metricValue}>
-                {scanData.riskLevel.charAt(0).toUpperCase() + scanData.riskLevel.slice(1)}
+                {scanData.riskLevel ? scanData.riskLevel.charAt(0).toUpperCase() + scanData.riskLevel.slice(1) : 'Unknown'}
               </Text>
             </View>
             <View style={styles.metric}>
               <Text style={styles.metricLabel}>Time Horizon</Text>
               <Text style={styles.metricValue}>
-                {scanData.timeHorizon.charAt(0).toUpperCase() + scanData.timeHorizon.slice(1)}
+                {scanData.timeHorizon ? scanData.timeHorizon.charAt(0).toUpperCase() + scanData.timeHorizon.slice(1) : 'Unknown'}
               </Text>
             </View>
           </View>
