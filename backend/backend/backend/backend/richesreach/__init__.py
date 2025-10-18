@@ -1,12 +1,5 @@
 # This will make sure the app is always imported when
 # Django starts so that shared_task will use this app.
-# Lazy accessor to avoid importing celery (and settings) at module import time
-import os
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "richesreach.settings_production")
+from .celery import app as celery_app
 
-def get_celery_app():
-    from .celery import app
-    return app
-
-# Remove eager import completely - only use lazy accessor
-__all__ = ("get_celery_app",)
+__all__ = ('celery_app',)

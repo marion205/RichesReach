@@ -255,8 +255,8 @@ errorService.handleGraphQLError(error, 'SocialScreen', 'fetch_discussions');
 const { data: followingData, loading: followingLoading, error: followingError, refetch: refetchFollowing } = useQuery(
   GET_FOLLOWING_FEED,
   {
-    skip: feedType !== 'following' || !followedSymbols.length,
-    variables: { symbols: followedSymbols, limit: 50 },
+    skip: feedType !== 'following' || !followedSymbols || !followedSymbols.length,
+    variables: { symbols: followedSymbols || [], limit: 50 },
     fetchPolicy: 'cache-and-network',
   }
 );
@@ -465,6 +465,13 @@ const discussions = React.useMemo(() => {
     return followingData?.feedByTickers || [];
   } else if (feedType === 'trending') {
     return discussionsData?.stockDiscussions || [];
+  } else if (feedType === 'social') {
+    // Handle socialFeed data structure - now returns proper structure
+    const socialData = discussionsData?.socialFeed;
+    if (Array.isArray(socialData)) {
+      return socialData;
+    }
+    return [];
   }
   return [];
 }, [feedType, discussionsData, followingData]);
@@ -472,14 +479,21 @@ const discussions = React.useMemo(() => {
 // Get all unique ticker symbols from discussions for live quotes
 const allTickerSymbols = React.useMemo(() => {
   const symbols = new Set<string>();
-  discussions.forEach((discussion: any) => {
-    if (discussion?.stock?.symbol) {
-      symbols.add(discussion.stock.symbol);
-    }
-    if (discussion?.tickers) {
-      discussion.tickers.forEach((ticker: string) => symbols.add(ticker));
-    }
-  });
+  if (discussions && Array.isArray(discussions)) {
+    discussions.forEach((discussion: any) => {
+      // Handle different data structures
+      if (discussion?.stock?.symbol) {
+        symbols.add(discussion.stock.symbol);
+      }
+      if (discussion?.tickers && Array.isArray(discussion.tickers)) {
+        discussion.tickers.forEach((ticker: string) => symbols.add(ticker));
+      }
+      // Handle socialFeed structure - now has proper stock data
+      if (discussion?.stock?.symbol) {
+        symbols.add(discussion.stock.symbol);
+      }
+    });
+  }
   return Array.from(symbols);
 }, [discussions]);
 
@@ -759,7 +773,7 @@ Alert.alert('Error', `Failed to create discussion: ${(error as any)?.message || 
 }
 };
 // FlatList implementation for Reddit-style feed
-const keyExtractor = React.useCallback((item: any) => item.id, []);
+const keyExtractor = React.useCallback((item: any) => item?.id || `item-${Math.random()}`, []);
 
 
 // Reddit-like list container - now using full-bleed design
@@ -773,6 +787,11 @@ const listEmpty = React.useMemo(() => (
 
 // Render item function using PostRow
 const renderItem = React.useCallback(({ item }: { item: any }) => {
+  // Add safety checks for item structure
+  if (!item || !item.id) {
+    return null;
+  }
+  
   return (
     <PostRow
       discussion={item}
@@ -780,7 +799,7 @@ const renderItem = React.useCallback(({ item }: { item: any }) => {
       onUpvote={() => handleUpvote(item.id)}
       onDownvote={() => handleDownvote(item.id)}
       onComment={() => handleDiscussionComment(item.id)}
-      onFollow={() => handleToggleFollow(item.user.id)}
+      onFollow={() => handleToggleFollow(item.user?.id || '')}
       onShare={() => handleShareDiscussion(item)}
       onSave={() => handleSaveDiscussion(item)}
       onPressTicker={(symbol) => onNavigate?.('Stock', { symbol })}
@@ -846,7 +865,7 @@ return (
 </View>
 </View>
 {/* Followed Tickers Display */}
-{feedType === 'following' && followedSymbols.length > 0 && (
+{feedType === 'following' && followedSymbols && followedSymbols.length > 0 && (
   <FollowingRibbon
     symbols={followedSymbols}
     liveQuotes={liveQuotes} // optional; falls back gracefully if missing

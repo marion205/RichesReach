@@ -36,15 +36,11 @@ const CryptoRecommendationsCard: React.FC<CryptoRecommendationsCardProps> = ({
 
   const { data, loading, error, refetch } = useQuery(GET_CRYPTO_RECOMMENDATIONS, {
     variables: {
-      constraints: {
-        maxSymbols: maxRecommendations,
-        minProbability: 0.55,
-        minLiquidityUsd24h: 5000000,
-        allowedTiers: ['LOW', 'MEDIUM', 'HIGH'],
-        excludeSymbols: [],
-      },
+      limit: maxRecommendations,
+      symbols: ['BTC', 'ETH', 'SOL', 'ADA', 'DOT']
     },
     pollInterval: 300000, // 5 minutes
+    errorPolicy: 'all', // Don't fail on auth errors
   });
 
   const handleRefresh = async () => {
@@ -135,7 +131,8 @@ const CryptoRecommendationsCard: React.FC<CryptoRecommendationsCardProps> = ({
     );
   }
 
-  const recommendations = data?.cryptoRecommendations?.recommendations || [];
+  // Use only real data from the backend
+  const recommendations = data?.cryptoRecommendations || [];
 
   return (
     <View style={styles.container}>

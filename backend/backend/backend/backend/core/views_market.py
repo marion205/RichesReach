@@ -18,6 +18,30 @@ logger = logging.getLogger(__name__)
 # API Configuration
 FINNHUB_API_KEY = os.getenv('FINNHUB_API_KEY')
 POLYGON_API_KEY = os.getenv('POLYGON_API_KEY')
+
+def _get_mock_quote(symbol: str) -> dict:
+    """Generate mock quote data for testing"""
+    import random
+    
+    base_prices = {
+        "AAPL": 150.0, "MSFT": 300.0, "GOOGL": 2500.0, "TSLA": 200.0,
+        "AMZN": 3000.0, "META": 300.0, "NVDA": 400.0, "NFLX": 400.0,
+        "ADBE": 580.0, "AMD": 125.0, "CRM": 220.0, "INTC": 45.0,
+        "LYFT": 12.0, "PYPL": 65.0, "UBER": 45.0
+    }
+    
+    base_price = base_prices.get(symbol, 100.0)
+    variation = random.uniform(-0.05, 0.05)
+    current_price = base_price * (1 + variation)
+    
+    return {
+        "symbol": symbol,
+        "price": round(current_price, 2),
+        "change": round(current_price - base_price, 2),
+        "change_percent": round(variation * 100, 2),
+        "timestamp": int(time.time() * 1000),
+        "provider": "mock"
+    }
 ALPHA_VANTAGE_API_KEY = os.getenv('ALPHA_VANTAGE_API_KEY')  # Fallback only
 
 def _fetch_quote_finnhub(symbol: str) -> dict:
@@ -50,12 +74,12 @@ def _fetch_quote_finnhub(symbol: str) -> dict:
     return data
 
 def _fetch_quote_polygon(symbol: str) -> dict:
-    """Fetch quote from Polygon.io API"""
+    """Fetch quote from Polygon.io API (previous day data)"""
     if not POLYGON_API_KEY:
         raise Exception("POLYGON_API_KEY not configured")
     
     response = requests.get(
-        f"https://api.polygon.io/v1/last_quote/stocks/{symbol}",
+        f"https://api.polygon.io/v2/aggs/ticker/{symbol}/prev",
         params={"apikey": POLYGON_API_KEY},
         timeout=10
     )
@@ -119,18 +143,22 @@ def _normalize_finnhub_quote(symbol: str, data: dict) -> dict:
     }
 
 def _normalize_polygon_quote(symbol: str, data: dict) -> dict:
-    """Normalize Polygon.io quote data"""
-    quote_data = data.get('results', {})
+    """Normalize Polygon.io quote data (previous day aggregates)"""
+    results = data.get('results', [])
+    if not results:
+        raise Exception("No results in Polygon response")
+    
+    quote_data = results[0]  # Get the first (and only) result
     return {
         'symbol': symbol,
-        'price': float(quote_data.get('P', 0)),  # price
-        'change': 0,  # Polygon last_quote doesn't provide change
+        'price': float(quote_data.get('c', 0)),  # close price
+        'change': 0,  # Polygon prev doesn't provide change
         'change_percent': 0,
-        'high': 0,
-        'low': 0,
-        'open': 0,
-        'previous_close': 0,
-        'volume': 0,
+        'high': float(quote_data.get('h', 0)),  # high
+        'low': float(quote_data.get('l', 0)),   # low
+        'open': float(quote_data.get('o', 0)),  # open
+        'previous_close': float(quote_data.get('c', 0)),  # close as previous close
+        'volume': int(quote_data.get('v', 0)),  # volume
         'updated': time.time(),
         'provider': 'polygon'
     }
@@ -189,35 +217,41 @@ def market_quotes(request):
             quote = None
             provider_used = None
             
-            # Try Finnhub first (primary)
-            try:
-                if FINNHUB_API_KEY:
-                    data = _fetch_quote_finnhub(symbol)
-                    quote = _normalize_finnhub_quote(symbol, data)
-                    provider_used = 'finnhub'
-                    logger.info(f"✅ Fetched {symbol} from Finnhub")
-            except Exception as e:
-                logger.warning(f"Finnhub failed for {symbol}: {e}")
-            
-            # Try Polygon.io second (secondary)
-            if not quote and POLYGON_API_KEY:
+            # Check if mock mode is enabled
+            if getattr(settings, 'USE_MARKET_MOCK', False):
+                quote = _get_mock_quote(symbol)
+                provider_used = 'mock'
+                logger.info(f"✅ Using mock data for {symbol}")
+            else:
+                # Try Finnhub first (primary)
                 try:
-                    data = _fetch_quote_polygon(symbol)
-                    quote = _normalize_polygon_quote(symbol, data)
-                    provider_used = 'polygon'
-                    logger.info(f"✅ Fetched {symbol} from Polygon.io")
+                    if FINNHUB_API_KEY:
+                        data = _fetch_quote_finnhub(symbol)
+                        quote = _normalize_finnhub_quote(symbol, data)
+                        provider_used = 'finnhub'
+                        logger.info(f"✅ Fetched {symbol} from Finnhub")
                 except Exception as e:
-                    logger.warning(f"Polygon.io failed for {symbol}: {e}")
-            
-            # Try Alpha Vantage as fallback (only if others fail)
-            if not quote and ALPHA_VANTAGE_API_KEY:
-                try:
-                    data = _fetch_quote_alpha_vantage_fallback(symbol)
-                    quote = _normalize_alpha_vantage_quote(symbol, data)
-                    provider_used = 'alpha_vantage'
-                    logger.info(f"✅ Fetched {symbol} from Alpha Vantage (fallback)")
-                except Exception as e:
-                    logger.warning(f"Alpha Vantage fallback failed for {symbol}: {e}")
+                    logger.warning(f"Finnhub failed for {symbol}: {e}")
+                
+                # Try Polygon.io second (secondary)
+                if not quote and POLYGON_API_KEY:
+                    try:
+                        data = _fetch_quote_polygon(symbol)
+                        quote = _normalize_polygon_quote(symbol, data)
+                        provider_used = 'polygon'
+                        logger.info(f"✅ Fetched {symbol} from Polygon.io")
+                    except Exception as e:
+                        logger.warning(f"Polygon.io failed for {symbol}: {e}")
+                
+                # Try Alpha Vantage as fallback (only if others fail)
+                if not quote and ALPHA_VANTAGE_API_KEY:
+                    try:
+                        data = _fetch_quote_alpha_vantage_fallback(symbol)
+                        quote = _normalize_alpha_vantage_quote(symbol, data)
+                        provider_used = 'alpha_vantage'
+                        logger.info(f"✅ Fetched {symbol} from Alpha Vantage (fallback)")
+                    except Exception as e:
+                        logger.warning(f"Alpha Vantage fallback failed for {symbol}: {e}")
             
             if quote:
                 # Cache for 60 seconds

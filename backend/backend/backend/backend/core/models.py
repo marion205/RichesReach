@@ -17,6 +17,31 @@ from .models_smart_alerts import (
     MLAnomalyDetection
 )
 
+# Import DeFi models
+from .models_defi import (
+    Chain,
+    Protocol,
+    Pool,
+    FarmPosition,
+    FarmAction
+)
+
+# Import DeFi analytics models
+from .models_analytics import (
+    PoolAnalytics,
+    PositionSnapshot,
+    PortfolioMetrics,
+    YieldHistory
+)
+
+# Import crypto models
+from .crypto_models import (
+    Cryptocurrency,
+    CryptoPrice,
+    CryptoTrade,
+    CryptoMLPrediction
+)
+
 class User(AbstractUser):
     """Custom User model for RichesReach"""
     email = models.EmailField(unique=True)

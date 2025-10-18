@@ -135,14 +135,45 @@ const [showComments, setShowComments] = useState<{ [key: string]: boolean }>({})
 const [posts, setPosts] = useState<any[]>([]);
 const [loading, setLoading] = useState(false);
 const [error, setError] = useState<string | null>(null);
-// Mock service removed - using real API
-// Load posts from mock service
+
+// Mock posts for Following tab - friendly message since everything is brand new
+const MOCK_POSTS = [
+  {
+    id: '1',
+    type: 'portfolio_update',
+    createdAt: new Date().toISOString(),
+    user: { id: '1', name: 'Alex Chen', profilePic: null, experienceLevel: 'advanced' },
+    content: 'Just rebalanced my portfolio after the recent market volatility. Increased exposure to defensive sectors.',
+    portfolio: { id: '1', name: 'Growth Portfolio', totalValue: 125000, totalReturnPercent: 15.2 },
+    stock: { symbol: 'AAPL', companyName: 'Apple Inc.', currentPrice: 175.50, changePercent: 2.1 },
+    likesCount: 12,
+    commentsCount: 3,
+    isLiked: false,
+    comments: []
+  },
+  {
+    id: '2',
+    type: 'stock_analysis',
+    createdAt: new Date(Date.now() - 3600000).toISOString(),
+    user: { id: '2', name: 'Sarah Johnson', profilePic: null, experienceLevel: 'intermediate' },
+    content: 'TSLA showing strong technical patterns. Watching for breakout above $250 resistance level.',
+    portfolio: null,
+    stock: { symbol: 'TSLA', companyName: 'Tesla Inc.', currentPrice: 245.80, changePercent: -1.2 },
+    likesCount: 8,
+    commentsCount: 1,
+    isLiked: true,
+    comments: []
+  }
+];
+
+// Load posts from mock data
 const loadPosts = () => {
 setLoading(true);
 setError(null);
 try {
-const mockPosts = mockUserService.getSocialFeedPosts();
-setPosts(mockPosts);
+// For now, show friendly message since everything is brand new
+setPosts([]);
+setError('friendly_message'); // Use this to show friendly message instead of error
 } catch (err) {
 setError('Failed to load posts');
 console.error('Error loading posts:', err);
@@ -358,7 +389,7 @@ onPress={() => onNavigate('share-post', { postId: post.id })}
 {/* Comments Section */}
 {showComments[post.id] && (
 <View style={styles.commentsSection}>
-{post.comments.map((comment) => (
+{post.comments && post.comments.map((comment) => (
 <View key={comment.id} style={styles.comment}>
 <View style={styles.commentHeader}>
 {comment.user.profilePic ? (
@@ -397,10 +428,13 @@ return (
 if (error) {
 return (
 <View style={styles.errorContainer}>
-<Icon name="alert-circle" size={24} color="#FF3B30" />
-<Text style={styles.errorText}>Unable to load social feed</Text>
+<Icon name="users" size={48} color="#8E8E93" />
+<Text style={styles.errorText}>Welcome to the community!</Text>
+<Text style={styles.errorSubText}>
+  You're one of the first members here. Follow other investors to see their portfolio updates and market insights.
+</Text>
 <TouchableOpacity style={styles.retryButton} onPress={handleRefresh}>
-<Text style={styles.retryButtonText}>Retry</Text>
+<Text style={styles.retryButtonText}>Refresh</Text>
 </TouchableOpacity>
 </View>
 );
@@ -413,7 +447,7 @@ refreshControl={
 }
 showsVerticalScrollIndicator={false}
 >
-{posts.length === 0 ? (
+{!posts || posts.length === 0 ? (
 <View style={styles.emptyContainer}>
 <Icon name="users" size={48} color="#8E8E93" />
 <Text style={styles.emptyTitle}>No Activity Yet</Text>
@@ -428,7 +462,7 @@ onPress={() => onNavigate('discover-users')}
 </TouchableOpacity>
 </View>
 ) : (
-posts.map(renderPost)
+posts && Array.isArray(posts) ? posts.map(renderPost) : null
 )}
 </ScrollView>
 );
@@ -455,10 +489,19 @@ alignItems: 'center',
 padding: 20,
 },
 errorText: {
-fontSize: 16,
-color: '#FF3B30',
-marginTop: 8,
-marginBottom: 16,
+fontSize: 18,
+fontWeight: '600',
+color: '#1C1C1E',
+marginTop: 12,
+marginBottom: 8,
+textAlign: 'center',
+},
+errorSubText: {
+fontSize: 14,
+color: '#8E8E93',
+marginBottom: 20,
+textAlign: 'center',
+lineHeight: 20,
 },
 retryButton: {
 backgroundColor: '#007AFF',

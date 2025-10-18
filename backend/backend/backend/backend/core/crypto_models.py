@@ -4,11 +4,8 @@ Supports top 15-20 liquid coins with SBLOC integration
 """
 
 from django.db import models
-from django.contrib.auth import get_user_model
 from decimal import Decimal
 import json
-
-User = get_user_model()
 
 
 class Cryptocurrency(models.Model):
@@ -87,7 +84,7 @@ class CryptoPrice(models.Model):
 
 class CryptoPortfolio(models.Model):
     """User's crypto holdings"""
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='crypto_portfolio')
+    user = models.OneToOneField('core.User', on_delete=models.CASCADE, related_name='crypto_portfolio')
     total_value_usd = models.DecimalField(max_digits=20, decimal_places=2, default=0)
     total_cost_basis = models.DecimalField(max_digits=20, decimal_places=2, default=0)
     total_pnl = models.DecimalField(max_digits=20, decimal_places=2, default=0)
@@ -156,7 +153,7 @@ class CryptoTrade(models.Model):
         ('AIRDROP', 'Airdrop'),
     ]
     
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='crypto_trades')
+    user = models.ForeignKey('core.User', on_delete=models.CASCADE, related_name='crypto_trades')
     cryptocurrency = models.ForeignKey(Cryptocurrency, on_delete=models.CASCADE)
     trade_type = models.CharField(max_length=20, choices=TRADE_TYPES)
     quantity = models.DecimalField(max_digits=20, decimal_places=8)
@@ -168,6 +165,27 @@ class CryptoTrade(models.Model):
     order_id = models.CharField(max_length=100, unique=True)
     status = models.CharField(max_length=20, default='COMPLETED')
     execution_time = models.DateTimeField(auto_now_add=True)
+    
+    # Server-authoritative pricing
+    quoted_price = models.DecimalField(max_digits=20, decimal_places=8, null=True, blank=True)
+    quote_source = models.CharField(max_length=32, null=True, blank=True)
+    quote_ts = models.DateTimeField(null=True, blank=True)
+    executed_price = models.DecimalField(max_digits=20, decimal_places=8, null=True, blank=True)
+    executed_ts = models.DateTimeField(null=True, blank=True)
+    slippage_bps = models.IntegerField(null=True, blank=True)
+    
+    # Order type and execution details
+    order_type = models.CharField(max_length=20, default='MARKET', choices=[
+        ('MARKET', 'Market'),
+        ('LIMIT', 'Limit'),
+        ('STOP_MARKET', 'Stop Market'),
+        ('STOP_LIMIT', 'Stop Limit'),
+    ])
+    time_in_force = models.CharField(max_length=10, default='GTC', choices=[
+        ('GTC', 'Good Till Cancel'),
+        ('IOC', 'Immediate or Cancel'),
+        ('FOK', 'Fill or Kill'),
+    ])
     
     # SBLOC integration
     is_sbloc_funded = models.BooleanField(default=False)
@@ -237,7 +255,7 @@ class CryptoMLPrediction(models.Model):
 
 class CryptoSBLOCLoan(models.Model):
     """SBLOC loans backed by crypto collateral"""
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='crypto_sbloc_loans')
+    user = models.ForeignKey('core.User', on_delete=models.CASCADE, related_name='crypto_sbloc_loans')
     cryptocurrency = models.ForeignKey(Cryptocurrency, on_delete=models.CASCADE)
     collateral_quantity = models.DecimalField(max_digits=20, decimal_places=8)
     collateral_value_at_loan = models.DecimalField(max_digits=20, decimal_places=2)
@@ -314,7 +332,7 @@ class SupplyPosition(models.Model):
     User supplies asset into the reserve; may toggle 'use_as_collateral'.
     Denominated in ASSET UNITS.
     """
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="defi_supplies")
+    user = models.ForeignKey('core.User', on_delete=models.CASCADE, related_name="defi_supplies")
     reserve = models.ForeignKey(LendingReserve, on_delete=models.CASCADE, related_name="supplies")
     quantity = models.DecimalField(max_digits=28, decimal_places=10, default=0)
     use_as_collateral = models.BooleanField(default=True)
@@ -345,7 +363,7 @@ class BorrowPosition(models.Model):
         ("STABLE", "Stable"),
     ]
 
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="defi_borrows")
+    user = models.ForeignKey('core.User', on_delete=models.CASCADE, related_name="defi_borrows")
     reserve = models.ForeignKey(LendingReserve, on_delete=models.CASCADE, related_name="borrows")
     amount = models.DecimalField(max_digits=28, decimal_places=10, default=0)  # in asset units
     rate_mode = models.CharField(max_length=10, choices=RATE_MODE_CHOICES, default="VARIABLE")
@@ -370,7 +388,7 @@ class BorrowPosition(models.Model):
 
 class CryptoEducationProgress(models.Model):
     """Track user's crypto education progress"""
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='crypto_education')
+    user = models.ForeignKey('core.User', on_delete=models.CASCADE, related_name='crypto_education')
     module_name = models.CharField(max_length=100)
     module_type = models.CharField(
         max_length=20,

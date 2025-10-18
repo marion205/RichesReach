@@ -1073,6 +1073,17 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
     investmentGoals: user?.incomeProfile?.investmentGoals,
     hasProfile: hasProfile
   });
+
+  // Pre-populate form fields when profile form is shown and user has existing profile
+  useEffect(() => {
+    if (showProfileForm && user?.incomeProfile && hasProfile) {
+      setIncomeBracket(user.incomeProfile.incomeBracket || '');
+      setAge(user.incomeProfile.age?.toString() || '');
+      setSelectedGoals(user.incomeProfile.investmentGoals || []);
+      setRiskTolerance(user.incomeProfile.riskTolerance || '');
+      setInvestmentHorizon(user.incomeProfile.investmentHorizon || '');
+    }
+  }, [showProfileForm, user?.incomeProfile, hasProfile]);
   
 
   const {
@@ -1178,11 +1189,18 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
   }, []);
 
   const handleCreateProfile = useCallback(async () => {
-    if (!incomeBracket || !age || selectedGoals.length === 0 || !riskTolerance || !investmentHorizon) {
+    // Use existing profile data if available, otherwise use local state
+    const finalIncomeBracket = incomeBracket || user?.incomeProfile?.incomeBracket || '';
+    const finalAge = age || user?.incomeProfile?.age?.toString() || '';
+    const finalSelectedGoals = selectedGoals.length > 0 ? selectedGoals : user?.incomeProfile?.investmentGoals || [];
+    const finalRiskTolerance = riskTolerance || user?.incomeProfile?.riskTolerance || '';
+    const finalInvestmentHorizon = investmentHorizon || user?.incomeProfile?.investmentHorizon || '';
+
+    if (!finalIncomeBracket || !finalAge || finalSelectedGoals.length === 0 || !finalRiskTolerance || !finalInvestmentHorizon) {
       Alert.alert('Missing Information', 'Please fill in all fields.');
       return;
     }
-    const parsedAge = parseInt(age, 10);
+    const parsedAge = parseInt(finalAge, 10);
     if (Number.isNaN(parsedAge) || parsedAge < 18 || parsedAge > 120) {
       Alert.alert('Invalid Age', 'Please enter a valid age between 18 and 120.');
       return;
@@ -1191,11 +1209,11 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
     try {
       const { data, errors } = await createIncomeProfile({
         variables: {
-          incomeBracket,
+          incomeBracket: finalIncomeBracket,
           age: parsedAge,
-          investmentGoals: selectedGoals,
-          riskTolerance,
-          investmentHorizon,
+          investmentGoals: finalSelectedGoals,
+          riskTolerance: finalRiskTolerance,
+          investmentHorizon: finalInvestmentHorizon,
         },
       });
 

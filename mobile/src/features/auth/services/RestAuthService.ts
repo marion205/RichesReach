@@ -134,7 +134,7 @@ class RestAuthService {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `Login failed with status ${response.status}`);
+        throw new Error(errorData.detail || errorData.error || `Login failed with status ${response.status}`);
       }
 
       const data = await response.json();

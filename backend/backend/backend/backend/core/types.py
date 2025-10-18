@@ -1191,6 +1191,13 @@ class PlaybookType(graphene.ObjectType):
     performance = graphene.Field(PlaybookPerformanceType)
     tags = graphene.List(graphene.String)
 
+class AIScanFilters(graphene.InputObjectType):
+    """AI Scan filters input type"""
+    category = graphene.String()
+    riskLevel = graphene.String()
+    timeHorizon = graphene.String()
+    isActive = graphene.Boolean()
+
 class AIScanType(graphene.ObjectType):
     """AI Scan type"""
     id = graphene.String()

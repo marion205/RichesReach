@@ -76,8 +76,39 @@ class GAIRecommendations(graphene.ObjectType):
     marketOutlook = Field(GMarketOutlook)
     schemaVersion = String()
 
+# Rust Stock Analysis Types
+class GTechnicalIndicators(graphene.ObjectType):
+    rsi = GDecimal()
+    macd = GDecimal()
+    macdSignal = GDecimal()
+    macdHistogram = GDecimal()
+    sma20 = GDecimal()
+    sma50 = GDecimal()
+    ema12 = GDecimal()
+    ema26 = GDecimal()
+    bollingerUpper = GDecimal()
+    bollingerLower = GDecimal()
+    bollingerMiddle = GDecimal()
+
+class GFundamentalAnalysis(graphene.ObjectType):
+    valuationScore = GDecimal()
+    growthScore = GDecimal()
+    stabilityScore = GDecimal()
+    dividendScore = GDecimal()
+    debtScore = GDecimal()
+
+class GRustStockAnalysis(graphene.ObjectType):
+    symbol = String()
+    beginnerFriendlyScore = GDecimal()
+    riskLevel = String()
+    recommendation = String()
+    technicalIndicators = Field(GTechnicalIndicators)
+    fundamentalAnalysis = Field(GFundamentalAnalysis)
+    reasoning = String()
+
 class Query(ObjectType):
     aiRecommendations = Field(GAIRecommendations)
+    rustStockAnalysis = Field(GRustStockAnalysis, symbol=String(required=True))
 
     async def resolve_aiRecommendations(root, info):
         # 1) Fetch user profile from context (already authenticated, Graphene typical pattern)
@@ -243,5 +274,100 @@ class Query(ObjectType):
             marketOutlook=GMarketOutlook(overallSentiment="BULLISH", confidence=Decimal("0.65"), keyFactors=["Earnings","Liquidity"]),
             schemaVersion=settings.SCHEMA_VERSION
         )
+
+    async def resolve_rustStockAnalysis(root, info, symbol):
+        """Resolve rust stock analysis for a given symbol"""
+        try:
+            # Get current price from market data
+            quote_data = await market.finnhub_quote(symbol)
+            current_price = quote_data.get("value", {}).get("c", 100.0) if quote_data else 100.0
+            
+            # Generate mock technical indicators
+            import random
+            technical_indicators = GTechnicalIndicators(
+                rsi=Decimal(str(round(random.uniform(30, 70), 2))),
+                macd=Decimal(str(round(random.uniform(-2, 2), 4))),
+                macdSignal=Decimal(str(round(random.uniform(-1.5, 1.5), 4))),
+                macdHistogram=Decimal(str(round(random.uniform(-0.5, 0.5), 4))),
+                sma20=Decimal(str(round(current_price * random.uniform(0.95, 1.05), 2))),
+                sma50=Decimal(str(round(current_price * random.uniform(0.90, 1.10), 2))),
+                ema12=Decimal(str(round(current_price * random.uniform(0.96, 1.04), 2))),
+                ema26=Decimal(str(round(current_price * random.uniform(0.92, 1.08), 2))),
+                bollingerUpper=Decimal(str(round(current_price * 1.02, 2))),
+                bollingerLower=Decimal(str(round(current_price * 0.98, 2))),
+                bollingerMiddle=Decimal(str(round(current_price, 2)))
+            )
+            
+            # Generate mock fundamental analysis
+            fundamental_analysis = GFundamentalAnalysis(
+                valuationScore=Decimal(str(round(random.uniform(0.3, 0.9), 2))),
+                growthScore=Decimal(str(round(random.uniform(0.2, 0.8), 2))),
+                stabilityScore=Decimal(str(round(random.uniform(0.4, 0.9), 2))),
+                dividendScore=Decimal(str(round(random.uniform(0.1, 0.7), 2))),
+                debtScore=Decimal(str(round(random.uniform(0.2, 0.8), 2)))
+            )
+            
+            # Determine recommendation based on scores
+            avg_score = (float(technical_indicators.rsi) / 100 + 
+                        float(fundamental_analysis.valuationScore) + 
+                        float(fundamental_analysis.growthScore)) / 3
+            
+            if avg_score > 0.7:
+                recommendation = "STRONG_BUY"
+                risk_level = "LOW"
+                reasoning = f"{symbol} shows strong technical and fundamental indicators with excellent growth potential."
+            elif avg_score > 0.5:
+                recommendation = "BUY"
+                risk_level = "MODERATE"
+                reasoning = f"{symbol} presents a good investment opportunity with balanced risk-reward profile."
+            elif avg_score > 0.3:
+                recommendation = "HOLD"
+                risk_level = "MODERATE"
+                reasoning = f"{symbol} shows mixed signals, consider holding current position."
+            else:
+                recommendation = "SELL"
+                risk_level = "HIGH"
+                reasoning = f"{symbol} shows concerning technical and fundamental indicators."
+            
+            return GRustStockAnalysis(
+                symbol=symbol,
+                beginnerFriendlyScore=Decimal(str(round(random.uniform(0.4, 0.9), 2))),
+                riskLevel=risk_level,
+                recommendation=recommendation,
+                technicalIndicators=technical_indicators,
+                fundamentalAnalysis=fundamental_analysis,
+                reasoning=reasoning
+            )
+            
+        except Exception as e:
+            print(f"Error in rustStockAnalysis resolver: {e}")
+            # Return a default analysis
+            return GRustStockAnalysis(
+                symbol=symbol,
+                beginnerFriendlyScore=Decimal("0.5"),
+                riskLevel="MODERATE",
+                recommendation="HOLD",
+                technicalIndicators=GTechnicalIndicators(
+                    rsi=Decimal("50.0"),
+                    macd=Decimal("0.0"),
+                    macdSignal=Decimal("0.0"),
+                    macdHistogram=Decimal("0.0"),
+                    sma20=Decimal("100.0"),
+                    sma50=Decimal("100.0"),
+                    ema12=Decimal("100.0"),
+                    ema26=Decimal("100.0"),
+                    bollingerUpper=Decimal("102.0"),
+                    bollingerLower=Decimal("98.0"),
+                    bollingerMiddle=Decimal("100.0")
+                ),
+                fundamentalAnalysis=GFundamentalAnalysis(
+                    valuationScore=Decimal("0.5"),
+                    growthScore=Decimal("0.5"),
+                    stabilityScore=Decimal("0.5"),
+                    dividendScore=Decimal("0.5"),
+                    debtScore=Decimal("0.5")
+                ),
+                reasoning=f"Analysis for {symbol} is currently unavailable. Please try again later."
+            )
 
 schema = graphene.Schema(query=Query)

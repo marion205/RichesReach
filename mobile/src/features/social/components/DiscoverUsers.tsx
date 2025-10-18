@@ -15,7 +15,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import { gql, useQuery, useMutation } from '@apollo/client';
 import UserProfileCard from '../../UserProfileCard';
 import { User } from '../../../types/social';
-// Mock data removed - using real API data
+// Mock data for Discover tab - showing 10+ users since everything is brand new
 // GraphQL Queries
 const GET_DISCOVER_USERS = gql`
 query GetDiscoverUsers($limit: Int, $offset: Int, $searchTerm: String, $experienceLevel: String, $sortBy: String) {
@@ -68,28 +68,49 @@ message
 interface DiscoverUsersProps {
 onNavigate: (screen: string, params?: any) => void;
 }
+// Mock user data for Discover tab - showing 10+ users since everything is brand new
+const MOCK_USERS = [
+  { id: '1', name: 'Alex Chen', email: 'alex@example.com', profilePic: null, followersCount: 1250, followingCount: 340, isFollowingUser: false, isFollowedByUser: false, experienceLevel: 'advanced', bio: 'Quantitative analyst with 8 years experience', totalReturnPercent: 15.2 },
+  { id: '2', name: 'Sarah Johnson', email: 'sarah@example.com', profilePic: null, followersCount: 890, followingCount: 210, isFollowingUser: false, isFollowedByUser: false, experienceLevel: 'intermediate', bio: 'Growth investor focused on tech stocks', totalReturnPercent: 8.7 },
+  { id: '3', name: 'Mike Rodriguez', email: 'mike@example.com', profilePic: null, followersCount: 2100, followingCount: 450, isFollowingUser: false, isFollowedByUser: false, experienceLevel: 'advanced', bio: 'Options trader and market strategist', totalReturnPercent: 22.1 },
+  { id: '4', name: 'Emma Wilson', email: 'emma@example.com', profilePic: null, followersCount: 650, followingCount: 180, isFollowingUser: false, isFollowedByUser: false, experienceLevel: 'beginner', bio: 'Learning about value investing', totalReturnPercent: 3.2 },
+  { id: '5', name: 'David Kim', email: 'david@example.com', profilePic: null, followersCount: 1800, followingCount: 320, isFollowingUser: false, isFollowedByUser: false, experienceLevel: 'advanced', bio: 'Crypto and DeFi enthusiast', totalReturnPercent: 45.8 },
+  { id: '6', name: 'Lisa Thompson', email: 'lisa@example.com', profilePic: null, followersCount: 420, followingCount: 95, isFollowingUser: false, isFollowedByUser: false, experienceLevel: 'intermediate', bio: 'Dividend investor and REIT specialist', totalReturnPercent: 12.4 },
+  { id: '7', name: 'James Brown', email: 'james@example.com', profilePic: null, followersCount: 1500, followingCount: 280, isFollowingUser: false, isFollowedByUser: false, experienceLevel: 'advanced', bio: 'Hedge fund manager and risk analyst', totalReturnPercent: 18.9 },
+  { id: '8', name: 'Maria Garcia', email: 'maria@example.com', profilePic: null, followersCount: 750, followingCount: 150, isFollowingUser: false, isFollowedByUser: false, experienceLevel: 'intermediate', bio: 'ESG investing advocate', totalReturnPercent: 9.6 },
+  { id: '9', name: 'Tom Anderson', email: 'tom@example.com', profilePic: null, followersCount: 320, followingCount: 80, isFollowingUser: false, isFollowedByUser: false, experienceLevel: 'beginner', bio: 'New to investing, learning fundamentals', totalReturnPercent: 1.8 },
+  { id: '10', name: 'Rachel Davis', email: 'rachel@example.com', profilePic: null, followersCount: 1100, followingCount: 240, isFollowingUser: false, isFollowedByUser: false, experienceLevel: 'intermediate', bio: 'Sector rotation specialist', totalReturnPercent: 14.3 },
+  { id: '11', name: 'Kevin Lee', email: 'kevin@example.com', profilePic: null, followersCount: 950, followingCount: 190, isFollowingUser: false, isFollowedByUser: false, experienceLevel: 'intermediate', bio: 'Technical analysis expert', totalReturnPercent: 11.7 },
+  { id: '12', name: 'Amanda White', email: 'amanda@example.com', profilePic: null, followersCount: 680, followingCount: 120, isFollowingUser: false, isFollowedByUser: false, experienceLevel: 'beginner', bio: 'Index fund investor', totalReturnPercent: 6.2 },
+];
+
 const DiscoverUsers: React.FC<DiscoverUsersProps> = ({ onNavigate }) => {
 const [searchTerm, setSearchTerm] = useState('');
 const [selectedExperience, setSelectedExperience] = useState<string>('');
 const [sortBy, setSortBy] = useState('followers');
 const [refreshing, setRefreshing] = useState(false);
-const [users, setUsers] = useState<MockUser[]>([]);
+const [users, setUsers] = useState<any[]>([]);
 const [loading, setLoading] = useState(false);
 const [error, setError] = useState<string | null>(null);
-const mockUserService = MockUserService.getInstance();
-// Load users from mock service
+
+// Load users from mock data
 const loadUsers = () => {
 setLoading(true);
 setError(null);
 try {
-const mockUsers = mockUserService.getDiscoverUsers(
-20, 
-0, 
-searchTerm.trim() || undefined, 
-selectedExperience || undefined, 
-sortBy
-);
-setUsers(mockUsers);
+// Filter users based on search and experience level
+let filteredUsers = MOCK_USERS.filter(user => {
+  const matchesSearch = !searchTerm || user.name.toLowerCase().includes(searchTerm.toLowerCase());
+  const matchesExperience = !selectedExperience || user.experienceLevel === selectedExperience;
+  return matchesSearch && matchesExperience;
+});
+
+// Sort users
+if (sortBy === 'followers') {
+  filteredUsers.sort((a, b) => b.followersCount - a.followersCount);
+}
+
+setUsers(filteredUsers);
 } catch (err) {
 setError('Failed to load users');
 console.error('Error loading users:', err);
@@ -109,13 +130,18 @@ setRefreshing(false);
 };
 const handleFollowToggle = async (userId: string, isFollowing: boolean) => {
 try {
-const result = mockUserService.toggleFollow(userId);
-if (result.success) {
-// Reload users to reflect the change
-loadUsers();
-} else {
-Alert.alert('Error', result.message);
-}
+// Update local state to reflect the follow toggle
+setUsers(prevUsers => 
+  prevUsers.map(user => 
+    user.id === userId 
+      ? { 
+          ...user, 
+          isFollowingUser: !isFollowing,
+          followersCount: isFollowing ? user.followersCount - 1 : user.followersCount + 1
+        }
+      : user
+  )
+);
 } catch (error) {
 console.error('Error toggling follow:', error);
 Alert.alert('Error', 'Failed to update follow status. Please try again.');
@@ -335,7 +361,7 @@ sortBy === option.id && styles.sortChipTextSelected,
 {/* Users List */}
 <FlatList
   style={styles.content}
-  data={users}
+  data={users || []}
   keyExtractor={(item) => item.id}
   renderItem={({ item }) => renderUserCard(item)}
   refreshControl={
@@ -349,10 +375,13 @@ sortBy === option.id && styles.sortChipTextSelected,
       </View>
     ) : error ? (
       <View style={styles.errorContainer}>
-        <Icon name="alert-circle" size={24} color="#FF3B30" />
-        <Text style={styles.errorText}>Unable to load users</Text>
+        <Icon name="users" size={48} color="#8E8E93" />
+        <Text style={styles.errorText}>Welcome to the community!</Text>
+        <Text style={styles.errorSubText}>
+          We're building something amazing here. Check back soon to discover other investors and traders.
+        </Text>
         <TouchableOpacity style={styles.retryButton} onPress={handleRefresh}>
-          <Text style={styles.retryButtonText}>Retry</Text>
+          <Text style={styles.retryButtonText}>Refresh</Text>
         </TouchableOpacity>
       </View>
     ) : (
@@ -365,7 +394,7 @@ sortBy === option.id && styles.sortChipTextSelected,
       </View>
     )
   }
-  contentContainerStyle={users.length === 0 ? styles.emptyContainer : undefined}
+  contentContainerStyle={!users || users.length === 0 ? styles.emptyContainer : undefined}
 />
 </View>
 );
@@ -473,10 +502,19 @@ alignItems: 'center',
 padding: 20,
 },
 errorText: {
-fontSize: 16,
-color: '#FF3B30',
-marginTop: 8,
-marginBottom: 16,
+fontSize: 18,
+fontWeight: '600',
+color: '#1C1C1E',
+marginTop: 12,
+marginBottom: 8,
+textAlign: 'center',
+},
+errorSubText: {
+fontSize: 14,
+color: '#8E8E93',
+marginBottom: 20,
+textAlign: 'center',
+lineHeight: 20,
 },
 retryButton: {
 backgroundColor: '#007AFF',

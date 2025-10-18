@@ -268,16 +268,18 @@ const SwingTradingMarketSentiment: React.FC = () => {
               <Icon name="tag" size={12} color="#6B7280" />
               <Text style={styles.categoryText}>{news.category}</Text>
             </View>
-            <View style={styles.relatedSymbols}>
-              {news.relatedSymbols.slice(0, 3).map((symbol, index) => (
-                <View key={index} style={styles.symbolTag}>
-                  <Text style={styles.symbolText}>{symbol}</Text>
-                </View>
-              ))}
-              {news.relatedSymbols.length > 3 && (
-                <Text style={styles.moreSymbols}>+{news.relatedSymbols.length - 3}</Text>
-              )}
-            </View>
+            {news.relatedSymbols && news.relatedSymbols.length > 0 && (
+              <View style={styles.relatedSymbols}>
+                {news.relatedSymbols.slice(0, 3).map((symbol, index) => (
+                  <View key={index} style={styles.symbolTag}>
+                    <Text style={styles.symbolText}>{symbol}</Text>
+                  </View>
+                ))}
+                {news.relatedSymbols.length > 3 && (
+                  <Text style={styles.moreSymbols}>+{news.relatedSymbols.length - 3}</Text>
+                )}
+              </View>
+            )}
           </View>
         </View>
       ))}

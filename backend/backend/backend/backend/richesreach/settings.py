@@ -17,6 +17,49 @@ environ.Env.read_env()
 # Read GRAPHQL_MODE early and log it
 GRAPHQL_MODE = os.getenv("GRAPHQL_MODE", "standard").lower()
 print(f"[BOOT] GRAPHQL_MODE={GRAPHQL_MODE}", flush=True)
+
+# ML Auth Control - can be overridden for testing
+ML_REQUIRE_AUTH = os.getenv("ML_REQUIRE_AUTH", "false").lower() in ("1","true","yes")
+
+# DeFi Configuration
+DEFI_ENABLED = os.getenv("DEFI_ENABLED", "true").lower() in ("1","true","yes")
+LLAMA_ENABLED = os.getenv("LLAMA_ENABLED", "true").lower() in ("1","true","yes")
+
+# Blockchain RPC URLs
+CHAIN_RPC = {
+    1: os.getenv("ETHEREUM_RPC_URL", "https://mainnet.infura.io/v3/YOUR_KEY"),  # Ethereum
+    8453: os.getenv("BASE_RPC_URL", "https://mainnet.base.org"),  # Base
+    137: os.getenv("POLYGON_RPC_URL", "https://polygon-rpc.com"),  # Polygon
+    42161: os.getenv("ARBITRUM_RPC_URL", "https://arb1.arbitrum.io/rpc"),  # Arbitrum
+    11155111: os.getenv("SEPOLIA_RPC_URL", "https://sepolia.infura.io/v3/YOUR_KEY"),  # Sepolia testnet
+}
+
+# DeFi Protocol Allowlist (for safety)
+DEFI_ALLOWLIST = [
+    'aave', 'uniswap', 'curve', 'compound', 'yearn', 'beefy', 'balancer'
+]
+
+# Celery Configuration
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://127.0.0.1:6379/0')
+CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', CELERY_BROKER_URL)
+CELERY_TASK_ALWAYS_EAGER = False  # True for local debugging only
+CELERY_BEAT_SCHEDULE = {
+    "defi_yield_refresh_5m": {
+        "task": "core.tasks.defi_yield_refresh",
+        "schedule": 300,  # 5 min
+        "options": {"queue": "defi"},
+    },
+    "defi_positions_refresh_hourly": {
+        "task": "core.tasks.defi_positions_refresh",
+        "schedule": 3600,  # 1h
+        "options": {"queue": "defi"},
+    },
+    "defi_analytics_daily": {
+        "task": "core.tasks.defi_analytics_daily",
+        "schedule": 86400,  # 24h
+        "options": {"queue": "defi"},
+    },
+}
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production

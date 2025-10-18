@@ -7,9 +7,10 @@
 const ENV_API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 
 const prodHost = "http://54.160.139.56:8000";
+const localHost = "http://192.168.1.236:8000";
 
-// Use environment variable if available, otherwise use hardcoded prod host
-export const API_BASE = ENV_API_BASE_URL || prodHost;
+// Use environment variable if available, otherwise use localhost for development
+export const API_BASE = ENV_API_BASE_URL || localHost;
 
 // Fail fast if no API base URL is configured
 if (!API_BASE) {
@@ -22,7 +23,7 @@ console.log('[API_BASE] graphql ->', `${API_BASE}/graphql`);
 
 export const API_HTTP    = API_BASE;
 export const API_GRAPHQL = `${API_BASE}/graphql/`;
-export const API_AUTH    = `${API_BASE}/api/auth/login/`;
+export const API_AUTH    = `${API_BASE}/auth/`;
 export const API_WS      = API_BASE.startsWith("https")
   ? API_BASE.replace("https","wss") + "/ws/"
   : API_BASE.replace("http","ws")   + "/ws/";

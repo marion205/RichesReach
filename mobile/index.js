@@ -1,6 +1,9 @@
 // Import Reanimated first (required for worklets)
 import 'react-native-reanimated';
 
+// Import gesture handler (required for react-native-tab-view)
+import 'react-native-gesture-handler';
+
 // Import URL polyfill first to fix React Native URL.protocol issues
 import 'react-native-url-polyfill/auto';
 

@@ -39,7 +39,7 @@ timezone: string;
 }
 class MarketDataService {
 // Kill switch to disable client-side market data calls
-private MARKET_DATA_DISABLED = process.env.EXPO_PUBLIC_MARKET_SOURCE === 'none' || true; // temporary kill switch
+private MARKET_DATA_DISABLED = true; // Always disabled - use SecureMarketDataService instead
 
 private apiKey: string = 'OHYSFF1AE446O7CR'; // Your Alpha Vantage API key
 private newsApiKey: string = '94a335c7316145f79840edd62f77e11e'; // Your NewsAPI key

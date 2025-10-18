@@ -8,6 +8,7 @@ import { gql } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
 import SparkMini from '../../../components/charts/SparkMini';
 import SBLOCCalculator from '../../../components/forms/SBLOCCalculator';
+import { GET_DAY_TRADING_PICKS } from '../../../graphql/dayTrading';
 
 const { width } = Dimensions.get('window');
 
@@ -243,6 +244,7 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
   const [notes, setNotes] = useState('');
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [orderFilter, setOrderFilter] = useState<'all'|'open'|'filled'|'cancelled'>('all');
+  const [dayTradingMode, setDayTradingMode] = useState<'SAFE'|'AGGRESSIVE'>('SAFE');
 
   const { data: accountData, loading: accountLoading, refetch: refetchAccount } =
     useQuery(GET_TRADING_ACCOUNT, { errorPolicy: 'all' });
@@ -258,6 +260,9 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
     startPolling: startOrdersPolling,
     stopPolling: stopOrdersPolling,
   } = useQuery(GET_TRADING_ORDERS, { variables: { limit: 20 }, errorPolicy: 'all', notifyOnNetworkStatusChange: true });
+
+  const { data: dayTradingData, loading: dayTradingLoading, refetch: refetchDayTrading } =
+    useQuery(GET_DAY_TRADING_PICKS, { variables: { mode: dayTradingMode }, errorPolicy: 'all' });
 
   // Debounced quote fetch when typing a symbol
   const {
@@ -473,25 +478,151 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
                 </View>
               )}
 
-              {/* Day Trading Button */}
-              {account.isDayTradingEnabled && (
-                <TouchableOpacity 
-                  style={styles.dayTradingButton}
-                  onPress={() => navigateTo('day-trading')}
-                >
-                  <View style={styles.dayTradingButtonContent}>
-                    <Icon name="trending-up" size={20} color="#fff" />
-                    <View style={styles.dayTradingButtonText}>
-                      <Text style={styles.dayTradingButtonTitle}>Daily Top-3 Picks</Text>
-                      <Text style={styles.dayTradingButtonSubtitle}>AI-powered intraday opportunities</Text>
-                    </View>
-                    <Icon name="chevron-right" size={20} color="#fff" />
+              {/* Day Trading Button - Always Visible */}
+              <TouchableOpacity 
+                style={styles.dayTradingButton}
+                onPress={() => navigateTo('day-trading')}
+              >
+                <View style={styles.dayTradingButtonContent}>
+                  <Icon name="trending-up" size={20} color="#fff" />
+                  <View style={styles.dayTradingButtonText}>
+                    <Text style={styles.dayTradingButtonTitle}>Daily Top-3 Picks</Text>
+                    <Text style={styles.dayTradingButtonSubtitle}>AI-powered intraday opportunities</Text>
                   </View>
-                </TouchableOpacity>
-              )}
+                  <Icon name="chevron-right" size={20} color="#fff" />
+                </View>
+              </TouchableOpacity>
             </>
           )}
           {!accountLoading && !account && <Text style={[styles.sub,{textAlign:'center'}]}>Unable to load account data.</Text>}
+        </View>
+
+        {/* Daily Top-3 Picks - Always Visible */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>Daily Top-3 Picks</Text>
+            <View style={styles.modeToggle}>
+              {(['SAFE', 'AGGRESSIVE'] as const).map(mode => (
+                <TouchableOpacity
+                  key={mode}
+                  onPress={() => setDayTradingMode(mode)}
+                  style={[
+                    styles.modeButton,
+                    dayTradingMode === mode && styles.modeButtonActive
+                  ]}
+                >
+                  <Text style={[
+                    styles.modeButtonText,
+                    dayTradingMode === mode && styles.modeButtonTextActive
+                  ]}>
+                    {mode}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {dayTradingLoading && (
+            <View style={styles.centerRow}>
+              <ActivityIndicator color={C.primary} />
+              <Text style={styles.sub}>  Loading picks…</Text>
+            </View>
+          )}
+
+          {!dayTradingLoading && dayTradingData?.dayTradingPicks?.picks && (
+            <>
+              {dayTradingData.dayTradingPicks.picks.slice(0, 3).map((pick, index) => (
+                <View key={`${pick.symbol}-${pick.side}`} style={styles.pickCard}>
+                  <View style={styles.pickHeader}>
+                    <View style={styles.pickSymbolRow}>
+                      <Text style={styles.pickSymbol}>{pick.symbol}</Text>
+                      <View style={[
+                        styles.pickSideChip,
+                        { backgroundColor: pick.side === 'LONG' ? C.green : C.red }
+                      ]}>
+                        <Text style={styles.pickSideText}>{pick.side}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.pickScore}>
+                      <Text style={[
+                        styles.pickScoreValue,
+                        { color: pick.score >= 2 ? C.green : pick.score >= 1 ? C.amber : C.red }
+                      ]}>
+                        {pick.score.toFixed(2)}
+                      </Text>
+                      <Text style={styles.pickScoreLabel}>Score</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.pickDetails}>
+                    <View style={styles.pickDetailRow}>
+                      <Text style={styles.pickDetailLabel}>Entry</Text>
+                      <Text style={styles.pickDetailValue}>
+                        ${(pick.risk.stop + pick.risk.atr5m).toFixed(2)}
+                      </Text>
+                    </View>
+                    <View style={styles.pickDetailRow}>
+                      <Text style={styles.pickDetailLabel}>Stop</Text>
+                      <Text style={styles.pickDetailValue}>
+                        ${pick.risk.stop.toFixed(2)}
+                      </Text>
+                    </View>
+                    <View style={styles.pickDetailRow}>
+                      <Text style={styles.pickDetailLabel}>Target</Text>
+                      <Text style={styles.pickDetailValue}>
+                        {pick.risk.targets?.[0] ? `$${pick.risk.targets[0].toFixed(2)}` : '—'}
+                      </Text>
+                    </View>
+                    <View style={styles.pickDetailRow}>
+                      <Text style={styles.pickDetailLabel}>Size</Text>
+                      <Text style={styles.pickDetailValue}>
+                        {pick.risk.sizeShares} sh
+                      </Text>
+                    </View>
+                  </View>
+
+                  {pick.notes && (
+                    <Text style={styles.pickNotes}>{pick.notes}</Text>
+                  )}
+
+                  <TouchableOpacity
+                    style={[
+                      styles.pickExecuteButton,
+                      { backgroundColor: pick.side === 'LONG' ? C.green : C.red }
+                    ]}
+                    onPress={() => {
+                      Alert.alert(
+                        'Execute Trade',
+                        `Execute ${pick.side} ${pick.symbol}?\nEntry≈ $${(pick.risk.stop + pick.risk.atr5m).toFixed(2)}\nStop: $${pick.risk.stop.toFixed(2)}\nTarget: ${pick.risk.targets?.[0] ? `$${pick.risk.targets[0].toFixed(2)}` : '—'}`,
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          { text: 'Execute', onPress: () => Alert.alert('Order accepted', 'Simulated execution complete.') },
+                        ]
+                      );
+                    }}
+                  >
+                    <Text style={styles.pickExecuteText}>Execute {pick.side}</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+
+              <TouchableOpacity
+                style={styles.viewAllPicksButton}
+                onPress={() => navigateTo('day-trading')}
+              >
+                <Text style={styles.viewAllPicksText}>View All Picks</Text>
+                <Icon name="chevron-right" size={16} color={C.primary} />
+              </TouchableOpacity>
+            </>
+          )}
+
+          {!dayTradingLoading && (!dayTradingData?.dayTradingPicks?.picks || dayTradingData.dayTradingPicks.picks.length === 0) && (
+            <View style={styles.emptyBlock}>
+              <Icon name="trending-up" size={40} color={C.sub} />
+              <Text style={styles.emptyTitle}>No picks available</Text>
+              <Text style={styles.emptySub}>Check back later for new opportunities.</Text>
+            </View>
+          )}
         </View>
 
         {/* Positions Header */}
@@ -1210,6 +1341,138 @@ const styles = StyleSheet.create({
   dayTradingButtonSubtitle: {
     fontSize: 12,
     color: 'rgba(255, 255, 255, 0.8)',
+  },
+
+  // Daily Picks Styles
+  modeToggle: {
+    flexDirection: 'row',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 8,
+    padding: 2,
+  },
+  modeButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  modeButtonActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 1 },
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  modeButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  modeButtonTextActive: {
+    color: '#1F2937',
+  },
+  pickCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 14,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  pickHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  pickSymbolRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  pickSymbol: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1F2937',
+  },
+  pickSideChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  pickSideText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  pickScore: {
+    alignItems: 'center',
+  },
+  pickScoreValue: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  pickScoreLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  pickDetails: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  pickDetailRow: {
+    width: '48%',
+    marginBottom: 8,
+  },
+  pickDetailLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginBottom: 2,
+  },
+  pickDetailValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  pickNotes: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontStyle: 'italic',
+    marginBottom: 12,
+    lineHeight: 16,
+  },
+  pickExecuteButton: {
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  pickExecuteText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  viewAllPicksButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    marginTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  viewAllPicksText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0E7AFE',
+    marginRight: 4,
   },
 });
 

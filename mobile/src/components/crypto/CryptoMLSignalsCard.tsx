@@ -132,6 +132,9 @@ const RecommendationCard: React.FC<{ recommendation: any }> = ({ recommendation 
 
 const CryptoMLSignalsCard: React.FC<Props> = ({ initialSymbol = 'BTC', pollInterval }) => {
   const [selectedSymbol, setSelectedSymbol] = useState(initialSymbol);
+  
+  console.log('[CryptoMLSignalsCard] Initial symbol:', initialSymbol);
+  console.log('[CryptoMLSignalsCard] Selected symbol:', selectedSymbol);
   const [generating, setGenerating] = useState(false);
   const [ownedOnly, setOwnedOnly] = useState(false);
   const topPicked = useRef(false);
@@ -166,6 +169,12 @@ const CryptoMLSignalsCard: React.FC<Props> = ({ initialSymbol = 'BTC', pollInter
     notifyOnNetworkStatusChange: false, // Reduce unnecessary re-renders
     errorPolicy: 'all',
     // Remove polling - let user manually refresh
+    onCompleted: (data) => {
+      console.log('[CryptoMLSignalsCard] Query completed with data:', data);
+    },
+    onError: (error) => {
+      console.log('[CryptoMLSignalsCard] Query error:', error);
+    }
   });
 
   const [generatePrediction] = useMutation(GENERATE_ML_PREDICTION, {
@@ -242,20 +251,40 @@ const CryptoMLSignalsCard: React.FC<Props> = ({ initialSymbol = 'BTC', pollInter
   const signal = useMemo(() => {
     const s = signalData?.cryptoMlSignal ?? {};
     
+    console.log('[CryptoMLSignalsCard] Signal data:', s);
+    console.log('[CryptoMLSignalsCard] Signal loading:', signalLoading);
+    console.log('[CryptoMLSignalsCard] Signal error:', signalError);
     
-    // safe defaults to avoid client crashes
-    return {
-      predictionType: s.probability > 0.6 ? 'BULLISH' : s.probability < 0.4 ? 'BEARISH' : 'NEUTRAL',
-      probability: clamp01(s.probability),
-      confidenceLevel: (s.confidenceLevel || 'LOW').toUpperCase(),
-      sentiment: s.probability > 0.6 ? 'Bullish' : s.probability < 0.4 ? 'Bearish' : 'Neutral',
-      sentimentDescription: s.probability > 0.6 ? 'Positive market sentiment detected.' : s.probability < 0.4 ? 'Negative market sentiment detected.' : 'Neutral market conditions.',
-      featuresUsed: s.features || {},
-      createdAt: s.timestamp ? new Date(s.timestamp * 1000).toISOString() : new Date().toISOString(),
-      expiresAt: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(), // +6h
-      explanation: s.explanation || 'Model output available. Awaiting more data for richer rationale.',
-    };
-  }, [signalData, signalLoading, signalError]);
+    // Use real data from the backend
+    if (s.predictionType) {
+      console.log('[CryptoMLSignalsCard] Using real data for', selectedSymbol);
+      return {
+        predictionType: s.predictionType,
+        probability: clamp01(s.probability),
+        confidenceLevel: (s.confidenceLevel || 'LOW').toUpperCase(),
+        sentiment: s.probability > 0.6 ? 'Bullish' : s.probability < 0.4 ? 'Bearish' : 'Neutral',
+        sentimentDescription: s.probability > 0.6 ? 'Positive market sentiment detected.' : s.probability < 0.4 ? 'Negative market sentiment detected.' : 'Neutral market conditions.',
+        featuresUsed: (() => {
+          try {
+            if (typeof s.featuresUsed === 'string') {
+              return JSON.parse(s.featuresUsed);
+            }
+            return s.featuresUsed || {};
+          } catch (e) {
+            console.warn('[CryptoMLSignalsCard] Failed to parse featuresUsed:', e);
+            return {};
+          }
+        })(),
+        createdAt: s.createdAt || new Date().toISOString(),
+        expiresAt: s.expiresAt || new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
+        explanation: s.explanation || 'Model output available. Awaiting more data for richer rationale.',
+      };
+    }
+    
+    console.log('[CryptoMLSignalsCard] No real data available for', selectedSymbol);
+    // Return null if no real data available
+    return null;
+  }, [signalData, signalLoading, signalError, selectedSymbol]);
 
   /* ------------------------------- Auto-refresh ------------------------------ */
 
@@ -281,13 +310,14 @@ const CryptoMLSignalsCard: React.FC<Props> = ({ initialSymbol = 'BTC', pollInter
     try {
       setGenerating(true);
       const res = await generatePrediction({ variables: { symbol: selectedSymbol } });
-      const ok = res.data?.crypto?.generateMlPrediction?.success;
+      console.log('[CryptoMLSignalsCard] Generate prediction response:', res.data);
+      const ok = res.data?.generateMlPrediction?.success;
       if (ok) {
-        const p = clamp01(res.data.crypto.generateMlPrediction.probability);
+        const p = clamp01(res.data.generateMlPrediction.probability);
         Alert.alert('Prediction Generated', `${selectedSymbol}: ${pctStr(p)} probability`);
         await refetchSignal();
       } else {
-        Alert.alert('Error', res.data?.crypto?.generateMlPrediction?.message || 'Failed to generate prediction.');
+        Alert.alert('Error', res.data?.generateMlPrediction?.message || 'Failed to generate prediction.');
       }
     } catch (e) {
       Alert.alert('Error', 'Failed to generate prediction. Please try again.');
@@ -300,7 +330,7 @@ const CryptoMLSignalsCard: React.FC<Props> = ({ initialSymbol = 'BTC', pollInter
 
   const bigDay = useMemo(() => {
     // Showcase badge if probability of a move is high (tune threshold as you like)
-    return signal.probability >= 0.7;
+    return signal && signal.probability >= 0.7;
   }, [signal]);
 
   /* ------------------------------ Rendering ----------------------------- */
@@ -386,15 +416,15 @@ const CryptoMLSignalsCard: React.FC<Props> = ({ initialSymbol = 'BTC', pollInter
             </TouchableOpacity>
           </View>
         </View>
-      ) : signalData?.cryptoMlSignal ? (
+      ) : signal ? (
         <View style={styles.card}>
           <View style={styles.rowBetween}>
             <View style={styles.rowCenter}>
               {(() => {
-                const tone = confidenceTone(signal.confidenceLevel);
+                const tone = confidenceTone(signal?.confidenceLevel);
                 return <>
                   <Icon name={tone.icon} size={22} color={tone.color} />
-                  <Text style={styles.title}>{signal.predictionType}</Text>
+                  <Text style={styles.title}>{signal?.predictionType}</Text>
                 </>;
               })()}
               {bigDay && (
@@ -415,41 +445,41 @@ const CryptoMLSignalsCard: React.FC<Props> = ({ initialSymbol = 'BTC', pollInter
           <View style={styles.rowSplit}>
             <View style={{ flex: 1 }}>
               <Text style={styles.sub}>Probability</Text>
-              <Text style={[styles.prob, { color: probTone(signal.probability) }]}>{pctStr(signal.probability)}</Text>
+              <Text style={[styles.prob, { color: probTone(signal?.probability) }]}>{pctStr(signal?.probability)}</Text>
               {/* small progress bar */}
               <View style={styles.progress}>
-                <View style={[styles.progressFill, { width: `${clamp01(signal.probability) * 100}%` }]} />
+                <View style={[styles.progressFill, { width: `${clamp01(signal?.probability) * 100}%` }]} />
               </View>
             </View>
 
             <View style={{ flex: 1, alignItems: 'flex-end' }}>
               <Text style={styles.sub}>Confidence</Text>
               {(() => {
-                const tone = confidenceTone(signal.confidenceLevel);
+                const tone = confidenceTone(signal?.confidenceLevel);
                 return (
                   <View style={styles.confBadge}>
                     <Icon name={tone.icon} size={14} color={tone.color} />
-                    <Text style={[styles.confText, { color: tone.color }]}>{signal.confidenceLevel}</Text>
+                    <Text style={[styles.confText, { color: tone.color }]}>{signal?.confidenceLevel}</Text>
                   </View>
                 );
               })()}
-              <Text style={styles.sentiment}>{signal.sentiment}</Text>
-              <Text style={styles.sentimentSub} numberOfLines={2}>{signal.sentimentDescription}</Text>
+              <Text style={styles.sentiment}>{signal?.sentiment}</Text>
+              <Text style={styles.sentimentSub} numberOfLines={2}>{signal?.sentimentDescription}</Text>
             </View>
           </View>
 
           {/* Explanation */}
           <View style={{ marginTop: 12 }}>
             <Text style={styles.h6}>AI Analysis</Text>
-            <Text style={styles.body}>{signal.explanation}</Text>
+            <Text style={styles.body}>{signal?.explanation}</Text>
           </View>
 
           {/* Key factors */}
-          {Object.keys(signal.featuresUsed || {}).length > 0 && (
+          {signal?.featuresUsed && Object.keys(signal.featuresUsed).length > 0 && (
             <View style={{ marginTop: 12 }}>
               <Text style={styles.h6}>Key Factors</Text>
               <View style={styles.tagsWrap}>
-                {Object.entries(signal.featuresUsed || {}).slice(0, 4).map(([k, v]) => (
+                {Object.entries(signal.featuresUsed).slice(0, 4).map(([k, v]) => (
                   <View key={k} style={styles.tag}>
                     <Text style={styles.tagKey}>{k.replace(/_/g, ' ').toUpperCase()}</Text>
                     <Text style={styles.tagVal}>{typeof v === 'number' ? v.toFixed(3) : String(v)}</Text>
@@ -461,8 +491,8 @@ const CryptoMLSignalsCard: React.FC<Props> = ({ initialSymbol = 'BTC', pollInter
 
           {/* Timestamps */}
           <View style={styles.footer}>
-            <Text style={styles.meta}>Generated: {new Date(signal.createdAt).toLocaleString()}</Text>
-            <Text style={styles.meta}>Expires: {new Date(signal.expiresAt).toLocaleString()}</Text>
+            <Text style={styles.meta}>Generated: {signal?.createdAt ? new Date(signal.createdAt).toLocaleString() : 'N/A'}</Text>
+            <Text style={styles.meta}>Expires: {signal?.expiresAt ? new Date(signal.expiresAt).toLocaleString() : 'N/A'}</Text>
           </View>
         </View>
       ) : (

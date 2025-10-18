@@ -73,7 +73,7 @@ const WashGuardScreen: React.FC = () => {
   const [guardResult, setGuardResult] = useState<GuardResponse | null>(null);
   const [showExplanation, setShowExplanation] = useState(false);
 
-  const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://riches-reach-alb-1199497064.us-east-1.elb.amazonaws.com';
+  const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8000';
 
   const getAuthToken = async (): Promise<string> => {
     // Mock token - replace with actual auth logic

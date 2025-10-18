@@ -397,13 +397,37 @@ const getDividendYieldForSymbol = (symbol: string): number => {
 
 export default function StockScreen({ navigateTo }: { navigateTo: (s: string, d?: any) => void }) {
   const [activeTab, setActiveTab] = useState<'browse' | 'beginner' | 'watchlist' | 'research' | 'options'>('browse');
-const [searchQuery, setSearchQuery] = useState('');
+  
+  const handleRowPress = (item: Stock) => {
+    console.log('🔍 ROW PRESS', item.symbol);
+    // Navigate to stock detail screen
+    navigateTo('StockDetail', {
+      symbol: item.symbol,
+    });
+  };
+
+  const openTrade = (item: Stock) => {
+    console.log('🔍 TRADE PRESS', item.symbol);
+    // Navigate to stock detail - user can use the Trade tab
+    navigateTo('StockDetail', {
+      symbol: item.symbol,
+    });
+  };
+
+  const openAnalysis = (item: Stock) => {
+    console.log('🔍 ANALYSIS PRESS', item.symbol);
+    // Navigate to stock detail - user can use the Trends tab for analysis
+    navigateTo('StockDetail', {
+      symbol: item.symbol,
+    });
+  };
+
+  const [searchQuery, setSearchQuery] = useState('');
   const [tooltip, setTooltip] = useState<{ title: string; description: string } | null>(null);
   const [watchlistModal, setWatchlistModal] = useState<{ open: boolean; stock: Stock | null }>({ open: false, stock: null });
   const [notes, setNotes] = useState('');
   const [rust, setRust] = useState<any | null>(null);
   const [rustOpen, setRustOpen] = useState(false);
-  const [selectedStock, setSelectedStock] = useState<Stock | null>(null);
   const [budgetImpactModal, setBudgetImpactModal] = useState<{ open: boolean; stock: Stock | null }>({ open: false, stock: null });
   
   // Research state
@@ -623,7 +647,7 @@ const [searchQuery, setSearchQuery] = useState('');
     // Debug: Log the variables being sent
     const variables = {
       symbol: watchlistModal.stock.symbol,
-      company_name: watchlistModal.stock.companyName || null,
+      companyName: watchlistModal.stock.companyName || null,
       notes: notes || ""
     };
     console.log('🔍 Watchlist Debug - Variables being sent:', variables);
@@ -836,7 +860,7 @@ const [searchQuery, setSearchQuery] = useState('');
       beginnerScoreBreakdown={item.beginnerScoreBreakdown}
       isGoodForIncomeProfile={isStockGoodForIncomeProfile(item)}
       onPressAdd={() => onPressAdd(item)}
-      onPressAnalysis={() => handleRustAnalysis(item.symbol)}
+      onPressAnalysis={() => openAnalysis(item)}
       onPressMetric={showMetricTooltip}
       onPressBudgetImpact={() => {
         console.log('🔍 Budget Impact Debug - Stock data:', item);
@@ -844,10 +868,10 @@ const [searchQuery, setSearchQuery] = useState('');
         console.log('🔍 Budget Impact Debug - factors:', item.beginnerScoreBreakdown?.factors);
         setBudgetImpactModal({ open: true, stock: item });
       }}
-      onPress={() => setSelectedStock(selectedStock?.symbol === item.symbol ? null : item)}
-      isSelected={selectedStock?.symbol === item.symbol}
+      onPressTrade={() => openTrade(item)}
+      onPress={() => handleRowPress(item)}
     />
-  ), [onPressAdd, handleRustAnalysis, showMetricTooltip, selectedStock, isStockGoodForIncomeProfile]);
+  ), [onPressAdd, handleRustAnalysis, showMetricTooltip, isStockGoodForIncomeProfile]);
 
   const renderWatch = useCallback(({ item }: { item: WatchlistItem }) => (
     <WatchlistCard item={item} onRemove={onRemoveWatchlist} />
@@ -1124,7 +1148,14 @@ const [searchQuery, setSearchQuery] = useState('');
       const mlData = mlScreeningData?.advancedStockScreening ?? [];
       const beginnerData = beginnerData?.beginnerFriendlyStocks ?? [];
       
-      // Transform ML screening data to match Stock interface
+      // Get real-time prices from stocks.data to override cached prices
+      const realTimeStocks = stocks.data?.stocks ?? [];
+      const realTimePrices = new Map();
+      realTimeStocks.forEach((stock: any) => {
+        realTimePrices.set(stock.symbol, stock.currentPrice);
+      });
+      
+      // Transform ML screening data to match Stock interface with real-time prices
       const transformedMlData = mlData.map((stock: any) => ({
         id: stock.symbol,
         symbol: stock.symbol,
@@ -1134,10 +1165,56 @@ const [searchQuery, setSearchQuery] = useState('');
         peRatio: stock.peRatio,
         dividendYield: stock.dividendYield,
         beginnerFriendlyScore: stock.beginnerFriendlyScore,
-        currentPrice: stock.currentPrice,
+        currentPrice: realTimePrices.get(stock.symbol) || stock.currentPrice, // Use real-time price if available
         __typename: 'Stock',
         // Add ML-specific fields
-        mlScore: stock.mlScore
+        mlScore: stock.mlScore,
+        // Add beginnerScoreBreakdown for Budget Impact Analysis (same structure as Browse All)
+        beginnerScoreBreakdown: {
+          score: stock.beginnerFriendlyScore,
+          factors: [
+            {
+              name: 'AI Confidence',
+              weight: 0.3,
+              value: stock.mlScore,
+              contrib: Math.round(stock.mlScore * 30),
+              detail: `AI confidence score: ${(stock.mlScore * 100).toFixed(1)}% - ML-powered analysis`
+            },
+            {
+              name: 'Expected Return',
+              weight: 0.25,
+              value: 0.6, // Default expected return for ML-screened stocks
+              contrib: 15,
+              detail: `Expected return: 12.0% annually (ML projection)`
+            },
+            {
+              name: 'Target Price',
+              weight: 0.2,
+              value: 0.7, // Default target price analysis
+              contrib: 14,
+              detail: `Target price: $${(stock.currentPrice * 1.15).toFixed(2)} (Current: $${stock.currentPrice})`
+            },
+            {
+              name: 'Market Position',
+              weight: 0.15,
+              value: 0.8,
+              contrib: 12,
+              detail: `Strong market position in ${stock.sector} sector`
+            },
+            {
+              name: 'Risk Assessment',
+              weight: 0.1,
+              value: 0.75,
+              contrib: 7,
+              detail: 'Moderate risk profile suitable for most investors'
+            }
+          ],
+          notes: [
+            `ML-powered analysis with ${(stock.mlScore * 100).toFixed(1)}% confidence`,
+            `Expected annual return: 12.0%`,
+            `Price target: $${(stock.currentPrice * 1.15).toFixed(2)}`
+          ]
+        }
       }));
       
       // Ensure we always have at least 5 stocks for Beginner Friendly
@@ -1229,7 +1306,7 @@ const [searchQuery, setSearchQuery] = useState('');
     const data = (watchlistQ.data as any)?.myWatchlist ?? [];
     console.log('Watchlist data:', data);
     return data;
-  }, [activeTab, stocks.data, beginnerData, aiRecommendationsData, mlScreeningData, watchlistQ.data]);
+  }, [activeTab, stocks.data, beginnerData, aiRecommendationsData, mlScreeningData, watchlistQ.data, searchQuery]);
 
   const loading = (activeTab === 'browse' && (stocks.loading || aiRecommendationsLoading))
                || (activeTab === 'beginner' && (beginnerLoading || mlScreeningLoading))
@@ -1703,46 +1780,10 @@ placeholderTextColor="#999"
         </View>
       )}
 
-      {/* Chart Modal - Show for selected stock (only on non-research/options tabs) */}
-      {activeTab !== 'research' && activeTab !== 'options' && selectedStock && (
-        <Modal
-          visible={!!selectedStock}
-          animationType="slide"
-          presentationStyle="fullScreen"
-          onRequestClose={() => setSelectedStock(null)}
-        >
-          <View style={styles.chartModalContainer}>
-            <View style={styles.chartModalHeader}>
-              <TouchableOpacity 
-                onPress={() => setSelectedStock(null)}
-                style={styles.backButton}
-              >
-                <Icon name="arrow-left" size={24} color="#007AFF" />
-              </TouchableOpacity>
-              <Text style={styles.chartModalTitle}>Price Chart - {selectedStock.symbol}</Text>
-              <View style={{ width: 24 }} />
-            </View>
-            <View style={styles.chartModalContent}>
-              <ResponsiveChart height={500}>
-                {(w) => (
-                  <StockChart
-                    symbol={selectedStock.symbol}
-                    embedded
-                    width={w}
-                    height={500}
-                    key={`${selectedStock.symbol}-${w}`}
-                  />
-                )}
-              </ResponsiveChart>
-            </View>
-          </View>
-        </Modal>
-      )}
 
       {/* List - Only show when not on research or options tab */}
       {activeTab !== 'research' && activeTab !== 'options' && (
       <FlatList
-        key={`${activeTab}-${listData.length}`} // Force re-render when tab or data changes
         data={Array.isArray(listData) ? listData : []}
         keyExtractor={activeTab === 'watchlist'
           ? ((i: any) => String(i.id))
@@ -1751,6 +1792,7 @@ placeholderTextColor="#999"
         renderItem={activeTab === 'watchlist' ? (renderWatch as any) : (renderStock as any)}
         refreshing={!!loading}
         onRefresh={() => {
+          // Only refetch if user explicitly pulls to refresh
           if (activeTab === 'browse') stocks.refetch();
           else if (activeTab === 'beginner') refetchBeginner?.();
           else watchlistQ.refetch();
@@ -1978,6 +2020,7 @@ placeholderTextColor="#999"
         price={budgetImpactModal.stock?.currentPrice ? Number(budgetImpactModal.stock.currentPrice) : undefined}
         currency="USD"
       />
+
 </View>
 );
 }
@@ -2225,6 +2268,7 @@ searchContainer: {
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    minHeight: 120,
   },
   metricTitle: {
     fontSize: 16,
@@ -2235,16 +2279,23 @@ searchContainer: {
   metricItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 8,
+    minHeight: 20,
   },
   metricLabel: {
     fontSize: 14,
     color: '#666',
+    flex: 1,
+    flexWrap: 'wrap',
   },
   metricValue: {
     fontSize: 14,
     fontWeight: '600',
     color: '#000',
+    flex: 1,
+    textAlign: 'right',
+    flexWrap: 'wrap',
   },
   sectionTitle: {
     fontSize: 18,

@@ -193,9 +193,9 @@ export default function PredictionModal({ visible, onClose, onCreated, defaultTi
           {/* Direction */}
           <Text style={st.label}>Direction</Text>
           <View style={st.row}>
-            {chip('Bullish', dir === 'bullish', () => setDir('bullish'))}
-            {chip('Bearish', dir === 'bearish', () => setDir('bearish'))}
-            {chip('Neutral', dir === 'neutral', () => setDir('neutral'))}
+            <View key="bullish">{chip('Bullish', dir === 'bullish', () => setDir('bullish'))}</View>
+            <View key="bearish">{chip('Bearish', dir === 'bearish', () => setDir('bearish'))}</View>
+            <View key="neutral">{chip('Neutral', dir === 'neutral', () => setDir('neutral'))}</View>
           </View>
 
           {/* Horizon */}
@@ -224,9 +224,11 @@ export default function PredictionModal({ visible, onClose, onCreated, defaultTi
             <View style={{ flex: 1 }}>
               <Text style={st.label}>Confidence</Text>
               <View style={st.rowWrap}>
-                {confSteps.map((c) =>
-                  chip(`${Math.round(c * 100)}%`, confidence === c, () => setConfidence(c))
-                )}
+                {confSteps.map((c) => (
+                  <View key={c}>
+                    {chip(`${Math.round(c * 100)}%`, confidence === c, () => setConfidence(c))}
+                  </View>
+                ))}
               </View>
             </View>
           </View>

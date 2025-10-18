@@ -12,7 +12,7 @@ Image,
 ActivityIndicator
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import MarketDataService, { MarketNews } from '../services/MarketDataService';
+import { SecureMarketDataService } from '../services/SecureMarketDataService';
 interface FinancialNewsProps {
 symbol?: string; // Optional: show news for specific stock
 limit?: number; // Optional: limit number of articles
@@ -29,13 +29,38 @@ const loadNews = async () => {
 try {
 setLoading(true);
 setError(null);
-let newsData: MarketNews[];
-if (symbol) {
-newsData = await MarketDataService.getStockNews(symbol);
-} else {
-newsData = await MarketDataService.getMarketNews();
+// For now, use mock news data since we're focusing on market data
+// TODO: Implement news API in backend
+const mockNews = [
+{
+id: '1',
+title: 'Market Update: Tech Stocks Show Strong Performance',
+summary: 'Technology stocks continue to lead market gains with strong earnings reports.',
+source: 'Financial Times',
+publishedAt: new Date().toISOString(),
+url: '#',
+imageUrl: null
+},
+{
+id: '2',
+title: 'Federal Reserve Maintains Current Interest Rates',
+summary: 'The Fed keeps rates steady as inflation shows signs of cooling.',
+source: 'Reuters',
+publishedAt: new Date(Date.now() - 3600000).toISOString(),
+url: '#',
+imageUrl: null
+},
+{
+id: '3',
+title: 'Energy Sector Sees Volatility Amid Supply Concerns',
+summary: 'Oil prices fluctuate as global supply chain issues persist.',
+source: 'Bloomberg',
+publishedAt: new Date(Date.now() - 7200000).toISOString(),
+url: '#',
+imageUrl: null
 }
-setNews(newsData.slice(0, limit));
+];
+setNews(mockNews.slice(0, limit));
 } catch (err) {
 setError('Failed to load news');
 console.error('Error loading news:', err);
@@ -108,7 +133,7 @@ color="#fff"
 <Text style={styles.newsSummary} numberOfLines={3}>
 {item.summary}
 </Text>
-{item.relatedSymbols.length > 0 && (
+{item.relatedSymbols && item.relatedSymbols.length > 0 && (
 <View style={styles.symbolsContainer}>
 {item.relatedSymbols.slice(0, 3).map((symbol, index) => (
 <View key={index} style={styles.symbolBadge}>
@@ -123,7 +148,7 @@ color="#fff"
 </View>
 </TouchableOpacity>
 );
-if (loading && news.length === 0) {
+if (loading && (!news || news.length === 0)) {
 return (
 <View style={styles.loadingContainer}>
 <ActivityIndicator size="large" color="#007AFF" />
@@ -131,7 +156,7 @@ return (
 </View>
 );
 }
-if (error && news.length === 0) {
+if (error && (!news || news.length === 0)) {
 return (
 <View style={styles.errorContainer}>
 <Icon name="alert-circle" size={48} color="#FF3B30" />

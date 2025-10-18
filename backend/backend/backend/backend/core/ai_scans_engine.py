@@ -696,3 +696,111 @@ class AIScansEngine:
             risk_tolerance=str(data.get("risk_tolerance", "medium")),
             time_horizon=str(data.get("time_horizon", "daily")),
         )
+
+    # --------- GraphQL API Methods ---------
+    def get_available_scans(self) -> List[Dict[str, Any]]:
+        """Get available AI scans for GraphQL"""
+        try:
+            # Return mock data for now - in production this would come from the database
+            return [
+                {
+                    "id": "scan_1",
+                    "name": "Momentum Breakout Scanner",
+                    "description": "Identifies stocks breaking out of consolidation patterns with strong volume",
+                    "category": "TECHNICAL",
+                    "riskLevel": "MEDIUM",
+                    "timeHorizon": "SHORT_TERM",
+                    "isActive": True,
+                    "lastRun": "2024-01-15T10:30:00Z",
+                    "results": [
+                        {
+                            "id": "result_1",
+                            "symbol": "AAPL",
+                            "currentPrice": 150.0,
+                            "changePercent": 2.5,
+                            "confidence": 0.85
+                        }
+                    ],
+                    "playbook": {
+                        "id": "playbook_1",
+                        "name": "Momentum Strategy",
+                        "performance": {
+                            "successRate": 0.75,
+                            "averageReturn": 0.12
+                        }
+                    }
+                },
+                {
+                    "id": "scan_2",
+                    "name": "Value Opportunity Finder",
+                    "description": "Discovers undervalued stocks with strong fundamentals",
+                    "category": "FUNDAMENTAL",
+                    "riskLevel": "LOW",
+                    "timeHorizon": "LONG_TERM",
+                    "isActive": True,
+                    "lastRun": "2024-01-15T09:15:00Z",
+                    "results": [
+                        {
+                            "id": "result_2",
+                            "symbol": "MSFT",
+                            "currentPrice": 300.0,
+                            "changePercent": 1.2,
+                            "confidence": 0.78
+                        }
+                    ],
+                    "playbook": {
+                        "id": "playbook_2",
+                        "name": "Value Hunter",
+                        "performance": {
+                            "successRate": 0.68,
+                            "averageReturn": 0.08
+                        }
+                    }
+                }
+            ]
+        except Exception as e:
+            logger.error(f"Error getting available scans: {e}")
+            return []
+
+    def get_available_playbooks(self) -> List[Dict[str, Any]]:
+        """Get available playbooks for GraphQL"""
+        try:
+            # Return mock data for now - in production this would come from the database
+            return [
+                {
+                    "id": "playbook_1",
+                    "name": "Momentum Strategy",
+                    "author": "AI System",
+                    "riskLevel": "MEDIUM",
+                    "performance": {
+                        "successRate": 0.75,
+                        "averageReturn": 0.12
+                    },
+                    "tags": ["momentum", "short-term", "technical"]
+                },
+                {
+                    "id": "playbook_2", 
+                    "name": "Value Hunter",
+                    "author": "AI System",
+                    "riskLevel": "LOW",
+                    "performance": {
+                        "successRate": 0.68,
+                        "averageReturn": 0.08
+                    },
+                    "tags": ["value", "long-term", "fundamental"]
+                },
+                {
+                    "id": "playbook_3",
+                    "name": "Growth Accelerator",
+                    "author": "AI System",
+                    "riskLevel": "HIGH",
+                    "performance": {
+                        "successRate": 0.82,
+                        "averageReturn": 0.18
+                    },
+                    "tags": ["growth", "medium-term", "fundamental"]
+                }
+            ]
+        except Exception as e:
+            logger.error(f"Error getting available playbooks: {e}")
+            return []

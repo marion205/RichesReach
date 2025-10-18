@@ -3,6 +3,7 @@
 * Hedge Fund-Level Options Strategy Recommendations
 */
 import { API_HTTP } from '../../../config';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 export interface OptionsRecommendation {
 strategy_name: string;
 strategy_type: 'income' | 'hedge' | 'speculation' | 'arbitrage';
@@ -91,6 +92,50 @@ export class AIOptionsService {
   }
 
   /**
+   * Get CSRF token from backend
+   */
+  private async getCSRFToken(): Promise<string | null> {
+    try {
+      const response = await fetch(`${API_HTTP}/csrf-token/`, {
+        method: 'GET',
+        credentials: 'include',
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        return data.csrfToken || null;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting CSRF token:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get authentication headers
+   */
+  private async getAuthHeaders(): Promise<Record<string, string>> {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      const csrfToken = await this.getCSRFToken();
+      
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        ...(csrfToken ? { 'X-CSRFToken': csrfToken } : {}),
+      };
+      
+      return headers;
+    } catch (error) {
+      console.error('Error getting auth headers:', error);
+      return {
+        'Content-Type': 'application/json',
+      };
+    }
+  }
+
+  /**
    * Retry helper for spotty network connections
    */
   private async retry<T>(fn: () => Promise<T>, attempts = 2, baseDelayMs = 400): Promise<T> {
@@ -135,11 +180,10 @@ maxRecommendations: number = 5
       };
       
       const response = await this.retry(async () => {
+        const headers = await this.getAuthHeaders();
         return await this.fetchWithTimeout(`${this.baseUrl}/recommendations`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers,
           body: JSON.stringify(requestBody),
         }, 12000);
       });
@@ -199,11 +243,10 @@ async optimizeStrategy(
 request: StrategyOptimizationRequest
 ): Promise<StrategyOptimizationResponse> {
 try {
+const headers = await this.getAuthHeaders();
 const response = await fetch(`${this.baseUrl}/optimize-strategy`, {
 method: 'POST',
-headers: {
-'Content-Type': 'application/json',
-},
+headers,
 body: JSON.stringify(request),
 });
 if (!response.ok) {
@@ -224,11 +267,10 @@ symbol: string,
 analysisType: 'comprehensive' | 'quick' | 'detailed' = 'comprehensive'
 ): Promise<any> {
 try {
+const headers = await this.getAuthHeaders();
 const response = await fetch(`${this.baseUrl}/market-analysis`, {
 method: 'POST',
-headers: {
-'Content-Type': 'application/json',
-},
+headers,
 body: JSON.stringify({
 symbol: (symbol || 'UNKNOWN').toUpperCase(),
 analysis_type: analysisType,
@@ -249,11 +291,10 @@ throw new Error('Failed to get market analysis');
 */
 async trainModels(symbol: string): Promise<any> {
 try {
+const headers = await this.getAuthHeaders();
 const response = await fetch(`${this.baseUrl}/train-models`, {
 method: 'POST',
-headers: {
-'Content-Type': 'application/json',
-},
+headers,
 body: JSON.stringify({ symbol: (symbol || 'UNKNOWN').toUpperCase() }),
 });
 if (!response.ok) {

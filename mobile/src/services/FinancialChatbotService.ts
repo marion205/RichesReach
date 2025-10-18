@@ -107,6 +107,7 @@ class MockRecommendationProvider implements RecommendationProvider {
 export class AlphaVantageRecommendationProvider implements RecommendationProvider {
   private apiKey: string;
   private base = 'https://www.alphavantage.co/query';
+  private disabled = true; // Disabled - use backend API instead
   // A small, curated universe (keeps within free API limits).
   // You can expand/segment by risk/goals below.
   private universe = {
@@ -218,6 +219,10 @@ export class AlphaVantageRecommendationProvider implements RecommendationProvide
   }
 
   async fetchRecommendations(ctx: InvestmentContext): Promise<StockRecommendation[]> {
+    if (this.disabled) {
+      // Return empty array when disabled - use backend API instead
+      return [];
+    }
     const risk = ctx.riskTolerance;
     const time = ctx.timeHorizon;
     const tickers = this.pickUniverse(risk);
