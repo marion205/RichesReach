@@ -16,14 +16,11 @@ RUN --mount=type=cache,target=/var/cache/apt \
 # 1) Ensure pip, setuptools, wheel exist for PEP 517 builds
 RUN python -m pip install --upgrade pip setuptools wheel
 
-# 2) Copy requirements and constraints (cache-safe)
-COPY backend/requirements.txt /tmp/requirements.txt
-COPY backend/constraints.txt /tmp/constraints.txt
-ARG REQUIREMENTS_SHA
+# 2) Copy lock file (cache-safe)
+COPY backend/constraints.lock /tmp/constraints.lock
+ARG LOCK_SHA
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --prefer-binary \
-        --constraint /tmp/constraints.txt \
-        -r /tmp/requirements.txt \
+    pip install --no-deps --require-hashes -r /tmp/constraints.lock \
  && python -m pip check
 
 # copy source
