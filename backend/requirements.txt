@@ -129,7 +129,7 @@ pyasn1_modules==0.4.2
 pycparser==2.23
 pycryptodome==3.23.0
 pydantic>=2.0.0,<2.8.0
-pydantic_core==2.33.2
+# pydantic_core==2.33.2  # Let pydantic handle this automatically
 Pygments==2.19.2
 PyJWT==2.10.1
 pyOpenSSL==25.3.0
@@ -162,7 +162,7 @@ starlette==0.27.0
 statsmodels==0.14.5
 stripe==13.0.1
 structlog==23.1.0
-ta==0.10.2  # Python 3.10 compatible; Full TA-Lib support
+ta==0.11.0  # Python 3.10 compatible; Full TA-Lib support
 tensorboard==2.17.1
 tensorboard-data-server==0.7.2
 tensorflow>=2.15.0,<2.17.0
@@ -179,7 +179,7 @@ txaio==25.9.2
 typing-inspection==0.4.1
 typing_extensions==4.15.0
 tzdata==2025.2
-urllib3>=1.26.0,<1.27.0  # Compatible with types-requests
+urllib3>=1.26.0,<3.0.0  # Modern range; Aligns with requests 2.32+
 uvicorn[standard]==0.30.*
 uvloop==0.21.0
 vine==5.1.0
