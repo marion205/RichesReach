@@ -269,10 +269,25 @@ jobs:
       - name: Run database migrations
         run: |
           echo "Running database migrations before service update..."
+          # Get secret ARN (assume you have one; create if not)
+          SECRET_ARN=$(aws secretsmanager describe-secret --secret-id django-db-password --query SecretArn --output text)
+          
           aws ecs run-task \
             --cluster riches-reach-cluster \
             --task-definition "$NEW_TD" \
-            --overrides '{"containerOverrides":[{"name":"streaming-pipeline","command":["python","manage.py","migrate"]}]}' \
+            --overrides '{
+              "containerOverrides": [{
+                "name": "streaming-pipeline",
+                "command": ["python", "manage.py", "migrate", "--verbosity=2"],
+                "environment": [
+                  {"name": "DJANGO_DB_HOST", "value": "richesreach-prod.c8kqj2x3x3x3.us-east-1.rds.amazonaws.com"},
+                  {"name": "DJANGO_DB_PORT", "value": "5432"},
+                  {"name": "DJANGO_DB_NAME", "value": "richesreach_prod"},
+                  {"name": "DJANGO_DB_USER", "value": "django_user"},
+                  {"name": "DJANGO_DB_PASSWORD", "valueFrom": "'${SECRET_ARN}'"}
+                ]
+              }]
+            }' \
             --network-configuration '{"awsvpcConfiguration":{"subnets":["subnet-02425582bcf709123","subnet-04dac76fa8a69130d","subnet-07ffaac96ec01fdb7"],"securityGroups":["sg-0c9973ce8922df3a5"],"assignPublicIp":"ENABLED"}}' \
             --region ${{ env.AWS_REGION }} \
             --query 'tasks[0].taskArn' --output text > migration-task-arn.txt
@@ -295,6 +310,12 @@ jobs:
           
           if [ "$EXIT_CODE" != "0" ]; then
             echo "❌ Migration failed with exit code: $EXIT_CODE"
+            echo "Fetching logs for debug..."
+            aws logs get-log-events \
+              --log-group-name /ecs/riches-reach-streaming-pipeline-optimized \
+              --log-stream-name $MIGRATION_TASK_ARN/streaming-pipeline/* \
+              --limit 50 \
+              --start-from-head
             exit 1
           fi
           
