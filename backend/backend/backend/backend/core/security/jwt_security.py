@@ -13,8 +13,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from graphql_jwt.exceptions import GraphQLJWTError
-from graphql_jwt.utils import get_http_authorization
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 import logging
 
 logger = logging.getLogger(__name__)
@@ -103,12 +102,12 @@ class SecureJWTHandler:
             # Check if token is in deny list
             jti = payload.get('jti')
             if jti and self._is_token_denied(jti):
-                raise GraphQLJWTError('Token has been revoked')
+                raise Exception('Token has been revoked')
             
             # Validate token type
             token_type = payload.get('type')
             if token_type not in ['access', 'refresh']:
-                raise GraphQLJWTError('Invalid token type')
+                raise Exception('Invalid token type')
             
             # Additional security checks
             self._validate_token_security(payload)
@@ -116,10 +115,10 @@ class SecureJWTHandler:
             return payload
             
         except jwt.ExpiredSignatureError:
-            raise GraphQLJWTError('Token has expired')
+            raise Exception('Token has expired')
         except jwt.InvalidTokenError as e:
             logger.warning(f"Invalid token: {str(e)}")
-            raise GraphQLJWTError('Invalid token')
+            raise Exception('Invalid token')
     
     def refresh_access_token(self, refresh_token: str) -> Dict[str, str]:
         """Generate new access token using refresh token"""
@@ -127,14 +126,14 @@ class SecureJWTHandler:
         payload = self.validate_token(refresh_token)
         
         if payload.get('type') != 'refresh':
-            raise GraphQLJWTError('Invalid refresh token')
+            raise Exception('Invalid refresh token')
         
         # Get user
         user_id = payload.get('user_id')
         try:
             user = User.objects.get(id=user_id)
         except User.DoesNotExist:
-            raise GraphQLJWTError('User not found')
+            raise Exception('User not found')
         
         # Revoke old refresh token
         jti = payload.get('jti')
@@ -189,13 +188,13 @@ class SecureJWTHandler:
             token_age = time.time() - iat
             max_age = 24 * 60 * 60  # 24 hours
             if token_age > max_age:
-                raise GraphQLJWTError('Token too old')
+                raise Exception('Token too old')
         
         # Validate required claims
         required_claims = ['user_id', 'jti', 'type', 'iss', 'aud']
         for claim in required_claims:
             if claim not in payload:
-                raise GraphQLJWTError(f'Missing required claim: {claim}')
+                raise Exception(f'Missing required claim: {claim}')
     
     def _is_token_denied(self, jti: str) -> bool:
         """Check if token JTI is in deny list"""
@@ -227,7 +226,7 @@ class SecureGraphQLJWTMiddleware:
     def _process_graphql_request(self, request):
         """Process GraphQL request with JWT validation"""
         # Get authorization header
-        auth_header = get_http_authorization(request)
+        auth_header = request.META.get('HTTP_AUTHORIZATION', '')
         
         if auth_header:
             try:
@@ -247,7 +246,7 @@ class SecureGraphQLJWTMiddleware:
                     except User.DoesNotExist:
                         logger.warning(f"JWT token references non-existent user: {user_id}")
                         
-            except GraphQLJWTError as e:
+            except Exception as e:
                 logger.warning(f"JWT validation failed: {str(e)}")
                 # Don't set user, let GraphQL handle authentication
 

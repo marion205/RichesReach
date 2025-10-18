@@ -111,7 +111,6 @@ INSTALLED_APPS = [
     'core',
     'graphene_django',
     'django_celery_results',
-    'graphql_jwt.refresh_token',
     # 'marketdata',  # New market data microservice - temporarily disabled due to migration issues
 ]
 
@@ -332,7 +331,7 @@ CHAINLINK_USDC_USD_FEED = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419"  # Mainne
 GRAPHENE = {
     "SCHEMA": "core.schema.schema",
     "MIDDLEWARE": [
-        "graphql_jwt.middleware.JSONWebTokenMiddleware"
+        # JWT middleware removed - using SimpleJWT approach
     ],
     "SCHEMA_INDEPTH_LIMIT": 20,
     "SCHEMA_OUTPUT": "schema.json",
@@ -340,22 +339,10 @@ GRAPHENE = {
 AUTH_USER_MODEL = "core.User"
 # Authentication backends
 AUTHENTICATION_BACKENDS = [
-'graphql_jwt.backends.JSONWebTokenBackend',
-'django.contrib.auth.backends.ModelBackend',
+    'django.contrib.auth.backends.ModelBackend',
 ]
 
-# JWT Configuration
-GRAPHQL_JWT = {
-    'JWT_ALGORITHM': 'HS256',
-    'JWT_SECRET_KEY': SECRET_KEY,
-    'JWT_EXPIRATION_DELTA': timedelta(minutes=60),
-    'JWT_REFRESH_EXPIRATION_DELTA': timedelta(days=7),
-    'JWT_VERIFY_EXPIRATION': True,
-    'JWT_LEEWAY': 0,
-    'JWT_AUTH_HEADER_PREFIX': 'Bearer',
-    'JWT_AUTH_COOKIE': None,
-    'JWT_ALLOW_REFRESH': True,
-}
+# JWT Configuration - Using SimpleJWT instead of graphql_jwt
 # Market Data Configuration
 REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
 POLYGON_API_KEY = os.getenv('POLYGON_API_KEY')  # No default - must be set via environment
@@ -573,7 +560,6 @@ CORS_ALLOW_ALL_ORIGINS = True  # dev only
 
 # Authentication backends
 AUTHENTICATION_BACKENDS = [
-    "graphql_jwt.backends.JSONWebTokenBackend",
     "django.contrib.auth.backends.ModelBackend",
 ]
 
@@ -588,7 +574,8 @@ DEV_ALLOW_ANON_GRAPHQL = os.getenv("DEV_ALLOW_ANON_GRAPHQL", "1") == "1"
 if DEV_ALLOW_ANON_GRAPHQL and DEBUG:
     print("INFO: Development mode - JWT middleware disabled for anonymous GraphQL requests")
 else:
-    GRAPHENE["MIDDLEWARE"] = ["graphql_jwt.middleware.JSONWebTokenMiddleware"]
+    # JWT middleware removed - using SimpleJWT approach
+    pass
 
 # CSRF Configuration for dev and production
 CSRF_TRUSTED_ORIGINS = [

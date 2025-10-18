@@ -1,5 +1,5 @@
 import graphene
-import graphql_jwt
+# import graphql_jwt  # Removed - using SimpleJWT
 from graphene_django import DjangoObjectType
 from django.contrib.auth import get_user_model
 
@@ -41,7 +41,8 @@ class Query(graphene.ObjectType):
 
 class Mutation(graphene.ObjectType):
     # token_auth = ObtainJSONWebToken.Field()  # Disabled - using SimpleJWT
-    verify_token = graphql_jwt.Verify.Field()
-    refresh_token = graphql_jwt.Refresh.Field()
+    # verify_token = graphql_jwt.Verify.Field()  # Disabled - using SimpleJWT
+    # refresh_token = graphql_jwt.Refresh.Field()  # Disabled - using SimpleJWT
+    pass
 
 schema = graphene.Schema(query=Query, mutation=Mutation)

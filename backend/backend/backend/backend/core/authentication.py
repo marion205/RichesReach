@@ -1,8 +1,8 @@
 # core/authentication.py
 from django.contrib.auth.backends import BaseBackend
 from django.contrib.auth import get_user_model
-from graphql_jwt.shortcuts import get_user_by_token
-from graphql_jwt.exceptions import PermissionDenied
+from rest_framework_simplejwt.tokens import AccessToken
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 User = get_user_model()
 class JWTAuthenticationBackend(BaseBackend):
     def authenticate(self, request, **kwargs):
@@ -18,11 +18,13 @@ class JWTAuthenticationBackend(BaseBackend):
 
 
 def get_user_from_token(token):
-    """Extract user from JWT token"""
+    """Extract user from JWT token using SimpleJWT"""
     try:
         if token:
-            user = get_user_by_token(token)
+            access_token = AccessToken(token)
+            user_id = access_token['user_id']
+            user = User.objects.get(pk=user_id)
             return user
-    except (PermissionDenied, Exception):
+    except (InvalidToken, TokenError, User.DoesNotExist, Exception):
         pass
     return None
