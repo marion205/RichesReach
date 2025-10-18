@@ -18,7 +18,7 @@ env:
   ECR_REGISTRY: 498606688292.dkr.ecr.us-east-1.amazonaws.com
   ECR_REPOSITORY: riches-reach-streaming
   PYTHON_VERSION: "3.11"  # Quick unblock; switch back to 3.12 once deps are stable
-  APP_DIR: "backend"  # Single source of truth - use main requirements.txt
+  APP_DIR: "backend/backend/backend"  # Django app location - use main requirements.txt
 
 jobs:
   production-deploy:
@@ -32,7 +32,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: "pip"
-          cache-dependency-path: ${{ env.APP_DIR }}/requirements.txt
+          cache-dependency-path: backend/requirements.txt
 
       - name: Verify project layout
         run: bash scripts/verify-layout.sh
@@ -52,14 +52,14 @@ jobs:
           PIP_DEFAULT_TIMEOUT: '100'
         run: |
           echo "=== Attempting binary-only install ==="
-          pip install -r "${APP_DIR}/requirements.txt" --only-binary=:all: -vvv
+          pip install -r backend/requirements.txt --only-binary=:all: -vvv
 
       - name: Retry without binary constraint & print culprit
         if: steps.pip1.outcome != 'success'
         run: |
           set -e
           echo "=== Binary-only failed, retrying with verbose output ==="
-          pip install -r "${APP_DIR}/requirements.txt" -vvv |& tee /tmp/pip.log
+          pip install -r backend/requirements.txt -vvv |& tee /tmp/pip.log
           echo "==== packages that triggered build from sdist ===="
           grep -E "Building wheel for|Preparing metadata|Running setup.py" /tmp/pip.log || true
           echo "==== Full pip log for debugging ===="
@@ -74,7 +74,7 @@ jobs:
       - name: Dry-run wheel check
         run: |
           echo "=== Checking for packages without wheels ==="
-          pip download --only-binary=:all: -r "${APP_DIR}/requirements.txt" -d /tmp/wheels
+          pip download --only-binary=:all: -r backend/requirements.txt -d /tmp/wheels
 
       - name: Lint for legacy JWT
         run: |
@@ -130,7 +130,7 @@ jobs:
         run: |
           APP_DIR="${{ env.APP_DIR }}"
           echo "Checking files in: $APP_DIR"
-          test -f "$APP_DIR/requirements.txt" || { echo "❌ Missing $APP_DIR/requirements.txt"; exit 1; }
+          test -f "backend/requirements.txt" || { echo "❌ Missing backend/requirements.txt"; exit 1; }
           test -f "$APP_DIR/manage.py" || { echo "❌ Missing $APP_DIR/manage.py"; exit 1; }
           test -d "$APP_DIR/richesreach" || { echo "❌ Missing $APP_DIR/richesreach/ directory"; exit 1; }
           echo "✅ All required files found"
