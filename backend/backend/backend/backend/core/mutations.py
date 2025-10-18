@@ -21,6 +21,17 @@ from .ml_mutations import GenerateMLPortfolioRecommendation, GetMLMarketAnalysis
 from .monitoring_types import MonitoringMutations
 
 
+# ------------------------ Authentication decorator ------------------------
+def login_required(resolver):
+    """Simple login required decorator for GraphQL mutations"""
+    def wrapper(root, info, *args, **kwargs):
+        user = info.context.user
+        if not user or user.is_anonymous:
+            raise GraphQLError("Authentication required")
+        return resolver(root, info, *args, **kwargs)
+    return wrapper
+
+
 # ------------------------ small helpers for metrics ------------------------
 def _normalize_to_decimal(v):
     """
