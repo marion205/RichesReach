@@ -52,10 +52,13 @@ def check_python_packages():
     """Check if required Python packages are installed."""
     print_status("Checking Python packages...")
     
+    # Set Django settings to avoid configuration errors
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'richesreach.settings')
+    
     required_packages = [
         'django',
-        'graphene-django',
-        'psycopg2-binary',
+        'graphene_django',
+        'psycopg2',
         'redis',
         'requests',
         'celery'
@@ -64,7 +67,7 @@ def check_python_packages():
     missing_packages = []
     for package in required_packages:
         try:
-            __import__(package.replace('-', '_'))
+            __import__(package)
             print_success(f"✓ {package}")
         except ImportError:
             print_error(f"✗ {package}")
