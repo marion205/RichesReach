@@ -57,7 +57,7 @@ def check_python_packages():
     
     required_packages = [
         'django',
-        'graphene_django',
+        'graphene',
         'psycopg2',
         'redis',
         'requests',
