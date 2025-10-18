@@ -16,11 +16,14 @@ RUN --mount=type=cache,target=/var/cache/apt \
 # 1) Ensure pip, setuptools, wheel exist for PEP 517 builds
 RUN python -m pip install --upgrade pip setuptools wheel
 
-# 2) Copy and install requirements (cache-safe)
+# 2) Copy requirements and constraints (cache-safe)
 COPY backend/requirements.txt /tmp/requirements.txt
+COPY backend/constraints.txt /tmp/constraints.txt
 ARG REQUIREMENTS_SHA
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --no-cache-dir -r /tmp/requirements.txt \
+    pip install --no-cache-dir --prefer-binary \
+        --constraint /tmp/constraints.txt \
+        -r /tmp/requirements.txt \
  && pip install --prefer-binary "gunicorn>=21" "uvicorn[standard]>=0.30" "whitenoise>=6"
 
 # copy source

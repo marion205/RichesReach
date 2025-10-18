@@ -146,6 +146,11 @@ jobs:
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Enable BuildKit
+        run: |
+          echo "DOCKER_BUILDKIT=1" >> $GITHUB_ENV
+          echo "COMPOSE_DOCKER_CLI_BUILD=1" >> $GITHUB_ENV
+
       - name: 🚨 Production Guardrails - No Mocks Allowed
         run: |
           echo "Checking for mock flags in environment..."
@@ -168,6 +173,7 @@ jobs:
           platforms: linux/amd64
           build-args: |
             REQUIREMENTS_SHA=${{ steps.tags.outputs.reqs_sha }}
+            PIP_NO_CACHE_DIR=0
           tags: |
             ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ steps.tags.outputs.raw }}
             ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ steps.tags.outputs.pref }}
