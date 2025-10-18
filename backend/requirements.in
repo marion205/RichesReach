@@ -1,5 +1,5 @@
 # Direct dependencies only - these are the packages you actually import
-# Build tools
+# Build tools (allow unsafe for setuptools)
 setuptools>=70.0.0
 wheel>=0.44.0
 
