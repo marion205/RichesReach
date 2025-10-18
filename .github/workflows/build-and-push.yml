@@ -42,6 +42,21 @@ jobs:
           python -m pip install --upgrade pip
           pip install pip-tools
 
+      - name: Guard: Check lock up-to-date
+        working-directory: backend
+        run: |
+          echo "🛡️ Checking if constraints.lock is up-to-date..."
+          if [ -f constraints.lock ]; then
+            if ! pip-compile --generate-hashes --resolver=backtracking --dry-run --allow-unsafe --output-file constraints.lock requirements.in constraints.in 2>/dev/null; then
+              echo "❌ constraints.lock is out-of-date! Run 'make lock' to update."
+              exit 1
+            fi
+          else
+            echo "❌ No constraints.lock found! Run 'make lock' first."
+            exit 1
+          fi
+          echo "✅ Lockfile is current."
+
       - name: Compile lock (deterministic, hashed)
         working-directory: backend
         run: |
@@ -158,10 +173,10 @@ jobs:
           pip install --no-deps --require-hashes -r backend/constraints.lock
           python -m pip check
           python - <<'PY'
-          import fastapi, sys
-          print("Python:", sys.version.split()[0])
-          print("fastapi:", fastapi.__version__)
-          PY
+import fastapi, sys
+print("Python:", sys.version.split()[0])
+print("fastapi:", fastapi.__version__)
+PY
 
       - name: 🚨 Production Guardrails - No Mocks Allowed
         run: |
