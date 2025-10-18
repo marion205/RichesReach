@@ -12,7 +12,6 @@ ml-dtypes==0.4.1
 # Core web stack - keep compatible (transitive deps only)
 pydantic==2.7.3
 
-# Database and core deps
+# Database and core deps (transitive deps only)
 psycopg2-binary==2.9.7
-django==5.1.4
-graphene-django==3.3.0
+# django and graphene-django removed - keep first-class deps in requirements.txt only
