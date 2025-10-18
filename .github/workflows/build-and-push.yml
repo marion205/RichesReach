@@ -158,10 +158,10 @@ jobs:
           pip install --no-deps --require-hashes -r backend/constraints.lock
           python -m pip check
           python - <<'PY'
-import fastapi, sys
-print("Python:", sys.version.split()[0])
-print("fastapi:", fastapi.__version__)
-PY
+          import fastapi, sys
+          print("Python:", sys.version.split()[0])
+          print("fastapi:", fastapi.__version__)
+          PY
 
       - name: 🚨 Production Guardrails - No Mocks Allowed
         run: |
