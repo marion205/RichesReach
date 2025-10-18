@@ -8,9 +8,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
 from datetime import timedelta
-import graphql_jwt
 from graphql import GraphQLError
-from graphql_jwt.decorators import login_required
 import secrets
 import hashlib
 
@@ -568,11 +566,7 @@ class PlaceStockOrder(graphene.Mutation):
 
 
 class Mutation(graphene.ObjectType):
-    # Auth mutations
-    token_auth = graphql_jwt.ObtainJSONWebToken.Field()
-    verify_token = graphql_jwt.Verify.Field()
-    refresh_token = graphql_jwt.Refresh.Field()
-    revoke_token = graphql_jwt.Revoke.Field()
+    # Auth mutations removed - using SimpleJWT mutations from core/schema.py
     
     # AI/ML mutations
     generate_ai_recommendations = GenerateAIRecommendations.Field()
