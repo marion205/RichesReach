@@ -4,13 +4,23 @@ SimpleJWT GraphQL Mutations
 import graphene
 from django.contrib.auth import get_user_model
 from rest_framework_simplejwt.serializers import (
-    TokenObtainPairSerializer,
+    TokenObtainPairSerializer as BaseTokenObtainPairSerializer,
     TokenRefreshSerializer,
     TokenVerifySerializer,
 )
 from graphql import GraphQLError
 
 User = get_user_model()
+
+class EmailTokenObtainPairSerializer(BaseTokenObtainPairSerializer):
+    """
+    If USERNAME_FIELD='email', accept 'email' and map it to 'username'
+    so we don't have to pass 'username' from the client.
+    """
+    def validate(self, attrs):
+        if "email" in attrs and "username" not in attrs:
+            attrs["username"] = attrs["email"]
+        return super().validate(attrs)
 
 class TokenPairType(graphene.ObjectType):
     access = graphene.String(required=True)
@@ -25,8 +35,8 @@ class ObtainTokenPair(graphene.Mutation):
 
     @classmethod
     def mutate(cls, root, info, email, password):
-        data = {"username": email, "password": password}
-        serializer = TokenObtainPairSerializer(data=data)
+        data = {"email": email, "password": password}
+        serializer = EmailTokenObtainPairSerializer(data=data)
         if serializer.is_valid():
             tokens = serializer.validated_data
             return TokenPairType(access=tokens["access"], refresh=tokens["refresh"])
