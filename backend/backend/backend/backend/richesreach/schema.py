@@ -81,9 +81,7 @@ class Query(graphene.ObjectType):
             }
         ]
 
-class Mutation(graphene.ObjectType):
-    # Import the mutation from core.mutations
-    from core.mutations import PlaceStockOrder
-    place_stock_order = PlaceStockOrder.Field()
+# Import the complete Mutation class from core.schema
+from core.schema import Mutation
 
 schema = graphene.Schema(query=Query, mutation=Mutation)
