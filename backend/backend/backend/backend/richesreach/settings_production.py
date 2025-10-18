@@ -25,18 +25,24 @@ DEBUG = False
 USE_SBLOC_MOCK = os.getenv('USE_SBLOC_MOCK', 'true').lower() == 'true'
 USE_SBLOC_AGGREGATOR = os.getenv('USE_SBLOC_AGGREGATOR', 'false').lower() == 'true'
 
-# JWT Configuration
+# JWT Configuration (using correct GRAPHQL_JWT settings for django-graphql-jwt)
 GRAPHQL_JWT = {
+    'JWT_VERIFY_EXPIRATION': True,
+    'JWT_EXPIRATION_DELTA': timedelta(minutes=60),   # access token
+    'JWT_REFRESH_EXPIRATION_DELTA': timedelta(days=7),
+    'JWT_LONG_RUNNING_REFRESH_TOKEN': True,          # persisted refresh pattern
     'JWT_ALGORITHM': 'HS256',
     'JWT_SECRET_KEY': SECRET_KEY,
-    'JWT_EXPIRATION_DELTA': timedelta(minutes=60),
-    'JWT_REFRESH_EXPIRATION_DELTA': timedelta(days=7),
-    'JWT_VERIFY_EXPIRATION': True,
     'JWT_LEEWAY': 0,
     'JWT_AUTH_HEADER_PREFIX': 'Bearer',
     'JWT_AUTH_COOKIE': None,
-    'JWT_ALLOW_REFRESH': True,
 }
+
+# Authentication backends
+AUTHENTICATION_BACKENDS = [
+    'graphql_jwt.backends.JSONWebTokenBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
 
 # Host / CSRF
 ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS","riches-reach-alb-1199497064.us-east-1.elb.amazonaws.com,localhost,127.0.0.1").split(",")
@@ -66,7 +72,7 @@ INSTALLED_APPS = [
     'django_celery_results',
     'rest_framework',
     'rest_framework.authtoken',
-    'graphql_jwt.refresh_token',
+    'graphql_jwt.refresh_token',  # Required for persisted refresh tokens
 ]
 
 MIDDLEWARE = [
@@ -81,6 +87,14 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = 'richesreach.urls'
+
+# GraphQL Configuration
+GRAPHENE = {
+    'SCHEMA': 'core.schema.schema',
+    'MIDDLEWARE': [
+        'graphql_jwt.middleware.JSONWebTokenMiddleware',
+    ],
+}
 
 TEMPLATES = [
     {
