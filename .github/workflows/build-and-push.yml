@@ -27,26 +27,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Clean & Reinstall Python Env
+      - name: Set up Python (Fallback Approach)
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: 'none'  # Disable cache to avoid corrupted toolcache
+          cache: "pip"
+          cache-dependency-path: ${{ env.APP_DIR }}/requirements.txt
 
       - name: Verify project layout
         run: bash scripts/verify-layout.sh
 
-      - name: Bootstrap Clean
+      - name: Install dependencies (Build Tool Method)
         run: |
-          python -m pip install --no-cache-dir --upgrade pip
-          python -m pip install --no-cache-dir setuptools wheel build  # Explicit build deps
-
-      - name: Install dependencies
-        run: |
-          # Try with build isolation first
-          python -m pip install --no-cache-dir --no-build-isolation -r "${APP_DIR}/requirements.txt" || \
-          # Fallback: Force backend override
-          BUILD_BACKEND=setuptools.build_meta python -m pip install --no-cache-dir -r "${APP_DIR}/requirements.txt"
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade setuptools wheel build
+          # Use build tool for sdist-heavy packages
+          python -m pip install -r "${APP_DIR}/requirements.txt" --verbose
 
       - name: Verify build backend
         run: |
