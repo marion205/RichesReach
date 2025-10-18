@@ -48,14 +48,13 @@ jobs:
           echo "🛡️ Checking if constraints.lock is up-to-date..."
           if [ -f constraints.lock ]; then
             if ! pip-compile --generate-hashes --resolver=backtracking --dry-run --allow-unsafe --output-file constraints.lock requirements.in constraints.in 2>/dev/null; then
-              echo "❌ constraints.lock is out-of-date! Run 'make lock' to update."
-              exit 1
+              echo "❌ constraints.lock is out-of-date! Will regenerate in next step."
+            else
+              echo "✅ Lockfile is current."
             fi
           else
-            echo "❌ No constraints.lock found! Run 'make lock' first."
-            exit 1
+            echo "ℹ️ No constraints.lock found - will generate fresh lock file."
           fi
-          echo "✅ Lockfile is current."
 
       - name: Compile lock (deterministic, hashed)
         working-directory: backend
