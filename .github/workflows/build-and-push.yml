@@ -267,6 +267,7 @@ jobs:
           echo "Registered TD: $NEW_TD"
 
       - name: Run database migrations (with DB secrets and logs)
+        shell: bash
         env:
           AWS_REGION: us-east-1
           CLUSTER: riches-reach-cluster
@@ -277,7 +278,7 @@ jobs:
           DJANGO_DB_PORT: "5432"
           DJANGO_DB_NAME: richesreach_prod
           DJANGO_DB_USER: django_user
-          # Name/ARN of the password secret (value is the password string)
+          # Secrets Manager id (NOT the password itself)
           DJANGO_DB_PASSWORD_SECRET_ID: django-db-password
         run: |
           set -euo pipefail
@@ -287,14 +288,13 @@ jobs:
             --secret-id "$DJANGO_DB_PASSWORD_SECRET_ID" \
             --query 'ARN' --output text --region "$AWS_REGION")
 
-          echo "🧾 Using task definition $NEW_TD for migration…"
-          # Build JSON overrides safely
-          OVERRIDES=$(jq -n --arg cn "$CONTAINER_NAME" \
-                           --arg host "$DJANGO_DB_HOST" \
-                           --arg port "$DJANGO_DB_PORT" \
-                           --arg name "$DJANGO_DB_NAME" \
-                           --arg user "$DJANGO_DB_USER" \
-                           --arg sa "$SECRET_ARN" '
+          echo "🧾 Building ECS overrides JSON…"
+          jq -n --arg cn "$CONTAINER_NAME" \
+                --arg host "$DJANGO_DB_HOST" \
+                --arg port "$DJANGO_DB_PORT" \
+                --arg name "$DJANGO_DB_NAME" \
+                --arg user "$DJANGO_DB_USER" \
+                --arg sa "$SECRET_ARN" '
             {
               containerOverrides: [
                 {
@@ -311,14 +311,14 @@ jobs:
                   ]
                 }
               ]
-            }')
+            }' > overrides.json
 
           echo "🚀 Starting one-off migration task…"
           TASK_ARN=$(aws ecs run-task \
             --cluster "$CLUSTER" \
             --task-definition "$NEW_TD" \
             --launch-type FARGATE \
-            --overrides "$OVERRIDES" \
+            --overrides file://overrides.json \
             --network-configuration '{
               "awsvpcConfiguration":{
                 "subnets":["subnet-02425582bcf709123","subnet-04dac76fa8a69130d","subnet-07ffaac96ec01fdb7"],
@@ -337,12 +337,10 @@ jobs:
             --cluster "$CLUSTER" --tasks "$TASK_ARN" --region "$AWS_REGION" \
             --query "tasks[0].containers[?name=='$CONTAINER_NAME'].exitCode | [0]" --output text)
 
-          # Get the precise CloudWatch log stream for this container
           LOG_STREAM=$(aws ecs describe-tasks \
             --cluster "$CLUSTER" --tasks "$TASK_ARN" --region "$AWS_REGION" \
             --query "tasks[0].containers[?name=='$CONTAINER_NAME'].logStreamName | [0]" --output text)
 
-          # Derive the log group from the task definition (safer than guessing)
           LOG_GROUP=$(aws ecs describe-task-definition --task-definition "$NEW_TD" --region "$AWS_REGION" \
             --query "taskDefinition.containerDefinitions[?name=='$CONTAINER_NAME'].logConfiguration.options.\"awslogs-group\" | [0]" \
             --output text)
