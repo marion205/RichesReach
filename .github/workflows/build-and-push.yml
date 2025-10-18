@@ -42,7 +42,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install pip-tools
 
-      - name: Guard: Check lock up-to-date
+      - name: Guard Check lock up-to-date
         working-directory: backend
         run: |
           echo "🛡️ Checking if constraints.lock is up-to-date..."
@@ -173,10 +173,10 @@ jobs:
           pip install --no-deps --require-hashes -r backend/constraints.lock
           python -m pip check
           python - <<'PY'
-import fastapi, sys
-print("Python:", sys.version.split()[0])
-print("fastapi:", fastapi.__version__)
-PY
+          import fastapi, sys
+          print("Python:", sys.version.split()[0])
+          print("fastapi:", fastapi.__version__)
+          PY
 
       - name: 🚨 Production Guardrails - No Mocks Allowed
         run: |
