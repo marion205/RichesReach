@@ -9,10 +9,8 @@ tensorflow==2.20.0
 tensorboard==2.20.0
 ml-dtypes==0.4.1
 
-# Core web stack - keep compatible
-fastapi==0.111.0
+# Core web stack - keep compatible (transitive deps only)
 pydantic==2.7.3
-uvicorn==0.30.5
 
 # Database and core deps
 psycopg2-binary==2.9.7
