@@ -42,6 +42,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r "${APP_DIR}/requirements.txt"
 
+      - name: Lint for legacy JWT
+        run: |
+          if grep -R "graphql_jwt\|ObtainJSONWebToken" -n backend/ --exclude-dir=venv --exclude-dir=__pycache__ --exclude-dir=logs; then
+            echo "❌ Legacy graphql_jwt references found"; exit 1; 
+          fi
+          echo "✅ No legacy JWT references found"
+
       - name: Django checks
         working-directory: ${{ env.APP_DIR }}
         env:
@@ -64,23 +71,25 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       # Compute consistent tags (single source of truth)
-      - name: Compute tags
+      - name: Compute tags and requirements hash
         id: tags
         run: |
           RAW_SHA="${GITHUB_SHA}"
           SHA_TAG="${RAW_SHA}"              # raw sha (no prefix)
           SHA_TAG_PREFIXED="sha-${RAW_SHA}" # prefixed variant
           BRANCH_TAG="${GITHUB_REF_NAME//\//-}"
+          REQUIREMENTS_SHA=$(sha256sum backend/requirements.txt | cut -d' ' -f1)
           echo "raw=${SHA_TAG}" >> $GITHUB_OUTPUT
           echo "pref=${SHA_TAG_PREFIXED}" >> $GITHUB_OUTPUT
           echo "branch=${BRANCH_TAG}" >> $GITHUB_OUTPUT
           echo "latest=latest" >> $GITHUB_OUTPUT
+          echo "reqs_sha=${REQUIREMENTS_SHA}" >> $GITHUB_OUTPUT
 
       - name: Show workspace & Dockerfile
         run: |
           pwd
           ls -la
-          test -f ./Dockerfile || (echo "Dockerfile not found in $(pwd)"; exit 1)
+          test -f backend/Dockerfile.prod || (echo "Dockerfile.prod not found in backend/"; exit 1)
           echo "Build context will be: ."
 
       - name: Verify expected files exist
@@ -115,11 +124,11 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .                # Explicit context - no variables
-          file: ./Dockerfile
+          file: backend/Dockerfile.prod
           push: true                # Avoids "No output specified" warning
           platforms: linux/amd64
           build-args: |
-            APP_DIR=${{ env.APP_DIR }}
+            REQUIREMENTS_SHA=${{ steps.tags.outputs.reqs_sha }}
           tags: |
             ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ steps.tags.outputs.raw }}
             ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ steps.tags.outputs.pref }}

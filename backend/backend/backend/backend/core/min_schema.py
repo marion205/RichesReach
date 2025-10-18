@@ -24,7 +24,7 @@ class UserType(DjangoObjectType):
     def resolve_subscriptionTier(self, info):
         return "PREMIUM"  # Mock subscription tier
 
-class ObtainJSONWebToken(graphql_jwt.JSONWebTokenMutation):
+# class ObtainJSONWebToken(graphql_jwt.JSONWebTokenMutation):  # Disabled - using SimpleJWT
     user = graphene.Field(UserType)
     @classmethod
     def resolve(cls, root, info, **kwargs):
@@ -40,7 +40,7 @@ class Query(graphene.ObjectType):
         return None
 
 class Mutation(graphene.ObjectType):
-    token_auth = ObtainJSONWebToken.Field()
+    # token_auth = ObtainJSONWebToken.Field()  # Disabled - using SimpleJWT
     verify_token = graphql_jwt.Verify.Field()
     refresh_token = graphql_jwt.Refresh.Field()
 
