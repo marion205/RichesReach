@@ -37,9 +37,13 @@ jobs:
       - name: Verify project layout
         run: bash scripts/verify-layout.sh
 
-      - name: Install dependencies
+      - name: Upgrade pip & seed build backend
         run: |
           python -m pip install --upgrade pip
+          python -m pip install --upgrade setuptools wheel build
+
+      - name: Install dependencies
+        run: |
           pip install -r "${APP_DIR}/requirements.txt"
 
       - name: Lint for legacy JWT

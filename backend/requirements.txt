@@ -1,3 +1,7 @@
+# Build tools for PEP 517 compatibility
+setuptools>=70.0.0
+wheel>=0.44.0
+
 absl-py==2.3.1
 aiohttp==3.8.5
 aiosignal==1.4.0
