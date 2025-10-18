@@ -162,10 +162,7 @@ starlette==0.27.0
 statsmodels==0.14.5
 stripe==13.0.1
 structlog==23.1.0
-# Use ta 0.11.x on Python >= 3.11 (compatible version)
-ta==0.11.0; python_version >= "3.11"
-# Keep ta 3.1.0 on Python < 3.11 (original version)
-ta==3.1.0; python_version < "3.11"
+ta==0.10.2  # Python 3.11 compatible; Full TA-Lib support
 tensorboard==2.17.1
 tensorboard-data-server==0.7.2
 tensorflow>=2.15.0,<2.17.0
@@ -182,7 +179,7 @@ types-requests==2.32.4.20250913
 typing-inspection==0.4.1
 typing_extensions==4.15.0
 tzdata==2025.2
-urllib3>=1.25.4,<1.27
+urllib3>=1.25.4,<2.0  # Allows 1.26.x common ground
 uvicorn[standard]==0.30.*
 uvloop==0.21.0
 vine==5.1.0
