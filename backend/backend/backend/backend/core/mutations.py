@@ -565,6 +565,47 @@ class PlaceStockOrder(graphene.Mutation):
             )
 
 
+class WithdrawFunds(graphene.Mutation):
+    class Arguments:
+        amount = graphene.Float(required=True)
+        currency = graphene.String(required=True)
+
+    success = graphene.Boolean(required=True)
+    message = graphene.String(required=True)
+
+    @classmethod
+    def mutate(cls, root, info, amount, currency):
+        try:
+            # Mock user balance check
+            mock_balance = 10000.0  # Mock balance in USD
+            
+            if amount <= 0:
+                return WithdrawFunds(
+                    success=False,
+                    message="Withdrawal amount must be greater than zero"
+                )
+            
+            if amount > mock_balance:
+                return WithdrawFunds(
+                    success=False,
+                    message=f"Insufficient balance. Available: ${mock_balance:.2f}"
+                )
+            
+            # In a real implementation, this would integrate with a payment processor
+            print(f"💰 Mock Withdrawal: ${amount} {currency}")
+            
+            return WithdrawFunds(
+                success=True,
+                message=f"Withdrawal of ${amount} {currency} processed successfully"
+            )
+            
+        except Exception as e:
+            return WithdrawFunds(
+                success=False,
+                message=f"Failed to process withdrawal: {str(e)}"
+            )
+
+
 class Mutation(graphene.ObjectType):
     # Auth mutations removed - using SimpleJWT mutations from core/schema.py
     
@@ -577,6 +618,9 @@ class Mutation(graphene.ObjectType):
     # Trading mutations
     place_stock_order = PlaceStockOrder.Field()
     remove_from_watchlist = RemoveFromWatchlist.Field()
+    
+    # Financial mutations
+    withdraw_funds = WithdrawFunds.Field()
     
     # Ticker follow mutations (stubbed for now)
     follow_ticker = graphene.Field(
