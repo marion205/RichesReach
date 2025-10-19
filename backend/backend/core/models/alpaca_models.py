@@ -3,11 +3,7 @@ Alpaca-specific models for account management and trading
 """
 from django.db import models
 from django.utils import timezone
-from django.contrib.auth import get_user_model
 import uuid
-
-# Get the User model (handles custom user models)
-User = get_user_model()
 
 class AlpacaAccount(models.Model):
     """Model to track Alpaca brokerage accounts"""
@@ -21,7 +17,7 @@ class AlpacaAccount(models.Model):
     ]
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='alpaca_account')
+    user = models.ForeignKey('core.User', on_delete=models.CASCADE, related_name='alpaca_account')
     alpaca_account_id = models.CharField(max_length=100, unique=True, null=True, blank=True)
     
     # Account details

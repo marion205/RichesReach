@@ -22,6 +22,7 @@ from .auth_utils import RateLimiter, SecurityUtils
 # from .websocket_service import websocket_service  # Temporarily disabled for local development
 from .ml_mutations import GenerateMLPortfolioRecommendation, GetMLMarketAnalysis, GetMLServiceStatus, GenerateInstitutionalPortfolioRecommendation
 from .monitoring_types import MonitoringMutations
+from .services.email_notification_service import EmailNotificationService
 
 
 # ------------------------ Authentication decorator ------------------------
@@ -681,6 +682,22 @@ class PlaceStockOrder(graphene.Mutation):
                     status=alpaca_response.get('status', 'new'),
                     submitted_at=timezone.now(),
                 )
+                
+                # Send order confirmation email
+                try:
+                    email_service = EmailNotificationService()
+                    order_data = {
+                        'symbol': symbol,
+                        'side': side,
+                        'type': order_type,
+                        'qty': quantity,
+                        'price': limit_price,
+                        'status': alpaca_response.get('status', 'new'),
+                        'order_id': alpaca_response['id']
+                    }
+                    email_service.send_order_confirmation(user, order_data)
+                except Exception as email_error:
+                    logger.warning(f"Failed to send order confirmation email: {email_error}")
                 
                 return PlaceStockOrder(
                     success=True,
