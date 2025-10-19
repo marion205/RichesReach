@@ -85,12 +85,13 @@ class Query(graphene.ObjectType):
 from core.schema import Mutation
 from core.alpaca_mutations import AlpacaMutation, AlpacaQuery
 from core.alpaca_crypto_mutations import AlpacaCryptoMutation, AlpacaCryptoQuery
+from core.kyc_mutations import KYCMutation, KYCQuery
 
 # Combine all mutations and queries
-class CombinedQuery(Query, AlpacaQuery, AlpacaCryptoQuery):
+class CombinedQuery(Query, AlpacaQuery, AlpacaCryptoQuery, KYCQuery):
     pass
 
-class CombinedMutation(Mutation, AlpacaMutation, AlpacaCryptoMutation):
+class CombinedMutation(Mutation, AlpacaMutation, AlpacaCryptoMutation, KYCMutation):
     pass
 
 schema = graphene.Schema(query=CombinedQuery, mutation=CombinedMutation)
