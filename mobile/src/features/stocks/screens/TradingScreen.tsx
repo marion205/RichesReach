@@ -105,29 +105,79 @@ const GET_STOCK_CHART_DATA = gql`
   }
 `;
 
-const PLACE_MARKET_ORDER = gql`
-  mutation PlaceMarketOrder($symbol: String!, $quantity: Int!, $side: String!, $notes: String) {
-    placeMarketOrder(symbol: $symbol, quantity: $quantity, side: $side, notes: $notes) {
+const PLACE_STOCK_ORDER = gql`
+  mutation PlaceStockOrder($symbol: String!, $side: String!, $quantity: Int!, $orderType: String!, $limitPrice: Float, $timeInForce: String) {
+    placeStockOrder(symbol: $symbol, side: $side, quantity: $quantity, orderType: $orderType, limitPrice: $limitPrice, timeInForce: $timeInForce) {
       success
-      order { id symbol side orderType quantity status createdAt notes }
+      message
+      orderId
     }
   }
 `;
 
-const PLACE_LIMIT_ORDER = gql`
-  mutation PlaceLimitOrder($symbol: String!, $quantity: Int!, $side: String!, $limitPrice: Float!, $notes: String) {
-    placeLimitOrder(symbol: $symbol, quantity: $quantity, side: $side, limitPrice: $limitPrice, notes: $notes) {
-      success
-      order { id symbol side orderType quantity price status createdAt notes }
+const CREATE_ALPACA_ACCOUNT = gql`
+  mutation CreateAlpacaAccount($userId: Int!, $accountNumber: String) {
+    createAlpacaAccount(userId: $userId, accountNumber: $accountNumber) {
+      id
+      status
+      alpacaAccountId
+      isApproved
+      createdAt
     }
   }
 `;
 
-const PLACE_STOP_LOSS_ORDER = gql`
-  mutation PlaceStopLossOrder($symbol: String!, $quantity: Int!, $side: String!, $stopPrice: Float!, $notes: String) {
-    placeStopLossOrder(symbol: $symbol, quantity: $quantity, side: $side, stopPrice: $stopPrice, notes: $notes) {
-      success
-      order { id symbol side orderType quantity stopPrice status createdAt notes }
+const GET_ALPACA_ACCOUNT = gql`
+  query GetAlpacaAccount($userId: Int!) {
+    alpacaAccount(userId: $userId) {
+      id
+      status
+      alpacaAccountId
+      isApproved
+      buyingPower
+      cash
+      portfolioValue
+      createdAt
+    }
+  }
+`;
+
+const GET_ALPACA_ORDERS = gql`
+  query GetAlpacaOrders($accountId: Int!, $status: String) {
+    alpacaOrders(accountId: $accountId, status: $status) {
+      id
+      symbol
+      qty
+      side
+      type
+      timeInForce
+      limitPrice
+      stopPrice
+      status
+      filledAvgPrice
+      filledQty
+      createdAt
+      submittedAt
+      filledAt
+    }
+  }
+`;
+
+const GET_ALPACA_POSITIONS = gql`
+  query GetAlpacaPositions($accountId: Int!) {
+    alpacaPositions(accountId: $accountId) {
+      id
+      symbol
+      qty
+      avgEntryPrice
+      marketValue
+      costBasis
+      unrealizedPl
+      unrealizedPlPc
+      currentPrice
+      lastDayPrice
+      changeToday
+      updatedAt
     }
   }
 `;
@@ -279,14 +329,40 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
     return () => { if (quoteTimerRef.current) clearTimeout(quoteTimerRef.current); };
   }, [symbol, refetchQuote]);
 
-  const [placeMarketOrder]   = useMutation(PLACE_MARKET_ORDER, { errorPolicy: 'all' });
-  const [placeLimitOrder]    = useMutation(PLACE_LIMIT_ORDER, { errorPolicy: 'all' });
-  const [placeStopLossOrder] = useMutation(PLACE_STOP_LOSS_ORDER, { errorPolicy: 'all' });
-  const [cancelOrder]        = useMutation(CANCEL_ORDER, { errorPolicy: 'all' });
+  const [placeStockOrder] = useMutation(PLACE_STOCK_ORDER, { errorPolicy: 'all' });
+  const [createAlpacaAccount] = useMutation(CREATE_ALPACA_ACCOUNT, { errorPolicy: 'all' });
+  const [cancelOrder] = useMutation(CANCEL_ORDER, { errorPolicy: 'all' });
 
-  const account = accountData?.tradingAccount;
-  const positions = useMemo(() => positionsData?.tradingPositions ?? [], [positionsData]);
-  const orders = useMemo(() => ordersData?.tradingOrders ?? [], [ordersData]);
+  // Alpaca account queries
+  const { data: alpacaAccountData, loading: alpacaAccountLoading, refetch: refetchAlpacaAccount } =
+    useQuery(GET_ALPACA_ACCOUNT, { 
+      variables: { userId: 1 }, // This should come from auth context
+      errorPolicy: 'all',
+      skip: false
+    });
+
+  const { data: alpacaOrdersData, loading: alpacaOrdersLoading, refetch: refetchAlpacaOrders } =
+    useQuery(GET_ALPACA_ORDERS, { 
+      variables: { accountId: alpacaAccountData?.alpacaAccount?.id || 0 }, 
+      errorPolicy: 'all',
+      skip: !alpacaAccountData?.alpacaAccount?.id
+    });
+
+  const { data: alpacaPositionsData, loading: alpacaPositionsLoading, refetch: refetchAlpacaPositions } =
+    useQuery(GET_ALPACA_POSITIONS, { 
+      variables: { accountId: alpacaAccountData?.alpacaAccount?.id || 0 }, 
+      errorPolicy: 'all',
+      skip: !alpacaAccountData?.alpacaAccount?.id
+    });
+
+  // Use Alpaca data when available, fallback to mock data
+  const alpacaAccount = alpacaAccountData?.alpacaAccount;
+  const alpacaPositions = useMemo(() => alpacaPositionsData?.alpacaPositions ?? [], [alpacaPositionsData]);
+  const alpacaOrders = useMemo(() => alpacaOrdersData?.alpacaOrders ?? [], [alpacaOrdersData]);
+  
+  const account = alpacaAccount || accountData?.tradingAccount;
+  const positions = alpacaPositions.length > 0 ? alpacaPositions : (positionsData?.tradingPositions ?? []);
+  const orders = alpacaOrders.length > 0 ? alpacaOrders : (ordersData?.tradingOrders ?? []);
 
   // Optional: light polling on orders while Orders tab is visible
   useEffect(() => {
@@ -302,10 +378,13 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
         refetchAccount?.(),
         refetchPositions?.(),
         refetchOrders?.(),
+        refetchAlpacaAccount?.(),
+        refetchAlpacaPositions?.(),
+        refetchAlpacaOrders?.(),
         symbol ? refetchQuote?.({ symbol: upper(symbol) }) : Promise.resolve(null),
       ]);
     } finally { setRefreshing(false); }
-  }, [refetchAccount, refetchPositions, refetchOrders, refetchQuote, symbol]);
+  }, [refetchAccount, refetchPositions, refetchOrders, refetchAlpacaAccount, refetchAlpacaPositions, refetchAlpacaOrders, refetchQuote, symbol]);
 
   /* ----------------------------- Place Order ---------------------------- */
 
@@ -353,31 +432,87 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
     try {
       const sym = upper(symbol);
       const qty = sanitizeInt(quantity);
-      const orderNotes = notes || 'Placed via RichesReach app';
-      let res: any;
-
-      if (orderType === 'market') {
-        res = await placeMarketOrder({ variables: { symbol: sym, quantity: qty, side: orderSide, notes: orderNotes } });
-      } else if (orderType === 'limit') {
-        const lim = sanitizeFloat(price);
-        res = await placeLimitOrder({ variables: { symbol: sym, quantity: qty, side: orderSide, limitPrice: lim, notes: orderNotes } });
-      } else {
-        const stp = sanitizeFloat(stopPrice);
-        res = await placeStopLossOrder({ variables: { symbol: sym, quantity: qty, side: orderSide, stopPrice: stp, notes: orderNotes } });
+      
+      // Check if user has Alpaca account, if not create one
+      if (!alpacaAccount) {
+        Alert.alert(
+          'Alpaca Account Required',
+          'You need an Alpaca trading account to place real orders. Would you like to create one?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Create Account', 
+              onPress: async () => {
+                try {
+                  const accountRes = await createAlpacaAccount({ 
+                    variables: { userId: 1 } // This should come from auth context
+                  });
+                  
+                  if (accountRes?.data?.createAlpacaAccount) {
+                    Alert.alert(
+                      'Account Created',
+                      'Your Alpaca account has been created. Please complete the KYC process to start trading.',
+                      [{ text: 'OK', onPress: () => refetchAlpacaAccount() }]
+                    );
+                  } else {
+                    Alert.alert('Account Creation Failed', 'Could not create Alpaca account. Please try again.');
+                  }
+                } catch (e: any) {
+                  Alert.alert('Account Creation Failed', e?.message || 'Could not create Alpaca account.');
+                }
+              }
+            }
+          ]
+        );
+        setIsPlacingOrder(false);
+        return;
       }
 
-      const key = `place${orderType.replace('_','').replace(/^./, c=>c.toUpperCase())}Order`;
-      const success = res?.data?.[key]?.success;
-      const errorMsg = res?.data?.[key]?.error;
+      // Check if account is approved for trading
+      if (!alpacaAccount.isApproved) {
+        Alert.alert(
+          'Account Not Approved',
+          'Your Alpaca account is not yet approved for trading. Please complete the KYC process first.',
+          [{ text: 'OK' }]
+        );
+        setIsPlacingOrder(false);
+        return;
+      }
+
+      // Prepare order variables
+      const orderVariables: any = {
+        symbol: sym,
+        side: orderSide.toUpperCase(),
+        quantity: qty,
+        orderType: orderType === 'market' ? 'MARKET' : orderType === 'limit' ? 'LIMIT' : 'STOP',
+        timeInForce: 'DAY'
+      };
+
+      if (orderType === 'limit' && price) {
+        orderVariables.limitPrice = sanitizeFloat(price);
+      }
+
+      // Place order through Alpaca
+      const res = await placeStockOrder({ variables: orderVariables });
+      const success = res?.data?.placeStockOrder?.success;
+      const message = res?.data?.placeStockOrder?.message;
+      const orderId = res?.data?.placeStockOrder?.orderId;
 
       if (success) {
-        Alert.alert('Order Placed', `Your ${orderType.replace('_',' ')} order for ${quantity} ${upper(symbol)} is in.`);
+        Alert.alert(
+          'Order Placed Successfully', 
+          `${message}\n\nOrder ID: ${orderId}`,
+          [{ text: 'OK' }]
+        );
         setShowOrderModal(false);
         resetOrderForm();
-        refetchOrders?.();
-        refetchAccount?.();
+        
+        // Refresh data
+        refetchAlpacaOrders?.();
+        refetchAlpacaPositions?.();
+        refetchAlpacaAccount?.();
       } else {
-        Alert.alert('Order Failed', errorMsg || 'Could not place order. Please try again.');
+        Alert.alert('Order Failed', message || 'Could not place order. Please try again.');
       }
     } catch (e: any) {
       Alert.alert('Order Failed', e?.message || 'Could not place order. Please try again.');
@@ -475,6 +610,46 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
                 <View style={styles.alertSoft}>
                   <Icon name="alert-triangle" size={16} color={C.amber} />
                   <Text style={[styles.sub, { marginLeft: 8 }]}>Trading is currently blocked</Text>
+                </View>
+              )}
+
+              {/* Alpaca Account Status */}
+              {alpacaAccount && (
+                <View style={styles.alpacaStatusCard}>
+                  <View style={styles.alpacaStatusHeader}>
+                    <Icon name="shield" size={16} color={alpacaAccount.isApproved ? C.green : C.amber} />
+                    <Text style={styles.alpacaStatusTitle}>Alpaca Account</Text>
+                    <Chip
+                      label={alpacaAccount.status?.toUpperCase() || 'UNKNOWN'}
+                      tone={alpacaAccount.isApproved ? 'success' : 'warning'}
+                    />
+                  </View>
+                  
+                  {!alpacaAccount.isApproved && (
+                    <View style={styles.kycPrompt}>
+                      <Text style={styles.kycPromptText}>
+                        Complete KYC verification to start trading with real money
+                      </Text>
+                      <TouchableOpacity 
+                        style={styles.kycButton}
+                        onPress={() => {
+                          Alert.alert(
+                            'KYC Verification',
+                            'This will open the KYC verification process. You\'ll need to provide identity documents and personal information.',
+                            [
+                              { text: 'Cancel', style: 'cancel' },
+                              { text: 'Start KYC', onPress: () => {
+                                // This would navigate to KYC screen
+                                Alert.alert('KYC Process', 'KYC verification process would start here.');
+                              }}
+                            ]
+                          );
+                        }}
+                      >
+                        <Text style={styles.kycButtonText}>Start KYC</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
                 </View>
               )}
 
@@ -1473,6 +1648,54 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#0E7AFE',
     marginRight: 4,
+  },
+
+  // Alpaca Account Status Styles
+  alpacaStatusCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  alpacaStatusHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  alpacaStatusTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: C.text,
+    marginLeft: 8,
+    flex: 1,
+  },
+  kycPrompt: {
+    marginTop: 8,
+    padding: 12,
+    backgroundColor: '#FEF3C7',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  kycPromptText: {
+    fontSize: 13,
+    color: '#92400E',
+    marginBottom: 8,
+    lineHeight: 18,
+  },
+  kycButton: {
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  kycButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
   },
 });
 
