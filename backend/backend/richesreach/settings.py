@@ -14,13 +14,52 @@ import environ
 env = environ.Env()
 environ.Env.read_env()
 
-# Check if we're using production settings to avoid DB config conflicts
-DJANGO_SETTINGS = os.getenv("DJANGO_SETTINGS_MODULE", "")
-IS_PROD_SETTINGS = DJANGO_SETTINGS.endswith("settings_production")
-
 # Read GRAPHQL_MODE early and log it
 GRAPHQL_MODE = os.getenv("GRAPHQL_MODE", "standard").lower()
 print(f"[BOOT] GRAPHQL_MODE={GRAPHQL_MODE}", flush=True)
+
+# ML Auth Control - can be overridden for testing
+ML_REQUIRE_AUTH = os.getenv("ML_REQUIRE_AUTH", "false").lower() in ("1","true","yes")
+
+# DeFi Configuration
+DEFI_ENABLED = os.getenv("DEFI_ENABLED", "true").lower() in ("1","true","yes")
+LLAMA_ENABLED = os.getenv("LLAMA_ENABLED", "true").lower() in ("1","true","yes")
+
+# Blockchain RPC URLs
+CHAIN_RPC = {
+    1: os.getenv("ETHEREUM_RPC_URL", "https://mainnet.infura.io/v3/YOUR_KEY"),  # Ethereum
+    8453: os.getenv("BASE_RPC_URL", "https://mainnet.base.org"),  # Base
+    137: os.getenv("POLYGON_RPC_URL", "https://polygon-rpc.com"),  # Polygon
+    42161: os.getenv("ARBITRUM_RPC_URL", "https://arb1.arbitrum.io/rpc"),  # Arbitrum
+    11155111: os.getenv("SEPOLIA_RPC_URL", "https://sepolia.infura.io/v3/YOUR_KEY"),  # Sepolia testnet
+}
+
+# DeFi Protocol Allowlist (for safety)
+DEFI_ALLOWLIST = [
+    'aave', 'uniswap', 'curve', 'compound', 'yearn', 'beefy', 'balancer'
+]
+
+# Celery Configuration
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://127.0.0.1:6379/0')
+CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', CELERY_BROKER_URL)
+CELERY_TASK_ALWAYS_EAGER = False  # True for local debugging only
+CELERY_BEAT_SCHEDULE = {
+    "defi_yield_refresh_5m": {
+        "task": "core.tasks.defi_yield_refresh",
+        "schedule": 300,  # 5 min
+        "options": {"queue": "defi"},
+    },
+    "defi_positions_refresh_hourly": {
+        "task": "core.tasks.defi_positions_refresh",
+        "schedule": 3600,  # 1h
+        "options": {"queue": "defi"},
+    },
+    "defi_analytics_daily": {
+        "task": "core.tasks.defi_analytics_daily",
+        "schedule": 86400,  # 24h
+        "options": {"queue": "defi"},
+    },
+}
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
@@ -71,7 +110,6 @@ INSTALLED_APPS = [
     'channels',
     'core',
     'graphene_django',
-    'gql',  # Add our new GQL app
     'django_celery_results',
     # 'marketdata',  # New market data microservice - temporarily disabled due to migration issues
 ]
@@ -120,10 +158,6 @@ ASGI_APPLICATION = 'richesreach.asgi.application'
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
 if GRAPHQL_MODE == "simple":
-    # Only allow simple mode if explicitly enabled (not in production)
-    if os.getenv("SIMPLE_MODE", "false").lower() != "true":
-        raise RuntimeError("Simple mode is disabled in production. Set SIMPLE_MODE=true to enable.")
-    
     # Do NOT require Postgres just to boot the app
     # Use a throwaway SQLite file so multiple gunicorn workers don't crash on :memory:
     DATABASES = {
@@ -150,75 +184,74 @@ if GRAPHQL_MODE == "simple":
     print(f"[BOOT] Using SQLite database for simple mode", flush=True)
 
 else:
-    # Production / standard mode - enforce PostgreSQL with SSL
-    # Skip base DB config when prod settings are active; prod module will define DATABASES.
-    if not IS_PROD_SETTINGS:
-        import urllib.parse as _urlparse
-
-        def _env(name, default=None):
-            return os.getenv(name, default)
-
-        def _req(name):
-            v = os.getenv(name)
-            if not v:
-                raise RuntimeError(f"Missing required env var: {name}")
-            return v
-
-        def _db_cfg():
-            url = _env("DATABASE_URL")
-            if url:
-                parsed = _urlparse.urlparse(url)
-                return {
+    # Production / standard mode - use DATABASE_URL or fallback to local dev defaults
+    DATABASE_URL = os.getenv("DATABASE_URL")
+    
+    if DATABASE_URL:
+        # Use dj-database-url for production
+        try:
+            import dj_database_url
+            DATABASES = {"default": dj_database_url.parse(DATABASE_URL, conn_max_age=600, ssl_require=False)}
+        except ImportError:
+            # Fallback to manual parsing if dj-database-url not available
+            from urllib.parse import urlparse
+            url = urlparse(DATABASE_URL)
+            DATABASES = {
+                "default": {
                     "ENGINE": "django.db.backends.postgresql",
-                    "NAME": (parsed.path.lstrip("/") or _env("DJANGO_DB_NAME","PGDATABASE","POSTGRES_DB")),
-                    "USER": (parsed.username or _env("DJANGO_DB_USER","PGUSER","POSTGRES_USER")),
-                    "PASSWORD": (parsed.password or _env("DJANGO_DB_PASSWORD","PGPASSWORD","POSTGRES_PASSWORD")),
-                    "HOST": (parsed.hostname or _env("DJANGO_DB_HOST","PGHOST","POSTGRES_HOST")),
-                    "PORT": (parsed.port or _env("DJANGO_DB_PORT","PGPORT","POSTGRES_PORT","5432")),
+                    "NAME": url.path[1:],  # Remove leading slash
+                    "USER": url.username,
+                    "PASSWORD": url.password,
+                    "HOST": url.hostname,
+                    "PORT": url.port or 5432,
+                    "CONN_MAX_AGE": 600,
+                    "OPTIONS": {"sslmode": os.getenv("SSLMODE", "require")},
+                }
+            }
+    else:
+        # Check for DJANGO_DB_* environment variables first (from ECS secrets)
+        if os.getenv("DJANGO_DB_ENGINE"):
+            # Production mode with DJANGO_DB_* environment variables
+            DATABASES = {
+                "default": {
+                    "ENGINE": os.getenv("DJANGO_DB_ENGINE"),
+                    "NAME": os.getenv("DJANGO_DB_NAME"),
+                    "USER": os.getenv("DJANGO_DB_USER"),
+                    "PASSWORD": os.getenv("DJANGO_DB_PASSWORD"),
+                    "HOST": os.getenv("DJANGO_DB_HOST"),
+                    "PORT": os.getenv("DJANGO_DB_PORT"),
+                    "CONN_MAX_AGE": 600,
+                    "OPTIONS": {"sslmode": os.getenv("SSLMODE", "require")},
+                }
+            }
+        else:
+            # Local development defaults
+            DB_NAME = os.getenv("PGDATABASE", "dev")
+            DB_USER = os.getenv("PGUSER", os.getenv("USER", "dev"))  # Use current user
+            DB_PASS = os.getenv("PGPASSWORD", "")  # No password for local dev
+            DB_HOST = os.getenv("PGHOST", "localhost")
+            DB_PORT = os.getenv("PGPORT", "5432")
+
+            DATABASES = {
+                "default": {
+                    "ENGINE": "django.db.backends.postgresql",
+                    "NAME": DB_NAME,
+                    "USER": DB_USER,
+                    "PASSWORD": DB_PASS,
+                    "HOST": DB_HOST,
+                    "PORT": DB_PORT,
+                    "CONN_MAX_AGE": 0,  # Disable connection pooling to avoid transaction issues
+                    "ATOMIC_REQUESTS": False,  # Disable atomic requests to prevent transaction blocks
+                    # For local Postgres, ensure no SSL requirement:
                     "OPTIONS": {
-                        "sslmode": _env("SSLMODE","PGSSLMODE","POSTGRES_SSLMODE","DJANGO_DB_SSLMODE","require")
+                        "sslmode": os.getenv("PGSSLMODE", "disable"),
                     },
                 }
-
-            def pick(*names, default=None, required=False):
-                for n in names:
-                    v = os.getenv(n)
-                    if v not in (None, ""):
-                        return v
-                if required:
-                    raise RuntimeError(
-                        "No production database configuration found. "
-                        "Set PG*/POSTGRES*/DJANGO_DB_* or DATABASE_URL."
-                    )
-                return default
-
-            host = pick("PGHOST","POSTGRES_HOST","DJANGO_DB_HOST", required=True)
-            port = pick("PGPORT","POSTGRES_PORT","DJANGO_DB_PORT", default="5432")
-            user = pick("PGUSER","POSTGRES_USER","DJANGO_DB_USER", required=True)
-            pwd  = pick("PGPASSWORD","POSTGRES_PASSWORD","DJANGO_DB_PASSWORD", required=True)
-            name = pick("PGDATABASE","POSTGRES_DB","DJANGO_DB_NAME", required=True)
-            sslm = pick("SSLMODE","PGSSLMODE","POSTGRES_SSLMODE","DJANGO_DB_SSLMODE", default="require")
-
-            return {
-                "ENGINE": "django.db.backends.postgresql",
-                "NAME": name, "USER": user, "PASSWORD": pwd,
-                "HOST": host, "PORT": port,
-                "OPTIONS": {"sslmode": sslm},
             }
 
-        DATABASES = {"default": _db_cfg()}
-
-        if DATABASES["default"]["ENGINE"] != "django.db.backends.postgresql":
-            raise RuntimeError("Production must use PostgreSQL")
-
-        import logging
-        logging.getLogger(__name__).warning(
-            "DB_ENGINE=%s, DB_NAME=%s",
-            DATABASES["default"]["ENGINE"], DATABASES["default"]["NAME"]
-        )
-        print(f"[BOOT] Database configuration loaded successfully: {DATABASES['default']['HOST']}", flush=True)
-    else:
-        print("[BOOT] Skipping base DB config (settings_production will define DATABASES)", flush=True)
+    # Log database engine for debugging
+    import logging
+    logging.getLogger(__name__).warning("DB_ENGINE=%s, DB_NAME=%s", DATABASES["default"]["ENGINE"], DATABASES["default"]["NAME"])
 # Email Configuration
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
@@ -295,25 +328,21 @@ CORS_ALLOW_ALL_ORIGINS = True # For dev only
 RPC_URL = "https://eth-sepolia.g.alchemy.com/v2/demo"  # Demo RPC for testing
 AAVE_POOL_ADDRESS = "0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951"  # Sepolia AAVE Pool
 CHAINLINK_USDC_USD_FEED = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419"  # Mainnet feed for demo
-# GRAPHENE configuration moved to the bottom of the file
+GRAPHENE = {
+    "SCHEMA": "core.schema.schema",
+    "MIDDLEWARE": [
+        # JWT middleware removed - using SimpleJWT approach
+    ],
+    "SCHEMA_INDEPTH_LIMIT": 20,
+    "SCHEMA_OUTPUT": "schema.json",
+}
 AUTH_USER_MODEL = "core.User"
 # Authentication backends
 AUTHENTICATION_BACKENDS = [
-'graphql_jwt.backends.JSONWebTokenBackend',
-'django.contrib.auth.backends.ModelBackend',
+    'django.contrib.auth.backends.ModelBackend',
 ]
 
-# JWT Configuration
-GRAPHQL_JWT = {
-    'JWT_ALGORITHM': 'HS256',
-    'JWT_SECRET_KEY': SECRET_KEY,
-    'JWT_EXPIRATION_DELTA': timedelta(minutes=60),
-    'JWT_REFRESH_EXPIRATION_DELTA': timedelta(days=7),
-    'JWT_VERIFY_EXPIRATION': True,
-    'JWT_LEEWAY': 0,
-    'JWT_AUTH_HEADER_PREFIX': 'Bearer',
-    'JWT_AUTH_COOKIE': None,
-}
+# JWT Configuration - Using SimpleJWT instead of graphql_jwt
 # Market Data Configuration
 REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
 POLYGON_API_KEY = os.getenv('POLYGON_API_KEY')  # No default - must be set via environment
@@ -531,26 +560,12 @@ CORS_ALLOW_ALL_ORIGINS = True  # dev only
 
 # Authentication backends
 AUTHENTICATION_BACKENDS = [
-    "graphql_jwt.backends.JSONWebTokenBackend",
     "django.contrib.auth.backends.ModelBackend",
 ]
 
-# GraphQL Configuration - Single source of truth
+# GraphQL Configuration
 GRAPHENE = {
-    "SCHEMA": "gql.schema_root.schema",  # <- single source of truth
-    # Optional while debugging, remove when done:
-    "MIDDLEWARE": ["graphene_django.debug.DjangoDebugMiddleware"],
-}
-
-# Temporary logging for GraphQL debugging
-LOGGING = {
-    "version": 1,
-    "disable_existing_loggers": False,
-    "handlers": {"console": {"class": "logging.StreamHandler"}},
-    "loggers": {
-        "graphql": {"handlers": ["console"], "level": "DEBUG"},
-        "django.request": {"handlers": ["console"], "level": "ERROR"},
-    },
+    "SCHEMA": "core.schema.schema",
 }
 
 # Disable JWT middleware in development to avoid signature decoding errors
@@ -559,7 +574,8 @@ DEV_ALLOW_ANON_GRAPHQL = os.getenv("DEV_ALLOW_ANON_GRAPHQL", "1") == "1"
 if DEV_ALLOW_ANON_GRAPHQL and DEBUG:
     print("INFO: Development mode - JWT middleware disabled for anonymous GraphQL requests")
 else:
-    GRAPHENE["MIDDLEWARE"] = ["graphql_jwt.middleware.JSONWebTokenMiddleware"]
+    # JWT middleware removed - using SimpleJWT approach
+    pass
 
 # CSRF Configuration for dev and production
 CSRF_TRUSTED_ORIGINS = [

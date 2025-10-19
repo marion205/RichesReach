@@ -136,7 +136,7 @@ def main():
     print("✅ Mock data disabled")
     print("✅ All endpoints returning 200 OK")
     
-    print("\n🚀 YOUR APP IS NOW USING:")
+    print("\n�� YOUR APP IS NOW USING:")
     print("   📈 Real market data from Finnhub/Polygon")
     print("   🤖 Real AI recommendations from OpenAI")
     print("   🏦 Real bank integration (Yodlee/SBLOC)")
