@@ -1,53 +1,199 @@
 // ApolloProvider.tsx
-import React, { useMemo } from 'react';
-import { ApolloProvider as Provider } from '@apollo/client';
-import { makeApolloClient, getApiBase } from './lib/apolloFactory';
-import JWTAuthService from './features/auth/services/JWTAuthService';
-
-// Quick health check probe - safe version
-(async () => {
-  try {
-    const baseUrl = process.env.EXPO_PUBLIC_API_BASE_URL;
-    if (baseUrl) {
-      const response = await fetch(`${baseUrl}/health`, { 
-        method: 'GET',
-        timeout: 5000 
-      });
-      console.log('[health] Status:', response.status, 'Text:', await response.text());
-    } else {
-      console.log('[health] Skipping - no API base URL set yet');
-    }
-  } catch (e: any) {
-    console.log('[health:error]', e?.message || 'Unknown error');
+import React from 'react';
+import { ApolloClient, InMemoryCache, ApolloProvider as Provider, createHttpLink, split } from '@apollo/client';
+import { setContext } from '@apollo/client/link/context';
+import { onError } from '@apollo/client/link/error';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getMainDefinition } from '@apollo/client/utilities';
+import JWTAuthService from '../services/JWTAuthService';
+import CSRFService from '../services/CSRFService';
+// If you’ll add subscriptions later:
+// import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
+// import { createClient } from 'graphql-ws';
+// Determine the correct URL based on the environment
+const getGraphQLURL = () => {
+  if (__DEV__) {
+    // In development, use the local server (replace with your computer's IP)
+    return 'http://192.168.1.236:8000/graphql/';  // Your computer's IP
   }
-})();
+  // In production, use the production URL
+  return 'http://54.160.139.56:8000/graphql/';
+};
 
-export default function ApolloProvider({ children }: { children: React.ReactNode }) {
-  const client = useMemo(() => {
-    try {
-      console.log('[ApolloProvider] Creating Apollo client...');
-      const apolloClient = makeApolloClient();
-      // Initialize the JWT service with the Apollo client
-      JWTAuthService.getInstance().setApolloClient(apolloClient);
-      console.log('[ApolloProvider] Apollo client created successfully');
-      return apolloClient;
-    } catch (error) {
-      console.error('[ApolloProvider] Failed to create Apollo client:', error);
-      // Return a minimal client to prevent the app from crashing
-      const { ApolloClient, InMemoryCache, HttpLink } = require('@apollo/client');
-      return new ApolloClient({
-        link: new HttpLink({ uri: 'https://grounds-firewall-thereafter-bracelets.trycloudflare.com/graphql' }),
-        cache: new InMemoryCache(),
-      });
-    }
-  }, []);
+const HTTP_URL = getGraphQLURL();
 
-  try {
-    const baseUrl = getApiBase();
-    console.log('[API_BASE]', baseUrl, 'graphql ->', `${baseUrl}/graphql/`);
-  } catch (error) {
-    console.log('[API_BASE] Error getting base URL:', error);
-  }
 
-  return <Provider client={client}>{children}</Provider>;
+const httpLink = createHttpLink({ uri: HTTP_URL });
+
+const authLink = setContext(async (_, { headers }) => {
+try {
+const jwtService = JWTAuthService.getInstance();
+const csrfService = CSRFService.getInstance();
+const token = await jwtService.getValidToken();
+const csrfToken = await csrfService.getCSRFToken();
+return {
+headers: {
+...headers,
+...(token ? { Authorization: `JWT ${token}` } : {}),
+...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
+},
+};
+} catch (error) {
+console.error('Error getting token for request:', error);
+return { headers };
+}
+});
+
+// Error link to handle token expiration
+const errorLink = onError(({ graphQLErrors, networkError, operation, forward }) => {
+if (graphQLErrors) {
+graphQLErrors.forEach(({ message, locations, path }) => {
+console.error(`GraphQL error: Message: ${message}, Location: ${locations}, Path: ${path}`);
+if (message.includes('Signature has expired') || message.includes('Token is invalid')) {
+console.log('Token expired, attempting refresh...');
+// Try to refresh the token
+JWTAuthService.getInstance().refreshToken().then((newToken) => {
+if (newToken) {
+console.log('Token refreshed successfully');
+// Retry the operation
+return forward(operation);
+} else {
+console.log('Token refresh failed, user needs to login again');
+// Clear the token and redirect to login
+JWTAuthService.getInstance().logout();
+}
+});
+}
+});
+}
+
+if (networkError) {
+console.error(`Network error: ${networkError}`);
+}
+});
+// (optional) subscriptions—leave commented out if not using yet
+// const wsLink = new GraphQLWsLink(createClient({
+// url: HTTP_URL.replace('http', 'ws'),
+// connectionParams: async () => {
+// const token = await AsyncStorage.getItem('token');
+// return token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+// },
+// }));
+// const link = split(
+// ({ query }) => {
+// const def = getMainDefinition(query);
+// return def.kind === 'OperationDefinition' && def.operation === 'subscription';
+// },
+// wsLink,
+// authLink.concat(httpLink)
+// );
+const client = new ApolloClient({
+link: errorLink.concat(authLink).concat(httpLink), // Add error handling
+cache: new InMemoryCache({
+// Optimize cache for better performance
+typePolicies: {
+Query: {
+fields: {
+// Cache user queries for better performance
+me: {
+merge: true,
+},
+},
+},
+        OptionsRecommendation: {
+          fields: {
+            sentimentDescription: {
+              read(existing, { readField }) {
+                if (existing) return existing;
+                const raw = readField<string>('sentiment');
+                if (!raw) return 'Neutral outlook';
+                const upperRaw = raw.toUpperCase();
+                const confidence = readField<number>('confidence');
+                const map: Record<string, string> = {
+                  BULLISH: 'Bullish — model expects upside',
+                  BEARISH: 'Bearish — model expects downside',
+                  NEUTRAL: 'Neutral — limited directional edge',
+                };
+                const base = map[upperRaw] || 'Unknown';
+                return typeof confidence === 'number'
+                  ? `${base} (confidence ${Math.round(confidence * 100)}%)`
+                  : base;
+              }
+            },
+            daysToExpiration: {
+              read(existing) {
+                // Provide a default value if the field is missing
+                return existing ?? 30; // Default to 30 days if missing
+              }
+            }
+          }
+        },
+        Option: {
+          fields: {
+            timeValue: {
+              read(existing) {
+                // Provide a default value if the field is missing
+                return existing ?? 0.0;
+              }
+            },
+            intrinsicValue: {
+              read(existing) {
+                // Provide a default value if the field is missing
+                return existing ?? 0.0;
+              }
+            },
+            daysToExpiration: {
+              read(existing) {
+                // Provide a default value if the field is missing
+                return existing ?? 30;
+              }
+            }
+          }
+        },
+        RecommendedStrategy: {
+          fields: {
+            daysToExpiration: {
+              read(existing) {
+                // Provide a default value if the field is missing
+                return existing ?? 30; // Default to 30 days if missing
+              }
+            },
+            marketOutlook: {
+              read(existing) {
+                // Handle both string and object formats for marketOutlook
+                if (typeof existing === 'string') {
+                  return {
+                    sentiment: existing.toUpperCase(),
+                    sentimentDescription: `Market outlook: ${existing}`
+                  };
+                }
+                return existing ?? { sentiment: 'NEUTRAL', sentimentDescription: 'Neutral outlook' };
+              }
+            }
+          }
+        },
+      },
+    }),
+// Add default options for better performance
+defaultOptions: {
+watchQuery: {
+errorPolicy: 'all',
+fetchPolicy: 'network-only',
+},
+    query: {
+      errorPolicy: 'all',
+      fetchPolicy: 'network-only',
+    },
+mutate: {
+errorPolicy: 'all',
+},
+},
+});
+
+// Initialize the JWT service with the Apollo client
+JWTAuthService.getInstance().setApolloClient(client);
+
+export { client };
+export default function ApolloWrapper({ children }: { children: React.ReactNode }) {
+return <Provider client={client}>{children}</Provider>;
 }

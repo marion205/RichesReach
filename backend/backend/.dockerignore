@@ -1,58 +1,124 @@
+# Git
 .git
+.gitignore
+
+# Python
 **/__pycache__/
 **/*.pyc
-node_modules/
-android/
-ios/
-.expo/
-build/
-dist/
-*.log
-.env
-.env.*
-mobile/
-docs/
-*.md
-.DS_Store
-*.aab
-*.apk
-*.ipa
-.terraform/
-terraform.tfstate*
-
-# Large directories that shouldn't be in build context
-deployment/
-rust_crypto_engine/
-models/
-deployment_package/
-assets/
-infrastructure/
-scripts/
-advanced_ml_models/
-monitoring/
-tests/
-server/
-
-# Python virtual environments
-.venv/
-venv/
+**/*.pyo
+**/*.pyd
+.Python
 env/
+venv/
+.venv/
 ENV/
+env.bak/
+venv.bak/
 
-# Logs and temporary files
-backend/logs/
+# Django
 *.log
-logs/
-temp/
-tmp/
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+user_feedback.db
+ml_monitoring.db
+trading_outcomes.db
 
-# IDE and editor files
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# OS files
+# OS
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
+
+# Heavy directories that shouldn't be in production
+assets/
+advanced_ml_models/
+deployment/
+infrastructure/
+ios/
+mobile/
+monitoring/
+nginx/
+rust_crypto_engine/
+rust_stock_engine/
+scripts/
+tests/
+docs/
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# ML models (too large for container)
+ml_models/
+test_ml_models/
+test_models/
+
+# Backup files
+*.backup
+*.bak

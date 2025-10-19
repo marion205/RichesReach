@@ -24,7 +24,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
  && python -m pip check
 
 # copy source
-COPY backend/backend/backend/backend/ /app/
+COPY backend/backend/ /app/
 
 # ensure no baked DB sneaks in even if present in repo history
 RUN rm -f db.sqlite3

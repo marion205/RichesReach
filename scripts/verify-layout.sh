@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Default to the current nested structure, but allow override
-APP_DIR="${APP_DIR:-backend/backend/backend/backend}"
+APP_DIR="${APP_DIR:-backend/backend}"
 
 echo "🔍 Verifying project layout in: $APP_DIR"
 
