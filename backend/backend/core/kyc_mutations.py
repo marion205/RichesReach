@@ -13,6 +13,7 @@ import logging
 User = get_user_model()
 
 from .services.kyc_workflow_service import KYCWorkflowService
+from .services.email_notification_service import EmailNotificationService
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +96,10 @@ class InitiateKYCWorkflow(graphene.Mutation):
         try:
             kyc_service = KYCWorkflowService()
             workflow_data = kyc_service.initiate_kyc_workflow(user, workflow_type)
+            
+            # Send email notification
+            email_service = EmailNotificationService()
+            email_service.send_kyc_workflow_started(user, workflow_type)
             
             return InitiateKYCWorkflow(
                 success=True,
@@ -258,6 +263,15 @@ class UpdateKYCStep(graphene.Mutation):
         try:
             kyc_service = KYCWorkflowService()
             response = kyc_service.update_workflow_step(str(user.id), step, status, data)
+            
+            # Send email notification for step completion
+            if status == 'COMPLETED':
+                email_service = EmailNotificationService()
+                # Get step name from the workflow
+                workflow_type = data.get('workflow_type', 'brokerage') if data else 'brokerage'
+                steps = kyc_service._get_required_steps(workflow_type)
+                step_name = steps[step - 1]['name'] if step <= len(steps) else f"Step {step}"
+                email_service.send_kyc_step_completed(user, step_name, step, len(steps), workflow_type)
             
             return UpdateKYCStep(
                 success=True,

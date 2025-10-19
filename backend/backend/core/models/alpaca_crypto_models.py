@@ -3,11 +3,7 @@ Alpaca Crypto-specific models for cryptocurrency trading and management
 """
 from django.db import models
 from django.utils import timezone
-from django.contrib.auth import get_user_model
 import uuid
-
-# Get the User model (handles custom user models)
-User = get_user_model()
 
 class AlpacaCryptoAccount(models.Model):
     """Model to track Alpaca crypto accounts"""
@@ -21,7 +17,7 @@ class AlpacaCryptoAccount(models.Model):
     ]
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='alpaca_crypto_account')
+    user = models.ForeignKey('core.User', on_delete=models.CASCADE, related_name='alpaca_crypto_account')
     alpaca_crypto_account_id = models.CharField(max_length=100, unique=True, null=True, blank=True)
     
     # Account details
