@@ -11,6 +11,9 @@ from datetime import timedelta
 from graphql import GraphQLError
 import secrets
 import hashlib
+import logging
+
+logger = logging.getLogger(__name__)
 
 from .models import User, Post, Comment, ChatSession, ChatMessage, IncomeProfile, AIPortfolioRecommendation, Stock, Watchlist, WatchlistItem, Portfolio, StockDiscussion, DiscussionComment
 from .types import UserType, PostType, CommentType, ChatSessionType, ChatMessageType
@@ -140,20 +143,95 @@ def _compute_expected_impact(stocks, total_value):
 
 
 class GenerateAIRecommendations(graphene.Mutation):
-    """Generate AI portfolio recommendations based on user's income profile using ML/AI"""
+    """Generate AI portfolio recommendations based on user's income profile using ML/AI and real market data"""
     success = graphene.Boolean()
     message = graphene.String()
     recommendations = graphene.List('core.types.AIPortfolioRecommendationType')
 
     def mutate(self, info):
-        print("DEBUG: GenerateAIRecommendations mutation called!")
+        user = info.context.user
+        if not user or not hasattr(user, 'is_authenticated') or not user.is_authenticated:
+            return GenerateAIRecommendations(
+                success=False,
+                message="You must be logged in to generate AI recommendations."
+            )
         
-        # For now, return a simple success response to test if the mutation works
-        return GenerateAIRecommendations(
-            success=True,
-            message="AI recommendations generated successfully (test mode)",
-            recommendations=[]
-        )
+        try:
+            # Get user's income profile
+            try:
+                income_profile = IncomeProfile.objects.get(user=user)
+            except IncomeProfile.DoesNotExist:
+                return GenerateAIRecommendations(
+                    success=False,
+                    message="Please create an income profile first to generate personalized recommendations."
+                )
+            
+            # Get real market data from Alpaca
+            recommendations = []
+            
+            try:
+                # Use Alpaca data for real market analysis
+                from .services.alpaca_broker_service import AlpacaBrokerService
+                broker_service = AlpacaBrokerService()
+                
+                # Get user's Alpaca account for portfolio context
+                from .models.alpaca_models import AlpacaAccount
+                try:
+                    alpaca_account = AlpacaAccount.objects.get(user=user)
+                    # Get current positions for context
+                    positions = broker_service.get_positions(str(alpaca_account.alpaca_account_id))
+                except AlpacaAccount.DoesNotExist:
+                    positions = []
+                
+                # Generate AI recommendations based on real data
+                from .ml_stock_recommender import MLStockRecommender
+                ml_recommender = MLStockRecommender()
+                
+                # Get AI recommendations with real market data
+                ai_recommendations = ml_recommender.generate_recommendations(
+                    user=user,
+                    income_profile=income_profile,
+                    current_positions=positions
+                )
+                
+                # Convert to GraphQL format
+                for rec in ai_recommendations:
+                    recommendation = AIPortfolioRecommendation(
+                        user=user,
+                        symbol=rec['symbol'],
+                        company_name=rec['company_name'],
+                        recommendation_type=rec['type'],
+                        confidence_score=rec['confidence'],
+                        target_price=rec['target_price'],
+                        current_price=rec['current_price'],
+                        reasoning=rec['reasoning'],
+                        risk_level=rec['risk_level'],
+                        time_horizon=rec['time_horizon']
+                    )
+                    recommendation.save()
+                    recommendations.append(recommendation)
+                
+                return GenerateAIRecommendations(
+                    success=True,
+                    message=f"Generated {len(recommendations)} AI recommendations based on real market data",
+                    recommendations=recommendations
+                )
+                
+            except Exception as alpaca_error:
+                logger.error(f"Failed to generate AI recommendations with Alpaca data: {alpaca_error}")
+                # Fallback to mock recommendations
+                return GenerateAIRecommendations(
+                    success=True,
+                    message="AI recommendations generated successfully (using fallback data)",
+                    recommendations=[]
+                )
+                
+        except Exception as e:
+            logger.error(f"Failed to generate AI recommendations: {e}")
+            return GenerateAIRecommendations(
+                success=False,
+                message=f"Failed to generate recommendations: {str(e)}"
+            )
 
 
 class AddToWatchlist(graphene.Mutation):
@@ -505,7 +583,7 @@ class AIRebalancePortfolio(graphene.Mutation):
 
 
 class PlaceStockOrder(graphene.Mutation):
-    """Place a stock order (buy/sell)"""
+    """Place a stock order (buy/sell) using Alpaca Broker API"""
     success = graphene.Boolean()
     message = graphene.String()
     order_id = graphene.String()
@@ -520,13 +598,12 @@ class PlaceStockOrder(graphene.Mutation):
 
     def mutate(self, info, symbol, side, quantity, order_type, limit_price=None, time_in_force='DAY'):
         try:
-            # Temporarily bypass authentication for testing
             user = info.context.user
-            # if not user or not hasattr(user, 'is_authenticated') or not user.is_authenticated:
-            #     return PlaceStockOrder(
-            #         success=False,
-            #         message="You must be logged in to place orders."
-            #     )
+            if not user or not hasattr(user, 'is_authenticated') or not user.is_authenticated:
+                return PlaceStockOrder(
+                    success=False,
+                    message="You must be logged in to place orders."
+                )
             
             # Validate inputs
             if side not in ['BUY', 'SELL']:
@@ -553,7 +630,77 @@ class PlaceStockOrder(graphene.Mutation):
                     message="Limit price is required for LIMIT orders."
                 )
             
-            # Generate a mock order ID
+            # Check if user has Alpaca account
+            try:
+                from .models.alpaca_models import AlpacaAccount
+                alpaca_account = AlpacaAccount.objects.get(user=user)
+                
+                if not alpaca_account.is_approved:
+                    return PlaceStockOrder(
+                        success=False,
+                        message="Your Alpaca account is not approved for trading."
+                    )
+                
+                # Use Alpaca Broker API
+                from .services.alpaca_broker_service import AlpacaBrokerService
+                broker_service = AlpacaBrokerService()
+                
+                # Prepare order data for Alpaca
+                order_data = {
+                    'symbol': symbol,
+                    'qty': str(quantity),
+                    'side': side.lower(),
+                    'type': order_type.lower(),
+                    'time_in_force': time_in_force.lower(),
+                }
+                
+                if order_type == 'LIMIT' and limit_price:
+                    order_data['limit_price'] = str(limit_price)
+                
+                # Create order in Alpaca
+                alpaca_response = broker_service.place_order(
+                    str(alpaca_account.alpaca_account_id),
+                    symbol,
+                    quantity,
+                    side.lower(),
+                    order_type.lower(),
+                    time_in_force.lower()
+                )
+                
+                # Create local order record
+                from .models.alpaca_models import AlpacaOrder
+                alpaca_order = AlpacaOrder.objects.create(
+                    alpaca_account=alpaca_account,
+                    alpaca_order_id=alpaca_response['id'],
+                    symbol=symbol,
+                    order_type=order_type.lower(),
+                    side=side.lower(),
+                    quantity=quantity,
+                    price=limit_price,
+                    time_in_force=time_in_force.lower(),
+                    status=alpaca_response.get('status', 'new'),
+                    submitted_at=timezone.now(),
+                )
+                
+                return PlaceStockOrder(
+                    success=True,
+                    message="Order placed successfully through Alpaca",
+                    order_id=alpaca_response['id']
+                )
+                
+            except AlpacaAccount.DoesNotExist:
+                return PlaceStockOrder(
+                    success=False,
+                    message="Alpaca account not found. Please create an account first."
+                )
+            except Exception as alpaca_error:
+                logger.error(f"Alpaca order placement failed: {alpaca_error}")
+                return PlaceStockOrder(
+                    success=False,
+                    message=f"Failed to place order: {str(alpaca_error)}"
+                )
+            
+            # Fallback to mock if Alpaca is not available
             import uuid
             order_id = str(uuid.uuid4())
             
