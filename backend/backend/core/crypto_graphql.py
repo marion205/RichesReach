@@ -8,6 +8,7 @@ from decimal import Decimal
 import graphene
 from graphene_django import DjangoObjectType
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 
 from .crypto_models import (
     Cryptocurrency, CryptoPrice, CryptoPortfolio, CryptoHolding,
@@ -435,14 +436,6 @@ class ExecuteCryptoTrade(graphene.Mutation):
             return ExecuteCryptoTrade(ok=False, error=ErrorType(code="AUTH", message="Login required"))
 
         try:
-            # Get fresh quote from server
-            from .crypto_quotes import get_fresh_crypto_quote
-            quote = get_fresh_crypto_quote(symbol)
-        except Exception as e:
-            logger.error(f"Failed to get fresh quote for {symbol}: {e}")
-            return ExecuteCryptoTrade(ok=False, error=ErrorType(code="QUOTE", message=str(e)))
-
-        try:
             # Validate inputs
             if trade_type.upper() not in ['BUY', 'SELL']:
                 return ExecuteCryptoTrade(ok=False, error=ErrorType(code="INPUT", message="Invalid trade type"))
@@ -452,6 +445,94 @@ class ExecuteCryptoTrade(graphene.Mutation):
             
             if quantity <= 0:
                 return ExecuteCryptoTrade(ok=False, error=ErrorType(code="INPUT", message="Quantity must be positive"))
+
+            # Check if user has Alpaca crypto account
+            try:
+                from .models.alpaca_crypto_models import AlpacaCryptoAccount
+                crypto_account = AlpacaCryptoAccount.objects.get(user=user)
+                
+                if not crypto_account.is_approved:
+                    return ExecuteCryptoTrade(ok=False, error=ErrorType(code="ACCOUNT", message="Crypto account not approved for trading"))
+                
+                # Use Alpaca Crypto API
+                from .services.alpaca_crypto_service import AlpacaCryptoService
+                crypto_service = AlpacaCryptoService()
+                
+                # Prepare order data for Alpaca Crypto
+                order_data = {
+                    'symbol': symbol,
+                    'side': trade_type.lower(),
+                    'type': order_type.lower(),
+                    'time_in_force': 'day',
+                }
+                
+                if order_type.upper() == 'MARKET':
+                    # For market orders, use notional amount
+                    order_data['notional'] = str(quantity)
+                else:  # LIMIT order
+                    if price_per_unit is None:
+                        return ExecuteCryptoTrade(ok=False, error=ErrorType(code="INPUT", message="price_per_unit required for LIMIT orders"))
+                    order_data['qty'] = str(quantity)
+                    order_data['limit_price'] = str(price_per_unit)
+                
+                # Validate order
+                validation = crypto_service.validate_crypto_order(order_data)
+                if not validation['valid']:
+                    return ExecuteCryptoTrade(ok=False, error=ErrorType(code="VALIDATION", message=f"Invalid order: {', '.join(validation['errors'])}"))
+                
+                # Create order in Alpaca Crypto
+                alpaca_response = crypto_service.create_crypto_order(order_data)
+                
+                # Create local order record
+                from .models.alpaca_crypto_models import AlpacaCryptoOrder
+                crypto_order = AlpacaCryptoOrder.objects.create(
+                    alpaca_crypto_account=crypto_account,
+                    alpaca_order_id=alpaca_response['id'],
+                    symbol=symbol,
+                    order_type=order_type.lower(),
+                    side=trade_type.lower(),
+                    quantity=quantity if order_type.upper() == 'LIMIT' else None,
+                    notional=quantity if order_type.upper() == 'MARKET' else None,
+                    price=price_per_unit,
+                    time_in_force='day',
+                    status=alpaca_response.get('status', 'new'),
+                    submitted_at=timezone.now(),
+                )
+                
+                # Create CryptoTrade record for compatibility
+                from .models import Cryptocurrency
+                currency = Cryptocurrency.objects.get(symbol=symbol.upper(), is_active=True)
+                
+                execution_price = price_per_unit if order_type.upper() == 'LIMIT' else None
+                
+                trade = CryptoTrade.objects.create(
+                    user=user,
+                    cryptocurrency=currency,
+                    trade_type=trade_type.upper(),
+                    quantity=Decimal(str(quantity)),
+                    price_per_unit=execution_price,
+                    total_amount=execution_price * Decimal(str(quantity)) if execution_price else None,
+                    order_type=order_type.upper(),
+                    status='FILLED' if alpaca_response.get('status') == 'filled' else 'PENDING',
+                    alpaca_order_id=alpaca_response['id']
+                )
+                
+                return ExecuteCryptoTrade(ok=True, trade=trade)
+                
+            except AlpacaCryptoAccount.DoesNotExist:
+                return ExecuteCryptoTrade(ok=False, error=ErrorType(code="ACCOUNT", message="Crypto account not found. Please create an account first."))
+            except Exception as alpaca_error:
+                logger.error(f"Alpaca crypto order placement failed: {alpaca_error}")
+                return ExecuteCryptoTrade(ok=False, error=ErrorType(code="ALPACA", message=f"Failed to place order: {str(alpaca_error)}"))
+            
+            # Fallback to original logic if Alpaca is not available
+            try:
+                # Get fresh quote from server
+                from .crypto_quotes import get_fresh_crypto_quote
+                quote = get_fresh_crypto_quote(symbol)
+            except Exception as e:
+                logger.error(f"Failed to get fresh quote for {symbol}: {e}")
+                return ExecuteCryptoTrade(ok=False, error=ErrorType(code="QUOTE", message=str(e)))
 
             # Get cryptocurrency
             currency = Cryptocurrency.objects.get(symbol=symbol.upper(), is_active=True)
