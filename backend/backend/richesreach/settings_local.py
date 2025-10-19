@@ -143,4 +143,31 @@ print(f"[FLAGS]   USE_NOTIF_MOCK: {'🟢 DISABLED' if not USE_NOTIF_MOCK else '�
 print(f"[FLAGS]   USE_PAYMENTS_MOCK: {'🟢 DISABLED' if not USE_PAYMENTS_MOCK else '🔴 ENABLED'}")
 print(f"[FLAGS]   USE_POLYGON_MOCK: {'🟢 DISABLED' if not USE_POLYGON_MOCK else '🔴 ENABLED'}")
 print(f"[FLAGS]   USE_SBLOC_MOCK: {'🟢 DISABLED' if not USE_SBLOC_MOCK else '🔴 ENABLED'}")
+
+# =============================================================================
+# ALPACA API CONFIGURATION
+# =============================================================================
+ALPACA_API_KEY = os.getenv('ALPACA_API_KEY', '')
+ALPACA_SECRET_KEY = os.getenv('ALPACA_SECRET_KEY', '')
+ALPACA_BASE_URL = os.getenv('ALPACA_BASE_URL', 'https://broker-api.sandbox.alpaca.markets')
+ALPACA_DATA_URL = os.getenv('ALPACA_DATA_URL', 'https://data.sandbox.alpaca.markets')
+ALPACA_CRYPTO_URL = os.getenv('ALPACA_CRYPTO_URL', 'https://api.sandbox.alpaca.markets')
+ALPACA_PAPER_TRADING = os.getenv('ALPACA_PAPER_TRADING', 'true').lower() == 'true'
+ALPACA_ENVIRONMENT = os.getenv('ALPACA_ENVIRONMENT', 'sandbox')
+
+# Alpaca Integration Flags
+USE_ALPACA = os.getenv('USE_ALPACA', 'true').lower() == 'true'
+USE_ALPACA_BROKER = os.getenv('USE_ALPACA_BROKER', 'true').lower() == 'true'
+USE_ALPACA_CRYPTO = os.getenv('USE_ALPACA_CRYPTO', 'true').lower() == 'true'
+
+# Disable broker mock when Alpaca is enabled
+if USE_ALPACA_BROKER:
+    USE_BROKER_MOCK = False
+
+print(f"[FLAGS] Alpaca Integration Status:")
+print(f"[FLAGS]   USE_ALPACA: {'🟢 ENABLED' if USE_ALPACA else '🔴 DISABLED'}")
+print(f"[FLAGS]   USE_ALPACA_BROKER: {'🟢 ENABLED' if USE_ALPACA_BROKER else '🔴 DISABLED'}")
+print(f"[FLAGS]   USE_ALPACA_CRYPTO: {'🟢 ENABLED' if USE_ALPACA_CRYPTO else '🔴 DISABLED'}")
+print(f"[FLAGS]   ALPACA_ENVIRONMENT: {ALPACA_ENVIRONMENT}")
+print(f"[FLAGS]   ALPACA_PAPER_TRADING: {'🟢 ENABLED' if ALPACA_PAPER_TRADING else '🔴 DISABLED'}")
 print("=" * 60)
