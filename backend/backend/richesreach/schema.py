@@ -83,5 +83,13 @@ class Query(graphene.ObjectType):
 
 # Import the complete Mutation class from core.schema
 from core.schema import Mutation
+from core.alpaca_mutations import AlpacaMutation, AlpacaQuery
 
-schema = graphene.Schema(query=Query, mutation=Mutation)
+# Combine all mutations and queries
+class CombinedQuery(Query, AlpacaQuery):
+    pass
+
+class CombinedMutation(Mutation, AlpacaMutation):
+    pass
+
+schema = graphene.Schema(query=CombinedQuery, mutation=CombinedMutation)
