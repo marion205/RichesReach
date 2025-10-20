@@ -7,40 +7,40 @@ from django.contrib.auth.models import AbstractUser
 from django.utils import timezone
 import json
 
-# Import smart alerts models
-from .models_smart_alerts import (
-    AlertThreshold,
-    AlertDeliveryPreference,
-    SmartAlert,
-    AlertDeliveryHistory,
-    AlertSuppression,
-    MLAnomalyDetection
-)
+# Import smart alerts models (temporarily disabled for testing)
+# from .models_smart_alerts import (
+#     AlertThreshold,
+#     AlertDeliveryPreference,
+#     SmartAlert,
+#     AlertDeliveryHistory,
+#     AlertSuppression,
+#     MLAnomalyDetection
+# )
 
-# Import DeFi models
-from .models_defi import (
-    Chain,
-    Protocol,
-    Pool,
-    FarmPosition,
-    FarmAction
-)
+# Import DeFi models (temporarily disabled for testing)
+# from .models_defi import (
+#     Chain,
+#     Protocol,
+#     Pool,
+#     FarmPosition,
+#     FarmAction
+# )
 
-# Import DeFi analytics models
-from .models_analytics import (
-    PoolAnalytics,
-    PositionSnapshot,
-    PortfolioMetrics,
-    YieldHistory
-)
+# Import DeFi analytics models (temporarily disabled for testing)
+# from .models_analytics import (
+#     PoolAnalytics,
+#     PositionSnapshot,
+#     PortfolioMetrics,
+#     YieldHistory
+# )
 
-# Import crypto models
-from .crypto_models import (
-    Cryptocurrency,
-    CryptoPrice,
-    CryptoTrade,
-    CryptoMLPrediction
-)
+# Import crypto models (temporarily disabled for testing)
+# from .crypto_models import (
+#     Cryptocurrency,
+#     CryptoPrice,
+#     CryptoTrade,
+#     CryptoMLPrediction
+# )
 
 class User(AbstractUser):
     """Custom User model for RichesReach"""
@@ -62,6 +62,14 @@ class User(AbstractUser):
         ('PREMIUM', 'Premium'),
         ('ENTERPRISE', 'Enterprise'),
     ])
+    
+    # Security fields (required by database schema)
+    email_verified = models.BooleanField(default=False)
+    two_factor_enabled = models.BooleanField(default=False)
+    two_factor_secret = models.CharField(max_length=255, default='')
+    failed_login_attempts = models.IntegerField(default=0)
+    locked_until = models.DateTimeField(null=True, blank=True)
+    last_login_ip = models.GenericIPAddressField(null=True, blank=True)
     
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
@@ -618,150 +626,12 @@ class AuditLog(models.Model):
         return f"{self.action_type} by {self.user.username} at {self.timestamp}"
 
 
-# Yodlee Integration Models
-class BankLink(models.Model):
-    """Represents a linked bank account via Yodlee"""
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='bank_links')
-    provider_account_id = models.CharField(max_length=64, unique=True, help_text="Yodlee provider account ID")
-    institution_name = models.CharField(max_length=128, blank=True, help_text="Bank/institution name")
-    institution_id = models.CharField(max_length=64, blank=True, help_text="Yodlee institution ID")
-    status = models.CharField(max_length=32, default="linked", choices=[
-        ('linked', 'Linked'),
-        ('active', 'Active'),
-        ('inactive', 'Inactive'),
-        ('error', 'Error'),
-        ('expired', 'Expired'),
-    ])
-    last_sync = models.DateTimeField(null=True, blank=True, help_text="Last successful data sync")
-    last_refresh = models.DateTimeField(null=True, blank=True, help_text="Last refresh attempt")
-    error_message = models.TextField(blank=True, help_text="Last error message if any")
-    
-    # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    
-    class Meta:
-        ordering = ['-created_at']
-        indexes = [
-            models.Index(fields=['user', 'status']),
-            models.Index(fields=['provider_account_id']),
-            models.Index(fields=['last_sync']),
-        ]
-    
-    def __str__(self):
-        return f"{self.institution_name} - {self.user.username} ({self.status})"
+# Bank models are defined in models/bank_models.py
 
 
-class BankAccount(models.Model):
-    """Individual accounts within a bank link"""
-    link = models.ForeignKey(BankLink, on_delete=models.CASCADE, related_name="accounts")
-    account_id = models.CharField(max_length=64, help_text="Yodlee account ID")
-    name = models.CharField(max_length=128, blank=True, help_text="Account display name")
-    type = models.CharField(max_length=32, blank=True, choices=[
-        ('CHECKING', 'Checking'),
-        ('SAVINGS', 'Savings'),
-        ('CREDIT', 'Credit Card'),
-        ('INVESTMENT', 'Investment'),
-        ('LOAN', 'Loan'),
-        ('MORTGAGE', 'Mortgage'),
-        ('OTHER', 'Other'),
-    ])
-    mask = models.CharField(max_length=8, blank=True, help_text="Last 4 digits or account mask")
-    currency = models.CharField(max_length=8, default="USD", help_text="Account currency")
-    balance = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True, help_text="Current balance")
-    available_balance = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True, help_text="Available balance")
-    
-    # Yodlee specific fields
-    provider_id = models.CharField(max_length=64, blank=True, help_text="Yodlee provider ID")
-    is_manual = models.BooleanField(default=False, help_text="Is this a manually added account")
-    
-    # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    last_updated = models.DateTimeField(null=True, blank=True, help_text="Last time data was updated from Yodlee")
-    
-    class Meta:
-        ordering = ['-created_at']
-        unique_together = ['link', 'account_id']
-        indexes = [
-            models.Index(fields=['link', 'type']),
-            models.Index(fields=['account_id']),
-            models.Index(fields=['last_updated']),
-        ]
-    
-    def __str__(self):
-        return f"{self.name} ({self.mask}) - {self.link.institution_name}"
-
-
-class BankTransaction(models.Model):
-    """Transaction data from linked bank accounts"""
-    account = models.ForeignKey(BankAccount, on_delete=models.CASCADE, related_name="transactions")
-    transaction_id = models.CharField(max_length=64, help_text="Yodlee transaction ID")
-    amount = models.DecimalField(max_digits=15, decimal_places=2, help_text="Transaction amount")
-    description = models.TextField(blank=True, help_text="Transaction description")
-    merchant_name = models.CharField(max_length=128, blank=True, help_text="Merchant name if available")
-    category = models.CharField(max_length=64, blank=True, help_text="Transaction category")
-    subcategory = models.CharField(max_length=64, blank=True, help_text="Transaction subcategory")
-    date = models.DateField(help_text="Transaction date")
-    post_date = models.DateField(null=True, blank=True, help_text="Post date")
-    type = models.CharField(max_length=32, choices=[
-        ('DEBIT', 'Debit'),
-        ('CREDIT', 'Credit'),
-    ])
-    
-    # Yodlee specific fields
-    base_type = models.CharField(max_length=32, blank=True, help_text="Yodlee base type")
-    status = models.CharField(max_length=32, default="posted", choices=[
-        ('posted', 'Posted'),
-        ('pending', 'Pending'),
-        ('cancelled', 'Cancelled'),
-    ])
-    
-    # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    
-    class Meta:
-        ordering = ['-date', '-created_at']
-        unique_together = ['account', 'transaction_id']
-        indexes = [
-            models.Index(fields=['account', 'date']),
-            models.Index(fields=['date']),
-            models.Index(fields=['category']),
-            models.Index(fields=['type']),
-        ]
-    
-    def __str__(self):
-        return f"{self.description} - ${self.amount} ({self.date})"
+# BankTransaction model is defined in models/bank_models.py
 
 
 
 
-# Streamlined SBLOC Models
-class SblocBank(models.Model):
-    name = models.CharField(max_length=120)
-    slug = models.SlugField(unique=True)
-    logo_url = models.URLField(blank=True)
-    min_apr = models.FloatField(default=0.06)
-    max_apr = models.FloatField(default=0.12)
-    min_ltv = models.FloatField(default=0.30)
-    max_ltv = models.FloatField(default=0.50)
-    min_loan_usd = models.IntegerField(default=5000)
-    regions = models.JSONField(default=list, blank=True)
-    notes = models.TextField(blank=True)
-    is_active = models.BooleanField(default=True)
-
-class SblocReferral(models.Model):
-    user_id = models.IntegerField(null=True, blank=True)  # or FK to your User
-    bank = models.ForeignKey(SblocBank, on_delete=models.PROTECT)
-    amount_usd = models.IntegerField()
-    status = models.CharField(max_length=32, default='DRAFT')
-    external_ref = models.CharField(max_length=128, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-class SblocSession(models.Model):
-    referral = models.ForeignKey(SblocReferral, on_delete=models.CASCADE)
-    application_url = models.URLField()
-    external_session_id = models.CharField(max_length=128)
-    status = models.CharField(max_length=32, default='CREATED')
-    created_at = models.DateTimeField(auto_now_add=True)
+# SBLOC Models are defined in models/sbloc.py

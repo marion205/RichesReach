@@ -16,16 +16,17 @@ print("[BOOT] Using LOCAL DEVELOPMENT SETTINGS (settings_local.py)")
 print("[BOOT] Database: localhost:5432/richesreach_local")
 print("[BOOT] Debug mode: True")
 print("[BOOT] Real market data: ENABLED")
-print("[BOOT] JWT middleware: ENABLED")
+print("[BOOT] JWT middleware: DISABLED (attach_user middleware disabled for local dev)")
 print("[BOOT] CORS enabled for local development")
 
 # =============================================================================
 # DATABASE CONFIGURATION
 # =============================================================================
+# Force local database configuration - override any env.secrets settings
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'richesreach_local',
+        'NAME': 'dev',
         'USER': os.getenv('USER', 'marioncollins'),
         'PASSWORD': '',  # No password for local development
         'HOST': 'localhost',
@@ -36,11 +37,36 @@ DATABASES = {
     }
 }
 
+# Explicitly override any DATABASE_URL that might be set in env.secrets
+if 'DATABASE_URL' in os.environ:
+    del os.environ['DATABASE_URL']
+
 # =============================================================================
 # SECURITY & DEBUG
 # =============================================================================
 DEBUG = True
 ALLOWED_HOSTS = ['*']
+
+# =============================================================================
+# MIDDLEWARE CONFIGURATION (Override base settings)
+# =============================================================================
+# Disable attach_user middleware for local development to fix GraphQL auth issues
+MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
+    'django.middleware.security.SecurityMiddleware',
+    'core.middleware.rate_limit.RateLimitMiddleware',
+    'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.common.CommonMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'graphql_jwt.middleware.JSONWebTokenMiddleware',  # JWT authentication for GraphQL
+    'django.contrib.messages.middleware.MessageMiddleware',
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # Production middleware
+    'core.middleware.PerformanceMiddleware',
+    'core.middleware.SecurityHeadersMiddleware',
+    'core.middleware.RequestLoggingMiddleware',
+]
 
 # =============================================================================
 # CORS CONFIGURATION
@@ -58,7 +84,7 @@ CORS_ALLOWED_ORIGINS = [
 # =============================================================================
 # JWT AUTHENTICATION (REAL)
 # =============================================================================
-GRAPHENE["MIDDLEWARE"] = ["graphql_jwt.middleware.JSONWebTokenMiddleware"]
+GRAPHENE["MIDDLEWARE"] = []  # Temporarily disable JWT middleware for development
 AUTHENTICATION_BACKENDS = [
     "graphql_jwt.backends.JSONWebTokenBackend",
     "django.contrib.auth.backends.ModelBackend",
@@ -155,14 +181,13 @@ ALPACA_CRYPTO_URL = os.getenv('ALPACA_CRYPTO_URL', 'https://api.sandbox.alpaca.m
 ALPACA_PAPER_TRADING = os.getenv('ALPACA_PAPER_TRADING', 'true').lower() == 'true'
 ALPACA_ENVIRONMENT = os.getenv('ALPACA_ENVIRONMENT', 'sandbox')
 
-# Alpaca Integration Flags
+# Alpaca Integration Flags - ENABLED for real trading
 USE_ALPACA = os.getenv('USE_ALPACA', 'true').lower() == 'true'
 USE_ALPACA_BROKER = os.getenv('USE_ALPACA_BROKER', 'true').lower() == 'true'
 USE_ALPACA_CRYPTO = os.getenv('USE_ALPACA_CRYPTO', 'true').lower() == 'true'
 
-# Disable broker mock when Alpaca is enabled
-if USE_ALPACA_BROKER:
-    USE_BROKER_MOCK = False
+# Disable broker mock for real trading
+USE_BROKER_MOCK = False
 
 print(f"[FLAGS] Alpaca Integration Status:")
 print(f"[FLAGS]   USE_ALPACA: {'🟢 ENABLED' if USE_ALPACA else '🔴 DISABLED'}")
@@ -170,4 +195,14 @@ print(f"[FLAGS]   USE_ALPACA_BROKER: {'🟢 ENABLED' if USE_ALPACA_BROKER else '
 print(f"[FLAGS]   USE_ALPACA_CRYPTO: {'🟢 ENABLED' if USE_ALPACA_CRYPTO else '🔴 DISABLED'}")
 print(f"[FLAGS]   ALPACA_ENVIRONMENT: {ALPACA_ENVIRONMENT}")
 print(f"[FLAGS]   ALPACA_PAPER_TRADING: {'🟢 ENABLED' if ALPACA_PAPER_TRADING else '🔴 DISABLED'}")
+print("=" * 60)
+
+# =============================================================================
+# SANITY CHECKS - DEBUGGING INFO
+# =============================================================================
+print(f"[BOOT] Using settings: {os.environ.get('DJANGO_SETTINGS_MODULE')}")
+print(f"[BOOT] DB NAME: {DATABASES['default'].get('NAME')}")
+print(f"[BOOT] DB HOST: {DATABASES['default'].get('HOST')}")
+print(f"[BOOT] DB PORT: {DATABASES['default'].get('PORT')}")
+print(f"[BOOT] AUTH_USER_MODEL: {AUTH_USER_MODEL}")
 print("=" * 60)

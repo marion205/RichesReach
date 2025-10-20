@@ -28,7 +28,7 @@ export type StockCardProps = {
   onPressAnalysis: () => void;
   onPressMetric: (k: 'marketCap' | 'peRatio' | 'dividendYield') => void;
   onPressBudgetImpact?: () => void;
-  onPressTrade?: () => void;
+  // onPressTrade removed - Trade button no longer exists
   onPress?: () => void;
   isSelected?: boolean;
 };
@@ -110,18 +110,7 @@ function StockCard(props: StockCardProps) {
         )}
       </View>
 
-      {/* Trade Button */}
-      <TouchableOpacity
-        style={styles.standaloneTradeBtn}
-        onPress={() => {
-          console.log('🔍 StockCard Trade button pressed for:', props.symbol);
-          props.onPressTrade?.();
-        }}
-        activeOpacity={0.85}
-      >
-        <Icon name="trending-up" size={16} color="#fff" style={{ marginRight: 8 }} />
-        <Text style={styles.tradeText}>Trade</Text>
-      </TouchableOpacity>
+      {/* Trade Button - Removed as requested */}
 
       {/* Advanced Analysis Button */}
       <TouchableOpacity
@@ -172,25 +161,7 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', 
     borderWidth: 1, borderColor: '#FF6B35', marginLeft: 8
   },
-  standaloneTradeBtn: {
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    backgroundColor: '#10B981',
-    paddingVertical: 12, 
-    borderRadius: 12, 
-    marginTop: 16,
-    shadowColor: '#10B981',
-    shadowOffset: { width: 0, height: 2 }, 
-    shadowOpacity: 0.3, 
-    shadowRadius: 4, 
-    elevation: 3,
-  },
-  tradeText: { 
-    fontSize: 14, 
-    fontWeight: '600', 
-    color: '#fff' 
-  },
+  // Trade button styles removed
   analysisBtn: {
     flexDirection: 'row', 
     alignItems: 'center', 

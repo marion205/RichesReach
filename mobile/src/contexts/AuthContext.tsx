@@ -133,8 +133,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       if (authToken) {
         console.log('🔐 Setting token and user state...');
+        console.log('🔐 Token length:', authToken.length);
+        console.log('🔐 Token preview:', authToken.substring(0, 20) + '...');
         setToken(authToken);
         await AsyncStorage.setItem('token', authToken);
+        console.log('🔐 Token stored in AsyncStorage successfully');
         
         // Set a basic user object for authentication
         const basicUser = {
@@ -165,32 +168,49 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const restLoginFlexible = async (emailOrUsername: string, password: string): Promise<string | null> => {
-    const baseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+    // Hardcode the correct URL for now to ensure it works
+    const baseUrl = 'http://192.168.1.236:8000';
     const identifier = emailOrUsername.trim();
     
+    console.log('🔍 AuthContext: Using baseUrl:', baseUrl);
+    console.log('🔍 AuthContext: Environment variable:', process.env.EXPO_PUBLIC_API_BASE_URL);
+    
     const attempt = async (payload: any) => {
-      const response = await fetch(`${baseUrl}/auth/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      console.log('🔄 AuthContext: Attempting login to:', `${baseUrl}/auth/`);
+      console.log('🔄 AuthContext: Payload:', payload);
       
-      const json = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(json?.error || 'Login failed');
+      try {
+        const response = await fetch(`${baseUrl}/auth/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        
+        console.log('📡 AuthContext: Response status:', response.status);
+        console.log('📡 AuthContext: Response ok:', response.ok);
+        
+        const json = await response.json().catch(() => ({}));
+        console.log('📡 AuthContext: Response json:', json);
+        
+        if (!response.ok) {
+          throw new Error(json?.error || `Login failed with status ${response.status}`);
+        }
+        
+        // Handle response format: /auth/ returns {token, user}
+        if (!json.token) {
+          throw new Error('Missing token in response');
+        }
+        
+        // Store user data from REST response
+        if (json.user) {
+          setUser(json.user);
+        }
+        
+        return json.token;
+      } catch (fetchError) {
+        console.error('❌ AuthContext: Fetch error:', fetchError);
+        throw fetchError;
       }
-      
-      // Handle response format: /auth/ returns {token, user}
-      if (!json.token) {
-        throw new Error('Missing token in response');
-      }
-      
-      // Store user data from REST response
-      if (json.user) {
-        setUser(json.user);
-      }
-      
-      return json.token;
     };
 
     try {
@@ -216,11 +236,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = async (): Promise<void> => {
     try {
+      console.log('🔄 AuthContext: Starting logout...');
       setUser(null);
+      console.log('✅ AuthContext: User set to null');
       setToken(null);
+      console.log('✅ AuthContext: Token set to null');
       await AsyncStorage.removeItem('token');
+      console.log('✅ AuthContext: Token removed from AsyncStorage');
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error('❌ AuthContext logout error:', error);
     }
   };
 

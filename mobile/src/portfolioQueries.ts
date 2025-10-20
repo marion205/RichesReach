@@ -12,17 +12,12 @@ holdingsCount
 holdings {
 id
 stock {
-id
 symbol
-companyName
 }
 shares
 averagePrice
 currentPrice
 totalValue
-notes
-createdAt
-updatedAt
 }
 }
 }

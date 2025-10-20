@@ -219,7 +219,7 @@ const CryptoTradingCard: React.FC<CryptoTradingCardProps> = ({
       // Send: pricePerUnit = effective execution price field (limit price for limit types; live for market/stop-market)
       // Send: triggerPrice only for STOP_* (server can ignore otherwise)
       const variables: any = {
-        symbol: selectedSymbol,
+        symbol: `${selectedSymbol}/USD`, // Convert BTC to BTC/USD format
         tradeType,
         quantity: parseFloat(qty),
         pricePerUnit: Number(

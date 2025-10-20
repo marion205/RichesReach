@@ -1,5 +1,6 @@
 import graphene
 from core.graphql_mutations_auth import ObtainTokenPair, RefreshToken, VerifyToken
+from core.auth_mutations import RegisterUser, LoginUser
 from graphene_django import DjangoObjectType
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
@@ -15,6 +16,8 @@ from core.notification_graphql import NotificationQuery, NotificationMutation
 from core.benchmark_graphql import BenchmarkQuery, BenchmarkMutation
 from core.swing_trading_graphql import SwingTradingQuery, SwingTradingMutation
 from core.mutations import AddToWatchlist, RemoveFromWatchlist, AIRebalancePortfolio, PlaceStockOrder, GenerateAIRecommendations, WithdrawFunds
+from core.alpaca_mutations import AlpacaMutation, AlpacaQuery
+from core.alpaca_crypto_mutations import AlpacaCryptoMutation, AlpacaCryptoQuery
 from core.stock_comprehensive import StockComprehensiveQuery
 # from core.schema_defi import DeFiQuery, DeFiMutation  # Temporarily disabled due to pydantic issues
 # from core.schema_defi_analytics import DeFiAnalyticsQuery  # Temporarily disabled due to pydantic issues
@@ -328,6 +331,7 @@ class QuoteType(graphene.ObjectType):
     symbol = graphene.String()
     last = graphene.Float()
     changePct = graphene.Float()
+    changePercent = graphene.Float()  # Alias for changePct
     # Additional fields for mobile app
     price = graphene.Float()
     chg = graphene.Float()
@@ -337,6 +341,9 @@ class QuoteType(graphene.ObjectType):
     volume = graphene.Float()
     currentPrice = graphene.Float()
     change = graphene.Float()
+    
+    def resolve_changePercent(self, info):
+        return self.changePct
 
 # Options Analysis Types
 class OptionType(graphene.ObjectType):
@@ -445,7 +452,11 @@ class MyPortfolioHoldingType(graphene.ObjectType):
 
 class MyPortfoliosType(graphene.ObjectType):
     totalPortfolios = graphene.Int()
+    id = graphene.ID()
+    name = graphene.String()
     totalValue = graphene.Float()
+    totalGain = graphene.Float()
+    totalGainPercent = graphene.Float()
     portfolios = graphene.List(PortfolioType)
 
 class TradingAccountType(graphene.ObjectType):
@@ -821,7 +832,54 @@ class BaseQuery(graphene.ObjectType):
         """Get real portfolio metrics from user's actual portfolio"""
         user = info.context.user
         if not user.is_authenticated:
-            return None
+            # Return mock portfolio metrics for development
+            from types import SimpleNamespace
+            
+            # Create mock holdings
+            mock_holdings = [
+                SimpleNamespace(
+                    symbol='AAPL',
+                    company_name='Apple Inc.',
+                    shares=100,
+                    current_price=150.25,
+                    total_value=15025.0,
+                    cost_basis=14000.0,
+                    return_amount=1025.0,
+                    return_percent=7.32,
+                    sector='Technology'
+                ),
+                SimpleNamespace(
+                    symbol='MSFT',
+                    company_name='Microsoft Corporation',
+                    shares=50,
+                    current_price=330.15,
+                    total_value=16507.5,
+                    cost_basis=15000.0,
+                    return_amount=1507.5,
+                    return_percent=10.05,
+                    sector='Technology'
+                )
+            ]
+            
+            # Create mock portfolio metrics object
+            mock_metrics = SimpleNamespace(
+                total_value=125000.0,
+                total_cost=100000.0,
+                total_return=25000.0,
+                total_return_percent=25.0,
+                day_change=1250.0,
+                day_change_percent=1.0,
+                volatility=0.15,
+                sharpe_ratio=1.2,
+                max_drawdown=-0.08,
+                beta=1.0,
+                alpha=0.05,
+                sector_allocation='{"Technology": 40, "Healthcare": 25, "Finance": 20, "Consumer": 15}',
+                risk_metrics='{"riskScore": 0.65, "diversificationScore": 0.78}',
+                holdings=mock_holdings
+            )
+            
+            return mock_metrics
             
         try:
             from core.models import Portfolio, PortfolioPosition
@@ -2329,7 +2387,7 @@ class MarketOverviewType(graphene.ObjectType):
     totalMarketCap = graphene.Float()
     totalVolume24h = graphene.Float()
 
-class Query(SwingQuery, BaseQuery, SblocQuery, NotificationQuery, BenchmarkQuery, SwingTradingQuery, CryptoQuery, StockComprehensiveQuery, graphene.ObjectType):
+class Query(SwingQuery, BaseQuery, SblocQuery, NotificationQuery, BenchmarkQuery, SwingTradingQuery, CryptoQuery, StockComprehensiveQuery, AlpacaQuery, AlpacaCryptoQuery, graphene.ObjectType):
     # merging by multiple inheritance; keep simple to avoid MRO issues
     optionOrders = graphene.List(OptionOrderType, status=graphene.String())
     
@@ -3528,10 +3586,14 @@ class Query(SwingQuery, BaseQuery, SblocQuery, NotificationQuery, BenchmarkQuery
             }
         }
 
-class Mutation(SblocMutation, NotificationMutation, BenchmarkMutation, SwingTradingMutation, CryptoMutation, graphene.ObjectType):
+class Mutation(SblocMutation, NotificationMutation, BenchmarkMutation, SwingTradingMutation, CryptoMutation, AlpacaMutation, AlpacaCryptoMutation, graphene.ObjectType):
+    # Authentication mutations
     token_auth = ObtainTokenPair.Field()
     verify_token = VerifyToken.Field()
     refresh_token = RefreshToken.Field()
+    registerUser = RegisterUser.Field()
+    loginUser = LoginUser.Field()
+    
     runBacktest = RunBacktestMutation.Field()
     
     # Watchlist mutations

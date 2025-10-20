@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Force local settings for this shell process
+export DJANGO_SETTINGS_MODULE=richesreach.settings_local
+
+# Load Alpaca API credentials from env.secrets
+if [ -f "env.secrets" ]; then
+    echo "🔧 Loading API credentials from env.secrets..."
+    export $(grep -v '^#' env.secrets | grep -v '^$' | xargs)
+fi
+
+# Make it obvious on boot which settings/db we're using
+echo "[DEV] DJANGO_SETTINGS_MODULE=$DJANGO_SETTINGS_MODULE"
+echo "[DEV] Starting RichesReach development server..."
+
+# Kill any existing servers to avoid conflicts
+echo "[DEV] Killing any existing Django servers..."
+pkill -f "manage.py runserver" || true
+sleep 2
+
+# Run migrations to ensure DB is up to date
+echo "[DEV] Running migrations..."
+python3 manage.py migrate
+
+# Start the development server
+echo "[DEV] Starting Django development server..."
+python3 manage.py runserver 0.0.0.0:8000

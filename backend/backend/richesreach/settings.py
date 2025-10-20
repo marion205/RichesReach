@@ -99,7 +99,7 @@ else:
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
 # Application definition
 INSTALLED_APPS = [
-    'django.contrib.admin',
+    # 'django.contrib.admin',  # Temporarily disabled
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
@@ -129,6 +129,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'core.graphql_auth.attach_user',  # JWT authentication for GraphQL
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     # Production middleware
@@ -336,10 +337,11 @@ GRAPHENE = {
     "SCHEMA_INDEPTH_LIMIT": 20,
     "SCHEMA_OUTPUT": "schema.json",
 }
-AUTH_USER_MODEL = "core.User"
+AUTH_USER_MODEL = "core.User"  # Using custom User model
 # Authentication backends
 AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
+    'rest_framework_simplejwt.authentication.JWTAuthentication',
 ]
 
 # JWT Configuration - Using SimpleJWT instead of graphql_jwt
@@ -558,10 +560,7 @@ CHANNEL_LAYERS = {
 # CORS Configuration (dev only)
 CORS_ALLOW_ALL_ORIGINS = True  # dev only
 
-# Authentication backends
-AUTHENTICATION_BACKENDS = [
-    "django.contrib.auth.backends.ModelBackend",
-]
+# Authentication backends (already defined above)
 
 # GraphQL Configuration
 GRAPHENE = {
