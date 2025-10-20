@@ -590,46 +590,106 @@ import { API_BASE } from '../config/api';
             />
           )}
 
-          {/* AI Tools Section */}
+          {/* Learning & AI Tools Section */}
           <View style={styles.learningSection}>
             <View style={styles.learningHeader}>
               <View style={styles.learningHeaderLeft}>
-                <Icon name="zap" size={20} color="#00cc99" />
-                <Text style={styles.learningTitle}>AI Tools</Text>
+                <Icon name="book-open" size={20} color="#00cc99" />
+                <Text style={styles.learningTitle}>Learning & AI Tools</Text>
               </View>
-              <TouchableOpacity style={styles.learningButton} onPress={() => navigateTo('ai-scans')}>
-                <Text style={styles.learningButtonText}>Explore All</Text>
-                <Icon name="chevron-right" size={16} color="#00cc99" />
-              </TouchableOpacity>
             </View>
-
+            
             <View style={styles.learningCards}>
-              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('ai-scans')}>
+              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('assistant-chat')}>
                 <View style={styles.learningCardIcon}>
-                  <Icon name="search" size={24} color="#00cc99" />
+                  <Icon name="message-circle" size={24} color="#00cc99" />
                 </View>
                 <View style={styles.learningCardContent}>
-                  <Text style={styles.learningCardTitle}>AI Scans</Text>
-                  <Text style={styles.learningCardDescription}>Market intelligence & scanning</Text>
-                  <Text style={styles.learningCardMeta}>Hedge-fund grade analysis</Text>
+                  <Text style={styles.learningCardTitle}>AI Assistant Chat</Text>
+                  <Text style={styles.learningCardDescription}>Chat with your financial AI</Text>
                 </View>
                 <Icon name="chevron-right" size={16} color="#8E8E93" />
               </TouchableOpacity>
-
-              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('ai-options')}>
+              
+              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('tutor-ask-explain')}>
+                <View style={styles.learningCardIcon}>
+                  <Icon name="help-circle" size={24} color="#34C759" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={styles.learningCardTitle}>Ask & Explain</Text>
+                  <Text style={styles.learningCardDescription}>Ask questions or get explanations</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('tutor-quiz')}>
+                <View style={styles.learningCardIcon}>
+                  <Icon name="check-circle" size={24} color="#FF9500" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={styles.learningCardTitle}>Knowledge Quiz</Text>
+                  <Text style={styles.learningCardDescription}>Test your financial knowledge</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('tutor-module')}>
+                <View style={styles.learningCardIcon}>
+                  <Icon name="book" size={24} color="#AF52DE" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={styles.learningCardTitle}>Learning Modules</Text>
+                  <Text style={styles.learningCardDescription}>Structured learning topics</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('market-commentary')}>
                 <View style={styles.learningCardIcon}>
                   <Icon name="trending-up" size={24} color="#FF3B30" />
                 </View>
                 <View style={styles.learningCardContent}>
+                  <Text style={styles.learningCardTitle}>Market Commentary</Text>
+                  <Text style={styles.learningCardDescription}>Daily market insights</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('trading-coach')}>
+                <View style={styles.learningCardIcon}>
+                  <Icon name="target" size={24} color="#F59E0B" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={styles.learningCardTitle}>Trading Coach</Text>
+                  <Text style={styles.learningCardDescription}>Personalized trading advice</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('ai-scans')}>
+                <View style={styles.learningCardIcon}>
+                  <Icon name="search" size={24} color="#007AFF" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={styles.learningCardTitle}>AI Market Scans</Text>
+                  <Text style={styles.learningCardDescription}>Market intelligence & analysis</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('ai-options')}>
+                <View style={styles.learningCardIcon}>
+                  <Icon name="layers" size={24} color="#FF2D92" />
+                </View>
+                <View style={styles.learningCardContent}>
                   <Text style={styles.learningCardTitle}>AI Options</Text>
                   <Text style={styles.learningCardDescription}>Options strategy recommendations</Text>
-                  <Text style={styles.learningCardMeta}>Advanced options analysis</Text>
                 </View>
                 <Icon name="chevron-right" size={16} color="#8E8E93" />
               </TouchableOpacity>
             </View>
           </View>
-  
+
           {/* Swing Trading Section */}
           <View style={styles.learningSection}>
             <View style={styles.learningHeader}>
@@ -688,70 +748,6 @@ import { API_BASE } from '../config/api';
                   <Text style={styles.learningCardTitle}>Leaderboard</Text>
                   <Text style={styles.learningCardDescription}>Top traders & performance rankings</Text>
                   <Text style={styles.learningCardMeta}>Community • Competition</Text>
-                </View>
-                <Icon name="chevron-right" size={16} color="#8E8E93" />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Learn section (unchanged aside from tiny spacing tweaks) */}
-          <View style={styles.learningSection}>
-            <View style={styles.learningHeader}>
-              <View style={styles.learningHeaderLeft}>
-                <Icon name="book-open" size={20} color="#AF52DE" />
-                <Text style={styles.learningTitle}>Learn Investing</Text>
-              </View>
-              <TouchableOpacity style={styles.learningButton} onPress={() => navigateTo('learning-paths')}>
-                <Text style={styles.learningButtonText}>View All</Text>
-                <Icon name="chevron-right" size={16} color="#AF52DE" />
-              </TouchableOpacity>
-            </View>
-  
-            <View style={styles.learningCards}>
-              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('learning-paths')}>
-                <View style={styles.learningCardIcon}>
-                  <Icon name="play-circle" size={24} color="#34C759" />
-                </View>
-                <View style={styles.learningCardContent}>
-                  <Text style={styles.learningCardTitle}>Getting Started</Text>
-                  <Text style={styles.learningCardDescription}>Learn the basics of investing</Text>
-                  <Text style={styles.learningCardMeta}>6 modules • 35 min</Text>
-                </View>
-                <Icon name="chevron-right" size={16} color="#8E8E93" />
-              </TouchableOpacity>
-  
-              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('portfolio-learning')}>
-                <View style={styles.learningCardIcon}>
-                  <Icon name="bar-chart-2" size={24} color="#007AFF" />
-                </View>
-                <View style={styles.learningCardContent}>
-                  <Text style={styles.learningCardTitle}>Portfolio Management</Text>
-                  <Text style={styles.learningCardDescription}>Optimize your investments</Text>
-                  <Text style={styles.learningCardMeta}>6 modules • 35 min</Text>
-                </View>
-                <Icon name="chevron-right" size={16} color="#8E8E93" />
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('options-learning')}>
-                <View style={styles.learningCardIcon}>
-                  <Icon name="trending-up" size={24} color="#00cc99" />
-                </View>
-                <View style={styles.learningCardContent}>
-                  <Text style={styles.learningCardTitle}>Options Trading</Text>
-                  <Text style={styles.learningCardDescription}>Master options strategies</Text>
-                  <Text style={styles.learningCardMeta}>4 modules • 30 min</Text>
-                </View>
-                <Icon name="chevron-right" size={16} color="#8E8E93" />
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('sbloc-learning')}>
-                <View style={styles.learningCardIcon}>
-                  <Icon name="credit-card" size={24} color="#8B5CF6" />
-                </View>
-                <View style={styles.learningCardContent}>
-                  <Text style={styles.learningCardTitle}>SBLOC Guide</Text>
-                  <Text style={styles.learningCardDescription}>Securities-based lending</Text>
-                  <Text style={styles.learningCardMeta}>5 modules • 25 min</Text>
                 </View>
                 <Icon name="chevron-right" size={16} color="#8E8E93" />
               </TouchableOpacity>

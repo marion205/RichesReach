@@ -79,6 +79,12 @@ import TaxOptimizationScreen from './screens/TaxOptimizationScreen';
 import SmartLotsScreen from './screens/SmartLotsScreen';
 import BorrowVsSellScreen from './screens/BorrowVsSellScreen';
 import WashGuardScreen from './screens/WashGuardScreen';
+import TutorAskExplainScreen from './features/learning/screens/TutorAskExplainScreen';
+import TutorQuizScreen from './features/learning/screens/TutorQuizScreen';
+import TutorModuleScreen from './features/learning/screens/TutorModuleScreen';
+import MarketCommentaryScreen from './features/news/screens/MarketCommentaryScreen';
+import AssistantChatScreen from './features/assistant/screens/AssistantChatScreen';
+import TradingCoachScreen from './features/coach/screens/TradingCoachScreen';
 // Components
 import { BottomTabBar, TopHeader, PersonalizedDashboard } from './components';
 // Services
@@ -398,6 +404,18 @@ case 'borrow-vs-sell':
 return <BorrowVsSellScreen />;
 case 'wash-guard':
 return <WashGuardScreen />;
+case 'tutor-ask-explain':
+return <TutorAskExplainScreen />;
+case 'tutor-quiz':
+return <TutorQuizScreen />;
+case 'tutor-module':
+return <TutorModuleScreen />;
+case 'market-commentary':
+return <MarketCommentaryScreen />;
+case 'assistant-chat':
+return <AssistantChatScreen />;
+case 'trading-coach':
+return <TradingCoachScreen />;
 case 'subscription':
 return <SubscriptionScreen />;
     default:

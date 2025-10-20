@@ -810,7 +810,7 @@ class ZeroTrustEngine:
         """Get security metrics"""
         try:
             recent_events = [event for event in self.security_events 
-                           if event.timestamp > datetime.now() - timedelta(hours=24))]
+                           if event.timestamp > datetime.now() - timedelta(hours=24)]
             
             return {
                 "total_events": len(self.security_events),

@@ -720,7 +720,6 @@ class RealDataService:
                 "market_sentiment": "Neutral",
                 "risk_appetite": "Medium"
             }
-    
     def train_ml_model(self, symbol: str, features: List[float], target: float) -> Dict[str, Any]:
         """Train advanced ML models including deep learning for stock prediction"""
         try:
@@ -1235,6 +1234,28 @@ app = FastAPI(
     version="1.0.0"
 )
 
+@app.on_event("startup")
+async def _market_startup_check():
+    """Check market data provider readiness on startup"""
+    try:
+        from core.robust_market_service import market_service
+        provider_status = market_service.get_provider_status()
+        
+        logger.info("🔍 Market data provider readiness check:")
+        for name, status in provider_status.items():
+            status_text = "✅ configured" if status['configured'] else "❌ missing key"
+            logger.info(f"  {name}: {status_text}")
+        
+        # Check if any provider is ready
+        any_ready = any(status['configured'] for status in provider_status.values())
+        if any_ready:
+            logger.info("✅ Market data service ready")
+        else:
+            logger.warning("⚠️ No market data providers configured - quotes will return empty")
+            
+    except Exception as e:
+        logger.error(f"❌ Market startup check failed: {e}")
+
 @app.on_event("shutdown")
 async def _close_httpx():
     svc = get_real_data_service()
@@ -1352,6 +1373,82 @@ if OPTIONS_COPILOT_AVAILABLE:
     logger.info("✅ Options Copilot API included")
 else:
     logger.warning("⚠️ Options Copilot API not available")
+
+# Include AI Tutor API
+try:
+    from core.ai_tutor_api import router as ai_tutor_router
+    app.include_router(ai_tutor_router)
+    logger.info("✅ AI Tutor API router included")
+except Exception as e:
+    logger.warning(f"⚠️ Failed to include AI Tutor API router: {e}")
+
+# Include Conversational Assistant API
+try:
+    from core.assistant_api import router as assistant_router
+    app.include_router(assistant_router)
+    logger.info("✅ Assistant API router included")
+except Exception as e:
+    logger.warning(f"⚠️ Failed to include Assistant API router: {e}")
+
+# Include Trading Coach API
+try:
+    from core.trading_coach_api import router as coach_router
+    app.include_router(coach_router)
+    logger.info("✅ Trading Coach API router included")
+except Exception as e:
+    logger.warning(f"⚠️ Failed to include Trading Coach API router: {e}")
+
+# Include Market Data endpoints with robust provider fallback
+try:
+    from core.robust_market_service import market_service
+    from fastapi import Request, Query
+    from fastapi.responses import JSONResponse
+    import json
+    
+    @app.get("/api/market/quotes")
+    async def get_market_quotes(symbols: str = Query(..., description="Comma-separated list of stock symbols")):
+        """Get market quotes for multiple symbols with robust provider fallback"""
+        try:
+            # Parse symbols
+            symbol_list = [s.strip().upper() for s in symbols.split(',') if s.strip()]
+            
+            if not symbol_list:
+                return JSONResponse(content={"error": "No valid symbols provided"}, status_code=400)
+            
+            if len(symbol_list) > 20:
+                return JSONResponse(content={"error": "Maximum 20 symbols per request"}, status_code=400)
+            
+            # Get quotes using robust service
+            quotes = await market_service.get_quotes(symbol_list)
+            
+            return JSONResponse(content=quotes, status_code=200)
+                
+        except Exception as e:
+            logger.error(f"Market quotes error: {e}")
+            return JSONResponse(content={"error": str(e)}, status_code=500)
+    
+    @app.get("/api/market/status")
+    async def get_market_status():
+        """Get market data service status"""
+        try:
+            provider_status = market_service.get_provider_status()
+            
+            return JSONResponse(content={
+                'service': 'robust_market_data',
+                'providers': provider_status,
+                'cache_enabled': True,
+                'cache_ttl_seconds': 10,
+                'max_symbols_per_request': 20,
+                'status': 'operational' if any(p['configured'] for p in provider_status.values()) else 'unavailable'
+            }, status_code=200)
+                
+        except Exception as e:
+            logger.error(f"Market status error: {e}")
+            return JSONResponse(content={"error": str(e)}, status_code=500)
+    
+    logger.info("✅ Robust market data endpoints included")
+except Exception as e:
+    logger.warning(f"⚠️ Failed to include robust market data endpoints: {e}")
 
 # Debug endpoint to prove which scoring module is active
 @app.get("/debug/scoring_info")
@@ -1511,10 +1608,8 @@ def _pq_key(query: str, variables: dict) -> str:
 def _pq_get(key: str):
     v = _PERSISTED.get(key)
     return None if not v or v[0] < time.time() else v[1]
-
 def _pq_set(key: str, payload: dict, ttl: int = 180):
     _PERSISTED[key] = (time.time() + ttl, payload)
-
 # === Soft TTL (stale-while-revalidate) ===
 def swr_get(cache: dict, key: str, fetch_fn, ttl=300, soft=900):
     rec = cache.get(key)  # rec = {"ts":..., "data":...}
@@ -2311,11 +2406,73 @@ users_db = {
         "hasPremiumAccess": True, "subscriptionTier": "premium"
     }
 }
-
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
     to_encode.update({"exp": datetime.utcnow() + (expires_delta or timedelta(minutes=15))})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+# ---------- Authentication ----------
+@app.post("/auth/")
+async def rest_auth(request: Request):
+    """REST authentication endpoint for mobile app compatibility"""
+    try:
+        body = await request.json()
+        email = body.get("email") or body.get("username")
+        password = body.get("password")
+        
+        if not email or not password:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "Email/username and password required"}
+            )
+        
+        # Check if user exists in our mock database (case-insensitive)
+        email_lower = email.lower()
+        if email_lower in users_db:
+            user_data = users_db[email_lower]
+            # Verify password (stored as SHA256 hash)
+            import hashlib
+            password_hash = hashlib.sha256(password.encode()).hexdigest()
+            
+            if user_data["password"] == password_hash:
+                # Generate JWT token
+                import jwt
+                import datetime
+                
+                payload = {
+                    "sub": email,
+                    "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=24)
+                }
+                
+                token = jwt.encode(payload, "your-secret-key", algorithm="HS256")
+                
+                return JSONResponse(content={
+                    "token": token,
+                    "user": {
+                        "id": user_data["id"],
+                        "email": user_data["email"],
+                        "name": user_data["name"],
+                        "hasPremiumAccess": user_data.get("hasPremiumAccess", False),
+                        "subscriptionTier": user_data.get("subscriptionTier", "free")
+                    }
+                })
+            else:
+                return JSONResponse(
+                    status_code=401,
+                    content={"error": "Invalid credentials"}
+                )
+        else:
+            return JSONResponse(
+                status_code=401,
+                content={"error": "User not found"}
+            )
+            
+    except Exception as e:
+        logger.error(f"REST auth error: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": "Internal server error"}
+        )
 
 # ---------- Health ----------
 @app.get("/")
@@ -2328,6 +2485,11 @@ async def health_check():
         return {"status": "healthy", "timestamp": datetime.now().isoformat(), "build": BUILD_ID}
     except Exception as e:
         return {"status": "error", "error": str(e), "build": BUILD_ID}
+
+@app.get("/healthz")
+async def healthz():
+    """Simple health check for load balancers"""
+    return {"ok": True}
 
 @app.get("/health/detailed/")
 async def detailed_health_check():
@@ -3053,9 +3215,7 @@ def _get_mock_realtime_price(symbol: str):
         "DOT": {"priceUsd": 6.5, "volumeUsd24h": 80000000.0}
     }
     return mock_prices.get(symbol.upper(), {"priceUsd": 0.0, "volumeUsd24h": 0.0})
-
 # ========== REAL DATA INTEGRATION ==========
-
 import requests
 import time
 from typing import Dict, Any, Optional
@@ -3662,7 +3822,6 @@ def get_real_ml_prediction(symbol: str) -> Dict[str, Any]:
 def _get_mock_drift_decision():
     """Mock function to get drift decision - replace with real implementation"""
     return {"size_multiplier": 1.0, "level": "OK"}
-
 # ---------- GraphQL endpoint ----------
 @app.post("/graphql")
 @app.post("/graphql/")
@@ -4371,7 +4530,6 @@ async def graphql_endpoint(request_data: dict):
             response_data["placeOptionOrder"] = None
             _add_error(errors, f"placeOptionOrder failed: {e}")
             return {"data": response_data, "errors": errors}
-
     # === Phase 3: Research Hub (Early Return) ===
     if "researchHub" in fields:
         try:
@@ -4922,7 +5080,6 @@ async def graphql_endpoint(request_data: dict):
             "updatedAt": datetime.now().isoformat(),
             "__typename": "PortfolioMetrics"
         }}}
-
     # Options Analysis (query)
     if "optionsAnalysis" in fields:
         symbol = variables.get("symbol", "AAPL")
@@ -5685,7 +5842,6 @@ async def graphql_endpoint(request_data: dict):
             "updatedAt": datetime.now().isoformat(),
             "__typename": "OptionsAnalysis"
         }}}
-
     if "advancedStockScreening" in fields:
         _trace("enter advancedStockScreening handler")
         print("🎯 DETECTED advancedStockScreening query! (runpy exec loader)")
@@ -6449,7 +6605,6 @@ async def graphql_endpoint(request_data: dict):
                 "__typename": "StockDiscussion"
             }
         ]}}
-
     if "socialFeed" in fields:
         return {"data": {"socialFeed": [
             {
@@ -7247,7 +7402,6 @@ async def graphql_endpoint(request_data: dict):
                 "explanation": None,
                 "__typename": "GenerateMlPredictionResponse"
             }}}
-
     # Crypto Recommendations (query)
     if "cryptoRecommendations" in fields:
         constraints = variables.get("constraints") or {}
