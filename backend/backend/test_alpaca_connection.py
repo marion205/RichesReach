@@ -1,111 +1,77 @@
 #!/usr/bin/env python3
 """
-Test Alpaca API Connection
+Test Alpaca Connection
+Verify sandbox API keys work and check existing accounts
 """
-import os
-import django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'richesreach.settings_local')
-django.setup()
 
-from alpaca.trading.client import TradingClient
-from alpaca.data.historical import StockHistoricalDataClient
-from alpaca.data.requests import StockBarsRequest
-from alpaca.data.timeframe import TimeFrame
-from datetime import datetime, timedelta
+import os
+from alpaca.broker.client import BrokerClient
+
+# Load environment variables from env.secrets
+def load_env_secrets():
+    env_file = 'env.secrets'
+    if os.path.exists(env_file):
+        with open(env_file, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    os.environ[key] = value
+        print("✅ Loaded environment variables from env.secrets")
+    else:
+        print("❌ env.secrets file not found")
 
 def test_alpaca_connection():
-    """Test Alpaca API connection with provided credentials"""
+    """Test Alpaca Broker API connection"""
+    print("🔍 Testing Alpaca Broker API Connection...")
     
-    # Test Alpaca configuration
-    api_key = os.getenv('ALPACA_API_KEY', '')
-    secret_key = os.getenv('ALPACA_SECRET_KEY', '')
-    base_url = os.getenv('ALPACA_BASE_URL', 'https://broker-api.sandbox.alpaca.markets')
-
-    print(f'🔑 API Key: {api_key[:10]}...' if api_key else '❌ No API Key')
-    print(f'🔑 Secret Key: {secret_key[:10]}...' if secret_key else '❌ No Secret Key')
-    print(f'🌐 Base URL: {base_url}')
-
-    if api_key and secret_key:
-        try:
-            # Test Broker API (for account management and KYC)
-            print("🔍 Testing Broker API connection...")
-            import requests
+    # Load environment variables
+    load_env_secrets()
+    
+    # Get API keys
+    API_KEY = os.getenv('ALPACA_API_KEY')
+    SECRET_KEY = os.getenv('ALPACA_SECRET_KEY')
+    
+    if not API_KEY or not SECRET_KEY:
+        print("❌ Alpaca API keys not found in environment")
+        return False
+    
+    print(f"📊 API Key: {API_KEY[:10]}...")
+    print(f"📊 Secret Key: {SECRET_KEY[:10]}...")
+    
+    try:
+        # Create client
+        client = BrokerClient(API_KEY, SECRET_KEY, sandbox=True)
+        print("✅ Broker client created successfully")
+        
+        # Get account list
+        accounts = client.get_account_list()
+        print(f"✅ Connected! Current accounts: {len(accounts)}")
+        
+        if accounts:
+            print("📊 Existing accounts:")
+            for acc in accounts:
+                print(f"  - ID: {acc.id}")
+                print(f"  - Number: {acc.account_number}")
+                print(f"  - Status: {acc.status}")
+                print(f"  - Created: {acc.created_at}")
+                print("  ---")
+        else:
+            print("📊 No accounts yet—ready to create!")
             
-            broker_url = f"{base_url}/v1/accounts"
-            headers = {
-                'APCA-API-KEY-ID': api_key,
-                'APCA-API-SECRET-KEY': secret_key,
-                'Content-Type': 'application/json'
-            }
-            
-            response = requests.get(broker_url, headers=headers)
-            print(f'📊 Broker API Response Status: {response.status_code}')
-            
-            if response.status_code == 200:
-                accounts = response.json()
-                print(f'✅ Broker API connected successfully!')
-                print(f'📊 Response type: {type(accounts)}')
-                print(f'📊 Response: {accounts}')
-                
-                # Handle different response formats
-                if isinstance(accounts, list):
-                    print(f'📊 Accounts found: {len(accounts)}')
-                    if accounts:
-                        account = accounts[0]
-                        print(f'📈 Account ID: {account.get("id", "N/A")}')
-                        print(f'📊 Account Status: {account.get("status", "N/A")}')
-                elif isinstance(accounts, dict):
-                    accounts_list = accounts.get("accounts", [])
-                    print(f'📊 Accounts found: {len(accounts_list)}')
-                    if accounts_list:
-                        account = accounts_list[0]
-                        print(f'📈 Account ID: {account.get("id", "N/A")}')
-                        print(f'📊 Account Status: {account.get("status", "N/A")}')
-            else:
-                print(f'⚠️ Broker API response: {response.text}')
-            
-            # Test Trading API (for paper trading)
-            print("\n🔍 Testing Trading API connection...")
-            try:
-                trading_client = TradingClient(api_key, secret_key, paper=True)
-                account = trading_client.get_account()
-                print(f'✅ Trading Client connected successfully!')
-                print(f'📊 Account Status: {account.status}')
-                print(f'💰 Buying Power: ${account.buying_power}')
-                print(f'💵 Cash: ${account.cash}')
-                print(f'📈 Portfolio Value: ${account.portfolio_value}')
-            except Exception as trading_error:
-                print(f'⚠️ Trading API error: {str(trading_error)}')
-                print('💡 This is normal for broker API credentials')
-            
-            # Test Data API (for market data)
-            print("\n🔍 Testing Data API connection...")
-            try:
-                data_client = StockHistoricalDataClient(api_key, secret_key)
-                
-                # Test getting some stock data
-                request_params = StockBarsRequest(
-                    symbol_or_symbols=["AAPL"],
-                    timeframe=TimeFrame.Day,
-                    start=datetime.now() - timedelta(days=5),
-                    end=datetime.now()
-                )
-                
-                bars = data_client.get_stock_bars(request_params)
-                print(f'✅ Stock data retrieved successfully!')
-                print(f'📊 AAPL bars count: {len(bars.data["AAPL"])}')
-            except Exception as data_error:
-                print(f'⚠️ Data API error: {str(data_error)}')
-                print('💡 This is normal for broker API credentials')
-            
-            return True
-            
-        except Exception as e:
-            print(f'❌ Alpaca connection failed: {str(e)}')
-            return False
-    else:
-        print('❌ Missing API credentials')
+        return True
+        
+    except Exception as e:
+        print(f"❌ Error: {e}")
         return False
 
 if __name__ == "__main__":
-    test_alpaca_connection()
+    print("🚀 Alpaca Connection Test")
+    print("=" * 40)
+    
+    success = test_alpaca_connection()
+    
+    if success:
+        print("\n🎉 Connection successful! Ready to create accounts.")
+    else:
+        print("\n❌ Connection failed. Check your API keys.")

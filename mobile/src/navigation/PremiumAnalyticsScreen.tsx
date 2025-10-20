@@ -61,16 +61,30 @@ const { width } = Dimensions.get('window');
 const GET_PREMIUM_PORTFOLIO_METRICS = gql`
   query GetPremiumPortfolioMetrics {
     portfolioMetrics {
-      totalValueUsd
-      weightedApy
-      portfolioRisk
-      diversificationScore
-      activePositions
-      protocolsCount
-      totalReturn1d
-      totalReturn7d
-      totalReturn30d
-      createdAt
+      totalValue
+      totalCost
+      totalReturn
+      totalReturnPercent
+      dayChange
+      dayChangePercent
+      volatility
+      sharpeRatio
+      maxDrawdown
+      beta
+      alpha
+      sectorAllocation
+      riskMetrics
+      holdings {
+        symbol
+        companyName
+        shares
+        currentPrice
+        totalValue
+        costBasis
+        returnAmount
+        returnPercent
+        sector
+      }
     }
   }
 `;
@@ -248,16 +262,51 @@ const GET_OPTIONS_ANALYSIS_TEST = gql`
 
 // Mock data for when backend returns null
 const mockMetrics = {
-  totalValueUsd: 125000.0,
-  weightedApy: 8.5,
-  portfolioRisk: 0.65,
-  diversificationScore: 0.78,
-  activePositions: 12,
-  protocolsCount: 8,
-  totalReturn1d: 1250.0,
-  totalReturn7d: 8750.0,
-  totalReturn30d: 18750.0,
-  createdAt: new Date().toISOString()
+  totalValue: 125000.0,
+  totalCost: 100000.0,
+  totalReturn: 25000.0,
+  totalReturnPercent: 25.0,
+  dayChange: 1250.0,
+  dayChangePercent: 1.0,
+  volatility: 0.15,
+  sharpeRatio: 1.2,
+  maxDrawdown: -0.08,
+  beta: 1.0,
+  alpha: 0.05,
+  sectorAllocation: JSON.stringify({
+    "Technology": 40,
+    "Healthcare": 25,
+    "Finance": 20,
+    "Consumer": 15
+  }),
+  riskMetrics: JSON.stringify({
+    "riskScore": 0.65,
+    "diversificationScore": 0.78
+  }),
+  holdings: [
+    {
+      symbol: "AAPL",
+      companyName: "Apple Inc.",
+      shares: 100,
+      currentPrice: 150.25,
+      totalValue: 15025.0,
+      costBasis: 14000.0,
+      returnAmount: 1025.0,
+      returnPercent: 7.32,
+      sector: "Technology"
+    },
+    {
+      symbol: "MSFT",
+      companyName: "Microsoft Corporation",
+      shares: 50,
+      currentPrice: 330.15,
+      totalValue: 16507.5,
+      costBasis: 15000.0,
+      returnAmount: 1507.5,
+      returnPercent: 10.05,
+      sector: "Technology"
+    }
+  ]
 };
 
 const mockOptionsData = {
@@ -615,7 +664,7 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
                 <Text style={styles.metricLabel}>Total Value</Text>
               </View>
               <Text style={styles.metricValue}>
-                ${displayMetrics.totalValueUsd?.toLocaleString() || '0.00'}
+                ${displayMetrics.totalValue?.toLocaleString() || '0.00'}
               </Text>
             </View>
             
@@ -625,7 +674,7 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
                 <Text style={styles.metricLabel}>Weighted APY</Text>
               </View>
               <Text style={[styles.metricValue, { color: '#34C759' }]}>
-                {displayMetrics.weightedApy?.toFixed(2) || '0.00'}%
+                {displayMetrics.totalReturnPercent?.toFixed(2) || '0.00'}%
               </Text>
             </View>
             
@@ -635,7 +684,7 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
                 <Text style={styles.metricLabel}>Portfolio Risk</Text>
               </View>
               <Text style={styles.metricValue}>
-                {displayMetrics.portfolioRisk != null ? `${(displayMetrics.portfolioRisk * 100).toFixed(1)}%` : 'N/A'}
+                {displayMetrics.volatility != null ? `${(displayMetrics.volatility * 100).toFixed(1)}%` : 'N/A'}
               </Text>
             </View>
             
@@ -645,7 +694,7 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
                 <Text style={styles.metricLabel}>Diversification</Text>
               </View>
               <Text style={styles.metricValue}>
-                {displayMetrics.diversificationScore != null ? `${(displayMetrics.diversificationScore * 100).toFixed(0)}%` : 'N/A'}
+                {displayMetrics.riskMetrics ? JSON.parse(displayMetrics.riskMetrics).diversificationScore ? `${(JSON.parse(displayMetrics.riskMetrics).diversificationScore * 100).toFixed(0)}%` : 'N/A' : 'N/A'}
               </Text>
             </View>
           </View>
@@ -657,20 +706,20 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
           <View style={styles.returnsContainer}>
             <View style={styles.returnItem}>
               <Text style={styles.returnLabel}>1 Day</Text>
-              <Text style={[styles.returnValue, { color: displayMetrics.totalReturn1d >= 0 ? '#34C759' : '#ef4444' }]}>
-                ${displayMetrics.totalReturn1d?.toLocaleString() || '0'}
+              <Text style={[styles.returnValue, { color: displayMetrics.dayChange >= 0 ? '#34C759' : '#ef4444' }]}>
+                ${displayMetrics.dayChange?.toLocaleString() || '0'}
               </Text>
             </View>
             <View style={styles.returnItem}>
               <Text style={styles.returnLabel}>7 Days</Text>
-              <Text style={[styles.returnValue, { color: displayMetrics.totalReturn7d >= 0 ? '#34C759' : '#ef4444' }]}>
-                ${displayMetrics.totalReturn7d?.toLocaleString() || '0'}
+              <Text style={[styles.returnValue, { color: displayMetrics.totalReturn >= 0 ? '#34C759' : '#ef4444' }]}>
+                ${displayMetrics.totalReturn?.toLocaleString() || '0'}
               </Text>
             </View>
             <View style={styles.returnItem}>
               <Text style={styles.returnLabel}>30 Days</Text>
-              <Text style={[styles.returnValue, { color: displayMetrics.totalReturn30d >= 0 ? '#34C759' : '#ef4444' }]}>
-                ${displayMetrics.totalReturn30d?.toLocaleString() || '0'}
+              <Text style={[styles.returnValue, { color: displayMetrics.totalReturn >= 0 ? '#34C759' : '#ef4444' }]}>
+                ${displayMetrics.totalReturn?.toLocaleString() || '0'}
               </Text>
             </View>
           </View>
@@ -682,11 +731,11 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
           <View style={styles.summaryCard}>
             <View style={styles.summaryItem}>
               <Text style={styles.summaryLabel}>Active Positions</Text>
-              <Text style={styles.summaryValue}>{displayMetrics.activePositions || 0}</Text>
+              <Text style={styles.summaryValue}>{displayMetrics.holdings?.length || 0}</Text>
             </View>
             <View style={styles.summaryItem}>
               <Text style={styles.summaryLabel}>Protocols</Text>
-              <Text style={styles.summaryValue}>{displayMetrics.protocolsCount || 0}</Text>
+              <Text style={styles.summaryValue}>{displayMetrics.holdings?.length || 0}</Text>
             </View>
             <View style={styles.summaryItem}>
               <Text style={styles.summaryLabel}>Last Updated</Text>

@@ -315,7 +315,7 @@ const CryptoTradingCardPro: React.FC<CryptoTradingCardProps> = ({
       // Server-authoritative pricing: don't send price for MARKET orders
       // Server will fetch fresh quote and use that for execution
       const variables: any = {
-        symbol: selectedSymbol,
+        symbol: `${selectedSymbol}/USD`, // Convert BTC to BTC/USD format
         tradeType,
         quantity: parseFloat(qty),
         orderType,

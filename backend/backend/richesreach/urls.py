@@ -282,37 +282,54 @@ def home(_):
 
 @csrf_exempt
 def auth_view(request):
+    print(f"Auth: Request method: {request.method}")
     if request.method == 'POST':
         try:
+            print(f"Auth: Request body: {request.body}")
             data = json.loads(request.body)
             email = data.get('email', '')
             password = data.get('password', '')
+            print(f"Auth: Email: {email}, Password length: {len(password)}")
             
             # Simple authentication for testing
             if email and password:
-                # Generate a proper JWT token
-                import jwt
-                import datetime
+                # Use SimpleJWT to generate tokens that work with GraphQL
+                from rest_framework_simplejwt.tokens import RefreshToken
+                from django.contrib.auth import get_user_model
                 
-                payload = {
-                    'user_id': 1,
-                    'username': email.split('@')[0],
-                    'email': email,
-                    'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24),
-                    'iat': datetime.datetime.utcnow()
-                }
+                User = get_user_model()
                 
-                # Use a simple secret key for development
-                secret_key = "dev-secret-key-change-in-production"
-                token = jwt.encode(payload, secret_key, algorithm="HS256")
+                # Find user by email (handle duplicates)
+                user = User.objects.filter(email__iexact=email).first()
+                if not user:
+                    print(f"Auth: User not found: {email}")
+                    return JsonResponse({
+                        'token': None,
+                        'user': None
+                    })
+                print(f"Auth: User found: {user.email}")
+                
+                # Check password
+                if not user.check_password(password):
+                    print(f"Auth: Password check failed for: {email}")
+                    return JsonResponse({
+                        'token': None,
+                        'user': None
+                    })
+                
+                print(f"Auth: Password check passed for: {email}")
+                
+                # Generate SimpleJWT token
+                refresh = RefreshToken.for_user(user)
+                token = str(refresh.access_token)
                 
                 # Return the token directly (not wrapped in data.tokenAuth)
                 return JsonResponse({
                     'token': token,
                     'user': {
-                        'id': '1',
-                        'email': email,
-                        'username': email.split('@')[0]
+                        'id': str(user.id),
+                        'email': user.email,
+                        'username': user.username
                     }
                 })
             else:
@@ -321,6 +338,7 @@ def auth_view(request):
                     'user': None
                 })
         except Exception as e:
+            print(f"Auth: Exception: {e}")
             return JsonResponse({
                 'token': None,
                 'user': None
@@ -555,7 +573,7 @@ def discussions_view(request):
 
 urlpatterns = [
     path("", home),  # <-- Root endpoint
-    path("admin/", admin.site.urls),
+    # path("admin/", admin.site.urls),  # Temporarily disabled
     path("healthz", healthz),  # <-- ALB target health
     path("health", health),   # <-- Health check (no trailing slash)
     path("health/", health),   # <-- Health check (with trailing slash)

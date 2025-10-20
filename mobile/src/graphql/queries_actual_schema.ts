@@ -75,9 +75,6 @@ export const MY_WATCHLIST = gql`
       id
       stock {
         symbol
-        companyName
-        currentPrice
-        changePercent
       }
       notes
       addedAt
@@ -210,11 +207,16 @@ export const MY_PORTFOLIOS = gql`
         id
         name
         totalValue
+        holdingsCount
         holdings {
-          symbol
+          id
+          stock {
+            symbol
+          }
           shares
           averagePrice
-          currentValue
+          currentPrice
+          totalValue
         }
       }
     }

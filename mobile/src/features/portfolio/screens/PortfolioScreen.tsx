@@ -12,22 +12,7 @@ import { useQuery } from '@apollo/client';
 import { gql } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
 import { SecureMarketDataService } from '../../stocks/services/SecureMarketDataService';
-const GET_MY_WATCHLIST = gql`
-query GetMyWatchlist {
-myWatchlist {
-id
-stock {
-id
-symbol
-companyName
-sector
-beginnerFriendlyScore
-}
-addedAt
-notes
-}
-}
-`;
+import { GET_MY_PORTFOLIOS } from '../../../portfolioQueries';
 interface PortfolioScreenProps {
 navigateTo?: (screen: string) => void;
 }
@@ -35,19 +20,22 @@ const PortfolioScreen: React.FC<PortfolioScreenProps> = ({ navigateTo }) => {
 const [refreshing, setRefreshing] = useState(false);
 const [realTimePrices, setRealTimePrices] = useState<{ [key: string]: number }>({});
 const [loadingPrices, setLoadingPrices] = useState(false);
-const { data: watchlistData, loading: watchlistLoading, error: watchlistError, refetch } = useQuery(GET_MY_WATCHLIST);
-// Fetch real-time prices when watchlist data changes
+const { data: portfolioData, loading: portfolioLoading, error: portfolioError, refetch } = useQuery(GET_MY_PORTFOLIOS);
+// Fetch real-time prices when portfolio data changes
 useEffect(() => {
-if (watchlistData?.myWatchlist) {
-fetchRealTimePrices(watchlistData.myWatchlist);
+if (portfolioData?.myPortfolios?.portfolios) {
+const allHoldings = portfolioData.myPortfolios.portfolios.flatMap(p => p.holdings || []);
+if (allHoldings.length > 0) {
+fetchRealTimePrices(allHoldings);
 }
-}, [watchlistData]);
-// Fetch real-time prices for watchlist items
-const fetchRealTimePrices = async (watchlistItems: any[]) => {
-if (watchlistItems.length === 0) return;
+}
+}, [portfolioData]);
+// Fetch real-time prices for portfolio holdings
+const fetchRealTimePrices = async (holdings: any[]) => {
+if (holdings.length === 0) return;
 setLoadingPrices(true);
 try {
-const symbols = watchlistItems.map(item => item.stock.symbol);
+const symbols = holdings.map(holding => holding.stock.symbol);
 const service = SecureMarketDataService.getInstance();
 const quotes = await service.fetchQuotes(symbols);
 const prices: { [key: string]: number } = {};
@@ -58,7 +46,7 @@ prices[quote.symbol] = quote.price;
 });
 setRealTimePrices(prices);
 } catch (error) {
-console.error('Failed to fetch real-time prices for watchlist:', error);
+console.error('Failed to fetch real-time prices for portfolio:', error);
 } finally {
 setLoadingPrices(false);
 }
@@ -73,7 +61,7 @@ await refetch();
 setRefreshing(false);
 }
 };
-if (watchlistLoading) {
+if (portfolioLoading) {
 return (
 <View style={styles.container}>
 <View style={styles.header}>
@@ -87,7 +75,7 @@ return (
 </View>
 );
 }
-if (watchlistError) {
+if (portfolioError) {
 return (
 <View style={styles.container}>
 <View style={styles.header}>
@@ -98,7 +86,7 @@ return (
 <Icon name="alert-circle" size={48} color="#FF3B30" />
 <Text style={styles.errorTitle}>Error Loading Portfolio</Text>
 <Text style={styles.errorText}>
-Unable to load your watchlist data. Please try again.
+Unable to load your portfolio data. Please try again.
 </Text>
 <View style={styles.errorActions}>
 <Text style={styles.errorActionText} onPress={onRefresh}>
@@ -109,8 +97,11 @@ Tap to retry
 </View>
 );
 }
-const watchlistItems = watchlistData?.myWatchlist || [];
-if (watchlistItems.length === 0) {
+const portfolios = portfolioData?.myPortfolios?.portfolios || [];
+const totalValue = portfolioData?.myPortfolios?.totalValue || 0;
+const totalPortfolios = portfolioData?.myPortfolios?.totalPortfolios || 0;
+
+if (portfolios.length === 0) {
 return (
 <View style={styles.container}>
 <View style={styles.header}>
@@ -119,9 +110,9 @@ return (
 </View>
 <View style={styles.emptyContainer}>
 <Icon name="bar-chart-2" size={64} color="#9CA3AF" />
-<Text style={styles.emptyTitle}>No Stocks in Portfolio</Text>
+<Text style={styles.emptyTitle}>No Portfolios Yet</Text>
 <Text style={styles.emptySubtitle}>
-Add stocks to your watchlist to start building your portfolio.
+Start building your investment portfolio by adding stocks.
 </Text>
 <View style={styles.emptyActions}>
 <Text 
@@ -150,32 +141,29 @@ showsVerticalScrollIndicator={false}
 >
 {/* Portfolio Overview */}
 <View style={styles.portfolioOverview}>
-<Text style={styles.overviewTitle}>Your Watchlist</Text>
+<Text style={styles.overviewTitle}>Your Portfolios</Text>
 <Text style={styles.overviewSubtitle}>
-{watchlistItems.length} stocks being tracked
+{totalPortfolios} portfolios • ${totalValue.toLocaleString()} total value
 {loadingPrices && ' • Loading prices...'}
 </Text>
 <View style={styles.watchlistGrid}>
-{watchlistItems.slice(0, 6).map((item: any) => (
-<View key={item.id} style={styles.watchlistItem}>
-<Text style={styles.stockSymbol}>{item.stock.symbol}</Text>
+{portfolios.slice(0, 3).map((portfolio: any) => (
+<View key={portfolio.name} style={styles.watchlistItem}>
+<Text style={styles.stockSymbol}>{portfolio.name}</Text>
 <Text style={styles.stockName} numberOfLines={1}>
-{item.stock.companyName}
+{portfolio.holdingsCount} holdings
 </Text>
 <View style={styles.priceContainer}>
 <Text style={styles.stockPrice}>
-${realTimePrices[item.stock.symbol] ? realTimePrices[item.stock.symbol].toFixed(2) : 'N/A'}
+${portfolio.totalValue ? portfolio.totalValue.toLocaleString() : '0'}
 </Text>
-{realTimePrices[item.stock.symbol] && (
-<Text style={styles.livePriceIndicator}>Live</Text>
-)}
 </View>
 </View>
 ))}
 </View>
-{watchlistItems.length > 6 && (
+{portfolios.length > 3 && (
 <Text style={styles.moreStocks}>
-+{watchlistItems.length - 6} more stocks
++{portfolios.length - 3} more portfolios
 </Text>
 )}
 </View>
@@ -255,6 +243,43 @@ Advanced options strategies and market sentiment
 </Text>
 </View>
 <Icon name="chevron-right" size={20} color="#8E8E93" />
+</View>
+</TouchableOpacity>
+</View>
+
+{/* Analytics Section */}
+<View style={styles.analyticsSection}>
+<Text style={styles.analyticsTitle}>Portfolio Analytics</Text>
+<View style={styles.analyticsGrid}>
+<View style={styles.analyticsCard}>
+<Text style={styles.analyticsLabel}>Total Return</Text>
+<Text style={styles.analyticsValue}>+12.5%</Text>
+<Text style={styles.analyticsSubtext}>This month</Text>
+</View>
+<View style={styles.analyticsCard}>
+<Text style={styles.analyticsLabel}>Sharpe Ratio</Text>
+<Text style={styles.analyticsValue}>1.4</Text>
+<Text style={styles.analyticsSubtext}>Risk-adjusted</Text>
+</View>
+<View style={styles.analyticsCard}>
+<Text style={styles.analyticsLabel}>Volatility</Text>
+<Text style={styles.analyticsValue}>15.8%</Text>
+<Text style={styles.analyticsSubtext}>Annualized</Text>
+</View>
+<View style={styles.analyticsCard}>
+<Text style={styles.analyticsLabel}>Max Drawdown</Text>
+<Text style={styles.analyticsValue}>-5.2%</Text>
+<Text style={styles.analyticsSubtext}>Worst decline</Text>
+</View>
+</View>
+<TouchableOpacity 
+style={styles.analyticsButton}
+onPress={() => navigateTo?.('premium-analytics')}
+>
+<View style={styles.analyticsButtonContent}>
+<Icon name="pie-chart" size={20} color="#007AFF" />
+<Text style={styles.analyticsButtonText}>View Detailed Analytics</Text>
+<Icon name="chevron-right" size={16} color="#8E8E93" />
 </View>
 </TouchableOpacity>
 </View>
@@ -465,6 +490,69 @@ actionDescription: {
 fontSize: 14,
 color: '#8E8E93',
 lineHeight: 20,
+},
+analyticsSection: {
+marginTop: 8,
+paddingHorizontal: 16,
+},
+analyticsTitle: {
+fontSize: 18,
+fontWeight: 'bold',
+color: '#1C1C1E',
+marginBottom: 16,
+},
+analyticsGrid: {
+flexDirection: 'row',
+flexWrap: 'wrap',
+justifyContent: 'space-between',
+marginBottom: 16,
+},
+analyticsCard: {
+backgroundColor: '#FFFFFF',
+borderRadius: 12,
+padding: 16,
+width: '48%',
+marginBottom: 12,
+shadowColor: '#000',
+shadowOffset: { width: 0, height: 2 },
+shadowOpacity: 0.1,
+shadowRadius: 4,
+elevation: 3,
+},
+analyticsLabel: {
+fontSize: 12,
+color: '#8E8E93',
+fontWeight: '500',
+marginBottom: 4,
+},
+analyticsValue: {
+fontSize: 20,
+fontWeight: 'bold',
+color: '#1C1C1E',
+marginBottom: 2,
+},
+analyticsSubtext: {
+fontSize: 11,
+color: '#8E8E93',
+},
+analyticsButton: {
+backgroundColor: '#F0F8FF',
+borderRadius: 12,
+padding: 16,
+borderWidth: 1,
+borderColor: '#E3F2FD',
+},
+analyticsButtonContent: {
+flexDirection: 'row',
+alignItems: 'center',
+justifyContent: 'center',
+},
+analyticsButtonText: {
+fontSize: 16,
+fontWeight: '600',
+color: '#007AFF',
+marginLeft: 8,
+marginRight: 8,
 },
 });
 export default PortfolioScreen;

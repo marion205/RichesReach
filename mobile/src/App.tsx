@@ -33,7 +33,6 @@ const priceAlertService = expoGoCompatiblePriceAlertService;
 // Screens
 import HomeScreen from './navigation/HomeScreen';
 import LoginScreen from './features/auth/screens/LoginScreen';
-import EnhancedLoginScreen from './features/auth/screens/EnhancedLoginScreen';
 import ForgotPasswordScreen from './features/auth/screens/ForgotPasswordScreen';
 import SignUpScreen from './features/auth/screens/SignUpScreen';
 import ProfileScreen from './features/user/screens/ProfileScreen';
@@ -87,7 +86,7 @@ import UserProfileService from './features/user/services/UserProfileService';
 // Contexts
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 function AppContent() {
-const { user, isAuthenticated, loading } = useAuth();
+const { user, isAuthenticated, loading, logout: authLogout } = useAuth();
 const [currentScreen, setCurrentScreen] = useState('login');
 
 // Track currentScreen changes for analytics (production)
@@ -222,12 +221,25 @@ console.error('Error saving user profile:', error);
 };
 const handleLogout = async () => {
 try {
-const jwtService = JWTAuthService.getInstance();
-await jwtService.logout();
+    console.log('🔄 Starting logout process...');
+    
+    // Clear JWT service
+    const jwtService = JWTAuthService.getInstance();
+    await jwtService.logout();
+    console.log('✅ JWT service cleared');
+    
+    // Clear AuthContext state
+    await authLogout();
+    console.log('✅ AuthContext cleared');
+    
+    // Clear local state
+    setCurrentScreen('login');
+    setHasCompletedOnboarding(false);
+    console.log('✅ Local state cleared, navigating to login');
 } catch (error) {
-console.error('Logout error:', error);
-} finally {
-setCurrentScreen('login');
+    console.error('❌ Logout error:', error);
+    // Still navigate to login even if there's an error
+    setCurrentScreen('login');
 }
 };
 const renderScreen = () => {

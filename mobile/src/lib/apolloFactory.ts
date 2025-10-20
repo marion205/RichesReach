@@ -4,7 +4,7 @@ import { persistCache, AsyncStorageWrapper } from 'apollo3-cache-persist';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Force the correct IP address for local development
-const GRAPHQL_URL = "http://localhost:8000/graphql/";
+const GRAPHQL_URL = "http://192.168.1.236:8000/graphql/";
 
 if (!GRAPHQL_URL) {
   throw new Error(
@@ -32,6 +32,8 @@ export function makeApolloClient() {
         AsyncStorage.getItem('token').then((token) => {
         if (token) {
           console.log('🔐 Apollo Client: Adding Bearer token to request');
+          console.log('🔐 Apollo Client: Token length:', token.length);
+          console.log('🔐 Apollo Client: Token preview:', token.substring(0, 20) + '...');
           operation.setContext({
             headers: {
               authorization: `Bearer ${token}`,
@@ -39,6 +41,7 @@ export function makeApolloClient() {
           });
         } else {
           console.log('🔐 Apollo Client: No token found in AsyncStorage');
+          console.log('🔐 Apollo Client: This will cause authentication failures');
         }
         resolve(forward!(operation));
       }).catch(reject);

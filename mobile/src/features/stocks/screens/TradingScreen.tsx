@@ -116,13 +116,51 @@ const PLACE_STOCK_ORDER = gql`
 `;
 
 const CREATE_ALPACA_ACCOUNT = gql`
-  mutation CreateAlpacaAccount($userId: Int!, $accountNumber: String) {
-    createAlpacaAccount(userId: $userId, accountNumber: $accountNumber) {
-      id
-      status
+  mutation CreateAlpacaAccount(
+    $firstName: String!
+    $lastName: String!
+    $email: String!
+    $dateOfBirth: Date!
+    $streetAddress: String!
+    $city: String!
+    $state: String!
+    $postalCode: String!
+    $phone: String
+    $ssn: String
+    $country: String
+    $employmentStatus: String
+    $annualIncome: Float
+    $netWorth: Float
+    $riskTolerance: String
+    $investmentExperience: String
+  ) {
+    createAlpacaAccount(
+      firstName: $firstName
+      lastName: $lastName
+      email: $email
+      dateOfBirth: $dateOfBirth
+      streetAddress: $streetAddress
+      city: $city
+      state: $state
+      postalCode: $postalCode
+      phone: $phone
+      ssn: $ssn
+      country: $country
+      employmentStatus: $employmentStatus
+      annualIncome: $annualIncome
+      netWorth: $netWorth
+      riskTolerance: $riskTolerance
+      investmentExperience: $investmentExperience
+    ) {
+      success
+      message
       alpacaAccountId
-      isApproved
-      createdAt
+      account {
+        id
+        status
+        createdAt
+        approvedAt
+      }
     }
   }
 `;
@@ -133,7 +171,7 @@ const GET_ALPACA_ACCOUNT = gql`
       id
       status
       alpacaAccountId
-      isApproved
+      approvedAt
       buyingPower
       cash
       portfolioValue
@@ -445,17 +483,29 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
               onPress: async () => {
                 try {
                   const accountRes = await createAlpacaAccount({ 
-                    variables: { userId: 1 } // This should come from auth context
+                    variables: { 
+                      firstName: "Test",
+                      lastName: "User",
+                      email: "test@example.com",
+                      dateOfBirth: "1990-01-01",
+                      streetAddress: "123 Main St",
+                      city: "New York",
+                      state: "NY",
+                      postalCode: "10001",
+                      country: "US",
+                      riskTolerance: "medium",
+                      investmentExperience: "beginner"
+                    }
                   });
                   
-                  if (accountRes?.data?.createAlpacaAccount) {
+                  if (accountRes?.data?.createAlpacaAccount?.success) {
                     Alert.alert(
                       'Account Created',
-                      'Your Alpaca account has been created. Please complete the KYC process to start trading.',
+                      accountRes.data.createAlpacaAccount.message || 'Your Alpaca account has been created. Please complete the KYC process to start trading.',
                       [{ text: 'OK', onPress: () => refetchAlpacaAccount() }]
                     );
                   } else {
-                    Alert.alert('Account Creation Failed', 'Could not create Alpaca account. Please try again.');
+                    Alert.alert('Account Creation Failed', accountRes?.data?.createAlpacaAccount?.message || 'Could not create Alpaca account. Please try again.');
                   }
                 } catch (e: any) {
                   Alert.alert('Account Creation Failed', e?.message || 'Could not create Alpaca account.');
@@ -469,7 +519,7 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
       }
 
       // Check if account is approved for trading
-      if (!alpacaAccount.isApproved) {
+      if (!alpacaAccount.approvedAt) {
         Alert.alert(
           'Account Not Approved',
           'Your Alpaca account is not yet approved for trading. Please complete the KYC process first.',
@@ -617,15 +667,15 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
               {alpacaAccount && (
                 <View style={styles.alpacaStatusCard}>
                   <View style={styles.alpacaStatusHeader}>
-                    <Icon name="shield" size={16} color={alpacaAccount.isApproved ? C.green : C.amber} />
+                    <Icon name="shield" size={16} color={alpacaAccount.approvedAt ? C.green : C.amber} />
                     <Text style={styles.alpacaStatusTitle}>Alpaca Account</Text>
                     <Chip
                       label={alpacaAccount.status?.toUpperCase() || 'UNKNOWN'}
-                      tone={alpacaAccount.isApproved ? 'success' : 'warning'}
+                      tone={alpacaAccount.approvedAt ? 'success' : 'warning'}
                     />
                   </View>
                   
-                  {!alpacaAccount.isApproved && (
+                  {!alpacaAccount.approvedAt && (
                     <View style={styles.kycPrompt}>
                       <Text style={styles.kycPromptText}>
                         Complete KYC verification to start trading with real money

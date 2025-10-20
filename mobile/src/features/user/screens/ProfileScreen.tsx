@@ -91,8 +91,6 @@ myWatchlist {
 id
 stock {
 symbol
-companyName
-currentPrice
 }
 notes
 targetPrice
@@ -136,6 +134,7 @@ onLogout?: () => void;
 const { width } = Dimensions.get('window');
 const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigateTo, onLogout }) => {
   const [showSBLOCModal, setShowSBLOCModal] = useState(false);
+  const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const [showSblocCalculator, setShowSblocCalculator] = useState(false);
   const { data: meData, loading: meLoading, error: meError } = useQuery(GET_ME);
 const { data: portfoliosData, loading: portfoliosLoading, refetch: refetchPortfolios } = useQuery(GET_MY_PORTFOLIOS, {
@@ -200,15 +199,26 @@ console.log('Portfolio Data Debug:', {
 
 const handleLogout = async () => {
 try {
+    console.log('🔄 ProfileScreen: Starting logout...');
+    
     // Clear cache safely without resetting store while queries are in flight
     await client.cache.reset();
-await AsyncStorage.removeItem('token');
-if (onLogout) {
-onLogout();
-}
+    console.log('✅ ProfileScreen: Apollo cache cleared');
+    
+    await AsyncStorage.removeItem('token');
+    console.log('✅ ProfileScreen: Token removed from AsyncStorage');
+    
+    // Call the main app's logout function
+    if (onLogout) {
+        console.log('🔄 ProfileScreen: Calling main app logout...');
+        await onLogout();
+        console.log('✅ ProfileScreen: Main app logout completed');
+    } else {
+        console.warn('⚠️ ProfileScreen: No onLogout function provided');
+    }
 } catch (error) {
-// Logout error
-Alert.alert('Error', 'Failed to logout properly. Please try again.');
+    console.error('❌ ProfileScreen logout error:', error);
+    Alert.alert('Error', 'Failed to logout properly. Please try again.');
 }
 };
 if (meLoading) {
@@ -280,10 +290,66 @@ return (
 <Text style={styles.headerTitle}>Profile</Text>
 </View>
 <View style={styles.headerRight}>
-<TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-<Icon name="power" size={16} color="#ff4757" />
-<Text style={styles.logoutButtonText}>Logout</Text>
+<TouchableOpacity 
+  onPress={() => setShowSettingsMenu(!showSettingsMenu)} 
+  style={styles.settingsButton}
+>
+<Icon name="more-vertical" size={20} color="#333" />
 </TouchableOpacity>
+{showSettingsMenu && (
+<View style={styles.settingsDropdown}>
+<TouchableOpacity 
+  style={styles.settingsItem}
+  onPress={() => {
+    setShowSettingsMenu(false);
+    navigateTo?.('subscription');
+  }}
+>
+<Icon name="credit-card" size={16} color="#333" />
+<Text style={styles.settingsItemText}>Subscription</Text>
+</TouchableOpacity>
+<TouchableOpacity 
+  style={styles.settingsItem}
+  onPress={() => {
+    setShowSettingsMenu(false);
+    navigateTo?.('news-preferences');
+  }}
+>
+<Icon name="bell" size={16} color="#333" />
+<Text style={styles.settingsItemText}>Notifications</Text>
+</TouchableOpacity>
+<TouchableOpacity 
+  style={styles.settingsItem}
+  onPress={() => {
+    setShowSettingsMenu(false);
+    navigateTo?.('tax-optimization');
+  }}
+>
+<Icon name="calculator" size={16} color="#333" />
+<Text style={styles.settingsItemText}>Tax Tools</Text>
+</TouchableOpacity>
+<TouchableOpacity 
+  style={styles.settingsItem}
+  onPress={() => {
+    setShowSettingsMenu(false);
+    navigateTo?.('learning-paths');
+  }}
+>
+<Icon name="book-open" size={16} color="#333" />
+<Text style={styles.settingsItemText}>Learning</Text>
+</TouchableOpacity>
+<TouchableOpacity 
+  style={[styles.settingsItem, styles.logoutItem]}
+  onPress={() => {
+    setShowSettingsMenu(false);
+    handleLogout();
+  }}
+>
+<Icon name="power" size={16} color="#ff4757" />
+<Text style={[styles.settingsItemText, styles.logoutText]}>Logout</Text>
+</TouchableOpacity>
+</View>
+)}
 </View>
 </View>
 <ScrollView 
@@ -703,6 +769,44 @@ backgroundColor: '#FFF5F5',
 logoutButtonText: {
 fontSize: 14,
 fontWeight: '600',
+color: '#ff4757',
+},
+settingsButton: {
+padding: 8,
+borderRadius: 20,
+backgroundColor: '#F2F2F7',
+},
+settingsDropdown: {
+position: 'absolute',
+top: 50,
+right: 0,
+backgroundColor: '#FFFFFF',
+borderRadius: 12,
+shadowColor: '#000',
+shadowOffset: { width: 0, height: 4 },
+shadowOpacity: 0.15,
+shadowRadius: 8,
+elevation: 8,
+minWidth: 180,
+zIndex: 1000,
+},
+settingsItem: {
+flexDirection: 'row',
+alignItems: 'center',
+paddingHorizontal: 16,
+paddingVertical: 12,
+gap: 12,
+},
+logoutItem: {
+borderTopWidth: 1,
+borderTopColor: '#E5E7EB',
+},
+settingsItemText: {
+fontSize: 16,
+color: '#1F2937',
+fontWeight: '500',
+},
+logoutText: {
 color: '#ff4757',
 },
 

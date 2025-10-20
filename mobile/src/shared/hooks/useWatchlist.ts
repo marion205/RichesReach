@@ -6,12 +6,7 @@ export const GET_MY_WATCHLIST = gql`
     myWatchlist {
       id
       stock {
-        id
         symbol
-        companyName
-        sector
-        beginnerFriendlyScore
-        currentPrice
       }
       addedAt
       notes

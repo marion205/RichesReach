@@ -5,8 +5,9 @@ from django.contrib.auth import authenticate
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.timezone import now
+from django.contrib.auth import get_user_model
 
-SECRET = getattr(settings, "JWT_SECRET_KEY", settings.SECRET_KEY)
+User = get_user_model()
 
 @csrf_exempt
 def login_view(request):
@@ -18,19 +19,27 @@ def login_view(request):
     email = body.get("email")
     password = body.get("password")
     
-    # For development, accept any email/password combination
-    if email and password:
-        # Create a mock user payload
-        payload = {
-            "sub": "1",  # user ID
-            "email": email,
-            "username": email.split('@')[0],
-            "iss": "richesreach",
-            "aud": "mobile",
-            "iat": int(now().timestamp()),
-            "exp": int((now() + datetime.timedelta(hours=8)).timestamp())
-        }
-        token = jwt.encode(payload, SECRET, algorithm="HS256")
-        return JsonResponse({"token": token})
+    # Authenticate user
+    user = authenticate(request, username=email, password=password)
+    
+    if user:
+            # Create GraphQL JWT compatible token using the same method as graphql_jwt
+            from graphql_jwt.utils import jwt_encode, jwt_payload
+            from graphql_jwt.settings import jwt_settings
+            
+            # Generate payload using the same method as graphql_jwt
+            payload = jwt_payload(user)
+            
+            # Encode using the same settings as graphql_jwt
+            token = jwt_encode(payload)
+            
+            return JsonResponse({
+                "token": token,
+                "user": {
+                    "id": str(user.id),
+                    "email": user.email,
+                    "username": user.username
+                }
+            })
     else:
         return JsonResponse({"detail": "Invalid credentials"}, status=401)

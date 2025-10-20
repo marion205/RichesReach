@@ -416,10 +416,8 @@ export default function StockScreen({ navigateTo }: { navigateTo: (s: string, d?
 
   const openAnalysis = (item: Stock) => {
     console.log('🔍 ANALYSIS PRESS', item.symbol);
-    // Navigate to stock detail - user can use the Trends tab for analysis
-    navigateTo('StockDetail', {
-      symbol: item.symbol,
-    });
+    // Open the rust analysis modal
+    handleRustAnalysis(item.symbol);
   };
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -868,7 +866,7 @@ export default function StockScreen({ navigateTo }: { navigateTo: (s: string, d?
         console.log('🔍 Budget Impact Debug - factors:', item.beginnerScoreBreakdown?.factors);
         setBudgetImpactModal({ open: true, stock: item });
       }}
-      onPressTrade={() => openTrade(item)}
+      // onPressTrade removed - Trade button no longer exists
       onPress={() => handleRowPress(item)}
     />
   ), [onPressAdd, handleRustAnalysis, showMetricTooltip, isStockGoodForIncomeProfile]);

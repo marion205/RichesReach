@@ -248,7 +248,7 @@ const CryptoTradingScreen: React.FC<CryptoTradingScreenProps> = ({ navigation })
     try {
       const orderVariables: any = {
         accountId: cryptoAccount.id,
-        symbol: selectedAsset,
+        symbol: `${selectedAsset}/USD`, // Convert BTC to BTC/USD format
         side: orderSide.toUpperCase(),
         type: orderType.toUpperCase(),
         timeInForce: 'DAY'
