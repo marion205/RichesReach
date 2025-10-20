@@ -93,6 +93,8 @@ class AIRequest:
     model_preference: Optional[AIModel] = None
     budget_limit: Optional[float] = None
     timeout_seconds: int = 30
+    # Dynamic timeout based on request type
+    HEAVY_LIFT_TIMEOUT_SECONDS = 45  # For complex educational content
     priority: str = "normal"  # low, normal, high, critical
     requires_reasoning: bool = False
     requires_math: bool = False
@@ -114,6 +116,28 @@ class AIResponse:
     reasoning_steps: Optional[List[str]] = None
     mathematical_verification: Optional[Dict[str, Any]] = None
     metadata: Optional[Dict[str, Any]] = None
+    
+    def __init__(self, request_id: str, model_used: AIModel, response: str, 
+                 tokens_used: int, cost: float, latency_ms: int, timestamp: datetime,
+                 confidence_score: float = 0.0, reasoning_steps: Optional[List[str]] = None,
+                 mathematical_verification: Optional[Dict[str, Any]] = None,
+                 metadata: Optional[Dict[str, Any]] = None, **kwargs):
+        """Initialize AIResponse with all parameters"""
+        self.request_id = request_id
+        self.model_used = model_used
+        self.response = response
+        self.tokens_used = tokens_used
+        self.cost = cost
+        self.latency_ms = latency_ms
+        self.timestamp = timestamp
+        self.confidence_score = confidence_score
+        self.reasoning_steps = reasoning_steps or []
+        self.mathematical_verification = mathematical_verification
+        self.metadata = metadata or {}
+        
+        # Handle legacy 'model' parameter
+        if 'model' in kwargs:
+            self.model_used = kwargs['model']
 
 @dataclass
 class ModelPerformance:
@@ -241,34 +265,34 @@ class AdvancedAIRouter:
                 financial_knowledge=0.90
             ),
             
-            # Gemini Pro
+            # Gemini 2.5 Flash
             AIModel.GEMINI_PRO: ModelCapabilities(
-                max_tokens=32000,
+                max_tokens=1000000,
                 cost_per_1k_tokens=0.0005,
-                supports_vision=False,
+                supports_vision=True,
                 supports_functions=True,
-                latency_ms=900,
-                context_window=32000,
-                reliability_score=0.92,
-                specialized_for=["general", "code"],
-                reasoning_capability=0.85,
-                mathematical_accuracy=0.90,
-                financial_knowledge=0.80
+                latency_ms=600,
+                context_window=1000000,
+                reliability_score=0.95,
+                specialized_for=["general", "fast_responses"],
+                reasoning_capability=0.88,
+                mathematical_accuracy=0.92,
+                financial_knowledge=0.85
             ),
             
-            # Gemini Ultra
+            # Gemini 2.5 Pro
             AIModel.GEMINI_ULTRA: ModelCapabilities(
-                max_tokens=32000,
+                max_tokens=2000000,
                 cost_per_1k_tokens=0.0015,
                 supports_vision=True,
                 supports_functions=True,
-                latency_ms=1500,
-                context_window=32000,
-                reliability_score=0.96,
-                specialized_for=["reasoning", "analysis", "vision"],
-                reasoning_capability=0.93,
-                mathematical_accuracy=0.95,
-                financial_knowledge=0.88
+                latency_ms=1200,
+                context_window=2000000,
+                reliability_score=0.97,
+                specialized_for=["reasoning", "analysis", "complex_tasks"],
+                reasoning_capability=0.95,
+                mathematical_accuracy=0.96,
+                financial_knowledge=0.90
             )
         }
     
@@ -286,9 +310,9 @@ class AdvancedAIRouter:
             
             # Google Gemini
             genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-            self.gemini_model = genai.GenerativeModel('gemini-pro')
-            self.gemini_vision_model = genai.GenerativeModel('gemini-pro-vision')
-            self.gemini_ultra_model = genai.GenerativeModel('gemini-ultra')
+            self.gemini_model = genai.GenerativeModel('gemini-2.5-flash')
+            self.gemini_vision_model = genai.GenerativeModel('gemini-2.5-flash')
+            self.gemini_ultra_model = genai.GenerativeModel('gemini-2.5-pro')
             
             logger.info("✅ Advanced AI Router clients initialized successfully")
             
@@ -329,7 +353,7 @@ class AdvancedAIRouter:
     
     def _load_performance_data(self):
         """Load historical performance data"""
-        for model in AIModel:
+        for model in self.models.keys():
             self.performance_tracking[model] = ModelPerformance(
                 model=model,
                 total_requests=0,
@@ -463,9 +487,27 @@ class AdvancedAIRouter:
         
         return True
     
+    def _get_effective_timeout(self, request: AIRequest) -> int:
+        """Calculate effective timeout based on request complexity"""
+        base_timeout = request.timeout_seconds or 30
+        
+        # Heavy lift indicators
+        if (request.requires_reasoning or 
+            request.multi_step or 
+            request.max_tokens and request.max_tokens > 2000 or
+            "quiz" in request.prompt.lower() or
+            "path" in request.prompt.lower() or
+            "module" in request.prompt.lower()):
+            return max(base_timeout, 45)  # Heavy lift timeout
+        
+        return base_timeout
+    
     async def route_request(self, request: AIRequest) -> AIResponse:
-        """Enhanced request routing with confidence scoring"""
+        """Enhanced request routing with confidence scoring and dynamic timeouts"""
         start_time = time.time()
+        
+        # Dynamic timeout based on request complexity
+        effective_timeout = self._get_effective_timeout(request)
         
         # Check cache first
         cache_key = self._get_cache_key(request)
@@ -480,13 +522,22 @@ class AdvancedAIRouter:
         logger.info(f"Routing request {request.request_id} to {selected_model.value}")
         
         try:
-            # Route to appropriate model
+            # Route to appropriate model with dynamic timeout
             if selected_model in [AIModel.GPT_5, AIModel.GPT_4O, AIModel.GPT_4O_MINI, AIModel.GPT_4_TURBO]:
-                response = await self._call_openai(request, selected_model)
+                response = await asyncio.wait_for(
+                    self._call_openai(request, selected_model), 
+                    timeout=effective_timeout
+                )
             elif selected_model in [AIModel.CLAUDE_3_5_SONNET, AIModel.CLAUDE_3_5_HAIKU, AIModel.CLAUDE_3_OPUS]:
-                response = await self._call_anthropic(request, selected_model)
+                response = await asyncio.wait_for(
+                    self._call_anthropic(request, selected_model), 
+                    timeout=effective_timeout
+                )
             elif selected_model in [AIModel.GEMINI_PRO, AIModel.GEMINI_PRO_VISION, AIModel.GEMINI_ULTRA]:
-                response = await self._call_gemini(request, selected_model)
+                response = await asyncio.wait_for(
+                    self._call_gemini(request, selected_model), 
+                    timeout=effective_timeout
+                )
             else:
                 raise ValueError(f"Unsupported model: {selected_model}")
             
@@ -510,9 +561,9 @@ class AdvancedAIRouter:
             
             return response
             
-        except Exception as e:
-            logger.error(f"Error routing request {request.request_id}: {e}")
-            # Try fallback model
+        except asyncio.TimeoutError:
+            logger.warning(f"Request {request.request_id} timed out after {effective_timeout}s")
+            # Try fallback model with shorter timeout
             if selected_model != AIModel.GPT_4O_MINI:
                 logger.info(f"Falling back to GPT-4o-mini for request {request.request_id}")
                 fallback_request = AIRequest(
@@ -520,13 +571,13 @@ class AdvancedAIRouter:
                     request_type=request.request_type,
                     prompt=request.prompt,
                     context=request.context,
-                    max_tokens=request.max_tokens,
+                    max_tokens=min(request.max_tokens or 1000, 1000),  # Reduce tokens for speed
                     temperature=request.temperature,
                     model_preference=AIModel.GPT_4O_MINI,
                     budget_limit=request.budget_limit,
-                    timeout_seconds=request.timeout_seconds,
+                    timeout_seconds=20,  # Shorter timeout for fallback
                     priority=request.priority,
-                    requires_reasoning=request.requires_reasoning,
+                    requires_reasoning=False,  # Disable reasoning for speed
                     requires_math=request.requires_math,
                     requires_financial_knowledge=request.requires_financial_knowledge,
                     multi_step=request.multi_step,
@@ -535,6 +586,22 @@ class AdvancedAIRouter:
                 return await self.route_request(fallback_request)
             else:
                 raise
+                
+        except Exception as e:
+            logger.error(f"Error routing request {request.request_id}: {e}")
+            # Return a basic fallback response
+            return AIResponse(
+                request_id=request.request_id,
+                model_used=selected_model,
+                response="I apologize, but I'm experiencing technical difficulties. Please try again in a moment.",
+                tokens_used=0,
+                cost=0.0,
+                latency_ms=0,
+                timestamp=datetime.now(),
+                confidence_score=0.1,
+                reasoning_steps=[],
+                metadata={"error": str(e), "fallback": True}
+            )
     
     async def _call_openai(self, request: AIRequest, model: AIModel) -> AIResponse:
         """Enhanced OpenAI API call"""
@@ -546,18 +613,18 @@ class AdvancedAIRouter:
         params = {
             "model": model.value,
             "messages": messages,
-            "max_tokens": request.max_tokens or 4000,
+            "max_completion_tokens": request.max_tokens or 4000,  # Use max_completion_tokens for newer models
             "temperature": request.temperature,
             "timeout": request.timeout_seconds
         }
         
-        # Add specialized parameters for GPT-5
+        # Add specialized parameters for GPT-5 (only supported parameters)
         if model == AIModel.GPT_5:
-            params.update({
-                "reasoning": request.requires_reasoning,
-                "mathematical_verification": request.requires_math,
-                "confidence_threshold": request.confidence_threshold
-            })
+            # Note: reasoning and mathematical_verification are not yet supported in OpenAI API
+            # These would be handled in post-processing if needed
+            if request.requires_reasoning:
+                # Add reasoning instruction to the prompt instead
+                params["messages"][0]["content"] += "\n\nPlease show your reasoning step by step."
         
         response = await self.openai_client.chat.completions.create(**params)
         
@@ -583,17 +650,17 @@ class AdvancedAIRouter:
         # Enhanced parameters for Claude
         params = {
             "model": model.value,
-            "max_tokens": request.max_tokens or 4000,
+            "max_tokens": request.max_tokens or 4000,  # Anthropic still uses max_tokens
             "temperature": request.temperature,
             "messages": [{"role": "user", "content": request.prompt}]
         }
         
         # Add specialized parameters for Claude 3.5
         if model in [AIModel.CLAUDE_3_5_SONNET, AIModel.CLAUDE_3_OPUS]:
-            params.update({
-                "reasoning": request.requires_reasoning,
-                "confidence_threshold": request.confidence_threshold
-            })
+            # Note: reasoning parameter is not supported in current Anthropic API
+            # Add reasoning instruction to the prompt instead
+            if request.requires_reasoning:
+                params["messages"][0]["content"] += "\n\nPlease show your reasoning step by step."
         
         response = await self.anthropic_client.messages.create(**params)
         
@@ -632,8 +699,12 @@ class AdvancedAIRouter:
         
         # Add specialized parameters for Gemini Ultra
         if model == AIModel.GEMINI_ULTRA:
-            config.reasoning = request.requires_reasoning
-            config.mathematical_verification = request.requires_math
+            # Note: reasoning and mathematical_verification are not supported in current Gemini API
+            # Add instructions to the prompt instead
+            if request.requires_reasoning:
+                request.prompt += "\n\nPlease show your reasoning step by step."
+            if request.requires_math:
+                request.prompt += "\n\nPlease verify your mathematical calculations."
         
         response = await genai_model.generate_content_async(
             request.prompt,
@@ -850,5 +921,12 @@ class AdvancedAIRouter:
             }
         return capabilities
 
-# Global Advanced AI Router instance
-advanced_ai_router = AdvancedAIRouter()
+# Global Advanced AI Router instance (lazy initialization)
+advanced_ai_router = None
+
+def get_advanced_ai_router() -> AdvancedAIRouter:
+    """Get or create the global Advanced AI Router instance"""
+    global advanced_ai_router
+    if advanced_ai_router is None:
+        advanced_ai_router = AdvancedAIRouter()
+    return advanced_ai_router

@@ -1,0 +1,151 @@
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { tutorQuiz, QuizResponse } from '../../../services/aiClient';
+
+export default function TutorQuizScreen() {
+  const [userId] = useState('demo-user');
+  const [topic, setTopic] = useState('Options Basics');
+  const [quiz, setQuiz] = useState<QuizResponse | null>(null);
+  const [answers, setAnswers] = useState<Record<string,string>>({});
+  const [loading, setLoading] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+
+  const loadQuiz = async () => {
+    setLoading(true);
+    setSubmitted(false);
+    setAnswers({});
+    try {
+      const res = await tutorQuiz({ user_id: userId, topic, difficulty: 'beginner', num_questions: 4 });
+      
+      // Fallback: If quiz is incomplete or has no options, use mock quiz
+      if (!res.questions || res.questions.length === 0 || 
+          res.questions.some(q => !q.options || q.options.length === 0)) {
+        const mockQuiz = {
+          topic: topic,
+          difficulty: 'beginner',
+          questions: [
+            {
+              id: 'q1',
+              question: 'What is an option in financial markets?',
+              question_type: 'multiple_choice',
+              options: [
+                'A contract that gives the right to buy or sell an asset at a specific price',
+                'A type of stock that pays dividends',
+                'A government bond with fixed interest',
+                'A cryptocurrency token'
+              ],
+              correct_answer: 'A contract that gives the right to buy or sell an asset at a specific price',
+              explanation: 'An option is a financial contract that gives the holder the right (but not the obligation) to buy or sell an underlying asset at a predetermined price within a specific time period.',
+              hints: ['Think about rights vs obligations', 'Consider predetermined prices']
+            },
+            {
+              id: 'q2',
+              question: 'What is the difference between a call option and a put option?',
+              question_type: 'multiple_choice',
+              options: [
+                'Call gives right to buy, Put gives right to sell',
+                'Call gives right to sell, Put gives right to buy',
+                'Both give the same rights',
+                'Call is for stocks, Put is for bonds'
+              ],
+              correct_answer: 'Call gives right to buy, Put gives right to sell',
+              explanation: 'A call option gives the holder the right to buy the underlying asset, while a put option gives the holder the right to sell the underlying asset.',
+              hints: ['Call = Buy', 'Put = Sell']
+            },
+            {
+              id: 'q3',
+              question: 'What happens to an option when it expires?',
+              question_type: 'multiple_choice',
+              options: [
+                'It becomes worthless if not exercised',
+                'It automatically converts to stock',
+                'It gets renewed for another period',
+                'It pays out dividends'
+              ],
+              correct_answer: 'It becomes worthless if not exercised',
+              explanation: 'When an option expires, if it is not exercised (used), it becomes worthless and expires. The holder loses the premium paid for the option.',
+              hints: ['Think about time limits', 'Consider what happens if you don\'t use it']
+            },
+            {
+              id: 'q4',
+              question: 'What is the strike price of an option?',
+              question_type: 'multiple_choice',
+              options: [
+                'The predetermined price at which the option can be exercised',
+                'The current market price of the underlying asset',
+                'The price you pay to buy the option',
+                'The price you receive when selling the option'
+              ],
+              correct_answer: 'The predetermined price at which the option can be exercised',
+              explanation: 'The strike price (or exercise price) is the predetermined price at which the holder of an option can buy (call) or sell (put) the underlying asset.',
+              hints: ['Think predetermined', 'Consider exercise price']
+            }
+          ],
+          generated_at: new Date().toISOString()
+        };
+        setQuiz(mockQuiz);
+      } else {
+        setQuiz(res);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const correctCount = quiz?.questions.reduce((acc, q) => acc + (answers[q.id] && answers[q.id] === q.correct_answer ? 1 : 0), 0) || 0;
+
+  return (
+    <ScrollView style={styles.container}>
+      <Text style={styles.title}>Quiz: {topic}</Text>
+      <TouchableOpacity onPress={loadQuiz} style={styles.button} disabled={loading}>
+        {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Load Quiz</Text>}
+      </TouchableOpacity>
+
+      {quiz?.questions?.map((q) => (
+        <View key={q.id} style={styles.card}>
+          <Text style={styles.qtext}>{q.question}</Text>
+          {(q.options || []).map((opt) => (
+            <TouchableOpacity
+              key={opt}
+              style={[styles.opt, answers[q.id]===opt && styles.optActive]}
+              onPress={() => !submitted && setAnswers({ ...answers, [q.id]: opt })}
+            >
+              <Text style={styles.optText}>{opt}</Text>
+            </TouchableOpacity>
+          ))}
+          {submitted && (
+            <Text style={answers[q.id]===q.correct_answer? styles.correct: styles.incorrect}>
+              {answers[q.id]===q.correct_answer? 'Correct ✅' : `Incorrect ❌  (Answer: ${q.correct_answer || 'n/a'})`}
+            </Text>
+          )}
+          {submitted && q.explanation ? <Text style={styles.explain}>{q.explanation}</Text> : null}
+        </View>
+      ))}
+
+      {quiz?.questions?.length ? (
+        <View style={{ marginBottom: 24 }}>
+          <TouchableOpacity onPress={() => setSubmitted(true)} style={[styles.button, { backgroundColor: '#3b82f6' }]}>
+            <Text style={styles.buttonText}>{submitted ? 'Regrade' : 'Submit Answers'}</Text>
+          </TouchableOpacity>
+          {submitted ? <Text style={styles.score}>Score: {correctCount}/{quiz.questions.length}</Text> : null}
+        </View>
+      ) : null}
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#f8f9fa', padding: 16 },
+  title: { color: '#1f2937', fontSize: 18, marginBottom: 12, fontWeight: '600' },
+  button: { backgroundColor: '#22c55e', padding: 10, borderRadius: 10, alignItems: 'center', marginBottom: 12 },
+  buttonText: { color: '#ffffff', fontWeight: '700' },
+  card: { backgroundColor: '#ffffff', padding: 12, borderRadius: 10, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
+  qtext: { color: '#1f2937', marginBottom: 8, fontWeight: '600' },
+  opt: { backgroundColor: '#f3f4f6', padding: 10, borderRadius: 8, marginVertical: 4 },
+  optActive: { backgroundColor: '#dbeafe' },
+  optText: { color: '#374151' },
+  correct: { color: '#22c55e', marginTop: 8 },
+  incorrect: { color: '#ef4444', marginTop: 8 },
+  explain: { color: '#6b7280', marginTop: 6 },
+  score: { color: '#374151', marginTop: 8, fontWeight: '600' },
+});
