@@ -106,6 +106,10 @@ async def advise(
         )
         return AdviceResponse(**payload)
     except Exception as e:
+        # Check if this is a retryable error that should be handled by the AI router
+        if "temperature" in str(e) or "credit balance" in str(e) or "unsupported" in str(e):
+            # Let the AI router handle retries, don't convert to HTTP exception
+            raise e
         _raise_http(e)
 
 @router.post(
@@ -124,9 +128,24 @@ async def strategy(
         request_id = x_request_id or str(uuid.uuid4())
         response.headers["X-Request-ID"] = request_id
         
-        # TEMPORARY: Always return mock strategies due to AI service issues
-        # TODO: Remove this and use coach.strategy() once AI service is fixed
-        payload = {
+        # Use the real AI service with proper error handling
+        payload = await coach.strategy(
+            user_id=req.user_id,
+            objective=req.objective.strip(),
+            market_view=req.market_view.strip(),
+            constraints=req.constraints,
+        )
+        return StrategyResponse(**payload)
+    except Exception as e:
+        # Check if this is a retryable error that should be handled by the AI router
+        if "temperature" in str(e) or "credit balance" in str(e) or "unsupported" in str(e):
+            # Let the AI router handle retries, don't convert to HTTP exception
+            raise e
+        _raise_http(e)
+
+# TEMPORARY: Mock strategies fallback (remove once AI service is fully working)
+def _get_mock_strategies():
+    return {
             "strategies": [
                 {
                     "name": "Dollar-Cost Averaging (DCA)",

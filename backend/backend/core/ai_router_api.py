@@ -24,7 +24,7 @@ class AIRequestModel(BaseModel):
     prompt: str = Field(..., description="The prompt to send to AI")
     context: Optional[Dict[str, Any]] = Field(None, description="Additional context")
     max_tokens: Optional[int] = Field(None, description="Maximum tokens to generate")
-    temperature: float = Field(0.7, ge=0.0, le=2.0, description="Temperature for generation")
+    temperature: float = Field(1.0, ge=0.0, le=2.0, description="Temperature for generation (1.0 for GPT-5 compatibility)")
     model_preference: Optional[str] = Field(None, description="Preferred AI model")
     budget_limit: Optional[float] = Field(None, description="Maximum cost for this request")
     timeout_seconds: int = Field(30, ge=5, le=120, description="Request timeout in seconds")
@@ -239,7 +239,7 @@ async def analyze_market_data(symbol: str, timeframe: str = "1d", analysis_type:
                 "timeframe": timeframe,
                 "analysis_type": analysis_type
             },
-            temperature=0.3,  # Lower temperature for financial analysis
+            temperature=1.0,  # Temperature for financial analysis (GPT-5 compatible)
             max_tokens=2000
         )
         
@@ -286,7 +286,7 @@ async def optimize_portfolio(portfolio_data: Dict[str, Any]):
             request_type=RequestType.PORTFOLIO_OPTIMIZATION,
             prompt=prompt,
             context={"portfolio_data": portfolio_data},
-            temperature=0.2,  # Very low temperature for financial calculations
+            temperature=1.0,  # Temperature for financial calculations (GPT-5 compatible)
             max_tokens=3000
         )
         
@@ -332,7 +332,7 @@ async def analyze_news_sentiment(news_data: List[Dict[str, Any]]):
             request_type=RequestType.NEWS_SENTIMENT,
             prompt=prompt,
             context={"news_count": len(news_data)},
-            temperature=0.1,  # Very low temperature for sentiment analysis
+            temperature=1.0,  # Temperature for sentiment analysis (GPT-5 compatible)
             max_tokens=1500
         )
         
@@ -360,7 +360,7 @@ async def ai_router_health():
             request_type=RequestType.GENERAL_CHAT,
             prompt="Hello, this is a health check.",
             max_tokens=10,
-            temperature=0.1
+            temperature=1.0
         )
         
         response = await ai_router.route_request(test_request)

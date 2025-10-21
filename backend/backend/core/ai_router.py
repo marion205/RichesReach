@@ -58,7 +58,7 @@ class AIRequest:
     prompt: str
     context: Optional[Dict[str, Any]] = None
     max_tokens: Optional[int] = None
-    temperature: float = 0.7
+    temperature: float = 1.0  # Default to 1.0 for GPT-5 compatibility
     model_preference: Optional[AIModel] = None
     budget_limit: Optional[float] = None
     timeout_seconds: int = 30

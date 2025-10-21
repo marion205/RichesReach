@@ -1398,6 +1398,14 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Failed to include Trading Coach API router: {e}")
 
+# Include AI Trading Coach API
+try:
+    from core.ai_trading_coach_api import router as ai_trading_coach_router
+    app.include_router(ai_trading_coach_router)
+    logger.info("✅ AI Trading Coach API router included")
+except Exception as e:
+    logger.warning(f"⚠️ Failed to include AI Trading Coach API router: {e}")
+
 # Include Market Data endpoints with robust provider fallback
 try:
     from core.robust_market_service import market_service

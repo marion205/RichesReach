@@ -89,7 +89,7 @@ class AIRequest:
     prompt: str
     context: Optional[Dict[str, Any]] = None
     max_tokens: Optional[int] = None
-    temperature: float = 0.7
+    temperature: float = 1.0  # Default to 1.0 for GPT-5 compatibility
     model_preference: Optional[AIModel] = None
     budget_limit: Optional[float] = None
     timeout_seconds: int = 30
@@ -589,7 +589,55 @@ class AdvancedAIRouter:
                 
         except Exception as e:
             logger.error(f"Error routing request {request.request_id}: {e}")
-            # Return a basic fallback response
+            
+            # Handle specific temperature errors for GPT-5
+            if "temperature" in str(e) and "unsupported" in str(e) and selected_model == AIModel.GPT_5:
+                logger.info(f"Retrying {selected_model.value} with temperature 1.0")
+                # Create a new request with temperature 1.0 and call the API directly
+                retry_request = AIRequest(
+                    request_id=request.request_id,
+                    request_type=request.request_type,
+                    prompt=request.prompt,
+                    context=request.context,
+                    max_tokens=request.max_tokens,
+                    temperature=1.0,  # Force temperature 1.0 for GPT-5
+                    model_preference=request.model_preference,
+                    budget_limit=request.budget_limit,
+                    priority=request.priority,
+                    timeout_seconds=request.timeout_seconds,
+                    requires_reasoning=request.requires_reasoning,
+                    requires_math=request.requires_math,
+                    requires_financial_knowledge=request.requires_financial_knowledge,
+                    multi_step=request.multi_step,
+                    confidence_threshold=request.confidence_threshold
+                )
+                # Call the API directly instead of recursing
+                return await self._call_openai(retry_request, selected_model)
+            
+            # Handle Anthropic credit issues
+            elif "credit balance is too low" in str(e) and selected_model in [AIModel.CLAUDE_3_5_SONNET, AIModel.CLAUDE_3_5_HAIKU]:
+                logger.info(f"Anthropic credits low, falling back to GPT-4o-mini")
+                fallback_request = AIRequest(
+                    request_id=request.request_id,
+                    request_type=request.request_type,
+                    prompt=request.prompt,
+                    context=request.context,
+                    max_tokens=request.max_tokens,
+                    temperature=request.temperature,
+                    model_preference=AIModel.GPT_4O_MINI,
+                    budget_limit=request.budget_limit,
+                    priority=request.priority,
+                    timeout_seconds=request.timeout_seconds,
+                    requires_reasoning=False,  # Disable reasoning for speed
+                    requires_math=request.requires_math,
+                    requires_financial_knowledge=request.requires_financial_knowledge,
+                    multi_step=request.multi_step,
+                    confidence_threshold=request.confidence_threshold
+                )
+                # Call the API directly instead of recursing
+                return await self._call_openai(fallback_request, AIModel.GPT_4O_MINI)
+            
+            # Return a basic fallback response for other errors
             return AIResponse(
                 request_id=request.request_id,
                 model_used=selected_model,
@@ -610,11 +658,14 @@ class AdvancedAIRouter:
         messages = [{"role": "user", "content": request.prompt}]
         
         # Enhanced parameters for GPT-5
+        # GPT-5 only supports temperature 1.0, other models can use custom temperature
+        temperature = 1.0 if model == AIModel.GPT_5 else request.temperature
+        
         params = {
             "model": model.value,
             "messages": messages,
             "max_completion_tokens": request.max_tokens or 4000,  # Use max_completion_tokens for newer models
-            "temperature": request.temperature,
+            "temperature": temperature,
             "timeout": request.timeout_seconds
         }
         
@@ -626,22 +677,47 @@ class AdvancedAIRouter:
                 # Add reasoning instruction to the prompt instead
                 params["messages"][0]["content"] += "\n\nPlease show your reasoning step by step."
         
-        response = await self.openai_client.chat.completions.create(**params)
-        
-        latency_ms = int((time.time() - start_time) * 1000)
-        tokens_used = response.usage.total_tokens
-        cost = (tokens_used / 1000) * self.models[model].cost_per_1k_tokens
-        
-        return AIResponse(
-            request_id=request.request_id,
-            model_used=model,
-            response=response.choices[0].message.content,
-            tokens_used=tokens_used,
-            cost=cost,
-            latency_ms=latency_ms,
-            timestamp=datetime.now(),
-            metadata={"finish_reason": response.choices[0].finish_reason}
-        )
+        try:
+            response = await self.openai_client.chat.completions.create(**params)
+            
+            latency_ms = int((time.time() - start_time) * 1000)
+            tokens_used = response.usage.total_tokens
+            cost = (tokens_used / 1000) * self.models[model].cost_per_1k_tokens
+            
+            return AIResponse(
+                request_id=request.request_id,
+                model_used=model,
+                response=response.choices[0].message.content,
+                tokens_used=tokens_used,
+                cost=cost,
+                latency_ms=latency_ms,
+                timestamp=datetime.now(),
+                metadata={"finish_reason": response.choices[0].finish_reason}
+            )
+        except Exception as e:
+            # Handle OpenAI API errors
+            if "temperature" in str(e) and "unsupported" in str(e):
+                logger.warning(f"OpenAI temperature error for {model.value}: {e}")
+                # Retry with temperature 1.0
+                params["temperature"] = 1.0
+                response = await self.openai_client.chat.completions.create(**params)
+                
+                latency_ms = int((time.time() - start_time) * 1000)
+                tokens_used = response.usage.total_tokens
+                cost = (tokens_used / 1000) * self.models[model].cost_per_1k_tokens
+                
+                return AIResponse(
+                    request_id=request.request_id,
+                    model_used=model,
+                    response=response.choices[0].message.content,
+                    tokens_used=tokens_used,
+                    cost=cost,
+                    latency_ms=latency_ms,
+                    timestamp=datetime.now(),
+                    metadata={"finish_reason": response.choices[0].finish_reason, "temperature_fixed": True}
+                )
+            else:
+                raise e
     
     async def _call_anthropic(self, request: AIRequest, model: AIModel) -> AIResponse:
         """Enhanced Anthropic API call"""
@@ -662,22 +738,33 @@ class AdvancedAIRouter:
             if request.requires_reasoning:
                 params["messages"][0]["content"] += "\n\nPlease show your reasoning step by step."
         
-        response = await self.anthropic_client.messages.create(**params)
-        
-        latency_ms = int((time.time() - start_time) * 1000)
-        tokens_used = response.usage.input_tokens + response.usage.output_tokens
-        cost = (tokens_used / 1000) * self.models[model].cost_per_1k_tokens
-        
-        return AIResponse(
-            request_id=request.request_id,
-            model_used=model,
-            response=response.content[0].text,
-            tokens_used=tokens_used,
-            cost=cost,
-            latency_ms=latency_ms,
-            timestamp=datetime.now(),
-            metadata={"stop_reason": response.stop_reason}
-        )
+        try:
+            response = await self.anthropic_client.messages.create(**params)
+            
+            latency_ms = int((time.time() - start_time) * 1000)
+            tokens_used = response.usage.input_tokens + response.usage.output_tokens
+            cost = (tokens_used / 1000) * self.models[model].cost_per_1k_tokens
+            
+            return AIResponse(
+                request_id=request.request_id,
+                model_used=model,
+                response=response.content[0].text,
+                tokens_used=tokens_used,
+                cost=cost,
+                latency_ms=latency_ms,
+                timestamp=datetime.now(),
+                metadata={"stop_reason": response.stop_reason}
+            )
+        except Exception as e:
+            # Handle Anthropic credit issues and other errors
+            if "credit balance is too low" in str(e) or "invalid_request_error" in str(e):
+                logger.warning(f"Anthropic API error for {model.value}: {e}")
+                # Fallback to GPT-4o-mini for cost-effective alternative
+                fallback_model = AIModel.GPT_4O_MINI
+                logger.info(f"Falling back to {fallback_model.value} due to Anthropic issues")
+                return await self._call_openai(request, fallback_model)
+            else:
+                raise e
     
     async def _call_gemini(self, request: AIRequest, model: AIModel) -> AIResponse:
         """Enhanced Google Gemini API call"""

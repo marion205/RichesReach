@@ -722,6 +722,22 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
           {!accountLoading && !account && <Text style={[styles.sub,{textAlign:'center'}]}>Unable to load account data.</Text>}
         </View>
 
+        {/* Trading Coach - Quick Assistance */}
+        <TouchableOpacity 
+          style={styles.card}
+          onPress={() => navigateTo('trading-coach')}
+        >
+          <View style={styles.cardHeader}>
+            <View style={styles.coachHeader}>
+              <Icon name="target" size={20} color="#F59E0B" />
+              <Text style={styles.cardTitle}>Trading Coach</Text>
+            </View>
+            <Icon name="chevron-right" size={16} color="#8E8E93" />
+          </View>
+          <Text style={styles.coachDescription}>Get quick trading advice & strategies</Text>
+          <Text style={styles.coachMeta}>Real-time • Assistance</Text>
+        </TouchableOpacity>
+
         {/* Daily Top-3 Picks - Always Visible */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
@@ -1746,6 +1762,24 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '600',
+  },
+
+  // Trading Coach styles
+  coachHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  coachDescription: {
+    fontSize: 14,
+    color: C.sub,
+    marginTop: 4,
+    marginBottom: 2,
+  },
+  coachMeta: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontWeight: '500',
   },
 });
 

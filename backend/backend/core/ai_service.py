@@ -72,7 +72,7 @@ class AIService:
     # Reasonable defaults if settings are missing
     DEFAULT_MODEL = "gpt-3.5-turbo"
     DEFAULT_MAX_TOKENS = 1000
-    DEFAULT_TEMPERATURE = 0.7
+    DEFAULT_TEMPERATURE = 1.0  # GPT-5 compatible
     OPENAI_TIMEOUT = 25  # seconds
     OPENAI_MAX_RETRIES = 2
 

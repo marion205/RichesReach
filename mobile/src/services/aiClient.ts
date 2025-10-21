@@ -1,7 +1,7 @@
 // Lightweight API client for Tutor, Assistant, Coach endpoints
 // Uses fetch; expects EXPO_PUBLIC_API_BASE_URL or falls back to localhost
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://127.0.0.1:8124';
+const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://127.0.0.1:8000';
 const DEFAULT_TIMEOUT_MS = 25_000;
 
 export class ApiError extends Error {

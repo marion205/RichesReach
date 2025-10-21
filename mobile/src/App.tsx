@@ -83,8 +83,8 @@ import TutorAskExplainScreen from './features/learning/screens/TutorAskExplainSc
 import TutorQuizScreen from './features/learning/screens/TutorQuizScreen';
 import TutorModuleScreen from './features/learning/screens/TutorModuleScreen';
 import MarketCommentaryScreen from './features/news/screens/MarketCommentaryScreen';
-import AssistantChatScreen from './features/assistant/screens/AssistantChatScreen';
 import TradingCoachScreen from './features/coach/screens/TradingCoachScreen';
+import AITradingCoachScreen from './features/coach/screens/AITradingCoachScreen';
 // Components
 import { BottomTabBar, TopHeader, PersonalizedDashboard } from './components';
 // Services
@@ -412,10 +412,10 @@ case 'tutor-module':
 return <TutorModuleScreen />;
 case 'market-commentary':
 return <MarketCommentaryScreen />;
-case 'assistant-chat':
-return <AssistantChatScreen />;
 case 'trading-coach':
 return <TradingCoachScreen />;
+case 'ai-trading-coach':
+return <AITradingCoachScreen />;
 case 'subscription':
 return <SubscriptionScreen />;
     default:
