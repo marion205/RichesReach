@@ -24,7 +24,7 @@ class AdvancedAIRequestModel(BaseModel):
     prompt: str = Field(..., description="The prompt to send to AI")
     context: Optional[Dict[str, Any]] = Field(None, description="Additional context")
     max_tokens: Optional[int] = Field(None, description="Maximum tokens to generate")
-    temperature: float = Field(0.7, ge=0.0, le=2.0, description="Temperature for generation")
+    temperature: float = Field(1.0, ge=0.0, le=2.0, description="Temperature for generation (1.0 for GPT-5 compatibility)")
     model_preference: Optional[str] = Field(None, description="Preferred AI model")
     budget_limit: Optional[float] = Field(None, description="Maximum cost for this request")
     timeout_seconds: int = Field(30, ge=5, le=120, description="Request timeout in seconds")
@@ -55,7 +55,7 @@ class EnsembleRequestModel(BaseModel):
     prompt: str = Field(..., description="The prompt to send to AI")
     context: Optional[Dict[str, Any]] = Field(None, description="Additional context")
     max_tokens: Optional[int] = Field(None, description="Maximum tokens to generate")
-    temperature: float = Field(0.7, ge=0.0, le=2.0, description="Temperature for generation")
+    temperature: float = Field(1.0, ge=0.0, le=2.0, description="Temperature for generation (1.0 for GPT-5 compatibility)")
     budget_limit: Optional[float] = Field(None, description="Maximum cost for this request")
     timeout_seconds: int = Field(60, ge=10, le=180, description="Request timeout in seconds")
     priority: str = Field("high", description="Request priority for ensemble")
@@ -71,7 +71,7 @@ class ModelComparisonRequestModel(BaseModel):
     models_to_compare: List[str] = Field(..., description="List of models to compare")
     context: Optional[Dict[str, Any]] = Field(None, description="Additional context")
     max_tokens: Optional[int] = Field(None, description="Maximum tokens to generate")
-    temperature: float = Field(0.7, ge=0.0, le=2.0, description="Temperature for generation")
+    temperature: float = Field(1.0, ge=0.0, le=2.0, description="Temperature for generation (1.0 for GPT-5 compatibility)")
 
 class FinancialAnalysisRequestModel(BaseModel):
     """Financial analysis request model"""
@@ -349,7 +349,7 @@ async def perform_financial_analysis(request: FinancialAnalysisRequestModel):
             prompt=prompt,
             context=request.context,
             max_tokens=4000,
-            temperature=0.2,  # Low temperature for financial analysis
+            temperature=1.0,  # Temperature for financial analysis (GPT-5 compatible)
             priority="high",
             requires_reasoning=requires_reasoning,
             requires_math=requires_math,
@@ -412,7 +412,7 @@ async def generate_trading_signals(request: TradingSignalRequestModel):
                 "risk_parameters": request.risk_parameters
             },
             max_tokens=3000,
-            temperature=0.1,  # Very low temperature for trading signals
+            temperature=1.0,  # Temperature for trading signals (GPT-5 compatible)
             priority="critical",
             requires_reasoning=True,
             requires_math=True,
@@ -476,7 +476,7 @@ async def advanced_ai_health():
             request_type=RequestType.GENERAL_CHAT,
             prompt="Hello, this is a health check for the advanced AI router.",
             max_tokens=10,
-            temperature=0.1
+            temperature=1.0
         )
         
         response = await advanced_ai_router.route_request(test_request)

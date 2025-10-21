@@ -270,7 +270,7 @@ DISABLE_POLYGON = os.getenv('DISABLE_POLYGON', 'false').lower() == 'true'
 USE_OPENAI = bool(OPENAI_API_KEY)
 OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-4')
 OPENAI_MAX_TOKENS = int(os.getenv('OPENAI_MAX_TOKENS', '4000'))
-OPENAI_TEMPERATURE = float(os.getenv('OPENAI_TEMPERATURE', '0.7'))
+OPENAI_TEMPERATURE = float(os.getenv('OPENAI_TEMPERATURE', '1.0'))  # GPT-5 compatible
 
 # Email Configuration
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'

@@ -210,6 +210,11 @@ class TradingCoachService:
 
         except Exception as e:
             logger.exception("TradingCoachService.advise failed: %s", e)
+            # Check if this is a retryable error (temperature, credits, etc.)
+            if "temperature" in str(e) or "credit balance" in str(e) or "unsupported" in str(e):
+                # Let the AI router handle retries, don't return empty response
+                raise e
+            # For other errors, return empty response
             return AdvicePayload(
                 overview="",
                 risk_considerations=[],
@@ -285,13 +290,29 @@ class TradingCoachService:
             resp = await _retry(_op, attempts=self.RETRY_ATTEMPTS)
             logger.info(f"AI Response received: {resp.response[:200]}...")
             
-            # Always use mock strategies for now since AI is failing
-            logger.warning("Using mock strategies due to AI service issues")
-            raise Exception("Using mock strategies")
+            # Parse the AI response
+            raw = json.loads(resp.response)
+            data = {
+                "strategies": raw.get("strategies", []),
+                "disclaimer": str(raw.get("disclaimer") or _DEF_DISCLAIMER),
+            }
+
+            data["generated_at"] = _now_iso_utc()
+            data["model"] = getattr(resp, "model", None)
+            data["confidence_score"] = float(getattr(resp, "confidence_score", 0.0) or 0.0)
+            
+            # harden: always ensure a disclaimer
+            if not data.get("disclaimer"):
+                data["disclaimer"] = _DEF_DISCLAIMER
+            return data
 
         except Exception as e:
             logger.exception("TradingCoachService.strategy failed: %s", e)
-            # Return mock strategies when AI fails
+            # Check if this is a retryable error (temperature, credits, etc.)
+            if "temperature" in str(e) or "credit balance" in str(e) or "unsupported" in str(e):
+                # Let the AI router handle retries, don't return mock strategies
+                raise e
+            # For other errors, return mock strategies
             mock_strategies = [
                 {
                     "name": "Dollar-Cost Averaging (DCA)",

@@ -18,7 +18,7 @@ import { GraphSkeleton, HoldingsSkeleton } from '../components/skeletons/HomeSke
 import RealTimePortfolioService, { PortfolioMetrics } from '../features/portfolio/services/RealTimePortfolioService';
 import webSocketService, { PortfolioUpdate } from '../services/WebSocketService';
 import UserProfileService, { ExtendedUserProfile } from '../features/user/services/UserProfileService';
-import FinancialChatbotService, { AlphaVantageRecommendationProvider } from '../services/FinancialChatbotService';
+import { assistantQuery } from '../services/aiClient';
 import { usePortfolioHistory, setPortfolioHistory } from '../shared/portfolioHistory';
 
 // New imports for smart portfolio metrics
@@ -119,7 +119,7 @@ import { API_BASE } from '../config/api';
               id: String(Date.now()),
               role: 'assistant',
               content:
-                'Welcome to your Financial AI Assistant!\n\nI can help you with:\n• Investment basics (ETFs, index funds, stocks)\n• Retirement planning (IRAs, 401(k)s)\n• Budgeting strategies (50/30/20 rule)\n• Risk management and diversification\n• Financial terminology and concepts\n\nThis is educational information only.',
+                'Welcome to your AI Financial Assistant!\n\nI can help you with:\n• Investment strategies and portfolio analysis\n• Market insights and economic trends\n• Financial planning and budgeting\n• Risk assessment and diversification\n• Trading education and terminology\n• Real-time market commentary\n• Personalized financial advice\n\nNote: I\'m currently setting up my advanced AI capabilities. I can still provide helpful financial guidance and answer your questions!',
             }]);
           }
         } catch { /* ignore */ }
@@ -192,7 +192,7 @@ import { API_BASE } from '../config/api';
         <View style={styles.chatHeader}>
           <View style={styles.chatTitleContainer}>
             <Icon name="flash-on" size={20} color="#00cc99" style={styles.chatTitleIcon} />
-            <Text style={styles.chatTitle}>Financial Education Assistant</Text>
+            <Text style={styles.chatTitle}>AI Financial Assistant</Text>
           </View>
           <View style={styles.chatHeaderActions}>
             <TouchableOpacity onPress={clear} style={styles.chatActionButton} accessibilityLabel="Clear chat">
@@ -412,15 +412,38 @@ import { API_BASE } from '../config/api';
     /* ---------- AI service ---------- */
     const generateAIResponse = useCallback(async (userInput: string): Promise<string> => {
       try {
-        const chatbotService = FinancialChatbotService.getInstance(
-          new AlphaVantageRecommendationProvider('OHYSFF1AE446O7CR')
-        );
-        return await chatbotService.processUserInput(userInput);
-      } catch (error) {
+        // Use the AI Assistant service for unified conversational AI
+        const userId = userData?.me?.id || userProfile?.id || 'demo-user';
+        const response = await assistantQuery({ 
+          user_id: userId, 
+          prompt: userInput 
+        });
+        return response?.answer || response?.response || 'I hit a snag processing that—mind trying again?';
+      } catch (error: any) {
         console.error('AI error:', error);
-        return 'I hit a snag processing that—mind trying again?';
+        
+        // Provide helpful fallback responses based on common questions
+        const lowerInput = userInput.toLowerCase();
+        
+        if (lowerInput.includes('investment') || lowerInput.includes('invest')) {
+          return 'I\'m currently setting up my AI capabilities. For now, I can share that diversification across different asset classes (stocks, bonds, ETFs) is a fundamental investment strategy. Consider your risk tolerance and time horizon when making investment decisions.';
+        }
+        
+        if (lowerInput.includes('budget') || lowerInput.includes('saving')) {
+          return 'While I\'m getting my AI features ready, here\'s a solid budgeting tip: The 50/30/20 rule allocates 50% to needs, 30% to wants, and 20% to savings and debt repayment. This is a great starting point for financial planning.';
+        }
+        
+        if (lowerInput.includes('stock') || lowerInput.includes('market')) {
+          return 'I\'m currently initializing my market analysis capabilities. In the meantime, remember that stock market investing involves risk, and it\'s important to do your research, diversify your portfolio, and invest for the long term rather than trying to time the market.';
+        }
+        
+        if (lowerInput.includes('retirement') || lowerInput.includes('401k') || lowerInput.includes('ira')) {
+          return 'While I\'m setting up my retirement planning tools, here\'s key advice: Start early, take advantage of employer 401(k) matching, and consider both traditional and Roth IRAs. The power of compound interest over time is your greatest ally in retirement planning.';
+        }
+        
+        return 'I\'m currently setting up my AI capabilities to provide you with personalized financial advice. Please try again in a moment, or feel free to ask about general investment principles, budgeting strategies, or retirement planning basics.';
       }
-    }, []);
+    }, [userData?.me?.id, userProfile?.id]);
   
     /* ---------- helpers ---------- */
     const getExperienceIcon = useCallback((level: string) => {
@@ -600,16 +623,6 @@ import { API_BASE } from '../config/api';
             </View>
             
             <View style={styles.learningCards}>
-              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('assistant-chat')}>
-                <View style={styles.learningCardIcon}>
-                  <Icon name="message-circle" size={24} color="#00cc99" />
-                </View>
-                <View style={styles.learningCardContent}>
-                  <Text style={styles.learningCardTitle}>AI Assistant Chat</Text>
-                  <Text style={styles.learningCardDescription}>Chat with your financial AI</Text>
-                </View>
-                <Icon name="chevron-right" size={16} color="#8E8E93" />
-              </TouchableOpacity>
               
               <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('tutor-ask-explain')}>
                 <View style={styles.learningCardIcon}>
@@ -655,17 +668,6 @@ import { API_BASE } from '../config/api';
                 <Icon name="chevron-right" size={16} color="#8E8E93" />
               </TouchableOpacity>
               
-              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('trading-coach')}>
-                <View style={styles.learningCardIcon}>
-                  <Icon name="target" size={24} color="#F59E0B" />
-                </View>
-                <View style={styles.learningCardContent}>
-                  <Text style={styles.learningCardTitle}>Trading Coach</Text>
-                  <Text style={styles.learningCardDescription}>Personalized trading advice</Text>
-                </View>
-                <Icon name="chevron-right" size={16} color="#8E8E93" />
-              </TouchableOpacity>
-              
               <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('ai-scans')}>
                 <View style={styles.learningCardIcon}>
                   <Icon name="search" size={24} color="#007AFF" />
@@ -673,6 +675,17 @@ import { API_BASE } from '../config/api';
                 <View style={styles.learningCardContent}>
                   <Text style={styles.learningCardTitle}>AI Market Scans</Text>
                   <Text style={styles.learningCardDescription}>Market intelligence & analysis</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('ai-trading-coach')}>
+                <View style={styles.learningCardIcon}>
+                  <Icon name="zap" size={24} color="#3B82F6" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={styles.learningCardTitle}>AI Trading Coach</Text>
+                  <Text style={styles.learningCardDescription}>Advanced AI-powered coaching</Text>
                 </View>
                 <Icon name="chevron-right" size={16} color="#8E8E93" />
               </TouchableOpacity>
@@ -751,6 +764,8 @@ import { API_BASE } from '../config/api';
                 </View>
                 <Icon name="chevron-right" size={16} color="#8E8E93" />
               </TouchableOpacity>
+
+
             </View>
           </View>
 
@@ -760,7 +775,7 @@ import { API_BASE } from '../config/api';
         <TouchableOpacity
           style={styles.chatButton}
           onPress={() => setChatOpen(true)}
-          accessibilityLabel="Open financial assistant"
+          accessibilityLabel="Open AI Financial Assistant"
           testID="chat-fab"
         >
           <Icon name="message-circle" size={24} color="#fff" />
