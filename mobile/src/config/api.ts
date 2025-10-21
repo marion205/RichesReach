@@ -23,7 +23,7 @@ console.log('[API_BASE] graphql ->', `${API_BASE}/graphql`);
 
 export const API_HTTP    = API_BASE;
 export const API_GRAPHQL = `${API_BASE}/graphql/`;
-export const API_AUTH    = `${API_BASE}/auth/`;
+export const API_AUTH    = `${API_BASE}/auth/login`;
 export const API_WS      = API_BASE.startsWith("https")
   ? API_BASE.replace("https","wss") + "/ws/"
   : API_BASE.replace("http","ws")   + "/ws/";

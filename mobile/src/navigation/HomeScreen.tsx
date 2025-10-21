@@ -690,6 +690,118 @@ import { API_BASE } from '../config/api';
                 <Icon name="chevron-right" size={16} color="#8E8E93" />
               </TouchableOpacity>
               
+              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('daily-voice-digest')}>
+                <View style={styles.learningCardIcon}>
+                  <Icon name="mic" size={24} color="#F59E0B" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={styles.learningCardTitle}>Daily Voice Digest</Text>
+                  <Text style={styles.learningCardDescription}>60-second personalized market briefings</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('notification-center')}>
+                <View style={styles.learningCardIcon}>
+                  <Icon name="bell" size={24} color="#8B5CF6" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={styles.learningCardTitle}>Notification Center</Text>
+                  <Text style={styles.learningCardDescription}>Manage alerts and stay informed</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Community Features Section */}
+          <View style={styles.learningSection}>
+            <View style={styles.learningHeader}>
+              <View style={styles.learningHeaderLeft}>
+                <Icon name="users" size={20} color="#10B981" />
+                <Text style={styles.learningTitle}>Community Features</Text>
+              </View>
+            </View>
+            
+            <View style={styles.learningCards}>
+              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('wealth-circles')}>
+                <View style={styles.learningCardIcon}>
+                  <Icon name="circle" size={24} color="#10B981" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={styles.learningCardTitle}>Wealth Circles</Text>
+                  <Text style={styles.learningCardDescription}>Connect with your community</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('peer-progress')}>
+                <View style={styles.learningCardIcon}>
+                  <Icon name="trending-up" size={24} color="#F59E0B" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={styles.learningCardTitle}>Peer Progress</Text>
+                  <Text style={styles.learningCardDescription}>See community achievements</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('trade-challenges')}>
+                <View style={styles.learningCardIcon}>
+                  <Icon name="trending-up" size={24} color="#EF4444" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={styles.learningCardTitle}>Trade Challenges</Text>
+                  <Text style={styles.learningCardDescription}>Compete with the community</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Advanced Personalization Section */}
+          <View style={styles.learningSection}>
+            <View style={styles.learningHeader}>
+              <View style={styles.learningHeaderLeft}>
+                <Icon name="arrow-right" size={20} color="#8B5CF6" />
+                <Text style={styles.learningTitle}>Advanced Personalization</Text>
+              </View>
+            </View>
+            
+            <View style={styles.learningCards}>
+              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('personalization-dashboard')}>
+                <View style={styles.learningCardIcon}>
+                  <Icon name="user" size={24} color="#8B5CF6" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={styles.learningCardTitle}>Personalization Dashboard</Text>
+                  <Text style={styles.learningCardDescription}>Your AI-powered profile</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('behavioral-analytics')}>
+                <View style={styles.learningCardIcon}>
+                  <Icon name="trending-up" size={24} color="#10B981" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={styles.learningCardTitle}>Behavioral Analytics</Text>
+                  <Text style={styles.learningCardDescription}>AI behavior insights</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('dynamic-content')}>
+                <View style={styles.learningCardIcon}>
+                  <Icon name="zap" size={24} color="#F59E0B" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={styles.learningCardTitle}>Dynamic Content</Text>
+                  <Text style={styles.learningCardDescription}>Real-time adaptation</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+              
               <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('ai-options')}>
                 <View style={styles.learningCardIcon}>
                   <Icon name="layers" size={24} color="#FF2D92" />
@@ -839,6 +951,21 @@ import { API_BASE } from '../config/api';
     learningCardTitle: { fontSize: 16, fontWeight: '600', color: '#1C1C1E', marginBottom: 4 },
     learningCardDescription: { fontSize: 13, color: '#8E8E93', marginBottom: 4 },
     learningCardMeta: { fontSize: 12, color: '#8E8E93' },
+    
+    /* Badge */
+    badgeContainer: {
+      backgroundColor: '#F59E0B',
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 4,
+      marginLeft: 8
+    },
+    badgeText: {
+      color: '#ffffff',
+      fontSize: 10,
+      fontWeight: '700',
+      textTransform: 'uppercase'
+    },
   
     /* Chat */
     chatButton: {

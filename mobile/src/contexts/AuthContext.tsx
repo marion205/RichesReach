@@ -176,11 +176,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     console.log('🔍 AuthContext: Environment variable:', process.env.EXPO_PUBLIC_API_BASE_URL);
     
     const attempt = async (payload: any) => {
-      console.log('🔄 AuthContext: Attempting login to:', `${baseUrl}/auth/`);
+      console.log('🔄 AuthContext: Attempting login to:', `${baseUrl}/auth/login`);
       console.log('🔄 AuthContext: Payload:', payload);
       
       try {
-        const response = await fetch(`${baseUrl}/auth/`, {
+        const response = await fetch(`${baseUrl}/auth/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -196,9 +196,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           throw new Error(json?.error || `Login failed with status ${response.status}`);
         }
         
-        // Handle response format: /auth/ returns {token, user}
-        if (!json.token) {
-          throw new Error('Missing token in response');
+        // Handle response format: /auth/login returns {access_token, user}
+        if (!json.access_token) {
+          throw new Error('Missing access_token in response');
         }
         
         // Store user data from REST response
@@ -206,7 +206,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setUser(json.user);
         }
         
-        return json.token;
+        return json.access_token;
       } catch (fetchError) {
         console.error('❌ AuthContext: Fetch error:', fetchError);
         throw fetchError;
