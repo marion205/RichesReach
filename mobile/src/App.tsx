@@ -57,9 +57,8 @@ import DayTradingScreen from './features/trading/screens/DayTradingScreen';
 import MLSystemScreen from './features/ml/screens/MLSystemScreen';
 import RiskManagementScreen from './features/risk/screens/RiskManagementScreen';
 // Swing Trading Screens
-import { SignalsScreen, RiskCoachScreen, BacktestingScreen } from './features/swingTrading';
+import { SignalsScreen, RiskCoachScreen } from './features/swingTrading';
 import LeaderboardScreen from './features/swingTrading/screens/LeaderboardScreen';
-import SwingTradingTestScreen from './components/SwingTradingTestScreen';
 import AIOptionsScreen from './features/options/screens/AIOptionsScreen';
 import OptionsCopilotScreen from './features/options/screens/OptionsCopilotScreen';
 import AIScansScreen from './features/aiScans/screens/AIScansScreen';
@@ -71,7 +70,6 @@ import OptionsLearningScreen from './features/options/screens/OptionsLearningScr
 import SBLOCLearningScreen from './features/learning/screens/SBLOCLearningScreen';
 import SBLOCBankSelectionScreen from './features/sbloc/screens/SBLOCBankSelectionScreen';
 import SBLOCApplicationScreen from './features/sbloc/screens/SBLOCApplicationScreen';
-import SBLOCStatusScreen from './features/sbloc/screens/SBLOCStatusScreen';
 import NewsPreferencesScreen from './features/news/screens/NewsPreferencesScreen';
 import PortfolioLearningScreen from './features/learning/screens/PortfolioLearningScreen';
 // Tax Optimization Screens
@@ -83,6 +81,14 @@ import TutorAskExplainScreen from './features/learning/screens/TutorAskExplainSc
 import TutorQuizScreen from './features/learning/screens/TutorQuizScreen';
 import TutorModuleScreen from './features/learning/screens/TutorModuleScreen';
 import MarketCommentaryScreen from './features/news/screens/MarketCommentaryScreen';
+// import DailyVoiceDigestScreen from './features/learning/screens/DailyVoiceDigestScreen';
+import NotificationCenterScreen from './features/notifications/screens/NotificationCenterScreen';
+import WealthCirclesScreen from './features/community/screens/WealthCirclesScreen';
+import PeerProgressScreen from './features/community/screens/PeerProgressScreen';
+import TradeChallengesScreen from './features/community/screens/TradeChallengesScreen';
+import PersonalizationDashboardScreen from './features/personalization/screens/PersonalizationDashboardScreen';
+import BehavioralAnalyticsScreen from './features/personalization/screens/BehavioralAnalyticsScreen';
+import DynamicContentScreen from './features/personalization/screens/DynamicContentScreen';
 import TradingCoachScreen from './features/coach/screens/TradingCoachScreen';
 import AITradingCoachScreen from './features/coach/screens/AITradingCoachScreen';
 // Components
@@ -369,13 +375,13 @@ return <DayTradingScreen navigateTo={navigateTo} />;
         case 'risk-management':
           return <RiskManagementScreen navigateTo={navigateTo} />;
         case 'swing-trading-test':
-          return <SwingTradingTestScreen navigateTo={navigateTo} />;
+          return <SignalsScreen navigateTo={navigateTo} />;
         case 'swing-signals':
           return <SignalsScreen navigateTo={navigateTo} />;
         case 'swing-risk-coach':
           return <RiskCoachScreen navigateTo={navigateTo} />;
         case 'swing-backtesting':
-          return <BacktestingScreen navigateTo={navigateTo} />;
+          return <SignalsScreen navigateTo={navigateTo} />;
         case 'swing-leaderboard':
           return <LeaderboardScreen navigateTo={navigateTo} />;
         case 'bank-accounts':
@@ -392,8 +398,8 @@ case 'SBLOCBankSelection':
 return <SBLOCBankSelectionScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('bank-accounts') }} route={{ params: { amountUsd: 25000 } }} />;
 case 'SBLOCApplication':
 return <SBLOCApplicationScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('SBLOCBankSelection') }} route={{ params: { sessionUrl: '', referral: { id: '', bank: { id: '', name: '', minLtv: 0, maxLtv: 0, minLineUsd: 0, maxLineUsd: 0, typicalAprMin: 0, typicalAprMax: 0, isActive: true, priority: 0 } } } }} />;
-case 'SblocStatus':
-return <SBLOCStatusScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('SBLOCBankSelection') }} route={{ params: { sessionId: '' } }} />;
+        case 'SblocStatus':
+          return <SBLOCApplicationScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('SBLOCBankSelection') }} route={{ params: { sessionId: '' } }} />;
 case 'news-preferences':
 return <NewsPreferencesScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('profile') }} />;
 case 'tax-optimization':
@@ -412,6 +418,22 @@ case 'tutor-module':
 return <TutorModuleScreen />;
 case 'market-commentary':
 return <MarketCommentaryScreen />;
+        case 'daily-voice-digest':
+          return <TutorAskExplainScreen navigateTo={navigateTo} />;
+case 'notification-center':
+return <NotificationCenterScreen />;
+case 'wealth-circles':
+return <WealthCirclesScreen />;
+        case 'peer-progress':
+          return <PeerProgressScreen />;
+        case 'trade-challenges':
+          return <TradeChallengesScreen />;
+case 'personalization-dashboard':
+return <PersonalizationDashboardScreen />;
+        case 'behavioral-analytics':
+          return <BehavioralAnalyticsScreen />;
+        case 'dynamic-content':
+          return <DynamicContentScreen />;
 case 'trading-coach':
 return <TradingCoachScreen />;
 case 'ai-trading-coach':

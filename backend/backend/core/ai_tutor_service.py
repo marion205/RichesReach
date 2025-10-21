@@ -30,6 +30,7 @@ from .genai_education_service import (
     UserLearningProfile,
     DifficultyLevel,
 )
+from .ml_service import MLService
 
 logger = logging.getLogger(__name__)
 # =============================================================================
@@ -59,6 +60,7 @@ class QuizPayload(TypedDict, total=False):
     difficulty: str
     questions: List[QuizQuestion]
     generated_at: str  # ISO8601 (UTC)
+    regime_context: Optional[Dict[str, Any]]  # Market regime context for adaptive quizzes
 class EvaluationResult(TypedDict, total=False):
     """Payload for answer evaluations."""
     score: int
@@ -459,6 +461,239 @@ class AITutorService:
             "evaluated_at": _now_iso_utc(),
         }
         return result
+
+    async def generate_regime_adaptive_quiz(
+        self,
+        user_id: str,
+        market_data: Optional[Dict[str, Any]] = None,
+        *,
+        difficulty: Optional[DifficultyLevel] = None,
+        num_questions: int = 3,
+        max_tokens: int = 1500,
+        model: Optional[AIModel] = None,
+    ) -> QuizPayload:
+        """
+        Generate a quiz that adapts to current market regime conditions.
+        
+        This is the key differentiator - creates educational content that's
+        immediately relevant to current market conditions, helping users
+        understand why certain strategies work in specific regimes.
+        
+        Args:
+            user_id: User identifier for personalization
+            market_data: Current market data for regime detection
+            difficulty: Quiz difficulty level
+            num_questions: Number of questions to generate
+            max_tokens: Maximum tokens for AI response
+            model: AI model to use for generation
+            
+        Returns:
+            QuizPayload with regime-specific questions and context
+        """
+        try:
+            # Get current market regime
+            ml_service = MLService()
+            regime_prediction = ml_service.predict_market_regime(market_data or {})
+            current_regime = regime_prediction.get('regime', 'sideways_consolidation')
+            regime_confidence = regime_prediction.get('confidence', 0.5)
+            
+            # Get user learning profile for personalization
+            user_profile = await self.education_service.get_user_learning_profile(user_id)
+            if difficulty is None:
+                difficulty = user_profile.get('preferred_difficulty', DifficultyLevel.INTERMEDIATE)
+            
+            # Create regime-specific quiz prompt
+            regime_context = {
+                'current_regime': current_regime,
+                'regime_confidence': regime_confidence,
+                'regime_description': self._get_regime_description(current_regime),
+                'relevant_strategies': self._get_regime_strategies(current_regime),
+                'common_mistakes': self._get_regime_mistakes(current_regime)
+            }
+            
+            prompt = self._build_regime_quiz_prompt(
+                current_regime, regime_context, difficulty, num_questions
+            )
+            
+            # Generate quiz using AI
+            request = AIRequest(
+                prompt=prompt,
+                max_tokens=max_tokens,
+                model=model or self.default_chat_model,
+                request_type=RequestType.GENERAL_CHAT,
+                temperature=0.7,  # Slightly creative for engaging questions
+            )
+            
+            resp = await self.ai_router.route_request(request)
+            if not resp or not resp.response:
+                raise ValueError("Failed to generate regime-adaptive quiz")
+            
+            # Parse and structure the response
+            parsed = _safe_json_loads(resp.response)
+            if not parsed:
+                # Fallback to structured generation
+                parsed = await self._generate_fallback_regime_quiz(
+                    current_regime, regime_context, difficulty, num_questions
+                )
+            
+            # Build quiz payload with regime context
+            quiz_id = str(uuid.uuid4())
+            questions = self._parse_quiz_questions(parsed.get('questions', []), quiz_id)
+            
+            payload: QuizPayload = {
+                "topic": f"Market Regime: {current_regime.replace('_', ' ').title()}",
+                "difficulty": difficulty.value,
+                "questions": questions,
+                "generated_at": _now_iso_utc(),
+                "regime_context": regime_context,
+            }
+            
+            logger.info(f"Generated regime-adaptive quiz for user {user_id}: {current_regime} regime")
+            return payload
+            
+        except Exception as e:
+            logger.error(f"Error generating regime-adaptive quiz: {e}")
+            # Return a fallback quiz
+            return await self._generate_fallback_regime_quiz(
+                'sideways_consolidation', {}, difficulty or DifficultyLevel.INTERMEDIATE, num_questions
+            )
+
+    def _get_regime_description(self, regime: str) -> str:
+        """Get human-readable description of market regime."""
+        descriptions = {
+            'early_bull_market': 'Strong growth phase with low volatility and rising prices',
+            'late_bull_market': 'High growth phase with increasing volatility and potential overvaluation',
+            'correction': 'Temporary pullback in an overall bull market trend',
+            'bear_market': 'Sustained decline with high volatility and negative sentiment',
+            'sideways_consolidation': 'Range-bound market with low volatility and uncertain direction',
+            'high_volatility': 'Uncertain market conditions with elevated volatility',
+            'recovery': 'Market bouncing back from a previous decline',
+            'bubble_formation': 'Excessive optimism with high valuations and speculation'
+        }
+        return descriptions.get(regime, 'Uncertain market conditions')
+
+    def _get_regime_strategies(self, regime: str) -> List[str]:
+        """Get relevant trading strategies for the current regime."""
+        strategies = {
+            'early_bull_market': ['Growth investing', 'Momentum trading', 'Buy and hold'],
+            'late_bull_market': ['Value investing', 'Defensive positioning', 'Profit taking'],
+            'correction': ['Dollar-cost averaging', 'Quality stock selection', 'Sector rotation'],
+            'bear_market': ['Short selling', 'Put options', 'Defensive stocks', 'Cash positions'],
+            'sideways_consolidation': ['Range trading', 'Options strategies', 'Dividend investing'],
+            'high_volatility': ['Volatility trading', 'Options strategies', 'Risk management'],
+            'recovery': ['Value investing', 'Cyclical stocks', 'Gradual re-entry'],
+            'bubble_formation': ['Contrarian investing', 'Risk management', 'Exit strategies']
+        }
+        return strategies.get(regime, ['General investing principles'])
+
+    def _get_regime_mistakes(self, regime: str) -> List[str]:
+        """Get common mistakes to avoid in the current regime."""
+        mistakes = {
+            'early_bull_market': ['FOMO buying', 'Ignoring fundamentals', 'Over-leveraging'],
+            'late_bull_market': ['Chasing momentum', 'Ignoring valuations', 'No exit strategy'],
+            'correction': ['Panic selling', 'Trying to time the bottom', 'Ignoring quality'],
+            'bear_market': ['Buying the dip too early', 'Ignoring risk management', 'Emotional trading'],
+            'sideways_consolidation': ['Overtrading', 'Ignoring fundamentals', 'Poor timing'],
+            'high_volatility': ['Panic reactions', 'Poor risk management', 'Ignoring position sizing'],
+            'recovery': ['Missing the opportunity', 'Being too cautious', 'Poor stock selection'],
+            'bubble_formation': ['FOMO investing', 'Ignoring valuations', 'No risk management']
+        }
+        return mistakes.get(regime, ['Poor risk management', 'Emotional trading'])
+
+    def _build_regime_quiz_prompt(
+        self, 
+        regime: str, 
+        regime_context: Dict[str, Any], 
+        difficulty: DifficultyLevel, 
+        num_questions: int
+    ) -> str:
+        """Build a comprehensive prompt for regime-adaptive quiz generation."""
+        return f"""
+You are an expert financial educator creating a quiz about trading and investing in a {regime.replace('_', ' ')} market.
+
+CURRENT MARKET REGIME: {regime.replace('_', ' ').title()}
+DESCRIPTION: {regime_context['regime_description']}
+CONFIDENCE: {regime_context['regime_confidence']:.1%}
+
+RELEVANT STRATEGIES: {', '.join(regime_context['relevant_strategies'])}
+COMMON MISTAKES: {', '.join(regime_context['common_mistakes'])}
+
+Create {num_questions} quiz questions at {difficulty.value} level that help users understand:
+1. Why certain strategies work in this market regime
+2. How to identify and avoid common mistakes
+3. Practical applications of regime-specific knowledge
+4. Risk management considerations
+
+Each question should be:
+- Directly relevant to the current market regime
+- Educational and practical
+- Include clear explanations
+- Test understanding, not memorization
+
+Format your response as JSON:
+{{
+    "questions": [
+        {{
+            "id": "q1",
+            "question": "Question text here",
+            "question_type": "multiple_choice",
+            "options": ["A", "B", "C", "D"],
+            "correct_answer": "B",
+            "explanation": "Detailed explanation of why this is correct and how it applies to {regime} markets",
+            "hints": ["Hint 1", "Hint 2"]
+        }}
+    ]
+}}
+
+Make the questions immediately actionable for someone trading in this market regime.
+"""
+
+    async def _generate_fallback_regime_quiz(
+        self, 
+        regime: str, 
+        regime_context: Dict[str, Any], 
+        difficulty: DifficultyLevel, 
+        num_questions: int
+    ) -> Dict[str, Any]:
+        """Generate a fallback quiz when AI generation fails."""
+        quiz_id = str(uuid.uuid4())
+        questions = []
+        
+        # Create regime-specific fallback questions
+        for i in range(num_questions):
+            question_id = f"{quiz_id}_q{i+1}"
+            questions.append({
+                "id": question_id,
+                "question": f"In a {regime.replace('_', ' ')} market, what is the most important consideration?",
+                "question_type": "multiple_choice",
+                "options": [
+                    "Maximize returns at all costs",
+                    "Manage risk appropriately",
+                    "Follow the crowd",
+                    "Ignore market conditions"
+                ],
+                "correct_answer": "Manage risk appropriately",
+                "explanation": f"In {regime.replace('_', ' ')} markets, risk management is crucial. This regime requires careful consideration of position sizing, stop losses, and portfolio allocation.",
+                "hints": ["Think about what changes in different market conditions", "Consider the importance of capital preservation"]
+            })
+        
+        return {"questions": questions}
+
+    def _parse_quiz_questions(self, questions_data: List[Dict], quiz_id: str) -> List[QuizQuestion]:
+        """Parse and validate quiz questions from AI response."""
+        questions = []
+        for i, q_data in enumerate(questions_data):
+            question: QuizQuestion = {
+                "id": q_data.get("id", f"{quiz_id}_q{i+1}"),
+                "question": str(q_data.get("question", "")),
+                "question_type": str(q_data.get("question_type", "multiple_choice")),
+                "options": q_data.get("options", []),
+                "correct_answer": str(q_data.get("correct_answer", "")),
+                "explanation": str(q_data.get("explanation", "")),
+                "hints": q_data.get("hints", []) or [],
+            }
+            questions.append(question)
+        return questions
 # =============================================================================
 # Singleton Instance (Optional for Convenience)
 # =============================================================================

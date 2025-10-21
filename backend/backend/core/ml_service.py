@@ -11,82 +11,87 @@ import warnings
 warnings.filterwarnings('ignore')
 # ML imports
 try:
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingRegressor
-from sklearn.preprocessing import StandardScaler, LabelEncoder
-from sklearn.model_selection import train_test_split, cross_val_score
-from sklearn.metrics import accuracy_score, mean_squared_error
-from sklearn.cluster import KMeans
-from sklearn.decomposition import PCA
-import statsmodels.api as sm
-from statsmodels.tsa.arima.model import ARIMA
-from statsmodels.tsa.seasonal import seasonal_decompose
-ML_AVAILABLE = True
+    from sklearn.ensemble import RandomForestClassifier, GradientBoostingRegressor
+    from sklearn.preprocessing import StandardScaler, LabelEncoder
+    from sklearn.model_selection import train_test_split, cross_val_score
+    from sklearn.metrics import accuracy_score, mean_squared_error
+    from sklearn.cluster import KMeans
+    from sklearn.decomposition import PCA
+    import statsmodels.api as sm
+    from statsmodels.tsa.arima.model import ARIMA
+    from statsmodels.tsa.seasonal import seasonal_decompose
+    ML_AVAILABLE = True
 except ImportError as e:
-logging.warning(f"ML libraries not available: {e}")
-ML_AVAILABLE = False
+    logging.warning(f"ML libraries not available: {e}")
+    ML_AVAILABLE = False
 # Production R² Model import
 try:
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from production_r2_model import ProductionR2Model
-PRODUCTION_R2_AVAILABLE = True
+    import sys
+    import os
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from production_r2_model import ProductionR2Model
+    PRODUCTION_R2_AVAILABLE = True
 except ImportError as e:
-logging.warning(f"Production R² model not available: {e}")
-PRODUCTION_R2_AVAILABLE = False
+    logging.warning(f"Production R² model not available: {e}")
+    PRODUCTION_R2_AVAILABLE = False
 logger = logging.getLogger(__name__)
 class MLService:
-"""
-Machine Learning service for enhanced AI portfolio recommendations
-"""
-def __init__(self):
-self.ml_available = ML_AVAILABLE
-self.production_r2_available = PRODUCTION_R2_AVAILABLE
-if not self.ml_available:
-logger.warning("ML Service initialized in fallback mode")
-# Initialize models
-self.market_regime_model = None
-self.portfolio_optimizer = None
-self.stock_scorer = None
-self.scaler = StandardScaler()
-# Initialize production R² model
-if self.production_r2_available:
-try:
-self.production_r2_model = ProductionR2Model()
-logger.info("Production R² model initialized (R² = 0.023)")
-except Exception as e:
-logger.warning(f"Failed to initialize production R² model: {e}")
-self.production_r2_available = False
-else:
-self.production_r2_model = None
-# Model parameters
-self.model_params = {
-'market_regime': {
-'n_estimators': 100,
-'max_depth': 10,
-'random_state': 42
-},
-'portfolio_optimization': {
-'n_estimators': 200,
-'max_depth': 15,
-'learning_rate': 0.1,
-'random_state': 42
-}
-}
-# Enhanced market regime labels with granular detection
-self.regime_labels = [
-'early_bull_market', # Strong growth, low volatility
-'late_bull_market', # High growth, increasing volatility
-'correction', # Temporary pullback in bull market
-'bear_market', # Declining market
-'sideways_consolidation', # Range-bound, low volatility
-'high_volatility', # Uncertain, high volatility
-'recovery', # Bouncing back from decline
-'bubble_formation' # Excessive optimism, high valuations
-]
-def is_available(self) -> bool:
-"""Check if ML capabilities are available"""
-return self.ml_available
+    """
+    Machine Learning service for enhanced AI portfolio recommendations
+    """
+    def __init__(self):
+        self.ml_available = ML_AVAILABLE
+        self.production_r2_available = PRODUCTION_R2_AVAILABLE
+        if not self.ml_available:
+            logger.warning("ML Service initialized in fallback mode")
+        
+        # Initialize models
+        self.market_regime_model = None
+        self.portfolio_optimizer = None
+        self.stock_scorer = None
+        self.scaler = StandardScaler()
+        
+        # Initialize production R² model
+        if self.production_r2_available:
+            try:
+                self.production_r2_model = ProductionR2Model()
+                logger.info("Production R² model initialized (R² = 0.023)")
+            except Exception as e:
+                logger.warning(f"Failed to initialize production R² model: {e}")
+                self.production_r2_available = False
+        else:
+            self.production_r2_model = None
+        
+        # Model parameters
+        self.model_params = {
+            'market_regime': {
+                'n_estimators': 100,
+                'max_depth': 10,
+                'random_state': 42
+            },
+            'portfolio_optimization': {
+                'n_estimators': 200,
+                'max_depth': 15,
+                'learning_rate': 0.1,
+                'random_state': 42
+            }
+        }
+        
+        # Enhanced market regime labels with granular detection
+        self.regime_labels = [
+            'early_bull_market', # Strong growth, low volatility
+            'late_bull_market', # High growth, increasing volatility
+            'correction', # Temporary pullback in bull market
+            'bear_market', # Declining market
+            'sideways_consolidation', # Range-bound, low volatility
+            'high_volatility', # Uncertain, high volatility
+            'recovery', # Bouncing back from decline
+            'bubble_formation' # Excessive optimism, high valuations
+        ]
+    
+    def is_available(self) -> bool:
+        """Check if ML capabilities are available"""
+        return self.ml_available
 def predict_market_regime(self, market_data: Dict[str, Any]) -> Dict[str, Any]:
 """
 Predict market regime using ML models
