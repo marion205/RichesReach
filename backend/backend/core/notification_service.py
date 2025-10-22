@@ -394,7 +394,8 @@ class NotificationService:
             
             # Create achievement-specific content
             title = f"🏆 {achievement.get('name', 'Achievement Unlocked!')}"
-            body = f"Congratulations! {achievement.get('description', 'You\'ve unlocked a new achievement!')}"
+            description = achievement.get('description', 'You\'ve unlocked a new achievement!')
+            body = f"Congratulations! {description}"
             
             # Create notification payload
             notification_id = str(uuid.uuid4())
