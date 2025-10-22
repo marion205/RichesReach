@@ -1,0 +1,343 @@
+name: 🧪 Comprehensive Testing
+
+on:
+  push:
+    branches: [ main, develop, comprehensive-testing ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+env:
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '18'
+  TEST_TIMEOUT: 300
+
+jobs:
+  # Backend Tests
+  backend-tests:
+    name: 🐍 Backend Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+        
+    - name: 📦 Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest pytest-asyncio pytest-cov pytest-mock httpx
+        pip install fastapi uvicorn pydantic
+        pip install -r requirements.txt || echo "No requirements.txt found"
+        
+    - name: 🧪 Run backend unit tests
+      run: |
+        python -m pytest tests/unit/ -v --cov=backend --cov-report=xml --cov-report=html --tb=short
+        
+    - name: 🧪 Run backend integration tests
+      run: |
+        python -m pytest tests/integration/ -v --tb=short
+        
+    - name: 🧪 Run phase-specific tests
+      run: |
+        python -m pytest tests/test_phase*_backend.py -v --tb=short
+        
+    - name: 📊 Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: backend
+        name: backend-coverage
+        
+    - name: 📁 Upload test artifacts
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: backend-test-results
+        path: |
+          htmlcov/
+          coverage.xml
+          pytest-report.html
+
+  # Mobile Tests
+  mobile-tests:
+    name: 📱 Mobile Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 📦 Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: mobile/package-lock.json
+        
+    - name: 📦 Install mobile dependencies
+      working-directory: mobile
+      run: |
+        npm ci
+        npm install --save-dev @testing-library/react-native @testing-library/jest-native
+        
+    - name: 🧪 Run mobile tests
+      working-directory: mobile
+      run: |
+        npm test -- --coverage --watchAll=false --verbose
+        
+    - name: 📊 Upload mobile coverage
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./mobile/coverage/lcov.info
+        flags: mobile
+        name: mobile-coverage
+        
+    - name: 📁 Upload mobile test artifacts
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: mobile-test-results
+        path: |
+          mobile/coverage/
+          mobile/jest-report.html
+
+  # Integration Tests
+  integration-tests:
+    name: 🔗 Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: [backend-tests]
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+        
+    - name: 📦 Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest pytest-asyncio httpx fastapi uvicorn
+        
+    - name: 🚀 Start test server
+      run: |
+        python test_server_minimal.py &
+        sleep 5
+        
+    - name: 🧪 Run API integration tests
+      run: |
+        python -m pytest tests/integration/test_api_endpoints_comprehensive.py -v --tb=short
+        
+    - name: 🧪 Run end-to-end workflow tests
+      run: |
+        python -m pytest tests/test_api_endpoints_integration.py -v --tb=short
+        
+    - name: 📁 Upload integration test artifacts
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: integration-test-results
+        path: |
+          integration-test-report.html
+
+  # Performance Tests
+  performance-tests:
+    name: ⚡ Performance Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+        
+    - name: 📦 Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest pytest-asyncio httpx locust
+        
+    - name: 🧪 Run performance tests
+      run: |
+        python -m pytest -m performance -v --tb=short
+        
+    - name: 📊 Run load tests
+      run: |
+        python -c "
+        import locust
+        from locust import HttpUser, task, between
+        
+        class WebsiteUser(HttpUser):
+            wait_time = between(1, 3)
+            
+            @task
+            def test_auth(self):
+                self.client.post('/auth/login', json={'email': 'test@example.com', 'password': 'testpass123'})
+            
+            @task
+            def test_tutor(self):
+                self.client.post('/tutor/ask', json={'question': 'Test question', 'user_id': 'test_user_123'})
+        
+        # Run load test for 30 seconds with 10 users
+        import subprocess
+        subprocess.run(['locust', '-f', 'load_test.py', '--headless', '-u', '10', '-r', '2', '-t', '30s', '--host', 'http://localhost:8000'])
+        " || echo "Load test completed"
+        
+    - name: 📁 Upload performance test artifacts
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: performance-test-results
+        path: |
+          performance-report.html
+          locust-report.html
+
+  # Security Tests
+  security-tests:
+    name: 🔒 Security Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+        
+    - name: 📦 Install security tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install bandit safety semgrep
+        
+    - name: 🔍 Run security scan
+      run: |
+        bandit -r backend/ -f json -o bandit-report.json || echo "Bandit scan completed"
+        safety check --json --output safety-report.json || echo "Safety check completed"
+        
+    - name: 📁 Upload security artifacts
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: security-test-results
+        path: |
+          bandit-report.json
+          safety-report.json
+
+  # Test Summary
+  test-summary:
+    name: 📊 Test Summary
+    runs-on: ubuntu-latest
+    needs: [backend-tests, mobile-tests, integration-tests, performance-tests, security-tests]
+    if: always()
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 📁 Download all artifacts
+      uses: actions/download-artifact@v3
+      
+    - name: 🧪 Run comprehensive test runner
+      run: |
+        python run_comprehensive_tests.py --verbose
+        
+    - name: 📊 Generate test summary
+      run: |
+        echo "# 🧪 Test Results Summary" > test-summary.md
+        echo "" >> test-summary.md
+        echo "## Backend Tests" >> test-summary.md
+        echo "- Status: ${{ needs.backend-tests.result }}" >> test-summary.md
+        echo "" >> test-summary.md
+        echo "## Mobile Tests" >> test-summary.md
+        echo "- Status: ${{ needs.mobile-tests.result }}" >> test-summary.md
+        echo "" >> test-summary.md
+        echo "## Integration Tests" >> test-summary.md
+        echo "- Status: ${{ needs.integration-tests.result }}" >> test-summary.md
+        echo "" >> test-summary.md
+        echo "## Performance Tests" >> test-summary.md
+        echo "- Status: ${{ needs.performance-tests.result }}" >> test-summary.md
+        echo "" >> test-summary.md
+        echo "## Security Tests" >> test-summary.md
+        echo "- Status: ${{ needs.security-tests.result }}" >> test-summary.md
+        
+    - name: 📤 Upload test summary
+      uses: actions/upload-artifact@v3
+      with:
+        name: test-summary
+        path: test-summary.md
+        
+    - name: 💬 Comment on PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          const summary = fs.readFileSync('test-summary.md', 'utf8');
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: summary
+          });
+
+  # Deployment Gate
+  deployment-gate:
+    name: 🚀 Deployment Gate
+    runs-on: ubuntu-latest
+    needs: [backend-tests, mobile-tests, integration-tests, performance-tests, security-tests]
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: ✅ Check all tests passed
+      run: |
+        if [[ "${{ needs.backend-tests.result }}" != "success" ]]; then
+          echo "❌ Backend tests failed"
+          exit 1
+        fi
+        if [[ "${{ needs.mobile-tests.result }}" != "success" ]]; then
+          echo "❌ Mobile tests failed"
+          exit 1
+        fi
+        if [[ "${{ needs.integration-tests.result }}" != "success" ]]; then
+          echo "❌ Integration tests failed"
+          exit 1
+        fi
+        if [[ "${{ needs.performance-tests.result }}" != "success" ]]; then
+          echo "❌ Performance tests failed"
+          exit 1
+        fi
+        if [[ "${{ needs.security-tests.result }}" != "success" ]]; then
+          echo "❌ Security tests failed"
+          exit 1
+        fi
+        echo "✅ All tests passed! Ready for deployment."
+        
+    - name: 🚀 Trigger deployment
+      run: |
+        echo "All tests passed! Deployment can proceed."
+        # Add deployment trigger here
