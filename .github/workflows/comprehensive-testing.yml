@@ -58,7 +58,7 @@ jobs:
         name: backend-coverage
         
     - name: 📁 Upload test artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: backend-test-results
@@ -103,7 +103,7 @@ jobs:
         name: mobile-coverage
         
     - name: 📁 Upload mobile test artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: mobile-test-results
@@ -147,7 +147,7 @@ jobs:
         python -m pytest tests/test_api_endpoints_integration.py -v --tb=short
         
     - name: 📁 Upload integration test artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: integration-test-results
@@ -202,7 +202,7 @@ jobs:
         " || echo "Load test completed"
         
     - name: 📁 Upload performance test artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: performance-test-results
@@ -237,7 +237,7 @@ jobs:
         safety check --json --output safety-report.json || echo "Safety check completed"
         
     - name: 📁 Upload security artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: security-test-results
@@ -257,7 +257,7 @@ jobs:
       uses: actions/checkout@v4
       
     - name: 📁 Download all artifacts
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       
     - name: 🧪 Run comprehensive test runner
       run: |
@@ -283,7 +283,7 @@ jobs:
         echo "- Status: ${{ needs.security-tests.result }}" >> test-summary.md
         
     - name: 📤 Upload test summary
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: test-summary
         path: test-summary.md
