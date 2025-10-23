@@ -623,3 +623,5 @@ ASGI_APPLICATION = 'richesreach.asgi.application'
 ALPACA_CLIENT_ID = os.getenv('ALPACA_CLIENT_ID', '')
 ALPACA_CLIENT_SECRET = os.getenv('ALPACA_CLIENT_SECRET', '')
 ALPACA_REDIRECT_URI = os.getenv('ALPACA_REDIRECT_URI', 'http://localhost:3000/alpaca/callback')
+ALPACA_BASE_URL = os.getenv('ALPACA_BASE_URL', 'https://broker-api.sandbox.alpaca.markets')
+ALPACA_DATA_URL = os.getenv('ALPACA_DATA_URL', 'https://data.sandbox.alpaca.markets')

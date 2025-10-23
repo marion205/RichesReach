@@ -23,7 +23,7 @@ class AlpacaOAuthView(View):
     def get(self, request):
         """Initiate OAuth flow"""
         if not request.user.is_authenticated:
-            return JsonResponse({'error': 'Authentication required'}, status=401)
+            return JsonResponse({'error': 'Authentication required'}, status=200)
         
         # Generate state parameter for security
         state = str(uuid.uuid4())
@@ -44,7 +44,7 @@ class AlpacaCallbackView(View):
     def get(self, request):
         """Process OAuth callback"""
         if not request.user.is_authenticated:
-            return JsonResponse({'error': 'Authentication required'}, status=401)
+            return JsonResponse({'error': 'Authentication required'}, status=200)
         
         code = request.GET.get('code')
         state = request.GET.get('state')
@@ -86,7 +86,7 @@ class AlpacaAccountView(View):
     def get(self, request):
         """Get account information"""
         if not request.user.is_authenticated:
-            return JsonResponse({'error': 'Authentication required'}, status=401)
+            return JsonResponse({'error': 'Authentication required'}, status=200)
         
         try:
             api_service = AlpacaAPIService(user=request.user)
@@ -108,7 +108,7 @@ class AlpacaPositionsView(View):
     def get(self, request):
         """Get current positions"""
         if not request.user.is_authenticated:
-            return JsonResponse({'error': 'Authentication required'}, status=401)
+            return JsonResponse({'error': 'Authentication required'}, status=200)
         
         try:
             api_service = AlpacaAPIService(user=request.user)
@@ -130,7 +130,7 @@ class AlpacaOrdersView(View):
     def get(self, request):
         """Get orders"""
         if not request.user.is_authenticated:
-            return JsonResponse({'error': 'Authentication required'}, status=401)
+            return JsonResponse({'error': 'Authentication required'}, status=200)
         
         try:
             api_service = AlpacaAPIService(user=request.user)
@@ -216,7 +216,7 @@ class AlpacaMarketDataView(View):
     def get(self, request):
         """Get market data for symbols"""
         if not request.user.is_authenticated:
-            return JsonResponse({'error': 'Authentication required'}, status=401)
+            return JsonResponse({'error': 'Authentication required'}, status=200)
         
         try:
             symbols = request.GET.get('symbols', '').split(',')

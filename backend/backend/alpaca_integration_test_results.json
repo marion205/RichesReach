@@ -1,0 +1,104 @@
+[
+  {
+    "test": "Setup Test User",
+    "status": "PASS",
+    "message": "User found",
+    "timestamp": "2025-10-23T23:28:04.542282"
+  },
+  {
+    "test": "Server Health",
+    "status": "PASS",
+    "message": "Production server running",
+    "timestamp": "2025-10-23T23:28:04.558537"
+  },
+  {
+    "test": "OAuth Authorization Endpoint",
+    "status": "PASS",
+    "message": "Endpoint requires authentication",
+    "timestamp": "2025-10-23T23:28:04.563831"
+  },
+  {
+    "test": "OAuth Callback Endpoint",
+    "status": "PASS",
+    "message": "Endpoint requires authentication",
+    "timestamp": "2025-10-23T23:28:04.791695"
+  },
+  {
+    "test": "Account Endpoint",
+    "status": "PASS",
+    "message": "Endpoint requires authentication",
+    "timestamp": "2025-10-23T23:28:04.798854"
+  },
+  {
+    "test": "Positions Endpoint",
+    "status": "PASS",
+    "message": "Endpoint requires authentication",
+    "timestamp": "2025-10-23T23:28:04.804353"
+  },
+  {
+    "test": "Orders Endpoint",
+    "status": "PASS",
+    "message": "Endpoint requires authentication",
+    "timestamp": "2025-10-23T23:28:04.816833"
+  },
+  {
+    "test": "Market Data Endpoint",
+    "status": "PASS",
+    "message": "Endpoint requires authentication",
+    "timestamp": "2025-10-23T23:28:04.822459"
+  },
+  {
+    "test": "OAuth Service Initialization",
+    "status": "PASS",
+    "message": "Service initialized successfully",
+    "timestamp": "2025-10-23T23:28:04.822640"
+  },
+  {
+    "test": "API Service Initialization",
+    "status": "PASS",
+    "message": "Service initialized successfully",
+    "timestamp": "2025-10-23T23:28:04.822685"
+  },
+  {
+    "test": "OAuth Token Model",
+    "status": "PASS",
+    "message": "Model can be instantiated",
+    "timestamp": "2025-10-23T23:28:04.823429"
+  },
+  {
+    "test": "Alpaca Account Model",
+    "status": "PASS",
+    "message": "Model can be instantiated",
+    "timestamp": "2025-10-23T23:28:04.823887"
+  },
+  {
+    "test": "Environment Configuration",
+    "status": "PASS",
+    "message": "All settings configured correctly",
+    "timestamp": "2025-10-23T23:28:04.824048"
+  },
+  {
+    "test": "Mobile App - Oracle Insights",
+    "status": "PASS",
+    "message": "Endpoint returns data",
+    "timestamp": "2025-10-23T23:28:04.832180"
+  },
+  {
+    "test": "Mobile App - Voice AI",
+    "status": "PASS",
+    "message": "Endpoint returns data",
+    "timestamp": "2025-10-23T23:28:04.838413"
+  },
+  {
+    "test": "Mobile App - Wealth Circles",
+    "status": "PASS",
+    "message": "Endpoint returns data",
+    "timestamp": "2025-10-23T23:28:04.846001"
+  },
+  {
+    "test": "Mobile App - Blockchain Status",
+    "status": "PASS",
+    "message": "Endpoint returns data",
+    "timestamp": "2025-10-23T23:28:04.849639"
+  }
+]
