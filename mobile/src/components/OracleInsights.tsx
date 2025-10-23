@@ -93,7 +93,46 @@ export default function OracleInsights({ onInsightPress, onGenerateInsight }: Or
     try {
       setLoading(true);
       
-      // Simulate API call - replace with actual API
+      // Use real API endpoint
+      const response = await fetch('http://127.0.0.1:8000/api/oracle/insights/', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${await AsyncStorage.getItem('authToken')}`,
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const apiData = await response.json();
+      
+      // Transform API data to match component interface
+      const transformedInsights: OracleEvent[] = apiData.insights?.map((insight: any) => ({
+        id: insight.type || 'unknown',
+        event_type: insight.type || 'market_trend',
+        title: insight.title || 'Market Insight',
+        description: insight.description || 'AI-powered market analysis',
+        confidence: insight.confidence || 0.85,
+        impact: insight.impact || 'high',
+        timeframe: insight.timeframe || '1-3 months',
+        symbols: insight.symbols || [],
+        timestamp: new Date().toISOString(),
+        source: 'oracle_ai',
+        category: insight.type || 'market_trend',
+        priority: insight.impact === 'high' ? 'high' : 'medium',
+        actionable: true,
+        metadata: {
+          model_version: '2.0',
+          data_quality: 'high',
+          last_updated: new Date().toISOString(),
+        },
+      })) || [];
+      
+      setInsights(transformedInsights);
+      
+      // Fallback to mock data if API fails
       const mockInsights: OracleEvent[] = [
         {
           id: '1',

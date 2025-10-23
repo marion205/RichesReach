@@ -20,6 +20,7 @@ import { GET_MY_PORTFOLIOS } from '../../../portfolioQueries';
 import SBLOCCalculator from '../../../components/forms/SBLOCCalculator';
 import SblocWidget from '../../../components/forms/SblocWidget';
 import SblocCalculatorModal from '../../../components/forms/SblocCalculatorModal';
+import { FEATURES } from '../../../config/featureFlags';
 
 // --- Design tokens (light theme) ---
 const UI = {
@@ -465,6 +466,7 @@ showsVerticalScrollIndicator={false}
 <Icon name="chevron-right" size={18} color="#CBD5E1" />
 </TouchableOpacity>
 
+{FEATURES.THEME_SETTINGS_ENABLED && (
 <TouchableOpacity style={styles.rowItem} onPress={() => navigateTo?.('theme-settings')}>
 <View style={[styles.rowIcon, { backgroundColor: '#F5F3FF', borderColor: '#DDD6FE' }]}>
 <Icon name="color-palette" size={16} color={UI.violet} />
@@ -472,6 +474,7 @@ showsVerticalScrollIndicator={false}
 <Text style={styles.rowText}>Theme Settings</Text>
 <Icon name="chevron-right" size={18} color="#CBD5E1" />
 </TouchableOpacity>
+)}
 
 <TouchableOpacity style={styles.rowItem} onPress={() => navigateTo?.('security-fortress')}>
 <View style={[styles.rowIcon, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}>

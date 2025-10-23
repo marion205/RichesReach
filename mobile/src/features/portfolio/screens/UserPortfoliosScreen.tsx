@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { User } from '../../../types/social';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface UserPortfoliosScreenProps {
   userId: string;
@@ -22,19 +23,44 @@ const UserPortfoliosScreen: React.FC<UserPortfoliosScreenProps> = ({ userId, onN
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const mockUserService = UserService.getInstance();
-
-  // Load user profile from mock service
-  const loadUserProfile = () => {
+  // Load user profile from real API
+  const loadUserProfile = async () => {
     setLoading(true);
     setError(null);
     try {
-      const userProfile = mockUserService.getUserById(userId);
-      if (userProfile) {
-        setUser(userProfile);
-      } else {
-        setError('User not found');
+      const token = await AsyncStorage.getItem('authToken');
+      const response = await fetch(`http://127.0.0.1:8000/api/user/profile/`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
+      
+      const userData = await response.json();
+      
+      // Transform API data to match User interface
+      const userProfile: User = {
+        id: userData.id || userId,
+        name: userData.name || 'Unknown User',
+        email: userData.email || '',
+        avatar: userData.avatar || 'https://via.placeholder.com/100',
+        bio: userData.bio || '',
+        followersCount: userData.followersCount || 0,
+        followingCount: userData.followingCount || 0,
+        isFollowing: userData.isFollowing || false,
+        isFollowedBy: userData.isFollowedBy || false,
+        hasPremiumAccess: userData.hasPremiumAccess || false,
+        subscriptionTier: userData.subscriptionTier || 'BASIC',
+        createdAt: userData.createdAt || new Date().toISOString(),
+        updatedAt: userData.updatedAt || new Date().toISOString(),
+      };
+      
+      setUser(userProfile);
     } catch (err) {
       setError('Failed to load user profile');
       console.error('Error loading user profile:', err);

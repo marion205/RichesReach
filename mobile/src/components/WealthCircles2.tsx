@@ -130,7 +130,51 @@ export default function WealthCircles2({ onCirclePress, onCreateCircle, onJoinCi
     try {
       setLoading(true);
       
-      // Simulate API call - replace with actual API
+      // Use real API endpoint
+      const response = await fetch('http://127.0.0.1:8000/api/wealth-circles/', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${await AsyncStorage.getItem('authToken')}`,
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const apiCircles = await response.json();
+      
+      // Transform API data to match component interface
+      const transformedCircles: WealthCircle[] = apiCircles.map((circle: any) => ({
+        id: circle.id,
+        name: circle.name,
+        description: circle.description || 'Building wealth through community support',
+        memberCount: circle.members || 0,
+        totalValue: 0, // Not provided by API
+        performance: 0, // Not provided by API
+        category: circle.category || 'investment',
+        isPrivate: false,
+        isJoined: false,
+        members: circle.activity?.map((activity: any) => ({
+          id: activity.user || 'unknown',
+          name: activity.user || 'Anonymous',
+          avatar: 'https://via.placeholder.com/40',
+          role: 'member',
+          portfolioValue: 0,
+          performance: 0,
+          isOnline: false,
+          lastActive: activity.timestamp || 'Unknown',
+        })) || [],
+        recentActivity: circle.recentActivity || [],
+        tags: [circle.category || 'investment'],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }));
+      
+      setCircles(transformedCircles);
+      
+      // Fallback to mock data if API fails
       const mockCircles: WealthCircle[] = [
         {
           id: '1',

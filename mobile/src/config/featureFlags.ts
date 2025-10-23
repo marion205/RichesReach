@@ -16,6 +16,7 @@ export const FEATURES = {
   BROKER_ENABLED: (process.env.EXPO_PUBLIC_BROKER_ENABLED ?? 'true').toLowerCase() !== 'false',
   PAYMENTS_ENABLED: (process.env.EXPO_PUBLIC_PAYMENTS_ENABLED ?? 'true').toLowerCase() !== 'false',
   LEARNING_ENABLED: (process.env.EXPO_PUBLIC_LEARNING_ENABLED ?? 'true').toLowerCase() !== 'false',
+  THEME_SETTINGS_ENABLED: (process.env.EXPO_PUBLIC_THEME_SETTINGS_ENABLED ?? 'false').toLowerCase() !== 'false',
 };
 
 // Production guardrails - hard fail if features are disabled in release

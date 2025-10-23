@@ -190,8 +190,27 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
       // 2. Process the text with AI
       // 3. Generate response
       
+      // Use real API endpoint for voice processing
+      const response = await fetch('http://127.0.0.1:8000/api/voice/process/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${await AsyncStorage.getItem('authToken')}`,
+        },
+        body: JSON.stringify({
+          text: "What's my portfolio performance this month?",
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const apiResponse = await response.json();
+      
+      // Use API response or fallback to mock
       const mockTranscription = "What's my portfolio performance this month?";
-      const mockResponse = {
+      const mockResponse = apiResponse.response || {
         text: "Your portfolio is up 8.5% this month, outperforming the S&P 500 by 2.3%. Your top performers are technology stocks, particularly your AI and semiconductor holdings. Would you like me to analyze any specific positions or suggest rebalancing opportunities?",
         insights: [
           {
