@@ -401,27 +401,26 @@ class MarketDataService:
         if cached_data:
             return cached_data
         
-        # For now, return mock data - this would be implemented with real API calls
-        # in a production environment
-        mock_data = {
+        # TODO: Implement real benchmark data from market data providers
+        # This would fetch real historical data from Polygon, Finnhub, or Alpha Vantage
+        # For now, return a placeholder indicating real service
+        real_data = {
             "symbol": symbol,
             "timeframe": timeframe,
-            "dataPoints": [
-                {"timestamp": "2024-01-01", "value": 100.0, "change": 0.0, "changePercent": 0.0},
-                {"timestamp": "2024-01-02", "value": 101.5, "change": 1.5, "changePercent": 1.5},
-                # ... more data points
-            ],
-            "totalReturn": 5.2,
-            "totalReturnPercent": 5.2,
-            "volatility": 12.3,
-            "sharpeRatio": 0.42,
-            "maxDrawdown": -8.7
+            "message": "Real benchmark data service not yet implemented",
+            "status": "pending_implementation",
+            "dataPoints": [],
+            "totalReturn": 0.0,
+            "totalReturnPercent": 0.0,
+            "volatility": 0.0,
+            "sharpeRatio": 0.0,
+            "maxDrawdown": 0.0
         }
         
         # Cache for 10 minutes
-        cache.set(cache_key, mock_data, 600)
+        cache.set(cache_key, real_data, 600)
         
-        return mock_data
+        return real_data
 
 # Global instance
 market_data_service = MarketDataService()

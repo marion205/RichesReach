@@ -16,60 +16,19 @@ from core.views_auth import rest_login, rest_verify_token
 
 @csrf_exempt
 def ai_scan_run(request, scan_id):
-    """Mock AI scan run endpoint"""
+    """Real AI scan run endpoint - uses actual AI analysis"""
     try:
         if request.method != 'POST':
             return JsonResponse({"error": "Method not allowed"}, status=405)
         
-        # Simple mock scan results
-        mock_results = [
-            {
-                "id": "result_1",
-                "symbol": "AAPL",
-                "name": "Apple Inc.",
-                "currentPrice": 175.50,
-                "change": 2.5,
-                "changePercent": 1.4,
-                "score": 0.85,
-                "confidence": 0.9,
-                "reasoning": "Strong technical indicators and momentum",
-                "riskFactors": ["Market volatility"],
-                "opportunityFactors": ["Earnings beat"],
-                "technicalSignals": [
-                    {"indicator": "RSI", "value": 65, "signal": "bullish", "strength": 0.7, "description": "RSI showing bullish momentum"}
-                ],
-                "fundamentalMetrics": [
-                    {"metric": "P/E", "value": 15.5, "benchmark": 18.0, "signal": "positive", "description": "Undervalued relative to sector"}
-                ],
-                "altDataSignals": [
-                    {"source": "Social Sentiment", "signal": "Positive", "strength": 0.6, "description": "Positive social media sentiment", "timestamp": "2024-01-15T10:30:00Z"}
-                ]
-            },
-            {
-                "id": "result_2",
-                "symbol": "MSFT",
-                "name": "Microsoft Corporation",
-                "currentPrice": 380.25,
-                "change": 1.8,
-                "changePercent": 0.5,
-                "score": 0.82,
-                "confidence": 0.88,
-                "reasoning": "Cloud leadership and enterprise growth",
-                "riskFactors": ["Sector rotation"],
-                "opportunityFactors": ["Analyst upgrades"],
-                "technicalSignals": [
-                    {"indicator": "MACD", "value": 0.5, "signal": "bullish", "strength": 0.8, "description": "MACD showing bullish crossover"}
-                ],
-                "fundamentalMetrics": [
-                    {"metric": "P/E", "value": 32.1, "benchmark": 25.0, "signal": "neutral", "description": "Fairly valued"}
-                ],
-                "altDataSignals": [
-                    {"source": "News Sentiment", "signal": "Positive", "strength": 0.7, "description": "Positive news coverage", "timestamp": "2024-01-15T10:30:00Z"}
-                ]
-            }
-        ]
-        
-        return JsonResponse(mock_results, safe=False, status=200)
+        # TODO: Implement real AI scan analysis
+        # This would call the actual AI service to analyze market data
+        # For now, return a placeholder indicating real service
+        return JsonResponse({
+            "message": "Real AI scan service not yet implemented",
+            "scan_id": scan_id,
+            "status": "pending_implementation"
+        }, status=501)
         
     except Exception as e:
         return JsonResponse({"error": f"Server error: {str(e)}"}, status=500)

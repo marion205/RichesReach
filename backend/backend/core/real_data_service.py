@@ -1,64 +1,106 @@
 """
-Real Data Service - Mock implementation for testing
+Real Data Service - Production implementation with real API calls
 """
 
 import asyncio
-import random
+import httpx
+import os
 from typing import Dict, Any, Optional
 from datetime import datetime
 
 class RealDataService:
-    """Mock real data service for testing purposes"""
+    """Real data service using actual market data APIs"""
     
     def __init__(self):
-        self.mock_data = {
-            "AAPL": {
-                "name": "Apple Inc.",
-                "price": 175.50,
-                "change": 2.30,
-                "change_percent": 1.33,
-                "volume": 45000000,
-                "market_cap": 2800000000000,
-                "pe_ratio": 28.5
-            },
-            "GOOGL": {
-                "name": "Alphabet Inc.",
-                "price": 142.80,
-                "change": -1.20,
-                "change_percent": -0.83,
-                "volume": 25000000,
-                "market_cap": 1800000000000,
-                "pe_ratio": 25.2
-            },
-            "MSFT": {
-                "name": "Microsoft Corporation",
-                "price": 378.90,
-                "change": 5.40,
-                "change_percent": 1.45,
-                "volume": 30000000,
-                "market_cap": 2800000000000,
-                "pe_ratio": 32.1
-            }
-        }
+        self.polygon_api_key = os.getenv('POLYGON_API_KEY')
+        self.finnhub_api_key = os.getenv('FINNHUB_API_KEY')
+        self.alpha_vantage_api_key = os.getenv('ALPHA_VANTAGE_API_KEY')
     
     async def get_stock_data(self, symbol: str) -> Optional[Dict[str, Any]]:
-        """Get mock stock data for testing"""
-        await asyncio.sleep(0.1)  # Simulate network delay
-        return self.mock_data.get(symbol.upper())
+        """Get real stock data from market data providers"""
+        try:
+            # Try Polygon first
+            if self.polygon_api_key:
+                async with httpx.AsyncClient() as client:
+                    response = await client.get(
+                        f"https://api.polygon.io/v2/aggs/ticker/{symbol}/prev",
+                        params={"apikey": self.polygon_api_key}
+                    )
+                    if response.status_code == 200:
+                        data = response.json()
+                        if data.get('results'):
+                            result = data['results'][0]
+                            return {
+                                "name": symbol,
+                                "price": result.get('c', 0),
+                                "change": result.get('c', 0) - result.get('o', 0),
+                                "change_percent": ((result.get('c', 0) - result.get('o', 0)) / result.get('o', 1)) * 100,
+                                "volume": result.get('v', 0),
+                                "market_cap": 0,  # Would need additional API call
+                                "pe_ratio": 0  # Would need additional API call
+                            }
+        except Exception as e:
+            print(f"Error fetching stock data from Polygon: {e}")
+        
+        # Fallback to Finnhub
+        try:
+            if self.finnhub_api_key:
+                async with httpx.AsyncClient() as client:
+                    response = await client.get(
+                        f"https://finnhub.io/api/v1/quote",
+                        params={"symbol": symbol, "token": self.finnhub_api_key}
+                    )
+                    if response.status_code == 200:
+                        data = response.json()
+                        return {
+                            "name": symbol,
+                            "price": data.get('c', 0),
+                            "change": data.get('d', 0),
+                            "change_percent": data.get('dp', 0),
+                            "volume": 0,  # Not available in quote endpoint
+                            "market_cap": 0,
+                            "pe_ratio": 0
+                        }
+        except Exception as e:
+            print(f"Error fetching stock data from Finnhub: {e}")
+        
+        return None
     
     async def get_options_chain(self, symbol: str) -> Dict[str, Any]:
-        """Get mock options chain data"""
-        await asyncio.sleep(0.1)
-        return {
-            "calls": [
-                {"strike": 175, "bid": 2.50, "ask": 2.60, "volume": 1000},
-                {"strike": 180, "bid": 1.20, "ask": 1.30, "volume": 800}
-            ],
-            "puts": [
-                {"strike": 170, "bid": 1.80, "ask": 1.90, "volume": 1200},
-                {"strike": 165, "bid": 0.90, "ask": 1.00, "volume": 600}
-            ]
-        }
+        """Get real options chain data from market data providers"""
+        try:
+            # Try Polygon for options data
+            if self.polygon_api_key:
+                async with httpx.AsyncClient() as client:
+                    response = await client.get(
+                        f"https://api.polygon.io/v3/reference/options/contracts",
+                        params={"underlying_ticker": symbol, "apikey": self.polygon_api_key}
+                    )
+                    if response.status_code == 200:
+                        data = response.json()
+                        # Process real options data
+                        calls = []
+                        puts = []
+                        for contract in data.get('results', [])[:10]:  # Limit to 10 contracts
+                            if contract.get('contract_type') == 'call':
+                                calls.append({
+                                    "strike": contract.get('strike_price', 0),
+                                    "bid": 0,  # Would need additional API call for quotes
+                                    "ask": 0,
+                                    "volume": 0
+                                })
+                            else:
+                                puts.append({
+                                    "strike": contract.get('strike_price', 0),
+                                    "bid": 0,
+                                    "ask": 0,
+                                    "volume": 0
+                                })
+                        return {"calls": calls, "puts": puts}
+        except Exception as e:
+            print(f"Error fetching options data: {e}")
+        
+        return {"calls": [], "puts": []}
 
 # Global instance
 _real_data_service = None
