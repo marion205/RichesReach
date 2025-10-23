@@ -33,7 +33,7 @@ const SblocWidget: React.FC<Props> = ({
 
         {/* APR pill */}
         <View style={ui.aprPill} accessibilityLabel={`APR ${apr}%`}>
-          <Text style={ui.aprText}>{apr.toFixed(1)}% APR</Text>
+          <Text style={ui.aprText}>{(apr || 0).toFixed(1)}% APR</Text>
         </View>
       </View>
 

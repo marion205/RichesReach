@@ -50,12 +50,12 @@ const TABS = ['1D', '1W', '1M', '3M', '1Y', 'All'] as const;
 type Timeframe = typeof TABS[number];
 
 const fmtCompactUsd = (n: number) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 2 }).format(n);
+  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 2 }).format(n || 0);
 
 const fmtUsd = (n: number) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(n);
+  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(n || 0);
 
-const fmtPct = (p: number) => `${p >= 0 ? '+' : ''}${p.toFixed(2)}%`;
+const fmtPct = (p: number) => `${(p || 0) >= 0 ? '+' : ''}${(p || 0).toFixed(2)}%`;
 
 export default function PortfolioPerformanceCard({
   totalValue,

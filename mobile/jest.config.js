@@ -21,7 +21,7 @@ module.exports = {
     '^@utils/(.*)$': '<rootDir>/src/utils/$1'
   },
   transformIgnorePatterns: [
-    'node_modules/(?!(react-native|@react-native|@expo|expo|@react-navigation|react-native-vector-icons|react-native-svg|react-native-reanimated|react-native-gesture-handler|react-native-svg-charts|d3-shape)/)'
+    'node_modules/(?!(react-native|@react-native|@expo|expo|@react-navigation|react-native-vector-icons|react-native-svg|react-native-reanimated|react-native-gesture-handler|react-native-svg-charts|d3-shape|expo-font|expo-constants|expo-linear-gradient|expo-image-picker)/)'
   ],
   testEnvironment: 'node',
   verbose: true,

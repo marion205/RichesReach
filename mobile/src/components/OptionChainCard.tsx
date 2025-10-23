@@ -54,16 +54,16 @@ type Props = {
 /* ===================== Utils ===================== */
 
 const money = (n?: number) =>
-  Number.isFinite(n) ? `$${Number(n).toFixed(2)}` : '—';
+  Number.isFinite(n) ? `$${(Number(n) || 0).toFixed(2)}` : '—';
 
 const num = (n?: number, dp = 2) =>
-  Number.isFinite(n) ? Number(n).toFixed(dp) : '—';
+  Number.isFinite(n) ? (Number(n) || 0).toFixed(dp) : '—';
 
 const pct = (n?: number, dp = 0) =>
-  Number.isFinite(n) ? `${(Number(n) * 100).toFixed(dp)}%` : '—';
+  Number.isFinite(n) ? `${((Number(n) || 0) * 100).toFixed(dp)}%` : '—';
 
 const volFmt = (n?: number) =>
-  Number.isFinite(n) ? (n! >= 1000 ? `${(n! / 1000).toFixed(1)}k` : String(n)) : '—';
+  Number.isFinite(n) ? (n! >= 1000 ? `${((n || 0) / 1000).toFixed(1)}k` : String(n)) : '—';
 
 const spreadColor = (bid?: number, ask?: number) => {
   if (!Number.isFinite(bid) || !Number.isFinite(ask)) return '#ef4444';
@@ -385,7 +385,7 @@ function OptionRow({
                  {/* Ask */}
                  <View style={st.colNum}>
                    <Text style={st.cellNum}>{money(row.ask)}</Text>
-                   <Text style={[st.subTiny, { color: sprColor }]}>spr {(row.ask - row.bid).toFixed(2)}</Text>
+                   <Text style={[st.subTiny, { color: sprColor }]}>spr {((row.ask || 0) - (row.bid || 0)).toFixed(2)}</Text>
                  </View>
        
                  {/* Vol */}

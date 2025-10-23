@@ -87,15 +87,15 @@ const CryptoSBLOCCard: React.FC<Props> = ({ onLoanSuccess, onTopUpCollateral }) 
     if (!collateralQuantity || priceUsd <= 0) return;
     if (!loanAmount || parseFloat(loanAmount) === 0) {
       const v = parseFloat(collateralQuantity) * priceUsd;
-      setLoanAmount((v * 0.5).toFixed(2));
+      setLoanAmount(((v || 0) * 0.5).toFixed(2));
     }
   }, [collateralQuantity, priceUsd]); // eslint-disable-line
 
   // Validation
   useEffect(() => {
     if (!collateralQuantity || !loanAmount) { setErrorText(null); return; }
-    if (!withinBalance) setErrorText(`You only have ${availableQty.toFixed(6)} ${selectedSymbol} available`);
-    else if (ltv > MAX_LTV) setErrorText(`LTV ${ltv.toFixed(1)}% exceeds ${MAX_LTV}% maximum`);
+    if (!withinBalance) setErrorText(`You only have ${(availableQty || 0).toFixed(6)} ${selectedSymbol} available`);
+    else if (ltv > MAX_LTV) setErrorText(`LTV ${(ltv || 0).toFixed(1)}% exceeds ${MAX_LTV}% maximum`);
     else if (ltv > LIQUIDATION_LTV) setErrorText(`Above liquidation threshold (${LIQUIDATION_LTV}%). Please reduce.`);
     else setErrorText(null);
   }, [ltv, withinBalance, availableQty, selectedSymbol, collateralQuantity, loanAmount]);
@@ -107,14 +107,14 @@ const CryptoSBLOCCard: React.FC<Props> = ({ onLoanSuccess, onTopUpCollateral }) 
   const setQtyFromBalancePct = (pct: number) => {
     if (availableQty <= 0) return;
     const q = (availableQty * pct) / 100;
-    setCollateralQuantity(q.toFixed(8));
+    setCollateralQuantity((q || 0).toFixed(8));
   };
   const setQtyMax = () => setQtyFromBalancePct(100);
 
   // Loan amount helpers from target LTV (based on entered qty)
   const setLoanByTargetLtv = (targetPct: number) => {
     if (qtyNum <= 0 || priceUsd <= 0) return;
-    setLoanAmount(((qtyNum * priceUsd) * (targetPct / 100)).toFixed(2));
+    setLoanAmount((((qtyNum || 0) * (priceUsd || 0)) * ((targetPct || 0) / 100)).toFixed(2));
   };
 
   const handleCreateLoan = async () => {
@@ -208,7 +208,7 @@ const CryptoSBLOCCard: React.FC<Props> = ({ onLoanSuccess, onTopUpCollateral }) 
         <View style={styles.kpiItem}>
           <Text style={styles.kpiLabel}>Buffer to Liquidation</Text>
           <Text style={[styles.kpiValue, { color: bufferToLiquidation > 0 ? '#34C759' : '#FF3B30' }]}>
-            {bufferToLiquidation.toFixed(1)}%
+            {(bufferToLiquidation || 0).toFixed(1)}%
           </Text>
         </View>
       </View>
@@ -220,7 +220,7 @@ const CryptoSBLOCCard: React.FC<Props> = ({ onLoanSuccess, onTopUpCollateral }) 
           <ActivityIndicator size="small" color="#8E8E93" />
         ) : (
           <Text style={styles.availValue}>
-            {availableQty.toFixed(6)} {selectedSymbol}
+            {(availableQty || 0).toFixed(6)} {selectedSymbol}
           </Text>
         )}
       </View>
@@ -266,7 +266,7 @@ const CryptoSBLOCCard: React.FC<Props> = ({ onLoanSuccess, onTopUpCollateral }) 
           <View style={styles.inlineWarn}>
             <Icon name="alert-triangle" size={14} color="#FF3B30" />
             <Text style={styles.inlineWarnText}>
-              You only have {availableQty.toFixed(6)} {selectedSymbol}
+              You only have {(availableQty || 0).toFixed(6)} {selectedSymbol}
             </Text>
           </View>
         ) : null}
@@ -304,7 +304,7 @@ const CryptoSBLOCCard: React.FC<Props> = ({ onLoanSuccess, onTopUpCollateral }) 
         <View style={styles.meterCard}>
           <View style={styles.meterHeader}>
             <Text style={styles.meterLabel}>Current LTV</Text>
-            <Text style={[styles.meterValue, { color: ltvColor }]}>{ltv.toFixed(1)}%</Text>
+            <Text style={[styles.meterValue, { color: ltvColor }]}>{(ltv || 0).toFixed(1)}%</Text>
           </View>
           <View style={styles.meterTrack}>
             <View style={[styles.meterFill, { width: `${meterWidthPct}%`, backgroundColor: ltvColor }]} />
@@ -376,7 +376,7 @@ const CryptoSBLOCCard: React.FC<Props> = ({ onLoanSuccess, onTopUpCollateral }) 
                 <View style={styles.loanDetailItem}>
                   <Text style={styles.loanDetailLabel}>Collateral</Text>
                   <Text style={styles.loanDetailValue}>
-                    {parseFloat(loan.collateralQuantity).toFixed(6)} {loan.cryptocurrency.symbol}
+                    {(parseFloat(loan.collateralQuantity) || 0).toFixed(6)} {loan.cryptocurrency.symbol}
                   </Text>
                 </View>
                 <View style={styles.loanDetailItem}>
@@ -387,7 +387,7 @@ const CryptoSBLOCCard: React.FC<Props> = ({ onLoanSuccess, onTopUpCollateral }) 
                 </View>
                 <View style={styles.loanDetailItem}>
                   <Text style={styles.loanDetailLabel}>Interest Rate</Text>
-                  <Text style={styles.loanDetailValue}>{(parseFloat(loan.interestRate) * 100).toFixed(1)}%</Text>
+                  <Text style={styles.loanDetailValue}>{((parseFloat(loan.interestRate) || 0) * 100).toFixed(1)}%</Text>
                 </View>
               </View>
             </View>

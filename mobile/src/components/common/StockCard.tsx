@@ -102,7 +102,7 @@ function StockCard(props: StockCardProps) {
             <Text style={styles.metricLabel}>Dividend</Text>
             <Text style={styles.metricValue}>
               {Number.isFinite(Number(props.dividendYield)) 
-                ? `${(Number(props.dividendYield) * 100).toFixed(2)}%` 
+                ? `${((Number(props.dividendYield) || 0) * 100).toFixed(2)}%` 
                 : 'N/A'}
             </Text>
             <Icon name="trending-up" size={16} color="#00cc99" style={styles.info} />

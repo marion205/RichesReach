@@ -219,7 +219,7 @@ const SwingTradingSignalAnalysis: React.FC = () => {
           <View style={styles.mlScoreCard}>
             <Text style={styles.mlScoreLabel}>Overall Score</Text>
             <Text style={[styles.mlScoreValue, { color: getConfidenceColor(mlMetrics.overallScore * 100) }]}>
-              {(mlMetrics.overallScore * 100).toFixed(0)}%
+              {((mlMetrics.overallScore || 0) * 100).toFixed(0)}%
             </Text>
             <View style={styles.mlScoreBar}>
               <View 
@@ -238,13 +238,13 @@ const SwingTradingSignalAnalysis: React.FC = () => {
             <View style={styles.mlMetric}>
               <Text style={styles.mlMetricLabel}>Model Confidence</Text>
               <Text style={[styles.mlMetricValue, { color: getConfidenceColor(mlMetrics.modelConfidence * 100) }]}>
-                {(mlMetrics.modelConfidence * 100).toFixed(0)}%
+                {((mlMetrics.modelConfidence || 0) * 100).toFixed(0)}%
               </Text>
             </View>
             <View style={styles.mlMetric}>
               <Text style={styles.mlMetricLabel}>Prediction Accuracy</Text>
               <Text style={[styles.mlMetricValue, { color: getConfidenceColor(mlMetrics.predictionAccuracy * 100) }]}>
-                {(mlMetrics.predictionAccuracy * 100).toFixed(0)}%
+                {((mlMetrics.predictionAccuracy || 0) * 100).toFixed(0)}%
               </Text>
             </View>
           </View>
@@ -264,10 +264,10 @@ const SwingTradingSignalAnalysis: React.FC = () => {
             <View key={index} style={styles.featureItem}>
               <View style={styles.featureInfo}>
                 <Text style={styles.featureName}>{feature.feature.replace(/_/g, ' ')}</Text>
-                <Text style={styles.featureValue}>Value: {feature.value.toFixed(2)}</Text>
+                <Text style={styles.featureValue}>Value: {(feature.value || 0).toFixed(2)}</Text>
               </View>
               <View style={styles.featureImportance}>
-                <Text style={styles.importanceValue}>{(feature.importance * 100).toFixed(0)}%</Text>
+                <Text style={styles.importanceValue}>{((feature.importance || 0) * 100).toFixed(0)}%</Text>
                 <View style={styles.importanceBar}>
                   <View 
                     style={[
@@ -307,7 +307,7 @@ const SwingTradingSignalAnalysis: React.FC = () => {
                 </View>
               </View>
               
-              <Text style={styles.indicatorValue}>{indicator.value.toFixed(2)}</Text>
+              <Text style={styles.indicatorValue}>{(indicator.value || 0).toFixed(2)}</Text>
               
               <View style={styles.strengthContainer}>
                 <Text style={styles.strengthLabel}>Strength</Text>

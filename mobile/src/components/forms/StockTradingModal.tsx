@@ -84,7 +84,7 @@ const StockTradingModal: React.FC<StockTradingModalProps> = ({
   };
 
   const totalValue = quantity && currentPrice 
-    ? (parseInt(quantity) * currentPrice).toFixed(2)
+    ? (parseInt(quantity) * (currentPrice || 0)).toFixed(2)
     : '0.00';
 
   return (
@@ -104,7 +104,7 @@ const StockTradingModal: React.FC<StockTradingModalProps> = ({
         <View style={styles.stockInfo}>
           <Text style={styles.companyName}>{companyName}</Text>
           <Text style={styles.symbol}>{symbol}</Text>
-          <Text style={styles.currentPrice}>${currentPrice.toFixed(2)}</Text>
+          <Text style={styles.currentPrice}>${(currentPrice || 0).toFixed(2)}</Text>
         </View>
 
         {/* Side Selection */}

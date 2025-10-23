@@ -69,11 +69,11 @@ const WhatIfSlider: React.FC<WhatIfSliderProps> = ({
 
   const getTierMessage = (tier: string, ltvPct: number): string => {
     const messages: Record<string, string> = {
-      'SAFE': `Portfolio is healthy at ${ltvPct.toFixed(1)}% LTV`,
-      'WARN': `Monitor closely - LTV at ${ltvPct.toFixed(1)}%`,
-      'TOP_UP': `Consider adding collateral - LTV at ${ltvPct.toFixed(1)}%`,
-      'AT_RISK': `Immediate action needed - LTV at ${ltvPct.toFixed(1)}%`,
-      'LIQUIDATE': `Liquidation risk - LTV at ${ltvPct.toFixed(1)}%`,
+      'SAFE': `Portfolio is healthy at ${(ltvPct || 0).toFixed(1)}% LTV`,
+      'WARN': `Monitor closely - LTV at ${(ltvPct || 0).toFixed(1)}%`,
+      'TOP_UP': `Consider adding collateral - LTV at ${(ltvPct || 0).toFixed(1)}%`,
+      'AT_RISK': `Immediate action needed - LTV at ${(ltvPct || 0).toFixed(1)}%`,
+      'LIQUIDATE': `Liquidation risk - LTV at ${(ltvPct || 0).toFixed(1)}%`,
     };
     return messages[tier] || 'Unknown risk level';
   };
@@ -124,7 +124,7 @@ const WhatIfSlider: React.FC<WhatIfSliderProps> = ({
           <View style={styles.metric}>
             <Text style={styles.metricLabel}>LTV Ratio</Text>
             <Text style={[styles.metricValue, { color: getTierColor(stress.tier) }]}>
-              {stress.ltvPct.toFixed(1)}%
+              {(stress.ltvPct || 0).toFixed(1)}%
             </Text>
           </View>
         </View>

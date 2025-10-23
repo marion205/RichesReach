@@ -125,7 +125,7 @@ const LoanManagementModal: React.FC<Props> = ({
     if (!activeLoan) return;
     const outstanding = Number(activeLoan.loanAmount || 0);
     const amt = (p / 100) * outstanding;
-    setRepayAmount(amt.toFixed(2));
+    setRepayAmount((amt || 0).toFixed(2));
   };
 
   const breakdown = computeBreakdown(activeLoan, parseFloat(repayAmount || '0'));
@@ -173,7 +173,7 @@ const LoanManagementModal: React.FC<Props> = ({
               </View>
               <View style={styles.row}>
                 <Text style={styles.label}>Interest</Text>
-                <Text style={styles.value}>{(Number(loan.interestRate || 0) * 100).toFixed(2)}% APR</Text>
+                <Text style={styles.value}>{((Number(loan.interestRate || 0) || 0) * 100).toFixed(2)}% APR</Text>
               </View>
 
               <View style={styles.actions}>
@@ -237,7 +237,7 @@ const LoanManagementModal: React.FC<Props> = ({
                       </TouchableOpacity>
                     ))}
                   </View>
-                  <Text style={styles.sliderHint}>Repaying ~{sliderPercent.toFixed(0)}% of outstanding</Text>
+                  <Text style={styles.sliderHint}>Repaying ~{(sliderPercent || 0).toFixed(0)}% of outstanding</Text>
                   {/* You can swap this hint for a proper slider if you prefer a native slider component */}
                 </View>
 

@@ -24,7 +24,7 @@ function makeSeries(seed = 1, n = 24) {
     // pseudo-random walk
     const step = ((seed % 7) - 3) * 0.2 + Math.sin((i + seed) * 0.45) * 0.7;
     val = Math.max(1, val + step);
-    out.push(+val.toFixed(2));
+    out.push(+(val || 0).toFixed(2));
     seed = (seed * 9301 + 49297) % 233280;
   }
   return out;

@@ -169,18 +169,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const restLoginFlexible = async (emailOrUsername: string, password: string): Promise<string | null> => {
     // Hardcode the correct URL for now to ensure it works
-    const baseUrl = 'http://192.168.1.236:8000';
+    const baseUrl = 'http://127.0.0.1:8000';
     const identifier = emailOrUsername.trim();
     
     console.log('🔍 AuthContext: Using baseUrl:', baseUrl);
     console.log('🔍 AuthContext: Environment variable:', process.env.EXPO_PUBLIC_API_BASE_URL);
     
     const attempt = async (payload: any) => {
-      console.log('🔄 AuthContext: Attempting login to:', `${baseUrl}/auth/login`);
+      console.log('🔄 AuthContext: Attempting login to:', `${baseUrl}/api/auth/login/`);
       console.log('🔄 AuthContext: Payload:', payload);
       
       try {
-        const response = await fetch(`${baseUrl}/auth/login`, {
+        const response = await fetch(`${baseUrl}/api/auth/login/`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -196,9 +196,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           throw new Error(json?.error || `Login failed with status ${response.status}`);
         }
         
-        // Handle response format: /auth/login returns {access_token, user}
-        if (!json.access_token) {
-          throw new Error('Missing access_token in response');
+        // Handle response format: /api/auth/login/ returns {token, user}
+        if (!json.token) {
+          throw new Error('Missing token in response');
         }
         
         // Store user data from REST response
@@ -206,7 +206,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setUser(json.user);
         }
         
-        return json.access_token;
+        return json.token;
       } catch (fetchError) {
         console.error('❌ AuthContext: Fetch error:', fetchError);
         throw fetchError;

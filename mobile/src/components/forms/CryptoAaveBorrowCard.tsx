@@ -182,15 +182,15 @@ const CryptoAAVEBorrowCard: React.FC<Props> = ({
   useEffect(() => {
     if (!qtyNum || !collPx || !!borNum) return;
     const headroom = collateralUsd * weightedLTV;
-    if (headroom > 0) setBorrowUsd((headroom * 0.5).toFixed(2));
+    if (headroom > 0) setBorrowUsd(((headroom || 0) * 0.5).toFixed(2));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [qtyNum, collPx, weightedLTV]);
 
   // validation text
   const errorText = useMemo(() => {
     if (!supplyQty && !borrowUsd) return null;
-    if (qtyNum > availQty) return `You only have ${availQty.toFixed(6)} ${collSymbol} available`;
-    if (currentDebtUsd > borrowCapUsd) return `Borrow exceeds LTV cap (${(weightedLTV * 100).toFixed(0)}%)`;
+    if (qtyNum > availQty) return `You only have ${(availQty || 0).toFixed(6)} ${collSymbol} available`;
+    if (currentDebtUsd > borrowCapUsd) return `Borrow exceeds LTV cap (${((weightedLTV || 0) * 100).toFixed(0)}%)`;
     if (healthFactor <= 1.0) return 'Health Factor ≤ 1.00 — liquidation risk';
     return null;
   }, [qtyNum, availQty, collSymbol, currentDebtUsd, borrowCapUsd, weightedLTV, healthFactor]);
@@ -198,13 +198,13 @@ const CryptoAAVEBorrowCard: React.FC<Props> = ({
   const setQtyFromBalancePct = (pct: number) => {
     if (availQty <= 0) return;
     const q = (availQty * pct) / 100;
-    setSupplyQty(q.toFixed(8));
+    setSupplyQty((q || 0).toFixed(8));
   };
 
   const setBorrowFromHeadroomPct = (pct: number) => {
     const cap = collateralUsd * weightedLTV;
     if (cap <= 0) return;
-    setBorrowUsd(((cap * pct) / 100).toFixed(2));
+    setBorrowUsd((((cap || 0) * (pct || 0)) / 100).toFixed(2));
   };
 
   const onInfo = (key: 'hf' | 'ltv' | 'liq' | 'avail') => {
@@ -348,7 +348,7 @@ const CryptoAAVEBorrowCard: React.FC<Props> = ({
             placeholder="0.00000000"
             keyboardType="numeric"
           />
-          <TouchableOpacity onPress={() => setSupplyQty(availQty.toFixed(8))} disabled={availQty <= 0}>
+          <TouchableOpacity onPress={() => setSupplyQty((availQty || 0).toFixed(8))} disabled={availQty <= 0}>
             <Text style={s.maxBtn}>MAX</Text>
           </TouchableOpacity>
           <Text style={s.inputSuffix}>{collSymbol}</Text>
@@ -417,14 +417,14 @@ const CryptoAAVEBorrowCard: React.FC<Props> = ({
               <Text style={s.metricLabel}>Weighted LTV</Text>
               <TouchableOpacity onPress={() => onInfo('ltv')}><Icon name="info" size={14} color="#6B7280" /></TouchableOpacity>
             </View>
-            <Text style={s.metricVal}>{(weightedLTV * 100).toFixed(0)}%</Text>
+            <Text style={s.metricVal}>{((weightedLTV || 0) * 100).toFixed(0)}%</Text>
           </View>
           <View style={s.metricRow}>
             <View style={s.metricL}>
               <Text style={s.metricLabel}>Liquidation Threshold</Text>
               <TouchableOpacity onPress={() => onInfo('liq')}><Icon name="info" size={14} color="#6B7280" /></TouchableOpacity>
             </View>
-            <Text style={s.metricVal}>{(weightedLiq * 100).toFixed(0)}%</Text>
+            <Text style={s.metricVal}>{((weightedLiq || 0) * 100).toFixed(0)}%</Text>
           </View>
           <View style={s.metricRow}>
             <View style={s.metricL}>
@@ -438,7 +438,7 @@ const CryptoAAVEBorrowCard: React.FC<Props> = ({
               <Text style={s.metricLabel}>Health Factor</Text>
               <TouchableOpacity onPress={() => onInfo('hf')}><Icon name="info" size={14} color="#6B7280" /></TouchableOpacity>
             </View>
-            <Text style={[s.metricVal, { color: tierColor }]}>{isFinite(healthFactor) ? healthFactor.toFixed(2) : '∞'}</Text>
+            <Text style={[s.metricVal, { color: tierColor }]}>{isFinite(healthFactor) ? (healthFactor || 0).toFixed(2) : '∞'}</Text>
           </View>
 
           {/* HF meter (0 → 2.0) */}

@@ -29,7 +29,7 @@ const toNum = (v:any, def:number = 0) => {
   return Number.isFinite(n) ? n : def;
 };
 const toMoney = (n:any) => `$${Math.round(toNum(n)).toLocaleString()}`;
-const to2 = (n:any) => toNum(n).toFixed(2);
+const to2 = (n:any) => (toNum(n) || 0).toFixed(2);
 
 const SblocCalculatorModal: React.FC<Props> = ({
   visible, onClose,
