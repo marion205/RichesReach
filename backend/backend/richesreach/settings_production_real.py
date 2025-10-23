@@ -120,24 +120,24 @@ POLYGON_API_KEY = os.getenv('POLYGON_API_KEY', '')
 FINNHUB_API_KEY = os.getenv('FINNHUB_API_KEY', '')
 
 # =============================================================================
-# AI & ML SERVICES (100% REAL)
+# AI & ML SERVICES (100% REAL) - OVERRIDE BASE SETTINGS
 # =============================================================================
-# Use real AI services - NO MOCKS
+# Force real AI services - NO MOCKS (override environment variables)
 USE_AI_RECS_MOCK = False  # Use real AI recommendations
 USE_LEARNING_MOCK = False  # Use real ML learning
-USE_OPENAI = True  # Enable OpenAI
+USE_OPENAI = True  # Force enable OpenAI
 
 # Real broker and payment processing - NO MOCKS
 USE_BROKER_MOCK = False  # Use real broker data
 USE_PAYMENTS_MOCK = False  # Use real payment processing
 
 # =============================================================================
-# EXTERNAL SERVICES (100% REAL)
+# EXTERNAL SERVICES (100% REAL) - OVERRIDE BASE SETTINGS
 # =============================================================================
-# Enable real external services
-USE_YODLEE = True  # Enable real Yodlee integration
-USE_SBLOC_AGGREGATOR = True  # Enable real SBLOC
-USE_SBLOC_MOCK = False  # DISABLED - Use real SBLOC
+# Force real external services (override environment variables)
+USE_YODLEE = True  # Force enable real Yodlee integration
+USE_SBLOC_AGGREGATOR = True  # Force enable real SBLOC
+USE_SBLOC_MOCK = False  # Force disable SBLOC mock
 
 # =============================================================================
 # NOTIFICATIONS & OTHER SERVICES (100% REAL)
@@ -249,6 +249,15 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 # =============================================================================
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# =============================================================================
+# FINAL SERVICE OVERRIDES - MUST BE LAST
+# =============================================================================
+# Override any remaining service flags to ensure 100% real data
+USE_OPENAI = True
+USE_YODLEE = True
+USE_SBLOC_MOCK = False
+USE_SBLOC_AGGREGATOR = True
 
 print("🚀 PRODUCTION REAL DATA MODE - All services REAL")
 print("============================================================")
