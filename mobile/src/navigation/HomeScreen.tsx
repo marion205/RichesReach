@@ -613,6 +613,54 @@ import { API_BASE } from '../config/api';
             />
           )}
 
+          {/* Smart Wealth Suite Section */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionTitleContainer}>
+                <Icon name="send" size={20} color="#8B5CF6" style={styles.sectionTitleIcon} />
+                <Text style={styles.sectionTitle}>Smart Wealth Suite</Text>
+              </View>
+            </View>
+            
+            <View style={styles.learningCards}>
+              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('oracle-insights')}>
+                <View style={styles.learningCardIcon}>
+                  <Icon name="eye" size={24} color="#8B5CF6" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={styles.learningCardTitle}>Oracle Insights</Text>
+                  <Text style={styles.learningCardDescription}>AI-powered market predictions</Text>
+                  <Text style={styles.learningCardMeta}>Predictive • AI</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('voice-ai')}>
+                <View style={styles.learningCardIcon}>
+                  <Icon name="mic" size={24} color="#10B981" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={styles.learningCardTitle}>Voice AI Assistant</Text>
+                  <Text style={styles.learningCardDescription}>Hands-free trading & insights</Text>
+                  <Text style={styles.learningCardMeta}>Voice • AI</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('blockchain-integration')}>
+                <View style={styles.learningCardIcon}>
+                  <Icon name="link" size={24} color="#8B5CF6" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={styles.learningCardTitle}>Blockchain Integration</Text>
+                  <Text style={styles.learningCardDescription}>Tokenize your portfolio & access DeFi</Text>
+                  <Text style={styles.learningCardMeta}>DeFi • Tokenization • Advanced</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
           {/* Learning & AI Tools Section */}
           <View style={styles.learningSection}>
             <View style={styles.learningHeader}>
@@ -877,8 +925,8 @@ import { API_BASE } from '../config/api';
                 <Icon name="chevron-right" size={16} color="#8E8E93" />
               </TouchableOpacity>
 
-
             </View>
+
           </View>
 
         </ScrollView>
@@ -951,6 +999,17 @@ import { API_BASE } from '../config/api';
     learningCardTitle: { fontSize: 16, fontWeight: '600', color: '#1C1C1E', marginBottom: 4 },
     learningCardDescription: { fontSize: 13, color: '#8E8E93', marginBottom: 4 },
     learningCardMeta: { fontSize: 12, color: '#8E8E93' },
+
+    /* Smart Wealth Suite Section */
+    section: { marginTop: 24, marginBottom: 16 },
+    sectionHeader: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      marginBottom: 16, paddingHorizontal: 16,
+    },
+    sectionTitleContainer: { flexDirection: 'row', alignItems: 'center' },
+    sectionTitleIcon: { marginRight: 8 },
+    sectionTitle: { fontSize: 18, fontWeight: '700', color: '#1C1C1E' },
+    sectionSubtitle: { fontSize: 14, color: '#8E8E93', marginTop: 4 },
     
     /* Badge */
     badgeContainer: {

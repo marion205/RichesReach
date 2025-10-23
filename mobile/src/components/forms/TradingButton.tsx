@@ -190,7 +190,7 @@ const TradingButton: React.FC<TradingButtonProps> = ({
             {currentPrice && (
               <View style={styles.priceInfo}>
                 <Text style={styles.priceLabel}>Current Price:</Text>
-                <Text style={styles.priceValue}>${currentPrice.toFixed(2)}</Text>
+                <Text style={styles.priceValue}>${(currentPrice || 0).toFixed(2)}</Text>
               </View>
             )}
 
@@ -286,16 +286,16 @@ const TradingButton: React.FC<TradingButtonProps> = ({
                 {orderType === 'limit' && limitPrice && (
                   <View style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>Price:</Text>
-                    <Text style={styles.summaryValue}>${parseFloat(limitPrice).toFixed(2)}</Text>
+                    <Text style={styles.summaryValue}>${(parseFloat(limitPrice) || 0).toFixed(2)}</Text>
                   </View>
                 )}
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>Total Value:</Text>
                   <Text style={styles.summaryValue}>
                     ${orderType === 'limit' && limitPrice 
-                      ? (parseFloat(limitPrice) * parseInt(quantity)).toFixed(2)
+                      ? ((parseFloat(limitPrice) || 0) * parseInt(quantity)).toFixed(2)
                       : currentPrice 
-                        ? (currentPrice * parseInt(quantity)).toFixed(2)
+                        ? ((currentPrice || 0) * parseInt(quantity)).toFixed(2)
                         : '0.00'
                     }
                   </Text>

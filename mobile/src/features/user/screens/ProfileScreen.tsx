@@ -464,6 +464,30 @@ showsVerticalScrollIndicator={false}
 <Text style={styles.rowText}>Trading</Text>
 <Icon name="chevron-right" size={18} color="#CBD5E1" />
 </TouchableOpacity>
+
+<TouchableOpacity style={styles.rowItem} onPress={() => navigateTo?.('theme-settings')}>
+<View style={[styles.rowIcon, { backgroundColor: '#F5F3FF', borderColor: '#DDD6FE' }]}>
+<Icon name="color-palette" size={16} color={UI.violet} />
+</View>
+<Text style={styles.rowText}>Theme Settings</Text>
+<Icon name="chevron-right" size={18} color="#CBD5E1" />
+</TouchableOpacity>
+
+<TouchableOpacity style={styles.rowItem} onPress={() => navigateTo?.('security-fortress')}>
+<View style={[styles.rowIcon, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}>
+<Icon name="shield" size={16} color={UI.danger} />
+</View>
+<Text style={styles.rowText}>Security Fortress</Text>
+<Icon name="chevron-right" size={18} color="#CBD5E1" />
+</TouchableOpacity>
+
+<TouchableOpacity style={styles.rowItem} onPress={() => navigateTo?.('viral-growth')}>
+<View style={[styles.rowIcon, { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' }]}>
+<Icon name="trending-up" size={16} color="#F59E0B" />
+</View>
+<Text style={styles.rowText}>Viral Growth System</Text>
+<Icon name="chevron-right" size={18} color="#CBD5E1" />
+</TouchableOpacity>
 </View>
 {/* ---- Overview card ---- */}
 <View style={styles.sectionCard}>

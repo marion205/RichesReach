@@ -20,10 +20,18 @@ LogBox.ignoreLogs([
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import ApolloProvider from './ApolloProvider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import JWTAuthService from './features/auth/services/JWTAuthService';
 import Toast from 'react-native-toast-message';
+// Version 2 Features
+import { ThemeProvider } from './theme/PersonalizedThemes';
+import GestureNavigation from './components/GestureNavigation';
+import ZeroFrictionOnboarding from './features/onboarding/ZeroFrictionOnboarding';
+import WellnessScoreDashboard from './components/WellnessScoreDashboard';
+import ARPortfolioPreview from './components/ARPortfolioPreview';
+import OfflineInsightsService from './services/OfflineInsightsService';
 // Use only Expo Go compatible services to avoid "Exception in HostFunction" errors
 import expoGoCompatibleNotificationService from './features/notifications/services/ExpoGoCompatibleNotificationService';
 import expoGoCompatiblePriceAlertService from './features/stocks/services/ExpoGoCompatiblePriceAlertService';
@@ -59,6 +67,7 @@ import RiskManagementScreen from './features/risk/screens/RiskManagementScreen';
 // Swing Trading Screens
 import { SignalsScreen, RiskCoachScreen } from './features/swingTrading';
 import LeaderboardScreen from './features/swingTrading/screens/LeaderboardScreen';
+import BacktestingScreen from './features/swingTrading/screens/BacktestingScreen';
 import AIOptionsScreen from './features/options/screens/AIOptionsScreen';
 import OptionsCopilotScreen from './features/options/screens/OptionsCopilotScreen';
 import AIScansScreen from './features/aiScans/screens/AIScansScreen';
@@ -84,6 +93,16 @@ import MarketCommentaryScreen from './features/news/screens/MarketCommentaryScre
 // import DailyVoiceDigestScreen from './features/learning/screens/DailyVoiceDigestScreen';
 import NotificationCenterScreen from './features/notifications/screens/NotificationCenterScreen';
 import WealthCirclesScreen from './features/community/screens/WealthCirclesScreen';
+import WealthCircles2 from './components/WealthCircles2';
+import SocialTrading from './components/SocialTrading';
+import ViralGrowthSystem from './components/ViralGrowthSystem';
+import SecurityFortress from './components/SecurityFortress';
+import ScalabilityEngine from './components/ScalabilityEngine';
+import MarketingRocket from './components/MarketingRocket';
+import OracleInsights from './components/OracleInsights';
+import VoiceAIAssistant from './components/VoiceAIAssistant';
+import BlockchainIntegration from './components/BlockchainIntegration';
+import ThemeSettingsScreen from './components/ThemeSettingsScreen';
 import PeerProgressScreen from './features/community/screens/PeerProgressScreen';
 import TradeChallengesScreen from './features/community/screens/TradeChallengesScreen';
 import PersonalizationDashboardScreen from './features/personalization/screens/PersonalizationDashboardScreen';
@@ -100,6 +119,26 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 function AppContent() {
 const { user, isAuthenticated, loading, logout: authLogout } = useAuth();
 const [currentScreen, setCurrentScreen] = useState('login');
+// Version 2 State
+const [showARPreview, setShowARPreview] = useState(false);
+const [showWellnessDashboard, setShowWellnessDashboard] = useState(false);
+const [portfolioData, setPortfolioData] = useState({
+  totalValue: 125000,
+  totalReturn: 25000,
+  totalReturnPercent: 25,
+  holdings: [
+    { symbol: 'AAPL', shares: 50, value: 8750, change: 1250, changePercent: 16.7 },
+    { symbol: 'MSFT', shares: 30, value: 12000, change: 1800, changePercent: 17.6 },
+    { symbol: 'TSLA', shares: 20, value: 4500, change: -500, changePercent: -10.0 },
+  ],
+  performance: {
+    dayChange: 1250,
+    weekChange: 3200,
+    monthChange: 8500,
+    yearChange: 25000,
+  }
+});
+const [offlineStatus, setOfflineStatus] = useState(null);
 
 // Track currentScreen changes for analytics (production)
 useEffect(() => {
@@ -135,6 +174,11 @@ useEffect(() => {
       const userProfileService = UserProfileService.getInstance();
       const onboardingCompleted = await userProfileService.isOnboardingCompleted();
       setHasCompletedOnboarding(onboardingCompleted);
+      
+      // Initialize Version 2 services
+      const offlineService = OfflineInsightsService;
+      const status = offlineService.getOfflineStatus();
+      setOfflineStatus(status);
 // Initialize push notifications with error handling
 if (pushNotificationService) {
 try {
@@ -173,6 +217,18 @@ initializeServices();
 }, []);
 const navigateTo = (screen: string, params?: any) => {
   console.log('🔍 navigateTo called:', { screen, params });
+  
+  // Handle Version 2 special screens
+  if (screen === 'ar-preview') {
+    setShowARPreview(true);
+    return;
+  }
+  
+  if (screen === 'wellness-dashboard') {
+    setShowWellnessDashboard(true);
+    return;
+  }
+  
   if (screen === 'StockDetail') {
     console.log('🔍 Navigating to StockDetail with params:', params);
     // Store params for StockDetail screen
@@ -279,7 +335,17 @@ onNavigateToLogin={() => setCurrentScreen('login')}
 onNavigateToResetPassword={(email) => setCurrentScreen('login')} 
 />;
 case 'signup':
-return <SignUpScreen navigateTo={navigateTo} onSignUp={handleSignUp} onNavigateToLogin={() => setCurrentScreen('login')} />;
+return (
+<ZeroFrictionOnboarding
+onComplete={(profile) => {
+setHasCompletedOnboarding(true);
+handleSignUp(profile);
+}}
+onSkip={() => {
+setCurrentScreen('login');
+}}
+/>
+);
 default:
 return <LoginScreen 
 onLogin={handleLogin} 
@@ -290,7 +356,18 @@ onNavigateToForgotPassword={() => setCurrentScreen('forgot-password')}
 }
 // Show onboarding if user is logged in but hasn't completed onboarding
 if (isLoggedIn && !hasCompletedOnboarding) {
-return <OnboardingScreen onComplete={handleOnboardingComplete} />;
+return (
+<ZeroFrictionOnboarding
+onComplete={(profile) => {
+setHasCompletedOnboarding(true);
+handleSignUp(profile);
+}}
+onSkip={() => {
+setHasCompletedOnboarding(true);
+setCurrentScreen('home');
+}}
+/>
+);
 }
 console.log('🔍 Main switch statement, currentScreen:', currentScreen);
 switch (currentScreen) {
@@ -327,7 +404,7 @@ return <StockScreen navigateTo={navigateTo} />;
 case 'ai-recommendations':
 return <AIPortfolioScreen navigateTo={navigateTo} />;
 case 'social':
-return <SocialScreen onNavigate={navigateTo} />;
+return <SocialTrading onNavigate={navigateTo} />;
 case 'learning-paths':
 return <LearningPathsScreen />;
 case 'discover-users':
@@ -381,7 +458,7 @@ return <DayTradingScreen navigateTo={navigateTo} />;
         case 'swing-risk-coach':
           return <RiskCoachScreen navigateTo={navigateTo} />;
         case 'swing-backtesting':
-          return <SignalsScreen navigateTo={navigateTo} />;
+          return <BacktestingScreen navigateTo={navigateTo} />;
         case 'swing-leaderboard':
           return <LeaderboardScreen navigateTo={navigateTo} />;
         case 'bank-accounts':
@@ -422,8 +499,12 @@ return <MarketCommentaryScreen />;
           return <TutorAskExplainScreen navigateTo={navigateTo} />;
 case 'notification-center':
 return <NotificationCenterScreen />;
-case 'wealth-circles':
-return <WealthCirclesScreen />;
+        case 'wealth-circles':
+          return <WealthCircles2 
+            onCirclePress={(circleId) => console.log('Circle pressed:', circleId)}
+            onCreateCircle={() => console.log('Create circle')}
+            onJoinCircle={(circleId) => console.log('Join circle:', circleId)}
+          />;
         case 'peer-progress':
           return <PeerProgressScreen />;
         case 'trade-challenges':
@@ -440,6 +521,42 @@ case 'ai-trading-coach':
 return <AITradingCoachScreen />;
 case 'subscription':
 return <SubscriptionScreen />;
+// Version 2 New Routes
+case 'viral-growth':
+return <ViralGrowthSystem onNavigate={navigateTo} />;
+case 'security-fortress':
+return <SecurityFortress onNavigate={navigateTo} />;
+case 'scalability-engine':
+return <ScalabilityEngine onNavigate={navigateTo} />;
+case 'marketing-rocket':
+return <MarketingRocket onNavigate={navigateTo} />;
+case 'oracle-insights':
+return <OracleInsights onNavigate={navigateTo} />;
+            case 'voice-ai':
+            return <VoiceAIAssistant 
+              onClose={() => navigateTo('home')} 
+              onInsightGenerated={(insight) => {
+                console.log('Insight generated:', insight);
+                // You can add logic here to handle insights
+              }} 
+            />;
+            case 'blockchain-integration':
+            return <BlockchainIntegration 
+              onPortfolioTokenize={(portfolio) => {
+                console.log('Portfolio tokenized:', portfolio);
+                // You can add logic here to handle tokenization
+              }}
+              onDeFiPositionCreate={(position) => {
+                console.log('DeFi position created:', position);
+                // You can add logic here to handle DeFi positions
+              }}
+              onGovernanceVote={(proposalId, vote) => {
+                console.log('Governance vote:', proposalId, vote);
+                // You can add logic here to handle governance votes
+              }}
+            />;
+            case 'theme-settings':
+            return <ThemeSettingsScreen onClose={() => navigateTo('home')} />;
     default:
       // Handle user-profile and user-portfolios with userId pattern
       if (currentScreen.startsWith('user-profile-')) {
@@ -462,26 +579,59 @@ return <SubscriptionScreen />;
 }
 };
 return (
+<ThemeProvider>
 <GestureHandlerRootView style={styles.container}>
-{isLoggedIn && currentScreen !== 'login' && currentScreen !== 'signup' && currentScreen !== 'onboarding' && (
-<TopHeader currentScreen={currentScreen} onNavigate={navigateTo} />
+<GestureNavigation 
+  onNavigate={navigateTo} 
+  currentScreen={currentScreen}
+>
+  {isLoggedIn && currentScreen !== 'login' && currentScreen !== 'signup' && currentScreen !== 'onboarding' && (
+    <TopHeader currentScreen={currentScreen} onNavigate={navigateTo} />
+  )}
+  {renderScreen()}
+  {isLoggedIn && currentScreen !== 'login' && currentScreen !== 'signup' && (
+    <BottomTabBar currentScreen={currentScreen} onNavigate={navigateTo} />
+  )}
+</GestureNavigation>
+
+{/* Version 2 Features */}
+{showARPreview && portfolioData && (
+  <ARPortfolioPreview
+    portfolio={portfolioData}
+    onClose={() => setShowARPreview(false)}
+    onTrade={(action) => {
+      console.log('AR Trade Action:', action);
+      setShowARPreview(false);
+    }}
+  />
 )}
-{renderScreen()}
-{isLoggedIn && currentScreen !== 'login' && currentScreen !== 'signup' && (
-<BottomTabBar currentScreen={currentScreen} onNavigate={navigateTo} />
+
+{showWellnessDashboard && portfolioData && (
+  <WellnessScoreDashboard
+    portfolio={portfolioData}
+    onActionPress={(action) => {
+      console.log('Wellness Action:', action);
+      setShowWellnessDashboard(false);
+    }}
+    onClose={() => setShowWellnessDashboard(false)}
+  />
 )}
+
 <Toast />
 </GestureHandlerRootView>
+</ThemeProvider>
 );
 }
 
 export default function App() {
 return (
+<SafeAreaProvider>
 <ApolloProvider>
 <AuthProvider>
 <AppContent />
 </AuthProvider>
 </ApolloProvider>
+</SafeAreaProvider>
 );
 }
 const styles = StyleSheet.create({

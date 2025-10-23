@@ -19,7 +19,7 @@ const SblocFundingCard: React.FC<Props> = ({ onPress, maxBorrow, aprPct, portfol
         <View style={styles.iconWrap}><Icon name="shield" size={18} color="#10B981" /></View>
         <Text style={[styles.title, { marginLeft: 8 }]}>Borrow against portfolio</Text>
       </View>
-      <Text style={styles.sub}>Up to {fmt(maxBorrow)} available • {(aprPct).toFixed(1)}% APR</Text>
+      <Text style={styles.sub}>Up to {fmt(maxBorrow)} available • {(aprPct || 0).toFixed(1)}% APR</Text>
       <TouchableOpacity style={styles.cta} onPress={onPress}>
         <Text style={styles.ctaText}>Estimate & Draw</Text>
         <Icon name="chevron-right" size={18} color="#fff" style={{ marginLeft: 6 }} />

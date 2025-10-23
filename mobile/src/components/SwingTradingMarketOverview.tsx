@@ -101,8 +101,8 @@ const SwingTradingMarketOverview: React.FC = () => {
   };
 
   const formatVolume = (volume: number) => {
-    if (volume >= 1000000) return `${(volume / 1000000).toFixed(1)}M`;
-    if (volume >= 1000) return `${(volume / 1000).toFixed(1)}K`;
+    if (volume >= 1000000) return `${((volume || 0) / 1000000).toFixed(1)}M`;
+    if (volume >= 1000) return `${((volume || 0) / 1000).toFixed(1)}K`;
     return volume.toString();
   };
 
@@ -140,10 +140,10 @@ const SwingTradingMarketOverview: React.FC = () => {
                 <Text style={styles.marketSymbol}>{market.symbol}</Text>
                 <Text style={styles.marketName}>{market.name}</Text>
               </View>
-              <Text style={styles.marketPrice}>${market.price.toFixed(2)}</Text>
+              <Text style={styles.marketPrice}>${(market.price || 0).toFixed(2)}</Text>
               <View style={styles.marketChange}>
                 <Text style={[styles.changeText, { color: getChangeColor(market.change) }]}>
-                  {market.change > 0 ? '+' : ''}{market.change.toFixed(2)} ({market.changePercent > 0 ? '+' : ''}{market.changePercent.toFixed(2)}%)
+                  {(market.change || 0) > 0 ? '+' : ''}{(market.change || 0).toFixed(2)} ({(market.changePercent || 0) > 0 ? '+' : ''}{(market.changePercent || 0).toFixed(2)}%)
                 </Text>
               </View>
               <View style={styles.marketFooter}>
@@ -171,9 +171,9 @@ const SwingTradingMarketOverview: React.FC = () => {
                 <Text style={styles.sectorSymbol}>{sector.symbol}</Text>
               </View>
               <View style={styles.sectorMetrics}>
-                <Text style={styles.sectorWeight}>{sector.weight.toFixed(1)}%</Text>
+                <Text style={styles.sectorWeight}>{(sector.weight || 0).toFixed(1)}%</Text>
                 <Text style={[styles.sectorChange, { color: getChangeColor(sector.change) }]}>
-                  {sector.change > 0 ? '+' : ''}{sector.changePercent.toFixed(2)}%
+                  {(sector.change || 0) > 0 ? '+' : ''}{(sector.changePercent || 0).toFixed(2)}%
                 </Text>
               </View>
             </TouchableOpacity>
@@ -195,9 +195,9 @@ const SwingTradingMarketOverview: React.FC = () => {
               <Text style={styles.sentimentTitle}>VIX</Text>
               <Text style={styles.sentimentSubtitle}>Volatility Index</Text>
             </View>
-            <Text style={styles.sentimentValue}>{volatilityData.vix.toFixed(2)}</Text>
+            <Text style={styles.sentimentValue}>{(volatilityData.vix || 0).toFixed(2)}</Text>
             <Text style={[styles.sentimentChange, { color: getChangeColor(volatilityData.vixChange) }]}>
-              {volatilityData.vixChange > 0 ? '+' : ''}{volatilityData.vixChange.toFixed(2)}
+              {(volatilityData.vixChange || 0) > 0 ? '+' : ''}{(volatilityData.vixChange || 0).toFixed(2)}
             </Text>
           </View>
 
@@ -219,7 +219,7 @@ const SwingTradingMarketOverview: React.FC = () => {
               <Text style={styles.sentimentTitle}>Put/Call Ratio</Text>
               <Text style={styles.sentimentSubtitle}>Options Sentiment</Text>
             </View>
-            <Text style={styles.sentimentValue}>{volatilityData.putCallRatio.toFixed(2)}</Text>
+            <Text style={styles.sentimentValue}>{(volatilityData.putCallRatio || 0).toFixed(2)}</Text>
             <Text style={styles.sentimentLabel}>
               {volatilityData.putCallRatio > 1 ? 'Bearish' : volatilityData.putCallRatio < 0.7 ? 'Bullish' : 'Neutral'}
             </Text>

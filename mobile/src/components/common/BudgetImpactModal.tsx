@@ -44,7 +44,7 @@ const formatCurrency = (n?: number, currency = CURRENCY) => {
     return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(n);
   } catch {
     // minimal fallback
-    return `$${n.toFixed(2)}`;
+    return `$${(n || 0).toFixed(2)}`;
   }
 };
 
@@ -116,7 +116,7 @@ export default function BudgetImpactModal({
   const renderFactor = ({ item }: { item: Factor }) => {
     const color = getFactorColor(item.name);
     const contribSign = item.contrib >= 0 ? '+' : '−';
-    const contribAbs = Math.abs(item.contrib).toFixed(1);
+    const contribAbs = Math.abs(item.contrib || 0).toFixed(1);
 
     return (
       <View style={styles.factorCard}>
@@ -130,7 +130,7 @@ export default function BudgetImpactModal({
             <Text style={styles.factorDetail}>
               {item.detail}{' '}
               <Text style={styles.factorMeta}>
-                (w={item.weight.toFixed(2)} • v={(item.value * 100).toFixed(0)})
+                (w={(item.weight || 0).toFixed(2)} • v={((item.value || 0) * 100).toFixed(0)})
               </Text>
             </Text>
           </View>
@@ -165,7 +165,7 @@ export default function BudgetImpactModal({
                 </Text>
                 <Text style={styles.budgetText}>
                   That would spend {formatCurrency(budgetInfo.spend, currency)} (
-                  {budgetInfo.spendPct.toFixed(0)}% of your budget).
+                  {(budgetInfo.spendPct || 0).toFixed(0)}% of your budget).
                 </Text>
                 <Text style={styles.budgetText}>
                   {item.value < 0.5
@@ -254,7 +254,7 @@ export default function BudgetImpactModal({
                     </Text>
                     <Text style={styles.budgetText}>
                       That would spend {formatCurrency(budgetInfo.spend, currency)} (
-                      {budgetInfo.spendPct.toFixed(0)}% of your budget).
+                      {(budgetInfo.spendPct || 0).toFixed(0)}% of your budget).
                     </Text>
                   </>
                 ) : (

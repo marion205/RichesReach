@@ -8,6 +8,7 @@ RefreshControl,
 Alert,
 TouchableOpacity,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from '@apollo/client';
 import { gql } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
@@ -17,6 +18,7 @@ interface PortfolioScreenProps {
 navigateTo?: (screen: string) => void;
 }
 const PortfolioScreen: React.FC<PortfolioScreenProps> = ({ navigateTo }) => {
+const insets = useSafeAreaInsets();
 const [refreshing, setRefreshing] = useState(false);
 const [realTimePrices, setRealTimePrices] = useState<{ [key: string]: number }>({});
 const [loadingPrices, setLoadingPrices] = useState(false);
@@ -132,13 +134,14 @@ return (
 <Icon name="bar-chart-2" size={24} color="#34C759" />
 <Text style={styles.headerTitle}>Portfolio</Text>
 </View>
-<ScrollView
-style={styles.content}
-refreshControl={
-<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-}
-showsVerticalScrollIndicator={false}
->
+    <ScrollView
+      style={styles.content}
+      contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
+      showsVerticalScrollIndicator={false}
+    >
 {/* Portfolio Overview */}
 <View style={styles.portfolioOverview}>
 <Text style={styles.overviewTitle}>Your Portfolios</Text>
@@ -244,10 +247,68 @@ Advanced options strategies and market sentiment
 </View>
 <Icon name="chevron-right" size={20} color="#8E8E93" />
 </View>
-</TouchableOpacity>
-</View>
+        </TouchableOpacity>
+      </View>
 
-{/* Analytics Section */}
+      {/* Portfolio Health & Visualization Section */}
+      <View style={styles.wellnessSection}>
+        <Text style={styles.wellnessTitle}>Portfolio Health & Visualization</Text>
+        
+        <TouchableOpacity 
+          style={styles.wellnessButton}
+          onPress={() => navigateTo?.('wellness-dashboard')}
+        >
+          <View style={styles.wellnessButtonContent}>
+            <Icon name="heart" size={24} color="#EF4444" />
+            <View style={styles.wellnessText}>
+              <Text style={styles.wellnessButtonTitle}>Wellness Score Dashboard</Text>
+              <Text style={styles.wellnessButtonDescription}>
+                Dynamic portfolio health metrics and insights
+              </Text>
+            </View>
+            <Icon name="chevron-right" size={20} color="#8E8E93" />
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={styles.wellnessButton}
+          onPress={() => navigateTo?.('ar-preview')}
+        >
+          <View style={styles.wellnessButtonContent}>
+            <Icon name="camera" size={24} color="#10B981" />
+            <View style={styles.wellnessText}>
+              <Text style={styles.wellnessButtonTitle}>AR Portfolio Preview</Text>
+              <Text style={styles.wellnessButtonDescription}>
+                Augmented reality portfolio visualization
+              </Text>
+            </View>
+            <Icon name="chevron-right" size={20} color="#8E8E93" />
+          </View>
+        </TouchableOpacity>
+      </View>
+
+      {/* Advanced Portfolio Features Section */}
+      <View style={styles.wellnessSection}>
+        <Text style={styles.wellnessTitle}>Advanced Portfolio Features</Text>
+        
+        <TouchableOpacity 
+          style={styles.wellnessButton}
+          onPress={() => navigateTo?.('blockchain-integration')}
+        >
+          <View style={styles.wellnessButtonContent}>
+            <Icon name="link" size={24} color="#8B5CF6" />
+            <View style={styles.wellnessText}>
+              <Text style={styles.wellnessButtonTitle}>Blockchain Integration</Text>
+              <Text style={styles.wellnessButtonDescription}>
+                DeFi meets traditional finance - tokenize your portfolio
+              </Text>
+            </View>
+            <Icon name="chevron-right" size={20} color="#8E8E93" />
+          </View>
+        </TouchableOpacity>
+      </View>
+
+      {/* Analytics Section */}
 <View style={styles.analyticsSection}>
 <Text style={styles.analyticsTitle}>Portfolio Analytics</Text>
 <View style={styles.analyticsGrid}>
@@ -548,11 +609,50 @@ alignItems: 'center',
 justifyContent: 'center',
 },
 analyticsButtonText: {
-fontSize: 16,
-fontWeight: '600',
-color: '#007AFF',
-marginLeft: 8,
-marginRight: 8,
-},
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#007AFF',
+    marginLeft: 8,
+    marginRight: 8,
+  },
+  wellnessSection: {
+    marginTop: 8,
+    paddingHorizontal: 16,
+  },
+  wellnessTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1C1C1E',
+    marginBottom: 16,
+  },
+  wellnessButton: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  wellnessButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  wellnessText: {
+    flex: 1,
+    marginLeft: 16,
+  },
+  wellnessButtonTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1C1C1E',
+    marginBottom: 4,
+  },
+  wellnessButtonDescription: {
+    fontSize: 14,
+    color: '#8E8E93',
+    lineHeight: 20,
+  },
 });
 export default PortfolioScreen;

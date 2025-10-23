@@ -178,13 +178,13 @@ styles.confidenceText,
 {alert.targetPrice && (
 <View style={styles.priceInfo}>
 <Text style={styles.priceLabel}>Target Price:</Text>
-<Text style={styles.priceValue}>${alert.targetPrice.toFixed(2)}</Text>
+<Text style={styles.priceValue}>${(alert.targetPrice || 0).toFixed(2)}</Text>
 </View>
 )}
 {alert.stopLoss && (
 <View style={styles.priceInfo}>
 <Text style={styles.priceLabel}>Stop Loss:</Text>
-<Text style={styles.priceValue}>${alert.stopLoss.toFixed(2)}</Text>
+<Text style={styles.priceValue}>${(alert.stopLoss || 0).toFixed(2)}</Text>
 </View>
 )}
 <View style={styles.alertActions}>

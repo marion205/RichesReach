@@ -87,9 +87,9 @@ lastUpdated: new Date().toISOString()
 await this.savePortfolio(updatedPortfolio);
 this.lastPortfolioData = updatedPortfolio;
 console.log({
-  totalValue: totalValue.toFixed(2),
-  totalReturn: totalReturn.toFixed(2),
-  totalReturnPercent: totalReturnPercent.toFixed(2),
+  totalValue: (totalValue || 0).toFixed(2),
+  totalReturn: (totalReturn || 0).toFixed(2),
+  totalReturnPercent: (totalReturnPercent || 0).toFixed(2),
 });
 return updatedPortfolio;
 } catch (error) {
@@ -178,9 +178,9 @@ data: updatedPortfolio,
 timestamp: Date.now()
 });
 console.log({
-  totalValue: totalValue.toFixed(2),
-  totalReturn: totalReturn.toFixed(2),
-  totalReturnPercent: totalReturnPercent.toFixed(2),
+  totalValue: (totalValue || 0).toFixed(2),
+  totalReturn: (totalReturn || 0).toFixed(2),
+  totalReturnPercent: (totalReturnPercent || 0).toFixed(2),
 });
 } catch (error) {
 console.error(' Error updating portfolio:', error);

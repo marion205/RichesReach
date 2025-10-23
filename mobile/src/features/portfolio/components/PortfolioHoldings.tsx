@@ -44,14 +44,14 @@ const PortfolioHoldings: React.FC<PortfolioHoldingsProps> = ({
           </View>
           <View style={styles.holdingValue}>
             <Text style={styles.totalValue}>
-              ${holding.totalValue.toFixed(2)}
+              ${(holding.totalValue || 0).toFixed(2)}
             </Text>
             <Text style={[
               styles.change,
-              { color: holding.change >= 0 ? '#4CAF50' : '#F44336' }
+              { color: (holding.change || 0) >= 0 ? '#4CAF50' : '#F44336' }
             ]}>
-              {holding.change >= 0 ? '+' : ''}${holding.change.toFixed(2)} 
-              ({holding.changePercent >= 0 ? '+' : ''}{holding.changePercent.toFixed(2)}%)
+              {(holding.change || 0) >= 0 ? '+' : ''}${(holding.change || 0).toFixed(2)} 
+              ({(holding.changePercent || 0) >= 0 ? '+' : ''}{(holding.changePercent || 0).toFixed(2)}%)
             </Text>
           </View>
         </TouchableOpacity>

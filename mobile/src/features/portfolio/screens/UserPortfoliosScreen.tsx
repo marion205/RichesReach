@@ -151,7 +151,7 @@ const UserPortfoliosScreen: React.FC<UserPortfoliosScreenProps> = ({ userId, onN
                     // Navigate to portfolio detail or show more info
                     Alert.alert(
                       portfolio.name,
-                      `Total Value: $${portfolio.totalValue ? portfolio.totalValue.toLocaleString() : '0.00'}\nReturn: ${portfolio.totalReturnPercent >= 0 ? '+' : ''}${portfolio.totalReturnPercent.toFixed(2)}%`,
+                      `Total Value: $${portfolio.totalValue ? portfolio.totalValue.toLocaleString() : '0.00'}\nReturn: ${portfolio.totalReturnPercent >= 0 ? '+' : ''}${(portfolio.totalReturnPercent || 0).toFixed(2)}%`,
                       [{ text: 'OK' }]
                     );
                   }}
@@ -166,7 +166,7 @@ const UserPortfoliosScreen: React.FC<UserPortfoliosScreenProps> = ({ userId, onN
                         styles.portfolioReturnText,
                         { color: portfolio.totalReturnPercent >= 0 ? '#34C759' : '#FF3B30' }
                       ]}>
-                        {portfolio.totalReturnPercent >= 0 ? '+' : ''}{portfolio.totalReturnPercent.toFixed(1)}%
+                        {portfolio.totalReturnPercent >= 0 ? '+' : ''}{(portfolio.totalReturnPercent || 0).toFixed(1)}%
                       </Text>
                     </View>
                   </View>

@@ -153,9 +153,9 @@ const ProAaveCard: React.FC<ProAaveCardProps> = ({
   const hfPill = (() => {
     const val = projectedHF ?? hf;
     if (val == null) return { label: '--', color: theme.subtext, bg: isDark ? '#20252b' : '#eef2f7' };
-    if (val >= 2.0) return { label: `${val.toFixed(2)}x Safe`, color: '#0f5132', bg: '#d1e7dd' };
-    if (val >= 1.2) return { label: `${val.toFixed(2)}x Caution`, color: '#664d03', bg: '#fff3cd' };
-    return { label: `${val.toFixed(2)}x Risk`, color: '#842029', bg: '#f8d7da' };
+    if (val >= 2.0) return { label: `${(val || 0).toFixed(2)}x Safe`, color: '#0f5132', bg: '#d1e7dd' };
+    if (val >= 1.2) return { label: `${(val || 0).toFixed(2)}x Caution`, color: '#664d03', bg: '#fff3cd' };
+    return { label: `${(val || 0).toFixed(2)}x Risk`, color: '#842029', bg: '#f8d7da' };
   })();
 
   const setAmountGuarded = (setter: (s: string) => void, doFiat?: boolean, sym?: Asset['symbol']) => async (txt: string) => {
@@ -256,7 +256,7 @@ const ProAaveCard: React.FC<ProAaveCardProps> = ({
   const setPct = (pct: number, which: 'supply'|'borrow') => {
     const src = which === 'supply' ? balance : balance; // for demo; adapt if you track availableBorrow
     const base = src ? Number(src) : 100;
-    const val = (base * pct).toFixed( selected.decimals === 6 ? 2 : 4 );
+    const val = ((base || 0) * (pct || 0)).toFixed( selected.decimals === 6 ? 2 : 4 );
     which === 'supply' ? setSupplyAmount(val) : setBorrowAmount(val);
   };
 
@@ -340,7 +340,7 @@ const ProAaveCard: React.FC<ProAaveCardProps> = ({
 
         {!!toFiatLocal && toFiatLocal(supplyAmount) && (
           <Text style={[styles.fiatHint, { color: theme.subtext }]}>
-            ~ ${toFiatLocal(supplyAmount)?.toFixed(2)} USD
+            ~ ${(toFiatLocal(supplyAmount) || 0).toFixed(2)} USD
           </Text>
         )}
 
@@ -393,7 +393,7 @@ const ProAaveCard: React.FC<ProAaveCardProps> = ({
 
         {!!toFiatLocal && toFiatLocal(borrowAmount) && (
           <Text style={[styles.fiatHint, { color: theme.subtext }]}>
-            ~ ${toFiatLocal(borrowAmount)?.toFixed(2)} USD
+            ~ ${(toFiatLocal(borrowAmount) || 0).toFixed(2)} USD
           </Text>
         )}
 

@@ -72,7 +72,7 @@ const CollateralHealthCard: React.FC<Props> = ({ loans = [], priceMap = {}, onAs
         <View style={[styles.ltvPill, { backgroundColor: `${ltvPill(totals.ltv).color}22`, borderColor: ltvPill(totals.ltv).color }]}>
           <Icon name="shield" size={14} color={ltvPill(totals.ltv).color} />
           <Text style={[styles.ltvPillText, { color: ltvPill(totals.ltv).color }]}>
-            {ltvPill(totals.ltv).label} • {totals.ltv.toFixed(1)}% LTV
+            {ltvPill(totals.ltv).label} • {(totals.ltv || 0).toFixed(1)}% LTV
           </Text>
         </View>
       </View>
@@ -112,7 +112,7 @@ const CollateralHealthCard: React.FC<Props> = ({ loans = [], priceMap = {}, onAs
             <View style={styles.assetRight}>
               <Text style={styles.loanValue}>{fmt(data.loanUsd)}</Text>
               <View style={[styles.assetLtvPill, { backgroundColor: `${pill.color}22` }]}>
-                <Text style={[styles.assetLtvText, { color: pill.color }]}>{assetLtv.toFixed(1)}%</Text>
+                <Text style={[styles.assetLtvText, { color: pill.color }]}>{(assetLtv || 0).toFixed(1)}%</Text>
               </View>
               <Icon name="chevron-right" size={18} color="#CBD5E1" />
             </View>

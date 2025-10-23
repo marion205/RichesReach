@@ -113,10 +113,10 @@ const BasicRiskMetrics: React.FC<BasicRiskMetricsProps> = ({
   // concentration flags
   const concentrationFlags: string[] = [];
   if (topHoldingWeight >= RISK_THRESHOLDS.topHoldingWarn) {
-    concentrationFlags.push(`Top holding is ${(topHoldingWeight * 100).toFixed(0)}% of portfolio`);
+    concentrationFlags.push(`Top holding is ${((topHoldingWeight || 0) * 100).toFixed(0)}% of portfolio`);
   }
   if (topSectorWeight >= RISK_THRESHOLDS.topSectorWarn) {
-    concentrationFlags.push(`Top sector is ${(topSectorWeight * 100).toFixed(0)}%`);
+    concentrationFlags.push(`Top sector is ${((topSectorWeight || 0) * 100).toFixed(0)}%`);
   }
 
   return (

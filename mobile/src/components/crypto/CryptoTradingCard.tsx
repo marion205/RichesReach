@@ -84,11 +84,11 @@ const CryptoTradingCard: React.FC<CryptoTradingCardProps> = ({
 
     if (mode === 'QTY') {
       const q = parseFloat(qty || '0');
-      if (q > 0) setUsd((q * p).toFixed(2));
+      if (q > 0) setUsd(((q || 0) * (p || 0)).toFixed(2));
       else setUsd('');
     } else {
       const u = parseFloat(usd || '0');
-      if (u > 0) setQty((u / p).toFixed(8));
+      if (u > 0) setQty(((u || 0) / (p || 1)).toFixed(8));
       else setQty('');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -123,7 +123,7 @@ const CryptoTradingCard: React.FC<CryptoTradingCardProps> = ({
     if (tradeType === 'SELL') {
       const bal = balances?.[selectedSymbol];
       if (typeof bal === 'number' && qtyNum > bal + 1e-10) {
-        return `You only have ${bal.toFixed(8)} ${selectedSymbol} available.`;
+        return `You only have ${(bal || 0).toFixed(8)} ${selectedSymbol} available.`;
       }
     } else if (tradeType === 'BUY' && typeof usdAvailable === 'number') {
       if (totalCost > usdAvailable + 1e-6) {
@@ -186,20 +186,20 @@ const CryptoTradingCard: React.FC<CryptoTradingCardProps> = ({
       const bal = balances?.[selectedSymbol] ?? 0;
       const q = bal * pct;
       setMode('QTY');
-      setQty(q > 0 ? q.toFixed(8) : '');
+      setQty(q > 0 ? (q || 0).toFixed(8) : '');
     } else {
       const avail = typeof usdAvailable === 'number' ? usdAvailable : 0;
       const u = avail * pct;
       setMode('USD');
-      setUsd(u > 0 ? u.toFixed(2) : '');
+      setUsd(u > 0 ? (u || 0).toFixed(2) : '');
     }
   };
   const setMax = () => {
     if (tradeType === 'SELL') {
       const bal = balances?.[selectedSymbol] ?? 0;
-      setMode('QTY'); setQty(bal > 0 ? bal.toFixed(8) : '');
+      setMode('QTY'); setQty(bal > 0 ? (bal || 0).toFixed(8) : '');
     } else if (typeof usdAvailable === 'number') {
-      setMode('USD'); setUsd(usdAvailable > 0 ? usdAvailable.toFixed(2) : '');
+      setMode('USD'); setUsd(usdAvailable > 0 ? (usdAvailable || 0).toFixed(2) : '');
     }
   };
 
@@ -328,7 +328,7 @@ const CryptoTradingCard: React.FC<CryptoTradingCardProps> = ({
                 styles.changeText,
                 { color: (change24h ?? 0) >= 0 ? '#10B981' : '#EF4444' }
               ]}>
-                {(change24h ?? 0) >= 0 ? '+' : ''}{(change24h ?? 0).toFixed(2)}%
+                {(change24h ?? 0) >= 0 ? '+' : ''}{((change24h ?? 0) || 0).toFixed(2)}%
               </Text>
             </View>
           )}
@@ -481,7 +481,7 @@ const CryptoTradingCard: React.FC<CryptoTradingCardProps> = ({
             {(orderType === 'LIMIT' || orderType === 'STOP_LIMIT' || orderType === 'TAKE_PROFIT_LIMIT') && (
               <Row label="Limit" value={fmtUSD(Number(limitPrice || '0'))} />
             )}
-            <Row label="Quantity" value={`${qtyNum.toFixed(8)} ${selectedSymbol}`} />
+            <Row label="Quantity" value={`${(qtyNum || 0).toFixed(8)} ${selectedSymbol}`} />
             <Row label="Preview Px" value={fmtUSD(effectivePrice)} />
             <View style={styles.divider} />
             <Row label="Notional" value={fmtUSD(usdNum)} />

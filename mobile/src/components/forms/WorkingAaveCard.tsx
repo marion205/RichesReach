@@ -81,9 +81,9 @@ const WorkingAAVECard: React.FC<WorkingAAVECardProps> = ({
 
   const hfStatus = (() => {
     if (hf == null) return { label: '—', color: theme.subtext, bg: isDark ? '#20252b' : '#eef2f7' };
-    if (hf >= 2.0) return { label: `${hf.toFixed(2)}× Safe`, color: '#0f5132', bg: '#d1e7dd' };
-    if (hf >= 1.2) return { label: `${hf.toFixed(2)}× Caution`, color: '#664d03', bg: '#fff3cd' };
-    return { label: `${hf.toFixed(2)}× Risk`, color: '#842029', bg: '#f8d7da' };
+    if (hf >= 2.0) return { label: `${(hf || 0).toFixed(2)}× Safe`, color: '#0f5132', bg: '#d1e7dd' };
+    if (hf >= 1.2) return { label: `${(hf || 0).toFixed(2)}× Caution`, color: '#664d03', bg: '#fff3cd' };
+    return { label: `${(hf || 0).toFixed(2)}× Risk`, color: '#842029', bg: '#f8d7da' };
   })();
 
   const setAmountGuarded = (setter: (s: string) => void) => (txt: string) => {

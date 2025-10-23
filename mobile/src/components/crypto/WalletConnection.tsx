@@ -75,7 +75,7 @@ const WalletConnection: React.FC<WalletConnectionProps> = ({
 
   const formatBalance = (balance: string) => {
     const num = parseFloat(balance);
-    return num.toFixed(4);
+    return (num || 0).toFixed(4);
   };
 
   if (isConnected && walletInfo) {

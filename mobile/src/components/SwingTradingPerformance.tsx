@@ -183,7 +183,7 @@ const SwingTradingPerformance: React.FC = () => {
   };
 
   const formatPercentage = (value: number) => {
-    return `${value > 0 ? '+' : ''}${value.toFixed(2)}%`;
+    return `${(value || 0) > 0 ? '+' : ''}${(value || 0).toFixed(2)}%`;
   };
 
   return (
@@ -288,7 +288,7 @@ const SwingTradingPerformance: React.FC = () => {
           <View style={styles.metricCard}>
             <Text style={styles.metricLabel}>Win Rate</Text>
             <Text style={[styles.metricValue, { color: '#10B981' }]}>
-              {performanceMetrics.winRate.toFixed(1)}%
+              {(performanceMetrics.winRate || 0).toFixed(1)}%
             </Text>
             <Text style={styles.metricSubtext}>
               {performanceMetrics.winningTrades}/{performanceMetrics.totalTrades} trades
@@ -298,7 +298,7 @@ const SwingTradingPerformance: React.FC = () => {
           <View style={styles.metricCard}>
             <Text style={styles.metricLabel}>Profit Factor</Text>
             <Text style={[styles.metricValue, { color: performanceMetrics.profitFactor > 1 ? '#10B981' : '#EF4444' }]}>
-              {performanceMetrics.profitFactor.toFixed(2)}
+              {(performanceMetrics.profitFactor || 0).toFixed(2)}
             </Text>
             <Text style={styles.metricSubtext}>
               Avg Win: {formatCurrency(performanceMetrics.avgWin)}
@@ -308,7 +308,7 @@ const SwingTradingPerformance: React.FC = () => {
           <View style={styles.metricCard}>
             <Text style={styles.metricLabel}>Sharpe Ratio</Text>
             <Text style={[styles.metricValue, { color: performanceMetrics.sharpeRatio > 1 ? '#10B981' : '#EF4444' }]}>
-              {performanceMetrics.sharpeRatio.toFixed(2)}
+              {(performanceMetrics.sharpeRatio || 0).toFixed(2)}
             </Text>
             <Text style={styles.metricSubtext}>Risk-Adjusted Return</Text>
           </View>
@@ -316,7 +316,7 @@ const SwingTradingPerformance: React.FC = () => {
           <View style={styles.metricCard}>
             <Text style={styles.metricLabel}>Max Drawdown</Text>
             <Text style={[styles.metricValue, { color: '#EF4444' }]}>
-              {performanceMetrics.maxDrawdown.toFixed(1)}%
+              {(performanceMetrics.maxDrawdown || 0).toFixed(1)}%
             </Text>
             <Text style={styles.metricSubtext}>Worst Period</Text>
           </View>
@@ -324,7 +324,7 @@ const SwingTradingPerformance: React.FC = () => {
           <View style={styles.metricCard}>
             <Text style={styles.metricLabel}>Avg Holding</Text>
             <Text style={styles.metricValue}>
-              {performanceMetrics.avgHoldingPeriod.toFixed(1)} days
+              {(performanceMetrics.avgHoldingPeriod || 0).toFixed(1)} days
             </Text>
             <Text style={styles.metricSubtext}>Swing Duration</Text>
           </View>

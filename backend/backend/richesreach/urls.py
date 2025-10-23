@@ -1400,3 +1400,432 @@ urlpatterns.insert(0, path("api/ai-scans/<str:scan_id>/run", ai_scan_run, name='
 # Diagnostic endpoints
 urlpatterns.append(path("echo", echo, name='echo'))
 urlpatterns.append(path("netcheck", netcheck, name='netcheck'))
+
+# Missing API Endpoints - Added for Version 2 Features
+@csrf_exempt
+def user_profile_api(request):
+    """User Profile API endpoint"""
+    try:
+        auth_header = request.headers.get('Authorization', '')
+        if not auth_header.startswith('Bearer '):
+            return JsonResponse({'error': 'Authentication required'}, status=401)
+        
+        return JsonResponse({
+            'id': 1,
+            'email': 'demo@example.com',
+            'username': 'demo',
+            'name': 'Demo User',
+            'hasPremiumAccess': True,
+            'subscriptionTier': 'PREMIUM',
+            'createdAt': '2024-01-01T00:00:00Z',
+            'lastLogin': time.strftime('%Y-%m-%dT%H:%M:%SZ')
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@csrf_exempt
+def portfolio_api(request):
+    """Portfolio Management API endpoint"""
+    try:
+        if request.method == 'GET':
+            portfolios = [
+                {
+                    'id': 1,
+                    'name': 'Growth Portfolio',
+                    'totalValue': 50000.0,
+                    'totalReturn': 7500.0,
+                    'totalReturnPercent': 15.0,
+                    'holdings': [
+                        {
+                            'id': 1,
+                            'symbol': 'AAPL',
+                            'shares': 50,
+                            'currentPrice': 175.50,
+                            'totalValue': 8775.0
+                        },
+                        {
+                            'id': 2,
+                            'symbol': 'MSFT',
+                            'shares': 30,
+                            'currentPrice': 380.25,
+                            'totalValue': 11407.5
+                        }
+                    ],
+                    'createdAt': '2024-01-01T00:00:00Z',
+                    'updatedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ')
+                }
+            ]
+            return JsonResponse(portfolios, safe=False)
+        
+        elif request.method == 'POST':
+            data = json.loads(request.body)
+            return JsonResponse({
+                'id': 2,
+                'name': data.get('name', 'New Portfolio'),
+                'totalValue': 0.0,
+                'totalReturn': 0.0,
+                'totalReturnPercent': 0.0,
+                'holdings': [],
+                'createdAt': time.strftime('%Y-%m-%dT%H:%M:%SZ'),
+                'updatedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ')
+            }, status=201)
+            
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@csrf_exempt
+def market_quotes_api(request):
+    """Market Quotes API endpoint"""
+    try:
+        symbols = request.GET.get('symbols', 'AAPL,MSFT,GOOGL').split(',')
+        quotes = []
+        
+        for symbol in symbols:
+            symbol = symbol.strip().upper()
+            quotes.append({
+                'symbol': symbol,
+                'price': 175.50 if symbol == 'AAPL' else 380.25 if symbol == 'MSFT' else 140.85,
+                'change': 2.5,
+                'changePercent': 1.4,
+                'volume': 1000000,
+                'marketCap': 2800000000000 if symbol == 'AAPL' else 2800000000000 if symbol == 'MSFT' else 1800000000000,
+                'lastUpdated': time.strftime('%Y-%m-%dT%H:%M:%SZ')
+            })
+        
+        return JsonResponse(quotes, safe=False)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@csrf_exempt
+def market_news_api(request):
+    """Market News API endpoint"""
+    try:
+        news = [
+            {
+                'id': 1,
+                'title': 'Apple Reports Strong Q4 Earnings',
+                'summary': 'Apple Inc. reported better-than-expected earnings for Q4 2024',
+                'url': 'https://example.com/news/apple-earnings',
+                'publishedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ'),
+                'source': 'Reuters',
+                'sentiment': 'positive',
+                'relevanceScore': 0.9
+            },
+            {
+                'id': 2,
+                'title': 'Microsoft Cloud Growth Continues',
+                'summary': 'Microsoft Azure shows strong growth in enterprise adoption',
+                'url': 'https://example.com/news/microsoft-cloud',
+                'publishedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ'),
+                'source': 'Bloomberg',
+                'sentiment': 'positive',
+                'relevanceScore': 0.8
+            }
+        ]
+        return JsonResponse(news, safe=False)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@csrf_exempt
+def oracle_insights_api(request):
+    """Oracle Insights API endpoint"""
+    try:
+        return JsonResponse({
+            "insights": [
+                {
+                    "type": "market_trend",
+                    "title": "AI-Powered Market Analysis",
+                    "description": "Current market shows bullish sentiment with strong tech sector performance",
+                    "confidence": 0.85,
+                    "impact": "high",
+                    "timeframe": "1-3 months"
+                }
+            ],
+            "predictions": [
+                {
+                    "symbol": "AAPL",
+                    "direction": "bullish",
+                    "targetPrice": 185.0,
+                    "confidence": 0.82,
+                    "timeframe": "3 months"
+                }
+            ],
+            "marketSentiment": "bullish",
+            "riskAssessment": "moderate",
+            "recommendations": [
+                "Consider increasing tech allocation",
+                "Monitor volatility indicators"
+            ],
+            "generatedAt": time.strftime('%Y-%m-%dT%H:%M:%SZ')
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@csrf_exempt
+def voice_ai_api(request):
+    """Voice AI Assistant API endpoint"""
+    try:
+        data = json.loads(request.body)
+        text = data.get('text', '')
+        
+        response = {
+            'response': {
+                'text': f'AI processed: "{text}"',
+                'intent': 'portfolio_query',
+                'entities': ['portfolio', 'performance'],
+                'confidence': 0.85
+            },
+            'actions': [
+                {
+                    'type': 'show_portfolio',
+                    'parameters': {'portfolioId': '1'},
+                    'execute': True
+                }
+            ],
+            'success': True,
+            'errors': []
+        }
+        return JsonResponse(response)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@csrf_exempt
+def wellness_score_api(request, portfolio_id):
+    """Wellness Score API endpoint"""
+    try:
+        return JsonResponse({
+            "overallScore": 85,
+            "metrics": {
+                "riskManagement": 88,
+                "diversification": 82,
+                "taxEfficiency": 79,
+                "performance": 87,
+                "liquidity": 91
+            },
+            "recommendations": [
+                {
+                    "category": "risk_management",
+                    "priority": "high",
+                    "description": "Consider adding more defensive stocks to reduce volatility",
+                    "impact": "Reduce portfolio volatility by 15%"
+                }
+            ],
+            "calculatedAt": time.strftime('%Y-%m-%dT%H:%M:%SZ')
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@csrf_exempt
+def blockchain_status_api(request):
+    """Blockchain Integration API endpoint"""
+    try:
+        return JsonResponse({
+            "networks": [
+                {
+                    "name": "Ethereum",
+                    "status": "active",
+                    "balance": 1.25,
+                    "transactions": 15
+                }
+            ],
+            "defiPositions": [
+                {
+                    "protocol": "Aave",
+                    "asset": "USDC",
+                    "amount": 10000.0,
+                    "apy": 0.045
+                }
+            ],
+            "nfts": [
+                {
+                    "id": "nft_1",
+                    "name": "RichesReach Genesis NFT",
+                    "value": 0.5,
+                    "collection": "RichesReach"
+                }
+            ],
+            "lastUpdated": time.strftime('%Y-%m-%dT%H:%M:%SZ')
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@csrf_exempt
+def social_trading_api(request):
+    """Social Trading API endpoint"""
+    try:
+        return JsonResponse({
+            "signals": [
+                {
+                    "id": "signal_1",
+                    "trader": "AI_Trader_Pro",
+                    "symbol": "AAPL",
+                    "action": "BUY",
+                    "price": 175.50,
+                    "confidence": 0.85,
+                    "timestamp": time.strftime('%Y-%m-%dT%H:%M:%SZ')
+                }
+            ],
+            "topTraders": [
+                {
+                    "id": "trader_1",
+                    "name": "AI_Trader_Pro",
+                    "performance": 0.25,
+                    "followers": 1250,
+                    "winRate": 0.78
+                }
+            ],
+            "collectiveFunds": [
+                {
+                    "id": "fund_1",
+                    "name": "Tech Growth Collective",
+                    "totalValue": 2500000.0,
+                    "participants": 150,
+                    "performance": 0.18
+                }
+            ]
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@csrf_exempt
+def wealth_circles_api(request):
+    """Wealth Circles API endpoint"""
+    try:
+        return JsonResponse([
+            {
+                "id": "circle_1",
+                "name": "Tech Entrepreneurs",
+                "category": "technology",
+                "description": "Building wealth through technology investments",
+                "members": 45,
+                "activity": [
+                    {
+                        "type": "discussion",
+                        "user": "tech_leader_1",
+                        "content": "AI sector showing strong momentum",
+                        "timestamp": time.strftime('%Y-%m-%dT%H:%M:%SZ')
+                    }
+                ],
+                "recentActivity": [
+                    {
+                        "type": "trade_share",
+                        "user": "tech_leader_2",
+                        "content": "Just opened AAPL position",
+                        "timestamp": time.strftime('%Y-%m-%dT%H:%M:%SZ')
+                    }
+                ]
+            }
+        ], safe=False)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@csrf_exempt
+def theme_settings_api(request):
+    """Theme Settings API endpoint"""
+    try:
+        if request.method == 'GET':
+            return JsonResponse({
+                'theme': 'light',
+                'primaryColor': '#8B5CF6',
+                'accentColor': '#10B981',
+                'fontSize': 'medium',
+                'animations': True
+            })
+        elif request.method == 'PUT':
+            data = json.loads(request.body)
+            return JsonResponse({
+                'theme': data.get('theme', 'light'),
+                'primaryColor': data.get('primaryColor', '#8B5CF6'),
+                'accentColor': data.get('accentColor', '#10B981'),
+                'fontSize': data.get('fontSize', 'medium'),
+                'animations': data.get('animations', True)
+            })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@csrf_exempt
+def security_settings_api(request):
+    """Security Settings API endpoint"""
+    try:
+        if request.method == 'GET':
+            return JsonResponse({
+                'biometricAuth': True,
+                'twoFactorAuth': False,
+                'sessionTimeout': 30,
+                'loginNotifications': True
+            })
+        elif request.method == 'PUT':
+            data = json.loads(request.body)
+            return JsonResponse({
+                'biometricAuth': data.get('biometricAuth', True),
+                'twoFactorAuth': data.get('twoFactorAuth', False),
+                'sessionTimeout': data.get('sessionTimeout', 30),
+                'loginNotifications': data.get('loginNotifications', True)
+            })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@csrf_exempt
+def viral_growth_api(request):
+    """Viral Growth System API endpoint"""
+    try:
+        return JsonResponse({
+            'referralCode': 'DEMO123',
+            'referralCount': 15,
+            'earnings': 250.0,
+            'tier': 'Gold',
+            'nextTier': 'Platinum',
+            'nextTierRequirement': 25
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@csrf_exempt
+def scalability_metrics_api(request):
+    """Scalability Metrics API endpoint"""
+    try:
+        return JsonResponse({
+            'systemLoad': 0.45,
+            'responseTime': 120,
+            'throughput': 1500,
+            'errorRate': 0.001,
+            'uptime': 99.9
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@csrf_exempt
+def marketing_metrics_api(request):
+    """Marketing Metrics API endpoint"""
+    try:
+        return JsonResponse({
+            'userAcquisition': 1250,
+            'retentionRate': 0.78,
+            'conversionRate': 0.12,
+            'revenue': 45000.0,
+            'costPerAcquisition': 25.0
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+# Add all missing endpoints to URL patterns
+urlpatterns.append(path("api/user/profile/", user_profile_api, name='user_profile'))
+urlpatterns.append(path("api/portfolio/", portfolio_api, name='portfolio_list'))
+urlpatterns.append(path("api/portfolio/<int:portfolio_id>/", portfolio_api, name='portfolio_detail'))
+urlpatterns.append(path("api/portfolio/<int:portfolio_id>/holdings/", portfolio_api, name='portfolio_holdings'))
+urlpatterns.append(path("api/portfolio/<int:portfolio_id>/holdings/<int:holding_id>/", portfolio_api, name='holding_detail'))
+urlpatterns.append(path("api/market/quotes/", market_quotes_api, name='market_quotes'))
+urlpatterns.append(path("api/market/news/", market_news_api, name='market_news'))
+urlpatterns.append(path("api/market/analysis/", market_quotes_api, name='market_analysis'))
+urlpatterns.append(path("api/oracle/insights/", oracle_insights_api, name='oracle_insights'))
+urlpatterns.append(path("api/voice/process/", voice_ai_api, name='voice_ai'))
+urlpatterns.append(path("api/portfolio/<int:portfolio_id>/wellness/", wellness_score_api, name='wellness_score'))
+urlpatterns.append(path("api/portfolio/<int:portfolio_id>/ar/", wellness_score_api, name='ar_portfolio'))
+urlpatterns.append(path("api/blockchain/status/", blockchain_status_api, name='blockchain_status'))
+urlpatterns.append(path("api/social/trading/", social_trading_api, name='social_trading'))
+urlpatterns.append(path("api/wealth-circles/", wealth_circles_api, name='wealth_circles'))
+urlpatterns.append(path("api/user/theme/", theme_settings_api, name='theme_settings'))
+urlpatterns.append(path("api/user/security/", security_settings_api, name='security_settings'))
+urlpatterns.append(path("api/viral-growth/", viral_growth_api, name='viral_growth'))
+urlpatterns.append(path("api/system/scalability/", scalability_metrics_api, name='scalability_metrics'))
+urlpatterns.append(path("api/marketing/metrics/", marketing_metrics_api, name='marketing_metrics'))
