@@ -110,7 +110,7 @@ USE_REAL_MARKET_DATA = True
 USE_ALPHA_MOCK = False
 USE_POLYGON_MOCK = False
 USE_FINNHUB_MOCK = False
-USE_MARKET_MOCK = True
+USE_MARKET_MOCK = False  # Use real market data
 
 # Real API keys (from environment)
 ALPHA_VANTAGE_API_KEY = os.getenv('ALPHA_VANTAGE_API_KEY', '')
@@ -118,29 +118,29 @@ POLYGON_API_KEY = os.getenv('POLYGON_API_KEY', '')
 FINNHUB_API_KEY = os.getenv('FINNHUB_API_KEY', '')
 
 # =============================================================================
-# AI & ML SERVICES (REAL WITH FALLBACKS)
+# AI & ML SERVICES (REAL)
 # =============================================================================
-# Use real AI services but with fallbacks for portfolio data
+# Use real AI services - NO MOCKS
 USE_AI_RECS_MOCK = False  # Use real AI recommendations
 USE_LEARNING_MOCK = False  # Use real ML learning
 USE_OPENAI = True  # Enable OpenAI
 
-# Mock fallbacks for portfolio-specific data to ensure functionality
-USE_BROKER_MOCK = True  # Mock broker data for portfolio
-USE_PAYMENTS_MOCK = True  # Mock payment processing
+# Use real services - NO MOCKS
+USE_BROKER_MOCK = False  # Use real broker data
+USE_PAYMENTS_MOCK = False  # Use real payment processing
 
 # =============================================================================
-# EXTERNAL SERVICES
+# EXTERNAL SERVICES (REAL)
 # =============================================================================
-# Disable external services that require production setup
-USE_YODLEE = False  # Disable Yodlee (requires production setup)
-USE_SBLOC_AGGREGATOR = False  # Disable SBLOC (requires production setup)
-USE_SBLOC_MOCK = True  # Use mock SBLOC for testing
+# Enable real external services
+USE_YODLEE = True  # Enable Yodlee
+USE_SBLOC_AGGREGATOR = True  # Enable SBLOC
+USE_SBLOC_MOCK = False  # Use real SBLOC
 
 # =============================================================================
-# NOTIFICATIONS & OTHER SERVICES
+# NOTIFICATIONS & OTHER SERVICES (REAL)
 # =============================================================================
-USE_NOTIF_MOCK = True  # Mock notifications for local development
+USE_NOTIF_MOCK = False  # Use real notifications
 
 # =============================================================================
 # GRAPHIQL (GraphQL Playground)
@@ -186,8 +186,7 @@ USE_ALPACA = os.getenv('USE_ALPACA', 'true').lower() == 'true'
 USE_ALPACA_BROKER = os.getenv('USE_ALPACA_BROKER', 'true').lower() == 'true'
 USE_ALPACA_CRYPTO = os.getenv('USE_ALPACA_CRYPTO', 'true').lower() == 'true'
 
-# Disable broker mock for real trading
-USE_BROKER_MOCK = False
+# All mock services disabled for real trading
 
 print(f"[FLAGS] Alpaca Integration Status:")
 print(f"[FLAGS]   USE_ALPACA: {'🟢 ENABLED' if USE_ALPACA else '🔴 DISABLED'}")

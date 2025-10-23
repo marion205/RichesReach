@@ -111,6 +111,7 @@ INSTALLED_APPS = [
     'core',
     'graphene_django',
     'django_celery_results',
+    'alpaca_integration',  # Alpaca OAuth Connect integration
     # 'marketdata',  # New market data microservice - temporarily disabled due to migration issues
 ]
 
@@ -615,3 +616,10 @@ CHANNEL_LAYERS = {
 
 # ASGI Application
 ASGI_APPLICATION = 'richesreach.asgi.application'
+
+# =============================================================================
+# ALPACA OAUTH CONNECT CONFIGURATION
+# =============================================================================
+ALPACA_CLIENT_ID = os.getenv('ALPACA_CLIENT_ID', '')
+ALPACA_CLIENT_SECRET = os.getenv('ALPACA_CLIENT_SECRET', '')
+ALPACA_REDIRECT_URI = os.getenv('ALPACA_REDIRECT_URI', 'http://localhost:3000/alpaca/callback')

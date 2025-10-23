@@ -672,7 +672,7 @@ class PlaceStockOrder(graphene.Mutation):
                 
                 # Check if we should use mock mode for testing
                 from django.conf import settings
-                use_mock = getattr(settings, 'USE_BROKER_MOCK', True)  # Default to mock for testing
+                use_mock = getattr(settings, 'USE_BROKER_MOCK', False)  # Default to real API for production
                 
                 if use_mock:
                     # Mock order response for testing

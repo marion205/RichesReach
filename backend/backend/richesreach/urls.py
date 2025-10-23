@@ -1788,3 +1788,7 @@ urlpatterns.append(path("api/user/security/", security_settings_api, name='secur
 urlpatterns.append(path("api/viral-growth/", viral_growth_api, name='viral_growth'))
 urlpatterns.append(path("api/system/scalability/", scalability_metrics_api, name='scalability_metrics'))
 urlpatterns.append(path("api/marketing/metrics/", marketing_metrics_api, name='marketing_metrics'))
+
+# Alpaca Integration URLs
+from alpaca_integration.urls import urlpatterns as alpaca_urls
+urlpatterns.extend(alpaca_urls)
