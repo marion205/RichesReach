@@ -2799,3 +2799,8 @@ urlpatterns.append(path('assistant/query', AssistantQueryView.as_view(), name='a
 from core.urls_live_streaming import urlpatterns as live_streaming_urls
 for url_pattern in live_streaming_urls:
     urlpatterns.append(path(f'api/{url_pattern.pattern._route}', url_pattern.callback, name=url_pattern.name))
+
+# Voice AI URLs
+from core.urls_voice_ai import urlpatterns as voice_ai_urls
+for url_pattern in voice_ai_urls:
+    urlpatterns.append(path(f'api/{url_pattern.pattern._route}', url_pattern.callback, name=url_pattern.name))

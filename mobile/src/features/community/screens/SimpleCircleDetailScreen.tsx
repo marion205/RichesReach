@@ -25,6 +25,8 @@ import { Video } from 'expo-av';
 import Animated from 'react-native-reanimated';
 import RichesLiveStreaming from '../../../components/RichesLiveStreaming';
 import AdvancedLiveStreaming from '../../../components/AdvancedLiveStreaming';
+import VoiceAI from '../../../components/VoiceAI';
+import VoiceAIIntegration from '../../../components/VoiceAIIntegration';
 
 const { height: screenHeight } = Dimensions.get('window');
 
@@ -107,6 +109,14 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
   const [liveStreamModalVisible, setLiveStreamModalVisible] = useState(false);
   const [isLiveHost, setIsLiveHost] = useState(false);
   const [useAdvancedStreaming, setUseAdvancedStreaming] = useState(true);
+  const [voiceAIModalVisible, setVoiceAIModalVisible] = useState(false);
+  const [voiceAISettings, setVoiceAISettings] = useState({
+    enabled: true,
+    voice: 'default',
+    speed: 1.0,
+    emotion: 'neutral',
+    autoPlay: false,
+  });
   const videoRef = useRef<Video>(null);
 
   // Reanimated values for responsive interactions
@@ -376,6 +386,21 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
         </TouchableOpacity>
       </View>
 
+      {/* Voice AI Response */}
+      {voiceAISettings.enabled && (
+        <View style={styles.voiceAIContainer}>
+          <Text style={styles.voiceAILabel}>AI Financial Advisor</Text>
+          <VoiceAI
+            text={generateAIResponse(item.content)}
+            voice={voiceAISettings.voice as any}
+            speed={voiceAISettings.speed}
+            emotion={voiceAISettings.emotion as any}
+            autoPlay={voiceAISettings.autoPlay}
+            style={styles.voiceAIComponent}
+          />
+        </View>
+      )}
+
       <View style={styles.divider} />
     </TouchableOpacity>
   );
@@ -401,6 +426,31 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
   const closeLiveStreamModal = () => {
     setLiveStreamModalVisible(false);
     setIsLiveHost(false);
+  };
+
+  // Voice AI Functions
+  const openVoiceAISettings = () => {
+    setVoiceAIModalVisible(true);
+  };
+
+  const closeVoiceAIModal = () => {
+    setVoiceAIModalVisible(false);
+  };
+
+  const handleVoiceSettingsChange = (settings: any) => {
+    setVoiceAISettings(settings);
+  };
+
+  const generateAIResponse = async (postContent: string): Promise<string> => {
+    // Simulate AI response generation
+    const responses = [
+      `Based on your post about "${postContent.slice(0, 30)}...", here's my analysis: The market trends suggest a positive outlook for this sector. Consider diversifying your portfolio to manage risk effectively.`,
+      `Great insights in your post! From a financial perspective, this aligns with current market conditions. I recommend monitoring key indicators and adjusting your strategy accordingly.`,
+      `Your post highlights important market dynamics. As your AI financial advisor, I suggest reviewing your asset allocation and considering long-term growth opportunities.`,
+      `Excellent analysis! This perspective on the market is valuable. I'd recommend focusing on fundamental analysis and maintaining a balanced approach to investing.`,
+    ];
+    
+    return responses[Math.floor(Math.random() * responses.length)];
   };
 
   return (
@@ -456,6 +506,11 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
               <Text style={styles.actionText}>
                 {useAdvancedStreaming ? 'Advanced' : 'Basic'}
               </Text>
+            </LinearGradient>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={openVoiceAISettings} style={styles.actionButton}>
+            <LinearGradient colors={['#4ECDC4', '#44A08D']} style={styles.actionGradient}>
+              <Text style={styles.actionText}>Voice AI</Text>
             </LinearGradient>
           </TouchableOpacity>
         </View>
@@ -576,6 +631,14 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
           circleName={circle.name}
         />
       )}
+
+      {/* Voice AI Integration Modal */}
+      <VoiceAIIntegration
+        visible={voiceAIModalVisible}
+        onClose={closeVoiceAIModal}
+        text="Your portfolio is performing well today. Consider diversifying your investments for better risk management."
+        onVoiceSettingsChange={handleVoiceSettingsChange}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -883,5 +946,26 @@ const styles = StyleSheet.create({
   emptySubtext: {
     fontSize: 14,
     color: '#666',
+  },
+  // Voice AI Styles
+  voiceAIContainer: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#F0FDFC',
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#4ECDC4',
+  },
+  voiceAILabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#4ECDC4',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  voiceAIComponent: {
+    marginVertical: 0,
+    backgroundColor: 'transparent',
   },
 });
