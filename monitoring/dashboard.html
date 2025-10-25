@@ -1,0 +1,956 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RichesReach Live Streaming Monitor</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.7.2/dist/socket.io.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 30px;
+            color: white;
+        }
+
+        .status-item {
+            text-align: center;
+        }
+
+        .status-item h3 {
+            font-size: 2rem;
+            margin-bottom: 5px;
+        }
+
+        .status-item p {
+            opacity: 0.8;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-online { background: #4CAF50; }
+        .status-offline { background: #f44336; }
+        .status-warning { background: #ff9800; }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: rgba(255,255,255,0.95);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .card h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+        }
+
+        .card h2::before {
+            content: '';
+            width: 4px;
+            height: 20px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            margin-right: 10px;
+            border-radius: 2px;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin-bottom: 20px;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+
+        .metric {
+            text-align: center;
+            padding: 15px;
+            background: rgba(102, 126, 234, 0.1);
+            border-radius: 10px;
+            border: 1px solid rgba(102, 126, 234, 0.2);
+        }
+
+        .metric-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+
+        .metric-label {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .stream-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .stream-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            margin-bottom: 10px;
+            background: rgba(102, 126, 234, 0.05);
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+        }
+
+        .stream-info h4 {
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .stream-info p {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .stream-stats {
+            text-align: right;
+        }
+
+        .stream-stats .viewer-count {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stream-stats .status {
+            font-size: 0.8rem;
+            padding: 2px 8px;
+            border-radius: 12px;
+            color: white;
+        }
+
+        .status-live { background: #4CAF50; }
+        .status-ended { background: #666; }
+        .status-scheduled { background: #ff9800; }
+
+        .alerts {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .alert {
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            border-left: 4px solid;
+            background: rgba(255,255,255,0.8);
+        }
+
+        .alert-error {
+            border-left-color: #f44336;
+            background: rgba(244, 67, 54, 0.1);
+        }
+
+        .alert-warning {
+            border-left-color: #ff9800;
+            background: rgba(255, 152, 0, 0.1);
+        }
+
+        .alert-info {
+            border-left-color: #2196F3;
+            background: rgba(33, 150, 243, 0.1);
+        }
+
+        .alert-success {
+            border-left-color: #4CAF50;
+            background: rgba(76, 175, 80, 0.1);
+        }
+
+        .alert-time {
+            font-size: 0.8rem;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .alert-message {
+            color: #333;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5a6fd8;
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .refresh-indicator {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #667eea;
+            border-top: 2px solid transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .connection-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 15px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            z-index: 1000;
+        }
+
+        .connection-connected {
+            background: #4CAF50;
+        }
+
+        .connection-disconnected {
+            background: #f44336;
+        }
+
+        .connection-connecting {
+            background: #ff9800;
+        }
+
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .status-bar {
+                flex-direction: column;
+                gap: 15px;
+            }
+            
+            .controls {
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="connection-status" id="connectionStatus">
+        <span class="status-indicator status-offline"></span>
+        Connecting...
+    </div>
+
+    <div class="container">
+        <div class="header">
+            <h1>🎥 RichesReach Live Streaming Monitor</h1>
+            <p>Real-time monitoring dashboard for live streaming infrastructure</p>
+        </div>
+
+        <div class="status-bar">
+            <div class="status-item">
+                <h3 id="totalStreams">0</h3>
+                <p>Active Streams</p>
+            </div>
+            <div class="status-item">
+                <h3 id="totalViewers">0</h3>
+                <p>Total Viewers</p>
+            </div>
+            <div class="status-item">
+                <h3 id="totalMessages">0</h3>
+                <p>Messages Sent</p>
+            </div>
+            <div class="status-item">
+                <h3 id="totalReactions">0</h3>
+                <p>Reactions Sent</p>
+            </div>
+            <div class="status-item">
+                <h3 id="systemLoad">0%</h3>
+                <p>System Load</p>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button class="btn btn-primary" onclick="refreshData()">
+                🔄 Refresh Data
+                <span class="refresh-indicator" id="refreshIndicator" style="display: none;"></span>
+            </button>
+            <button class="btn btn-secondary" onclick="toggleAutoRefresh()">
+                <span id="autoRefreshText">⏸️ Pause Auto-Refresh</span>
+            </button>
+            <button class="btn btn-success" onclick="exportData()">
+                📊 Export Data
+            </button>
+            <button class="btn btn-danger" onclick="clearAlerts()">
+                🗑️ Clear Alerts
+            </button>
+        </div>
+
+        <div class="grid">
+            <!-- Viewer Count Chart -->
+            <div class="card">
+                <h2>📈 Viewer Count Over Time</h2>
+                <div class="chart-container">
+                    <canvas id="viewerChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Message Activity Chart -->
+            <div class="card">
+                <h2>💬 Message Activity</h2>
+                <div class="chart-container">
+                    <canvas id="messageChart"></canvas>
+                </div>
+            </div>
+
+            <!-- System Performance -->
+            <div class="card">
+                <h2>⚡ System Performance</h2>
+                <div class="metrics-grid">
+                    <div class="metric">
+                        <div class="metric-value" id="cpuUsage">0%</div>
+                        <div class="metric-label">CPU Usage</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value" id="memoryUsage">0%</div>
+                        <div class="metric-label">Memory Usage</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value" id="networkLatency">0ms</div>
+                        <div class="metric-label">Network Latency</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value" id="errorRate">0%</div>
+                        <div class="metric-label">Error Rate</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Active Streams -->
+            <div class="card">
+                <h2>📺 Active Streams</h2>
+                <div class="stream-list" id="streamList">
+                    <p style="text-align: center; color: #666; padding: 20px;">
+                        No active streams
+                    </p>
+                </div>
+            </div>
+
+            <!-- Recent Alerts -->
+            <div class="card">
+                <h2>🚨 Recent Alerts</h2>
+                <div class="alerts" id="alertsList">
+                    <p style="text-align: center; color: #666; padding: 20px;">
+                        No alerts
+                    </p>
+                </div>
+            </div>
+
+            <!-- Stream Quality Metrics -->
+            <div class="card">
+                <h2>🎯 Stream Quality</h2>
+                <div class="chart-container">
+                    <canvas id="qualityChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const config = {
+            apiBaseUrl: 'http://192.168.1.236:8000/api',
+            websocketUrl: 'ws://192.168.1.236:8000',
+            refreshInterval: 5000, // 5 seconds
+            maxDataPoints: 50,
+        };
+
+        // Global state
+        let socket = null;
+        let autoRefresh = true;
+        let refreshInterval = null;
+        let charts = {};
+        let data = {
+            viewers: [],
+            messages: [],
+            reactions: [],
+            streams: [],
+            alerts: [],
+            performance: {
+                cpu: [],
+                memory: [],
+                latency: [],
+                errors: []
+            }
+        };
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeCharts();
+            connectWebSocket();
+            startAutoRefresh();
+            loadInitialData();
+        });
+
+        // Initialize charts
+        function initializeCharts() {
+            // Viewer count chart
+            const viewerCtx = document.getElementById('viewerChart').getContext('2d');
+            charts.viewer = new Chart(viewerCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Total Viewers',
+                        data: [],
+                        borderColor: '#667eea',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: {
+                                color: 'rgba(0,0,0,0.1)'
+                            }
+                        },
+                        x: {
+                            grid: {
+                                color: 'rgba(0,0,0,0.1)'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+
+            // Message activity chart
+            const messageCtx = document.getElementById('messageChart').getContext('2d');
+            charts.message = new Chart(messageCtx, {
+                type: 'bar',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Messages',
+                        data: [],
+                        backgroundColor: 'rgba(76, 175, 80, 0.8)',
+                        borderColor: '#4CAF50',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: {
+                                color: 'rgba(0,0,0,0.1)'
+                            }
+                        },
+                        x: {
+                            grid: {
+                                color: 'rgba(0,0,0,0.1)'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+
+            // Quality chart
+            const qualityCtx = document.getElementById('qualityChart').getContext('2d');
+            charts.quality = new Chart(qualityCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Excellent', 'Good', 'Fair', 'Poor'],
+                    datasets: [{
+                        data: [0, 0, 0, 0],
+                        backgroundColor: [
+                            '#4CAF50',
+                            '#8BC34A',
+                            '#FF9800',
+                            '#f44336'
+                        ],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+
+        // WebSocket connection
+        function connectWebSocket() {
+            try {
+                socket = io(config.websocketUrl);
+                
+                socket.on('connect', function() {
+                    updateConnectionStatus('connected');
+                    console.log('Connected to WebSocket');
+                });
+
+                socket.on('disconnect', function() {
+                    updateConnectionStatus('disconnected');
+                    console.log('Disconnected from WebSocket');
+                });
+
+                socket.on('connect_error', function(error) {
+                    updateConnectionStatus('disconnected');
+                    console.error('WebSocket connection error:', error);
+                });
+
+                // Listen for real-time updates
+                socket.on('viewer-count-update', function(data) {
+                    updateViewerCount(data);
+                });
+
+                socket.on('new-message', function(data) {
+                    addAlert('info', `New message in stream: ${data.content.substring(0, 50)}...`);
+                });
+
+                socket.on('new-reaction', function(data) {
+                    addAlert('info', `New reaction: ${data.reaction_type}`);
+                });
+
+                socket.on('stream-started', function(data) {
+                    addAlert('success', `Stream started: ${data.title}`);
+                });
+
+                socket.on('stream-ended', function(data) {
+                    addAlert('warning', `Stream ended: ${data.title}`);
+                });
+
+                socket.on('error', function(data) {
+                    addAlert('error', `System error: ${data.message}`);
+                });
+
+            } catch (error) {
+                console.error('Failed to connect to WebSocket:', error);
+                updateConnectionStatus('disconnected');
+            }
+        }
+
+        // Update connection status
+        function updateConnectionStatus(status) {
+            const statusEl = document.getElementById('connectionStatus');
+            const indicator = statusEl.querySelector('.status-indicator');
+            
+            statusEl.className = `connection-status connection-${status}`;
+            
+            switch (status) {
+                case 'connected':
+                    indicator.className = 'status-indicator status-online';
+                    statusEl.innerHTML = '<span class="status-indicator status-online"></span>Connected';
+                    break;
+                case 'disconnected':
+                    indicator.className = 'status-indicator status-offline';
+                    statusEl.innerHTML = '<span class="status-indicator status-offline"></span>Disconnected';
+                    break;
+                case 'connecting':
+                    indicator.className = 'status-indicator status-warning';
+                    statusEl.innerHTML = '<span class="status-indicator status-warning"></span>Connecting...';
+                    break;
+            }
+        }
+
+        // Auto-refresh functionality
+        function startAutoRefresh() {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+            
+            refreshInterval = setInterval(() => {
+                if (autoRefresh) {
+                    refreshData();
+                }
+            }, config.refreshInterval);
+        }
+
+        function toggleAutoRefresh() {
+            autoRefresh = !autoRefresh;
+            const textEl = document.getElementById('autoRefreshText');
+            textEl.textContent = autoRefresh ? '⏸️ Pause Auto-Refresh' : '▶️ Resume Auto-Refresh';
+        }
+
+        // Data loading functions
+        async function loadInitialData() {
+            try {
+                await Promise.all([
+                    loadStreams(),
+                    loadPerformanceData(),
+                    loadAlerts()
+                ]);
+            } catch (error) {
+                console.error('Failed to load initial data:', error);
+                addAlert('error', 'Failed to load initial data');
+            }
+        }
+
+        async function refreshData() {
+            const indicator = document.getElementById('refreshIndicator');
+            indicator.style.display = 'inline-block';
+            
+            try {
+                await Promise.all([
+                    loadStreams(),
+                    loadPerformanceData(),
+                    updateCharts()
+                ]);
+            } catch (error) {
+                console.error('Failed to refresh data:', error);
+                addAlert('error', 'Failed to refresh data');
+            } finally {
+                indicator.style.display = 'none';
+            }
+        }
+
+        async function loadStreams() {
+            try {
+                const response = await fetch(`${config.apiBaseUrl}/live-streams/`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    data.streams = result.data;
+                    updateStreamList();
+                    updateStatusBar();
+                }
+            } catch (error) {
+                console.error('Failed to load streams:', error);
+            }
+        }
+
+        async function loadPerformanceData() {
+            try {
+                // Simulate performance data (replace with real API calls)
+                const now = new Date();
+                const timestamp = now.toLocaleTimeString();
+                
+                // Generate mock performance data
+                const cpu = Math.random() * 100;
+                const memory = Math.random() * 100;
+                const latency = Math.random() * 100;
+                const errors = Math.random() * 5;
+                
+                // Update performance metrics
+                document.getElementById('cpuUsage').textContent = `${cpu.toFixed(1)}%`;
+                document.getElementById('memoryUsage').textContent = `${memory.toFixed(1)}%`;
+                document.getElementById('networkLatency').textContent = `${latency.toFixed(0)}ms`;
+                document.getElementById('errorRate').textContent = `${errors.toFixed(1)}%`;
+                
+                // Add to performance data arrays
+                data.performance.cpu.push({ time: timestamp, value: cpu });
+                data.performance.memory.push({ time: timestamp, value: memory });
+                data.performance.latency.push({ time: timestamp, value: latency });
+                data.performance.errors.push({ time: timestamp, value: errors });
+                
+                // Keep only recent data points
+                if (data.performance.cpu.length > config.maxDataPoints) {
+                    data.performance.cpu.shift();
+                    data.performance.memory.shift();
+                    data.performance.latency.shift();
+                    data.performance.errors.shift();
+                }
+                
+            } catch (error) {
+                console.error('Failed to load performance data:', error);
+            }
+        }
+
+        async function loadAlerts() {
+            try {
+                // Simulate loading alerts (replace with real API calls)
+                const mockAlerts = [
+                    {
+                        type: 'info',
+                        message: 'System monitoring started',
+                        timestamp: new Date().toISOString()
+                    },
+                    {
+                        type: 'success',
+                        message: 'All systems operational',
+                        timestamp: new Date().toISOString()
+                    }
+                ];
+                
+                data.alerts = mockAlerts;
+                updateAlertsList();
+                
+            } catch (error) {
+                console.error('Failed to load alerts:', error);
+            }
+        }
+
+        // Update functions
+        function updateStatusBar() {
+            const totalStreams = data.streams.filter(s => s.status === 'live').length;
+            const totalViewers = data.streams.reduce((sum, s) => sum + (s.viewer_count || 0), 0);
+            const totalMessages = data.streams.reduce((sum, s) => sum + (s.total_messages || 0), 0);
+            const totalReactions = data.streams.reduce((sum, s) => sum + (s.total_reactions || 0), 0);
+            
+            document.getElementById('totalStreams').textContent = totalStreams;
+            document.getElementById('totalViewers').textContent = totalViewers;
+            document.getElementById('totalMessages').textContent = totalMessages;
+            document.getElementById('totalReactions').textContent = totalReactions;
+        }
+
+        function updateStreamList() {
+            const streamList = document.getElementById('streamList');
+            
+            if (data.streams.length === 0) {
+                streamList.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">No active streams</p>';
+                return;
+            }
+            
+            streamList.innerHTML = data.streams.map(stream => `
+                <div class="stream-item">
+                    <div class="stream-info">
+                        <h4>${stream.title || 'Untitled Stream'}</h4>
+                        <p>${stream.host?.username || 'Unknown Host'} • ${stream.category || 'general'}</p>
+                    </div>
+                    <div class="stream-stats">
+                        <div class="viewer-count">${stream.viewer_count || 0}</div>
+                        <div class="status status-${stream.status}">${stream.status}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function updateAlertsList() {
+            const alertsList = document.getElementById('alertsList');
+            
+            if (data.alerts.length === 0) {
+                alertsList.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">No alerts</p>';
+                return;
+            }
+            
+            alertsList.innerHTML = data.alerts.slice(-10).reverse().map(alert => `
+                <div class="alert alert-${alert.type}">
+                    <div class="alert-time">${new Date(alert.timestamp).toLocaleString()}</div>
+                    <div class="alert-message">${alert.message}</div>
+                </div>
+            `).join('');
+        }
+
+        function updateCharts() {
+            const now = new Date();
+            const timestamp = now.toLocaleTimeString();
+            
+            // Update viewer chart
+            const totalViewers = data.streams.reduce((sum, s) => sum + (s.viewer_count || 0), 0);
+            data.viewers.push({ time: timestamp, value: totalViewers });
+            
+            if (data.viewers.length > config.maxDataPoints) {
+                data.viewers.shift();
+            }
+            
+            charts.viewer.data.labels = data.viewers.map(d => d.time);
+            charts.viewer.data.datasets[0].data = data.viewers.map(d => d.value);
+            charts.viewer.update();
+            
+            // Update message chart
+            const totalMessages = data.streams.reduce((sum, s) => sum + (s.total_messages || 0), 0);
+            data.messages.push({ time: timestamp, value: totalMessages });
+            
+            if (data.messages.length > config.maxDataPoints) {
+                data.messages.shift();
+            }
+            
+            charts.message.data.labels = data.messages.map(d => d.time);
+            charts.message.data.datasets[0].data = data.messages.map(d => d.value);
+            charts.message.update();
+        }
+
+        function updateViewerCount(data) {
+            // Update viewer count in real-time
+            const stream = data.streams.find(s => s.id === data.stream_id);
+            if (stream) {
+                stream.viewer_count = data.viewer_count;
+                updateStreamList();
+                updateStatusBar();
+            }
+        }
+
+        function addAlert(type, message) {
+            const alert = {
+                type: type,
+                message: message,
+                timestamp: new Date().toISOString()
+            };
+            
+            data.alerts.push(alert);
+            
+            // Keep only recent alerts
+            if (data.alerts.length > 100) {
+                data.alerts.shift();
+            }
+            
+            updateAlertsList();
+        }
+
+        // Control functions
+        function exportData() {
+            const exportData = {
+                timestamp: new Date().toISOString(),
+                streams: data.streams,
+                performance: data.performance,
+                alerts: data.alerts
+            };
+            
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `richesreach-monitor-${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function clearAlerts() {
+            data.alerts = [];
+            updateAlertsList();
+        }
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', function() {
+            if (socket) {
+                socket.disconnect();
+            }
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+        });
+    </script>
+</body>
+</html>

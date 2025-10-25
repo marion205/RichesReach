@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,10 +12,10 @@ import {
   FlatList,
   ActivityIndicator,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-// import { BlurView } from 'expo-blur'; // Removed for Expo Go compatibility
-// import LottieView from 'lottie-react-native'; // Removed for Expo Go compatibility
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../theme/PersonalizedThemes';
 
 const { width } = Dimensions.get('window');
@@ -129,21 +129,24 @@ export default function WealthCircles2({ onCirclePress, onCreateCircle, onJoinCi
   const loadCircles = async () => {
     try {
       setLoading(true);
+      console.log('🔄 Loading circles from API...');
       
       // Use real API endpoint
-      const response = await fetch('http://127.0.0.1:8000/api/wealth-circles/', {
+      const response = await fetch('http://192.168.1.236:8000/api/wealth-circles/', {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${await AsyncStorage.getItem('authToken')}`,
         },
       });
+      
+      console.log('📡 API Response status:', response.status);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
       const apiCircles = await response.json();
+      console.log('✅ API Circles loaded:', apiCircles.length, 'circles');
       
       // Transform API data to match component interface
       const transformedCircles: WealthCircle[] = apiCircles.map((circle: any) => ({
@@ -173,6 +176,11 @@ export default function WealthCircles2({ onCirclePress, onCreateCircle, onJoinCi
       }));
       
       setCircles(transformedCircles);
+      console.log('🎉 Successfully loaded', transformedCircles.length, 'circles from API');
+      
+    } catch (error) {
+      console.error('❌ Error loading circles:', error);
+      console.log('🔄 Falling back to mock data...');
       
       // Fallback to mock data if API fails
       const mockCircles: WealthCircle[] = [
@@ -439,9 +447,6 @@ export default function WealthCircles2({ onCirclePress, onCreateCircle, onJoinCi
       ];
       
       setCircles(mockCircles);
-    } catch (error) {
-      console.error('Error loading circles:', error);
-      Alert.alert('Error', 'Failed to load wealth circles');
     } finally {
       setLoading(false);
     }
@@ -601,7 +606,7 @@ function CircleCard({
   
   return (
     <TouchableOpacity style={styles.circleCard} onPress={onPress}>
-      <View intensity={20} style={styles.circleBlur}>
+      <View style={styles.circleBlur}>
         {/* Header */}
         <View style={styles.circleHeader}>
           <View style={styles.circleInfo}>

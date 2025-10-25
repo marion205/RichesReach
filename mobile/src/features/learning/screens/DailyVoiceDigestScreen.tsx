@@ -10,7 +10,7 @@ import {
   Vibration
 } from 'react-native';
 import { generateDailyDigest, createRegimeAlert, VoiceDigestResponse } from '../../../services/aiClient';
-import { Speech } from 'expo-speech';
+import * as Speech from 'expo-speech';
 
 export default function DailyVoiceDigestScreen() {
   const [userId] = useState('demo-user');
@@ -18,6 +18,16 @@ export default function DailyVoiceDigestScreen() {
   const [loading, setLoading] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
+
+  // Debug Speech module availability
+  useEffect(() => {
+    console.log('🎙️ Speech module check:', {
+      Speech: !!Speech,
+      speak: typeof Speech?.speak,
+      stop: typeof Speech?.stop,
+      SpeechKeys: Speech ? Object.keys(Speech) : 'undefined'
+    });
+  }, []);
 
   const generateDigest = async () => {
     setLoading(true);
@@ -41,6 +51,14 @@ export default function DailyVoiceDigestScreen() {
     try {
       setIsPlaying(true);
       
+      // Check if Speech is available
+      if (!Speech || typeof Speech.speak !== 'function') {
+        console.error('Speech module not available');
+        Alert.alert('Voice Playback Unavailable', 'Text-to-speech is not available on this device. Please read the digest manually.');
+        setIsPlaying(false);
+        return;
+      }
+      
       // Parse haptic cues from voice script
       const script = digest.voice_script;
       const hapticCues = script.match(/\[HAPTIC: (gentle|strong)\]/g) || [];
@@ -52,7 +70,10 @@ export default function DailyVoiceDigestScreen() {
         rate: 0.9,
         onDone: () => setIsPlaying(false),
         onStopped: () => setIsPlaying(false),
-        onError: () => setIsPlaying(false),
+        onError: (error) => {
+          console.error('Speech error:', error);
+          setIsPlaying(false);
+        },
       });
 
       // Trigger haptic feedback at appropriate times
@@ -68,13 +89,21 @@ export default function DailyVoiceDigestScreen() {
 
     } catch (error) {
       console.error('Error playing voice:', error);
+      Alert.alert('Playback Error', 'Unable to play voice digest. Please try again or read the text manually.');
       setIsPlaying(false);
     }
   };
 
   const stopVoice = () => {
-    Speech.stop();
-    setIsPlaying(false);
+    try {
+      if (Speech && typeof Speech.stop === 'function') {
+        Speech.stop();
+      }
+    } catch (error) {
+      console.error('Error stopping speech:', error);
+    } finally {
+      setIsPlaying(false);
+    }
   };
 
   const testRegimeAlert = async () => {

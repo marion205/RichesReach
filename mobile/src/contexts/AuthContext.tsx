@@ -169,7 +169,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const restLoginFlexible = async (emailOrUsername: string, password: string): Promise<string | null> => {
     // Hardcode the correct URL for now to ensure it works
-    const baseUrl = 'http://127.0.0.1:8000';
+    const baseUrl = 'http://192.168.1.236:8000';
     const identifier = emailOrUsername.trim();
     
     console.log('🔍 AuthContext: Using baseUrl:', baseUrl);

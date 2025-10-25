@@ -119,7 +119,7 @@ class AIService:
 
     def _chat_completion(self, messages: List[ChatMessage]) -> Optional[Dict[str, Any]]:
         """
-        Thin wrapper over openai.ChatCompletion.create with retries & timeouts.
+        Thin wrapper over OpenAI API with retries & timeouts.
         Returns the raw OpenAI response dict or None on failure.
         """
         if not (self.api_key and OPENAI_AVAILABLE):
@@ -129,15 +129,28 @@ class AIService:
         last_error: Optional[Exception] = None
         for attempt in range(1, self.OPENAI_MAX_RETRIES + 2):  # e.g., 1 + retries
             try:
-                # Legacy SDK call (compatible with your current codebase)
-                resp = openai.ChatCompletion.create(
+                # Use new OpenAI API format (compatible with openai>=1.0.0)
+                client = openai.OpenAI(api_key=self.api_key)
+                resp = client.chat.completions.create(
                     model=self.model,
                     messages=messages,
                     max_tokens=self.max_tokens,
                     temperature=self.temperature,
-                    request_timeout=self.OPENAI_TIMEOUT,
+                    timeout=self.OPENAI_TIMEOUT,
                 )
-                return resp
+                # Convert to legacy format for compatibility
+                return {
+                    'choices': [{
+                        'message': {
+                            'content': resp.choices[0].message.content,
+                            'role': resp.choices[0].message.role
+                        }
+                    }],
+                    'model': resp.model,
+                    'usage': {
+                        'total_tokens': resp.usage.total_tokens if resp.usage else 0
+                    }
+                }
             except Exception as e:  # noqa: BLE001
                 last_error = e
                 logger.warning(

@@ -10,6 +10,24 @@ This configuration provides:
 
 import os
 from datetime import timedelta
+from dotenv import load_dotenv
+
+# Load environment variables from env.secrets FIRST, before importing base settings
+load_dotenv(os.path.join(os.path.dirname(__file__), '../env.secrets'))
+
+# =============================================================================
+# AGORA AND STREAM.IO CONFIGURATION
+# =============================================================================
+# Agora Live Streaming Configuration
+AGORA_APP_ID = os.getenv('AGORA_APP_ID', '2d220d40a19d4fea955d4aac662b24d1')
+AGORA_APP_CERTIFICATE = os.getenv('AGORA_APP_CERTIFICATE', '')  # Optional for development
+AGORA_TOKEN_TTL_SECONDS = int(os.getenv('AGORA_TOKEN_TTL_SECONDS', '3600'))  # 1 hour
+
+# Stream.io Chat Configuration
+STREAM_API_KEY = os.getenv('STREAM_API_KEY', '4866mbx8b4jv')
+STREAM_API_SECRET = os.getenv('STREAM_API_SECRET', '4ytw96t98yjxzdccr2sjmfq4qm9tqcg4exjmp9ca2tfuzbmt74bgcbxhyftp5mh4')
+STREAM_TOKEN_TTL_SECONDS = int(os.getenv('STREAM_TOKEN_TTL_SECONDS', '3600'))  # 1 hour
+
 from .settings import *  # Import base settings
 
 print("[BOOT] Using LOCAL DEVELOPMENT SETTINGS (settings_local.py)")

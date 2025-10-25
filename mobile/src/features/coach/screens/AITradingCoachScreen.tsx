@@ -109,7 +109,11 @@ const MemoizedStepCard = memo(({ step, index, onPress }: { step: string; index: 
   </TouchableOpacity>
 ));
 
-export default function AITradingCoachScreen() {
+interface AITradingCoachScreenProps {
+  onNavigate?: (screen: string) => void;
+}
+
+export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScreenProps) {
   // Fallback safe area values if react-native-safe-area-context is not available
   const insets = {
     top: Platform.OS === 'ios' ? 44 : 0,
@@ -794,7 +798,13 @@ export default function AITradingCoachScreen() {
         <View style={styles.streakBanner}>
           <Ionicons name="flame" size={20} color="#f97316" />
           <Text style={styles.streakText}>Live Session Active</Text>
-          <TouchableOpacity onPress={() => Alert.alert('Pro Tip', 'Voice commands coming soon!')}>
+          <TouchableOpacity onPress={() => {
+            if (onNavigate) {
+              onNavigate('voice-ai');
+            } else {
+              Alert.alert('Voice Commands Available!', 'Voice AI assistant is ready! Navigate to the Voice AI section to start using voice commands.');
+            }
+          }}>
             <Ionicons name="mic" size={20} color="#3b82f6" />
           </TouchableOpacity>
         </View>

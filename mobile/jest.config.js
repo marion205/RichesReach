@@ -1,30 +1,37 @@
 module.exports = {
   preset: 'react-native',
-  setupFilesAfterEnv: ['<rootDir>/src/__tests__/setup-simple.ts'],
+  setupFilesAfterEnv: ['<rootDir>/src/setupTests.ts'],
   testMatch: [
-    '<rootDir>/src/__tests__/**/*.test.tsx',
-    '<rootDir>/src/__tests__/**/*.test.ts'
+    '**/__tests__/**/*.(ts|tsx|js)',
+    '**/*.(test|spec).(ts|tsx|js)',
   ],
+  transform: {
+    '^.+\\.(ts|tsx)$': 'ts-jest',
+    '^.+\\.(js|jsx)$': 'babel-jest',
+  },
+  transformIgnorePatterns: [
+    'node_modules/(?!(react-native|@react-native|@expo|expo|@react-navigation|react-native-webrtc|react-native-gifted-chat|socket.io-client)/)',
+  ],
+  moduleNameMapping: {
+    '^@/(.*)$': '<rootDir>/src/$1',
+    '^@components/(.*)$': '<rootDir>/src/components/$1',
+    '^@services/(.*)$': '<rootDir>/src/services/$1',
+    '^@features/(.*)$': '<rootDir>/src/features/$1',
+    '^@theme/(.*)$': '<rootDir>/src/theme/$1',
+  },
   collectCoverageFrom: [
     'src/**/*.{ts,tsx}',
     '!src/**/*.d.ts',
-    '!src/__tests__/**',
-    '!src/**/*.stories.{ts,tsx}'
+    '!src/**/__tests__/**',
+    '!src/**/node_modules/**',
   ],
-  coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html'],
-  moduleNameMapper: {
-    '^@/(.*)$': '<rootDir>/src/$1',
-    '^@components/(.*)$': '<rootDir>/src/components/$1',
-    '^@features/(.*)$': '<rootDir>/src/features/$1',
-    '^@services/(.*)$': '<rootDir>/src/services/$1',
-    '^@utils/(.*)$': '<rootDir>/src/utils/$1'
+  coverageDirectory: 'coverage',
+  testEnvironment: 'jsdom',
+  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
+  globals: {
+    'ts-jest': {
+      tsconfig: 'tsconfig.json',
+    },
   },
-  transformIgnorePatterns: [
-    'node_modules/(?!(react-native|@react-native|@expo|expo|@react-navigation|react-native-vector-icons|react-native-svg|react-native-reanimated|react-native-gesture-handler|react-native-svg-charts|d3-shape|expo-font|expo-constants|expo-linear-gradient|expo-image-picker)/)'
-  ],
-  testEnvironment: 'node',
-  verbose: true,
-  clearMocks: true,
-  restoreMocks: true
 };

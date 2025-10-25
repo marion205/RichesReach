@@ -1,0 +1,656 @@
+{
+  "info": {
+    "name": "RichesReach Live Streaming API",
+    "description": "Complete API collection for testing RichesReach Live Streaming features",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.0.0"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{auth_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://192.168.1.236:8000/api",
+      "type": "string"
+    },
+    {
+      "key": "auth_token",
+      "value": "your-jwt-token-here",
+      "type": "string"
+    },
+    {
+      "key": "stream_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "circle_id",
+      "value": "1",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Live Streams",
+      "item": [
+        {
+          "name": "List Live Streams",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/live-streams/?circle_id={{circle_id}}&status=live&page=1&limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["live-streams", ""],
+              "query": [
+                {
+                  "key": "circle_id",
+                  "value": "{{circle_id}}"
+                },
+                {
+                  "key": "status",
+                  "value": "live"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Live Stream",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.success && response.data.id) {",
+                  "        pm.collectionVariables.set('stream_id', response.data.id);",
+                  "        console.log('Stream ID saved:', response.data.id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Market Analysis Live\",\n  \"description\": \"Daily market insights and analysis\",\n  \"circle_id\": {{circle_id}},\n  \"category\": \"market-analysis\",\n  \"is_public\": true,\n  \"allow_chat\": true,\n  \"allow_reactions\": true,\n  \"allow_screen_share\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/live-streams/",
+              "host": ["{{base_url}}"],
+              "path": ["live-streams", ""]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Stream Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/live-streams/{{stream_id}}/",
+              "host": ["{{base_url}}"],
+              "path": ["live-streams", "{{stream_id}}", ""]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Start Stream",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/live-streams/{{stream_id}}/start/",
+              "host": ["{{base_url}}"],
+              "path": ["live-streams", "{{stream_id}}", "start", ""]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "End Stream",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/live-streams/{{stream_id}}/end/",
+              "host": ["{{base_url}}"],
+              "path": ["live-streams", "{{stream_id}}", "end", ""]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Stream Viewers",
+      "item": [
+        {
+          "name": "Join Stream",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/live-streams/{{stream_id}}/join/",
+              "host": ["{{base_url}}"],
+              "path": ["live-streams", "{{stream_id}}", "join", ""]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Leave Stream",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/live-streams/{{stream_id}}/leave/",
+              "host": ["{{base_url}}"],
+              "path": ["live-streams", "{{stream_id}}", "leave", ""]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Stream Viewers",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/live-streams/{{stream_id}}/viewers/?page=1&limit=50",
+              "host": ["{{base_url}}"],
+              "path": ["live-streams", "{{stream_id}}", "viewers", ""],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Stream Messages",
+      "item": [
+        {
+          "name": "Get Stream Messages",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/live-streams/{{stream_id}}/messages/?page=1&limit=50",
+              "host": ["{{base_url}}"],
+              "path": ["live-streams", "{{stream_id}}", "messages", ""],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Send Message",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"Great insights on the market today!\",\n  \"message_type\": \"message\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/live-streams/{{stream_id}}/messages/send/",
+              "host": ["{{base_url}}"],
+              "path": ["live-streams", "{{stream_id}}", "messages", "send", ""]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Stream Reactions",
+      "item": [
+        {
+          "name": "Send Reaction",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reaction_type\": \"fire\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/live-streams/{{stream_id}}/reactions/send/",
+              "host": ["{{base_url}}"],
+              "path": ["live-streams", "{{stream_id}}", "reactions", "send", ""]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Recent Reactions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/live-streams/{{stream_id}}/reactions/?limit=100",
+              "host": ["{{base_url}}"],
+              "path": ["live-streams", "{{stream_id}}", "reactions", ""],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "100"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Stream Polls",
+      "item": [
+        {
+          "name": "Create Poll",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"What's your biggest investment challenge?\",\n  \"options\": [\n    \"Market volatility\",\n    \"Lack of knowledge\",\n    \"Emotional decisions\",\n    \"Time management\"\n  ],\n  \"is_multiple_choice\": false,\n  \"expires_in\": 10\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/live-streams/{{stream_id}}/polls/create/",
+              "host": ["{{base_url}}"],
+              "path": ["live-streams", "{{stream_id}}", "polls", "create", ""]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Active Polls",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/live-streams/{{stream_id}}/polls/",
+              "host": ["{{base_url}}"],
+              "path": ["live-streams", "{{stream_id}}", "polls", ""]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Vote on Poll",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"option_ids\": [\"poll-option-uuid\"]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/live-streams/{{stream_id}}/polls/{{poll_id}}/vote/",
+              "host": ["{{base_url}}"],
+              "path": ["live-streams", "{{stream_id}}", "polls", "{{poll_id}}", "vote", ""]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Q&A Sessions",
+      "item": [
+        {
+          "name": "Start Q&A Session",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/live-streams/{{stream_id}}/qa/start/",
+              "host": ["{{base_url}}"],
+              "path": ["live-streams", "{{stream_id}}", "qa", "start", ""]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Submit Question",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"How do you handle market downturns in your portfolio?\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/live-streams/{{stream_id}}/qa/questions/submit/",
+              "host": ["{{base_url}}"],
+              "path": ["live-streams", "{{stream_id}}", "qa", "questions", "submit", ""]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Questions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/live-streams/{{stream_id}}/qa/questions/",
+              "host": ["{{base_url}}"],
+              "path": ["live-streams", "{{stream_id}}", "qa", "questions", ""]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Screen Sharing",
+      "item": [
+        {
+          "name": "Start Screen Share",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"share_type\": \"screen\",\n  \"title\": \"Portfolio Analysis Dashboard\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/live-streams/{{stream_id}}/screen-share/start/",
+              "host": ["{{base_url}}"],
+              "path": ["live-streams", "{{stream_id}}", "screen-share", "start", ""]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Stop Screen Share",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/live-streams/{{stream_id}}/screen-share/stop/",
+              "host": ["{{base_url}}"],
+              "path": ["live-streams", "{{stream_id}}", "screen-share", "stop", ""]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Test Scenarios",
+      "item": [
+        {
+          "name": "Full Streaming Flow",
+          "item": [
+            {
+              "name": "1. Create Stream",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Test Stream\",\n  \"description\": \"Testing full streaming flow\",\n  \"circle_id\": {{circle_id}},\n  \"category\": \"general\",\n  \"is_public\": true,\n  \"allow_chat\": true,\n  \"allow_reactions\": true,\n  \"allow_screen_share\": true\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/live-streams/",
+                  "host": ["{{base_url}}"],
+                  "path": ["live-streams", ""]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "2. Start Stream",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/live-streams/{{stream_id}}/start/",
+                  "host": ["{{base_url}}"],
+                  "path": ["live-streams", "{{stream_id}}", "start", ""]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "3. Join Stream",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/live-streams/{{stream_id}}/join/",
+                  "host": ["{{base_url}}"],
+                  "path": ["live-streams", "{{stream_id}}", "join", ""]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "4. Send Message",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"content\": \"Hello from test!\",\n  \"message_type\": \"message\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/live-streams/{{stream_id}}/messages/send/",
+                  "host": ["{{base_url}}"],
+                  "path": ["live-streams", "{{stream_id}}", "messages", "send", ""]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "5. Send Reaction",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"reaction_type\": \"fire\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/live-streams/{{stream_id}}/reactions/send/",
+                  "host": ["{{base_url}}"],
+                  "path": ["live-streams", "{{stream_id}}", "reactions", "send", ""]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "6. End Stream",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/live-streams/{{stream_id}}/end/",
+                  "host": ["{{base_url}}"],
+                  "path": ["live-streams", "{{stream_id}}", "end", ""]
+                }
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

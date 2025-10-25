@@ -58,6 +58,7 @@ import OnboardingScreen, { UserProfile } from './features/auth/screens/Onboardin
 import DiscoverUsersScreen from './features/social/screens/DiscoverUsersScreen';
 import UserProfileScreen from './features/user/screens/UserProfileScreen';
 import UserPortfoliosScreen from './features/portfolio/screens/UserPortfoliosScreen';
+import SimpleCircleDetailScreen from './features/community/screens/SimpleCircleDetailScreen';
 import UserActivityScreen from './features/social/screens/UserActivityScreen';
 import MessageScreen from './features/social/screens/MessageScreen';
 import TradingScreen from './features/stocks/screens/TradingScreen';
@@ -65,7 +66,7 @@ import DayTradingScreen from './features/trading/screens/DayTradingScreen';
 import MLSystemScreen from './features/ml/screens/MLSystemScreen';
 import RiskManagementScreen from './features/risk/screens/RiskManagementScreen';
 // Swing Trading Screens
-import { SignalsScreen, RiskCoachScreen } from './features/swingTrading';
+import { SignalsScreen, RiskCoachScreen, SwingTradingDashboard } from './features/swingTrading';
 import LeaderboardScreen from './features/swingTrading/screens/LeaderboardScreen';
 import BacktestingScreen from './features/swingTrading/screens/BacktestingScreen';
 import AIOptionsScreen from './features/options/screens/AIOptionsScreen';
@@ -90,7 +91,7 @@ import TutorAskExplainScreen from './features/learning/screens/TutorAskExplainSc
 import TutorQuizScreen from './features/learning/screens/TutorQuizScreen';
 import TutorModuleScreen from './features/learning/screens/TutorModuleScreen';
 import MarketCommentaryScreen from './features/news/screens/MarketCommentaryScreen';
-// import DailyVoiceDigestScreen from './features/learning/screens/DailyVoiceDigestScreen';
+import DailyVoiceDigestScreen from './features/learning/screens/DailyVoiceDigestScreen';
 import NotificationCenterScreen from './features/notifications/screens/NotificationCenterScreen';
 import WealthCirclesScreen from './features/community/screens/WealthCirclesScreen';
 import WealthCircles2 from './components/WealthCircles2';
@@ -452,7 +453,7 @@ return <DayTradingScreen navigateTo={navigateTo} />;
         case 'risk-management':
           return <RiskManagementScreen navigateTo={navigateTo} />;
         case 'swing-trading-test':
-          return <SignalsScreen navigateTo={navigateTo} />;
+          return <SwingTradingDashboard navigateTo={navigateTo} />;
         case 'swing-signals':
           return <SignalsScreen navigateTo={navigateTo} />;
         case 'swing-risk-coach':
@@ -496,14 +497,19 @@ return <TutorModuleScreen />;
 case 'market-commentary':
 return <MarketCommentaryScreen />;
         case 'daily-voice-digest':
-          return <TutorAskExplainScreen navigateTo={navigateTo} />;
+          return <DailyVoiceDigestScreen />;
 case 'notification-center':
 return <NotificationCenterScreen />;
         case 'wealth-circles':
           return <WealthCircles2 
-            onCirclePress={(circleId) => console.log('Circle pressed:', circleId)}
+            onCirclePress={(circle) => setCurrentScreen('circle-detail')}
             onCreateCircle={() => console.log('Create circle')}
             onJoinCircle={(circleId) => console.log('Join circle:', circleId)}
+          />;
+        case 'circle-detail':
+          return <SimpleCircleDetailScreen 
+            route={{ params: { circle: { id: '1', name: 'BIPOC Wealth Builders', description: 'Building generational wealth through smart investing and community support', memberCount: 1247, category: 'investment' } } }}
+            navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('wealth-circles') }}
           />;
         case 'peer-progress':
           return <PeerProgressScreen />;
@@ -518,7 +524,7 @@ return <PersonalizationDashboardScreen />;
 case 'trading-coach':
 return <TradingCoachScreen />;
 case 'ai-trading-coach':
-return <AITradingCoachScreen />;
+return <AITradingCoachScreen onNavigate={navigateTo} />;
 case 'subscription':
 return <SubscriptionScreen />;
 // Version 2 New Routes
@@ -531,7 +537,16 @@ return <ScalabilityEngine onNavigate={navigateTo} />;
 case 'marketing-rocket':
 return <MarketingRocket onNavigate={navigateTo} />;
 case 'oracle-insights':
-return <OracleInsights onNavigate={navigateTo} />;
+return <OracleInsights 
+  onInsightPress={(insight) => {
+    console.log('Oracle insight pressed:', insight);
+    // Navigate to insight detail or handle the insight
+  }}
+  onGenerateInsight={() => {
+    console.log('Generate insight requested');
+    // Handle insight generation
+  }}
+/>;
             case 'voice-ai':
             return <VoiceAIAssistant 
               onClose={() => navigateTo('home')} 

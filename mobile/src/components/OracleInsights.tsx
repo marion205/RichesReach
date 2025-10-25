@@ -14,6 +14,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 // import { BlurView } from 'expo-blur'; // Removed for Expo Go compatibility
 // import LottieView from 'lottie-react-native'; // Removed for Expo Go compatibility
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../theme/PersonalizedThemes';
 
 const { width } = Dimensions.get('window');

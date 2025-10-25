@@ -871,7 +871,7 @@ import { API_BASE } from '../config/api';
                 <Text style={styles.learningTitle}>Swing Trading</Text>
               </View>
               <TouchableOpacity style={styles.learningButton} onPress={() => navigateTo('swing-trading-test')}>
-                <Text style={styles.learningButtonText}>Test All</Text>
+                <Text style={styles.learningButtonText}>Explore All</Text>
                 <Icon name="chevron-right" size={16} color="#AF52DE" />
               </TouchableOpacity>
             </View>

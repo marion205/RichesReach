@@ -1,0 +1,42 @@
+{
+  "dataset": {
+    "output_dir": "./finance_dataset",
+    "num_synthetic_samples": 1000,
+    "include_terminology": true,
+    "include_external": false
+  },
+  "training": {
+    "model_name": "openai/whisper-tiny.en",
+    "output_dir": "./whisper-finance-lora",
+    "lora_r": 16,
+    "lora_alpha": 32,
+    "lora_dropout": 0.1,
+    "learning_rate": 1e-4,
+    "num_train_epochs": 3,
+    "per_device_train_batch_size": 8,
+    "per_device_eval_batch_size": 8,
+    "gradient_accumulation_steps": 1,
+    "warmup_steps": 500,
+    "max_steps": 4000,
+    "evaluation_strategy": "steps",
+    "eval_steps": 500,
+    "save_steps": 500,
+    "logging_steps": 100,
+    "generation_max_length": 225,
+    "predict_with_generate": true,
+    "fp16": true,
+    "dataloader_num_workers": 4,
+    "remove_unused_columns": false,
+    "use_wandb": true,
+    "wandb_project": "whisper-finance-finetuning",
+    "wandb_run_name": "whisper-tiny-finance-lora"
+  },
+  "export": {
+    "output_dir": "./whisper-finance-export",
+    "quantization_type": "q4_0",
+    "create_package": true
+  },
+  "finance_terms_weight": 2.0,
+  "min_audio_length": 0.5,
+  "max_audio_length": 30.0
+}

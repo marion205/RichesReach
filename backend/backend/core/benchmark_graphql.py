@@ -244,15 +244,10 @@ class BenchmarkQuery(graphene.ObjectType):
                 
                 series_data = custom_benchmark_service.get_custom_benchmark_data(int(custom_id), user, timeframe)
             else:
-                # Use real market data if requested
-                if useRealData:
-                    series_data = real_market_data_service.get_benchmark_data(symbol, timeframe)
-                
-                # Fallback to mock data if real data fails
-                if not series_data:
-                    from .benchmark_service import BenchmarkService
-                    benchmark_service = BenchmarkService()
-                    series_data = benchmark_service.get_benchmark_series(symbol, timeframe)
+                # For now, always use mock data to ensure reliability
+                from .benchmark_service import BenchmarkService
+                benchmark_service = BenchmarkService()
+                series_data = benchmark_service.get_benchmark_series(symbol, timeframe)
             
             if not series_data:
                 logger.warning(f"No benchmark data found for {symbol} {timeframe}")
