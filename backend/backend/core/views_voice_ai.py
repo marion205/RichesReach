@@ -190,7 +190,161 @@ def async_view(view_func):
             loop.close()
     return wrapper
 
+@method_decorator(csrf_exempt, name='dispatch')
+class VoiceAIBatchView(View):
+    """Batch voice AI endpoint for multiple text synthesis"""
+    
+    async def post(self, request):
+        """Synthesize multiple texts in batch for efficiency"""
+        try:
+            data = json.loads(request.body)
+            texts = data.get('texts', [])
+            voice = data.get('voice', 'default')
+            speed = float(data.get('speed', 1.0))
+            emotion = data.get('emotion', 'neutral')
+            
+            if not texts or not isinstance(texts, list):
+                return JsonResponse({
+                    'error': 'Texts array is required',
+                    'success': False
+                }, status=400)
+            
+            if len(texts) > 10:  # Limit batch size
+                return JsonResponse({
+                    'error': 'Maximum 10 texts per batch',
+                    'success': False
+                }, status=400)
+            
+            # Validate parameters
+            if not 0.5 <= speed <= 2.0:
+                speed = 1.0
+            
+            valid_emotions = ['neutral', 'confident', 'friendly', 'analytical', 'encouraging']
+            if emotion not in valid_emotions:
+                emotion = 'neutral'
+            
+            logger.info(f"🎤 Batch TTS Request: {len(texts)} texts with voice '{voice}'")
+            
+            # Process texts in parallel
+            import asyncio
+            tasks = []
+            for i, text in enumerate(texts):
+                if text and text.strip():
+                    task = voice_ai_service.synthesize_speech(
+                        text=text.strip(),
+                        voice=voice,
+                        speed=speed,
+                        emotion=emotion
+                    )
+                    tasks.append((i, task))
+            
+            # Wait for all synthesis to complete
+            results = []
+            for i, task in tasks:
+                audio_path = await task
+                if audio_path:
+                    audio_filename = os.path.basename(audio_path)
+                    audio_url = f"/api/voice-ai/audio/{audio_filename}"
+                    results.append({
+                        'index': i,
+                        'success': True,
+                        'audio_url': audio_url,
+                        'filename': audio_filename,
+                        'text': texts[i]
+                    })
+                else:
+                    results.append({
+                        'index': i,
+                        'success': False,
+                        'error': 'Failed to generate speech',
+                        'text': texts[i]
+                    })
+            
+            # Sort results by original index
+            results.sort(key=lambda x: x['index'])
+            
+            return JsonResponse({
+                'success': True,
+                'results': results,
+                'total_processed': len(results),
+                'successful': len([r for r in results if r['success']]),
+                'voice': voice,
+                'speed': speed,
+                'emotion': emotion
+            })
+            
+        except json.JSONDecodeError:
+            return JsonResponse({
+                'error': 'Invalid JSON data',
+                'success': False
+            }, status=400)
+        except Exception as e:
+            logger.error(f"❌ Batch Voice AI error: {e}")
+            return JsonResponse({
+                'error': 'Internal server error',
+                'success': False
+            }, status=500)
+
+@method_decorator(csrf_exempt, name='dispatch')
+class VoiceAIPreviewView(View):
+    """Preview endpoint for testing voice settings"""
+    
+    async def post(self, request):
+        """Generate a short preview of voice settings"""
+        try:
+            data = json.loads(request.body)
+            voice = data.get('voice', 'default')
+            speed = float(data.get('speed', 1.0))
+            emotion = data.get('emotion', 'neutral')
+            
+            # Use a standard preview text
+            preview_text = "Hello, I'm your AI financial advisor. I can help you understand market trends, analyze your portfolio, and provide personalized investment insights."
+            
+            logger.info(f"🎤 Voice Preview: voice '{voice}', speed {speed}, emotion '{emotion}'")
+            
+            # Synthesize preview
+            audio_path = await voice_ai_service.synthesize_speech(
+                text=preview_text,
+                voice=voice,
+                speed=speed,
+                emotion=emotion
+            )
+            
+            if not audio_path:
+                return JsonResponse({
+                    'error': 'Failed to generate preview',
+                    'success': False
+                }, status=500)
+            
+            # Return preview audio
+            audio_filename = os.path.basename(audio_path)
+            audio_url = f"/api/voice-ai/audio/{audio_filename}"
+            
+            return JsonResponse({
+                'success': True,
+                'audio_url': audio_url,
+                'filename': audio_filename,
+                'preview_text': preview_text,
+                'voice': voice,
+                'speed': speed,
+                'emotion': emotion
+            })
+            
+        except json.JSONDecodeError:
+            return JsonResponse({
+                'error': 'Invalid JSON data',
+                'success': False
+            }, status=400)
+        except Exception as e:
+            logger.error(f"❌ Voice Preview error: {e}")
+            return JsonResponse({
+                'error': 'Internal server error',
+                'success': False
+            }, status=500)
+
 # Apply async wrapper to async views
 VoiceAIView.post = async_view(VoiceAIView.post)
 VoiceAIVoicesView.get = async_view(VoiceAIVoicesView.get)
 VoiceAIHealthView.get = async_view(VoiceAIHealthView.get)
+VoiceAIBatchView.post = async_view(VoiceAIBatchView.post)
+VoiceAIPreviewView.post = async_view(VoiceAIPreviewView.post)

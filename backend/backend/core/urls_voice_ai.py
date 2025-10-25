@@ -9,6 +9,12 @@ urlpatterns = [
     # Main TTS synthesis endpoint
     path('synthesize/', views_voice_ai.VoiceAIView.as_view(), name='voice_ai_synthesize'),
     
+    # Batch TTS synthesis endpoint
+    path('batch/', views_voice_ai.VoiceAIBatchView.as_view(), name='voice_ai_batch'),
+    
+    # Voice preview endpoint
+    path('preview/', views_voice_ai.VoiceAIPreviewView.as_view(), name='voice_ai_preview'),
+    
     # Audio file serving
     path('audio/<str:filename>/', views_voice_ai.VoiceAIAudioView.as_view(), name='voice_ai_audio'),
     

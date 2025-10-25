@@ -228,6 +228,23 @@ async def mock_auth(request: LoginRequest):
     else:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
+@app.post("/api/auth/login/")
+async def mock_auth_api(request: LoginRequest):
+    """Mock authentication endpoint for mobile app compatibility"""
+    # Accept demo credentials that the mobile app is using
+    if (request.email.lower() == "demo@example.com" and request.password == "demo123") or \
+       (request.email.lower() == "test@example.com" and request.password == "testpass123"):
+        return {
+            "access_token": "mock_token_12345",
+            "user": {
+                "id": "demo-user-123",
+                "email": request.email,
+                "name": "Demo User"
+            }
+        }
+    else:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
 @app.get("/market/quote/{symbol}")
 async def mock_market_data(symbol: str):
     """Mock market data endpoint"""
@@ -1429,6 +1446,601 @@ async def get_personalization_score(user_id: str, content_type: str):
             "gamification": True
         },
         "generated_at": "2024-01-15T10:30:00Z"
+    }
+
+@app.get("/api/oracle/insights/")
+async def get_oracle_insights():
+    """Get Oracle AI insights for market analysis."""
+    return {
+        "insights": [
+            {
+                "type": "market_trend",
+                "title": "Tech Sector Momentum Building",
+                "description": "AI-powered analysis indicates strong momentum in tech sector with particular strength in semiconductor and cloud computing stocks.",
+                "confidence": 0.87,
+                "impact": "high",
+                "timeframe": "2-4 weeks",
+                "symbols": ["NVDA", "AMD", "MSFT", "GOOGL"],
+                "timestamp": "2024-01-15T10:30:00Z",
+                "source": "oracle_ai",
+                "category": "market_trend",
+                "priority": "high",
+                "actionable": True,
+                "metadata": {
+                    "model_version": "2.0",
+                    "data_quality": "high",
+                    "last_updated": "2024-01-15T10:30:00Z"
+                }
+            },
+            {
+                "type": "volatility_alert",
+                "title": "Market Volatility Expected",
+                "description": "Technical indicators suggest increased volatility in the coming days. Consider adjusting position sizes and risk management strategies.",
+                "confidence": 0.82,
+                "impact": "medium",
+                "timeframe": "1-2 weeks",
+                "symbols": ["SPY", "QQQ", "VIX"],
+                "timestamp": "2024-01-15T10:30:00Z",
+                "source": "oracle_ai",
+                "category": "volatility_alert",
+                "priority": "medium",
+                "actionable": True,
+                "metadata": {
+                    "model_version": "2.0",
+                    "data_quality": "high",
+                    "last_updated": "2024-01-15T10:30:00Z"
+                }
+            },
+            {
+                "type": "earnings_opportunity",
+                "title": "Earnings Season Opportunities",
+                "description": "Upcoming earnings reports show potential for significant moves in financial and healthcare sectors.",
+                "confidence": 0.79,
+                "impact": "high",
+                "timeframe": "1-3 weeks",
+                "symbols": ["JPM", "BAC", "JNJ", "PFE"],
+                "timestamp": "2024-01-15T10:30:00Z",
+                "source": "oracle_ai",
+                "category": "earnings_opportunity",
+                "priority": "high",
+                "actionable": True,
+                "metadata": {
+                    "model_version": "2.0",
+                    "data_quality": "high",
+                    "last_updated": "2024-01-15T10:30:00Z"
+                }
+            }
+        ],
+        "total_insights": 3,
+        "last_updated": "2024-01-15T10:30:00Z",
+        "next_update": "2024-01-15T16:30:00Z"
+    }
+
+@app.post("/api/voice/process/")
+async def process_voice_audio():
+    """Process voice audio and return AI response."""
+    return {
+        "success": True,
+        "response": {
+            "transcription": "What are the best investment opportunities right now?",
+            "text": "Based on current market conditions, I recommend focusing on technology stocks, particularly in AI and cloud computing sectors. Companies like NVIDIA, Microsoft, and Amazon are showing strong fundamentals. However, always remember to diversify your portfolio and consider your risk tolerance.",
+            "confidence": 0.92,
+            "suggestions": [
+                "Consider dollar-cost averaging into tech ETFs",
+                "Look at renewable energy stocks for long-term growth",
+                "Review your portfolio allocation quarterly"
+            ],
+            "insights": [
+                {
+                    "title": "Tech Sector Analysis",
+                    "value": "Strong Buy",
+                    "description": "Technology stocks showing strong momentum"
+                }
+            ]
+        },
+        "timestamp": "2024-01-15T10:30:00Z"
+    }
+
+@app.post("/api/transcribe-audio/")
+async def transcribe_audio():
+    """Transcribe audio to text."""
+    return {
+        "transcription": "I want to learn about options trading strategies for beginners",
+        "audioUrl": "https://example.com/transcribed-audio.wav",
+        "confidence": 0.89,
+        "timestamp": "2024-01-15T10:30:00Z"
+    }
+
+@app.get("/api/voice-ai/voices/")
+async def get_available_voices():
+    """Get available voice options for text-to-speech."""
+    return {
+        "voices": {
+            "alloy": {
+                "name": "Alloy",
+                "description": "Neutral, professional voice",
+                "gender": "neutral",
+                "accent": "american",
+                "emotions": ["neutral", "confident", "friendly"]
+            },
+            "echo": {
+                "name": "Echo", 
+                "description": "Warm, conversational voice",
+                "gender": "male",
+                "accent": "american",
+                "emotions": ["warm", "encouraging", "professional"]
+            },
+            "fable": {
+                "name": "Fable",
+                "description": "Clear, authoritative voice",
+                "gender": "male", 
+                "accent": "british",
+                "emotions": ["authoritative", "confident", "wise"]
+            },
+            "onyx": {
+                "name": "Onyx",
+                "description": "Deep, serious voice",
+                "gender": "male",
+                "accent": "american", 
+                "emotions": ["serious", "analytical", "professional"]
+            },
+            "nova": {
+                "name": "Nova",
+                "description": "Bright, energetic voice",
+                "gender": "female",
+                "accent": "american",
+                "emotions": ["energetic", "optimistic", "engaging"]
+            },
+            "shimmer": {
+                "name": "Shimmer",
+                "description": "Soft, empathetic voice", 
+                "gender": "female",
+                "accent": "american",
+                "emotions": ["empathetic", "calm", "supportive"]
+            }
+        }
+    }
+
+@app.post("/api/voice-ai/synthesize/")
+async def synthesize_speech(request: dict):
+    """Synthesize text to speech with specified voice and settings."""
+    # Don't return audio_url to trigger fallback to device speech with voice parameters
+    return {
+        "success": True,
+        # "audio_url": "http://localhost:8000/api/voice-ai/audio/sample-response.wav",  # Commented out to use device speech
+        "duration": 15.2,
+        "voice_used": request.get("voice", "alloy"),
+        "emotion": request.get("emotion", "neutral"),
+        "speed": request.get("speed", 1.0),
+        "text_length": len(request.get("text", "")),
+        "timestamp": "2024-01-15T10:30:00Z"
+    }
+
+@app.post("/api/voice-ai/preview/")
+async def preview_voice(request: dict):
+    """Preview a voice with sample text."""
+    # For demo purposes, don't return audio_url to trigger fallback to basic speech
+    return {
+        "success": True,
+        # "audio_url": "http://localhost:8000/api/voice-ai/audio/sample-preview.wav",  # Commented out to trigger fallback
+        "duration": 8.5,
+        "voice_used": request.get("voice", "alloy"),
+        "emotion": request.get("emotion", "neutral"),
+        "speed": request.get("speed", 1.0),
+        "preview_text": "This is a preview of the selected voice.",
+        "timestamp": "2024-01-15T10:30:00Z"
+    }
+
+@app.get("/api/voice-ai/audio/sample-response.wav")
+async def get_sample_audio():
+    """Serve a sample audio file for voice synthesis."""
+    from fastapi.responses import FileResponse
+    import os
+    
+    # Check if the audio file exists
+    audio_file_path = "sample-response.wav"
+    if os.path.exists(audio_file_path):
+        return FileResponse(
+            audio_file_path,
+            media_type="audio/wav",
+            filename="sample-response.wav"
+        )
+    else:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Audio file not found")
+
+@app.get("/api/voice-ai/audio/sample-preview.wav")
+async def get_sample_preview():
+    """Serve a sample preview audio file."""
+    # Return a simple audio file response
+    # In a real implementation, this would be a generated audio file
+    # For now, we'll return a 404 to trigger fallback to basic speech
+    from fastapi import HTTPException
+    raise HTTPException(status_code=404, detail="Preview audio file not found - using fallback speech")
+
+@app.get("/api/market/quotes")
+async def get_market_quotes(symbols: str):
+    """Get market quotes for multiple symbols."""
+    symbol_list = symbols.split(',')
+    quotes = {}
+    
+    for symbol in symbol_list:
+        quotes[symbol] = {
+            "symbol": symbol,
+            "price": round(150.0 + (hash(symbol) % 1000) / 10, 2),
+            "change": round((hash(symbol) % 20 - 10) / 10, 2),
+            "change_percent": round((hash(symbol) % 20 - 10) / 100, 2),
+            "volume": hash(symbol) % 1000000,
+            "market_cap": hash(symbol) % 1000000000000,
+            "timestamp": "2024-01-15T10:30:00Z",
+            "name": f"{symbol} Inc.",
+            "currency": "USD",
+            "exchange": "NASDAQ"
+        }
+    
+    return {
+        "success": True,
+        "data": quotes,
+        "timestamp": "2024-01-15T10:30:00Z"
+    }
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint."""
+    return {"status": "healthy", "timestamp": "2024-01-15T10:30:00Z"}
+
+@app.post("/graphql/")
+async def graphql_endpoint(request: dict = None):
+    """GraphQL endpoint for Apollo Client."""
+    # Handle mutations
+    if request and "query" in str(request):
+        query_str = str(request.get("query", ""))
+        
+        # Handle updateSecurity mutation
+        if "updateSecurity" in query_str:
+            return {
+                "data": {
+                    "updateSecurity": {
+                        "success": True,
+                        "message": "Security settings updated successfully",
+                        "security": {
+                            "twoFactorEnabled": True,
+                            "biometricEnabled": True,
+                            "lastPasswordChange": "2024-01-15T10:30:00Z"
+                        }
+                    }
+                }
+            }
+        
+        # Handle updateProfile mutation
+        if "updateProfile" in query_str:
+            return {
+                "data": {
+                    "updateProfile": {
+                        "success": True,
+                        "message": "Profile updated successfully",
+                        "user": {
+                            "id": "demo-user-123",
+                            "name": "Demo User",
+                            "email": "demo@example.com",
+                            "phone": "+1-555-0123",
+                            "dateOfBirth": "1990-01-15",
+                            "address": {
+                                "street": "123 Main St",
+                                "city": "San Francisco",
+                                "state": "CA",
+                                "zipCode": "94105",
+                                "country": "USA"
+                            }
+                        }
+                    }
+                }
+            }
+        
+        # Handle updatePreferences mutation
+        if "updatePreferences" in query_str:
+            return {
+                "data": {
+                    "updatePreferences": {
+                        "success": True,
+                        "message": "Preferences updated successfully",
+                        "preferences": {
+                            "theme": "light",
+                            "notifications": True,
+                            "privacy": "public",
+                            "language": "en"
+                        }
+                    }
+                }
+            }
+        
+        # Handle changePassword mutation
+        if "changePassword" in query_str:
+            return {
+                "data": {
+                    "changePassword": {
+                        "success": True,
+                        "message": "Password changed successfully"
+                    }
+                }
+            }
+    
+    # Default query response
+    return {
+        "data": {
+            "me": {
+                "id": "demo-user-123",
+                "email": "demo@example.com",
+                "name": "Demo User",
+                "username": "demo",
+                "hasPremiumAccess": False,
+                "subscriptionTier": "free",
+                "profilePic": "https://via.placeholder.com/150",
+                "followersCount": 42,
+                "followingCount": 128,
+                "isFollowingUser": False,
+                "isFollowedByUser": False,
+                "phone": "+1-555-0123",
+                "dateOfBirth": "1990-01-15",
+                "address": {
+                    "street": "123 Main St",
+                    "city": "San Francisco",
+                    "state": "CA",
+                    "zipCode": "94105",
+                    "country": "USA"
+                },
+                    "preferences": {
+                        "theme": "light",
+                        "notifications": True,
+                        "privacy": "public",
+                        "language": "en"
+                    },
+                    "security": {
+                        "twoFactorEnabled": False,
+                        "biometricEnabled": True,
+                        "lastPasswordChange": "2024-01-01T00:00:00Z"
+                    }
+            },
+            "availableBenchmarks": [
+                {
+                    "id": "sp500",
+                    "name": "S&P 500",
+                    "symbol": "^GSPC",
+                    "description": "Standard & Poor's 500 Index"
+                },
+                {
+                    "id": "nasdaq",
+                    "name": "NASDAQ",
+                    "symbol": "^IXIC", 
+                    "description": "NASDAQ Composite Index"
+                },
+                {
+                    "id": "dow",
+                    "name": "Dow Jones",
+                    "symbol": "^DJI",
+                    "description": "Dow Jones Industrial Average"
+                }
+            ],
+            "benchmarkSeries": [
+                {
+                    "benchmarkId": "sp500",
+                    "symbol": "^GSPC",
+                    "name": "S&P 500",
+                    "timeframe": "1Y",
+                    "dataPoints": [
+                        {"date": "2024-01-01", "value": 4769.83, "timestamp": "2024-01-01T00:00:00Z", "change": 0, "changePercent": 0},
+                        {"date": "2024-01-02", "value": 4772.50, "timestamp": "2024-01-02T00:00:00Z", "change": 2.67, "changePercent": 0.056},
+                        {"date": "2024-01-03", "value": 4781.18, "timestamp": "2024-01-03T00:00:00Z", "change": 8.68, "changePercent": 0.182},
+                        {"date": "2024-01-04", "value": 4789.83, "timestamp": "2024-01-04T00:00:00Z", "change": 8.65, "changePercent": 0.181},
+                        {"date": "2024-01-05", "value": 4795.83, "timestamp": "2024-01-05T00:00:00Z", "change": 6.00, "changePercent": 0.125}
+                    ],
+                    "data": [
+                        {"date": "2024-01-01", "value": 4769.83, "timestamp": "2024-01-01T00:00:00Z", "change": 0, "changePercent": 0},
+                        {"date": "2024-01-02", "value": 4772.50, "timestamp": "2024-01-02T00:00:00Z", "change": 2.67, "changePercent": 0.056},
+                        {"date": "2024-01-03", "value": 4781.18, "timestamp": "2024-01-03T00:00:00Z", "change": 8.68, "changePercent": 0.182},
+                        {"date": "2024-01-04", "value": 4789.83, "timestamp": "2024-01-04T00:00:00Z", "change": 8.65, "changePercent": 0.181},
+                        {"date": "2024-01-05", "value": 4795.83, "timestamp": "2024-01-05T00:00:00Z", "change": 6.00, "changePercent": 0.125}
+                    ],
+                    "startValue": 4769.83,
+                    "endValue": 4795.83,
+                    "totalReturn": 26.00,
+                    "totalReturnPercent": 0.55,
+                    "volatility": 0.12
+                }
+            ],
+            "myWatchlist": [
+                {
+                    "id": "watch_001",
+                    "symbol": "AAPL",
+                    "name": "Apple Inc.",
+                    "price": 185.92,
+                    "change": 2.15,
+                    "changePercent": 1.17,
+                    "stock": {
+                        "symbol": "AAPL",
+                        "name": "Apple Inc.",
+                        "price": 185.92,
+                        "change": 2.15,
+                        "changePercent": 1.17
+                    },
+                    "notes": "Strong fundamentals, good for long-term hold",
+                    "targetPrice": 200.00,
+                    "addedAt": "2024-01-15T10:30:00Z"
+                },
+                {
+                    "id": "watch_002", 
+                    "symbol": "MSFT",
+                    "name": "Microsoft Corporation",
+                    "price": 378.85,
+                    "change": -1.25,
+                    "changePercent": -0.33,
+                    "stock": {
+                        "symbol": "MSFT",
+                        "name": "Microsoft Corporation",
+                        "price": 378.85,
+                        "change": -1.25,
+                        "changePercent": -0.33
+                    },
+                    "notes": "Cloud growth story continues",
+                    "targetPrice": 400.00,
+                    "addedAt": "2024-01-15T10:30:00Z"
+                },
+                {
+                    "id": "watch_003",
+                    "symbol": "TSLA", 
+                    "name": "Tesla, Inc.",
+                    "price": 248.50,
+                    "change": 5.20,
+                    "changePercent": 2.14,
+                    "stock": {
+                        "symbol": "TSLA",
+                        "name": "Tesla, Inc.",
+                        "price": 248.50,
+                        "change": 5.20,
+                        "changePercent": 2.14
+                    },
+                    "notes": "EV leader with strong growth potential",
+                    "targetPrice": 300.00,
+                    "addedAt": "2024-01-15T10:30:00Z"
+                }
+            ],
+            "myPortfolios": [
+                {
+                    "id": "portfolio_001",
+                    "name": "Growth Portfolio",
+                    "value": 125000.00,
+                    "change": 2500.00,
+                    "changePercent": 2.04,
+                    "totalPortfolios": 1,
+                    "totalValue": 125000.00,
+                    "holdingsCount": 2,
+                    "portfolios": [
+                        {
+                            "id": "portfolio_001",
+                            "name": "Growth Portfolio",
+                            "value": 125000.00,
+                            "change": 2500.00,
+                            "changePercent": 2.04,
+                            "totalValue": 125000.00,
+                            "holdingsCount": 2,
+                            "holdings": [
+                                {
+                                    "id": "holding_001",
+                                    "symbol": "AAPL",
+                                    "shares": 100,
+                                    "value": 18592.00,
+                                    "weight": 14.87,
+                                    "stock": {
+                                        "symbol": "AAPL",
+                                        "name": "Apple Inc.",
+                                        "price": 185.92,
+                                        "change": 2.15,
+                                        "changePercent": 1.17
+                                    },
+                                    "averagePrice": 180.00,
+                                    "currentPrice": 185.92,
+                                    "totalValue": 18592.00
+                                },
+                                {
+                                    "id": "holding_002",
+                                    "symbol": "MSFT", 
+                                    "shares": 50,
+                                    "value": 18942.50,
+                                    "weight": 15.15,
+                                    "stock": {
+                                        "symbol": "MSFT",
+                                        "name": "Microsoft Corporation",
+                                        "price": 378.85,
+                                        "change": -1.25,
+                                        "changePercent": -0.33
+                                    },
+                                    "averagePrice": 375.00,
+                                    "currentPrice": 378.85,
+                                    "totalValue": 18942.50
+                                }
+                            ]
+                        }
+                    ],
+                    "holdings": [
+                        {
+                            "id": "holding_001",
+                            "symbol": "AAPL",
+                            "shares": 100,
+                            "value": 18592.00,
+                            "weight": 14.87,
+                            "stock": {
+                                "symbol": "AAPL",
+                                "name": "Apple Inc.",
+                                "price": 185.92,
+                                "change": 2.15,
+                                "changePercent": 1.17
+                            },
+                            "averagePrice": 180.00,
+                            "currentPrice": 185.92,
+                            "totalValue": 18592.00
+                        },
+                        {
+                            "id": "holding_002",
+                            "symbol": "MSFT", 
+                            "shares": 50,
+                            "value": 18942.50,
+                            "weight": 15.15,
+                            "stock": {
+                                "symbol": "MSFT",
+                                "name": "Microsoft Corporation",
+                                "price": 378.85,
+                                "change": -1.25,
+                                "changePercent": -0.33
+                            },
+                            "averagePrice": 375.00,
+                            "currentPrice": 378.85,
+                            "totalValue": 18942.50
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+
+@app.get("/api/wealth-circles/")
+async def get_wealth_circles():
+    """Get wealth circles for community features."""
+    return {
+        "circles": [
+            {
+                "id": "circle_001",
+                "name": "Tech Investors",
+                "description": "Discussion about technology investments",
+                "member_count": 1250,
+                "is_private": False,
+                "created_at": "2024-01-15T10:30:00Z"
+            },
+            {
+                "id": "circle_002", 
+                "name": "BIPOC Wealth Builders",
+                "description": "Building wealth in the BIPOC community",
+                "member_count": 890,
+                "is_private": False,
+                "created_at": "2024-01-15T10:30:00Z"
+            }
+        ]
+    }
+
+@app.get("/api/wealth-circles/{circle_id}/posts/")
+async def get_circle_posts(circle_id: str):
+    """Get posts from a wealth circle."""
+    return {
+        "posts": [
+            {
+                "id": "post_001",
+                "title": "Market Analysis for Q1 2024",
+                "content": "Here's my analysis of the current market conditions...",
+                "author": "demo_user",
+                "created_at": "2024-01-15T10:30:00Z",
+                "likes": 45,
+                "comments": 12
+            }
+        ]
     }
 
 if __name__ == "__main__":

@@ -167,7 +167,7 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
       console.log('🔄 Attempting to load real posts from API...');
       
       // Try to get real posts from your Django backend
-      const response = await fetch(`http://192.168.1.236:8000/api/wealth-circles/${circle.id}/posts/`, {
+      const response = await fetch(`http://localhost:8000/api/wealth-circles/${circle.id}/posts/`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',

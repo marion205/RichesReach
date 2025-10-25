@@ -16,6 +16,7 @@ import { Audio } from 'expo-av';
 import * as Speech from 'expo-speech';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../theme/PersonalizedThemes';
+import { useVoice } from '../contexts/VoiceContext';
 
 const { width, height } = Dimensions.get('window');
 
@@ -26,6 +27,7 @@ interface VoiceAIAssistantProps {
 
 export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceAIAssistantProps) {
   const theme = useTheme();
+  const { getSelectedVoice } = useVoice();
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -101,6 +103,20 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
   const speakWelcomeMessage = async () => {
     const welcomeMessage = "Hello! I'm your Wealth Oracle. I can help you with portfolio analysis, market insights, and investment strategies. What would you like to know?";
     await speakText(welcomeMessage);
+  };
+
+  const getVoiceParameters = (voiceId: string) => {
+    // Map voice IDs to speech parameters that approximate their characteristics
+    const voiceParams = {
+      'alloy': { pitch: 1.0, rate: 0.9 },      // Neutral, professional
+      'echo': { pitch: 0.9, rate: 0.8 },       // Warm, conversational (lower pitch)
+      'fable': { pitch: 0.8, rate: 0.7 },      // Clear, authoritative (lower pitch, slower)
+      'onyx': { pitch: 0.7, rate: 0.8 },       // Deep, serious (much lower pitch)
+      'nova': { pitch: 1.2, rate: 1.0 },       // Bright, energetic (higher pitch, faster)
+      'shimmer': { pitch: 1.1, rate: 0.8 }     // Soft, empathetic (slightly higher pitch)
+    };
+    
+    return voiceParams[voiceId] || voiceParams['alloy'];
   };
 
   const startWaveAnimation = () => {
@@ -283,22 +299,152 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
       // Stop any existing speech
       Speech.stop();
       
-      // Speak the text
-      await Speech.speak(text, {
-        language: 'en-US',
-        pitch: 1.0,
-        rate: 0.9,
-        onDone: () => {
-          setIsSpeaking(false);
+      // Use the voice synthesis API with selected voice
+      const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+      const response = await fetch(`${API_BASE_URL}/api/voice-ai/synthesize/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
-        onError: (error) => {
-          console.error('TTS error:', error);
-          setIsSpeaking(false);
-        },
+        body: JSON.stringify({
+          text: text,
+          voice: getSelectedVoice(),
+          speed: 1.0,
+          emotion: 'neutral',
+        }),
       });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.audio_url) {
+          try {
+            // Try to play the synthesized audio
+            const { sound } = await Audio.Sound.createAsync(
+              { uri: data.audio_url },
+              { shouldPlay: true }
+            );
+            
+            // Set up a timeout to fallback if audio doesn't start playing
+            const fallbackTimeout = setTimeout(async () => {
+              console.log('Audio playback timeout, falling back to basic speech');
+              await sound.unloadAsync();
+              await Speech.speak(text, {
+                language: 'en-US',
+                pitch: 1.0,
+                rate: 0.9,
+                onDone: () => {
+                  setIsSpeaking(false);
+                },
+                onError: (error) => {
+                  console.error('TTS error:', error);
+                  setIsSpeaking(false);
+                },
+              });
+            }, 3000); // 3 second timeout
+            
+            sound.setOnPlaybackStatusUpdate((status) => {
+              if (status.isLoaded) {
+                clearTimeout(fallbackTimeout);
+                if (status.didJustFinish) {
+                  setIsSpeaking(false);
+                  sound.unloadAsync();
+                }
+              } else if (status.error) {
+                clearTimeout(fallbackTimeout);
+                console.log('Audio playback error, falling back to basic speech:', status.error);
+                sound.unloadAsync();
+                Speech.speak(text, {
+                  language: 'en-US',
+                  pitch: 1.0,
+                  rate: 0.9,
+                  onDone: () => {
+                    setIsSpeaking(false);
+                  },
+                  onError: (error) => {
+                    console.error('TTS error:', error);
+                    setIsSpeaking(false);
+                  },
+                });
+              }
+            });
+          } catch (audioError) {
+            console.log('Audio playback failed, falling back to basic speech:', audioError);
+            // Fallback to basic speech if audio playback fails
+            const selectedVoice = getSelectedVoice();
+            const voiceParams = getVoiceParameters(selectedVoice);
+            
+            await Speech.speak(text, {
+              language: 'en-US',
+              pitch: voiceParams.pitch,
+              rate: voiceParams.rate,
+              onDone: () => {
+                setIsSpeaking(false);
+              },
+              onError: (error) => {
+                console.error('TTS error:', error);
+                setIsSpeaking(false);
+              },
+            });
+          }
+        } else {
+          // Fallback to basic speech with voice-appropriate parameters
+          const selectedVoice = getSelectedVoice();
+          const voiceParams = getVoiceParameters(selectedVoice);
+          
+          await Speech.speak(text, {
+            language: 'en-US',
+            pitch: voiceParams.pitch,
+            rate: voiceParams.rate,
+            onDone: () => {
+              setIsSpeaking(false);
+            },
+            onError: (error) => {
+              console.error('TTS error:', error);
+              setIsSpeaking(false);
+            },
+          });
+        }
+      } else {
+        // Fallback to basic speech if API fails
+        const selectedVoice = getSelectedVoice();
+        const voiceParams = getVoiceParameters(selectedVoice);
+        
+        await Speech.speak(text, {
+          language: 'en-US',
+          pitch: voiceParams.pitch,
+          rate: voiceParams.rate,
+          onDone: () => {
+            setIsSpeaking(false);
+          },
+          onError: (error) => {
+            console.error('TTS error:', error);
+            setIsSpeaking(false);
+          },
+        });
+      }
     } catch (error) {
       console.error('Error speaking text:', error);
-      setIsSpeaking(false);
+      // Final fallback with voice parameters
+      try {
+        const selectedVoice = getSelectedVoice();
+        const voiceParams = getVoiceParameters(selectedVoice);
+        
+        await Speech.speak(text, {
+          language: 'en-US',
+          pitch: voiceParams.pitch,
+          rate: voiceParams.rate,
+          onDone: () => {
+            setIsSpeaking(false);
+          },
+          onError: (error) => {
+            console.error('Final TTS error:', error);
+            setIsSpeaking(false);
+          },
+        });
+      } catch (finalError) {
+        console.error('Final speech error:', finalError);
+        setIsSpeaking(false);
+      }
     }
   };
 
@@ -343,8 +489,10 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
             <Text style={styles.closeButtonText}>✕</Text>
           </TouchableOpacity>
-          <Text style={styles.title}>Wealth Oracle</Text>
-          <Text style={styles.subtitle}>Your AI Financial Assistant</Text>
+          <View style={styles.titleContainer}>
+            <Text style={styles.title}>Wealth Oracle</Text>
+            <Text style={styles.subtitle}>Your AI Financial Assistant</Text>
+          </View>
         </View>
 
         {/* Conversation History */}
@@ -417,6 +565,7 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
             </Text>
           </View>
         </View>
+
       </LinearGradient>
     </Animated.View>
   );
@@ -462,12 +611,11 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingHorizontal: 20,
     paddingBottom: 20,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
   },
   closeButton: {
-    position: 'absolute',
-    top: 60,
-    right: 20,
     width: 30,
     height: 30,
     borderRadius: 15,
@@ -633,5 +781,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 20,
+  },
+  titleContainer: {
+    flex: 1,
+    alignItems: 'center',
   },
 });

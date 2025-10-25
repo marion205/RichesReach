@@ -35,7 +35,7 @@ def live_streams_list(request):
         limit = int(request.GET.get('limit', 20))
         
         # Build query
-        queryset = LiveStream.objects.select_related('host', 'circle')
+        queryset = LiveStream.objects.select_related('host')
         
         if circle_id:
             queryset = queryset.filter(circle_id=circle_id)
@@ -62,10 +62,7 @@ def live_streams_list(request):
                     'first_name': stream.host.first_name,
                     'last_name': stream.host.last_name,
                 },
-                'circle': {
-                    'id': stream.circle.id,
-                    'name': stream.circle.name,
-                },
+                'circle_id': stream.circle_id,
                 'viewer_count': stream.current_viewer_count,
                 'max_viewers': stream.max_viewers,
                 'total_reactions': stream.total_reactions,
@@ -105,13 +102,10 @@ def live_streams_list(request):
                         'error': f'Missing required field: {field}'
                     }, status=400)
             
-            # Get circle
-            circle = get_object_or_404(WealthCircle, id=data['circle_id'])
-            
             # Create stream
             stream = LiveStream.objects.create(
                 host=request.user,
-                circle=circle,
+                circle_id=data['circle_id'],
                 title=data['title'],
                 description=data.get('description', ''),
                 category=data['category'],
@@ -172,10 +166,7 @@ def live_stream_detail(request, stream_id):
                     'first_name': stream.host.first_name,
                     'last_name': stream.host.last_name,
                 },
-                'circle': {
-                    'id': stream.circle.id,
-                    'name': stream.circle.name,
-                },
+                'circle_id': stream.circle_id,
                 'viewer_count': stream.current_viewer_count,
                 'max_viewers': stream.max_viewers,
                 'total_reactions': stream.total_reactions,

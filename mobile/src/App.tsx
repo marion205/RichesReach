@@ -44,6 +44,7 @@ import LoginScreen from './features/auth/screens/LoginScreen';
 import ForgotPasswordScreen from './features/auth/screens/ForgotPasswordScreen';
 import SignUpScreen from './features/auth/screens/SignUpScreen';
 import ProfileScreen from './features/user/screens/ProfileScreen';
+import AccountManagementScreen from './features/user/screens/AccountManagementScreen';
 import StockScreen from './features/stocks/screens/StockScreen';
 import PriceChartScreen from './features/stocks/screens/PriceChartScreen';
 import StockDetailScreen from './features/stocks/screens/StockDetailScreen';
@@ -117,6 +118,7 @@ import { BottomTabBar, TopHeader, PersonalizedDashboard } from './components';
 import UserProfileService from './features/user/services/UserProfileService';
 // Contexts
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { VoiceProvider } from './contexts/VoiceContext';
 function AppContent() {
 const { user, isAuthenticated, loading, logout: authLogout } = useAuth();
 const [currentScreen, setCurrentScreen] = useState('login');
@@ -379,6 +381,8 @@ case 'onboarding':
 return <OnboardingScreen onComplete={handleOnboardingComplete} />;
 case 'profile':
 return <ProfileScreen navigateTo={navigateTo} onLogout={handleLogout} />;
+case 'account-management':
+return <AccountManagementScreen navigateTo={navigateTo} />;
         case 'stock':
           return <StockScreen navigateTo={navigateTo} />;
         case 'StockDetail':
@@ -643,7 +647,9 @@ return (
 <SafeAreaProvider>
 <ApolloProvider>
 <AuthProvider>
+<VoiceProvider>
 <AppContent />
+</VoiceProvider>
 </AuthProvider>
 </ApolloProvider>
 </SafeAreaProvider>

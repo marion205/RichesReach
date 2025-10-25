@@ -13,6 +13,7 @@ import { Audio } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LinearGradient from 'expo-linear-gradient';
+import { useVoice } from '../contexts/VoiceContext';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -36,7 +37,7 @@ interface VoiceInfo {
 
 export default function VoiceAI({
   text,
-  voice = 'default',
+  voice,
   speed = 1.0,
   emotion = 'neutral',
   autoPlay = false,
@@ -45,6 +46,8 @@ export default function VoiceAI({
   onError,
   style,
 }: VoiceAIProps) {
+  const { getSelectedVoice } = useVoice();
+  const selectedVoice = voice || getSelectedVoice();
   const [isLoading, setIsLoading] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
@@ -53,7 +56,7 @@ export default function VoiceAI({
   const [pulseAnim] = useState(new Animated.Value(1));
   const [waveAnim] = useState(new Animated.Value(0));
 
-  const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://192.168.1.236:8000';
+  const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8000';
 
   useEffect(() => {
     loadAvailableVoices();
@@ -95,7 +98,7 @@ export default function VoiceAI({
         },
         body: JSON.stringify({
           text,
-          voice,
+          voice: selectedVoice,
           speed,
           emotion,
         }),
@@ -118,6 +121,39 @@ export default function VoiceAI({
       return null;
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const previewVoice = async (): Promise<string | null> => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/api/voice-ai/preview/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: JSON.stringify({
+          voice: selectedVoice,
+          speed,
+          emotion,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to generate preview');
+      }
+
+      return `${API_BASE_URL}${data.audio_url}`;
+    } catch (error) {
+      console.error('Voice preview error:', error);
+      return null;
     }
   };
 
@@ -221,11 +257,11 @@ export default function VoiceAI({
   };
 
   const getVoiceDisplayName = () => {
-    return availableVoices[voice]?.name || voice.replace('_', ' ').toUpperCase();
+    return availableVoices[selectedVoice]?.name || selectedVoice.replace('_', ' ').toUpperCase();
   };
 
   const getVoiceDescription = () => {
-    return availableVoices[voice]?.description || 'Natural voice synthesis';
+    return availableVoices[selectedVoice]?.description || 'Natural voice synthesis';
   };
 
   return (
@@ -236,30 +272,60 @@ export default function VoiceAI({
         <Text style={styles.voiceDescription}>{getVoiceDescription()}</Text>
       </View>
 
-      {/* Play Button */}
-      <TouchableOpacity
-        style={styles.playButton}
-        onPress={handlePlay}
-        disabled={isLoading || !text}
-        activeOpacity={0.8}
-      >
-        <LinearGradient
-          colors={isPlaying ? ['#FF6B6B', '#FF8E8E'] : ['#4ECDC4', '#44A08D']}
-          style={styles.playButtonGradient}
+      {/* Play Buttons */}
+      <View style={styles.buttonContainer}>
+        <TouchableOpacity
+          style={styles.playButton}
+          onPress={handlePlay}
+          disabled={isLoading || !text}
+          activeOpacity={0.8}
         >
-          {isLoading ? (
-            <ActivityIndicator color="#FFFFFF" size="small" />
-          ) : (
-            <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-              <Ionicons
-                name={isPlaying ? 'stop' : 'play'}
-                size={24}
-                color="#FFFFFF"
-              />
-            </Animated.View>
-          )}
-        </LinearGradient>
-      </TouchableOpacity>
+          <LinearGradient
+            colors={isPlaying ? ['#FF6B6B', '#FF8E8E'] : ['#4ECDC4', '#44A08D']}
+            style={styles.playButtonGradient}
+          >
+            {isLoading ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+                <Ionicons
+                  name={isPlaying ? 'stop' : 'play'}
+                  size={24}
+                  color="#FFFFFF"
+                />
+              </Animated.View>
+            )}
+          </LinearGradient>
+        </TouchableOpacity>
+
+        {/* Preview Button */}
+        <TouchableOpacity
+          style={styles.previewButton}
+          onPress={async () => {
+            const previewUrl = await previewVoice();
+            if (previewUrl) {
+              const { sound: previewSound } = await Audio.Sound.createAsync(
+                { uri: previewUrl },
+                { shouldPlay: true }
+              );
+              previewSound.setOnPlaybackStatusUpdate((status) => {
+                if (status.isLoaded && status.didJustFinish) {
+                  previewSound.unloadAsync();
+                }
+              });
+            }
+          }}
+          disabled={isLoading}
+          activeOpacity={0.8}
+        >
+          <LinearGradient
+            colors={['#6C5CE7', '#A29BFE']}
+            style={styles.previewButtonGradient}
+          >
+            <Ionicons name="headset" size={20} color="#FFFFFF" />
+          </LinearGradient>
+        </TouchableOpacity>
+      </View>
 
       {/* Wave Animation */}
       {isPlaying && (
@@ -326,11 +392,17 @@ const styles = StyleSheet.create({
     color: '#7F8C8D',
     textAlign: 'center',
   },
+  buttonContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+    gap: 16,
+  },
   playButton: {
     width: 60,
     height: 60,
     borderRadius: 30,
-    marginBottom: 16,
     elevation: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -341,6 +413,23 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  previewButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  previewButtonGradient: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 25,
     justifyContent: 'center',
     alignItems: 'center',
   },

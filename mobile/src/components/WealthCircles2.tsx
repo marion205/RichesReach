@@ -132,7 +132,7 @@ export default function WealthCircles2({ onCirclePress, onCreateCircle, onJoinCi
       console.log('🔄 Loading circles from API...');
       
       // Use real API endpoint
-      const response = await fetch('http://192.168.1.236:8000/api/wealth-circles/', {
+      const response = await fetch('http://localhost:8000/api/wealth-circles/', {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',

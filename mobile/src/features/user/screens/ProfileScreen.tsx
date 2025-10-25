@@ -340,6 +340,16 @@ return (
 <Text style={styles.settingsItemText}>Learning</Text>
 </TouchableOpacity>
 <TouchableOpacity 
+  style={styles.settingsItem}
+  onPress={() => {
+    setShowSettingsMenu(false);
+    navigateTo?.('account-management');
+  }}
+>
+<Icon name="settings" size={16} color="#333" />
+<Text style={styles.settingsItemText}>Account Settings</Text>
+</TouchableOpacity>
+<TouchableOpacity 
   style={[styles.settingsItem, styles.logoutItem]}
   onPress={() => {
     setShowSettingsMenu(false);

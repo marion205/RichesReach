@@ -14,6 +14,7 @@ import {
 import { useQuery, useMutation } from '@apollo/client';
 import { gql } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
+import { useVoice, voiceOptions } from '../../../contexts/VoiceContext';
 
 // GraphQL Queries and Mutations
 const GET_USER_PROFILE = gql`
@@ -110,6 +111,7 @@ const CHANGE_PASSWORD = gql`
 const AccountManagementScreen = ({ navigateTo }) => {
   const [activeSection, setActiveSection] = useState('profile');
   const [isEditing, setIsEditing] = useState(false);
+  const { voiceSettings, updateVoiceSettings } = useVoice();
   
   // Form states
   const [profileData, setProfileData] = useState({
@@ -285,237 +287,125 @@ const AccountManagementScreen = ({ navigateTo }) => {
     });
   };
 
-  const renderProfileSection = () => (
-    <View style={styles.section}>
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Personal Information</Text>
-        <TouchableOpacity
-          onPress={() => setIsEditing(!isEditing)}
-          style={styles.editButton}
-        >
-          <Icon name={isEditing ? 'x' : 'edit-3'} size={16} color="#007AFF" />
-          <Text style={styles.editButtonText}>
-            {isEditing ? 'Cancel' : 'Edit'}
-          </Text>
-        </TouchableOpacity>
-      </View>
 
-      <View style={styles.form}>
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Full Name</Text>
-          <TextInput
-            style={[styles.input, !isEditing && styles.inputDisabled]}
-            value={profileData.name}
-            onChangeText={(text) => setProfileData({...profileData, name: text})}
-            editable={isEditing}
-            placeholder="Enter your full name"
-          />
-        </View>
 
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Email Address</Text>
-          <TextInput
-            style={[styles.input, !isEditing && styles.inputDisabled]}
-            value={profileData.email}
-            onChangeText={(text) => setProfileData({...profileData, email: text})}
-            editable={isEditing}
-            placeholder="Enter your email"
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Phone Number</Text>
-          <TextInput
-            style={[styles.input, !isEditing && styles.inputDisabled]}
-            value={profileData.phone}
-            onChangeText={(text) => setProfileData({...profileData, phone: text})}
-            editable={isEditing}
-            placeholder="Enter your phone number"
-            keyboardType="phone-pad"
-          />
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Date of Birth</Text>
-          <TextInput
-            style={[styles.input, !isEditing && styles.inputDisabled]}
-            value={profileData.dateOfBirth}
-            onChangeText={(text) => setProfileData({...profileData, dateOfBirth: text})}
-            editable={isEditing}
-            placeholder="MM/DD/YYYY"
-          />
-        </View>
-
-        <Text style={styles.subsectionTitle}>Address</Text>
-        
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Street Address</Text>
-          <TextInput
-            style={[styles.input, !isEditing && styles.inputDisabled]}
-            value={profileData.address.street}
-            onChangeText={(text) => setProfileData({
-              ...profileData, 
-              address: {...profileData.address, street: text}
-            })}
-            editable={isEditing}
-            placeholder="Enter street address"
-          />
-        </View>
-
-        <View style={styles.row}>
-          <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
-            <Text style={styles.label}>City</Text>
-            <TextInput
-              style={[styles.input, !isEditing && styles.inputDisabled]}
-              value={profileData.address.city}
-              onChangeText={(text) => setProfileData({
-                ...profileData, 
-                address: {...profileData.address, city: text}
-              })}
-              editable={isEditing}
-              placeholder="City"
-            />
-          </View>
-          <View style={[styles.inputGroup, { flex: 1, marginLeft: 8 }]}>
-            <Text style={styles.label}>State</Text>
-            <TextInput
-              style={[styles.input, !isEditing && styles.inputDisabled]}
-              value={profileData.address.state}
-              onChangeText={(text) => setProfileData({
-                ...profileData, 
-                address: {...profileData.address, state: text}
-              })}
-              editable={isEditing}
-              placeholder="State"
-            />
-          </View>
-        </View>
-
-        <View style={styles.row}>
-          <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
-            <Text style={styles.label}>ZIP Code</Text>
-            <TextInput
-              style={[styles.input, !isEditing && styles.inputDisabled]}
-              value={profileData.address.zipCode}
-              onChangeText={(text) => setProfileData({
-                ...profileData, 
-                address: {...profileData.address, zipCode: text}
-              })}
-              editable={isEditing}
-              placeholder="ZIP"
-              keyboardType="numeric"
-            />
-          </View>
-          <View style={[styles.inputGroup, { flex: 1, marginLeft: 8 }]}>
-            <Text style={styles.label}>Country</Text>
-            <TextInput
-              style={[styles.input, !isEditing && styles.inputDisabled]}
-              value={profileData.address.country}
-              onChangeText={(text) => setProfileData({
-                ...profileData, 
-                address: {...profileData.address, country: text}
-              })}
-              editable={isEditing}
-              placeholder="Country"
-            />
-          </View>
-        </View>
-
-        {isEditing && (
-          <TouchableOpacity
-            style={styles.saveButton}
-            onPress={handleProfileUpdate}
-            disabled={profileLoading}
-          >
-            {profileLoading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.saveButtonText}>Save Changes</Text>
-            )}
-          </TouchableOpacity>
-        )}
-      </View>
-    </View>
-  );
 
   const renderPreferencesSection = () => (
     <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Preferences</Text>
+      <Text style={styles.sectionTitle}>Voice Settings</Text>
+      <Text style={styles.sectionDescription}>
+        Choose your preferred voice for AI interactions throughout the app
+      </Text>
+      
+      {voiceOptions.map((voice) => (
+        <TouchableOpacity
+          key={voice.id}
+          style={[
+            styles.voiceOption,
+            voiceSettings.selectedVoice === voice.id && styles.voiceOptionSelected,
+          ]}
+          onPress={() => updateVoiceSettings({ selectedVoice: voice.id })}
+        >
+          <View style={styles.voiceOptionContent}>
+            <Text style={[
+              styles.voiceOptionName,
+              voiceSettings.selectedVoice === voice.id && styles.voiceOptionNameSelected,
+            ]}>
+              {voice.name}
+            </Text>
+            <Text style={styles.voiceOptionDescription}>
+              {voice.description}
+            </Text>
+          </View>
+          {voiceSettings.selectedVoice === voice.id && (
+            <Icon name="check" size={20} color="#007AFF" />
+          )}
+        </TouchableOpacity>
+      ))}
+
+      <View style={styles.sectionDivider} />
+
+      <Text style={styles.sectionTitle}>App Preferences</Text>
       
       <View style={styles.preferenceItem}>
-        <View style={styles.preferenceInfo}>
-          <Text style={styles.preferenceTitle}>Theme</Text>
-          <Text style={styles.preferenceDescription}>Choose your preferred theme</Text>
-        </View>
-        <View style={styles.preferenceControl}>
-          <TouchableOpacity
-            style={[styles.themeButton, preferences.theme === 'light' && styles.themeButtonActive]}
-            onPress={() => setPreferences({...preferences, theme: 'light'})}
-          >
-            <Text style={[styles.themeButtonText, preferences.theme === 'light' && styles.themeButtonTextActive]}>
-              Light
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.themeButton, preferences.theme === 'dark' && styles.themeButtonActive]}
-            onPress={() => setPreferences({...preferences, theme: 'dark'})}
-          >
-            <Text style={[styles.themeButtonText, preferences.theme === 'dark' && styles.themeButtonTextActive]}>
-              Dark
-            </Text>
-          </TouchableOpacity>
+        <Text style={styles.preferenceLabel}>Theme</Text>
+        <View style={styles.preferenceValue}>
+          <Text style={styles.preferenceValueText}>
+            {preferences.theme === 'light' ? 'Light' : 'Dark'}
+          </Text>
+          <Icon name="chevron-right" size={16} color="#8E8E93" />
         </View>
       </View>
 
       <View style={styles.preferenceItem}>
-        <View style={styles.preferenceInfo}>
-          <Text style={styles.preferenceTitle}>Notifications</Text>
-          <Text style={styles.preferenceDescription}>Receive push notifications</Text>
-        </View>
+        <Text style={styles.preferenceLabel}>Notifications</Text>
         <Switch
           value={preferences.notifications}
-          onValueChange={(value) => setPreferences({...preferences, notifications: value})}
+          onValueChange={(value) => setPreferences({ ...preferences, notifications: value })}
           trackColor={{ false: '#E5E5EA', true: '#007AFF' }}
-          thumbColor="#fff"
+          thumbColor={preferences.notifications ? '#fff' : '#f4f3f4'}
         />
       </View>
 
       <View style={styles.preferenceItem}>
-        <View style={styles.preferenceInfo}>
-          <Text style={styles.preferenceTitle}>Privacy</Text>
-          <Text style={styles.preferenceDescription}>Control your profile visibility</Text>
+        <Text style={styles.preferenceLabel}>Language</Text>
+        <View style={styles.preferenceValue}>
+          <Text style={styles.preferenceValueText}>English</Text>
+          <Icon name="chevron-right" size={16} color="#8E8E93" />
         </View>
-        <View style={styles.preferenceControl}>
-          <TouchableOpacity
-            style={[styles.privacyButton, preferences.privacy === 'public' && styles.privacyButtonActive]}
-            onPress={() => setPreferences({...preferences, privacy: 'public'})}
-          >
-            <Text style={[styles.privacyButtonText, preferences.privacy === 'public' && styles.privacyButtonTextActive]}>
-              Public
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.privacyButton, preferences.privacy === 'private' && styles.privacyButtonActive]}
-            onPress={() => setPreferences({...preferences, privacy: 'private'})}
-          >
-            <Text style={[styles.privacyButtonText, preferences.privacy === 'private' && styles.privacyButtonTextActive]}>
-              Private
-            </Text>
-          </TouchableOpacity>
-        </View>
+      </View>
+    </View>
+  );
+
+  const renderProfileSection = () => (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>Personal Information</Text>
+      <Text style={styles.sectionDescription}>
+        Update your personal details and contact information
+      </Text>
+      
+      <View style={styles.inputGroup}>
+        <Text style={styles.inputLabel}>Full Name</Text>
+        <TextInput
+          style={styles.textInput}
+          value={profileData.name}
+          onChangeText={(text) => setProfileData({ ...profileData, name: text })}
+          placeholder="Enter your full name"
+        />
+      </View>
+
+      <View style={styles.inputGroup}>
+        <Text style={styles.inputLabel}>Email</Text>
+        <TextInput
+          style={styles.textInput}
+          value={profileData.email}
+          onChangeText={(text) => setProfileData({ ...profileData, email: text })}
+          placeholder="Enter your email"
+          keyboardType="email-address"
+          autoCapitalize="none"
+        />
+      </View>
+
+      <View style={styles.inputGroup}>
+        <Text style={styles.inputLabel}>Phone</Text>
+        <TextInput
+          style={styles.textInput}
+          value={profileData.phone}
+          onChangeText={(text) => setProfileData({ ...profileData, phone: text })}
+          placeholder="Enter your phone number"
+          keyboardType="phone-pad"
+        />
       </View>
 
       <TouchableOpacity
         style={styles.saveButton}
-        onPress={handlePreferencesUpdate}
-        disabled={preferencesLoading}
+        onPress={handleProfileUpdate}
+        disabled={profileLoading}
       >
-        {preferencesLoading ? (
+        {profileLoading ? (
           <ActivityIndicator color="#fff" />
         ) : (
-          <Text style={styles.saveButtonText}>Save Preferences</Text>
+          <Text style={styles.saveButtonText}>Save Profile</Text>
         )}
       </TouchableOpacity>
     </View>
@@ -523,82 +413,79 @@ const AccountManagementScreen = ({ navigateTo }) => {
 
   const renderSecuritySection = () => (
     <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Security</Text>
-      
+      <Text style={styles.sectionTitle}>Security Settings</Text>
+      <Text style={styles.sectionDescription}>
+        Manage your account security and authentication
+      </Text>
+
       <View style={styles.preferenceItem}>
-        <View style={styles.preferenceInfo}>
-          <Text style={styles.preferenceTitle}>Two-Factor Authentication</Text>
-          <Text style={styles.preferenceDescription}>Add an extra layer of security</Text>
-        </View>
+        <Text style={styles.preferenceLabel}>Two-Factor Authentication</Text>
         <Switch
           value={security.twoFactorEnabled}
-          onValueChange={(value) => setSecurity({...security, twoFactorEnabled: value})}
+          onValueChange={(value) => setSecurity({ ...security, twoFactorEnabled: value })}
           trackColor={{ false: '#E5E5EA', true: '#007AFF' }}
-          thumbColor="#fff"
+          thumbColor={security.twoFactorEnabled ? '#fff' : '#f4f3f4'}
         />
       </View>
 
       <View style={styles.preferenceItem}>
-        <View style={styles.preferenceInfo}>
-          <Text style={styles.preferenceTitle}>Biometric Authentication</Text>
-          <Text style={styles.preferenceDescription}>Use fingerprint or face ID</Text>
-        </View>
+        <Text style={styles.preferenceLabel}>Biometric Authentication</Text>
         <Switch
           value={security.biometricEnabled}
-          onValueChange={(value) => setSecurity({...security, biometricEnabled: value})}
+          onValueChange={(value) => setSecurity({ ...security, biometricEnabled: value })}
           trackColor={{ false: '#E5E5EA', true: '#007AFF' }}
-          thumbColor="#fff"
+          thumbColor={security.biometricEnabled ? '#fff' : '#f4f3f4'}
         />
       </View>
 
-      <View style={styles.passwordSection}>
-        <Text style={styles.subsectionTitle}>Change Password</Text>
-        
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Current Password</Text>
-          <TextInput
-            style={styles.input}
-            value={passwordData.currentPassword}
-            onChangeText={(text) => setPasswordData({...passwordData, currentPassword: text})}
-            placeholder="Enter current password"
-            secureTextEntry
-          />
-        </View>
+      <View style={styles.sectionDivider} />
 
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>New Password</Text>
-          <TextInput
-            style={styles.input}
-            value={passwordData.newPassword}
-            onChangeText={(text) => setPasswordData({...passwordData, newPassword: text})}
-            placeholder="Enter new password"
-            secureTextEntry
-          />
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Confirm New Password</Text>
-          <TextInput
-            style={styles.input}
-            value={passwordData.confirmPassword}
-            onChangeText={(text) => setPasswordData({...passwordData, confirmPassword: text})}
-            placeholder="Confirm new password"
-            secureTextEntry
-          />
-        </View>
-
-        <TouchableOpacity
-          style={styles.saveButton}
-          onPress={handlePasswordChange}
-          disabled={passwordLoading}
-        >
-          {passwordLoading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.saveButtonText}>Change Password</Text>
-          )}
-        </TouchableOpacity>
+      <Text style={styles.sectionTitle}>Change Password</Text>
+      
+      <View style={styles.inputGroup}>
+        <Text style={styles.inputLabel}>Current Password</Text>
+        <TextInput
+          style={styles.textInput}
+          value={passwordData.currentPassword}
+          onChangeText={(text) => setPasswordData({ ...passwordData, currentPassword: text })}
+          placeholder="Enter current password"
+          secureTextEntry
+        />
       </View>
+
+      <View style={styles.inputGroup}>
+        <Text style={styles.inputLabel}>New Password</Text>
+        <TextInput
+          style={styles.textInput}
+          value={passwordData.newPassword}
+          onChangeText={(text) => setPasswordData({ ...passwordData, newPassword: text })}
+          placeholder="Enter new password"
+          secureTextEntry
+        />
+      </View>
+
+      <View style={styles.inputGroup}>
+        <Text style={styles.inputLabel}>Confirm New Password</Text>
+        <TextInput
+          style={styles.textInput}
+          value={passwordData.confirmPassword}
+          onChangeText={(text) => setPasswordData({ ...passwordData, confirmPassword: text })}
+          placeholder="Confirm new password"
+          secureTextEntry
+        />
+      </View>
+
+      <TouchableOpacity
+        style={styles.saveButton}
+        onPress={handlePasswordChange}
+        disabled={passwordLoading}
+      >
+        {passwordLoading ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.saveButtonText}>Change Password</Text>
+        )}
+      </TouchableOpacity>
 
       <TouchableOpacity
         style={styles.saveButton}
@@ -891,6 +778,85 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 16,
     color: '#8E8E93',
+  },
+  voiceOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    marginBottom: 8,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  voiceOptionSelected: {
+    borderColor: '#007AFF',
+    backgroundColor: '#F0F8FF',
+  },
+  voiceOptionContent: {
+    flex: 1,
+  },
+  voiceOptionName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 4,
+  },
+  voiceOptionNameSelected: {
+    color: '#007AFF',
+  },
+  voiceOptionDescription: {
+    fontSize: 14,
+    color: '#8E8E93',
+  },
+  subSectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#000',
+    marginTop: 24,
+    marginBottom: 16,
+  },
+  sectionDescription: {
+    fontSize: 16,
+    color: '#8E8E93',
+    marginBottom: 24,
+    lineHeight: 22,
+  },
+  sectionDivider: {
+    height: 1,
+    backgroundColor: '#F2F2F7',
+    marginVertical: 24,
+  },
+  preferenceLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000',
+  },
+  preferenceValue: {
+    fontSize: 16,
+    color: '#8E8E93',
+    marginLeft: 8,
+  },
+  preferenceValueText: {
+    fontSize: 16,
+    color: '#8E8E93',
+    marginLeft: 8,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 8,
+  },
+  textInput: {
+    backgroundColor: '#F2F2F7',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    fontSize: 16,
+    color: '#000',
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
   },
 });
 
