@@ -2043,6 +2043,85 @@ async def get_circle_posts(circle_id: str):
         ]
     }
 
+# Voice Trading Endpoints
+@app.post("/api/voice-trading/parse-command/")
+async def parse_voice_command(request: dict):
+    """Parse voice command into structured order data"""
+    transcript = request.get("transcript", "")
+    voice_name = request.get("voice_name", "Nova")
+    
+    # Mock voice command parsing
+    mock_parsed_order = {
+        "symbol": "AAPL",
+        "side": "buy",
+        "quantity": 100,
+        "order_type": "limit",
+        "price": 150.0,
+        "confidence": 0.85,
+        "confirmation_message": f"{voice_name} confirming: buy 100 AAPL at $150. Proceeding?"
+    }
+    
+    return {
+        "success": True,
+        "parsed_order": mock_parsed_order,
+        "message": "Voice command parsed successfully"
+    }
+
+@app.post("/api/voice-trading/place-order/")
+async def place_voice_order(request: dict):
+    """Place order from voice command"""
+    symbol = request.get("symbol", "AAPL")
+    side = request.get("side", "buy")
+    quantity = request.get("quantity", 100)
+    order_type = request.get("order_type", "market")
+    price = request.get("price")
+    
+    # Mock order placement
+    mock_order = {
+        "id": f"voice_order_{int(time.time())}",
+        "symbol": symbol,
+        "side": side,
+        "order_type": order_type,
+        "quantity": quantity,
+        "status": "filled",
+        "limit_price": price,
+        "created_at": datetime.now().isoformat()
+    }
+    
+    return {
+        "success": True,
+        "order": mock_order,
+        "message": f"Order placed successfully: {side} {quantity} {symbol}"
+    }
+
+@app.get("/api/voice-trading/status/")
+async def get_trading_status():
+    """Get current trading status"""
+    return {
+        "account": {
+            "buying_power": 100000.0,
+            "portfolio_value": 100000.0,
+            "day_trade_count": 0,
+            "pattern_day_trader": False
+        },
+        "positions": [],
+        "open_orders": [],
+        "streaming": {
+            "active": True,
+            "symbols": ["AAPL", "MSFT", "GOOGL", "TSLA", "NVDA"]
+        }
+    }
+
+@app.post("/api/voice-trading/cancel-order/")
+async def cancel_voice_order(request: dict):
+    """Cancel an order"""
+    order_id = request.get("order_id")
+    
+    return {
+        "success": True,
+        "message": f"Order {order_id} cancelled successfully"
+    }
+
 if __name__ == "__main__":
     print("🚀 Starting RichesReach Test Server...")
     print("📡 Server will be available at: http://127.0.0.1:8000")
