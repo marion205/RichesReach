@@ -3223,6 +3223,272 @@ async def get_security_validation():
         "timestamp": datetime.now().isoformat()
     }
 
+# Voice AI Trading Commands Integration Endpoints
+@app.post("/api/voice-trading/process-command/")
+async def process_voice_trading_command(command_data: dict):
+    """Process voice trading command with real market data and brokerage integration"""
+    try:
+        from backend.voice.enhanced_trading_commands import voice_trading_manager
+        
+        text = command_data.get("text", "")
+        voice_name = command_data.get("voice_name", "Nova")
+        
+        if not text:
+            return {
+                "success": False,
+                "error": "No command text provided",
+                "message": f"{voice_name}: I didn't hear anything. Please try again."
+            }
+        
+        # Process the command
+        result = await voice_trading_manager.process_voice_command(text, voice_name)
+        
+        return result
+    
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Failed to process voice command: {str(e)}",
+            "message": f"Nova: I encountered an error processing your command. Please try again."
+        }
+
+@app.get("/api/voice-trading/help-commands/")
+async def get_voice_trading_help():
+    """Get available voice trading commands"""
+    try:
+        from backend.voice.enhanced_trading_commands import voice_trading_manager
+        
+        help_data = await voice_trading_manager.get_help_commands("Nova")
+        
+        return help_data
+    
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Failed to get help commands: {str(e)}",
+            "message": "Nova: I couldn't load the help commands right now."
+        }
+
+@app.post("/api/voice-trading/create-session/")
+async def create_voice_trading_session(session_data: dict):
+    """Create a new voice trading session"""
+    try:
+        from backend.voice.enhanced_trading_commands import voice_trading_manager
+        
+        user_id = session_data.get("user_id", "default_user")
+        voice_name = session_data.get("voice_name", "Nova")
+        
+        session = await voice_trading_manager.executor.create_session(user_id, voice_name)
+        
+        return {
+            "success": True,
+            "session": {
+                "session_id": session.session_id,
+                "user_id": session.user_id,
+                "voice_name": session.voice_name,
+                "created_at": session.created_at.isoformat()
+            },
+            "message": f"{voice_name}: Voice trading session created successfully."
+        }
+    
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Failed to create session: {str(e)}",
+            "message": "Nova: I couldn't create a trading session right now."
+        }
+
+@app.get("/api/voice-trading/session/{session_id}")
+async def get_voice_trading_session(session_id: str):
+    """Get voice trading session details"""
+    try:
+        from backend.voice.enhanced_trading_commands import voice_trading_manager
+        
+        session = await voice_trading_manager.executor.get_session(session_id)
+        
+        if session:
+            return {
+                "success": True,
+                "session": {
+                    "session_id": session.session_id,
+                    "user_id": session.user_id,
+                    "voice_name": session.voice_name,
+                    "active_commands": len(session.active_commands),
+                    "command_history": len(session.command_history),
+                    "created_at": session.created_at.isoformat(),
+                    "last_activity": session.last_activity.isoformat()
+                }
+            }
+        else:
+            return {
+                "success": False,
+                "error": "Session not found",
+                "message": "Nova: Session not found."
+            }
+    
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Failed to get session: {str(e)}",
+            "message": "Nova: I couldn't retrieve the session information."
+        }
+
+@app.post("/api/voice-trading/cleanup-session/{session_id}")
+async def cleanup_voice_trading_session(session_id: str):
+    """Cleanup voice trading session"""
+    try:
+        from backend.voice.enhanced_trading_commands import voice_trading_manager
+        
+        await voice_trading_manager.executor.cleanup_session(session_id)
+        
+        return {
+            "success": True,
+            "message": "Nova: Session cleaned up successfully."
+        }
+    
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Failed to cleanup session: {str(e)}",
+            "message": "Nova: I couldn't cleanup the session."
+        }
+
+@app.post("/api/voice-trading/parse-command/")
+async def parse_voice_command_only(command_data: dict):
+    """Parse voice command without execution (for testing)"""
+    try:
+        from backend.voice.enhanced_trading_commands import EnhancedVoiceCommandParser
+        
+        parser = EnhancedVoiceCommandParser()
+        text = command_data.get("text", "")
+        voice_name = command_data.get("voice_name", "Nova")
+        
+        command = parser.parse_command(text, voice_name)
+        
+        if command:
+            return {
+                "success": True,
+                "command": {
+                    "id": command.id,
+                    "type": command.command_type.value,
+                    "original_text": command.original_text,
+                    "parsed_data": command.parsed_data,
+                    "confidence": command.confidence,
+                    "voice_name": command.voice_name
+                },
+                "message": f"{voice_name}: Command parsed successfully."
+            }
+        else:
+            return {
+                "success": False,
+                "error": "Could not parse command",
+                "message": f"{voice_name}: I didn't understand that command. Please try again."
+            }
+    
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Failed to parse command: {str(e)}",
+            "message": f"Nova: I encountered an error parsing your command."
+        }
+
+@app.get("/api/voice-trading/available-symbols/")
+async def get_available_symbols():
+    """Get list of available symbols for voice commands"""
+    try:
+        from backend.voice.enhanced_trading_commands import EnhancedVoiceCommandParser
+        
+        parser = EnhancedVoiceCommandParser()
+        
+        return {
+            "success": True,
+            "symbols": parser.symbols,
+            "message": "Available symbols retrieved successfully."
+        }
+    
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Failed to get symbols: {str(e)}",
+            "message": "Nova: I couldn't retrieve the available symbols."
+        }
+
+@app.get("/api/voice-trading/command-examples/")
+async def get_command_examples():
+    """Get example voice commands for each type"""
+    try:
+        examples = {
+            "trading": [
+                "Buy 100 shares of AAPL",
+                "Sell 50 TSLA at market",
+                "Place limit order for 25 MSFT at $300",
+                "Buy 10 GOOGL with stop loss at $2500",
+                "Sell 200 NVDA at limit $400"
+            ],
+            "quotes": [
+                "What's the price of AAPL",
+                "Show me TSLA quote",
+                "Current price for MSFT",
+                "Quote for GOOGL",
+                "Price of NVDA"
+            ],
+            "positions": [
+                "Show my AAPL position",
+                "What positions do I have",
+                "Position status for TSLA",
+                "My MSFT position",
+                "All my positions"
+            ],
+            "account": [
+                "What's my account balance",
+                "Show my buying power",
+                "Account equity",
+                "My cash balance",
+                "Portfolio value"
+            ],
+            "news": [
+                "News for AAPL",
+                "Show me TSLA headlines",
+                "Latest news for MSFT",
+                "GOOGL news",
+                "NVDA headlines"
+            ],
+            "market_status": [
+                "Is the market open",
+                "Market status",
+                "Trading hours",
+                "Market open or closed",
+                "Current market time"
+            ],
+            "portfolio": [
+                "Show my portfolio",
+                "All positions",
+                "Portfolio summary",
+                "My holdings",
+                "Portfolio overview"
+            ],
+            "alerts": [
+                "Alert me when AAPL hits $160",
+                "Watch TSLA above $250",
+                "Monitor MSFT below $300",
+                "Set alert for GOOGL at $2500",
+                "Notify me when NVDA reaches $400"
+            ]
+        }
+        
+        return {
+            "success": True,
+            "examples": examples,
+            "message": "Command examples retrieved successfully."
+        }
+    
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Failed to get examples: {str(e)}",
+            "message": "Nova: I couldn't retrieve the command examples."
+        }
+
 # Real Market Data & Brokerage Integration Endpoints
 @app.get("/api/real-market/quotes/{symbol}")
 async def get_real_quote(symbol: str):
@@ -3619,7 +3885,15 @@ if __name__ == "__main__":
     print("   - /api/real-brokerage/account/")
     print("   - /api/real-brokerage/bracket-order/")
     print("   - /api/real-brokerage/portfolio-summary/")
-    print("🧪 This server includes both mock and real integration capabilities")
+    print("🎤 Voice AI Trading Commands endpoints available:")
+    print("   - /api/voice-trading/process-command/")
+    print("   - /api/voice-trading/help-commands/")
+    print("   - /api/voice-trading/create-session/")
+    print("   - /api/voice-trading/session/{session_id}")
+    print("   - /api/voice-trading/parse-command/")
+    print("   - /api/voice-trading/available-symbols/")
+    print("   - /api/voice-trading/command-examples/")
+    print("🧪 This server includes mock, real integration, and voice AI capabilities")
     print("=" * 60)
     
     uvicorn.run(
