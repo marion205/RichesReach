@@ -2122,6 +2122,227 @@ async def cancel_voice_order(request: dict):
         "message": f"Order {order_id} cancelled successfully"
     }
 
+# Live Data Endpoints
+@app.get("/api/live-data/universe/{mode}")
+async def get_live_universe(mode: str):
+    """Get live trading universe for mode"""
+    # Mock universe data
+    universe_data = {
+        "SAFE": [
+            {
+                "symbol": "AAPL",
+                "price": 175.50,
+                "volume": 2500000,
+                "avg_volume": 2000000,
+                "volatility": 0.025,
+                "momentum": 0.015,
+                "spread_bps": 2.5,
+                "score": 0.85
+            },
+            {
+                "symbol": "MSFT",
+                "price": 380.25,
+                "volume": 1800000,
+                "avg_volume": 1500000,
+                "volatility": 0.022,
+                "momentum": 0.012,
+                "spread_bps": 3.1,
+                "score": 0.82
+            },
+            {
+                "symbol": "GOOGL",
+                "price": 142.80,
+                "volume": 1200000,
+                "avg_volume": 1000000,
+                "volatility": 0.028,
+                "momentum": 0.018,
+                "spread_bps": 2.8,
+                "score": 0.78
+            }
+        ],
+        "AGGRESSIVE": [
+            {
+                "symbol": "TSLA",
+                "price": 245.75,
+                "volume": 3500000,
+                "avg_volume": 2000000,
+                "volatility": 0.045,
+                "momentum": 0.025,
+                "spread_bps": 4.2,
+                "score": 0.88
+            },
+            {
+                "symbol": "NVDA",
+                "price": 485.30,
+                "volume": 2800000,
+                "avg_volume": 1800000,
+                "volatility": 0.038,
+                "momentum": 0.022,
+                "spread_bps": 3.8,
+                "score": 0.85
+            },
+            {
+                "symbol": "META",
+                "price": 325.40,
+                "volume": 2200000,
+                "avg_volume": 1500000,
+                "volatility": 0.032,
+                "momentum": 0.019,
+                "spread_bps": 3.5,
+                "score": 0.81
+            }
+        ]
+    }
+    
+    return {
+        "mode": mode,
+        "universe": universe_data.get(mode, universe_data["SAFE"]),
+        "timestamp": datetime.now().isoformat(),
+        "total_symbols": len(universe_data.get(mode, universe_data["SAFE"]))
+    }
+
+@app.get("/api/live-data/features/{symbol}")
+async def get_live_features(symbol: str):
+    """Get real-time features for a symbol"""
+    # Mock feature calculation
+    features = {
+        "symbol": symbol,
+        "timestamp": datetime.now().isoformat(),
+        "momentum_15m": 0.015,
+        "momentum_5m": 0.008,
+        "momentum_1m": 0.003,
+        "rvol_10m": 1.8,
+        "rvol_5m": 2.1,
+        "volume_spike": 1.5,
+        "rsi_14": 65.5,
+        "macd_signal": 0.12,
+        "bollinger_position": 0.75,
+        "vwap_distance": 0.008,
+        "spread_bps": 2.8,
+        "bid_ask_ratio": 0.999,
+        "order_flow_imbalance": 0.15,
+        "atr_5m": 1.25,
+        "atr_15m": 1.45,
+        "volatility_regime": "NORMAL",
+        "breakout_pct": 0.012,
+        "resistance_level": 180.50,
+        "support_level": 172.30,
+        "news_sentiment": 0.3,
+        "earnings_proximity": 0.1,
+        "catalyst_score": 0.4,
+        "composite_score": 0.78
+    }
+    
+    return features
+
+@app.get("/api/live-data/picks/{mode}")
+async def get_live_picks(mode: str):
+    """Get live day trading picks"""
+    # Mock picks generation
+    picks_data = {
+        "SAFE": [
+            {
+                "symbol": "AAPL",
+                "side": "LONG",
+                "score": 0.85,
+                "confidence": 0.88,
+                "features": {
+                    "momentum_15m": 0.015,
+                    "rvol_10m": 1.8,
+                    "vwap_dist": 0.008,
+                    "breakout_pct": 0.012,
+                    "spread_bps": 2.5,
+                    "catalyst_score": 0.4
+                },
+                "risk": {
+                    "atr_5m": 1.25,
+                    "size_shares": 200,
+                    "stop": 172.50,
+                    "targets": [178.50, 181.50],
+                    "time_stop_min": 60
+                },
+                "market_regime": "BULL",
+                "volatility_regime": "NORMAL",
+                "entry_time": datetime.now().isoformat(),
+                "oracle_insight": "Oracle: AAPL showing strong bullish momentum with 1.8x volume spike",
+                "notes": "High volume spike: 1.8x; Breakout: 1.20%; Tight spreads - good liquidity"
+            }
+        ],
+        "AGGRESSIVE": [
+            {
+                "symbol": "TSLA",
+                "side": "LONG",
+                "score": 0.88,
+                "confidence": 0.92,
+                "features": {
+                    "momentum_15m": 0.025,
+                    "rvol_10m": 2.1,
+                    "vwap_dist": 0.015,
+                    "breakout_pct": 0.018,
+                    "spread_bps": 4.2,
+                    "catalyst_score": 0.6
+                },
+                "risk": {
+                    "atr_5m": 2.15,
+                    "size_shares": 150,
+                    "stop": 240.50,
+                    "targets": [251.00, 256.50],
+                    "time_stop_min": 30
+                },
+                "market_regime": "VOLATILE",
+                "volatility_regime": "HIGH",
+                "entry_time": datetime.now().isoformat(),
+                "oracle_insight": "Oracle: TSLA breaking above resistance with RSI 68.2 - bullish continuation likely",
+                "notes": "High volume spike: 2.1x; Breakout: 1.80%; Strong catalyst support"
+            }
+        ]
+    }
+    
+    return {
+        "mode": mode,
+        "picks": picks_data.get(mode, picks_data["SAFE"]),
+        "asOf": datetime.now().isoformat(),
+        "universeSize": 50,
+        "qualityThreshold": 0.7 if mode == "SAFE" else 0.6
+    }
+
+@app.get("/api/live-data/market-status/")
+async def get_market_status():
+    """Get current market status"""
+    return {
+        "market_open": True,
+        "pre_market": False,
+        "after_hours": False,
+        "session": "REGULAR",
+        "time_until_close": "2h 15m",
+        "volatility_regime": "NORMAL",
+        "market_regime": "BULL",
+        "vix_level": 18.5,
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.get("/api/live-data/top-movers/")
+async def get_top_movers():
+    """Get top moving symbols"""
+    return {
+        "gainers": [
+            {"symbol": "TSLA", "change": 0.025, "volume": 3500000},
+            {"symbol": "NVDA", "change": 0.022, "volume": 2800000},
+            {"symbol": "META", "change": 0.019, "volume": 2200000}
+        ],
+        "losers": [
+            {"symbol": "AAPL", "change": -0.012, "volume": 2500000},
+            {"symbol": "MSFT", "change": -0.008, "volume": 1800000},
+            {"symbol": "GOOGL", "change": -0.005, "volume": 1200000}
+        ],
+        "volume_leaders": [
+            {"symbol": "TSLA", "volume": 3500000, "change": 0.025},
+            {"symbol": "AAPL", "volume": 2500000, "change": -0.012},
+            {"symbol": "NVDA", "volume": 2800000, "change": 0.022}
+        ],
+        "timestamp": datetime.now().isoformat()
+    }
+
 if __name__ == "__main__":
     print("🚀 Starting RichesReach Test Server...")
     print("📡 Server will be available at: http://127.0.0.1:8000")
