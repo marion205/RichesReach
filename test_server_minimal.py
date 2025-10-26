@@ -3223,6 +3223,377 @@ async def get_security_validation():
         "timestamp": datetime.now().isoformat()
     }
 
+# Real Market Data & Brokerage Integration Endpoints
+@app.get("/api/real-market/quotes/{symbol}")
+async def get_real_quote(symbol: str):
+    """Get real-time quote using market data provider"""
+    try:
+        # Import the market data provider
+        from backend.market.providers.enhanced_base import create_market_data_provider
+        
+        # Create provider (using mock for now, can be switched to Polygon)
+        provider = create_market_data_provider("mock", "mock_key")
+        
+        # Get quote
+        quotes = await provider.get_quotes([symbol])
+        
+        if symbol in quotes:
+            quote = quotes[symbol]
+            return {
+                "symbol": quote.symbol,
+                "price": quote.price,
+                "bid": quote.bid,
+                "ask": quote.ask,
+                "bid_size": quote.bid_size,
+                "ask_size": quote.ask_size,
+                "volume": quote.volume,
+                "timestamp": quote.timestamp.isoformat(),
+                "session": quote.session.value,
+                "spread": quote.spread,
+                "mid_price": quote.mid_price,
+                "change": quote.change,
+                "change_percent": quote.change_percent
+            }
+        else:
+            return {"error": f"No quote data available for {symbol}"}
+    
+    except Exception as e:
+        return {"error": f"Failed to get quote for {symbol}: {str(e)}"}
+
+@app.get("/api/real-market/quotes/")
+async def get_multiple_real_quotes(symbols: str):
+    """Get real-time quotes for multiple symbols"""
+    try:
+        from backend.market.providers.enhanced_base import create_market_data_provider
+        
+        symbol_list = [s.strip().upper() for s in symbols.split(",")]
+        provider = create_market_data_provider("mock", "mock_key")
+        
+        quotes = await provider.get_quotes(symbol_list)
+        
+        result = {}
+        for symbol, quote in quotes.items():
+            result[symbol] = {
+                "symbol": quote.symbol,
+                "price": quote.price,
+                "bid": quote.bid,
+                "ask": quote.ask,
+                "volume": quote.volume,
+                "timestamp": quote.timestamp.isoformat(),
+                "spread": quote.spread,
+                "change": quote.change,
+                "change_percent": quote.change_percent
+            }
+        
+        return result
+    
+    except Exception as e:
+        return {"error": f"Failed to get quotes: {str(e)}"}
+
+@app.get("/api/real-market/ohlcv/{symbol}")
+async def get_real_ohlcv(symbol: str, timeframe: str = "1m", limit: int = 100):
+    """Get real OHLCV data"""
+    try:
+        from backend.market.providers.enhanced_base import create_market_data_provider
+        
+        provider = create_market_data_provider("mock", "mock_key")
+        
+        candles = await provider.get_ohlcv(symbol, timeframe, limit=limit)
+        
+        result = []
+        for candle in candles:
+            result.append({
+                "symbol": candle.symbol,
+                "timestamp": candle.timestamp.isoformat(),
+                "open": candle.open,
+                "high": candle.high,
+                "low": candle.low,
+                "close": candle.close,
+                "volume": candle.volume,
+                "timeframe": candle.timeframe,
+                "vwap": candle.vwap,
+                "trades_count": candle.trades_count
+            })
+        
+        return {
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "candles": result,
+            "count": len(result)
+        }
+    
+    except Exception as e:
+        return {"error": f"Failed to get OHLCV data for {symbol}: {str(e)}"}
+
+@app.get("/api/real-market/news/{symbol}")
+async def get_real_news(symbol: str, limit: int = 10):
+    """Get real news data"""
+    try:
+        from backend.market.providers.enhanced_base import create_market_data_provider
+        
+        provider = create_market_data_provider("mock", "mock_key")
+        
+        news_items = await provider.get_news(symbol, limit=limit)
+        
+        result = []
+        for news in news_items:
+            result.append({
+                "id": news.id,
+                "title": news.title,
+                "summary": news.summary,
+                "url": news.url,
+                "published_at": news.published_at.isoformat(),
+                "source": news.source,
+                "sentiment": news.sentiment,
+                "symbols": news.symbols,
+                "tags": news.tags
+            })
+        
+        return {
+            "symbol": symbol,
+            "news_items": result,
+            "count": len(result)
+        }
+    
+    except Exception as e:
+        return {"error": f"Failed to get news for {symbol}: {str(e)}"}
+
+@app.get("/api/real-market/status/")
+async def get_real_market_status():
+    """Get real market status"""
+    try:
+        from backend.market.providers.enhanced_base import create_market_data_provider
+        
+        provider = create_market_data_provider("mock", "mock_key")
+        
+        status = await provider.get_market_status()
+        
+        return {
+            "market_open": status.market_open,
+            "session": status.session.value,
+            "next_open": status.next_open.isoformat() if status.next_open else None,
+            "next_close": status.next_close.isoformat() if status.next_close else None,
+            "current_time": status.current_time.isoformat(),
+            "timezone": status.timezone
+        }
+    
+    except Exception as e:
+        return {"error": f"Failed to get market status: {str(e)}"}
+
+@app.post("/api/real-brokerage/place-order/")
+async def place_real_order(order_data: dict):
+    """Place a real order using brokerage adapter"""
+    try:
+        from backend.broker.adapters.enhanced_base import create_brokerage_adapter, Order, OrderSide, OrderType, TimeInForce
+        
+        # Create broker adapter (using mock for now, can be switched to Alpaca)
+        broker = create_brokerage_adapter("mock", "mock_key", "mock_secret")
+        
+        # Create order from request data
+        order = Order(
+            id=order_data.get("id"),
+            symbol=order_data["symbol"],
+            side=OrderSide(order_data["side"]),
+            order_type=OrderType(order_data["order_type"]),
+            quantity=order_data["quantity"],
+            price=order_data.get("price"),
+            stop_price=order_data.get("stop_price"),
+            time_in_force=TimeInForce(order_data.get("time_in_force", "DAY"))
+        )
+        
+        # Place order
+        placed_order = await broker.place_order(order)
+        
+        return {
+            "success": True,
+            "order": {
+                "id": placed_order.id,
+                "client_order_id": placed_order.client_order_id,
+                "symbol": placed_order.symbol,
+                "side": placed_order.side.value,
+                "order_type": placed_order.order_type.value,
+                "quantity": placed_order.quantity,
+                "price": placed_order.price,
+                "status": placed_order.status.value,
+                "filled_quantity": placed_order.filled_quantity,
+                "filled_avg_price": placed_order.filled_avg_price,
+                "created_at": placed_order.created_at.isoformat(),
+                "updated_at": placed_order.updated_at.isoformat()
+            }
+        }
+    
+    except Exception as e:
+        return {"success": False, "error": f"Failed to place order: {str(e)}"}
+
+@app.get("/api/real-brokerage/orders/")
+async def get_real_orders(status: str = None, symbol: str = None, limit: int = 100):
+    """Get real orders from brokerage"""
+    try:
+        from backend.broker.adapters.enhanced_base import create_brokerage_adapter, OrderStatus
+        
+        broker = create_brokerage_adapter("mock", "mock_key", "mock_secret")
+        
+        order_status = OrderStatus(status) if status else None
+        orders = await broker.get_orders(status=order_status, symbol=symbol, limit=limit)
+        
+        result = []
+        for order in orders:
+            result.append({
+                "id": order.id,
+                "client_order_id": order.client_order_id,
+                "symbol": order.symbol,
+                "side": order.side.value,
+                "order_type": order.order_type.value,
+                "quantity": order.quantity,
+                "price": order.price,
+                "stop_price": order.stop_price,
+                "status": order.status.value,
+                "filled_quantity": order.filled_quantity,
+                "filled_avg_price": order.filled_avg_price,
+                "created_at": order.created_at.isoformat(),
+                "updated_at": order.updated_at.isoformat()
+            })
+        
+        return {
+            "orders": result,
+            "count": len(result)
+        }
+    
+    except Exception as e:
+        return {"error": f"Failed to get orders: {str(e)}"}
+
+@app.get("/api/real-brokerage/positions/")
+async def get_real_positions():
+    """Get real positions from brokerage"""
+    try:
+        from backend.broker.adapters.enhanced_base import create_brokerage_adapter
+        
+        broker = create_brokerage_adapter("mock", "mock_key", "mock_secret")
+        
+        positions = await broker.get_positions()
+        
+        result = []
+        for position in positions:
+            result.append({
+                "symbol": position.symbol,
+                "quantity": position.quantity,
+                "side": position.side.value,
+                "average_price": position.average_price,
+                "current_price": position.current_price,
+                "market_value": position.market_value,
+                "unrealized_pnl": position.unrealized_pnl,
+                "unrealized_pnl_percent": position.unrealized_pnl_percent,
+                "realized_pnl": position.realized_pnl,
+                "cost_basis": position.cost_basis,
+                "day_pnl": position.day_pnl,
+                "day_pnl_percent": position.day_pnl_percent
+            })
+        
+        return {
+            "positions": result,
+            "count": len(result)
+        }
+    
+    except Exception as e:
+        return {"error": f"Failed to get positions: {str(e)}"}
+
+@app.get("/api/real-brokerage/account/")
+async def get_real_account():
+    """Get real account information from brokerage"""
+    try:
+        from backend.broker.adapters.enhanced_base import create_brokerage_adapter
+        
+        broker = create_brokerage_adapter("mock", "mock_key", "mock_secret")
+        
+        account = await broker.get_account()
+        
+        return {
+            "account_id": account.account_id,
+            "account_type": account.account_type,
+            "cash": account.cash,
+            "buying_power": account.buying_power,
+            "portfolio_value": account.portfolio_value,
+            "equity": account.equity,
+            "day_trade_count": account.day_trade_count,
+            "pattern_day_trader": account.pattern_day_trader,
+            "day_trading_buying_power": account.day_trading_buying_power,
+            "margin_equity": account.margin_equity,
+            "margin_used": account.margin_used,
+            "margin_available": account.margin_available,
+            "last_equity_change": account.last_equity_change,
+            "last_equity_change_percent": account.last_equity_change_percent
+        }
+    
+    except Exception as e:
+        return {"error": f"Failed to get account: {str(e)}"}
+
+@app.post("/api/real-brokerage/bracket-order/")
+async def place_bracket_order(order_data: dict):
+    """Place a bracket order (entry + take profit + stop loss)"""
+    try:
+        from backend.broker.adapters.enhanced_base import create_brokerage_adapter, OrderSide
+        
+        broker = create_brokerage_adapter("mock", "mock_key", "mock_secret")
+        
+        orders = await broker.place_bracket_order(
+            symbol=order_data["symbol"],
+            side=OrderSide(order_data["side"]),
+            quantity=order_data["quantity"],
+            entry_price=order_data.get("entry_price"),
+            take_profit_price=order_data.get("take_profit_price"),
+            stop_loss_price=order_data.get("stop_loss_price")
+        )
+        
+        result = []
+        for order in orders:
+            result.append({
+                "id": order.id,
+                "symbol": order.symbol,
+                "side": order.side.value,
+                "order_type": order.order_type.value,
+                "quantity": order.quantity,
+                "price": order.price,
+                "status": order.status.value,
+                "tags": order.tags
+            })
+        
+        return {
+            "success": True,
+            "orders": result,
+            "count": len(result)
+        }
+    
+    except Exception as e:
+        return {"success": False, "error": f"Failed to place bracket order: {str(e)}"}
+
+@app.get("/api/real-brokerage/portfolio-summary/")
+async def get_real_portfolio_summary():
+    """Get real portfolio summary"""
+    try:
+        from backend.broker.adapters.enhanced_base import create_brokerage_adapter
+        
+        broker = create_brokerage_adapter("mock", "mock_key", "mock_secret")
+        
+        summary = await broker.get_portfolio_summary()
+        
+        return {
+            "account": {
+                "account_id": summary["account"].account_id,
+                "equity": summary["account"].equity,
+                "buying_power": summary["account"].buying_power,
+                "portfolio_value": summary["account"].portfolio_value
+            },
+            "total_market_value": summary["total_market_value"],
+            "total_unrealized_pnl": summary["total_unrealized_pnl"],
+            "total_realized_pnl": summary["total_realized_pnl"],
+            "total_pnl": summary["total_pnl"],
+            "position_count": summary["position_count"],
+            "last_updated": summary["last_updated"].isoformat() if summary["last_updated"] else None
+        }
+    
+    except Exception as e:
+        return {"error": f"Failed to get portfolio summary: {str(e)}"}
+
 if __name__ == "__main__":
     print("🚀 Starting RichesReach Test Server...")
     print("📡 Server will be available at: http://127.0.0.1:8000")
@@ -3235,7 +3606,20 @@ if __name__ == "__main__":
     print("   - /api/testing/performance-benchmarks/")
     print("   - /api/testing/load-test-results/")
     print("   - /api/testing/security-validation/")
-    print("🧪 This is a mock server for testing - no real AI services")
+    print("📊 Real Market Data endpoints available:")
+    print("   - /api/real-market/quotes/{symbol}")
+    print("   - /api/real-market/quotes/?symbols=AAPL,MSFT,GOOGL")
+    print("   - /api/real-market/ohlcv/{symbol}")
+    print("   - /api/real-market/news/{symbol}")
+    print("   - /api/real-market/status/")
+    print("💰 Real Brokerage endpoints available:")
+    print("   - /api/real-brokerage/place-order/")
+    print("   - /api/real-brokerage/orders/")
+    print("   - /api/real-brokerage/positions/")
+    print("   - /api/real-brokerage/account/")
+    print("   - /api/real-brokerage/bracket-order/")
+    print("   - /api/real-brokerage/portfolio-summary/")
+    print("🧪 This server includes both mock and real integration capabilities")
     print("=" * 60)
     
     uvicorn.run(
