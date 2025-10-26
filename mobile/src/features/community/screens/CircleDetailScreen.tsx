@@ -88,7 +88,7 @@ interface CircleDetailProps {
 }
 
 // Configurable API base URL
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://192.168.1.236:8000';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8000';
 
 export default function CircleDetailScreen({ route, navigation }: CircleDetailProps) {
   const theme = useTheme();

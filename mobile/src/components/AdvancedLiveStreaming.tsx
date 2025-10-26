@@ -163,7 +163,7 @@ export default function AdvancedLiveStreaming({
   // API Functions
   const loadPolls = async () => {
     try {
-      const response = await fetch(`http://192.168.1.236:8000/api/live-streams/${circleId}/polls/`);
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/live-streams/${circleId}/polls/`);
       if (response.ok) {
         const data = await response.json();
         setActivePolls(data.data || []);
@@ -175,7 +175,7 @@ export default function AdvancedLiveStreaming({
 
   const loadQAQuestions = async () => {
     try {
-      const response = await fetch(`http://192.168.1.236:8000/api/live-streams/${circleId}/qa/questions/`);
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/live-streams/${circleId}/qa/questions/`);
       if (response.ok) {
         const data = await response.json();
         setQAQuestions(data.data || []);
@@ -200,7 +200,7 @@ export default function AdvancedLiveStreaming({
 
     setCreatingPoll(true);
     try {
-      const response = await fetch(`http://192.168.1.236:8000/api/live-streams/${circleId}/polls/create/`, {
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/live-streams/${circleId}/polls/create/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -234,7 +234,7 @@ export default function AdvancedLiveStreaming({
 
   const votePoll = async (pollId: string, optionIds: string[]) => {
     try {
-      const response = await fetch(`http://192.168.1.236:8000/api/live-streams/${circleId}/polls/${pollId}/vote/`, {
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/live-streams/${circleId}/polls/${pollId}/vote/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -260,7 +260,7 @@ export default function AdvancedLiveStreaming({
   // Q&A Functions
   const startQASession = async () => {
     try {
-      const response = await fetch(`http://192.168.1.236:8000/api/live-streams/${circleId}/qa/start/`, {
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/live-streams/${circleId}/qa/start/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -286,7 +286,7 @@ export default function AdvancedLiveStreaming({
     }
 
     try {
-      const response = await fetch(`http://192.168.1.236:8000/api/live-streams/${circleId}/qa/questions/submit/`, {
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/live-streams/${circleId}/qa/questions/submit/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -335,7 +335,7 @@ export default function AdvancedLiveStreaming({
   // Screen Share Functions
   const startScreenShare = async () => {
     try {
-      const response = await fetch(`http://192.168.1.236:8000/api/live-streams/${circleId}/screen-share/start/`, {
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/live-streams/${circleId}/screen-share/start/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -362,7 +362,7 @@ export default function AdvancedLiveStreaming({
 
   const stopScreenShare = async () => {
     try {
-      const response = await fetch(`http://192.168.1.236:8000/api/live-streams/${circleId}/screen-share/stop/`, {
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/live-streams/${circleId}/screen-share/stop/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

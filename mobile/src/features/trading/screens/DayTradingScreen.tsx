@@ -8,12 +8,17 @@ import {
   Alert,
   FlatList,
   ActivityIndicator,
+  PanGestureHandler,
+  State,
 } from 'react-native';
 import { useQuery, useMutation, useApolloClient } from '@apollo/client';
 import { gql } from '@apollo/client';
 import { GET_DAY_TRADING_PICKS, LOG_DAY_TRADING_OUTCOME } from '../../../graphql/dayTrading';
 import Icon from 'react-native-vector-icons/Feather';
 import SparkMini from '../../../components/charts/SparkMini';
+import * as Haptics from 'expo-haptics';
+import * as Speech from 'expo-speech';
+import { useVoice } from '../../../contexts/VoiceContext';
 
 type TradingMode = 'SAFE' | 'AGGRESSIVE';
 type Side = 'LONG' | 'SHORT';
@@ -87,9 +92,151 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
   const [quotes, setQuotes] = useState<{ [key: string]: any }>({});
   const [charts, setCharts] = useState<{ [key: string]: number[] }>({});
   const [visibleSymbols, setVisibleSymbols] = useState<Set<string>>(new Set());
+  const [isGestureActive, setIsGestureActive] = useState(false);
+  const [gestureDirection, setGestureDirection] = useState<string>('');
+  const [selectedPick, setSelectedPick] = useState<DayTradingPick | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const chartPollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const client = useApolloClient();
+  const { selectedVoice, getVoiceParameters } = useVoice();
+
+  // AR Gesture Handlers
+  const speakText = useCallback((text: string) => {
+    const params = getVoiceParameters(selectedVoice.id);
+    // Use Speech.speak with voice parameters
+    Speech.speak(text, {
+      voice: selectedVoice.id,
+      pitch: params.pitch,
+      rate: params.rate,
+    });
+  }, [selectedVoice, getVoiceParameters]);
+
+  const executeGestureTrade = useCallback(async (pick: DayTradingPick, side: 'LONG' | 'SHORT') => {
+    try {
+      // Haptic feedback
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      
+      // Voice confirmation
+      speakText(`${selectedVoice.name}: Executing ${side} trade for ${pick.symbol}`);
+      
+      // Mock trade execution (replace with real API call)
+      const response = await fetch('http://localhost:8000/api/mobile/gesture-trade/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          symbol: pick.symbol,
+          gesture_type: side === 'LONG' ? 'swipe_right' : 'swipe_left'
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        // Success haptic
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        
+        // Voice confirmation
+        speakText(`Trade executed successfully! Order ID: ${result.order_result.order_id}`);
+        
+        // Log the outcome
+        await logOutcome({
+          variables: {
+            input: {
+              symbol: pick.symbol,
+              side: side,
+              entryPrice: result.order_result.filled_price,
+              quantity: result.order_result.quantity,
+              timestamp: new Date().toISOString(),
+              outcome: 'EXECUTED'
+            }
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Gesture trade failed:', error);
+      
+      // Error haptic
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      
+      // Voice error message
+      speakText('Trade execution failed. Please try again.');
+    }
+  }, [selectedVoice, speakText, logOutcome]);
+
+  const switchTradingMode = useCallback(async (newMode: TradingMode) => {
+    try {
+      // Haptic feedback
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      
+      // Voice confirmation
+      speakText(`Switching to ${newMode} mode`);
+      
+      // Switch mode
+      setMode(newMode);
+      
+      // Success haptic
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      
+      // Voice confirmation
+      speakText(`${newMode} mode activated`);
+    } catch (error) {
+      console.error('Mode switch failed:', error);
+      
+      // Error haptic
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      
+      // Voice error message
+      speakText('Mode switch failed. Please try again.');
+    }
+  }, [speakText]);
+
+  const handleGesture = useCallback((event: any) => {
+    const { translationX, translationY, state } = event.nativeEvent;
+    
+    if (state === State.BEGAN) {
+      setIsGestureActive(true);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } else if (state === State.ACTIVE) {
+      // Determine gesture direction
+      if (Math.abs(translationX) > Math.abs(translationY)) {
+        if (translationX > 50) {
+          setGestureDirection('RIGHT');
+        } else if (translationX < -50) {
+          setGestureDirection('LEFT');
+        }
+      } else {
+        if (translationY > 50) {
+          setGestureDirection('DOWN');
+        } else if (translationY < -50) {
+          setGestureDirection('UP');
+        }
+      }
+    } else if (state === State.END) {
+      setIsGestureActive(false);
+      
+      // Execute action based on gesture
+      if (gestureDirection === 'RIGHT' && selectedPick) {
+        // Swipe right = Long trade
+        executeGestureTrade(selectedPick, 'LONG');
+      } else if (gestureDirection === 'LEFT' && selectedPick) {
+        // Swipe left = Short trade
+        executeGestureTrade(selectedPick, 'SHORT');
+      } else if (gestureDirection === 'UP') {
+        // Swipe up = Switch to Aggressive mode
+        switchTradingMode('AGGRESSIVE');
+      } else if (gestureDirection === 'DOWN') {
+        // Swipe down = Switch to Safe mode
+        switchTradingMode('SAFE');
+      }
+      
+      setGestureDirection('');
+    }
+  }, [gestureDirection, selectedPick, executeGestureTrade, switchTradingMode]);
+
+  const selectPick = useCallback((pick: DayTradingPick) => {
+    setSelectedPick(pick);
+    speakText(`Selected ${pick.symbol} for gesture trading`);
+  }, [speakText]);
 
   const { data, loading, error, refetch, networkStatus, startPolling, stopPolling } = useQuery(
     GET_DAY_TRADING_PICKS,
@@ -363,8 +510,21 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
     const quote = quotes[item.symbol];
     const chartData = charts[item.symbol] || [];
     const changePercent = quote?.changePercent ?? 0;
+    const isSelected = selectedPick?.symbol === item.symbol;
+    
     return (
-      <View style={[styles.card, { backgroundColor: C.card, borderColor: C.border }]}>
+      <TouchableOpacity 
+        style={[
+          styles.card, 
+          { 
+            backgroundColor: C.card, 
+            borderColor: isSelected ? '#4CAF50' : C.border,
+            borderWidth: isSelected ? 2 : 1,
+          }
+        ]}
+        onPress={() => selectPick(item)}
+        activeOpacity={0.7}
+      >
         {/* Header */}
         <View style={styles.pickHeader}>
           <View style={styles.pickSymbolWrap}>
@@ -595,40 +755,86 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: C.bg }]}>
-      <FlatList
-        data={picks}
-        keyExtractor={(item, idx) => `${item.symbol}-${item.side}-${idx}`}
-        ListHeaderComponent={Header}
-        renderItem={({ item }) => <MemoizedPick item={item} />}
-        contentContainerStyle={{ paddingBottom: 24 }}
-        refreshControl={<RefreshControl refreshing={refreshing || networkStatus === 4} onRefresh={onRefresh} tintColor={C.primary} />}
-        initialNumToRender={3}
-        maxToRenderPerBatch={3}
-        windowSize={10}
-        removeClippedSubviews={true}
-        onViewableItemsChanged={onViewableItemsChanged}
-        viewabilityConfig={viewabilityConfig}
-        ListEmptyComponent={
-          <View style={styles.emptyWrap}>
-            <Icon name="inbox" size={64} color={C.sub} />
-            <Text style={[styles.emptyTitle, { color: C.sub }]}>No qualifying picks for {mode} mode</Text>
-            <Text style={[styles.emptySub, { color: C.sub }]}>
-              Quality threshold not met or market conditions unsuitable
+    <PanGestureHandler
+      onGestureEvent={handleGesture}
+      onHandlerStateChange={handleGesture}
+    >
+      <View style={[styles.container, { backgroundColor: C.bg }]}>
+        {/* Gesture Hints */}
+        <View style={styles.gestureHints}>
+          <View style={styles.gestureHint}>
+            <Icon name="arrow-right" size={16} color="#4CAF50" />
+            <Text style={styles.gestureText}>LONG</Text>
+          </View>
+          <View style={styles.gestureHint}>
+            <Icon name="arrow-left" size={16} color="#F44336" />
+            <Text style={styles.gestureText}>SHORT</Text>
+          </View>
+          <View style={styles.gestureHint}>
+            <Icon name="arrow-up" size={16} color="#FF9800" />
+            <Text style={styles.gestureText}>AGGRESSIVE</Text>
+          </View>
+          <View style={styles.gestureHint}>
+            <Icon name="arrow-down" size={16} color="#2196F3" />
+            <Text style={styles.gestureText}>SAFE</Text>
+          </View>
+        </View>
+
+        {/* Selected Pick Indicator */}
+        {selectedPick && (
+          <View style={styles.selectedPickIndicator}>
+            <Text style={styles.selectedPickText}>
+              Selected: {selectedPick.symbol} - Swipe to trade
             </Text>
           </View>
-        }
-        ListFooterComponent={
-          <View style={[styles.disclaimer, { borderLeftColor: C.warnBorder, backgroundColor: C.warnBg, marginTop: 20 }]}>
-            <Icon name="alert-circle" size={16} color={C.warnText} style={{ marginRight: 8 }} />
-            <Text style={[styles.disclaimerText, { color: C.warnText }]}>
-              Day trading involves significant risk. Only trade with capital you can afford to lose. Past performance does
-              not guarantee future results.
+        )}
+
+        {/* Gesture Feedback */}
+        {isGestureActive && gestureDirection && (
+          <View style={styles.gestureFeedback}>
+            <Text style={styles.gestureFeedbackText}>
+              {gestureDirection === 'RIGHT' && '→ LONG'}
+              {gestureDirection === 'LEFT' && '← SHORT'}
+              {gestureDirection === 'UP' && '↑ AGGRESSIVE'}
+              {gestureDirection === 'DOWN' && '↓ SAFE'}
             </Text>
           </View>
-        }
-      />
-    </View>
+        )}
+
+        <FlatList
+          data={picks}
+          keyExtractor={(item, idx) => `${item.symbol}-${item.side}-${idx}`}
+          ListHeaderComponent={Header}
+          renderItem={({ item }) => <MemoizedPick item={item} />}
+          contentContainerStyle={{ paddingBottom: 24 }}
+          refreshControl={<RefreshControl refreshing={refreshing || networkStatus === 4} onRefresh={onRefresh} tintColor={C.primary} />}
+          initialNumToRender={3}
+          maxToRenderPerBatch={3}
+          windowSize={10}
+          removeClippedSubviews={true}
+          onViewableItemsChanged={onViewableItemsChanged}
+          viewabilityConfig={viewabilityConfig}
+          ListEmptyComponent={
+            <View style={styles.emptyWrap}>
+              <Icon name="inbox" size={64} color={C.sub} />
+              <Text style={[styles.emptyTitle, { color: C.sub }]}>No qualifying picks for {mode} mode</Text>
+              <Text style={[styles.emptySub, { color: C.sub }]}>
+                Quality threshold not met or market conditions unsuitable
+              </Text>
+            </View>
+          }
+          ListFooterComponent={
+            <View style={[styles.disclaimer, { borderLeftColor: C.warnBorder, backgroundColor: C.warnBg, marginTop: 20 }]}>
+              <Icon name="alert-circle" size={16} color={C.warnText} style={{ marginRight: 8 }} />
+              <Text style={[styles.disclaimerText, { color: C.warnText }]}>
+                Day trading involves significant risk. Only trade with capital you can afford to lose. Past performance does
+                not guarantee future results.
+              </Text>
+            </View>
+          }
+        />
+      </View>
+    </PanGestureHandler>
   );
 }
 
@@ -857,4 +1063,65 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   retryBtnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
+
+  // AR Gesture Styles
+  gestureHints: {
+    position: 'absolute',
+    top: 20,
+    left: 20,
+    right: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    zIndex: 1000,
+  },
+  gestureHint: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  gestureText: {
+    fontSize: 10,
+    color: '#fff',
+    marginTop: 2,
+    fontWeight: '600',
+  },
+  gestureFeedback: {
+    position: 'absolute',
+    bottom: 100,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    padding: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+    zIndex: 1000,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  gestureFeedbackText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#000',
+  },
+  selectedPickIndicator: {
+    position: 'absolute',
+    top: 60,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(76, 175, 80, 0.9)',
+    padding: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  selectedPickText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+  },
 });

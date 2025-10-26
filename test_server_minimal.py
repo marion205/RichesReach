@@ -10,6 +10,8 @@ from pydantic import BaseModel
 import uvicorn
 import logging
 import time
+import random
+from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 
 # Configure logging
@@ -1713,7 +1715,7 @@ async def graphql_endpoint(request: dict = None):
             }
         
         # Handle updateProfile mutation
-        if "updateProfile" in query_str:
+        elif "updateProfile" in query_str:
             return {
                 "data": {
                     "updateProfile": {
@@ -1738,7 +1740,7 @@ async def graphql_endpoint(request: dict = None):
             }
         
         # Handle updatePreferences mutation
-        if "updatePreferences" in query_str:
+        elif "updatePreferences" in query_str:
             return {
                 "data": {
                     "updatePreferences": {
@@ -1755,7 +1757,7 @@ async def graphql_endpoint(request: dict = None):
             }
         
         # Handle changePassword mutation
-        if "changePassword" in query_str:
+        elif "changePassword" in query_str:
             return {
                 "data": {
                     "changePassword": {
@@ -1764,7 +1766,36 @@ async def graphql_endpoint(request: dict = None):
                     }
                 }
             }
-    
+        
+        # Handle dayTradingPicks query with regime detection
+        elif "dayTradingPicks" in query_str:
+            # Get current regime for adaptive strategies
+            regime_response = await get_current_regime()
+            regime_type = regime_response.get("regime_type", "SIDEWAYS")
+            recommended_mode = regime_response.get("recommended_mode", "SAFE")
+            
+            # Adapt picks based on regime
+            picks = generate_regime_adapted_picks(regime_type, recommended_mode)
+            
+            return {
+                "data": {
+                    "dayTradingPicks": {
+                        "asOf": datetime.now().isoformat(),
+                        "mode": recommended_mode,
+                        "picks": picks,
+                        "universeSize": 500,
+                        "qualityThreshold": 0.7,
+                        "regimeContext": {
+                            "regimeType": regime_type,
+                            "confidence": regime_response.get("confidence", 0.8),
+                            "strategyWeights": regime_response.get("strategy_weights", {}),
+                            "recommendations": regime_response.get("trading_recommendations", []),
+                            "sentimentEnabled": True
+                        }
+                    }
+                }
+            }
+
     # Default query response
     return {
         "data": {
@@ -2001,6 +2032,163 @@ async def graphql_endpoint(request: dict = None):
             ]
         }
     }
+
+def generate_regime_adapted_picks(regime_type: str, recommended_mode: str) -> List[Dict]:
+    """Generate picks adapted to current market regime with sentiment analysis"""
+    symbols = ["AAPL", "MSFT", "GOOGL", "TSLA", "NVDA", "AMD", "ADBE", "AMZN", "CRM", "INTC"]
+    picks = []
+    
+    # Regime-specific adjustments with sentiment multipliers
+    regime_adjustments = {
+        "BULL": {
+            "momentum_weight": 0.4,
+            "mean_reversion_weight": 0.2,
+            "volatility_weight": 0.3,
+            "score_boost": 0.1,
+            "sentiment_multiplier": 1.3,
+            "long_bias": 0.7
+        },
+        "BEAR": {
+            "momentum_weight": 0.1,
+            "mean_reversion_weight": 0.5,
+            "volatility_weight": 0.2,
+            "score_boost": -0.05,
+            "sentiment_multiplier": 1.2,
+            "short_bias": 0.8
+        },
+        "SIDEWAYS": {
+            "momentum_weight": 0.2,
+            "mean_reversion_weight": 0.3,
+            "volatility_weight": 0.1,
+            "score_boost": 0.0,
+            "sentiment_multiplier": 1.1,
+            "neutral_bias": 0.5
+        },
+        "HIGH_VOL": {
+            "momentum_weight": 0.3,
+            "mean_reversion_weight": 0.2,
+            "volatility_weight": 0.4,
+            "score_boost": 0.05,
+            "sentiment_multiplier": 1.5,
+            "aggressive_bias": 0.9
+        }
+    }
+    
+    adjustments = regime_adjustments.get(regime_type, regime_adjustments["SIDEWAYS"])
+    
+    for symbol in symbols:
+        # Base features
+        momentum_15m = random.uniform(-0.05, 0.05)
+        rvol_10m = random.uniform(0.5, 2.0)
+        vwap_dist = random.uniform(-0.01, 0.01)
+        breakout_pct = random.uniform(0, 0.02)
+        spread_bps = random.uniform(1, 10)
+        catalyst_score = random.uniform(0, 1)
+        
+        # Generate synchronous sentiment analysis (no HTTP calls)
+        # Mock sentiment data based on symbol and regime
+        sentiment_base = hash(symbol) % 100 / 100.0 - 0.5  # -0.5 to 0.5 range
+        sentiment_score = sentiment_base + random.uniform(-0.2, 0.2)
+        news_sentiment = sentiment_base * 0.8 + random.uniform(-0.1, 0.1)
+        social_sentiment = sentiment_base * 1.2 + random.uniform(-0.15, 0.15)
+        
+        # Clamp values to reasonable range
+        sentiment_score = max(-1.0, min(1.0, sentiment_score))
+        news_sentiment = max(-1.0, min(1.0, news_sentiment))
+        social_sentiment = max(-1.0, min(1.0, social_sentiment))
+        
+        # Boost catalyst score based on sentiment
+        sentiment_boost = (sentiment_score + news_sentiment + social_sentiment) / 3
+        catalyst_score += sentiment_boost * adjustments["sentiment_multiplier"] * 0.2
+        
+        # Additional momentum boost for positive sentiment in bull markets
+        if regime_type == "BULL" and sentiment_boost > 0.1:
+            momentum_15m += sentiment_boost * 0.1
+        
+        # Mean reversion boost for negative sentiment in bear markets
+        elif regime_type == "BEAR" and sentiment_boost < -0.1:
+            momentum_15m -= abs(sentiment_boost) * 0.05
+        
+        # Apply regime adjustments
+        momentum_15m *= adjustments["momentum_weight"]
+        breakout_pct *= adjustments["mean_reversion_weight"]
+        catalyst_score *= adjustments["volatility_weight"]
+        
+        # Calculate regime-adapted score with sentiment boost
+        base_score = random.uniform(0.6, 0.9)
+        regime_score = base_score + adjustments["score_boost"]
+        
+        # Apply sentiment boost to final score
+        if abs(sentiment_score) > 0.2:
+            regime_score += abs(sentiment_score) * 0.1
+        
+        regime_score = min(max(regime_score, 0.0), 1.0)
+        
+        # Determine side based on regime bias + sentiment
+        base_bias = adjustments.get("long_bias", 0.5)
+        if regime_type == "BULL":
+            side = "LONG" if random.random() < base_bias else "SHORT"
+        elif regime_type == "BEAR":
+            side = "SHORT" if random.random() < adjustments["short_bias"] else "LONG"
+        elif regime_type == "HIGH_VOL":
+            side = "LONG" if random.random() < adjustments["aggressive_bias"] else "SHORT"
+        else:  # SIDEWAYS
+            side = "LONG" if random.random() < adjustments["neutral_bias"] else "SHORT"
+        
+        # Adjust side based on sentiment (if strong enough)
+        if abs(sentiment_score) > 0.3:
+            if sentiment_score > 0.3 and side == "SHORT":
+                side = "LONG"  # Override to LONG on strong positive sentiment
+            elif sentiment_score < -0.3 and side == "LONG":
+                side = "SHORT"  # Override to SHORT on strong negative sentiment
+        
+        # Enhanced notes with sentiment info
+        notes = f"Regime-adapted pick for {regime_type} market ({recommended_mode} mode)"
+        if regime_type == "BULL":
+            notes += " - Momentum bias applied"
+        elif regime_type == "BEAR":
+            notes += " - Mean reversion focus"
+        elif regime_type == "SIDEWAYS":
+            notes += " - Range trading strategy"
+        elif regime_type == "HIGH_VOL":
+            notes += " - Volatility breakout play"
+        
+        # Add sentiment context to notes
+        if abs(sentiment_score) > 0.2:
+            sentiment_direction = "bullish" if sentiment_score > 0 else "bearish"
+            notes += f" - {sentiment_direction} sentiment boost"
+        
+        pick = {
+            "symbol": symbol,
+            "side": side,
+            "score": regime_score,
+            "features": {
+                "momentum_15m": momentum_15m,
+                "rvol_10m": rvol_10m,
+                "vwap_dist": vwap_dist,
+                "breakout_pct": breakout_pct,
+                "spread_bps": spread_bps,
+                "catalyst_score": catalyst_score,
+                "sentiment_score": sentiment_score,
+                "news_sentiment": news_sentiment,
+                "social_sentiment": social_sentiment
+            },
+            "risk": {
+                "atr_5m": random.uniform(0.5, 2.0),
+                "size_shares": 100 if recommended_mode == "SAFE" else 200,
+                "stop": 0.95 if recommended_mode == "SAFE" else 0.90,
+                "targets": [1.02, 1.05] if recommended_mode == "SAFE" else [1.05, 1.10],
+                "time_stop_min": 120 if recommended_mode == "SAFE" else 60
+            },
+            "notes": notes
+        }
+        
+        picks.append(pick)
+    
+    # Sort by score
+    picks.sort(key=lambda x: x["score"], reverse=True)
+    
+    return picks[:5]  # Return top 5 picks
 
 @app.get("/api/wealth-circles/")
 async def get_wealth_circles():
@@ -3893,9 +4081,475 @@ if __name__ == "__main__":
     print("   - /api/voice-trading/parse-command/")
     print("   - /api/voice-trading/available-symbols/")
     print("   - /api/voice-trading/command-examples/")
+    print("🧠 AI Regime Detection: http://localhost:8000/api/regime-detection/")
+    print("📊 Sentiment Analysis: http://localhost:8000/api/sentiment-analysis/")
+    print("🤖 ML Pick Generation: http://localhost:8000/api/ml-picks/")
+    print("📱 Advanced Mobile Features: http://localhost:8000/api/mobile/")
     print("🧪 This server includes mock, real integration, and voice AI capabilities")
     print("=" * 60)
+
+# AI-Powered Market Regime Detection Endpoints
+@app.get("/api/regime-detection/current-regime/")
+async def get_current_regime():
+    """Get current market regime detection"""
+    try:
+        # Mock regime detection
+        regimes = ["BULL", "BEAR", "SIDEWAYS", "HIGH_VOL"]
+        current_regime = random.choice(regimes)
+        
+        regime_data = {
+            "regime_type": current_regime,
+            "confidence": random.uniform(0.7, 0.95),
+            "duration_minutes": random.randint(60, 240),
+            "volatility_regime": random.choice(["LOW", "MEDIUM", "HIGH"]),
+            "momentum_regime": random.choice(["STRONG_UP", "WEAK_UP", "NEUTRAL", "WEAK_DOWN", "STRONG_DOWN"]),
+            "vix_level": random.uniform(15, 35),
+            "spy_momentum": random.uniform(-0.02, 0.02),
+            "recommended_mode": "AGGRESSIVE" if current_regime in ["BULL", "HIGH_VOL"] else "SAFE",
+            "max_position_size": 0.10 if current_regime in ["BULL", "HIGH_VOL"] else 0.05,
+            "risk_multiplier": 1.2 if current_regime in ["BULL", "HIGH_VOL"] else 0.8,
+            "strategy_weights": {
+                "momentum": 0.4 if current_regime == "BULL" else 0.2,
+                "mean_reversion": 0.5 if current_regime == "BEAR" else 0.3,
+                "range": 0.4 if current_regime == "SIDEWAYS" else 0.2,
+                "volatility": 0.4 if current_regime == "HIGH_VOL" else 0.2
+            },
+            "trading_recommendations": [
+                f"Focus on {current_regime.lower()} strategies",
+                "Monitor VIX levels closely",
+                "Adjust position sizes based on regime"
+            ],
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        return regime_data
     
+    except Exception as e:
+        return {"error": str(e), "timestamp": datetime.now().isoformat()}
+
+@app.get("/api/regime-detection/regime-history/")
+async def get_regime_history():
+    """Get market regime history"""
+    try:
+        # Mock regime history
+        history = []
+        for i in range(10):
+            history.append({
+                "regime_type": random.choice(["BULL", "BEAR", "SIDEWAYS", "HIGH_VOL"]),
+                "confidence": random.uniform(0.6, 0.9),
+                "timestamp": (datetime.now() - timedelta(hours=i)).isoformat(),
+                "duration_minutes": random.randint(30, 180)
+            })
+        
+        return {"regime_history": history, "timestamp": datetime.now().isoformat()}
+    
+    except Exception as e:
+        return {"error": str(e), "timestamp": datetime.now().isoformat()}
+
+# Real-Time Sentiment Analysis Endpoints
+@app.get("/api/sentiment-analysis/{symbol}")
+async def get_sentiment_analysis(symbol: str):
+    """Get real-time sentiment analysis for a symbol"""
+    try:
+        # Mock sentiment analysis
+        sentiment_data = {
+            "symbol": symbol.upper(),
+            "timestamp": datetime.now().isoformat(),
+            "overall_sentiment": random.uniform(-1, 1),
+            "confidence": random.uniform(0.6, 0.9),
+            "twitter_sentiment": random.uniform(-1, 1),
+            "reddit_sentiment": random.uniform(-1, 1),
+            "news_sentiment": random.uniform(-1, 1),
+            "positive_count": random.randint(10, 100),
+            "negative_count": random.randint(5, 50),
+            "neutral_count": random.randint(20, 80),
+            "mention_volume": random.randint(100, 1000),
+            "engagement_score": random.uniform(0.3, 1.0),
+            "sentiment_trend": random.choice(["BULLISH", "BEARISH", "NEUTRAL", "VOLATILE"]),
+            "momentum_score": random.uniform(-0.5, 0.5),
+            "catalyst_detected": random.choice([True, False]),
+            "catalyst_type": random.choice(["EARNINGS", "NEWS", "SOCIAL", "TECHNICAL", "NONE"]),
+            "catalyst_strength": random.uniform(0, 1)
+        }
+        
+        return sentiment_data
+    
+    except Exception as e:
+        return {"error": str(e), "timestamp": datetime.now().isoformat()}
+
+@app.get("/api/sentiment-analysis/batch/{symbols}")
+async def get_batch_sentiment_analysis(symbols: str):
+    """Get sentiment analysis for multiple symbols"""
+    try:
+        symbol_list = symbols.split(",")
+        results = {}
+        
+        for symbol in symbol_list:
+            symbol = symbol.strip().upper()
+            results[symbol] = {
+                "overall_sentiment": random.uniform(-1, 1),
+                "confidence": random.uniform(0.6, 0.9),
+                "sentiment_trend": random.choice(["BULLISH", "BEARISH", "NEUTRAL", "VOLATILE"]),
+                "catalyst_detected": random.choice([True, False]),
+                "catalyst_type": random.choice(["EARNINGS", "NEWS", "SOCIAL", "TECHNICAL", "NONE"])
+            }
+        
+        return {"sentiment_results": results, "timestamp": datetime.now().isoformat()}
+    
+    except Exception as e:
+        return {"error": str(e), "timestamp": datetime.now().isoformat()}
+
+# Machine Learning Pick Generation Endpoints
+@app.get("/api/ml-picks/generate/{mode}")
+async def generate_ml_picks(mode: str):
+    """Generate ML-powered trading picks"""
+    try:
+        # Mock ML pick generation
+        symbols = ["AAPL", "MSFT", "GOOGL", "TSLA", "NVDA", "AMD", "ADBE", "AMZN", "CRM", "INTC"]
+        picks = []
+        
+        for symbol in symbols:
+            ml_score = random.uniform(0.6, 0.95)
+            confidence = random.uniform(0.7, 0.95)
+            
+            pick = {
+                "symbol": symbol,
+                "side": "LONG" if random.choice([True, False]) else "SHORT",
+                "ml_score": ml_score,
+                "confidence": confidence,
+                "prediction_horizon": 60,
+                "feature_importance": {
+                    "momentum_15m": random.uniform(0.1, 0.3),
+                    "rvol_10m": random.uniform(0.1, 0.3),
+                    "catalyst_score": random.uniform(0.1, 0.3),
+                    "news_sentiment": random.uniform(0.05, 0.2),
+                    "technical_indicators": random.uniform(0.05, 0.2)
+                },
+                "ensemble_predictions": {
+                    "rf_prediction": ml_score + random.uniform(-0.05, 0.05),
+                    "gb_prediction": ml_score + random.uniform(-0.05, 0.05),
+                    "ridge_prediction": ml_score + random.uniform(-0.05, 0.05)
+                },
+                "risk_metrics": {
+                    "predicted_volatility": random.uniform(0.01, 0.05),
+                    "predicted_drawdown": random.uniform(0.02, 0.08),
+                    "risk_score": random.uniform(0.3, 0.8)
+                },
+                "market_context": {
+                    "market_regime": random.choice(["BULL", "BEAR", "SIDEWAYS", "HIGH_VOL"]),
+                    "sector_momentum": random.uniform(-0.1, 0.1)
+                },
+                "generated_at": datetime.now().isoformat(),
+                "valid_until": (datetime.now() + timedelta(minutes=60)).isoformat()
+            }
+            
+            picks.append(pick)
+        
+        # Sort by ML score
+        picks.sort(key=lambda x: x["ml_score"], reverse=True)
+        
+        return {
+            "ml_picks": picks,
+            "model_performance": {
+                "rf_accuracy": random.uniform(0.75, 0.85),
+                "gb_accuracy": random.uniform(0.78, 0.88),
+                "ridge_accuracy": random.uniform(0.72, 0.82),
+                "ensemble_accuracy": random.uniform(0.80, 0.90)
+            },
+            "generation_mode": mode,
+            "timestamp": datetime.now().isoformat()
+        }
+    
+    except Exception as e:
+        return {"error": str(e), "timestamp": datetime.now().isoformat()}
+
+@app.get("/api/ml-picks/model-performance/")
+async def get_ml_model_performance():
+    """Get ML model performance metrics"""
+    try:
+        performance_data = {
+            "models": {
+                "random_forest": {
+                    "mse": random.uniform(0.01, 0.05),
+                    "r2": random.uniform(0.75, 0.85),
+                    "accuracy": random.uniform(0.78, 0.88)
+                },
+                "gradient_boosting": {
+                    "mse": random.uniform(0.008, 0.04),
+                    "r2": random.uniform(0.78, 0.88),
+                    "accuracy": random.uniform(0.80, 0.90)
+                },
+                "ridge_regression": {
+                    "mse": random.uniform(0.015, 0.06),
+                    "r2": random.uniform(0.72, 0.82),
+                    "accuracy": random.uniform(0.75, 0.85)
+                }
+            },
+            "ensemble_performance": {
+                "combined_accuracy": random.uniform(0.82, 0.92),
+                "feature_count": 25,
+                "training_samples": 5000,
+                "last_updated": datetime.now().isoformat()
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        return performance_data
+    
+    except Exception as e:
+        return {"error": str(e), "timestamp": datetime.now().isoformat()}
+
+# Advanced Mobile Features Endpoints
+@app.post("/api/mobile/gesture-trade/")
+async def execute_gesture_trade(request: dict):
+    """Execute trade via mobile gesture"""
+    try:
+        symbol = request.get("symbol", "AAPL")
+        gesture_type = request.get("gesture_type", "swipe_right")
+        side = "LONG" if gesture_type == "swipe_right" else "SHORT"
+        
+        # Mock trade execution
+        order_result = {
+            "order_id": f"gesture_{random.randint(1000, 9999)}",
+            "status": "filled",
+            "symbol": symbol,
+            "side": side,
+            "quantity": 100,
+            "filled_price": 150.0 if symbol == "AAPL" else 300.0,
+            "gesture_type": gesture_type,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        return {
+            "success": True,
+            "order_result": order_result,
+            "haptic_feedback": "success",
+            "voice_response": f"Gesture trade executed: {side} {symbol}",
+            "timestamp": datetime.now().isoformat()
+        }
+    
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "haptic_feedback": "error",
+            "voice_response": "Gesture trade failed",
+            "timestamp": datetime.now().isoformat()
+        }
+
+@app.post("/api/mobile/switch-mode/")
+async def switch_trading_mode(request: dict):
+    """Switch trading mode via mobile gesture"""
+    try:
+        mode = request.get("mode", "SAFE")
+        current_mode = request.get("current_mode", "SAFE")
+        
+        new_mode = "AGGRESSIVE" if current_mode == "SAFE" else "SAFE"
+        
+        return {
+            "success": True,
+            "previous_mode": current_mode,
+            "new_mode": new_mode,
+            "haptic_feedback": "success",
+            "voice_response": f"Switched to {new_mode} mode",
+            "timestamp": datetime.now().isoformat()
+        }
+    
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "haptic_feedback": "error",
+            "voice_response": "Mode switch failed",
+        }
+
+# HFT (High-Frequency Trading) Endpoints
+@app.get("/api/hft/performance/")
+async def get_hft_performance():
+    """Get HFT performance metrics"""
+    try:
+        from backend.hft.hft_engine import get_hft_engine
+        hft_engine = get_hft_engine()
+        metrics = hft_engine.get_hft_performance_metrics()
+        return metrics
+    except Exception as e:
+        return {"error": f"HFT performance error: {str(e)}"}
+
+@app.get("/api/hft/positions/")
+async def get_hft_positions():
+    """Get current HFT positions"""
+    try:
+        from backend.hft.hft_engine import get_hft_engine
+        hft_engine = get_hft_engine()
+        positions = hft_engine.get_hft_positions()
+        return {"positions": positions, "count": len(positions)}
+    except Exception as e:
+        return {"error": f"HFT positions error: {str(e)}"}
+
+@app.get("/api/hft/strategies/")
+async def get_hft_strategies():
+    """Get HFT strategies status"""
+    try:
+        from backend.hft.hft_engine import get_hft_engine
+        hft_engine = get_hft_engine()
+        strategies = hft_engine.get_hft_strategies_status()
+        return {"strategies": strategies}
+    except Exception as e:
+        return {"error": f"HFT strategies error: {str(e)}"}
+
+@app.post("/api/hft/execute-strategy/")
+async def execute_hft_strategy(request: dict):
+    """Execute HFT strategy"""
+    try:
+        from backend.hft.hft_engine import get_hft_engine
+        hft_engine = get_hft_engine()
+        
+        strategy_name = request.get("strategy", "scalping")
+        symbol = request.get("symbol", "AAPL")
+        
+        if strategy_name == "scalping":
+            orders = hft_engine.execute_scalping_strategy(symbol)
+        elif strategy_name == "market_making":
+            orders = hft_engine.execute_market_making_strategy(symbol)
+        elif strategy_name == "arbitrage":
+            orders = hft_engine.execute_arbitrage_strategy(symbol)
+        elif strategy_name == "momentum":
+            orders = hft_engine.execute_momentum_strategy(symbol)
+        else:
+            return {"error": f"Unknown strategy: {strategy_name}"}
+        
+        return {
+            "success": True,
+            "strategy": strategy_name,
+            "symbol": symbol,
+            "orders_executed": len(orders),
+            "orders": [
+                {
+                    "id": order.id,
+                    "symbol": order.symbol,
+                    "side": order.side,
+                    "quantity": order.quantity,
+                    "price": order.price,
+                    "order_type": order.order_type,
+                    "timestamp": order.timestamp,
+                    "latency_target": order.latency_target,
+                    "priority": order.priority
+                } for order in orders
+            ]
+        }
+    except Exception as e:
+        return {"error": f"HFT strategy execution error: {str(e)}"}
+
+@app.post("/api/hft/place-order/")
+async def place_hft_order(request: dict):
+    """Place ultra-fast HFT order"""
+    try:
+        from backend.hft.hft_engine import get_hft_engine
+        hft_engine = get_hft_engine()
+        
+        symbol = request.get("symbol", "AAPL")
+        side = request.get("side", "BUY")
+        quantity = request.get("quantity", 100)
+        order_type = request.get("order_type", "MARKET")
+        price = request.get("price")
+        
+        order = hft_engine.place_hft_order(symbol, side, quantity, order_type, price)
+        
+        return {
+            "success": True,
+            "order": {
+                "id": order.id,
+                "symbol": order.symbol,
+                "side": order.side,
+                "quantity": order.quantity,
+                "price": order.price,
+                "order_type": order.order_type,
+                "timestamp": order.timestamp,
+                "latency_target": order.latency_target,
+                "priority": order.priority
+            }
+        }
+    except Exception as e:
+        return {"error": f"HFT order placement error: {str(e)}"}
+
+@app.get("/api/hft/live-stream/")
+async def get_hft_live_stream():
+    """Get live HFT data stream"""
+    try:
+        from backend.hft.hft_engine import get_hft_engine
+        hft_engine = get_hft_engine()
+        
+        # Generate live tick data for all symbols
+        symbols = ["AAPL", "MSFT", "GOOGL", "TSLA", "NVDA", "SPY", "QQQ"]
+        live_data = {}
+        
+        for symbol in symbols:
+            tick = hft_engine.generate_tick_data(symbol)
+            live_data[symbol] = {
+                "symbol": tick.symbol,
+                "bid": tick.bid,
+                "ask": tick.ask,
+                "bid_size": tick.bid_size,
+                "ask_size": tick.ask_size,
+                "timestamp": tick.timestamp,
+                "volume": tick.volume,
+                "spread_bps": tick.spread_bps
+            }
+        
+        return {
+            "live_data": live_data,
+            "timestamp": datetime.now().isoformat(),
+            "data_points": len(live_data)
+        }
+    except Exception as e:
+        return {"error": f"HFT live stream error: {str(e)}"}
+
+if __name__ == "__main__":
+    print("🚀 Starting RichesReach Test Server...")
+    print("📡 Server will be available at: http://127.0.0.1:8000")
+    print("📚 API docs will be available at: http://127.0.0.1:8000/docs")
+    print("🧪 Phase 3 Testing endpoints available:")
+    print("   - /api/testing/integration-tests/")
+    print("   - /api/testing/safety-validation/")
+    print("   - /api/testing/deployment-checklist/")
+    print("   - /api/testing/comprehensive-results/")
+    print("   - /api/testing/performance-benchmarks/")
+    print("   - /api/testing/load-test-results/")
+    print("   - /api/testing/security-validation/")
+    print("📊 Real Market Data endpoints available:")
+    print("   - /api/real-market/quotes/{symbol}")
+    print("   - /api/real-market/quotes/?symbols=AAPL,MSFT,GOOGL")
+    print("   - /api/real-market/ohlcv/{symbol}")
+    print("   - /api/real-market/news/{symbol}")
+    print("   - /api/real-market/status/")
+    print("💰 Real Brokerage endpoints available:")
+    print("   - /api/real-brokerage/place-order/")
+    print("   - /api/real-brokerage/orders/")
+    print("   - /api/real-brokerage/positions/")
+    print("   - /api/real-brokerage/account/")
+    print("   - /api/real-brokerage/bracket-order/")
+    print("   - /api/real-brokerage/portfolio-summary/")
+    print("🎤 Voice AI Trading Commands endpoints available:")
+    print("   - /api/voice-trading/process-command/")
+    print("   - /api/voice-trading/help-commands/")
+    print("   - /api/voice-trading/create-session/")
+    print("   - /api/voice-trading/session/{session_id}")
+    print("   - /api/voice-trading/parse-command/")
+    print("   - /api/voice-trading/available-symbols/")
+    print("   - /api/voice-trading/command-examples/")
+    print("⚡ HFT (High-Frequency Trading) endpoints available:")
+    print("   - /api/hft/performance/")
+    print("   - /api/hft/positions/")
+    print("   - /api/hft/strategies/")
+    print("   - /api/hft/execute-strategy/")
+    print("   - /api/hft/place-order/")
+    print("   - /api/hft/live-stream/")
+    print("🧠 AI Regime Detection: http://localhost:8000/api/regime-detection/")
+    print("📊 Sentiment Analysis: http://localhost:8000/api/sentiment-analysis/")
+    print("🤖 ML Pick Generation: http://localhost:8000/api/ml-picks/")
+    print("📱 Advanced Mobile Features: http://localhost:8000/api/mobile/")
+    print("🧪 This server includes mock, real integration, voice AI, and HFT capabilities")
+    print("============================================================")
     uvicorn.run(
         app,
         host="127.0.0.1",

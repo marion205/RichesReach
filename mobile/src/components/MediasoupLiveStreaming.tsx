@@ -84,7 +84,7 @@ const MediasoupLiveStreaming: React.FC<MediasoupLiveStreamingProps> = ({
   const consumersRef = useRef<Map<string, Consumer>>(new Map());
   const localStreamRef = useRef<MediaStream | null>(null);
 
-  const SFU_SERVER_URL = process.env.EXPO_PUBLIC_SFU_SERVER_URL || 'http://192.168.1.236:8000';
+  const SFU_SERVER_URL = process.env.EXPO_PUBLIC_SFU_SERVER_URL || 'http://localhost:8000';
 
   useEffect(() => {
     if (visible) {

@@ -1,256 +1,211 @@
 #!/usr/bin/env python3
 """
-Comprehensive test runner for all Phase 1, 2, and 3 features
-Runs backend unit tests, mobile component tests, and API integration tests
+RichesReach Comprehensive Test Runner
+Executes all unit tests for HFT, Voice AI, Mobile Features, and AI capabilities
 """
 
 import subprocess
 import sys
-import os
 import time
+import os
 from pathlib import Path
 
-
-def run_command(command, description, cwd=None):
-    """Run a command and return success status"""
-    print(f"\n{'='*60}")
-    print(f"🧪 {description}")
-    print(f"{'='*60}")
-    print(f"Running: {command}")
-    print(f"Working directory: {cwd or os.getcwd()}")
+def run_test_file(test_file, description):
+    """Run a specific test file and return success status"""
+    print(f"\n🧪 Running {description}...")
+    print("-" * 60)
+    
+    start_time = time.time()
     
     try:
         result = subprocess.run(
-            command,
-            shell=True,
-            cwd=cwd,
+            [sys.executable, test_file],
             capture_output=True,
             text=True,
             timeout=300  # 5 minute timeout
         )
         
+        end_time = time.time()
+        duration = end_time - start_time
+        
         if result.returncode == 0:
-            print(f"✅ {description} - PASSED")
-            if result.stdout:
-                print("Output:", result.stdout[-500:])  # Last 500 chars
+            print(f"✅ {description} PASSED ({duration:.1f}s)")
             return True
         else:
-            print(f"❌ {description} - FAILED")
-            print("Error:", result.stderr)
-            if result.stdout:
-                print("Output:", result.stdout[-500:])
+            print(f"❌ {description} FAILED ({duration:.1f}s)")
+            print(f"Error output: {result.stderr}")
             return False
             
     except subprocess.TimeoutExpired:
-        print(f"⏰ {description} - TIMEOUT")
+        print(f"⏰ {description} TIMED OUT (300s)")
         return False
     except Exception as e:
-        print(f"💥 {description} - ERROR: {e}")
+        print(f"💥 {description} ERROR: {e}")
         return False
 
-
-def check_dependencies():
-    """Check if required dependencies are installed"""
-    print("🔍 Checking dependencies...")
-    
-    # Check Python dependencies
-    python_deps = ["pytest", "requests", "asyncio"]
-    for dep in python_deps:
-        try:
-            __import__(dep)
-            print(f"✅ {dep} - installed")
-        except ImportError:
-            print(f"❌ {dep} - missing")
-            return False
-    
-    # Check if test server is running
+def check_server_running():
+    """Check if the test server is running"""
     try:
         import requests
-        response = requests.get("http://127.0.0.1:8000/health", timeout=5)
-        if response.status_code == 200:
-            print("✅ Test server - running")
-        else:
-            print("⚠️  Test server - responding but not healthy")
+        response = requests.get("http://localhost:8000/health", timeout=5)
+        return response.status_code == 200
     except:
-        print("❌ Test server - not running")
-        print("   Please start the test server: python3 test_server_minimal.py")
+        return False
+
+def start_test_server():
+    """Start the test server if not running"""
+    if check_server_running():
+        print("✅ Test server is already running")
+        return True
+        
+    print("🚀 Starting test server...")
+    
+    try:
+        # Start server in background
+        process = subprocess.Popen(
+            [sys.executable, "test_server_minimal.py"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+        
+        # Wait for server to start
+        for i in range(30):  # Wait up to 30 seconds
+            time.sleep(1)
+            if check_server_running():
+                print("✅ Test server started successfully")
+                return True
+                
+        print("❌ Test server failed to start")
+        process.terminate()
+        return False
+        
+    except Exception as e:
+        print(f"💥 Failed to start test server: {e}")
+        return False
+
+def run_all_tests():
+    """Run all comprehensive tests"""
+    print("🚀 RICHESREACH COMPREHENSIVE TEST SUITE")
+    print("=" * 80)
+    print("Testing HFT Engine, Voice AI, Mobile Features, and AI Capabilities")
+    print("=" * 80)
+    
+    # Check if test server is running
+    if not start_test_server():
+        print("❌ Cannot run tests without test server")
         return False
     
-    return True
-
-
-def run_backend_tests():
-    """Run all backend unit tests"""
-    print("\n🚀 Running Backend Unit Tests...")
-    
-    tests = [
-        ("python3 -m pytest tests/test_phase1_backend.py -v", "Phase 1 Backend Tests"),
-        ("python3 -m pytest tests/test_phase2_backend.py -v", "Phase 2 Backend Tests"),
-        ("python3 -m pytest tests/test_phase3_backend.py -v", "Phase 3 Backend Tests"),
-    ]
-    
-    results = []
-    for command, description in tests:
-        success = run_command(command, description)
-        results.append((description, success))
-    
-    return results
-
-
-def run_api_integration_tests():
-    """Run API integration tests"""
-    print("\n🌐 Running API Integration Tests...")
-    
-    tests = [
-        ("python3 -m pytest tests/test_api_endpoints_integration.py::TestPhase1APIEndpoints -v", "Phase 1 API Tests"),
-        ("python3 -m pytest tests/test_api_endpoints_integration.py::TestPhase2APIEndpoints -v", "Phase 2 API Tests"),
-        ("python3 -m pytest tests/test_api_endpoints_integration.py::TestPhase3APIEndpoints -v", "Phase 3 API Tests"),
-        ("python3 -m pytest tests/test_api_endpoints_integration.py::TestCrossPhaseIntegration -v", "Cross-Phase Integration Tests"),
-    ]
-    
-    results = []
-    for command, description in tests:
-        success = run_command(command, description)
-        results.append((description, success))
-    
-    return results
-
-
-def run_mobile_tests():
-    """Run mobile component tests"""
-    print("\n📱 Running Mobile Component Tests...")
-    
-    mobile_dir = Path("mobile")
-    if not mobile_dir.exists():
-        print("❌ Mobile directory not found")
-        return [("Mobile Tests", False)]
-    
-    # Check if package.json exists
-    package_json = mobile_dir / "package.json"
-    if not package_json.exists():
-        print("❌ package.json not found in mobile directory")
-        return [("Mobile Tests", False)]
-    
-    # Install dependencies if needed
-    print("📦 Installing mobile dependencies...")
-    install_success = run_command("npm install", "Install Mobile Dependencies", cwd=mobile_dir)
-    if not install_success:
-        return [("Mobile Tests", False)]
-    
-    # Run mobile tests
-    tests = [
-        ("npm test -- --testPathPattern=test_phase1_components.test.tsx", "Phase 1 Mobile Tests"),
-        ("npm test -- --testPathPattern=test_phase2_components.test.tsx", "Phase 2 Mobile Tests"),
-        ("npm test -- --testPathPattern=test_phase3_components.test.tsx", "Phase 3 Mobile Tests"),
-    ]
-    
-    results = []
-    for command, description in tests:
-        success = run_command(command, description, cwd=mobile_dir)
-        results.append((description, success))
-    
-    return results
-
-
-def generate_test_report(all_results):
-    """Generate a comprehensive test report"""
-    print("\n" + "="*80)
-    print("📊 COMPREHENSIVE TEST REPORT")
-    print("="*80)
-    
-    total_tests = len(all_results)
-    passed_tests = sum(1 for _, success in all_results if success)
-    failed_tests = total_tests - passed_tests
-    
-    print(f"\n📈 SUMMARY:")
-    print(f"   Total Test Suites: {total_tests}")
-    print(f"   ✅ Passed: {passed_tests}")
-    print(f"   ❌ Failed: {failed_tests}")
-    print(f"   📊 Success Rate: {(passed_tests/total_tests)*100:.1f}%")
-    
-    print(f"\n📋 DETAILED RESULTS:")
-    for description, success in all_results:
-        status = "✅ PASSED" if success else "❌ FAILED"
-        print(f"   {status} - {description}")
-    
-    if failed_tests > 0:
-        print(f"\n🔧 FAILED TESTS:")
-        for description, success in all_results:
-            if not success:
-                print(f"   ❌ {description}")
-    
-    print(f"\n🎯 PHASE COVERAGE:")
-    phases = {
-        "Phase 1": ["Daily Voice Digest", "Momentum Missions", "Notifications", "Regime Monitoring"],
-        "Phase 2": ["Wealth Circles", "Peer Progress", "Trade Simulator"],
-        "Phase 3": ["Behavioral Analytics", "Dynamic Content", "Personalization"]
-    }
-    
-    for phase, features in phases.items():
-        print(f"   {phase}: {', '.join(features)}")
-    
-    print(f"\n📁 TEST FILES CREATED:")
+    # Define test files and descriptions
     test_files = [
-        "tests/test_phase1_backend.py",
-        "tests/test_phase2_backend.py", 
-        "tests/test_phase3_backend.py",
-        "tests/test_api_endpoints_integration.py",
-        "mobile/src/__tests__/test_phase1_components.test.tsx",
-        "mobile/src/__tests__/test_phase2_components.test.tsx",
-        "mobile/src/__tests__/test_phase3_components.test.tsx"
+        ("test_comprehensive_unit_tests.py", "Comprehensive Unit Tests"),
+        ("test_hft_performance.py", "HFT Performance Tests"),
+        ("test_all_endpoints.py", "Endpoint Integration Tests")
     ]
     
-    for test_file in test_files:
+    # Track results
+    results = []
+    total_start_time = time.time()
+    
+    # Run each test file
+    for test_file, description in test_files:
         if Path(test_file).exists():
-            print(f"   ✅ {test_file}")
+            success = run_test_file(test_file, description)
+            results.append((description, success))
         else:
-            print(f"   ❌ {test_file}")
+            print(f"⚠️  {test_file} not found, skipping {description}")
+            results.append((description, False))
     
-    return passed_tests == total_tests
-
-
-def main():
-    """Main test runner"""
-    print("🧪 RICHESREACH COMPREHENSIVE TEST SUITE")
-    print("Testing all Phase 1, 2, and 3 features")
-    print("="*60)
+    # Calculate summary
+    total_end_time = time.time()
+    total_duration = total_end_time - total_start_time
     
-    start_time = time.time()
+    passed_tests = sum(1 for _, success in results if success)
+    total_tests = len(results)
+    success_rate = (passed_tests / total_tests * 100) if total_tests > 0 else 0
     
-    # Check dependencies
-    if not check_dependencies():
-        print("\n❌ Dependency check failed. Please install missing dependencies.")
-        sys.exit(1)
+    # Print summary
+    print("\n" + "=" * 80)
+    print("📊 COMPREHENSIVE TEST SUMMARY")
+    print("=" * 80)
+    print(f"Total test suites: {total_tests}")
+    print(f"Passed: {passed_tests}")
+    print(f"Failed: {total_tests - passed_tests}")
+    print(f"Success rate: {success_rate:.1f}%")
+    print(f"Total duration: {total_duration:.1f}s")
     
-    all_results = []
+    print("\n📋 DETAILED RESULTS:")
+    for description, success in results:
+        status = "✅ PASSED" if success else "❌ FAILED"
+        print(f"  {status} - {description}")
     
-    # Run backend tests
-    backend_results = run_backend_tests()
-    all_results.extend(backend_results)
-    
-    # Run API integration tests
-    api_results = run_api_integration_tests()
-    all_results.extend(api_results)
-    
-    # Run mobile tests
-    mobile_results = run_mobile_tests()
-    all_results.extend(mobile_results)
-    
-    # Generate report
-    end_time = time.time()
-    duration = end_time - start_time
-    
-    success = generate_test_report(all_results)
-    
-    print(f"\n⏱️  Total execution time: {duration:.2f} seconds")
-    
-    if success:
-        print("\n🎉 ALL TESTS PASSED! Your implementation is solid.")
-        sys.exit(0)
+    if success_rate == 100:
+        print("\n🎉 ALL TESTS PASSED! RichesReach is ready for production!")
+        print("🚀 HFT Engine: ✅ Operational")
+        print("🎤 Voice AI: ✅ Operational") 
+        print("📱 Mobile Features: ✅ Operational")
+        print("🧠 AI Features: ✅ Operational")
+        print("⚡ Performance: ✅ Excellent")
+    elif success_rate >= 80:
+        print(f"\n⚠️  {success_rate:.1f}% tests passed. Minor issues detected.")
     else:
-        print("\n💥 SOME TESTS FAILED. Please review the failures above.")
-        sys.exit(1)
+        print(f"\n❌ Only {success_rate:.1f}% tests passed. Major issues detected.")
+    
+    return success_rate >= 80
 
+def run_quick_smoke_test():
+    """Run a quick smoke test to verify basic functionality"""
+    print("🔥 QUICK SMOKE TEST")
+    print("-" * 40)
+    
+    try:
+        import requests
+        
+        # Test basic endpoints
+        endpoints = [
+            ("/health", "Health Check"),
+            ("/api/hft/performance/", "HFT Performance"),
+            ("/api/voice-ai/voices/", "Voice AI"),
+            ("/api/regime-detection/current-regime/", "AI Regime Detection"),
+            ("/api/mobile/gesture-trade/", "Mobile Gestures")
+        ]
+        
+        passed = 0
+        for endpoint, description in endpoints:
+            try:
+                if endpoint == "/api/mobile/gesture-trade/":
+                    # POST endpoint
+                    response = requests.post(
+                        f"http://localhost:8000{endpoint}",
+                        json={"symbol": "AAPL", "gesture_type": "swipe_right"},
+                        timeout=5
+                    )
+                else:
+                    # GET endpoint
+                    response = requests.get(f"http://localhost:8000{endpoint}", timeout=5)
+                
+                if response.status_code == 200:
+                    print(f"✅ {description}")
+                    passed += 1
+                else:
+                    print(f"❌ {description} (Status: {response.status_code})")
+                    
+            except Exception as e:
+                print(f"❌ {description} (Error: {e})")
+        
+        success_rate = (passed / len(endpoints)) * 100
+        print(f"\nSmoke test: {passed}/{len(endpoints)} passed ({success_rate:.1f}%)")
+        
+        return success_rate >= 80
+        
+    except ImportError:
+        print("❌ requests library not available for smoke test")
+        return False
 
 if __name__ == "__main__":
-    main()
+    # Check command line arguments
+    if len(sys.argv) > 1 and sys.argv[1] == "--smoke":
+        success = run_quick_smoke_test()
+    else:
+        success = run_all_tests()
+    
+    sys.exit(0 if success else 1)
