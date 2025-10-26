@@ -2343,6 +2343,448 @@ async def get_top_movers():
         "timestamp": datetime.now().isoformat()
     }
 
+# Phase 2: Advanced Trading Endpoints
+@app.get("/api/advanced-features/{symbol}")
+async def get_advanced_features(symbol: str):
+    """Get advanced technical features for a symbol"""
+    return {
+        "symbol": symbol,
+        "timestamp": datetime.now().isoformat(),
+        "price_momentum": {
+            "momentum_5": 0.015,
+            "momentum_10": 0.012,
+            "momentum_20": 0.008,
+            "momentum_ma_5": 100.5,
+            "momentum_ma_10": 100.2,
+            "momentum_ma_20": 99.8
+        },
+        "volatility_features": {
+            "volatility_5": 0.025,
+            "volatility_10": 0.028,
+            "volatility_20": 0.030,
+            "volatility_annualized_5": 0.15,
+            "volatility_annualized_10": 0.18,
+            "volatility_annualized_20": 0.20
+        },
+        "trend_features": {
+            "trend_slope": 0.001,
+            "trend_r_squared": 0.75,
+            "price_position": 0.65
+        },
+        "volume_profile": {
+            "vwap_5": 100.3,
+            "vwap_10": 100.5,
+            "vwap_20": 100.2,
+            "vwap_distance_5": 0.005,
+            "vwap_distance_10": 0.008,
+            "vwap_distance_20": 0.012,
+            "volume_profile_skew": 0.2,
+            "volume_profile_kurtosis": 2.1
+        },
+        "order_flow": {
+            "buy_sell_ratio": 1.2,
+            "net_order_flow": 0.15
+        },
+        "liquidity_features": {
+            "volume_stability": 0.8,
+            "volume_trend": 0.05
+        },
+        "oscillators": {
+            "rsi_14": 65.5,
+            "rsi_21": 68.2,
+            "rsi_34": 70.1,
+            "stoch_k": 75.0,
+            "stoch_d": 72.0,
+            "williams_r": -25.0
+        },
+        "trend_indicators": {
+            "macd_line": 0.12,
+            "macd_signal": 0.08,
+            "macd_histogram": 0.04,
+            "bb_upper": 102.5,
+            "bb_middle": 100.0,
+            "bb_lower": 97.5,
+            "bb_position": 0.75,
+            "bb_width": 0.15
+        },
+        "volatility_indicators": {
+            "atr": 1.25,
+            "atr_percent": 1.25,
+            "atrp": 1.25
+        },
+        "microstructure": {
+            "price_volume_correlation": 0.65
+        },
+        "spread_analysis": {
+            "spread_absolute": 0.05,
+            "spread_bps": 5.0,
+            "spread_percent": 0.05,
+            "effective_spread_ratio": 0.8
+        },
+        "depth_analysis": {
+            "bid_depth": 1000,
+            "ask_depth": 1200,
+            "depth_imbalance": -0.09
+        },
+        "ml_features": {
+            "price_skewness": 0.2,
+            "price_kurtosis": 2.1,
+            "volume_skewness": 0.8,
+            "volume_kurtosis": 3.2
+        },
+        "anomaly_scores": {
+            "isolation_forest": 1
+        },
+        "pattern_recognition": {
+            "support_distance": 0.05,
+            "resistance_distance": 0.08,
+            "breakout_strength": 0.012
+        },
+        "sector_correlation": {
+            "tech_correlation": 0.75,
+            "finance_correlation": 0.45,
+            "energy_correlation": 0.30
+        },
+        "market_regime": {
+            "vix_level": 18.5,
+            "treasury_yield": 4.2,
+            "dollar_strength": 0.02
+        },
+        "macro_features": {
+            "economic_sentiment": 0.65,
+            "risk_appetite": 0.7,
+            "liquidity_conditions": 0.8
+        },
+        "composite_score": 0.78,
+        "confidence_score": 0.85,
+        "risk_score": 0.22
+    }
+
+@app.get("/api/enhanced-scoring/{symbol}")
+async def get_enhanced_score(symbol: str, side: str = "LONG"):
+    """Get enhanced ML-based scoring for a symbol"""
+    return {
+        "symbol": symbol,
+        "side": side,
+        "base_score": 0.75,
+        "confidence_score": 0.82,
+        "risk_score": 0.18,
+        "ml_score": 0.78,
+        "ensemble_score": 0.76,
+        "score_lower_bound": 0.68,
+        "score_upper_bound": 0.84,
+        "feature_contributions": {
+            "momentum": 0.3,
+            "volume": 0.25,
+            "technical": 0.25,
+            "microstructure": 0.2
+        },
+        "model_used": "ensemble_model",
+        "prediction_confidence": 0.85,
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.get("/api/risk-assessment/{symbol}")
+async def get_risk_assessment(symbol: str, mode: str = "SAFE"):
+    """Get comprehensive risk assessment for a position"""
+    return {
+        "symbol": symbol,
+        "side": "LONG",
+        "quantity": 100,
+        "entry_price": 100.0,
+        "current_price": 102.5,
+        "unrealized_pnl": 250.0,
+        "unrealized_pnl_percent": 0.025,
+        "risk_amount": 250.0,
+        "risk_percent": 0.025,
+        "position_value": 10250.0,
+        "position_percent": 0.05,
+        "leverage": 1.0,
+        "stop_loss": 95.0,
+        "take_profit": 110.0,
+        "stop_loss_distance": 7.5,
+        "take_profit_distance": 7.5,
+        "time_in_position": 45,
+        "time_risk_score": 0.375,
+        "volatility_risk": 0.02,
+        "atr_risk": 0.04,
+        "overall_risk_score": 0.35,
+        "risk_level": "MEDIUM",
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.get("/api/portfolio-risk/")
+async def get_portfolio_risk(mode: str = "SAFE"):
+    """Get portfolio-level risk assessment"""
+    return {
+        "total_value": 100000.0,
+        "cash": 50000.0,
+        "buying_power": 75000.0,
+        "total_risk": 2500.0,
+        "total_exposure": 50000.0,
+        "portfolio_beta": 1.1,
+        "position_count": 5,
+        "sector_diversification": {
+            "Technology": 0.4,
+            "Finance": 0.2,
+            "Healthcare": 0.15,
+            "Energy": 0.1,
+            "Other": 0.15
+        },
+        "correlation_risk": 0.65,
+        "daily_pnl": 1250.0,
+        "daily_pnl_percent": 0.0125,
+        "max_drawdown": 0.03,
+        "sharpe_ratio": 1.8,
+        "risk_limit_status": {
+            "daily_loss_limit": True,
+            "drawdown_limit": True,
+            "position_size_limit": True,
+            "sector_exposure_limit": True
+        },
+        "risk_alerts": [],
+        "timestamp": datetime.now().isoformat()
+    }
+
+# Advanced Order Endpoints
+@app.post("/api/advanced-orders/bracket/")
+async def place_bracket_order(request: dict):
+    """Place a bracket order"""
+    return {
+        "success": True,
+        "order_id": f"BRACKET_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+        "message": f"Bracket order placed for {request.get('symbol')}",
+        "execution_details": {
+            "symbol": request.get("symbol"),
+            "side": request.get("side"),
+            "quantity": request.get("quantity"),
+            "entry_price": request.get("entry_price"),
+            "stop_loss": request.get("stop_loss"),
+            "take_profit_1": request.get("take_profit_1"),
+            "take_profit_2": request.get("take_profit_2"),
+            "status": "SUBMITTED",
+            "created_at": datetime.now().isoformat()
+        }
+    }
+
+@app.post("/api/advanced-orders/oco/")
+async def place_oco_order(request: dict):
+    """Place an OCO (One-Cancels-Other) order"""
+    return {
+        "success": True,
+        "order_id": f"OCO_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+        "message": f"OCO order placed for {request.get('symbol')}",
+        "execution_details": {
+            "symbol": request.get("symbol"),
+            "side": request.get("side"),
+            "quantity": request.get("quantity"),
+            "order_1_price": request.get("order_1_price"),
+            "order_1_type": request.get("order_1_type"),
+            "order_2_price": request.get("order_2_price"),
+            "order_2_type": request.get("order_2_type"),
+            "status": "SUBMITTED",
+            "created_at": datetime.now().isoformat()
+        }
+    }
+
+@app.post("/api/advanced-orders/iceberg/")
+async def place_iceberg_order(request: dict):
+    """Place an iceberg order"""
+    return {
+        "success": True,
+        "order_id": f"ICEBERG_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+        "message": f"Iceberg order placed for {request.get('symbol')}",
+        "execution_details": {
+            "symbol": request.get("symbol"),
+            "side": request.get("side"),
+            "total_quantity": request.get("total_quantity"),
+            "visible_quantity": request.get("visible_quantity"),
+            "price": request.get("price"),
+            "status": "SUBMITTED",
+            "created_at": datetime.now().isoformat()
+        }
+    }
+
+@app.post("/api/advanced-orders/trailing-stop/")
+async def place_trailing_stop(request: dict):
+    """Place a trailing stop order"""
+    return {
+        "success": True,
+        "order_id": f"TRAILING_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+        "message": f"Trailing stop placed for {request.get('symbol')}",
+        "execution_details": {
+            "symbol": request.get("symbol"),
+            "side": request.get("side"),
+            "quantity": request.get("quantity"),
+            "trail_amount": request.get("trail_amount"),
+            "trail_percent": request.get("trail_percent"),
+            "status": "SUBMITTED",
+            "created_at": datetime.now().isoformat()
+        }
+    }
+
+@app.post("/api/advanced-orders/twap/")
+async def execute_twap_order(request: dict):
+    """Execute TWAP (Time-Weighted Average Price) order"""
+    symbol = request.get("symbol")
+    total_quantity = request.get("total_quantity", 1000)
+    duration_minutes = request.get("duration_minutes", 30)
+    
+    # Simulate TWAP execution
+    intervals = min(10, duration_minutes // 2)
+    quantity_per_interval = total_quantity // intervals
+    
+    execution_results = []
+    total_filled = 0
+    average_price = 0.0
+    
+    for i in range(intervals):
+        price = 100.0 + (i * 0.5)  # Simulate price movement
+        fill_quantity = quantity_per_interval
+        
+        execution_results.append({
+            "interval": i + 1,
+            "quantity": fill_quantity,
+            "price": price,
+            "order_id": f"TWAP_{i}_{datetime.now().strftime('%H%M%S')}",
+            "timestamp": datetime.now().isoformat()
+        })
+        
+        total_filled += fill_quantity
+        average_price += price * fill_quantity
+    
+    average_price = average_price / total_filled if total_filled > 0 else 0
+    
+    return {
+        "symbol": symbol,
+        "side": request.get("side"),
+        "total_quantity": total_quantity,
+        "total_filled": total_filled,
+        "average_price": average_price,
+        "duration_minutes": duration_minutes,
+        "execution_results": execution_results,
+        "completed_at": datetime.now().isoformat()
+    }
+
+@app.post("/api/advanced-orders/vwap/")
+async def execute_vwap_order(request: dict):
+    """Execute VWAP (Volume-Weighted Average Price) order"""
+    symbol = request.get("symbol")
+    total_quantity = request.get("total_quantity", 1000)
+    duration_minutes = request.get("duration_minutes", 30)
+    
+    # Simulate VWAP execution
+    intervals = min(10, duration_minutes)
+    base_quantity = total_quantity // intervals
+    
+    execution_results = []
+    total_filled = 0
+    average_price = 0.0
+    
+    for i in range(intervals):
+        volume_weight = 1.0 + (i * 0.1)  # Simulate volume pattern
+        price = 100.0 + (i * 0.3)  # Simulate price movement
+        fill_quantity = int(base_quantity * volume_weight)
+        
+        execution_results.append({
+            "interval": i + 1,
+            "quantity": fill_quantity,
+            "price": price,
+            "volume_weight": volume_weight,
+            "order_id": f"VWAP_{i}_{datetime.now().strftime('%H%M%S')}",
+            "timestamp": datetime.now().isoformat()
+        })
+        
+        total_filled += fill_quantity
+        average_price += price * fill_quantity
+    
+    average_price = average_price / total_filled if total_filled > 0 else 0
+    
+    return {
+        "symbol": symbol,
+        "side": request.get("side"),
+        "total_quantity": total_quantity,
+        "total_filled": total_filled,
+        "average_price": average_price,
+        "duration_minutes": duration_minutes,
+        "execution_results": execution_results,
+        "completed_at": datetime.now().isoformat()
+    }
+
+@app.post("/api/advanced-orders/cancel/")
+async def cancel_advanced_order(request: dict):
+    """Cancel an advanced order"""
+    order_id = request.get("order_id")
+    return {
+        "success": True,
+        "order_id": order_id,
+        "message": f"Order {order_id} cancelled successfully"
+    }
+
+# Oracle AI Endpoints
+@app.get("/api/oracle-insights/{symbol}")
+async def get_oracle_insights(symbol: str, side: str = "LONG"):
+    """Get Oracle AI insights for a symbol"""
+    return {
+        "symbol": symbol,
+        "side": side,
+        "insights": [
+            {
+                "insight_type": "MOMENTUM",
+                "insight_text": f"Oracle: {symbol} showing strong bullish momentum acceleration. 5m momentum 1.5% exceeds 10m 1.2%, indicating increasing buying pressure.",
+                "confidence": 0.85,
+                "impact_score": 15.0,
+                "time_horizon": "SHORT",
+                "supporting_evidence": [
+                    "5m momentum: 1.50%",
+                    "10m momentum: 1.20%",
+                    "20m momentum: 0.80%",
+                    "Momentum trend: ACCELERATING"
+                ],
+                "timestamp": datetime.now().isoformat()
+            },
+            {
+                "insight_type": "VOLUME",
+                "insight_text": f"Oracle: {symbol} showing strong volume confirmation for bullish move. 1.8x relative volume with price above VWAP by 0.8%, indicating institutional buying.",
+                "confidence": 0.82,
+                "impact_score": 18.0,
+                "time_horizon": "SHORT",
+                "supporting_evidence": [
+                    "Relative volume: 1.8x",
+                    "Volume spike: 1.5x",
+                    "VWAP distance: 0.80%",
+                    "Volume confirmation: True"
+                ],
+                "timestamp": datetime.now().isoformat()
+            },
+            {
+                "insight_type": "TECHNICAL",
+                "insight_text": f"Oracle: {symbol} showing Bollinger Band bounce setup. Price at 75% of BB range with MACD confirmation, suggesting mean reversion opportunity.",
+                "confidence": 0.80,
+                "impact_score": 25.0,
+                "time_horizon": "MEDIUM",
+                "supporting_evidence": [
+                    "RSI(14): 65.5",
+                    "MACD signal: 0.120",
+                    "BB position: 75%",
+                    "RSI extreme: False"
+                ],
+                "timestamp": datetime.now().isoformat()
+            }
+        ],
+        "oracle_score": 0.78,
+        "oracle_confidence": 0.82,
+        "market_regime": "BULL",
+        "adaptive_adjustments": {
+            "market_regime": 0.02,
+            "volatility": -0.01,
+            "liquidity": -0.005
+        },
+        "adaptive_score": 0.79,
+        "confidence_interval": [0.72, 0.86],
+        "timestamp": datetime.now().isoformat()
+    }
+
 if __name__ == "__main__":
     print("🚀 Starting RichesReach Test Server...")
     print("📡 Server will be available at: http://127.0.0.1:8000")
