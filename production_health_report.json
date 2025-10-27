@@ -1,0 +1,1173 @@
+{
+  "timestamp": "2025-10-27T17:49:40.051809",
+  "overall_status": "CRITICAL",
+  "checks": {
+    "Health Check": {
+      "endpoint": "/health/",
+      "success": true,
+      "message": "Status: 200",
+      "data": {
+        "ok": true,
+        "mode": "full",
+        "production": true
+      }
+    },
+    "Liveness Probe": {
+      "endpoint": "/live/",
+      "success": true,
+      "message": "Status: 200",
+      "data": {
+        "status": "alive",
+        "timestamp": 1761601780.3402503,
+        "pid": 44250
+      }
+    },
+    "Readiness Probe": {
+      "endpoint": "/ready/",
+      "success": false,
+      "message": "Status: 503",
+      "data": {
+        "status": "not_ready",
+        "timestamp": 1761601780.4439006,
+        "migrations": "applied",
+        "services": "error: connection to server at \"localhost\" (127.0.0.1), port 5432 failed: Connection refused\n\tIs the server running on that host and accepting TCP/IP connections?\n"
+      }
+    },
+    "GraphQL API": {
+      "endpoint": "/graphql/",
+      "success": true,
+      "message": "Status: 200",
+      "data": {
+        "data": {
+          "__schema": {
+            "types": [
+              {
+                "name": "Query"
+              },
+              {
+                "name": "AlpacaCryptoAccountType"
+              },
+              {
+                "name": "UUID"
+              },
+              {
+                "name": "UserType"
+              },
+              {
+                "name": "ID"
+              },
+              {
+                "name": "String"
+              },
+              {
+                "name": "Int"
+              },
+              {
+                "name": "Boolean"
+              },
+              {
+                "name": "IncomeProfileType"
+              },
+              {
+                "name": "DateTime"
+              },
+              {
+                "name": "CoreAlpacaCryptoAccountStatusChoices"
+              },
+              {
+                "name": "Decimal"
+              },
+              {
+                "name": "AlpacaCryptoOrderType"
+              },
+              {
+                "name": "CoreAlpacaCryptoOrderOrderTypeChoices"
+              },
+              {
+                "name": "CoreAlpacaCryptoOrderSideChoices"
+              },
+              {
+                "name": "CoreAlpacaCryptoOrderTimeInForceChoices"
+              },
+              {
+                "name": "CoreAlpacaCryptoOrderStatusChoices"
+              },
+              {
+                "name": "AlpacaCryptoBalanceType"
+              },
+              {
+                "name": "AlpacaCryptoActivityType"
+              },
+              {
+                "name": "CoreAlpacaCryptoActivityActivityTypeChoices"
+              },
+              {
+                "name": "AlpacaCryptoTransferType"
+              },
+              {
+                "name": "CoreAlpacaCryptoTransferTransferTypeChoices"
+              },
+              {
+                "name": "BigInt"
+              },
+              {
+                "name": "CoreAlpacaCryptoTransferStatusChoices"
+              },
+              {
+                "name": "CryptoQuoteType"
+              },
+              {
+                "name": "Float"
+              },
+              {
+                "name": "AlpacaAccountType"
+              },
+              {
+                "name": "CoreAlpacaAccountStatusChoices"
+              },
+              {
+                "name": "Date"
+              },
+              {
+                "name": "AlpacaKycDocumentType"
+              },
+              {
+                "name": "CoreAlpacaKycDocumentDocumentTypeChoices"
+              },
+              {
+                "name": "CoreAlpacaKycDocumentStatusChoices"
+              },
+              {
+                "name": "AlpacaOrderType"
+              },
+              {
+                "name": "CoreAlpacaOrderOrderTypeChoices"
+              },
+              {
+                "name": "CoreAlpacaOrderSideChoices"
+              },
+              {
+                "name": "CoreAlpacaOrderTimeInForceChoices"
+              },
+              {
+                "name": "CoreAlpacaOrderStatusChoices"
+              },
+              {
+                "name": "AlpacaPositionType"
+              },
+              {
+                "name": "AlpacaActivityType"
+              },
+              {
+                "name": "CoreAlpacaActivityActivityTypeChoices"
+              },
+              {
+                "name": "StockComprehensive"
+              },
+              {
+                "name": "ChartData"
+              },
+              {
+                "name": "ChartDataPoint"
+              },
+              {
+                "name": "KeyMetrics"
+              },
+              {
+                "name": "NewsItem"
+              },
+              {
+                "name": "AnalystRatings"
+              },
+              {
+                "name": "RatingsBreakdown"
+              },
+              {
+                "name": "AnalystRating"
+              },
+              {
+                "name": "EarningsData"
+              },
+              {
+                "name": "InsiderTrade"
+              },
+              {
+                "name": "InstitutionalHolding"
+              },
+              {
+                "name": "MarketSentiment"
+              },
+              {
+                "name": "SentimentPost"
+              },
+              {
+                "name": "TechnicalIndicators"
+              },
+              {
+                "name": "PeerStock"
+              },
+              {
+                "name": "CryptocurrencyType"
+              },
+              {
+                "name": "CoreCryptocurrencyVolatilityTierChoices"
+              },
+              {
+                "name": "CryptoPriceType"
+              },
+              {
+                "name": "CryptoHoldingType"
+              },
+              {
+                "name": "CryptoPortfolioType"
+              },
+              {
+                "name": "CryptoTradeType"
+              },
+              {
+                "name": "CryptoMLPredictionType"
+              },
+              {
+                "name": "CoreCryptoMLPredictionPredictionTypeChoices"
+              },
+              {
+                "name": "CoreCryptoMLPredictionConfidenceLevelChoices"
+              },
+              {
+                "name": "JSONString"
+              },
+              {
+                "name": "CryptoSBLOCLoanType"
+              },
+              {
+                "name": "CoreCryptoSBLOCLoanStatusChoices"
+              },
+              {
+                "name": "LendingReserveType"
+              },
+              {
+                "name": "SupplyPositionType"
+              },
+              {
+                "name": "BorrowPositionType"
+              },
+              {
+                "name": "CoreBorrowPositionRateModeChoices"
+              },
+              {
+                "name": "CryptoAnalyticsType"
+              },
+              {
+                "name": "CryptoMLSignalType"
+              },
+              {
+                "name": "DeFiAccountType"
+              },
+              {
+                "name": "MarketDataPointType"
+              },
+              {
+                "name": "SectorDataPointType"
+              },
+              {
+                "name": "VolatilityDataType"
+              },
+              {
+                "name": "TechnicalIndicatorType"
+              },
+              {
+                "name": "PatternRecognitionType"
+              },
+              {
+                "name": "SwingSignalType"
+              },
+              {
+                "name": "PerformanceMetricsType"
+              },
+              {
+                "name": "TradeType"
+              },
+              {
+                "name": "NewsItemType"
+              },
+              {
+                "name": "SentimentIndicatorType"
+              },
+              {
+                "name": "BenchmarkSeries"
+              },
+              {
+                "name": "BenchmarkDataPoint"
+              },
+              {
+                "name": "BenchmarkAnalytics"
+              },
+              {
+                "name": "BenchmarkHolding"
+              },
+              {
+                "name": "CustomBenchmark"
+              },
+              {
+                "name": "NotificationType"
+              },
+              {
+                "name": "NotificationSettingsType"
+              },
+              {
+                "name": "SblocBankType"
+              },
+              {
+                "name": "SblocSessionType"
+              },
+              {
+                "name": "PortfolioMetricsType"
+              },
+              {
+                "name": "PortfolioHoldingType"
+              },
+              {
+                "name": "StockType"
+              },
+              {
+                "name": "BeginnerScoreBreakdownType"
+              },
+              {
+                "name": "FactorType"
+              },
+              {
+                "name": "AdvancedStockScreeningResultType"
+              },
+              {
+                "name": "WatchlistItemType"
+              },
+              {
+                "name": "WatchlistStockType"
+              },
+              {
+                "name": "RustStockAnalysisType"
+              },
+              {
+                "name": "TechnicalIndicatorsType"
+              },
+              {
+                "name": "FundamentalAnalysisType"
+              },
+              {
+                "name": "BankAccountType"
+              },
+              {
+                "name": "FundingHistoryType"
+              },
+              {
+                "name": "SblocOfferType"
+              },
+              {
+                "name": "TargetPriceResultType"
+              },
+              {
+                "name": "PositionSizeResultType"
+              },
+              {
+                "name": "DynamicStopResultType"
+              },
+              {
+                "name": "ResearchHubType"
+              },
+              {
+                "name": "CompanySnapshotType"
+              },
+              {
+                "name": "QuoteType"
+              },
+              {
+                "name": "TechnicalType"
+              },
+              {
+                "name": "SentimentType"
+              },
+              {
+                "name": "MacroType"
+              },
+              {
+                "name": "MarketRegimeType"
+              },
+              {
+                "name": "StockChartDataType"
+              },
+              {
+                "name": "ChartDataType"
+              },
+              {
+                "name": "IndicatorsType"
+              },
+              {
+                "name": "CryptoRecommendationType"
+              },
+              {
+                "name": "DayTradingPicksType"
+              },
+              {
+                "name": "DayTradingPickType"
+              },
+              {
+                "name": "DayTradingFeaturesType"
+              },
+              {
+                "name": "DayTradingRiskType"
+              },
+              {
+                "name": "AIRecommendationsType"
+              },
+              {
+                "name": "PortfolioAnalysisType"
+              },
+              {
+                "name": "ExpectedImpactType"
+              },
+              {
+                "name": "RiskType"
+              },
+              {
+                "name": "AssetAllocationType"
+              },
+              {
+                "name": "StockRecommendationType"
+              },
+              {
+                "name": "RebalanceSuggestionType"
+              },
+              {
+                "name": "RiskAssessmentType"
+              },
+              {
+                "name": "MarketOutlookType"
+              },
+              {
+                "name": "MarketInsightsType"
+              },
+              {
+                "name": "TradingAccountType"
+              },
+              {
+                "name": "TradingPositionType"
+              },
+              {
+                "name": "TradingOrderType"
+              },
+              {
+                "name": "MLSystemStatusType"
+              },
+              {
+                "name": "OutcomeTrackingType"
+              },
+              {
+                "name": "ModelsType"
+              },
+              {
+                "name": "BanditType"
+              },
+              {
+                "name": "BanditStrategyType"
+              },
+              {
+                "name": "LastTrainingType"
+              },
+              {
+                "name": "RiskSummaryType"
+              },
+              {
+                "name": "RiskLimitsType"
+              },
+              {
+                "name": "ActivePositionType"
+              },
+              {
+                "name": "SocialFeedItemType"
+              },
+              {
+                "name": "SocialFeedUserType"
+              },
+              {
+                "name": "PortfolioType"
+              },
+              {
+                "name": "MyPortfolioHoldingType"
+              },
+              {
+                "name": "CommentType"
+              },
+              {
+                "name": "FeedItemType"
+              },
+              {
+                "name": "MyPortfoliosType"
+              },
+              {
+                "name": "SignalType"
+              },
+              {
+                "name": "GenericScalar"
+              },
+              {
+                "name": "LeaderboardEntryType"
+              },
+              {
+                "name": "TraderScoreType"
+              },
+              {
+                "name": "BacktestStrategyType"
+              },
+              {
+                "name": "BacktestResultType"
+              },
+              {
+                "name": "OptionOrderType"
+              },
+              {
+                "name": "OptionsAnalysisType"
+              },
+              {
+                "name": "OptionsChainType"
+              },
+              {
+                "name": "OptionType"
+              },
+              {
+                "name": "GreeksType"
+              },
+              {
+                "name": "UnusualFlowType"
+              },
+              {
+                "name": "TopTradeType"
+              },
+              {
+                "name": "RecommendedStrategyType"
+              },
+              {
+                "name": "MarketSentimentType"
+              },
+              {
+                "name": "MarketOverviewType"
+              },
+              {
+                "name": "TickerSnapshotType"
+              },
+              {
+                "name": "AIScanType"
+              },
+              {
+                "name": "ScanResultType"
+              },
+              {
+                "name": "PlaybookType"
+              },
+              {
+                "name": "PlaybookPerformanceType"
+              },
+              {
+                "name": "AIScanFilters"
+              },
+              {
+                "name": "Mutation"
+              },
+              {
+                "name": "CreateCryptoOrder"
+              },
+              {
+                "name": "GetCryptoAssets"
+              },
+              {
+                "name": "CryptoAssetType"
+              },
+              {
+                "name": "SyncCryptoData"
+              },
+              {
+                "name": "CreateCryptoTransfer"
+              },
+              {
+                "name": "CreateCryptoAccount"
+              },
+              {
+                "name": "CreateAlpacaAccount"
+              },
+              {
+                "name": "CreateKycDocument"
+              },
+              {
+                "name": "CreateAlpacaOrder"
+              },
+              {
+                "name": "SyncAlpacaData"
+              },
+              {
+                "name": "ExecuteCryptoTrade"
+              },
+              {
+                "name": "ErrorType"
+              },
+              {
+                "name": "CreateSBLOCLoan"
+              },
+              {
+                "name": "DefiSupply"
+              },
+              {
+                "name": "DefiWithdraw"
+              },
+              {
+                "name": "DefiBorrow"
+              },
+              {
+                "name": "DefiRepay"
+              },
+              {
+                "name": "DefiToggleCollateral"
+              },
+              {
+                "name": "GenerateMLPrediction"
+              },
+              {
+                "name": "StressTestHF"
+              },
+              {
+                "name": "CreateCustomBenchmark"
+              },
+              {
+                "name": "BenchmarkHoldingInput"
+              },
+              {
+                "name": "UpdateCustomBenchmark"
+              },
+              {
+                "name": "DeleteCustomBenchmark"
+              },
+              {
+                "name": "CreatePredefinedBenchmark"
+              },
+              {
+                "name": "UpdateAlertPreferences"
+              },
+              {
+                "name": "AlertPreferencesType"
+              },
+              {
+                "name": "QuietHoursType"
+              },
+              {
+                "name": "CustomThresholdsType"
+              },
+              {
+                "name": "AlertPreferencesInput"
+              },
+              {
+                "name": "QuietHoursInput"
+              },
+              {
+                "name": "CustomThresholdsInput"
+              },
+              {
+                "name": "MarkNotificationRead"
+              },
+              {
+                "name": "MarkAllNotificationsRead"
+              },
+              {
+                "name": "UpdateNotificationSettings"
+              },
+              {
+                "name": "NotificationSettingsInput"
+              },
+              {
+                "name": "GetNewsPreferences"
+              },
+              {
+                "name": "NewsPreferencesType"
+              },
+              {
+                "name": "UpdateNewsPreferences"
+              },
+              {
+                "name": "NewsPreferencesInput"
+              },
+              {
+                "name": "CreateSblocSessionResult"
+              },
+              {
+                "name": "TokenPairType"
+              },
+              {
+                "name": "VerifyToken"
+              },
+              {
+                "name": "RefreshToken"
+              },
+              {
+                "name": "RegisterUserResult"
+              },
+              {
+                "name": "TokenType"
+              },
+              {
+                "name": "LoginUserResult"
+              },
+              {
+                "name": "RunBacktestResultType"
+              },
+              {
+                "name": "BacktestResultOutputType"
+              },
+              {
+                "name": "BacktestConfigType"
+              },
+              {
+                "name": "StrategyParamsType"
+              },
+              {
+                "name": "AddToWatchlist"
+              },
+              {
+                "name": "RemoveFromWatchlist"
+              },
+              {
+                "name": "PlaceStockOrder"
+              },
+              {
+                "name": "WithdrawFunds"
+              },
+              {
+                "name": "CreateIncomeProfileResult"
+              },
+              {
+                "name": "GenerateAIRecommendations"
+              },
+              {
+                "name": "AIPortfolioRecommendationType"
+              },
+              {
+                "name": "AIRebalancePortfolio"
+              },
+              {
+                "name": "StockTradeType"
+              },
+              {
+                "name": "CreatePositionResultType"
+              },
+              {
+                "name": "CheckExitsResultType"
+              },
+              {
+                "name": "ExitedPositionType"
+              },
+              {
+                "name": "UpdateRiskSettingsResultType"
+              },
+              {
+                "name": "LinkBankAccountResultType"
+              },
+              {
+                "name": "InitiateFundingResultType"
+              },
+              {
+                "name": "CryptoMutation"
+              },
+              {
+                "name": "Subscription"
+              },
+              {
+                "name": "TickerPostType"
+              },
+              {
+                "name": "__Schema"
+              },
+              {
+                "name": "__Type"
+              },
+              {
+                "name": "__TypeKind"
+              },
+              {
+                "name": "__Field"
+              },
+              {
+                "name": "__InputValue"
+              },
+              {
+                "name": "__EnumValue"
+              },
+              {
+                "name": "__Directive"
+              },
+              {
+                "name": "__DirectiveLocation"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "AI Options API": {
+      "endpoint": "/api/ai-options/recommendations",
+      "success": true,
+      "message": "Status: 200",
+      "data": {
+        "ok": true,
+        "symbol": "AAPL",
+        "current_price": 268.81,
+        "data_providers": {
+          "quote": "finnhub",
+          "options": "polygon"
+        },
+        "recommendations": [
+          {
+            "strategy": "Covered Call",
+            "symbol": "AAPL",
+            "expirationDays": 30,
+            "strike": "$110.0",
+            "rationale": "Volatility play at 110.0 strike",
+            "contractType": "CALL",
+            "bid": null,
+            "ask": null,
+            "volume": null,
+            "openInterest": null
+          },
+          {
+            "strategy": "Covered Call",
+            "symbol": "AAPL",
+            "expirationDays": 30,
+            "strike": "$120.0",
+            "rationale": "Volatility play at 120.0 strike",
+            "contractType": "CALL",
+            "bid": null,
+            "ask": null,
+            "volume": null,
+            "openInterest": null
+          },
+          {
+            "strategy": "Covered Call",
+            "symbol": "AAPL",
+            "expirationDays": 30,
+            "strike": "$125.0",
+            "rationale": "Volatility play at 125.0 strike",
+            "contractType": "CALL",
+            "bid": null,
+            "ask": null,
+            "volume": null,
+            "openInterest": null
+          },
+          {
+            "strategy": "Covered Call",
+            "symbol": "AAPL",
+            "expirationDays": 30,
+            "strike": "$130.0",
+            "rationale": "Volatility play at 130.0 strike",
+            "contractType": "CALL",
+            "bid": null,
+            "ask": null,
+            "volume": null,
+            "openInterest": null
+          },
+          {
+            "strategy": "Covered Call",
+            "symbol": "AAPL",
+            "expirationDays": 30,
+            "strike": "$135.0",
+            "rationale": "Volatility play at 135.0 strike",
+            "contractType": "CALL",
+            "bid": null,
+            "ask": null,
+            "volume": null,
+            "openInterest": null
+          }
+        ],
+        "market_data_available": true
+      }
+    },
+    "AI Portfolio Optimization": {
+      "endpoint": "/api/ai-portfolio/optimize",
+      "success": true,
+      "message": "Status: 200",
+      "data": {
+        "status": "success",
+        "message": "AI Portfolio Optimization endpoint",
+        "data": {
+          "optimized_portfolio": {
+            "total_return": 0.12,
+            "risk_score": 0.65,
+            "allocations": [
+              {
+                "symbol": "AAPL",
+                "allocation": 0.3
+              },
+              {
+                "symbol": "MSFT",
+                "allocation": 0.25
+              },
+              {
+                "symbol": "TSLA",
+                "allocation": 0.2
+              },
+              {
+                "symbol": "NVDA",
+                "allocation": 0.25
+              }
+            ]
+          }
+        }
+      }
+    },
+    "ML Service Status": {
+      "endpoint": "/api/ml/status",
+      "success": true,
+      "message": "Status: 200",
+      "data": {
+        "status": "healthy",
+        "ml_services": {
+          "market_regime_detection": "active",
+          "price_prediction": "active",
+          "portfolio_optimization": "active"
+        },
+        "model_accuracy": {
+          "market_regime": 0.901,
+          "price_prediction": 0.023,
+          "portfolio_optimization": 0.85
+        }
+      }
+    },
+    "Yodlee Bank Linking": {
+      "endpoint": "/api/yodlee/fastlink/start",
+      "success": false,
+      "message": "Status: 405",
+      "data": {
+        "error": "Method not allowed"
+      }
+    },
+    "SBLOC Health": {
+      "endpoint": "/api/sbloc/health",
+      "success": false,
+      "message": "Status: 500",
+      "data": {
+        "content": "\n<!doctype html>\n<html lang=\"en\">\n<head>\n  <title>Server Error (500)</title>\n</head>\n<body>\n  <h1>Server Error (500)</h1><p></p>\n</body>\n</html>\n"
+      }
+    },
+    "SBLOC Banks": {
+      "endpoint": "/api/sbloc/banks",
+      "success": true,
+      "message": "Status: 200",
+      "data": {
+        "status": "success",
+        "banks": [
+          {
+            "id": "ibkr",
+            "name": "Interactive Brokers",
+            "min_apr": 0.0599,
+            "max_apr": 0.0999,
+            "min_ltv": 0.3,
+            "max_ltv": 0.5,
+            "min_loan_usd": 5000,
+            "popular": true
+          },
+          {
+            "id": "schwab",
+            "name": "Charles Schwab",
+            "min_apr": 0.0699,
+            "max_apr": 0.1099,
+            "min_ltv": 0.3,
+            "max_ltv": 0.5,
+            "min_loan_usd": 25000,
+            "popular": true
+          },
+          {
+            "id": "fidelity",
+            "name": "Fidelity",
+            "min_apr": 0.0699,
+            "max_apr": 0.1099,
+            "min_ltv": 0.3,
+            "max_ltv": 0.5,
+            "min_loan_usd": 25000,
+            "popular": true
+          }
+        ]
+      }
+    },
+    "Crypto Prices": {
+      "endpoint": "/api/crypto/prices",
+      "success": true,
+      "message": "Status: 200",
+      "data": {
+        "status": "success",
+        "prices": {
+          "BTC": {
+            "price": 45000.0,
+            "change_24h": 2.5
+          },
+          "ETH": {
+            "price": 3000.0,
+            "change_24h": 1.8
+          },
+          "USDC": {
+            "price": 1.0,
+            "change_24h": 0.0
+          }
+        }
+      }
+    },
+    "DeFi Account": {
+      "endpoint": "/api/defi/account",
+      "success": true,
+      "message": "Status: 200",
+      "data": {
+        "status": "success",
+        "account": {
+          "total_value": 15000.0,
+          "collateral_value": 12000.0,
+          "borrowed_value": 3000.0,
+          "health_factor": 4.0
+        }
+      }
+    },
+    "Rust Crypto Analysis": {
+      "endpoint": "/rust/analyze",
+      "success": true,
+      "message": "Status: 200",
+      "data": {
+        "status": "success",
+        "analysis": {
+          "market_trend": "bullish",
+          "volatility": 0.65,
+          "recommendations": [
+            "BTC",
+            "ETH",
+            "SOL"
+          ]
+        }
+      }
+    },
+    "Stock Data": {
+      "endpoint": "/api/market-data/stocks",
+      "success": true,
+      "message": "Status: 200",
+      "data": {
+        "status": "success",
+        "stocks": [
+          {
+            "symbol": "AAPL",
+            "price": 175.5,
+            "change": 2.5
+          },
+          {
+            "symbol": "MSFT",
+            "price": 380.25,
+            "change": 1.8
+          },
+          {
+            "symbol": "TSLA",
+            "price": 250.75,
+            "change": -1.2
+          }
+        ]
+      }
+    },
+    "Options Data": {
+      "endpoint": "/api/market-data/options",
+      "success": true,
+      "message": "Status: 200",
+      "data": {
+        "status": "success",
+        "options": [
+          {
+            "symbol": "AAPL",
+            "strike": 180,
+            "expiry": "2025-11-15",
+            "price": 5.25
+          },
+          {
+            "symbol": "MSFT",
+            "strike": 385,
+            "expiry": "2025-11-15",
+            "price": 8.5
+          }
+        ]
+      }
+    },
+    "Market News": {
+      "endpoint": "/api/market-data/news",
+      "success": true,
+      "message": "Status: 200",
+      "data": {
+        "status": "success",
+        "news": [
+          {
+            "headline": "Apple reports strong Q4 earnings",
+            "source": "Reuters"
+          },
+          {
+            "headline": "Tesla announces new factory plans",
+            "source": "Bloomberg"
+          }
+        ]
+      }
+    },
+    "SSL Certificate": {
+      "success": false,
+      "message": "SSL check failed: [Errno 61] Connection refused",
+      "data": {}
+    },
+    "Performance": {
+      "success": false,
+      "message": "Performance metrics collected",
+      "data": {
+        "/health/": {
+          "response_time_ms": 112.93,
+          "success": true,
+          "acceptable": true
+        },
+        "/graphql/": {
+          "response_time_ms": 1512.75,
+          "success": false,
+          "acceptable": true
+        },
+        "/api/ai-options/recommendations": {
+          "response_time_ms": 101.58,
+          "success": false,
+          "acceptable": true
+        }
+      }
+    },
+    "Database Connectivity": {
+      "success": true,
+      "message": "Database accessible through GraphQL",
+      "data": {
+        "data": {
+          "__schema": {
+            "queryType": {
+              "name": "Query"
+            }
+          }
+        }
+      }
+    },
+    "Mobile App Config": {
+      "success": false,
+      "message": "Mobile app configuration checked",
+      "data": {
+        "endpoints_tested": 2
+      }
+    }
+  },
+  "critical_issues": [
+    "Readiness Probe failed: Status: 503",
+    "SSL Certificate issue: [Errno 61] Connection refused"
+  ],
+  "warnings": [
+    "Yodlee Bank Linking failed: Status: 405",
+    "SBLOC Health failed: Status: 500",
+    "Mobile app configuration issues"
+  ],
+  "recommendations": [
+    "Fix SSL certificate issues immediately",
+    "Optimize slow endpoints: /graphql/"
+  ]
+}
