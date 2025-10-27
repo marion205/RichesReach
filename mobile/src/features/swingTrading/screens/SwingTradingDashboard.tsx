@@ -9,7 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { Feather as Icon } from '@expo/vector-icons';
-import LinearGradient from 'expo-linear-gradient';
+import { LinearGradient } from 'expo-linear-gradient';
 
 interface SwingTradingDashboardProps {
   navigateTo: (screen: string) => void;

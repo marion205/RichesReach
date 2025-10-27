@@ -4,13 +4,14 @@ Minimal test server for endpoint testing
 Runs without AI services to test basic functionality
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
 import logging
 import time
 import random
+import re
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 
@@ -791,6 +792,139 @@ async def mock_coach_advise(request: CoachAdviseRequest):
         ],
         "timestamp": "2024-01-15T10:30:00Z"
     }
+
+@app.post("/coach/recommend-strategy")
+async def recommend_strategy(request: dict):
+    """Recommend HFT strategy based on user preferences"""
+    try:
+        asset = request.get("asset", "AAPL")
+        # Handle both field names for compatibility
+        risk_level = request.get("risk_level") or request.get("risk_tolerance", "moderate")
+        time_horizon = request.get("time_horizon", "short")
+        
+        # Generate HFT strategy recommendations
+        strategies = []
+        
+        if risk_level == "low":
+            strategies = [
+                {
+                    "name": f"Conservative {asset} HFT Strategy",
+                    "description": f"Low-risk HFT approach for {asset} with market making",
+                    "strategy_type": "market_making",
+                    "risk_level": "low",
+                    "expected_return": "3-5%",
+                    "time_horizon": "short",
+                    "hft_features": {
+                        "latency_target": 50,
+                        "max_orders_per_second": 100,
+                        "profit_target_bps": 0.5,
+                        "stop_loss_bps": 1.0
+                    },
+                    "symbols": [asset],
+                    "confidence": 0.85
+                }
+            ]
+        elif risk_level == "moderate":
+            strategies = [
+                {
+                    "name": f"Balanced {asset} HFT Strategy",
+                    "description": f"Moderate-risk HFT approach combining scalping and momentum",
+                    "strategy_type": "scalping_momentum",
+                    "risk_level": "moderate",
+                    "expected_return": "8-12%",
+                    "time_horizon": "short",
+                    "hft_features": {
+                        "latency_target": 25,
+                        "max_orders_per_second": 200,
+                        "profit_target_bps": 2.0,
+                        "stop_loss_bps": 1.5
+                    },
+                    "symbols": [asset],
+                    "confidence": 0.78
+                },
+                {
+                    "name": f"{asset} Arbitrage Strategy",
+                    "description": f"HFT arbitrage opportunities for {asset}",
+                    "strategy_type": "arbitrage",
+                    "risk_level": "moderate",
+                    "expected_return": "5-8%",
+                    "time_horizon": "very_short",
+                    "hft_features": {
+                        "latency_target": 10,
+                        "max_orders_per_second": 500,
+                        "profit_target_bps": 5.0,
+                        "stop_loss_bps": 1.0
+                    },
+                    "symbols": [asset],
+                    "confidence": 0.82
+                }
+            ]
+        else:  # high risk
+            strategies = [
+                {
+                    "name": f"Aggressive {asset} HFT Strategy",
+                    "description": f"High-risk HFT momentum strategy for {asset}",
+                    "strategy_type": "momentum",
+                    "risk_level": "high",
+                    "expected_return": "15-25%",
+                    "time_horizon": "short",
+                    "hft_features": {
+                        "latency_target": 15,
+                        "max_orders_per_second": 1000,
+                        "profit_target_bps": 10.0,
+                        "stop_loss_bps": 5.0
+                    },
+                    "symbols": [asset],
+                    "confidence": 0.65
+                }
+            ]
+        
+        # Return the first strategy in the format expected by the mobile app
+        primary_strategy = strategies[0]
+        
+        # Convert expected_return string to numeric value
+        expected_return_str = primary_strategy["expected_return"]
+        if "8-12%" in expected_return_str:
+            expected_return_numeric = 10.0
+        elif "3-5%" in expected_return_str:
+            expected_return_numeric = 4.0
+        elif "15-25%" in expected_return_str:
+            expected_return_numeric = 20.0
+        elif "5-8%" in expected_return_str:
+            expected_return_numeric = 6.5
+        else:
+            expected_return_numeric = 10.0
+        
+        return {
+            "strategy_name": primary_strategy["name"],
+            "description": primary_strategy["description"],
+            "risk_level": primary_strategy["risk_level"],
+            "expected_return": expected_return_numeric,
+            "suitable_for": [f"HFT traders", f"{asset} specialists", "Algorithmic traders"],
+            "steps": [
+                f"1. Set up HFT infrastructure with {primary_strategy['hft_features']['latency_target']}ms latency target",
+                f"2. Configure order management for {primary_strategy['hft_features']['max_orders_per_second']} orders/second",
+                f"3. Implement {primary_strategy['strategy_type']} strategy for {asset}",
+                f"4. Set profit target at {primary_strategy['hft_features']['profit_target_bps']} bps",
+                f"5. Configure stop-loss at {primary_strategy['hft_features']['stop_loss_bps']} bps",
+                "6. Monitor performance and adjust parameters"
+            ],
+            "market_conditions": {
+                "volatility": "moderate",
+                "trend": "bullish",
+                "hft_enabled": True,
+                "latency_target": primary_strategy['hft_features']['latency_target'],
+                "max_orders_per_second": primary_strategy['hft_features']['max_orders_per_second']
+            },
+            "confidence_score": primary_strategy["confidence"],
+            "generated_at": datetime.now().isoformat()
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Strategy recommendation error: {str(e)}",
+            "timestamp": datetime.now().isoformat()
+        }
 
 @app.post("/coach/strategy")
 async def mock_coach_strategy(request: CoachStrategyRequest):
@@ -1664,10 +1798,10 @@ async def get_sample_preview():
 async def get_market_quotes(symbols: str):
     """Get market quotes for multiple symbols."""
     symbol_list = symbols.split(',')
-    quotes = {}
+    quotes = []
     
     for symbol in symbol_list:
-        quotes[symbol] = {
+        quotes.append({
             "symbol": symbol,
             "price": round(150.0 + (hash(symbol) % 1000) / 10, 2),
             "change": round((hash(symbol) % 20 - 10) / 10, 2),
@@ -1678,25 +1812,1055 @@ async def get_market_quotes(symbols: str):
             "name": f"{symbol} Inc.",
             "currency": "USD",
             "exchange": "NASDAQ"
-        }
+        })
     
-    return {
-        "success": True,
-        "data": quotes,
-        "timestamp": "2024-01-15T10:30:00Z"
-    }
+    return quotes
 
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return {"status": "healthy", "timestamp": "2024-01-15T10:30:00Z"}
+    return {"status": "healthy", "timestamp": "2024-01-15T10:30:00Z", "version": "swingSignals_fixed_v2"}
 
 @app.post("/graphql/")
-async def graphql_endpoint(request: dict = None):
+async def graphql_endpoint(request: Request):
     """GraphQL endpoint for Apollo Client."""
-    # Handle mutations
-    if request and "query" in str(request):
-        query_str = str(request.get("query", ""))
+    # Parse the request body
+    body = await request.json()
+    query_str = body.get("query", "")
+    
+    # Debug logging
+    print(f"DEBUG: GraphQL query received: {query_str[:100]}...")
+    print(f"DEBUG: Full query string: {query_str}")
+    print(f"DEBUG: Contains tradingQuote: {'tradingQuote' in query_str}")
+    print(f"DEBUG: Contains topTraders: {'topTraders' in query_str}")
+    print(f"DEBUG: Contains socialFeeds: {'socialFeeds' in query_str}")
+    print(f"DEBUG: Request body: {body}")
+    
+    # Handle tradingQuote query FIRST (before any other processing)
+    if "tradingQuote" in query_str:
+        print("DEBUG: Processing tradingQuote query")
+        # Extract symbol from query if available
+        symbol = "AAPL"  # Default fallback
+        
+        # Try to extract symbol from the query string
+        # Use string methods instead of regex to avoid variable conflicts
+        symbol_start = query_str.find('symbol: "')
+        if symbol_start != -1:
+            symbol_start += len('symbol: "')
+            symbol_end = query_str.find('"', symbol_start)
+            if symbol_end != -1:
+                symbol = query_str[symbol_start:symbol_end]
+                print(f"DEBUG: Extracted symbol from query: {symbol}")
+        else:
+            # Check if there are variables in the request
+            variables = body.get("variables", {})
+            symbol = variables.get("symbol", "AAPL")
+            print(f"DEBUG: Extracted symbol from variables: {symbol}")
+        
+        # Generate mock quote data
+        base_prices = {
+            "AAPL": 185.92,
+            "TSLA": 248.50,
+            "MSFT": 378.85,
+            "GOOGL": 2800.50,
+            "AMZN": 3200.00,
+            "META": 350.00,
+            "NVDA": 450.00,
+            "SPY": 445.20
+        }
+        
+        base_price = base_prices.get(symbol, 100.00)
+        change = random.uniform(-5.0, 5.0)
+        change_percent = (change / base_price) * 100
+        current_price = base_price + change
+        
+        print(f"DEBUG: Returning tradingQuote for {symbol}: {current_price}")
+        return {
+            "data": {
+                "tradingQuote": {
+                    "symbol": symbol,
+                    "currentPrice": round(current_price, 2),
+                    "change": round(change, 2),
+                    "changePercent": round(change_percent, 2),
+                    "bid": round(current_price - 0.01, 2),
+                    "ask": round(current_price + 0.01, 2),
+                    "volume": random.randint(1000000, 10000000),
+                    "timestamp": datetime.now().isoformat()
+                }
+            }
+        }
+    
+    # Handle GetBenchmarkSeries query
+    if "benchmarkSeries" in query_str:
+        print("DEBUG: Processing GetBenchmarkSeries query")
+        variables = body.get("variables", {})
+        symbol = variables.get("symbol", "SPY")
+        timeframe = variables.get("timeframe", "1M")
+        
+        # Generate mock benchmark data
+        data_points = []
+        base_value = 400.0
+        for i in range(30):  # 30 data points for 1 month
+            value = base_value + (i * 2.5) + (i % 3 - 1) * 1.2
+            change = value - base_value
+            change_percent = (change / base_value) * 100
+            data_points.append({
+                "timestamp": f"2024-01-{i+1:02d}T00:00:00Z",
+                "value": round(value, 2),
+                "change": round(change, 2),
+                "changePercent": round(change_percent, 2),
+                "__typename": "DataPoint"
+            })
+        
+        return {
+            "data": {
+                "benchmarkSeries": {
+                    "symbol": symbol,
+                    "name": f"{symbol} Benchmark",
+                    "timeframe": timeframe,
+                    "dataPoints": data_points,
+                    "startValue": base_value,
+                    "endValue": data_points[-1]["value"],
+                    "totalReturn": round(data_points[-1]["value"] - base_value, 2),
+                    "totalReturnPercent": round(((data_points[-1]["value"] - base_value) / base_value) * 100, 2),
+                    "volatility": 15.2,
+                    "__typename": "BenchmarkSeries"
+                }
+            }
+        }
+
+    # Handle UpdateQuestProgress mutation
+    if "updateQuestProgress" in query_str:
+        print("DEBUG: Processing UpdateQuestProgress mutation")
+        variables = body.get("variables", {})
+        quest_id = variables.get("questId", "quest_medium_123")
+        progress = float(variables.get("progress", 0.5))
+        completed_scenarios = int(variables.get("completedScenarios", 1))
+        
+        print(f"DEBUG: Quest {quest_id}, Progress: {progress}, Scenarios: {completed_scenarios}")
+        
+        # Calculate rewards based on progress
+        base_rewards = {"XP": 50, "STARS": 2, "BADGE": 1}
+        if progress >= 1.0:
+            # Quest completed!
+            return {
+                "data": {
+                    "updateQuestProgress": {
+                        "questId": quest_id,
+                        "progress": 1.0,
+                        "completed": True,
+                        "rewardsEarned": base_rewards,
+                        "message": "Quest completed! You've earned your rewards!",
+                        "nextQuestAvailable": True,
+                        "streakBonus": 1.2,  # 20% bonus for completion
+                        "__typename": "QuestProgress"
+                    }
+                }
+            }
+        else:
+            return {
+                "data": {
+                    "updateQuestProgress": {
+                        "questId": quest_id,
+                        "progress": progress,
+                        "completed": False,
+                        "rewardsEarned": {"XP": int(base_rewards["XP"] * progress)},
+                        "message": f"Great progress! {int(progress * 100)}% complete.",
+                        "nextQuestAvailable": False,
+                        "streakBonus": 1.0,
+                        "__typename": "QuestProgress"
+                    }
+                }
+            }
+
+    # Handle StartQuest mutation
+    if "startQuest" in query_str:
+        print("DEBUG: Processing StartQuest mutation")
+        variables = body.get("variables", {})
+        difficulty = variables.get("difficulty", "MEDIUM")
+        
+        # Quest-specific rewards based on difficulty
+        base_xp = {"EASY": 25, "MEDIUM": 50, "HARD": 100}.get(difficulty, 50)
+        base_stars = {"EASY": 1, "MEDIUM": 2, "HARD": 3}.get(difficulty, 2)
+        
+        return {
+            "data": {
+                "startQuest": {
+                    "id": f"quest_{difficulty.lower()}_{int(time.time())}",
+                    "topic": "daily quest",
+                    "difficulty": difficulty,
+                    "rewards": [
+                        {"type": "XP", "amount": base_xp},
+                        {"type": "STARS", "amount": base_stars},
+                        {"type": "BADGE", "amount": 1}
+                    ],
+                    "progress": 0.0,
+                    "narration": f"Welcome to your {difficulty.lower()} daily quest! Complete trading scenarios to earn {base_xp} XP and {base_stars} stars.",
+                    "expiresAt": (datetime.now() + timedelta(hours=24)).isoformat(),
+                    "questType": "simulation",
+                    "timeLimitMinutes": {"EASY": 10, "MEDIUM": 15, "HARD": 20}.get(difficulty, 15),
+                    "scenarios": [
+                        {
+                            "id": f"scenario_1_{difficulty.lower()}",
+                            "description": f"Practice {difficulty.lower()} trading scenario",
+                            "type": "options_spread",
+                            "marketCondition": "bull_market",
+                            "expectedOutcome": "profitable_trade"
+                        }
+                    ],
+                    "__typename": "QuestSession"
+                }
+            }
+        }
+
+    # Handle StartLiveSim mutation
+    if "startLiveSim" in query_str:
+        print("DEBUG: Processing StartLiveSim mutation")
+        variables = body.get("variables", {})
+        symbol = variables.get("symbol", "AAPL")
+        mode = variables.get("mode", "paper")
+        
+        return {
+            "data": {
+                "startLiveSim": {
+                    "id": f"sim_{symbol.lower()}_{int(time.time())}",
+                    "symbol": symbol,
+                    "mode": mode,
+                    "initialBalance": 10000.0,
+                    "currentBalance": 10000.0,
+                    "learningObjectives": [
+                        "Understand market dynamics",
+                        "Practice risk management", 
+                        "Learn technical analysis"
+                    ],
+                    "voiceFeedbackEnabled": True,
+                    "regimeContext": "bull_market",
+                    "performanceMetrics": {
+                        "totalTrades": 0,
+                        "winRate": 0.0,
+                        "totalPnL": 0.0,
+                        "returnPercentage": 0.0,
+                        "__typename": "PerformanceMetrics"
+                    },
+                    "__typename": "LiveSimulation"
+                }
+            }
+        }
+
+    # Handle SubmitQuiz mutation
+    if "submitQuiz" in query_str:
+        print("DEBUG: Processing SubmitQuiz mutation")
+        variables = body.get("variables", {})
+        lesson_id = variables.get("lessonId", "lesson_001")
+        answers = variables.get("answers", [0])
+        
+        # Calculate score based on answers
+        correct_answers = len([a for a in answers if a == 3])  # Assuming correct answer is 3
+        total_questions = len(answers)
+        score = int((correct_answers / total_questions) * 100) if total_questions > 0 else 0
+        
+        # Enhanced feedback based on score
+        feedback_messages = {
+            100: "🎉 Perfect! You've mastered this concept completely!",
+            90: "🌟 Excellent work! You clearly understand the material.",
+            80: "👍 Great job! You're on the right track.",
+            70: "💪 Good effort! Review the material and try again.",
+            60: "📚 Keep studying! You're making progress.",
+            50: "🔄 Don't give up! Practice makes perfect.",
+            0: "💡 Every expert was once a beginner. Keep learning!"
+        }
+        
+        # Get feedback message based on score range
+        feedback = feedback_messages.get(score, feedback_messages.get((score // 10) * 10, feedback_messages[0]))
+        
+        # Calculate XP bonus based on score
+        xp_bonus = max(10, score * 2)  # Minimum 10 XP, 2 XP per percentage point
+        
+        # Determine badges earned
+        badges_earned = []
+        if score == 100:
+            badges_earned.append("Perfect Score")
+        if score >= 90:
+            badges_earned.append("Quiz Master")
+        if score >= 80:
+            badges_earned.append("Knowledge Seeker")
+        if score >= 70:
+            badges_earned.append("Learning Progress")
+        
+        # Add streak bonus for high scores
+        streak_bonus = 0
+        if score >= 80:
+            streak_bonus = 25
+            feedback += f" 🔥 +{streak_bonus} XP streak bonus!"
+        
+        return {
+            "data": {
+                "submitQuiz": {
+                    "score": score,
+                    "xpBonus": xp_bonus + streak_bonus,
+                    "totalXp": 1250 + xp_bonus + streak_bonus,
+                    "feedback": feedback,
+                    "badgesEarned": badges_earned,
+                    "nextRecommendation": "Try the advanced options strategies lesson" if score >= 80 else "Review the material and retake the quiz",
+                    "streakStatus": "maintained" if score >= 70 else "broken",
+                    "levelProgress": {
+                        "currentLevel": 3,
+                        "currentXp": 1250 + xp_bonus + streak_bonus,
+                        "nextLevelXp": 2000,
+                        "progressPercentage": min(100, ((1250 + xp_bonus + streak_bonus) / 2000) * 100),
+                        "__typename": "LevelProgress"
+                    },
+                    "__typename": "QuizResult"
+                }
+            }
+        }
+
+    # Handle StartLesson mutation - MINIMAL VERSION
+    if "startLesson" in query_str:
+        print("DEBUG: Processing StartLesson mutation")
+        variables = body.get("variables", {})
+        
+        # Simple topic extraction
+        topic = variables.get("topic", "options basics")
+        topic = topic.strip().lower().replace('_', ' ')
+        
+        print(f"DEBUG: Topic detected: '{topic}'")
+        
+        # Simple lesson lookup
+        lessons = {
+            "options basics": {
+                "title": "📊 Options Trading Fundamentals",
+                "text": "Welcome to options trading! Options give you the right to buy or sell stocks at specific prices.",
+                "voiceNarration": "Welcome to options trading! Let's master the fundamentals.",
+                "quiz": {
+                    "id": "quiz_options_basics",
+                    "question": "What happens if you buy a call option and the stock price goes below the strike price?",
+                    "options": ["You make unlimited profit", "You lose only the premium paid", "You must buy the stock", "You get your money back"],
+                    "correct": 1,
+                    "explanation": "Correct! With options, your maximum loss is limited to the premium you paid.",
+                    "voiceHint": "Remember: options limit your downside risk to the premium paid."
+                },
+                "xpEarned": 50,
+                "difficulty": 1,
+                "estimatedTimeMinutes": 8,
+                "skillsTargeted": ["options_trading", "risk_management"]
+            },
+            "volatility trading": {
+                "title": "📈 Volatility Trading Strategies", 
+                "text": "Volatility measures how much a stock's price moves up and down. Learn to profit from market uncertainty.",
+                "voiceNarration": "Volatility is your friend in options trading! Learn proven strategies.",
+                "quiz": {
+                    "id": "quiz_volatility_trading",
+                    "question": "Which strategy works best when you expect high volatility?",
+                    "options": ["Iron Condor", "Straddle", "Calendar Spread", "Covered Call"],
+                    "correct": 1,
+                    "explanation": "Perfect! Straddles profit from big moves in either direction.",
+                    "voiceHint": "Think about strategies that benefit from big price movements."
+                },
+                "xpEarned": 75,
+                "difficulty": 2,
+                "estimatedTimeMinutes": 12,
+                "skillsTargeted": ["volatility_trading", "options_strategies"]
+            }
+        }
+        
+        # Get lesson content
+        lesson = lessons.get(topic, lessons["options basics"])
+        
+        return {
+            "data": {
+                "startLesson": {
+                    "id": f"lesson_{topic.replace(' ', '_')}",
+                    "title": lesson["title"],
+                    "text": lesson["text"],
+                    "voiceNarration": lesson["voiceNarration"],
+                    "quiz": {
+                        "id": lesson["quiz"]["id"],
+                        "question": lesson["quiz"]["question"],
+                        "options": lesson["quiz"]["options"],
+                        "correct": lesson["quiz"]["correct"],
+                        "explanation": lesson["quiz"]["explanation"],
+                        "voiceHint": lesson["quiz"]["voiceHint"],
+                        "__typename": "Quiz"
+                    },
+                    "xpEarned": lesson["xpEarned"],
+                    "streak": 1,
+                    "difficulty": lesson["difficulty"],
+                    "estimatedTimeMinutes": lesson["estimatedTimeMinutes"],
+                    "skillsTargeted": lesson["skillsTargeted"],
+                    "__typename": "Lesson"
+                }
+            }
+        }
+
+    # Handle tutorProgress query
+    if "tutorProgress" in query_str:
+        print("DEBUG: Processing tutorProgress query")
+        return {
+            "data": {
+                "tutorProgress": {
+                    "userId": "demo-user-123",
+                    "xp": 1250,
+                    "level": 3,
+                    "streakDays": 7,
+                    "badges": ["First Steps", "Quiz Master", "Streak Keeper"],
+                    "abilityEstimate": 0.75,
+                    "skillMastery": [
+                        {
+                            "skill": "options_trading",
+                            "masteryLevel": "intermediate",
+                            "masteryPercentage": 65,
+                            "status": "learning",
+                            "__typename": "SkillMastery"
+                        },
+                        {
+                            "skill": "portfolio_management",
+                            "masteryLevel": "beginner",
+                            "masteryPercentage": 40,
+                            "status": "learning",
+                            "__typename": "SkillMastery"
+                        }
+                    ],
+                    "hearts": 3,
+                    "maxHearts": 5,
+                    "__typename": "TutorProgress"
+                }
+            }
+        }
+    
+    # Handle dailyQuest query
+    if "dailyQuest" in query_str:
+        print("DEBUG: Processing dailyQuest query")
+        return {
+            "data": {
+                "dailyQuest": {
+                    "id": "quest_001",
+                    "title": "Options Spread Mastery",
+                    "description": "Complete 3 options spread scenarios with 80% accuracy",
+                    "questType": "simulation",
+                    "difficulty": 3,
+                    "xpReward": 150,
+                    "timeLimitMinutes": 15,
+                    "requiredSkills": ["options_trading", "risk_management"],
+                    "regimeContext": "bull_market",
+                    "voiceNarration": "Welcome to today's quest! You'll practice options spreads in a bull market scenario.",
+                    "completionCriteria": {
+                        "scenariosCompleted": 0,
+                        "successRate": 0.0,
+                        "__typename": "CompletionCriteria"
+                    },
+                    "__typename": "DailyQuest"
+                }
+            }
+        }
+
+    # Handle topTraders query
+    if "topTraders" in query_str:
+        print("DEBUG: Processing topTraders query")
+        print(f"DEBUG: Query string contains topTraders: {'topTraders' in query_str}")
+        print(f"DEBUG: Full query: {query_str}")
+        # Extract period from variables
+        variables = body.get("variables", {})
+        period = variables.get("period", "1M")
+        
+        # Generate mock top traders data
+        top_traders = [
+            {
+                "id": "trader_001",
+                "username": "QuantumTrader",
+                "avatar": "https://example.com/avatar1.jpg",
+                "verified": True,
+                "followerCount": 15420,
+                "performance": {
+                    "totalReturn": 0.2847,
+                    "winRate": 0.78,
+                    "sharpeRatio": 2.34,
+                    "maxDrawdown": -0.12,
+                    "totalTrades": 156
+                },
+                "recentTrades": [
+                    {
+                        "symbol": "NVDA",
+                        "side": "LONG",
+                        "quantity": 50,
+                        "price": 445.20,
+                        "timestamp": "2024-01-15T14:30:00Z",
+                        "pnl": 1250.00
+                    },
+                    {
+                        "symbol": "TSLA",
+                        "side": "SHORT",
+                        "quantity": 25,
+                        "price": 248.50,
+                        "timestamp": "2024-01-15T11:15:00Z",
+                        "pnl": 875.00
+                    }
+                ]
+            },
+            {
+                "id": "trader_002",
+                "username": "HFTMaster",
+                "avatar": "https://example.com/avatar2.jpg",
+                "verified": True,
+                "followerCount": 8930,
+                "performance": {
+                    "totalReturn": 0.1956,
+                    "winRate": 0.82,
+                    "sharpeRatio": 1.89,
+                    "maxDrawdown": -0.08,
+                    "totalTrades": 234
+                },
+                "recentTrades": [
+                    {
+                        "symbol": "AAPL",
+                        "side": "LONG",
+                        "quantity": 100,
+                        "price": 185.92,
+                        "timestamp": "2024-01-15T15:45:00Z",
+                        "pnl": 420.00
+                    },
+                    {
+                        "symbol": "MSFT",
+                        "side": "LONG",
+                        "quantity": 75,
+                        "price": 378.85,
+                        "timestamp": "2024-01-15T13:20:00Z",
+                        "pnl": 315.00
+                    }
+                ]
+            },
+            {
+                "id": "trader_003",
+                "username": "AlgoKing",
+                "avatar": "https://example.com/avatar3.jpg",
+                "verified": False,
+                "followerCount": 5670,
+                "performance": {
+                    "totalReturn": 0.1642,
+                    "winRate": 0.75,
+                    "sharpeRatio": 1.67,
+                    "maxDrawdown": -0.15,
+                    "totalTrades": 189
+                },
+                "recentTrades": [
+                    {
+                        "symbol": "GOOGL",
+                        "side": "LONG",
+                        "quantity": 30,
+                        "price": 2800.50,
+                        "timestamp": "2024-01-15T16:00:00Z",
+                        "pnl": 900.00
+                    },
+                    {
+                        "symbol": "AMZN",
+                        "side": "SHORT",
+                        "quantity": 20,
+                        "price": 3200.00,
+                        "timestamp": "2024-01-15T12:30:00Z",
+                        "pnl": 600.00
+                    }
+                ]
+            }
+        ]
+        
+        return {
+            "data": {
+                "topTraders": top_traders
+            }
+        }
+    
+    # Handle socialFeeds query
+    if "socialFeeds" in query_str:
+        print("DEBUG: Processing socialFeeds query")
+        # Extract limit and offset from variables
+        variables = body.get("variables", {})
+        limit = variables.get("limit", 20)
+        offset = variables.get("offset", 0)
+        
+        # Generate mock social feeds data
+        social_feeds = [
+            {
+                "id": "feed_001",
+                "user": {
+                    "id": "user_001",
+                    "username": "QuantumTrader",
+                    "avatar": "https://example.com/avatar1.jpg",
+                    "verified": True,
+                    "followerCount": 15420,
+                    "winRate": 0.78
+                },
+                "content": "Just closed a profitable NVDA position! The HFT momentum strategy worked perfectly. 🚀",
+                "type": "trade_update",
+                "timestamp": "2024-01-15T14:30:00Z",
+                "likes": 45,
+                "comments": 12,
+                "shares": 8,
+                "tradeData": {
+                    "symbol": "NVDA",
+                    "side": "LONG",
+                    "quantity": 50,
+                    "price": 445.20,
+                    "pnl": 1250.00
+                },
+                "performance": {
+                    "totalReturn": 0.2847,
+                    "winRate": 0.78,
+                    "sharpeRatio": 2.34
+                }
+            },
+            {
+                "id": "feed_002",
+                "user": {
+                    "id": "user_002",
+                    "username": "HFTMaster",
+                    "avatar": "https://example.com/avatar2.jpg",
+                    "verified": True,
+                    "followerCount": 8930,
+                    "winRate": 0.82
+                },
+                "content": "Market regime detection is showing HIGH_VOL conditions. Adjusting position sizes accordingly. #RiskManagement",
+                "type": "market_insight",
+                "timestamp": "2024-01-15T13:20:00Z",
+                "likes": 32,
+                "comments": 7,
+                "shares": 15,
+                "tradeData": None,
+                "performance": {
+                    "totalReturn": 0.1956,
+                    "winRate": 0.82,
+                    "sharpeRatio": 1.89
+                }
+            },
+            {
+                "id": "feed_003",
+                "user": {
+                    "id": "user_003",
+                    "username": "AlgoKing",
+                    "avatar": "https://example.com/avatar3.jpg",
+                    "verified": False,
+                    "followerCount": 5670,
+                    "winRate": 0.75
+                },
+                "content": "Scalping AAPL with microsecond precision. The HFT arbitrage opportunities are incredible today! ⚡",
+                "type": "trade_update",
+                "timestamp": "2024-01-15T12:15:00Z",
+                "likes": 28,
+                "comments": 5,
+                "shares": 3,
+                "tradeData": {
+                    "symbol": "AAPL",
+                    "side": "LONG",
+                    "quantity": 100,
+                    "price": 185.92,
+                    "pnl": 420.00
+                },
+                "performance": {
+                    "totalReturn": 0.1642,
+                    "winRate": 0.75,
+                    "sharpeRatio": 1.67
+                }
+            },
+            {
+                "id": "feed_004",
+                "user": {
+                    "id": "user_004",
+                    "username": "TechTrader",
+                    "avatar": "https://example.com/avatar4.jpg",
+                    "verified": True,
+                    "followerCount": 12300,
+                    "winRate": 0.85
+                },
+                "content": "Voice AI trading commands are game-changing! Just executed a complex bracket order using voice. 🎤",
+                "type": "feature_highlight",
+                "timestamp": "2024-01-15T11:45:00Z",
+                "likes": 67,
+                "comments": 23,
+                "shares": 18,
+                "tradeData": None,
+                "performance": {
+                    "totalReturn": 0.3124,
+                    "winRate": 0.85,
+                    "sharpeRatio": 2.12
+                }
+            },
+            {
+                "id": "feed_005",
+                "user": {
+                    "id": "user_005",
+                    "username": "MomentumPro",
+                    "avatar": "https://example.com/avatar5.jpg",
+                    "verified": False,
+                    "followerCount": 7890,
+                    "winRate": 0.73
+                },
+                "content": "SPY breakout confirmed! Institutional flow detected. Going long with HFT momentum strategy. 📈",
+                "type": "trade_update",
+                "timestamp": "2024-01-15T10:30:00Z",
+                "likes": 41,
+                "comments": 9,
+                "shares": 12,
+                "tradeData": {
+                    "symbol": "SPY",
+                    "side": "LONG",
+                    "quantity": 200,
+                    "price": 445.20,
+                    "pnl": 1040.00
+                },
+                "performance": {
+                    "totalReturn": 0.2234,
+                    "winRate": 0.73,
+                    "sharpeRatio": 1.95
+                }
+            }
+        ]
+        
+        return {
+            "data": {
+                "socialFeeds": social_feeds
+            }
+        }
+    
+    # Handle tradingAccount query
+    if "tradingAccount" in query_str:
+        print("DEBUG: Processing tradingAccount query")
+        return {
+            "data": {
+                "tradingAccount": {
+                    "id": "trading_account_123",
+                    "buyingPower": 50000.0,
+                    "cash": 25000.0,
+                    "portfolioValue": 125000.0,
+                    "equity": 125000.0,
+                    "dayTradeCount": 0,
+                    "patternDayTrader": False,
+                    "tradingBlocked": False,
+                    "dayTradingBuyingPower": 100000.0,
+                    "isDayTradingEnabled": True,
+                    "accountStatus": "ACTIVE",
+                    "createdAt": "2024-01-01T00:00:00Z"
+                }
+            }
+        }
+    
+    # Handle tradingOrders query
+    if "tradingOrders" in query_str:
+        print("DEBUG: Processing tradingOrders query")
+        return {
+            "data": {
+                "tradingOrders": [
+                    {
+                        "id": "order_001",
+                        "symbol": "AAPL",
+                        "side": "buy",
+                        "orderType": "market",
+                        "quantity": 100,
+                        "price": None,
+                        "stopPrice": None,
+                        "status": "filled",
+                        "createdAt": "2024-01-15T10:30:00Z",
+                        "filledAt": "2024-01-15T10:30:01Z",
+                        "filledQuantity": 100,
+                        "averageFillPrice": 150.25,
+                        "commission": 1.0,
+                        "notes": "HFT momentum trade"
+                    },
+                    {
+                        "id": "order_002",
+                        "symbol": "TSLA",
+                        "side": "sell",
+                        "orderType": "limit",
+                        "quantity": 50,
+                        "price": 250.0,
+                        "stopPrice": None,
+                        "status": "pending",
+                        "createdAt": "2024-01-15T10:30:00Z",
+                        "filledAt": None,
+                        "filledQuantity": 0,
+                        "averageFillPrice": None,
+                        "commission": 0.0,
+                        "notes": "HFT arbitrage setup"
+                    }
+                ]
+            }
+        }
+    
+    try:
+        # Default swing signals data (always available)
+        swing_signals = [
+            {
+                "id": "signal_001",
+                "symbol": "AAPL",
+                "signalType": "LONG",
+                "entryPrice": 150.25,
+                "targetPrice": 165.50,
+                "stopLoss": 142.00,
+                "stopPrice": 142.00,
+                "mlScore": 0.87,
+                "confidence": 0.92,
+                "timeframe": "1-3 days",
+                "reasoning": "Strong momentum with volume spike - HFT scalping opportunity",
+                "thesis": "Technical breakout with strong volume confirmation and institutional buying",
+                "isActive": True,
+                "createdAt": datetime.now().isoformat(),
+                "triggeredAt": datetime.now().isoformat(),
+                "createdBy": {
+                    "id": "ai_system_001",
+                    "username": "ai_trading_system",
+                    "name": "AI Trading System"
+                },
+                "riskRewardRatio": 2.1,
+                "daysSinceTriggered": 0,
+                "isLikedByUser": False,
+                "userLikeCount": 12,
+                "isValidated": True,
+                "validationPrice": 150.25,
+                "validationTimestamp": datetime.now().isoformat(),
+                "technicalIndicators": [
+                    {
+                        "name": "RSI",
+                        "value": 65.2,
+                        "signal": "BULLISH",
+                        "strength": "MODERATE",
+                        "description": "Relative Strength Index showing bullish momentum"
+                    },
+                    {
+                        "name": "MACD",
+                        "value": 1.25,
+                        "signal": "BULLISH",
+                        "strength": "STRONG",
+                        "description": "MACD histogram showing strong bullish divergence"
+                    },
+                    {
+                        "name": "Bollinger Bands",
+                        "value": "upper",
+                        "signal": "BULLISH",
+                        "strength": "MODERATE",
+                        "description": "Price trading near upper Bollinger Band"
+                    },
+                    {
+                        "name": "Volume",
+                        "value": "high",
+                        "signal": "BULLISH",
+                        "strength": "STRONG",
+                        "description": "Above average volume confirming breakout"
+                    }
+                ],
+                "patterns": [
+                    {
+                        "name": "Breakout",
+                        "confidence": 0.85,
+                        "signal": "BULLISH",
+                        "description": "Price breaking above key resistance level",
+                        "timeframe": "1-3 days"
+                    },
+                    {
+                        "name": "Volume Spike",
+                        "confidence": 0.92,
+                        "signal": "BULLISH",
+                        "description": "Significant volume increase confirming move",
+                        "timeframe": "1 day"
+                    },
+                    {
+                        "name": "Momentum",
+                        "confidence": 0.78,
+                        "signal": "BULLISH",
+                        "description": "Strong upward momentum with HFT scalping opportunity",
+                        "timeframe": "1-2 days"
+                    }
+                ],
+                "features": ["hft_enabled", "scalping", "momentum"],
+                "hftIntegration": {
+                    "scalpingEnabled": True,
+                    "momentumStrategy": True,
+                    "arbitrageEnabled": False,
+                    "marketMakingStrategy": False,
+                    "latencyTarget": 25,
+                    "maxOrdersPerSecond": 100
+                }
+            },
+            {
+                "id": "signal_002",
+                "symbol": "TSLA",
+                "signalType": "SHORT",
+                "entryPrice": 245.80,
+                "targetPrice": 230.00,
+                "stopLoss": 255.00,
+                "stopPrice": 255.00,
+                "mlScore": 0.79,
+                "confidence": 0.85,
+                "timeframe": "2-5 days",
+                "reasoning": "Overbought conditions with bearish divergence - HFT arbitrage setup",
+                "thesis": "Bearish divergence pattern with overbought RSI and weakening momentum",
+                "isActive": True,
+                "createdAt": datetime.now().isoformat(),
+                "triggeredAt": datetime.now().isoformat(),
+                "createdBy": {
+                    "id": "ai_system_001",
+                    "username": "ai_trading_system",
+                    "name": "AI Trading System"
+                },
+                "riskRewardRatio": 1.8,
+                "daysSinceTriggered": 0,
+                "isLikedByUser": False,
+                "userLikeCount": 8,
+                "isValidated": True,
+                "validationPrice": 245.80,
+                "validationTimestamp": datetime.now().isoformat(),
+                "technicalIndicators": [
+                    {
+                        "name": "RSI",
+                        "value": 78.5,
+                        "signal": "BEARISH",
+                        "strength": "STRONG",
+                        "description": "RSI showing overbought conditions"
+                    },
+                    {
+                        "name": "MACD",
+                        "value": -0.85,
+                        "signal": "BEARISH",
+                        "strength": "MODERATE",
+                        "description": "MACD showing bearish divergence"
+                    },
+                    {
+                        "name": "Bollinger Bands",
+                        "value": "upper",
+                        "signal": "BEARISH",
+                        "strength": "MODERATE",
+                        "description": "Price at upper Bollinger Band resistance"
+                    },
+                    {
+                        "name": "Volume",
+                        "value": "normal",
+                        "signal": "NEUTRAL",
+                        "strength": "WEAK",
+                        "description": "Average volume with no confirmation"
+                    }
+                ],
+                "patterns": [
+                    {
+                        "name": "Bearish Divergence",
+                        "confidence": 0.82,
+                        "signal": "BEARISH",
+                        "description": "Price and RSI showing bearish divergence",
+                        "timeframe": "2-3 days"
+                    },
+                    {
+                        "name": "Overbought",
+                        "confidence": 0.75,
+                        "signal": "BEARISH",
+                        "description": "RSI above 70 indicating overbought conditions",
+                        "timeframe": "1-2 days"
+                    },
+                    {
+                        "name": "Resistance",
+                        "confidence": 0.88,
+                        "signal": "BEARISH",
+                        "description": "Strong resistance level with HFT arbitrage setup",
+                        "timeframe": "2-5 days"
+                    }
+                ],
+                "features": ["hft_enabled", "arbitrage", "market_making"],
+                "hftIntegration": {
+                    "scalpingEnabled": False,
+                    "momentumStrategy": False,
+                    "arbitrageEnabled": True,
+                    "marketMakingStrategy": True,
+                    "latencyTarget": 10,
+                    "maxOrdersPerSecond": 200
+                }
+            },
+            {
+                "id": "signal_003",
+                "symbol": "SPY",
+                "signalType": "LONG",
+                "entryPrice": 445.20,
+                "targetPrice": 460.00,
+                "stopLoss": 435.00,
+                "stopPrice": 435.00,
+                "mlScore": 0.91,
+                "confidence": 0.88,
+                "timeframe": "1-2 days",
+                "reasoning": "Breakout above resistance with institutional flow - HFT momentum strategy",
+                "thesis": "Strong institutional buying with breakout above key resistance level",
+                "isActive": True,
+                "createdAt": datetime.now().isoformat(),
+                "triggeredAt": datetime.now().isoformat(),
+                "createdBy": {
+                    "id": "ai_system_001",
+                    "username": "ai_trading_system",
+                    "name": "AI Trading System"
+                },
+                "riskRewardRatio": 2.4,
+                "daysSinceTriggered": 0,
+                "isLikedByUser": False,
+                "userLikeCount": 15,
+                "isValidated": True,
+                "validationPrice": 445.20,
+                "validationTimestamp": datetime.now().isoformat(),
+                "technicalIndicators": [
+                    {
+                        "name": "RSI",
+                        "value": 58.3,
+                        "signal": "BULLISH",
+                        "strength": "MODERATE",
+                        "description": "RSI showing healthy bullish momentum"
+                    },
+                    {
+                        "name": "MACD",
+                        "value": 2.15,
+                        "signal": "BULLISH",
+                        "strength": "STRONG",
+                        "description": "MACD showing strong bullish momentum"
+                    },
+                    {
+                        "name": "Bollinger Bands",
+                        "value": "middle",
+                        "signal": "BULLISH",
+                        "strength": "MODERATE",
+                        "description": "Price trading in middle of Bollinger Bands"
+                    },
+                    {
+                        "name": "Volume",
+                        "value": "very_high",
+                        "signal": "BULLISH",
+                        "strength": "VERY_STRONG",
+                        "description": "Exceptional volume confirming institutional buying"
+                    }
+                ],
+                "patterns": [
+                    {
+                        "name": "Breakout",
+                        "confidence": 0.91,
+                        "signal": "BULLISH",
+                        "description": "Strong breakout above key resistance level",
+                        "timeframe": "1-2 days"
+                    },
+                    {
+                        "name": "Institutional Flow",
+                        "confidence": 0.88,
+                        "signal": "BULLISH",
+                        "description": "Large institutional buying pressure detected",
+                        "timeframe": "1-3 days"
+                    },
+                    {
+                        "name": "Momentum",
+                        "confidence": 0.85,
+                        "signal": "BULLISH",
+                        "description": "Strong momentum with HFT momentum strategy",
+                        "timeframe": "1-2 days"
+                    }
+                ],
+                "features": ["hft_enabled", "momentum", "scalping"],
+                "hftIntegration": {
+                    "scalpingEnabled": True,
+                    "momentumStrategy": True,
+                    "arbitrageEnabled": False,
+                    "marketMakingStrategy": False,
+                    "latencyTarget": 50,
+                    "maxOrdersPerSecond": 150
+                }
+            }
+        ]
         
         # Handle updateSecurity mutation
         if "updateSecurity" in query_str:
@@ -1772,16 +2936,19 @@ async def graphql_endpoint(request: dict = None):
             # Get current regime for adaptive strategies
             regime_response = await get_current_regime()
             regime_type = regime_response.get("regime_type", "SIDEWAYS")
-            recommended_mode = regime_response.get("recommended_mode", "SAFE")
             
-            # Adapt picks based on regime
-            picks = generate_regime_adapted_picks(regime_type, recommended_mode)
+            # Use the mode from the request variables, not the recommended mode
+            variables = body.get("variables", {})
+            user_mode = variables.get("mode", "SAFE")
+            
+            # Adapt picks based on regime and user-selected mode
+            picks = generate_regime_adapted_picks(regime_type, user_mode)
             
             return {
                 "data": {
                     "dayTradingPicks": {
                         "asOf": datetime.now().isoformat(),
-                        "mode": recommended_mode,
+                        "mode": user_mode,
                         "picks": picks,
                         "universeSize": 500,
                         "qualityThreshold": 0.7,
@@ -1795,10 +2962,720 @@ async def graphql_endpoint(request: dict = None):
                     }
                 }
             }
+        
+        # Handle swingSignals query
+        elif "swingSignals" in query_str:
+            return {
+                "data": {
+                    "swingSignals": swing_signals
+                }
+            }
+        
+        # Handle alpacaAccount query
+        elif "alpacaAccount" in query_str:
+            return {
+                "data": {
+                    "alpacaAccount": {
+                        "id": "alpaca_123",
+                        "status": "ACTIVE",
+                        "alpacaAccountId": "alpaca_demo_123",
+                        "accountType": "margin",
+                        "buyingPower": 50000.00,
+                        "cash": 25000.00,
+                        "portfolioValue": 125000.00,
+                        "equity": 125000.00,
+                        "lastEquity": 122500.00,
+                        "dayTradeCount": 0,
+                        "dayTradingBuyingPower": 100000.00,
+                        "regtBuyingPower": 50000.00,
+                        "longMarketValue": 100000.00,
+                        "shortMarketValue": 0.00,
+                        "initialMargin": 50000.00,
+                        "maintenanceMargin": 25000.00,
+                        "lastMaintenanceMargin": 24000.00,
+                        "sma": 25000.00,
+                        "createdAt": "2024-01-01T00:00:00Z",
+                        "approvedAt": "2024-01-01T00:00:00Z",
+                        "tradingBlocked": False,
+                        "transfersBlocked": False,
+                        "accountBlocked": False,
+                        "pdtFlag": False,
+                        "patternDayTrader": False,
+                        "tradingAuthorized": True,
+                        "tradingSuspendedAt": None,
+                        "maxAchEarlyAccessAmount": 1000.00,
+                        "achRelationship": "ACH_RELATIONSHIP_EXISTS",
+                        "cryptoStatus": "ACTIVE",
+                        "cryptoBuyingPower": 10000.00,
+                        "cryptoEquity": 5000.00,
+                        "cryptoInitialMargin": 5000.00,
+                        "cryptoMaintenanceMargin": 2500.00,
+                        "cryptoLongValue": 5000.00,
+                        "cryptoShortValue": 0.00,
+                        "cryptoPortfolioValue": 5000.00,
+                        "cryptoDayTradeCount": 0,
+                        "cryptoDayTradingBuyingPower": 10000.00,
+                        "cryptoRegtBuyingPower": 5000.00,
+                        "cryptoSma": 2500.00,
+                        "cryptoTradingBlocked": False,
+                        "cryptoTransfersBlocked": False,
+                        "cryptoAccountBlocked": False,
+                        "cryptoPdtFlag": False,
+                        "cryptoPatternDayTrader": False,
+                        "cryptoTradingAuthorized": True,
+                        "cryptoTradingSuspendedAt": None,
+                        "cryptoMaxAchEarlyAccessAmount": 500.00,
+                        "cryptoAchRelationship": "ACH_RELATIONSHIP_EXISTS"
+                    }
+                }
+            }
+        
+        # Handle tradingOrders query
+        elif "tradingOrders" in query_str:
+            return {
+                "data": {
+                    "tradingOrders": [
+                        {
+                            "id": "order_001",
+                            "symbol": "AAPL",
+                            "side": "buy",
+                            "quantity": 100,
+                            "orderType": "market",
+                            "status": "filled",
+                            "filledQuantity": 100,
+                            "averagePrice": 150.25,
+                            "createdAt": datetime.now().isoformat(),
+                            "filledAt": datetime.now().isoformat(),
+                            "commission": 1.00,
+                            "totalCost": 15026.00
+                        }
+                    ]
+                }
+            }
+        
+        # Handle alpacaOrders query
+        elif "alpacaOrders" in query_str:
+            return {
+                "data": {
+                    "alpacaOrders": [
+                        {
+                            "id": "alpaca_order_001",
+                            "symbol": "AAPL",
+                            "side": "buy",
+                            "quantity": 100,
+                            "orderType": "market",
+                            "status": "filled",
+                            "filledQuantity": 100,
+                            "averagePrice": 150.25,
+                            "createdAt": datetime.now().isoformat(),
+                            "filledAt": datetime.now().isoformat(),
+                            "commission": 1.00,
+                            "totalCost": 15026.00
+                        }
+                    ]
+                }
+            }
+        
+        # Handle alpacaPositions query
+        elif "alpacaPositions" in query_str:
+            return {
+                "data": {
+                    "alpacaPositions": [
+                        {
+                            "id": "alpaca_pos_001",
+                            "symbol": "AAPL",
+                            "quantity": 100,
+                            "marketValue": 15025.00,
+                            "averageCost": 148.50,
+                            "unrealizedPL": 175.00,
+                            "unrealizedPLPercent": 1.18,
+                            "side": "long",
+                            "marketPrice": 150.25,
+                            "costBasis": 14850.00,
+                            "dayChange": 25.00,
+                            "dayChangePercent": 0.17,
+                            "changePercent": 0.17,
+                            "positionValue": 15025.00,
+                            "lastUpdated": datetime.now().isoformat()
+                        }
+                    ]
+                }
+            }
+        
+        # Handle stockChartData query
+        elif "stockChartData" in query_str:
+            return {
+                "data": {
+                    "stockChartData": [
+                        {
+                            "symbol": "AAPL",
+                            "timeframe": "1D",
+                            "dataPoints": [
+                                {
+                                    "timestamp": "2024-01-15T09:30:00Z",
+                                    "open": 150.00,
+                                    "high": 151.50,
+                                    "low": 149.75,
+                                    "close": 150.25,
+                                    "volume": 1000000
+                                },
+                                {
+                                    "timestamp": "2024-01-15T10:00:00Z",
+                                    "open": 150.25,
+                                    "high": 151.00,
+                                    "low": 150.00,
+                                    "close": 150.75,
+                                    "volume": 800000
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        
+        # Handle tradingPositions query
+        elif "tradingPositions" in query_str:
+            return {
+                "data": {
+                    "tradingPositions": [
+                        {
+                            "id": "pos_001",
+                            "symbol": "AAPL",
+                            "quantity": 100,
+                            "marketValue": 15025.00,
+                            "averageCost": 148.50,
+                            "unrealizedPL": 175.00,
+                            "unrealizedPLPercent": 1.18,
+                            "side": "long",
+                            "marketPrice": 150.25,
+                            "currentPrice": 150.25,
+                            "costBasis": 14850.00,
+                            "dayChange": 25.00,
+                            "dayChangePercent": 0.17,
+                            "changePercent": 0.17,
+                            "positionValue": 15025.00,
+                            "lastUpdated": datetime.now().isoformat()
+                        },
+                        {
+                            "id": "pos_002", 
+                            "symbol": "TSLA",
+                            "quantity": 50,
+                            "marketValue": 12290.00,
+                            "averageCost": 240.00,
+                            "unrealizedPL": 290.00,
+                            "unrealizedPLPercent": 2.42,
+                            "side": "long",
+                            "marketPrice": 245.80,
+                            "currentPrice": 245.80,
+                            "costBasis": 12000.00,
+                            "dayChange": -15.00,
+                            "dayChangePercent": -0.06,
+                            "changePercent": -0.06,
+                            "positionValue": 12290.00,
+                            "lastUpdated": datetime.now().isoformat()
+                        },
+                        {
+                            "id": "pos_003",
+                            "symbol": "SPY", 
+                            "quantity": 200,
+                            "marketValue": 89040.00,
+                            "averageCost": 440.00,
+                            "unrealizedPL": 1040.00,
+                            "unrealizedPLPercent": 1.18,
+                            "side": "long",
+                            "marketPrice": 445.20,
+                            "currentPrice": 445.20,
+                            "costBasis": 88000.00,
+                            "dayChange": 40.00,
+                            "dayChangePercent": 0.09,
+                            "changePercent": 0.09,
+                            "positionValue": 89040.00,
+                            "lastUpdated": datetime.now().isoformat()
+                        }
+                    ]
+                }
+            }
+        
+    
+    except Exception as e:
+        # Fallback to default response if parsing fails
+        print(f"DEBUG: GraphQL parsing error: {e}")
+        pass
 
-    # Default query response
+    # Default query response with swingSignals included
+    swing_signals = [
+        {
+                "id": "signal_001",
+                "symbol": "AAPL",
+                "signalType": "LONG",
+                "entryPrice": 150.25,
+                "targetPrice": 165.50,
+                "stopLoss": 142.00,
+                "stopPrice": 142.00,
+                "mlScore": 0.87,
+                "confidence": 0.92,
+                "timeframe": "1-3 days",
+                "reasoning": "Strong momentum with volume spike - HFT scalping opportunity",
+                "thesis": "Technical breakout with strong volume confirmation and institutional buying",
+                "isActive": True,
+                "createdAt": datetime.now().isoformat(),
+                "triggeredAt": datetime.now().isoformat(),
+                "createdBy": "AI Trading System",
+                "riskRewardRatio": 2.1,
+                "daysSinceTriggered": 0,
+                "isLikedByUser": False,
+                "userLikeCount": 12,
+                "isValidated": True,
+                "validationPrice": 150.25,
+                "validationTimestamp": datetime.now().isoformat(),
+                "technicalIndicators": [
+                    {
+                        "name": "RSI",
+                        "value": 65.2,
+                        "signal": "BULLISH",
+                        "strength": "MODERATE",
+                        "description": "Relative Strength Index showing bullish momentum"
+                    },
+                    {
+                        "name": "MACD",
+                        "value": 1.25,
+                        "signal": "BULLISH",
+                        "strength": "STRONG",
+                        "description": "MACD histogram showing strong bullish divergence"
+                    },
+                    {
+                        "name": "Bollinger Bands",
+                        "value": "upper",
+                        "signal": "BULLISH",
+                        "strength": "MODERATE",
+                        "description": "Price trading near upper Bollinger Band"
+                    },
+                    {
+                        "name": "Volume",
+                        "value": "high",
+                        "signal": "BULLISH",
+                        "strength": "STRONG",
+                        "description": "Above average volume confirming breakout"
+                    }
+                ],
+                "patterns": [
+                    {
+                        "name": "Breakout",
+                        "confidence": 0.85,
+                        "signal": "BULLISH",
+                        "description": "Price breaking above key resistance level",
+                        "timeframe": "1-3 days"
+                    },
+                    {
+                        "name": "Volume Spike",
+                        "confidence": 0.92,
+                        "signal": "BULLISH",
+                        "description": "Significant volume increase confirming move",
+                        "timeframe": "1 day"
+                    },
+                    {
+                        "name": "Momentum",
+                        "confidence": 0.78,
+                        "signal": "BULLISH",
+                        "description": "Strong upward momentum with HFT scalping opportunity",
+                        "timeframe": "1-2 days"
+                    }
+                ],
+                "features": ["hft_enabled", "scalping", "momentum"],
+                "hftIntegration": {
+                    "scalpingEnabled": True,
+                    "momentumStrategy": True,
+                    "arbitrageEnabled": False,
+                    "marketMakingStrategy": False,
+                    "latencyTarget": 25,
+                    "maxOrdersPerSecond": 100
+                }
+            },
+            {
+                "id": "signal_002", 
+                "symbol": "TSLA",
+                "signalType": "SHORT",
+                "entryPrice": 245.80,
+                "targetPrice": 230.00,
+                "stopLoss": 255.00,
+                "stopPrice": 255.00,
+                "mlScore": 0.79,
+                "confidence": 0.85,
+                "timeframe": "2-5 days",
+                "reasoning": "Overbought conditions with bearish divergence - HFT arbitrage setup",
+                "thesis": "Bearish divergence pattern with overbought RSI and weakening momentum",
+                "isActive": True,
+                "createdAt": datetime.now().isoformat(),
+                "triggeredAt": datetime.now().isoformat(),
+                "createdBy": "AI Trading System",
+                "riskRewardRatio": 1.8,
+                "daysSinceTriggered": 0,
+                "isLikedByUser": False,
+                "userLikeCount": 8,
+                "isValidated": True,
+                "validationPrice": 245.80,
+                "validationTimestamp": datetime.now().isoformat(),
+                "technicalIndicators": [
+                    {
+                        "name": "RSI",
+                        "value": 78.5,
+                        "signal": "BEARISH",
+                        "strength": "STRONG",
+                        "description": "RSI showing overbought conditions"
+                    },
+                    {
+                        "name": "MACD",
+                        "value": -0.85,
+                        "signal": "BEARISH",
+                        "strength": "MODERATE",
+                        "description": "MACD showing bearish divergence"
+                    },
+                    {
+                        "name": "Bollinger Bands",
+                        "value": "upper",
+                        "signal": "BEARISH",
+                        "strength": "MODERATE",
+                        "description": "Price at upper Bollinger Band resistance"
+                    },
+                    {
+                        "name": "Volume",
+                        "value": "normal",
+                        "signal": "NEUTRAL",
+                        "strength": "WEAK",
+                        "description": "Average volume with no confirmation"
+                    }
+                ],
+                "patterns": [
+                    {
+                        "name": "Bearish Divergence",
+                        "confidence": 0.82,
+                        "signal": "BEARISH",
+                        "description": "Price and RSI showing bearish divergence",
+                        "timeframe": "2-3 days"
+                    },
+                    {
+                        "name": "Overbought",
+                        "confidence": 0.75,
+                        "signal": "BEARISH",
+                        "description": "RSI above 70 indicating overbought conditions",
+                        "timeframe": "1-2 days"
+                    },
+                    {
+                        "name": "Resistance",
+                        "confidence": 0.88,
+                        "signal": "BEARISH",
+                        "description": "Strong resistance level with HFT arbitrage setup",
+                        "timeframe": "2-5 days"
+                    }
+                ],
+                "features": ["hft_enabled", "arbitrage", "market_making"],
+                "hftIntegration": {
+                    "scalpingEnabled": False,
+                    "momentumStrategy": False,
+                    "arbitrageEnabled": True,
+                    "marketMakingStrategy": True,
+                    "latencyTarget": 10,
+                    "maxOrdersPerSecond": 200
+                }
+            },
+            {
+                "id": "signal_003",
+                "symbol": "SPY",
+                "signalType": "LONG", 
+                "entryPrice": 445.20,
+                "targetPrice": 460.00,
+                "stopLoss": 435.00,
+                "stopPrice": 435.00,
+                "mlScore": 0.91,
+                "confidence": 0.88,
+                "timeframe": "1-2 days",
+                "reasoning": "Breakout above resistance with institutional flow - HFT momentum strategy",
+                "thesis": "Strong institutional buying with breakout above key resistance level",
+                "isActive": True,
+                "createdAt": datetime.now().isoformat(),
+                "triggeredAt": datetime.now().isoformat(),
+                "createdBy": "AI Trading System",
+                "riskRewardRatio": 2.4,
+                "daysSinceTriggered": 0,
+                "isLikedByUser": False,
+                "userLikeCount": 15,
+                "isValidated": True,
+                "validationPrice": 445.20,
+                "validationTimestamp": datetime.now().isoformat(),
+                "technicalIndicators": [
+                    {
+                        "name": "RSI",
+                        "value": 58.3,
+                        "signal": "BULLISH",
+                        "strength": "MODERATE",
+                        "description": "RSI showing healthy bullish momentum"
+                    },
+                    {
+                        "name": "MACD",
+                        "value": 2.15,
+                        "signal": "BULLISH",
+                        "strength": "STRONG",
+                        "description": "MACD showing strong bullish momentum"
+                    },
+                    {
+                        "name": "Bollinger Bands",
+                        "value": "middle",
+                        "signal": "BULLISH",
+                        "strength": "MODERATE",
+                        "description": "Price trading in middle of Bollinger Bands"
+                    },
+                    {
+                        "name": "Volume",
+                        "value": "very_high",
+                        "signal": "BULLISH",
+                        "strength": "VERY_STRONG",
+                        "description": "Exceptional volume confirming institutional buying"
+                    }
+                ],
+                "patterns": [
+                    {
+                        "name": "Breakout",
+                        "confidence": 0.91,
+                        "signal": "BULLISH",
+                        "description": "Strong breakout above key resistance level",
+                        "timeframe": "1-2 days"
+                    },
+                    {
+                        "name": "Institutional Flow",
+                        "confidence": 0.88,
+                        "signal": "BULLISH",
+                        "description": "Large institutional buying pressure detected",
+                        "timeframe": "1-3 days"
+                    },
+                    {
+                        "name": "Momentum",
+                        "confidence": 0.85,
+                        "signal": "BULLISH",
+                        "description": "Strong momentum with HFT momentum strategy",
+                        "timeframe": "1-2 days"
+                    }
+                ],
+                "features": ["hft_enabled", "momentum", "scalping"],
+                "hftIntegration": {
+                    "scalpingEnabled": True,
+                    "momentumStrategy": True,
+                    "arbitrageEnabled": False,
+                    "marketMakingStrategy": False,
+                    "latencyTarget": 50,
+                    "maxOrdersPerSecond": 150
+                }
+            }
+        ]
+    
     return {
         "data": {
+            "swingSignals": swing_signals,
+            "tradingPositions": [
+                {
+                    "id": "pos_001",
+                    "symbol": "AAPL",
+                    "quantity": 100,
+                    "marketValue": 15025.00,
+                    "averageCost": 148.50,
+                    "unrealizedPL": 175.00,
+                    "unrealizedPLPercent": 1.18,
+                    "side": "long",
+                    "marketPrice": 150.25,
+                    "currentPrice": 150.25,
+                    "costBasis": 14850.00,
+                    "dayChange": 25.00,
+                    "dayChangePercent": 0.17,
+                    "changePercent": 0.17,
+                    "positionValue": 15025.00,
+                    "lastUpdated": datetime.now().isoformat()
+                },
+                {
+                    "id": "pos_002", 
+                    "symbol": "TSLA",
+                    "quantity": 50,
+                    "marketValue": 12290.00,
+                    "averageCost": 240.00,
+                    "unrealizedPL": 290.00,
+                    "unrealizedPLPercent": 2.42,
+                    "side": "long",
+                    "marketPrice": 245.80,
+                    "currentPrice": 245.80,
+                    "costBasis": 12000.00,
+                    "dayChange": -15.00,
+                    "dayChangePercent": -0.06,
+                    "changePercent": -0.06,
+                    "positionValue": 12290.00,
+                    "lastUpdated": datetime.now().isoformat()
+                },
+                {
+                    "id": "pos_003",
+                    "symbol": "SPY", 
+                    "quantity": 200,
+                    "marketValue": 89040.00,
+                    "averageCost": 440.00,
+                    "unrealizedPL": 1040.00,
+                    "unrealizedPLPercent": 1.18,
+                    "side": "long",
+                    "marketPrice": 445.20,
+                    "currentPrice": 445.20,
+                    "costBasis": 88000.00,
+                    "dayChange": 40.00,
+                    "dayChangePercent": 0.09,
+                    "changePercent": 0.09,
+                    "positionValue": 89040.00,
+                    "lastUpdated": datetime.now().isoformat()
+                }
+            ],
+            "tradingOrders": [
+                {
+                    "id": "order_001",
+                    "symbol": "AAPL",
+                    "side": "buy",
+                    "quantity": 100,
+                    "orderType": "market",
+                    "status": "filled",
+                    "filledQuantity": 100,
+                    "averagePrice": 150.25,
+                    "createdAt": datetime.now().isoformat(),
+                    "filledAt": datetime.now().isoformat(),
+                    "commission": 1.00,
+                    "totalCost": 15026.00
+                },
+                {
+                    "id": "order_002",
+                    "symbol": "TSLA",
+                    "side": "sell",
+                    "quantity": 50,
+                    "orderType": "limit",
+                    "status": "pending",
+                    "filledQuantity": 0,
+                    "averagePrice": None,
+                    "createdAt": datetime.now().isoformat(),
+                    "filledAt": None,
+                    "commission": 0.00,
+                    "totalCost": 0.00
+                }
+            ],
+            "alpacaOrders": [
+                {
+                    "id": "alpaca_order_001",
+                    "symbol": "AAPL",
+                    "side": "buy",
+                    "quantity": 100,
+                    "orderType": "market",
+                    "status": "filled",
+                    "filledQuantity": 100,
+                    "averagePrice": 150.25,
+                    "createdAt": datetime.now().isoformat(),
+                    "filledAt": datetime.now().isoformat(),
+                    "commission": 1.00,
+                    "totalCost": 15026.00
+                }
+            ],
+            "alpacaPositions": [
+                {
+                    "id": "alpaca_pos_001",
+                    "symbol": "AAPL",
+                    "quantity": 100,
+                    "marketValue": 15025.00,
+                    "averageCost": 148.50,
+                    "unrealizedPL": 175.00,
+                    "unrealizedPLPercent": 1.18,
+                    "side": "long",
+                    "marketPrice": 150.25,
+                    "costBasis": 14850.00,
+                    "dayChange": 25.00,
+                    "dayChangePercent": 0.17,
+                    "positionValue": 15025.00,
+                    "lastUpdated": datetime.now().isoformat()
+                }
+            ],
+                       "stockChartData": [
+                           {
+                               "symbol": "AAPL",
+                               "timeframe": "1D",
+                               "dataPoints": [
+                                   {
+                                       "timestamp": "2024-01-15T09:30:00Z",
+                                       "open": 150.00,
+                                       "high": 151.50,
+                                       "low": 149.75,
+                                       "close": 150.25,
+                                       "volume": 1000000
+                                   },
+                                   {
+                                       "timestamp": "2024-01-15T10:00:00Z",
+                                       "open": 150.25,
+                                       "high": 151.00,
+                                       "low": 150.00,
+                                       "close": 150.75,
+                                       "volume": 800000
+                                   }
+                               ]
+                           }
+                       ],
+                       "tradingQuote": {
+                           "symbol": "AAPL",
+                           "currentPrice": 185.92,
+                           "change": 2.15,
+                           "changePercent": 1.17,
+                           "bid": 185.91,
+                           "ask": 185.93,
+                           "volume": 5000000,
+                           "timestamp": datetime.now().isoformat()
+                       },
+            "alpacaAccount": {
+                "id": "alpaca_123",
+                "status": "ACTIVE",
+                "alpacaAccountId": "alpaca_demo_123",
+                "accountType": "margin",
+                "buyingPower": 50000.00,
+                "cash": 25000.00,
+                "portfolioValue": 125000.00,
+                "equity": 125000.00,
+                "lastEquity": 122500.00,
+                "dayTradeCount": 0,
+                "dayTradingBuyingPower": 100000.00,
+                "regtBuyingPower": 50000.00,
+                "longMarketValue": 100000.00,
+                "shortMarketValue": 0.00,
+                "initialMargin": 50000.00,
+                "maintenanceMargin": 25000.00,
+                "lastMaintenanceMargin": 24000.00,
+                "sma": 25000.00,
+                "createdAt": "2024-01-01T00:00:00Z",
+                "approvedAt": "2024-01-01T00:00:00Z",
+                "tradingBlocked": False,
+                "transfersBlocked": False,
+                "accountBlocked": False,
+                "pdtFlag": False,
+                "patternDayTrader": False,
+                "tradingAuthorized": True,
+                "tradingSuspendedAt": None,
+                "maxAchEarlyAccessAmount": 1000.00,
+                "achRelationship": "ACH_RELATIONSHIP_EXISTS",
+                "cryptoStatus": "ACTIVE",
+                "cryptoBuyingPower": 10000.00,
+                "cryptoEquity": 5000.00,
+                "cryptoInitialMargin": 5000.00,
+                "cryptoMaintenanceMargin": 2500.00,
+                "cryptoLongValue": 5000.00,
+                "cryptoShortValue": 0.00,
+                "cryptoPortfolioValue": 5000.00,
+                "cryptoDayTradeCount": 0,
+                "cryptoDayTradingBuyingPower": 10000.00,
+                "cryptoRegtBuyingPower": 5000.00,
+                "cryptoSma": 2500.00,
+                "cryptoTradingBlocked": False,
+                "cryptoTransfersBlocked": False,
+                "cryptoAccountBlocked": False,
+                "cryptoPdtFlag": False,
+                "cryptoPatternDayTrader": False,
+                "cryptoTradingAuthorized": True,
+                "cryptoTradingSuspendedAt": None,
+                "cryptoMaxAchEarlyAccessAmount": 500.00,
+                "cryptoAchRelationship": "ACH_RELATIONSHIP_EXISTS"
+            },
             "me": {
                 "id": "demo-user-123",
                 "email": "demo@example.com",
@@ -2078,12 +3955,12 @@ def generate_regime_adapted_picks(regime_type: str, recommended_mode: str) -> Li
     
     for symbol in symbols:
         # Base features
-        momentum_15m = random.uniform(-0.05, 0.05)
-        rvol_10m = random.uniform(0.5, 2.0)
-        vwap_dist = random.uniform(-0.01, 0.01)
-        breakout_pct = random.uniform(0, 0.02)
-        spread_bps = random.uniform(1, 10)
-        catalyst_score = random.uniform(0, 1)
+        momentum15m = random.uniform(-0.05, 0.05)
+        rvol10m = random.uniform(0.5, 2.0)
+        vwapDist = random.uniform(-0.01, 0.01)
+        breakoutPct = random.uniform(0, 0.02)
+        spreadBps = random.uniform(1, 10)
+        catalystScore = random.uniform(0, 1)
         
         # Generate synchronous sentiment analysis (no HTTP calls)
         # Mock sentiment data based on symbol and regime
@@ -2099,20 +3976,20 @@ def generate_regime_adapted_picks(regime_type: str, recommended_mode: str) -> Li
         
         # Boost catalyst score based on sentiment
         sentiment_boost = (sentiment_score + news_sentiment + social_sentiment) / 3
-        catalyst_score += sentiment_boost * adjustments["sentiment_multiplier"] * 0.2
+        catalystScore += sentiment_boost * adjustments["sentiment_multiplier"] * 0.2
         
         # Additional momentum boost for positive sentiment in bull markets
         if regime_type == "BULL" and sentiment_boost > 0.1:
-            momentum_15m += sentiment_boost * 0.1
+            momentum15m += sentiment_boost * 0.1
         
         # Mean reversion boost for negative sentiment in bear markets
         elif regime_type == "BEAR" and sentiment_boost < -0.1:
-            momentum_15m -= abs(sentiment_boost) * 0.05
+            momentum15m -= abs(sentiment_boost) * 0.05
         
         # Apply regime adjustments
-        momentum_15m *= adjustments["momentum_weight"]
-        breakout_pct *= adjustments["mean_reversion_weight"]
-        catalyst_score *= adjustments["volatility_weight"]
+        momentum15m *= adjustments["momentum_weight"]
+        breakoutPct *= adjustments["mean_reversion_weight"]
+        catalystScore *= adjustments["volatility_weight"]
         
         # Calculate regime-adapted score with sentiment boost
         base_score = random.uniform(0.6, 0.9)
@@ -2163,22 +4040,22 @@ def generate_regime_adapted_picks(regime_type: str, recommended_mode: str) -> Li
             "side": side,
             "score": regime_score,
             "features": {
-                "momentum_15m": momentum_15m,
-                "rvol_10m": rvol_10m,
-                "vwap_dist": vwap_dist,
-                "breakout_pct": breakout_pct,
-                "spread_bps": spread_bps,
-                "catalyst_score": catalyst_score,
+                "momentum15m": momentum15m,
+                "rvol10m": rvol10m,
+                "vwapDist": vwapDist,
+                "breakoutPct": breakoutPct,
+                "spreadBps": spreadBps,
+                "catalystScore": catalystScore,
                 "sentiment_score": sentiment_score,
                 "news_sentiment": news_sentiment,
                 "social_sentiment": social_sentiment
             },
             "risk": {
-                "atr_5m": random.uniform(0.5, 2.0),
-                "size_shares": 100 if recommended_mode == "SAFE" else 200,
+                "atr5m": random.uniform(0.5, 2.0),
+                "sizeShares": 100 if recommended_mode == "SAFE" else 200,
                 "stop": 0.95 if recommended_mode == "SAFE" else 0.90,
                 "targets": [1.02, 1.05] if recommended_mode == "SAFE" else [1.05, 1.10],
-                "time_stop_min": 120 if recommended_mode == "SAFE" else 60
+                "timeStopMin": 120 if recommended_mode == "SAFE" else 60
             },
             "notes": notes
         }
@@ -2435,19 +4312,19 @@ async def get_live_picks(mode: str):
                 "score": 0.85,
                 "confidence": 0.88,
                 "features": {
-                    "momentum_15m": 0.015,
-                    "rvol_10m": 1.8,
-                    "vwap_dist": 0.008,
-                    "breakout_pct": 0.012,
-                    "spread_bps": 2.5,
-                    "catalyst_score": 0.4
+                    "momentum15m": 0.015,
+                    "rvol10m": 1.8,
+                    "vwapDist": 0.008,
+                    "breakoutPct": 0.012,
+                    "spreadBps": 2.5,
+                    "catalystScore": 0.4
                 },
                 "risk": {
-                    "atr_5m": 1.25,
-                    "size_shares": 200,
+                    "atr5m": 1.25,
+                    "sizeShares": 200,
                     "stop": 172.50,
                     "targets": [178.50, 181.50],
-                    "time_stop_min": 60
+                    "timeStopMin": 60
                 },
                 "market_regime": "BULL",
                 "volatility_regime": "NORMAL",
@@ -2463,19 +4340,19 @@ async def get_live_picks(mode: str):
                 "score": 0.88,
                 "confidence": 0.92,
                 "features": {
-                    "momentum_15m": 0.025,
-                    "rvol_10m": 2.1,
-                    "vwap_dist": 0.015,
-                    "breakout_pct": 0.018,
-                    "spread_bps": 4.2,
-                    "catalyst_score": 0.6
+                    "momentum15m": 0.025,
+                    "rvol10m": 2.1,
+                    "vwapDist": 0.015,
+                    "breakoutPct": 0.018,
+                    "spreadBps": 4.2,
+                    "catalystScore": 0.6
                 },
                 "risk": {
-                    "atr_5m": 2.15,
-                    "size_shares": 150,
+                    "atr5m": 2.15,
+                    "sizeShares": 150,
                     "stop": 240.50,
                     "targets": [251.00, 256.50],
-                    "time_stop_min": 30
+                    "timeStopMin": 30
                 },
                 "market_regime": "VOLATILE",
                 "volatility_regime": "HIGH",
@@ -3443,19 +5320,36 @@ async def process_voice_trading_command(command_data: dict):
 @app.get("/api/voice-trading/help-commands/")
 async def get_voice_trading_help():
     """Get available voice trading commands"""
-    try:
-        from backend.voice.enhanced_trading_commands import voice_trading_manager
-        
-        help_data = await voice_trading_manager.get_help_commands("Nova")
-        
-        return help_data
-    
-    except Exception as e:
-        return {
-            "success": False,
-            "error": f"Failed to get help commands: {str(e)}",
-            "message": "Nova: I couldn't load the help commands right now."
-        }
+    return {
+        "success": True,
+        "commands": [
+            {
+                "command": "buy",
+                "description": "Place a buy order",
+                "example": "Buy 100 shares of AAPL",
+                "parameters": ["symbol", "quantity"]
+            },
+            {
+                "command": "sell", 
+                "description": "Place a sell order",
+                "example": "Sell 50 shares of MSFT",
+                "parameters": ["symbol", "quantity"]
+            },
+            {
+                "command": "check portfolio",
+                "description": "Get portfolio overview",
+                "example": "Show my portfolio",
+                "parameters": []
+            },
+            {
+                "command": "market status",
+                "description": "Check market status",
+                "example": "What's the market doing?",
+                "parameters": []
+            }
+        ],
+        "timestamp": datetime.now().isoformat()
+    }
 
 @app.post("/api/voice-trading/create-session/")
 async def create_voice_trading_session(session_data: dict):
@@ -3718,28 +5612,46 @@ async def get_real_quote(symbol: str):
 async def get_multiple_real_quotes(symbols: str):
     """Get real-time quotes for multiple symbols"""
     try:
-        from backend.market.providers.enhanced_base import create_market_data_provider
-        
         symbol_list = [s.strip().upper() for s in symbols.split(",")]
-        provider = create_market_data_provider("mock", "mock_key")
         
-        quotes = await provider.get_quotes(symbol_list)
-        
-        result = {}
-        for symbol, quote in quotes.items():
-            result[symbol] = {
-                "symbol": quote.symbol,
-                "price": quote.price,
-                "bid": quote.bid,
-                "ask": quote.ask,
-                "volume": quote.volume,
-                "timestamp": quote.timestamp.isoformat(),
-                "spread": quote.spread,
-                "change": quote.change,
-                "change_percent": quote.change_percent
+        # Generate mock quotes
+        quotes = []
+        for symbol in symbol_list:
+            base_price = {
+                "AAPL": 185.92,
+                "MSFT": 378.85,
+                "GOOGL": 2800.50,
+                "TSLA": 248.50,
+                "NVDA": 450.30,
+                "AMZN": 3200.00,
+                "META": 350.25,
+                "NFLX": 450.75,
+                "ADBE": 580.20,
+                "CRM": 220.15,
+                "AMD": 125.80,
+                "INTC": 45.60,
+                "LYFT": 12.30,
+                "UBER": 35.40,
+                "PYPL": 65.25
+            }.get(symbol, 100.00)
+            
+            change = random.uniform(-5.0, 5.0)
+            change_percent = (change / base_price) * 100
+            
+            quote = {
+                "symbol": symbol,
+                "price": base_price + change,
+                "bid": base_price + change - 0.01,
+                "ask": base_price + change + 0.01,
+                "volume": random.randint(1000000, 10000000),
+                "timestamp": datetime.now().isoformat(),
+                "spread": 0.02,
+                "change": change,
+                "change_percent": change_percent
             }
+            quotes.append(quote)
         
-        return result
+        return quotes
     
     except Exception as e:
         return {"error": f"Failed to get quotes: {str(e)}"}

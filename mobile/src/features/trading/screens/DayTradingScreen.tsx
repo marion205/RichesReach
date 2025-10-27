@@ -8,9 +8,8 @@ import {
   Alert,
   FlatList,
   ActivityIndicator,
-  PanGestureHandler,
-  State,
 } from 'react-native';
+import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { useQuery, useMutation, useApolloClient } from '@apollo/client';
 import { gql } from '@apollo/client';
 import { GET_DAY_TRADING_PICKS, LOG_DAY_TRADING_OUTCOME } from '../../../graphql/dayTrading';
@@ -525,6 +524,7 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
         onPress={() => selectPick(item)}
         activeOpacity={0.7}
       >
+        <View>
         {/* Header */}
         <View style={styles.pickHeader}>
           <View style={styles.pickSymbolWrap}>
@@ -621,7 +621,8 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
           <Icon name="zap" size={18} color="#fff" style={{ marginRight: 8 }} />
           <Text style={styles.executeBtnText}>Execute {item.side} Trade</Text>
         </TouchableOpacity>
-      </View>
+        </View>
+      </TouchableOpacity>
     );
   });
 
@@ -760,25 +761,6 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
       onHandlerStateChange={handleGesture}
     >
       <View style={[styles.container, { backgroundColor: C.bg }]}>
-        {/* Gesture Hints */}
-        <View style={styles.gestureHints}>
-          <View style={styles.gestureHint}>
-            <Icon name="arrow-right" size={16} color="#4CAF50" />
-            <Text style={styles.gestureText}>LONG</Text>
-          </View>
-          <View style={styles.gestureHint}>
-            <Icon name="arrow-left" size={16} color="#F44336" />
-            <Text style={styles.gestureText}>SHORT</Text>
-          </View>
-          <View style={styles.gestureHint}>
-            <Icon name="arrow-up" size={16} color="#FF9800" />
-            <Text style={styles.gestureText}>AGGRESSIVE</Text>
-          </View>
-          <View style={styles.gestureHint}>
-            <Icon name="arrow-down" size={16} color="#2196F3" />
-            <Text style={styles.gestureText}>SAFE</Text>
-          </View>
-        </View>
 
         {/* Selected Pick Indicator */}
         {selectedPick && (

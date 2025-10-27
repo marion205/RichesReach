@@ -929,29 +929,6 @@ import { API_BASE } from '../config/api';
 
           </View>
 
-          {/* Development Tools Section */}
-          <View style={styles.learningSection}>
-            <View style={styles.learningHeader}>
-              <View style={styles.learningHeaderLeft}>
-                <Icon name="tool" size={20} color="#6B7280" />
-                <Text style={styles.learningTitle}>Development Tools</Text>
-              </View>
-            </View>
-
-            <View style={styles.learningCards}>
-              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('connectivity-test')}>
-                <View style={styles.learningCardIcon}>
-                  <Icon name="wifi" size={24} color="#3B82F6" />
-                </View>
-                <View style={styles.learningCardContent}>
-                  <Text style={styles.learningCardTitle}>Connectivity Test</Text>
-                  <Text style={styles.learningCardDescription}>Test all API endpoints</Text>
-                  <Text style={styles.learningCardMeta}>Debug • Validation</Text>
-                </View>
-                <Icon name="chevron-right" size={16} color="#8E8E93" />
-              </TouchableOpacity>
-            </View>
-          </View>
 
         </ScrollView>
   

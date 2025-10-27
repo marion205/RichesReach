@@ -11,6 +11,8 @@ interface VoiceContextType {
   voiceSettings: VoiceSettings;
   updateVoiceSettings: (settings: Partial<VoiceSettings>) => Promise<void>;
   getSelectedVoice: () => string;
+  selectedVoice: { id: string; name: string; description: string };
+  getVoiceParameters: (voiceId: string) => { pitch: number; rate: number };
 }
 
 const VoiceContext = createContext<VoiceContextType | undefined>(undefined);
@@ -58,12 +60,29 @@ export function VoiceProvider({ children }: VoiceProviderProps) {
     return voiceSettings.selectedVoice;
   };
 
+  const getVoiceParameters = (voiceId: string) => {
+    // Return default voice parameters based on voice ID
+    const voiceParams: { [key: string]: { pitch: number; rate: number } } = {
+      'alloy': { pitch: 1.0, rate: 1.0 },
+      'echo': { pitch: 1.1, rate: 0.9 },
+      'fable': { pitch: 0.9, rate: 1.1 },
+      'onyx': { pitch: 0.8, rate: 0.9 },
+      'nova': { pitch: 1.2, rate: 1.1 },
+      'shimmer': { pitch: 1.1, rate: 0.8 },
+    };
+    return voiceParams[voiceId] || { pitch: 1.0, rate: 1.0 };
+  };
+
+  const selectedVoice = voiceOptions.find(voice => voice.id === voiceSettings.selectedVoice) || voiceOptions[0];
+
   return (
     <VoiceContext.Provider
       value={{
         voiceSettings,
         updateVoiceSettings,
         getSelectedVoice,
+        selectedVoice,
+        getVoiceParameters,
       }}
     >
       {children}

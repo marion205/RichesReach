@@ -115,6 +115,58 @@ const LIKE_POST = gql`
   }
 `;
 
+const GET_SWING_SIGNALS = gql`
+  query GetSwingSignals($limit: Int) {
+    swingSignals(limit: $limit) {
+      id
+      symbol
+      signalType
+      entryPrice
+      targetPrice
+      stopPrice
+      mlScore
+      confidence
+      timeframe
+      reasoning
+      thesis
+      isActive
+      createdAt
+      triggeredAt
+      createdBy
+      riskRewardRatio
+      daysSinceTriggered
+      isLikedByUser
+      userLikeCount
+      isValidated
+      validationPrice
+      validationTimestamp
+      technicalIndicators {
+        name
+        value
+        signal
+        strength
+        description
+      }
+      patterns {
+        name
+        confidence
+        signal
+        description
+        timeframe
+      }
+      features
+      hftIntegration {
+        scalpingEnabled
+        momentumStrategy
+        arbitrageEnabled
+        marketMakingStrategy
+        latencyTarget
+        maxOrdersPerSecond
+      }
+    }
+  }
+`;
+
 interface User {
   id: string;
   username: string;
@@ -192,6 +244,13 @@ export const SocialTrading: React.FC<SocialTradingProps> = ({
     }
   );
 
+  const { data: signalsData, loading: signalsLoading, refetch: refetchSignals } = useQuery(
+    GET_SWING_SIGNALS,
+    {
+      variables: { limit: 50 },
+    }
+  );
+
   const [followTrader] = useMutation(FOLLOW_TRADER);
   const [copyTrade] = useMutation(COPY_TRADE);
   const [likePost] = useMutation(LIKE_POST);
@@ -199,7 +258,7 @@ export const SocialTrading: React.FC<SocialTradingProps> = ({
   const onRefresh = async () => {
     setRefreshing(true);
     try {
-      await Promise.all([refetchFeeds(), refetchTraders()]);
+      await Promise.all([refetchFeeds(), refetchTraders(), refetchSignals()]);
     } catch (error) {
       console.error('Error refreshing data:', error);
     } finally {
@@ -254,9 +313,9 @@ export const SocialTrading: React.FC<SocialTradingProps> = ({
   };
 
   const getPerformanceColor = (returnValue: number) => {
-    if (returnValue > 0) return '#00ff88';
-    if (returnValue < 0) return '#ff4444';
-    return '#888';
+    if (returnValue > 0) return '#34C759'; // iOS green
+    if (returnValue < 0) return '#FF3B30'; // iOS red
+    return '#8e8e93'; // iOS gray
   };
 
   const renderSocialPost = ({ item }: { item: SocialPost }) => (
@@ -347,15 +406,15 @@ export const SocialTrading: React.FC<SocialTradingProps> = ({
           style={styles.actionButton}
           onPress={() => handleLikePost(item.id)}
         >
-          <Ionicons name="heart-outline" size={20} color="#888" />
+          <Ionicons name="heart-outline" size={20} color="#8e8e93" />
           <Text style={styles.actionText}>{item.likes}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.actionButton}>
-          <Ionicons name="chatbubble-outline" size={20} color="#888" />
+          <Ionicons name="chatbubble-outline" size={20} color="#8e8e93" />
           <Text style={styles.actionText}>{item.comments}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.actionButton}>
-          <Ionicons name="share-outline" size={20} color="#888" />
+          <Ionicons name="share-outline" size={20} color="#8e8e93" />
           <Text style={styles.actionText}>{item.shares}</Text>
         </TouchableOpacity>
       </View>
@@ -433,6 +492,70 @@ export const SocialTrading: React.FC<SocialTradingProps> = ({
     </TouchableOpacity>
   );
 
+  const renderSignal = ({ item }: { item: any }) => (
+    <TouchableOpacity style={styles.signalCard}>
+      <View style={styles.signalHeader}>
+        <View style={styles.signalSymbol}>
+          <Text style={styles.signalSymbolText}>{item.symbol}</Text>
+          <Text style={[
+            styles.signalType,
+            item.signalType === 'LONG' ? styles.longSignal : styles.shortSignal
+          ]}>
+            {item.signalType}
+          </Text>
+        </View>
+        <View style={styles.signalScore}>
+          <Text style={styles.signalScoreText}>
+            {(item.mlScore * 100).toFixed(0)}%
+          </Text>
+          <Text style={styles.signalScoreLabel}>ML Score</Text>
+        </View>
+      </View>
+
+      <View style={styles.signalPrices}>
+        <View style={styles.priceItem}>
+          <Text style={styles.priceLabel}>Entry</Text>
+          <Text style={styles.priceValue}>${item.entryPrice}</Text>
+        </View>
+        <View style={styles.priceItem}>
+          <Text style={styles.priceLabel}>Target</Text>
+          <Text style={styles.priceValue}>${item.targetPrice}</Text>
+        </View>
+        <View style={styles.priceItem}>
+          <Text style={styles.priceLabel}>Stop</Text>
+          <Text style={styles.priceValue}>${item.stopPrice}</Text>
+        </View>
+        <View style={styles.priceItem}>
+          <Text style={styles.priceLabel}>R:R</Text>
+          <Text style={styles.priceValue}>{item.riskRewardRatio}</Text>
+        </View>
+      </View>
+
+      <Text style={styles.signalReasoning}>{item.reasoning}</Text>
+      
+      {item.hftIntegration && (
+        <View style={styles.hftBadge}>
+          <Ionicons name="flash" size={12} color="#0F0" />
+          <Text style={styles.hftText}>HFT Enabled</Text>
+        </View>
+      )}
+
+      <View style={styles.signalFooter}>
+        <Text style={styles.signalTimeframe}>{item.timeframe}</Text>
+        <View style={styles.signalActions}>
+          <TouchableOpacity style={styles.likeButton}>
+            <Ionicons 
+              name={item.isLikedByUser ? "heart" : "heart-outline"} 
+              size={16} 
+              color={item.isLikedByUser ? "#FF3B30" : "#8E8E93"} 
+            />
+            <Text style={styles.likeCount}>{item.userLikeCount}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+
   const renderTabContent = () => {
     switch (activeTab) {
       case 'feed':
@@ -483,7 +606,20 @@ export const SocialTrading: React.FC<SocialTradingProps> = ({
       case 'signals':
         return (
           <View style={styles.signalsContainer}>
-            <Text style={styles.comingSoon}>Signals Coming Soon!</Text>
+            <FlatList
+              data={signalsData?.swingSignals || []}
+              renderItem={renderSignal}
+              keyExtractor={(item) => item.id}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+              }
+              showsVerticalScrollIndicator={false}
+              ListEmptyComponent={
+                <View style={styles.emptyContainer}>
+                  <Text style={styles.emptyText}>No signals available</Text>
+                </View>
+              }
+            />
           </View>
         );
       default:
@@ -491,7 +627,7 @@ export const SocialTrading: React.FC<SocialTradingProps> = ({
     }
   };
 
-  if (feedsLoading || tradersLoading) {
+  if (feedsLoading || tradersLoading || signalsLoading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#0F0" />
@@ -528,7 +664,7 @@ export const SocialTrading: React.FC<SocialTradingProps> = ({
             <Ionicons
               name={tab.icon as any}
               size={20}
-              color={activeTab === tab.key ? '#0F0' : '#888'}
+              color={activeTab === tab.key ? '#007AFF' : '#8e8e93'}
             />
             <Text style={[
               styles.tabText,
@@ -552,16 +688,16 @@ export const SocialTrading: React.FC<SocialTradingProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: '#fff',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#000',
+    backgroundColor: '#fff',
   },
   loadingText: {
-    color: '#0F0',
+    color: '#1a1a1a',
     marginTop: 10,
     fontSize: 16,
   },
@@ -571,20 +707,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 15,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: '#f8f9fa',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e5ea',
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#fff',
+    color: '#1a1a1a',
   },
   headerButton: {
     padding: 5,
   },
   tabContainer: {
     flexDirection: 'row',
-    backgroundColor: '#1a1a1a',
+    backgroundColor: '#f8f9fa',
     paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e5ea',
   },
   tabButton: {
     flex: 1,
@@ -596,27 +736,38 @@ const styles = StyleSheet.create({
   },
   activeTabButton: {
     borderBottomWidth: 2,
-    borderBottomColor: '#0F0',
+    borderBottomColor: '#007AFF',
   },
   tabText: {
     marginLeft: 8,
     fontSize: 14,
-    color: '#888',
+    color: '#8e8e93',
     fontWeight: '500',
   },
   activeTabText: {
-    color: '#0F0',
+    color: '#007AFF',
     fontWeight: 'bold',
   },
   content: {
     flex: 1,
+    backgroundColor: '#fff',
   },
   postCard: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: '#fff',
     marginHorizontal: 20,
     marginVertical: 10,
     borderRadius: 12,
     padding: 15,
+    borderWidth: 1,
+    borderColor: '#e5e5ea',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
   postHeader: {
     flexDirection: 'row',
@@ -639,28 +790,30 @@ const styles = StyleSheet.create({
   username: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#fff',
+    color: '#1a1a1a',
     marginRight: 5,
   },
   userStats: {
     fontSize: 12,
-    color: '#888',
+    color: '#8e8e93',
   },
   timestamp: {
     fontSize: 12,
-    color: '#888',
+    color: '#8e8e93',
   },
   postContent: {
     fontSize: 16,
-    color: '#fff',
+    color: '#1a1a1a',
     lineHeight: 22,
     marginBottom: 15,
   },
   tradeCard: {
-    backgroundColor: '#333',
+    backgroundColor: '#f8f9fa',
     borderRadius: 8,
     padding: 12,
     marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#e5e5ea',
   },
   tradeHeader: {
     flexDirection: 'row',
@@ -671,7 +824,7 @@ const styles = StyleSheet.create({
   tradeSymbol: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#fff',
+    color: '#1a1a1a',
   },
   tradeSide: {
     paddingHorizontal: 8,
@@ -709,15 +862,17 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   performanceCard: {
-    backgroundColor: '#333',
+    backgroundColor: '#f8f9fa',
     borderRadius: 8,
     padding: 12,
     marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#e5e5ea',
   },
   performanceTitle: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#fff',
+    color: '#1a1a1a',
     marginBottom: 8,
   },
   performanceStats: {
@@ -729,19 +884,20 @@ const styles = StyleSheet.create({
   },
   performanceLabel: {
     fontSize: 12,
-    color: '#888',
+    color: '#8e8e93',
     marginBottom: 4,
   },
   performanceValue: {
     fontSize: 16,
     fontWeight: 'bold',
+    color: '#1a1a1a',
   },
   postActions: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: '#333',
+    borderTopColor: '#e5e5ea',
   },
   actionButton: {
     flexDirection: 'row',
@@ -752,7 +908,7 @@ const styles = StyleSheet.create({
   actionText: {
     marginLeft: 5,
     fontSize: 14,
-    color: '#888',
+    color: '#8e8e93',
   },
   tradersContainer: {
     flex: 1,
@@ -761,32 +917,46 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingHorizontal: 20,
     paddingVertical: 15,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: '#f8f9fa',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e5ea',
   },
   periodButton: {
     paddingHorizontal: 15,
     paddingVertical: 8,
     marginRight: 10,
     borderRadius: 20,
-    backgroundColor: '#333',
+    backgroundColor: '#e5e5ea',
+    borderWidth: 1,
+    borderColor: '#d1d1d6',
   },
   activePeriodButton: {
     backgroundColor: '#007bff',
   },
   periodButtonText: {
     fontSize: 14,
-    color: '#fff',
+    color: '#1a1a1a',
     fontWeight: '500',
   },
   activePeriodButtonText: {
     fontWeight: 'bold',
   },
   traderCard: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: '#fff',
     marginHorizontal: 20,
     marginVertical: 10,
     borderRadius: 12,
     padding: 15,
+    borderWidth: 1,
+    borderColor: '#e5e5ea',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
   traderHeader: {
     flexDirection: 'row',
@@ -809,12 +979,12 @@ const styles = StyleSheet.create({
   traderName: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#fff',
+    color: '#1a1a1a',
     marginRight: 5,
   },
   traderFollowers: {
     fontSize: 14,
-    color: '#888',
+    color: '#8e8e93',
   },
   followButton: {
     backgroundColor: '#007bff',
@@ -833,16 +1003,16 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     paddingVertical: 10,
     borderTopWidth: 1,
-    borderTopColor: '#333',
+    borderTopColor: '#e5e5ea',
     borderBottomWidth: 1,
-    borderBottomColor: '#333',
+    borderBottomColor: '#e5e5ea',
   },
   traderStat: {
     alignItems: 'center',
   },
   traderStatLabel: {
     fontSize: 12,
-    color: '#888',
+    color: '#8e8e93',
     marginBottom: 4,
   },
   traderStatValue: {
@@ -855,7 +1025,7 @@ const styles = StyleSheet.create({
   recentTradesTitle: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#fff',
+    color: '#1a1a1a',
     marginBottom: 8,
   },
   recentTrade: {
@@ -866,7 +1036,7 @@ const styles = StyleSheet.create({
   },
   recentTradeSymbol: {
     fontSize: 14,
-    color: '#fff',
+    color: '#1a1a1a',
     fontWeight: '500',
   },
   recentTradeSide: {
@@ -884,7 +1054,148 @@ const styles = StyleSheet.create({
   },
   comingSoon: {
     fontSize: 18,
-    color: '#888',
+    color: '#8e8e93',
+    fontStyle: 'italic',
+  },
+  // Signal styles
+  signalCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e5e5ea',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  signalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  signalSymbol: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  signalSymbolText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1a1a1a',
+    marginRight: 8,
+  },
+  signalType: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  longSignal: {
+    backgroundColor: '#00ff88',
+    color: '#000',
+  },
+  shortSignal: {
+    backgroundColor: '#ff4444',
+    color: '#fff',
+  },
+  signalScore: {
+    alignItems: 'center',
+  },
+  signalScoreText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#34C759',
+  },
+  signalScoreLabel: {
+    fontSize: 12,
+    color: '#8e8e93',
+  },
+  signalPrices: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e5ea',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e5ea',
+  },
+  priceItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  priceLabel: {
+    fontSize: 12,
+    color: '#8e8e93',
+    marginBottom: 4,
+  },
+  priceValue: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1a1a1a',
+  },
+  signalReasoning: {
+    fontSize: 14,
+    color: '#1a1a1a',
+    marginBottom: 12,
+    lineHeight: 20,
+  },
+  hftBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#34C759',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+    marginBottom: 12,
+  },
+  hftText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#000',
+    marginLeft: 4,
+  },
+  signalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  signalTimeframe: {
+    fontSize: 12,
+    color: '#8e8e93',
+  },
+  signalActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  likeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  likeCount: {
+    fontSize: 12,
+    color: '#8e8e93',
+    marginLeft: 4,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#8e8e93',
     fontStyle: 'italic',
   },
 });
