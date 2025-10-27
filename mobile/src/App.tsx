@@ -88,7 +88,7 @@ import TaxOptimizationScreen from './screens/TaxOptimizationScreen';
 import SmartLotsScreen from './screens/SmartLotsScreen';
 import BorrowVsSellScreen from './screens/BorrowVsSellScreen';
 import WashGuardScreen from './screens/WashGuardScreen';
-import TutorAskExplainScreen from './features/learning/screens/TutorAskExplainScreen';
+import TutorScreen from './features/education/screens/TutorScreen';
 import TutorQuizScreen from './features/learning/screens/TutorQuizScreen';
 import TutorModuleScreen from './features/learning/screens/TutorModuleScreen';
 import MarketCommentaryScreen from './features/news/screens/MarketCommentaryScreen';
@@ -445,8 +445,8 @@ case 'ai-options':
 return <AIOptionsScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('home') }} />;
 case 'options-copilot':
 return <OptionsCopilotScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('ai-options') }} />;
-case 'ai-scans':
-return <AIScansScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('home') }} />;
+case 'tutor':
+return <TutorScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('home') }} />;
 case 'scan-playbook':
 return <ScanPlaybookScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('ai-scans') }} route={{ params: { scan: {} } }} />;
 case 'trading':

@@ -20,7 +20,7 @@ const TopHeader: React.FC<TopHeaderProps> = ({ currentScreen, onNavigate, title 
       case 'trading': return 'Trading';
       case 'portfolio': return 'Portfolio';
       case 'social': return 'Community';
-      case 'ai-scans': return 'AI Scans';
+      case 'tutor': return 'AI Tutor';
       case 'ai-options': return 'AI Options';
       case 'options-copilot': return 'Options Copilot';
       case 'scan-playbook': return 'Scan Details';

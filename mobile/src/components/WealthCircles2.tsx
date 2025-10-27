@@ -131,8 +131,8 @@ export default function WealthCircles2({ onCirclePress, onCreateCircle, onJoinCi
       setLoading(true);
       console.log('🔄 Loading circles from API...');
       
-      // Use real API endpoint
-      const response = await fetch('http://localhost:8000/api/wealth-circles/', {
+      // Use real API endpoint - updated to use working server
+      const response = await fetch('http://localhost:8002/api/wealth-circles/', {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -146,7 +146,13 @@ export default function WealthCircles2({ onCirclePress, onCreateCircle, onJoinCi
       }
       
       const apiCircles = await response.json();
-      console.log('✅ API Circles loaded:', apiCircles.length, 'circles');
+      console.log('✅ API Circles loaded:', apiCircles?.length || 0, 'circles');
+      
+      // Safety check - ensure apiCircles is an array
+      if (!apiCircles || !Array.isArray(apiCircles)) {
+        console.log('❌ API Circles is not an array:', apiCircles);
+        throw new Error('Invalid API response: circles data is not an array');
+      }
       
       // Transform API data to match component interface
       const transformedCircles: WealthCircle[] = apiCircles.map((circle: any) => ({
@@ -181,6 +187,12 @@ export default function WealthCircles2({ onCirclePress, onCreateCircle, onJoinCi
     } catch (error) {
       console.error('❌ Error loading circles:', error);
       console.log('🔄 Falling back to mock data...');
+      
+      // Provide more specific error information
+      if (error instanceof Error) {
+        console.error('Error message:', error.message);
+        console.error('Error stack:', error.stack);
+      }
       
       // Fallback to mock data if API fails
       const mockCircles: WealthCircle[] = [
