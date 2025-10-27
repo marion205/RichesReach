@@ -104,6 +104,7 @@ import MarketingRocket from './components/MarketingRocket';
 import OracleInsights from './components/OracleInsights';
 import VoiceAIAssistant from './components/VoiceAIAssistant';
 import BlockchainIntegration from './components/BlockchainIntegration';
+import ConnectivityTestScreen from './components/ConnectivityTestScreen';
 import ThemeSettingsScreen from './components/ThemeSettingsScreen';
 import PeerProgressScreen from './features/community/screens/PeerProgressScreen';
 import TradeChallengesScreen from './features/community/screens/TradeChallengesScreen';
@@ -576,6 +577,8 @@ return <OracleInsights
             />;
             case 'theme-settings':
             return <ThemeSettingsScreen onClose={() => navigateTo('home')} />;
+            case 'connectivity-test':
+            return <ConnectivityTestScreen onClose={() => navigateTo('home')} />;
     default:
       // Handle user-profile and user-portfolios with userId pattern
       if (currentScreen.startsWith('user-profile-')) {

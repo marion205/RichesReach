@@ -5,9 +5,9 @@
   "hft_features": {
     "performance": {
       "status": "OK",
-      "total_orders": 709,
-      "latency_us": 26.620893336510164,
-      "orders_per_sec": 709
+      "total_orders": 61,
+      "latency_us": 5.337327678993825,
+      "orders_per_sec": 61
     },
     "strategies": {
       "status": "OK",
@@ -21,11 +21,11 @@
     },
     "order_placement": {
       "status": "OK",
-      "order_id": "HFT_1761503711226873_709"
+      "order_id": "HFT_1761510434924018_61"
     },
     "strategy_execution": {
       "status": "OK",
-      "orders_executed": 0
+      "orders_executed": 2
     }
   },
   "voice_ai_features": {
@@ -53,17 +53,17 @@
     "regime_detection": {
       "status": "OK",
       "regime": "HIGH_VOL",
-      "confidence": 0.8951669388894739
+      "confidence": 0.7396448146718533
     },
     "sentiment_analysis": {
       "status": "OK",
-      "sentiment": -0.06963804031176757,
-      "confidence": 0.8592127637392204
+      "sentiment": 0.5427894264362871,
+      "confidence": 0.6687864817676766
     },
     "ml_picks": {
       "status": "OK",
       "count": 10,
-      "top_pick": "CRM"
+      "top_pick": "GOOGL"
     }
   },
   "mobile_features": {

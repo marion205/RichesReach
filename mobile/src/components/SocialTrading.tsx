@@ -1,732 +1,803 @@
-import React, { useState, useEffect, useRef } from 'react';
+/**
+ * Social Trading Features
+ * Copy trading, social signals, and community features
+ */
+
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  Animated,
-  Dimensions,
-  TouchableOpacity,
   ScrollView,
-  Alert,
+  TouchableOpacity,
   Image,
   FlatList,
   ActivityIndicator,
+  Alert,
+  RefreshControl,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-// import { BlurView } from 'expo-blur'; // Removed for Expo Go compatibility
-// import LottieView from 'lottie-react-native'; // Removed for Expo Go compatibility
-import { useTheme } from '../theme/PersonalizedThemes';
+import { useQuery, useMutation, gql } from '@apollo/client';
+import { Ionicons } from '@expo/vector-icons';
 
-const { width } = Dimensions.get('window');
+// GraphQL Queries and Mutations
+const GET_SOCIAL_FEEDS = gql`
+  query GetSocialFeeds($limit: Int, $offset: Int) {
+    socialFeeds(limit: $limit, offset: $offset) {
+      id
+      user {
+        id
+        username
+        avatar
+        verified
+        followerCount
+        winRate
+      }
+      content
+      type
+      timestamp
+      likes
+      comments
+      shares
+      tradeData {
+        symbol
+        side
+        quantity
+        price
+        pnl
+      }
+      performance {
+        totalReturn
+        winRate
+        sharpeRatio
+      }
+    }
+  }
+`;
 
-interface Trader {
+const GET_TOP_TRADERS = gql`
+  query GetTopTraders($period: String!) {
+    topTraders(period: $period) {
+      id
+      username
+      avatar
+      verified
+      followerCount
+      performance {
+        totalReturn
+        winRate
+        sharpeRatio
+        maxDrawdown
+        totalTrades
+      }
+      recentTrades {
+        symbol
+        side
+        quantity
+        price
+        timestamp
+        pnl
+      }
+    }
+  }
+`;
+
+const FOLLOW_TRADER = gql`
+  mutation FollowTrader($traderId: ID!) {
+    followTrader(traderId: $traderId) {
+      success
+      message
+    }
+  }
+`;
+
+const COPY_TRADE = gql`
+  mutation CopyTrade($tradeId: ID!, $amount: Float!) {
+    copyTrade(tradeId: $tradeId, amount: $amount) {
+      success
+      message
+      copiedTrade {
+        id
+        symbol
+        side
+        quantity
+        price
+      }
+    }
+  }
+`;
+
+const LIKE_POST = gql`
+  mutation LikePost($postId: ID!) {
+    likePost(postId: $postId) {
+      success
+      likes
+    }
+  }
+`;
+
+interface User {
   id: string;
-  name: string;
-  avatar: string;
   username: string;
-  bio: string;
-  totalReturn: number;
-  monthlyReturn: number;
+  avatar: string;
+  verified: boolean;
+  followerCount: number;
   winRate: number;
-  totalTrades: number;
-  followers: number;
-  isFollowing: boolean;
-  isVerified: boolean;
-  riskLevel: 'low' | 'medium' | 'high';
-  tradingStyle: 'scalping' | 'swing' | 'position' | 'day_trading';
-  portfolioValue: number;
-  recentTrades: Trade[];
-  performance: PerformanceMetrics;
 }
 
-interface Trade {
-  id: string;
+interface TradeData {
   symbol: string;
-  type: 'buy' | 'sell';
+  side: 'BUY' | 'SELL';
   quantity: number;
   price: number;
-  timestamp: string;
-  profit: number;
-  profitPercentage: number;
-  isCopied: boolean;
+  pnl: number;
 }
 
-interface PerformanceMetrics {
+interface Performance {
+  totalReturn: number;
+  winRate: number;
   sharpeRatio: number;
-  maxDrawdown: number;
-  volatility: number;
-  alpha: number;
-  beta: number;
-  calmarRatio: number;
+  maxDrawdown?: number;
+  totalTrades?: number;
 }
 
-interface CollectiveFund {
+interface SocialPost {
   id: string;
-  name: string;
-  description: string;
-  totalValue: number;
-  memberCount: number;
-  performance: number;
-  riskLevel: 'low' | 'medium' | 'high';
-  minimumInvestment: number;
-  isJoined: boolean;
-  managers: Trader[];
-  recentActivity: string[];
-  rules: string[];
-  category: 'growth' | 'income' | 'balanced' | 'aggressive' | 'conservative';
+  user: User;
+  content: string;
+  type: 'trade' | 'analysis' | 'question' | 'achievement';
+  timestamp: string;
+  likes: number;
+  comments: number;
+  shares: number;
+  tradeData?: TradeData;
+  performance?: Performance;
+}
+
+interface TopTrader {
+  id: string;
+  username: string;
+  avatar: string;
+  verified: boolean;
+  followerCount: number;
+  performance: Performance;
+  recentTrades: TradeData[];
 }
 
 interface SocialTradingProps {
-  onTraderPress: (trader: Trader) => void;
-  onCopyTrade: (trade: Trade) => void;
-  onJoinFund: (fund: CollectiveFund) => void;
+  userId: string;
+  onTraderSelect?: (trader: TopTrader) => void;
+  onTradeCopy?: (trade: TradeData) => void;
 }
 
-export default function SocialTrading({ onTraderPress, onCopyTrade, onJoinFund }: SocialTradingProps) {
-  const theme = useTheme();
-  const [activeTab, setActiveTab] = useState<'traders' | 'funds' | 'leaderboard'>('traders');
-  const [traders, setTraders] = useState<Trader[]>([]);
-  const [collectiveFunds, setCollectiveFunds] = useState<CollectiveFund[]>([]);
-  const [loading, setLoading] = useState(true);
-  
-  // Animation values
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
+export const SocialTrading: React.FC<SocialTradingProps> = ({
+  userId,
+  onTraderSelect,
+  onTradeCopy,
+}) => {
+  const [activeTab, setActiveTab] = useState<'feed' | 'traders' | 'signals'>('feed');
+  const [refreshing, setRefreshing] = useState(false);
+  const [selectedPeriod, setSelectedPeriod] = useState('1M');
 
-  useEffect(() => {
-    loadData();
-    startEntranceAnimation();
-  }, []);
+  const { data: feedsData, loading: feedsLoading, refetch: refetchFeeds } = useQuery(
+    GET_SOCIAL_FEEDS,
+    {
+      variables: { limit: 20, offset: 0 },
+    }
+  );
 
-  const startEntranceAnimation = () => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  };
+  const { data: tradersData, loading: tradersLoading, refetch: refetchTraders } = useQuery(
+    GET_TOP_TRADERS,
+    {
+      variables: { period: selectedPeriod },
+    }
+  );
 
-  const loadData = async () => {
+  const [followTrader] = useMutation(FOLLOW_TRADER);
+  const [copyTrade] = useMutation(COPY_TRADE);
+  const [likePost] = useMutation(LIKE_POST);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
     try {
-      setLoading(true);
-      
-      // Simulate API calls
-      const mockTraders: Trader[] = [
-        {
-          id: '1',
-          name: 'Marcus "The Oracle" Johnson',
-          avatar: 'https://via.placeholder.com/60',
-          username: '@marcus_oracle',
-          bio: 'BIPOC wealth builder | 15+ years trading | Focus on tech & AI stocks',
-          totalReturn: 247.3,
-          monthlyReturn: 12.5,
-          winRate: 78.5,
-          totalTrades: 1247,
-          followers: 15420,
-          isFollowing: false,
-          isVerified: true,
-          riskLevel: 'medium',
-          tradingStyle: 'swing',
-          portfolioValue: 2500000,
-          recentTrades: [
-            {
-              id: '1',
-              symbol: 'NVDA',
-              type: 'buy',
-              quantity: 100,
-              price: 450.25,
-              timestamp: '2 hours ago',
-              profit: 1250.00,
-              profitPercentage: 2.78,
-              isCopied: false,
-            },
-          ],
-          performance: {
-            sharpeRatio: 1.85,
-            maxDrawdown: -12.3,
-            volatility: 18.5,
-            alpha: 8.2,
-            beta: 1.1,
-            calmarRatio: 2.1,
-          },
-        },
-        {
-          id: '2',
-          name: 'Aisha "Tech Queen" Williams',
-          avatar: 'https://via.placeholder.com/60',
-          username: '@aisha_tech',
-          bio: 'Tech sector specialist | Crypto enthusiast | Building generational wealth',
-          totalReturn: 189.7,
-          monthlyReturn: 8.9,
-          winRate: 72.1,
-          totalTrades: 892,
-          followers: 9876,
-          isFollowing: true,
-          isVerified: true,
-          riskLevel: 'high',
-          tradingStyle: 'day_trading',
-          portfolioValue: 1800000,
-          recentTrades: [],
-          performance: {
-            sharpeRatio: 1.45,
-            maxDrawdown: -18.7,
-            volatility: 24.2,
-            alpha: 6.8,
-            beta: 1.3,
-            calmarRatio: 1.6,
-          },
-        },
-      ];
-
-      const mockFunds: CollectiveFund[] = [
-        {
-          id: '1',
-          name: 'BIPOC Growth Collective',
-          description: 'Diversified growth fund managed by top BIPOC traders',
-          totalValue: 12500000,
-          memberCount: 1247,
-          performance: 18.5,
-          riskLevel: 'medium',
-          minimumInvestment: 1000,
-          isJoined: false,
-          managers: [mockTraders[0], mockTraders[1]],
-          recentActivity: [
-            'Added 2.5% to tech allocation',
-            'New member: Sarah joined with $5K',
-            'Monthly performance report published',
-          ],
-          rules: [
-            'Minimum $1K investment',
-            'No withdrawals for 30 days',
-            'Vote on major allocation changes',
-          ],
-          category: 'growth',
-        },
-        {
-          id: '2',
-          name: 'Crypto Wealth Pool',
-          description: 'High-risk, high-reward crypto fund for experienced investors',
-          totalValue: 3200000,
-          memberCount: 456,
-          performance: 35.2,
-          riskLevel: 'high',
-          minimumInvestment: 5000,
-          isJoined: true,
-          managers: [],
-          recentActivity: [
-            'Added new DeFi tokens',
-            'Rebalanced to 60% BTC, 40% altcoins',
-          ],
-          rules: [
-            'Minimum $5K investment',
-            'High risk tolerance required',
-            'Monthly rebalancing',
-          ],
-          category: 'aggressive',
-        },
-      ];
-      
-      setTraders(mockTraders);
-      setCollectiveFunds(mockFunds);
+      await Promise.all([refetchFeeds(), refetchTraders()]);
     } catch (error) {
-      console.error('Error loading data:', error);
-      Alert.alert('Error', 'Failed to load social trading data');
+      console.error('Error refreshing data:', error);
     } finally {
-      setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  const followTrader = async (traderId: string) => {
+  const handleFollowTrader = async (traderId: string) => {
     try {
-      setTraders(prev => 
-        prev.map(trader => 
-          trader.id === traderId 
-            ? { ...trader, isFollowing: !trader.isFollowing }
-            : trader
-        )
-      );
-    } catch (error) {
-      console.error('Error following trader:', error);
-    }
-  };
-
-  const copyTrade = async (trade: Trade) => {
-    try {
-      Alert.alert(
-        'Copy Trade',
-        `Copy ${trade.symbol} ${trade.type} trade for $${trade.price}?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { 
-            text: 'Copy Trade', 
-            onPress: () => {
-              onCopyTrade(trade);
-              Alert.alert('Success', 'Trade copied successfully!');
-            }
-          },
-        ]
-      );
-    } catch (error) {
-      console.error('Error copying trade:', error);
-    }
-  };
-
-  const joinFund = async (fundId: string) => {
-    try {
-      setCollectiveFunds(prev => 
-        prev.map(fund => 
-          fund.id === fundId 
-            ? { ...fund, isJoined: !fund.isJoined }
-            : fund
-        )
-      );
-      
-      const fund = collectiveFunds.find(f => f.id === fundId);
-      if (fund) {
-        onJoinFund(fund);
+      const result = await followTrader({ variables: { traderId } });
+      if (result.data?.followTrader?.success) {
+        Alert.alert('Success', 'You are now following this trader!');
+        refetchTraders();
       }
     } catch (error) {
-      console.error('Error joining fund:', error);
+      Alert.alert('Error', 'Failed to follow trader');
     }
   };
 
-  const getRiskColor = (riskLevel: string) => {
-    switch (riskLevel) {
-      case 'low': return '#34C759';
-      case 'medium': return '#FF9500';
-      case 'high': return '#FF3B30';
-      default: return '#8E8E93';
+  const handleCopyTrade = async (tradeId: string, amount: number) => {
+    try {
+      const result = await copyTrade({ variables: { tradeId, amount } });
+      if (result.data?.copyTrade?.success) {
+        Alert.alert('Success', 'Trade copied successfully!');
+        onTradeCopy?.(result.data.copyTrade.copiedTrade);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to copy trade');
     }
   };
 
-  const getPerformanceColor = (performance: number) => {
-    return performance > 0 ? '#34C759' : '#FF3B30';
+  const handleLikePost = async (postId: string) => {
+    try {
+      await likePost({ variables: { postId } });
+      refetchFeeds();
+    } catch (error) {
+      console.error('Error liking post:', error);
+    }
   };
 
-  if (loading) {
+  const formatTimestamp = (timestamp: string) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return `${diffDays}d ago`;
+  };
+
+  const getPerformanceColor = (returnValue: number) => {
+    if (returnValue > 0) return '#00ff88';
+    if (returnValue < 0) return '#ff4444';
+    return '#888';
+  };
+
+  const renderSocialPost = ({ item }: { item: SocialPost }) => (
+    <View style={styles.postCard}>
+      {/* User Header */}
+      <View style={styles.postHeader}>
+        <Image source={{ uri: item.user.avatar }} style={styles.avatar} />
+        <View style={styles.userInfo}>
+          <View style={styles.usernameRow}>
+            <Text style={styles.username}>{item.user.username}</Text>
+            {item.user.verified && <Ionicons name="checkmark-circle" size={16} color="#007bff" />}
+          </View>
+          <Text style={styles.userStats}>
+            {item.user.followerCount.toLocaleString()} followers • {item.user.winRate}% win rate
+          </Text>
+        </View>
+        <Text style={styles.timestamp}>{formatTimestamp(item.timestamp)}</Text>
+      </View>
+
+      {/* Post Content */}
+      <Text style={styles.postContent}>{item.content}</Text>
+
+      {/* Trade Data */}
+      {item.tradeData && (
+        <View style={styles.tradeCard}>
+          <View style={styles.tradeHeader}>
+            <Text style={styles.tradeSymbol}>{item.tradeData.symbol}</Text>
+            <View style={[
+              styles.tradeSide,
+              { backgroundColor: item.tradeData.side === 'BUY' ? '#00ff88' : '#ff4444' }
+            ]}>
+              <Text style={styles.tradeSideText}>{item.tradeData.side}</Text>
+            </View>
+          </View>
+          <View style={styles.tradeDetails}>
+            <Text style={styles.tradeDetail}>
+              {item.tradeData.quantity} shares @ ${item.tradeData.price}
+            </Text>
+            <Text style={[
+              styles.tradePnl,
+              { color: getPerformanceColor(item.tradeData.pnl) }
+            ]}>
+              P&L: ${item.tradeData.pnl.toFixed(2)}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.copyButton}
+            onPress={() => handleCopyTrade(item.id, 1000)}
+          >
+            <Text style={styles.copyButtonText}>Copy Trade</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Performance Stats */}
+      {item.performance && (
+        <View style={styles.performanceCard}>
+          <Text style={styles.performanceTitle}>Performance</Text>
+          <View style={styles.performanceStats}>
+            <View style={styles.performanceStat}>
+              <Text style={styles.performanceLabel}>Return</Text>
+              <Text style={[
+                styles.performanceValue,
+                { color: getPerformanceColor(item.performance.totalReturn) }
+              ]}>
+                {item.performance.totalReturn.toFixed(1)}%
+              </Text>
+            </View>
+            <View style={styles.performanceStat}>
+              <Text style={styles.performanceLabel}>Win Rate</Text>
+              <Text style={styles.performanceValue}>
+                {item.performance.winRate.toFixed(1)}%
+              </Text>
+            </View>
+            <View style={styles.performanceStat}>
+              <Text style={styles.performanceLabel}>Sharpe</Text>
+              <Text style={styles.performanceValue}>
+                {item.performance.sharpeRatio.toFixed(2)}
+              </Text>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {/* Post Actions */}
+      <View style={styles.postActions}>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => handleLikePost(item.id)}
+        >
+          <Ionicons name="heart-outline" size={20} color="#888" />
+          <Text style={styles.actionText}>{item.likes}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.actionButton}>
+          <Ionicons name="chatbubble-outline" size={20} color="#888" />
+          <Text style={styles.actionText}>{item.comments}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.actionButton}>
+          <Ionicons name="share-outline" size={20} color="#888" />
+          <Text style={styles.actionText}>{item.shares}</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  const renderTopTrader = ({ item }: { item: TopTrader }) => (
+    <TouchableOpacity
+      style={styles.traderCard}
+      onPress={() => onTraderSelect?.(item)}
+    >
+      <View style={styles.traderHeader}>
+        <Image source={{ uri: item.avatar }} style={styles.traderAvatar} />
+        <View style={styles.traderInfo}>
+          <View style={styles.traderNameRow}>
+            <Text style={styles.traderName}>{item.username}</Text>
+            {item.verified && <Ionicons name="checkmark-circle" size={16} color="#007bff" />}
+          </View>
+          <Text style={styles.traderFollowers}>
+            {item.followerCount.toLocaleString()} followers
+          </Text>
+        </View>
+        <TouchableOpacity
+          style={styles.followButton}
+          onPress={() => handleFollowTrader(item.id)}
+        >
+          <Text style={styles.followButtonText}>Follow</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.traderPerformance}>
+        <View style={styles.traderStat}>
+          <Text style={styles.traderStatLabel}>Total Return</Text>
+          <Text style={[
+            styles.traderStatValue,
+            { color: getPerformanceColor(item.performance.totalReturn) }
+          ]}>
+            {item.performance.totalReturn.toFixed(1)}%
+          </Text>
+        </View>
+        <View style={styles.traderStat}>
+          <Text style={styles.traderStatLabel}>Win Rate</Text>
+          <Text style={styles.traderStatValue}>
+            {item.performance.winRate.toFixed(1)}%
+          </Text>
+        </View>
+        <View style={styles.traderStat}>
+          <Text style={styles.traderStatLabel}>Sharpe Ratio</Text>
+          <Text style={styles.traderStatValue}>
+            {item.performance.sharpeRatio.toFixed(2)}
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.recentTrades}>
+        <Text style={styles.recentTradesTitle}>Recent Trades</Text>
+        {item.recentTrades.slice(0, 3).map((trade, index) => (
+          <View key={index} style={styles.recentTrade}>
+            <Text style={styles.recentTradeSymbol}>{trade.symbol}</Text>
+            <Text style={[
+              styles.recentTradeSide,
+              { color: trade.side === 'BUY' ? '#00ff88' : '#ff4444' }
+            ]}>
+              {trade.side}
+            </Text>
+            <Text style={[
+              styles.recentTradePnl,
+              { color: getPerformanceColor(trade.pnl) }
+            ]}>
+              ${trade.pnl.toFixed(2)}
+            </Text>
+          </View>
+        ))}
+      </View>
+    </TouchableOpacity>
+  );
+
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'feed':
+        return (
+          <FlatList
+            data={feedsData?.socialFeeds || []}
+            renderItem={renderSocialPost}
+            keyExtractor={(item) => item.id}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+            showsVerticalScrollIndicator={false}
+          />
+        );
+      case 'traders':
+        return (
+          <View style={styles.tradersContainer}>
+            <View style={styles.periodSelector}>
+              {['1W', '1M', '3M', '1Y'].map((period) => (
+                <TouchableOpacity
+                  key={period}
+                  style={[
+                    styles.periodButton,
+                    selectedPeriod === period && styles.activePeriodButton,
+                  ]}
+                  onPress={() => setSelectedPeriod(period)}
+                >
+                  <Text style={[
+                    styles.periodButtonText,
+                    selectedPeriod === period && styles.activePeriodButtonText,
+                  ]}>
+                    {period}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <FlatList
+              data={tradersData?.topTraders || []}
+              renderItem={renderTopTrader}
+              keyExtractor={(item) => item.id}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+              }
+              showsVerticalScrollIndicator={false}
+            />
+          </View>
+        );
+      case 'signals':
+        return (
+          <View style={styles.signalsContainer}>
+            <Text style={styles.comingSoon}>Signals Coming Soon!</Text>
+          </View>
+        );
+      default:
+        return null;
+    }
+  };
+
+  if (feedsLoading || tradersLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator
-          size="large"
-          color="#3B82F6"
-          style={styles.loadingAnimation}
-        />
+        <ActivityIndicator size="large" color="#0F0" />
         <Text style={styles.loadingText}>Loading social trading data...</Text>
       </View>
     );
   }
 
   return (
-    <Animated.View
-      style={[
-        styles.container,
-        {
-          opacity: fadeAnim,
-          transform: [{ translateY: slideAnim }],
-        },
-      ]}
-    >
+    <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Social Trading</Text>
-        <Text style={styles.headerSubtitle}>Copy the best, build together</Text>
+        <TouchableOpacity style={styles.headerButton}>
+          <Ionicons name="search-outline" size={24} color="#fff" />
+        </TouchableOpacity>
       </View>
 
       {/* Tab Navigation */}
-      <View style={styles.tabNavigation}>
+      <View style={styles.tabContainer}>
         {[
-          { id: 'traders', name: 'Top Traders', icon: '👑' },
-          { id: 'funds', name: 'Collective Funds', icon: '🤝' },
-          { id: 'leaderboard', name: 'Leaderboard', icon: '🏆' },
+          { key: 'feed', label: 'Feed', icon: 'home-outline' },
+          { key: 'traders', label: 'Top Traders', icon: 'trophy-outline' },
+          { key: 'signals', label: 'Signals', icon: 'trending-up-outline' },
         ].map((tab) => (
           <TouchableOpacity
-            key={tab.id}
+            key={tab.key}
             style={[
               styles.tabButton,
-              activeTab === tab.id && styles.tabButtonActive,
+              activeTab === tab.key && styles.activeTabButton,
             ]}
-            onPress={() => setActiveTab(tab.id as any)}
+            onPress={() => setActiveTab(tab.key as any)}
           >
-            <Text style={styles.tabIcon}>{tab.icon}</Text>
+            <Ionicons
+              name={tab.icon as any}
+              size={20}
+              color={activeTab === tab.key ? '#0F0' : '#888'}
+            />
             <Text style={[
               styles.tabText,
-              activeTab === tab.id && styles.tabTextActive,
+              activeTab === tab.key && styles.activeTabText,
             ]}>
-              {tab.name}
+              {tab.label}
             </Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      {/* Content */}
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {activeTab === 'traders' && (
-          <View style={styles.tradersList}>
-            {traders.map((trader) => (
-              <TraderCard
-                key={trader.id}
-                trader={trader}
-                onPress={() => onTraderPress(trader)}
-                onFollow={() => followTrader(trader.id)}
-                onCopyTrade={copyTrade}
-                getRiskColor={getRiskColor}
-                getPerformanceColor={getPerformanceColor}
-              />
-            ))}
-          </View>
-        )}
-
-        {activeTab === 'funds' && (
-          <View style={styles.fundsList}>
-            {collectiveFunds.map((fund) => (
-              <CollectiveFundCard
-                key={fund.id}
-                fund={fund}
-                onJoin={() => joinFund(fund.id)}
-                getRiskColor={getRiskColor}
-                getPerformanceColor={getPerformanceColor}
-              />
-            ))}
-          </View>
-        )}
-
-        {activeTab === 'leaderboard' && (
-          <View style={styles.leaderboardList}>
-            {traders.map((trader, index) => (
-              <LeaderboardItem
-                key={trader.id}
-                trader={trader}
-                rank={index + 1}
-                onPress={() => onTraderPress(trader)}
-                getPerformanceColor={getPerformanceColor}
-              />
-            ))}
-          </View>
-        )}
-      </ScrollView>
-    </Animated.View>
-  );
-}
-
-// Trader Card Component
-function TraderCard({ 
-  trader, 
-  onPress, 
-  onFollow, 
-  onCopyTrade, 
-  getRiskColor, 
-  getPerformanceColor 
-}: any) {
-  return (
-    <TouchableOpacity style={styles.traderCard} onPress={onPress}>
-      <View intensity={20} style={styles.traderBlur}>
-        {/* Header */}
-        <View style={styles.traderHeader}>
-          <Image source={{ uri: trader.avatar }} style={styles.traderAvatar} />
-          <View style={styles.traderInfo}>
-            <View style={styles.traderNameRow}>
-              <Text style={styles.traderName}>{trader.name}</Text>
-              {trader.isVerified && (
-                <Text style={styles.verifiedIcon}>✓</Text>
-              )}
-            </View>
-            <Text style={styles.traderUsername}>{trader.username}</Text>
-            <Text style={styles.traderBio} numberOfLines={2}>
-              {trader.bio}
-            </Text>
-          </View>
-          
-          <TouchableOpacity
-            style={[
-              styles.followButton,
-              trader.isFollowing && styles.followingButton,
-            ]}
-            onPress={onFollow}
-          >
-            <Text style={[
-              styles.followButtonText,
-              trader.isFollowing && styles.followingButtonText,
-            ]}>
-              {trader.isFollowing ? 'Following' : 'Follow'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Performance Stats */}
-        <View style={styles.performanceStats}>
-          <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color: getPerformanceColor(trader.totalReturn) }]}>
-              {trader.totalReturn > 0 ? '+' : ''}{trader.totalReturn}%
-            </Text>
-            <Text style={styles.statLabel}>Total Return</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color: getPerformanceColor(trader.monthlyReturn) }]}>
-              {trader.monthlyReturn > 0 ? '+' : ''}{trader.monthlyReturn}%
-            </Text>
-            <Text style={styles.statLabel}>Monthly</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{trader.winRate}%</Text>
-            <Text style={styles.statLabel}>Win Rate</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{trader.followers.toLocaleString()}</Text>
-            <Text style={styles.statLabel}>Followers</Text>
-          </View>
-        </View>
-
-        {/* Risk Level */}
-        <View style={styles.riskLevel}>
-          <Text style={styles.riskLabel}>Risk Level:</Text>
-          <View style={[styles.riskBadge, { backgroundColor: getRiskColor(trader.riskLevel) }]}>
-            <Text style={styles.riskText}>{trader.riskLevel.toUpperCase()}</Text>
-          </View>
-        </View>
-
-        {/* Recent Trades */}
-        {trader.recentTrades.length > 0 && (
-          <View style={styles.recentTrades}>
-            <Text style={styles.recentTradesTitle}>Recent Trades</Text>
-            {trader.recentTrades.map((trade: Trade) => (
-              <TradeItem
-                key={trade.id}
-                trade={trade}
-                onCopy={() => onCopyTrade(trade)}
-                getPerformanceColor={getPerformanceColor}
-              />
-            ))}
-          </View>
-        )}
+      {/* Tab Content */}
+      <View style={styles.content}>
+        {renderTabContent()}
       </View>
-    </TouchableOpacity>
-  );
-}
-
-// Trade Item Component
-function TradeItem({ trade, onCopy, getPerformanceColor }: any) {
-  return (
-    <View style={styles.tradeItem}>
-      <View style={styles.tradeInfo}>
-        <Text style={styles.tradeSymbol}>{trade.symbol}</Text>
-        <Text style={styles.tradeType}>{trade.type.toUpperCase()}</Text>
-        <Text style={styles.tradePrice}>${trade.price}</Text>
-      </View>
-      
-      <View style={styles.tradePerformance}>
-        <Text style={[styles.tradeProfit, { color: getPerformanceColor(trade.profit) }]}>
-          {trade.profit > 0 ? '+' : ''}${(trade.profit || 0).toFixed(2)}
-        </Text>
-        <Text style={[styles.tradePercentage, { color: getPerformanceColor(trade.profitPercentage) }]}>
-          {trade.profitPercentage > 0 ? '+' : ''}{trade.profitPercentage}%
-        </Text>
-      </View>
-      
-      <TouchableOpacity style={styles.copyButton} onPress={onCopy}>
-        <Text style={styles.copyButtonText}>Copy</Text>
-      </TouchableOpacity>
     </View>
   );
-}
+};
 
-// Collective Fund Card Component
-function CollectiveFundCard({ fund, onJoin, getRiskColor, getPerformanceColor }: any) {
-  return (
-    <TouchableOpacity style={styles.fundCard}>
-      <View intensity={20} style={styles.fundBlur}>
-        {/* Header */}
-        <View style={styles.fundHeader}>
-          <View style={styles.fundInfo}>
-            <Text style={styles.fundName}>{fund.name}</Text>
-            <Text style={styles.fundDescription} numberOfLines={2}>
-              {fund.description}
-            </Text>
-          </View>
-          
-          <TouchableOpacity
-            style={[
-              styles.joinButton,
-              fund.isJoined && styles.joinedButton,
-            ]}
-            onPress={onJoin}
-          >
-            <Text style={[
-              styles.joinButtonText,
-              fund.isJoined && styles.joinedButtonText,
-            ]}>
-              {fund.isJoined ? 'Joined' : 'Join'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Fund Stats */}
-        <View style={styles.fundStats}>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>${((fund.totalValue || 0) / 1000000).toFixed(1)}M</Text>
-            <Text style={styles.statLabel}>Total Value</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{fund.memberCount.toLocaleString()}</Text>
-            <Text style={styles.statLabel}>Members</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color: getPerformanceColor(fund.performance) }]}>
-              {fund.performance > 0 ? '+' : ''}{fund.performance}%
-            </Text>
-            <Text style={styles.statLabel}>Performance</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>${fund.minimumInvestment.toLocaleString()}</Text>
-            <Text style={styles.statLabel}>Min. Investment</Text>
-          </View>
-        </View>
-
-        {/* Risk Level */}
-        <View style={styles.riskLevel}>
-          <Text style={styles.riskLabel}>Risk Level:</Text>
-          <View style={[styles.riskBadge, { backgroundColor: getRiskColor(fund.riskLevel) }]}>
-            <Text style={styles.riskText}>{fund.riskLevel.toUpperCase()}</Text>
-          </View>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
-}
-
-// Leaderboard Item Component
-function LeaderboardItem({ trader, rank, onPress, getPerformanceColor }: any) {
-  const getRankIcon = (rank: number) => {
-    switch (rank) {
-      case 1: return '🥇';
-      case 2: return '🥈';
-      case 3: return '🥉';
-      default: return `#${rank}`;
-    }
-  };
-
-  return (
-    <TouchableOpacity style={styles.leaderboardItem} onPress={onPress}>
-      <View style={styles.rankContainer}>
-        <Text style={styles.rankIcon}>{getRankIcon(rank)}</Text>
-      </View>
-      
-      <Image source={{ uri: trader.avatar }} style={styles.leaderboardAvatar} />
-      
-      <View style={styles.leaderboardInfo}>
-        <Text style={styles.leaderboardName}>{trader.name}</Text>
-        <Text style={styles.leaderboardUsername}>{trader.username}</Text>
-      </View>
-      
-      <View style={styles.leaderboardPerformance}>
-        <Text style={[styles.leaderboardReturn, { color: getPerformanceColor(trader.totalReturn) }]}>
-          {trader.totalReturn > 0 ? '+' : ''}{trader.totalReturn}%
-        </Text>
-        <Text style={styles.leaderboardFollowers}>
-          {trader.followers.toLocaleString()} followers
-        </Text>
-      </View>
-    </TouchableOpacity>
-  );
-}
-
+// Styles
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#000',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
-  },
-  loadingAnimation: {
-    width: 120,
-    height: 120,
-    marginBottom: 20,
+    backgroundColor: '#000',
   },
   loadingText: {
+    color: '#0F0',
+    marginTop: 10,
     fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
   },
   header: {
-    padding: 20,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    backgroundColor: '#1a1a1a',
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#1a1a1a',
+    color: '#fff',
   },
-  headerSubtitle: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 4,
+  headerButton: {
+    padding: 5,
   },
-  tabNavigation: {
+  tabContainer: {
     flexDirection: 'row',
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    backgroundColor: '#1a1a1a',
+    paddingHorizontal: 20,
   },
   tabButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
+    paddingVertical: 15,
+    marginHorizontal: 5,
+  },
+  activeTabButton: {
     borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
-  },
-  tabButtonActive: {
-    borderBottomColor: '#667eea',
-  },
-  tabIcon: {
-    fontSize: 16,
-    marginRight: 6,
+    borderBottomColor: '#0F0',
   },
   tabText: {
+    marginLeft: 8,
     fontSize: 14,
-    color: '#666',
+    color: '#888',
     fontWeight: '500',
   },
-  tabTextActive: {
-    color: '#667eea',
-    fontWeight: '600',
+  activeTabText: {
+    color: '#0F0',
+    fontWeight: 'bold',
   },
   content: {
     flex: 1,
   },
-  tradersList: {
-    padding: 16,
+  postCard: {
+    backgroundColor: '#1a1a1a',
+    marginHorizontal: 20,
+    marginVertical: 10,
+    borderRadius: 12,
+    padding: 15,
+  },
+  postHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 10,
+  },
+  userInfo: {
+    flex: 1,
+  },
+  usernameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  username: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginRight: 5,
+  },
+  userStats: {
+    fontSize: 12,
+    color: '#888',
+  },
+  timestamp: {
+    fontSize: 12,
+    color: '#888',
+  },
+  postContent: {
+    fontSize: 16,
+    color: '#fff',
+    lineHeight: 22,
+    marginBottom: 15,
+  },
+  tradeCard: {
+    backgroundColor: '#333',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 10,
+  },
+  tradeHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  tradeSymbol: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  tradeSide: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  tradeSideText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#000',
+  },
+  tradeDetails: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  tradeDetail: {
+    fontSize: 14,
+    color: '#ccc',
+  },
+  tradePnl: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  copyButton: {
+    backgroundColor: '#007bff',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  copyButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  performanceCard: {
+    backgroundColor: '#333',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 10,
+  },
+  performanceTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 8,
+  },
+  performanceStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  performanceStat: {
+    alignItems: 'center',
+  },
+  performanceLabel: {
+    fontSize: 12,
+    color: '#888',
+    marginBottom: 4,
+  },
+  performanceValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  postActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#333',
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  actionText: {
+    marginLeft: 5,
+    fontSize: 14,
+    color: '#888',
+  },
+  tradersContainer: {
+    flex: 1,
+  },
+  periodSelector: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    backgroundColor: '#1a1a1a',
+  },
+  periodButton: {
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    marginRight: 10,
+    borderRadius: 20,
+    backgroundColor: '#333',
+  },
+  activePeriodButton: {
+    backgroundColor: '#007bff',
+  },
+  periodButtonText: {
+    fontSize: 14,
+    color: '#fff',
+    fontWeight: '500',
+  },
+  activePeriodButtonText: {
+    fontWeight: 'bold',
   },
   traderCard: {
-    marginBottom: 16,
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  traderBlur: {
-    padding: 20,
+    backgroundColor: '#1a1a1a',
+    marginHorizontal: 20,
+    marginVertical: 10,
+    borderRadius: 12,
+    padding: 15,
   },
   traderHeader: {
     flexDirection: 'row',
-    marginBottom: 16,
+    alignItems: 'center',
+    marginBottom: 15,
   },
   traderAvatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    marginRight: 12,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 15,
   },
   traderInfo: {
     flex: 1,
@@ -734,233 +805,88 @@ const styles = StyleSheet.create({
   traderNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
   },
   traderName: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
-    color: '#1a1a1a',
+    color: '#fff',
+    marginRight: 5,
   },
-  verifiedIcon: {
-    fontSize: 16,
-    color: '#007AFF',
-    marginLeft: 6,
-  },
-  traderUsername: {
+  traderFollowers: {
     fontSize: 14,
-    color: '#666',
-    marginBottom: 4,
-  },
-  traderBio: {
-    fontSize: 12,
-    color: '#666',
-    lineHeight: 16,
+    color: '#888',
   },
   followButton: {
-    paddingHorizontal: 16,
+    backgroundColor: '#007bff',
+    paddingHorizontal: 20,
     paddingVertical: 8,
-    borderRadius: 16,
-    backgroundColor: '#667eea',
-  },
-  followingButton: {
-    backgroundColor: '#34C759',
+    borderRadius: 20,
   },
   followButtonText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '600',
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
-  followingButtonText: {
-    color: 'white',
-  },
-  performanceStats: {
+  traderPerformance: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    marginBottom: 16,
+    marginBottom: 15,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#333',
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
   },
-  statItem: {
+  traderStat: {
     alignItems: 'center',
   },
-  statValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
-  },
-  statLabel: {
+  traderStatLabel: {
     fontSize: 12,
-    color: '#666',
-    marginTop: 2,
+    color: '#888',
+    marginBottom: 4,
   },
-  riskLevel: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  riskLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginRight: 8,
-  },
-  riskBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  riskText: {
-    color: 'white',
-    fontSize: 10,
+  traderStatValue: {
+    fontSize: 16,
     fontWeight: 'bold',
   },
   recentTrades: {
-    marginTop: 16,
+    marginTop: 10,
   },
   recentTradesTitle: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#1a1a1a',
+    fontWeight: 'bold',
+    color: '#fff',
     marginBottom: 8,
   },
-  tradeItem: {
+  recentTrade: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    paddingVertical: 5,
   },
-  tradeInfo: {
-    flex: 1,
-  },
-  tradeSymbol: {
+  recentTradeSymbol: {
     fontSize: 14,
+    color: '#fff',
+    fontWeight: '500',
+  },
+  recentTradeSide: {
+    fontSize: 12,
     fontWeight: 'bold',
-    color: '#1a1a1a',
   },
-  tradeType: {
-    fontSize: 12,
-    color: '#666',
-  },
-  tradePrice: {
-    fontSize: 12,
-    color: '#666',
-  },
-  tradePerformance: {
-    alignItems: 'flex-end',
-    marginRight: 12,
-  },
-  tradeProfit: {
+  recentTradePnl: {
     fontSize: 14,
     fontWeight: 'bold',
   },
-  tradePercentage: {
-    fontSize: 12,
-  },
-  copyButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-    backgroundColor: '#667eea',
-  },
-  copyButtonText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  fundsList: {
-    padding: 16,
-  },
-  fundCard: {
-    marginBottom: 16,
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  fundBlur: {
-    padding: 20,
-  },
-  fundHeader: {
-    flexDirection: 'row',
-    marginBottom: 16,
-  },
-  fundInfo: {
+  signalsContainer: {
     flex: 1,
-  },
-  fundName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
-    marginBottom: 4,
-  },
-  fundDescription: {
-    fontSize: 12,
-    color: '#666',
-    lineHeight: 16,
-  },
-  joinButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 16,
-    backgroundColor: '#667eea',
-  },
-  joinedButton: {
-    backgroundColor: '#34C759',
-  },
-  joinButtonText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  joinedButtonText: {
-    color: 'white',
-  },
-  fundStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 16,
-  },
-  leaderboardList: {
-    padding: 16,
-  },
-  leaderboardItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  rankContainer: {
-    width: 40,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  rankIcon: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  leaderboardAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 12,
-  },
-  leaderboardInfo: {
-    flex: 1,
-  },
-  leaderboardName: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
-  },
-  leaderboardUsername: {
-    fontSize: 12,
-    color: '#666',
-  },
-  leaderboardPerformance: {
-    alignItems: 'flex-end',
-  },
-  leaderboardReturn: {
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  leaderboardFollowers: {
-    fontSize: 12,
-    color: '#666',
+  comingSoon: {
+    fontSize: 18,
+    color: '#888',
+    fontStyle: 'italic',
   },
 });
+
+export default SocialTrading;
