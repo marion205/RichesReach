@@ -1,0 +1,169 @@
+[
+  {
+    "action": "tap",
+    "x": 196,
+    "y": 800,
+    "description": "Voice AI Tab",
+    "timestamp": 1761627861204
+  },
+  {
+    "action": "tap",
+    "x": 100,
+    "y": 400,
+    "description": "Nova Voice Selection",
+    "timestamp": 1761627863782
+  },
+  {
+    "action": "tap",
+    "x": 196,
+    "y": 400,
+    "description": "Voice Orb",
+    "timestamp": 1761627866356
+  },
+  {
+    "action": "tap",
+    "x": 196,
+    "y": 500,
+    "description": "Execute Trade Button",
+    "timestamp": 1761627871888
+  },
+  {
+    "action": "tap",
+    "x": 196,
+    "y": 600,
+    "description": "View Portfolio",
+    "timestamp": 1761627874434
+  },
+  {
+    "action": "tap",
+    "x": 294,
+    "y": 800,
+    "description": "MemeQuest Tab",
+    "timestamp": 1761627880185
+  },
+  {
+    "action": "tap",
+    "x": 150,
+    "y": 400,
+    "description": "Frog Template",
+    "timestamp": 1761627883057
+  },
+  {
+    "action": "tap",
+    "x": 196,
+    "y": 500,
+    "description": "Voice Launch",
+    "timestamp": 1761627886020
+  },
+  {
+    "action": "tap",
+    "x": 196,
+    "y": 600,
+    "description": "Animate Button",
+    "timestamp": 1761627888671
+  },
+  {
+    "action": "tap",
+    "x": 196,
+    "y": 700,
+    "description": "Send Tip Button",
+    "timestamp": 1761627892886
+  },
+  {
+    "action": "tap",
+    "x": 392,
+    "y": 800,
+    "description": "Coach Tab",
+    "timestamp": 1761627898391
+  },
+  {
+    "action": "tap",
+    "x": 196,
+    "y": 500,
+    "description": "Bullish Spread Strategy",
+    "timestamp": 1761627901048
+  },
+  {
+    "action": "tap",
+    "x": 196,
+    "y": 600,
+    "description": "Execute Trade",
+    "timestamp": 1761627903474
+  },
+  {
+    "action": "tap",
+    "x": 490,
+    "y": 800,
+    "description": "Learning Tab",
+    "timestamp": 1761627908745
+  },
+  {
+    "action": "tap",
+    "x": 196,
+    "y": 400,
+    "description": "Start Options Quiz",
+    "timestamp": 1761627911153
+  },
+  {
+    "action": "tap",
+    "x": 196,
+    "y": 500,
+    "description": "Call Option Answer",
+    "timestamp": 1761627913629
+  },
+  {
+    "action": "tap",
+    "x": 196,
+    "y": 600,
+    "description": "Next Button",
+    "timestamp": 1761627916020
+  },
+  {
+    "action": "tap",
+    "x": 196,
+    "y": 500,
+    "description": "Put Option Answer",
+    "timestamp": 1761627918514
+  },
+  {
+    "action": "tap",
+    "x": 196,
+    "y": 600,
+    "description": "Show Results",
+    "timestamp": 1761627921021
+  },
+  {
+    "action": "tap",
+    "x": 588,
+    "y": 800,
+    "description": "Community Tab",
+    "timestamp": 1761627926247
+  },
+  {
+    "action": "tap",
+    "x": 196,
+    "y": 400,
+    "description": "BIPOC Wealth Builders League",
+    "timestamp": 1761627928778
+  },
+  {
+    "action": "tap",
+    "x": 196,
+    "y": 500,
+    "description": "Join Discussion",
+    "timestamp": 1761627931273
+  },
+  {
+    "action": "type",
+    "text": "Great insights!",
+    "description": "Discussion Message",
+    "timestamp": 1761627933506
+  },
+  {
+    "action": "tap",
+    "x": 196,
+    "y": 600,
+    "description": "Send Message",
+    "timestamp": 1761627934784
+  }
+]

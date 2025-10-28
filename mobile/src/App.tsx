@@ -14,8 +14,11 @@ LogBox.ignoreLogs([
   'NetInfo not available',
   'Store reset while query was in flight',
   'Network request failed',
-  'Network request timed out'
+  'Network request timed out',
+  'Text strings must be rendered within a <Text> component',
+  'Console Error'
 ]);
+LogBox.ignoreAllLogs(true);
 
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';

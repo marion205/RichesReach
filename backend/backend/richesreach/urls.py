@@ -784,23 +784,14 @@ urlpatterns = [
 
 # Add GraphQL URLs - use real GraphQL view for production-ready settings
 from django.conf import settings
+from graphene_django.views import GraphQLView
+from django.views.decorators.csrf import csrf_exempt
 
-# Check if we're using production-ready settings
-if hasattr(settings, 'GRAPHENE') and settings.GRAPHENE.get('SCHEMA') == 'core.schema.schema':
-    # Use real GraphQL view for production-ready settings
-    from graphene_django.views import GraphQLView
-    from django.views.decorators.csrf import csrf_exempt
-    
-    urlpatterns += [
-        path("graphql/", csrf_exempt(GraphQLView.as_view(graphiql=True))),
-        path("auth/", auth_view),
-    ]
-else:
-    # Use simple view for basic settings
-    urlpatterns += [
-        path("graphql/", graphql_view),
-        path("auth/", auth_view),
-    ]
+# Force use of real GraphQL view - bypass custom mock view
+urlpatterns += [
+    path("graphql/", csrf_exempt(GraphQLView.as_view(graphiql=True))),
+    path("auth/", auth_view),
+]
 
 # Real GraphQL endpoint for testing (renamed from mock_graphql for compatibility)
 # Temporary schema test endpoint
@@ -1174,6 +1165,38 @@ def test_stock_creation(request):
         }, status=500)
 
 urlpatterns.append(path("test-stock-creation/", test_stock_creation))
+
+# Pump.fun API endpoints
+from core.pump_fun_views import launch_meme_coin, get_bonding_curve, execute_trade
+urlpatterns.append(path("api/pump-fun/launch/", launch_meme_coin))
+urlpatterns.append(path("api/pump-fun/bonding-curve/<str:contract_address>/", get_bonding_curve))
+urlpatterns.append(path("api/pump-fun/trade/", execute_trade))
+
+# DeFi Yield API endpoints
+from core.defi_yield_views import get_yield_pools, stake_tokens, unstake_tokens, get_user_stakes
+urlpatterns.append(path("api/defi/pools/", get_yield_pools))
+urlpatterns.append(path("api/defi/stake/", stake_tokens))
+urlpatterns.append(path("api/defi/unstake/", unstake_tokens))
+urlpatterns.append(path("api/defi/stakes/<str:user_address>/", get_user_stakes))
+
+# Social Trading API endpoints
+from core.social_trading_views import (
+    launch_meme, get_social_feed, create_social_post, 
+    process_voice_command, create_raid, join_raid,
+    get_meme_templates, stake_meme_yield, get_meme_analytics,
+    get_leaderboard, social_trading_health
+)
+urlpatterns.append(path("api/social/launch-meme", launch_meme))
+urlpatterns.append(path("api/social/feed", get_social_feed))
+urlpatterns.append(path("api/social/create-post", create_social_post))
+urlpatterns.append(path("api/social/voice-command", process_voice_command))
+urlpatterns.append(path("api/social/create-raid", create_raid))
+urlpatterns.append(path("api/social/join-raid", join_raid))
+urlpatterns.append(path("api/social/meme-templates", get_meme_templates))
+urlpatterns.append(path("api/social/stake-yield", stake_meme_yield))
+urlpatterns.append(path("api/social/meme-analytics", get_meme_analytics))
+urlpatterns.append(path("api/social/leaderboard", get_leaderboard))
+urlpatterns.append(path("api/social/health", social_trading_health))
 
 # Temporary migration test endpoint
 import os

@@ -8,3 +8,4 @@ from ..models_main import *
 from .sbloc import *
 from .bank_models import *
 from .alpaca_models import *
+from .memequest_models import *

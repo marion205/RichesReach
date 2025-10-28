@@ -1,28 +1,3 @@
-# MemeQuest Integration for RichesReach AI
-
-## 🎮 **MEMEQUEST SCREEN IMPLEMENTATION**
-
-### **Core Features:**
-- **Voice-Launched Memes**: "Launch $RICHESTROLL on Solana!"
-- **BIPOC-Themed Templates**: Hoodie Bear, Wealth Frog, Community Dog
-- **Gamified Raids**: XP/streaks for viral memes
-- **Social Feed**: TikTok-style meme trading videos
-- **AI Risk Management**: R² ML prevents rug pulls
-- **DeFi Integration**: Meme-to-earn yield farming
-
-### **Integration Points:**
-- **TutorScreen**: Add MemeQuest tab/modal
-- **Voice AI**: Voice commands for meme creation
-- **Web3**: Pump.fun SDK integration
-- **Social**: X/TikTok integration for virality
-- **Education**: "Why memes pump?" quizzes
-
----
-
-## 📱 **REACT NATIVE IMPLEMENTATION**
-
-### **MemeQuestScreen.tsx**
-```typescript
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -34,362 +9,850 @@ import {
   StyleSheet,
   Dimensions,
   Alert,
+  Modal,
   Animated,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Speech from 'expo-speech';
+import * as Haptics from 'expo-haptics';
 import ConfettiCannon from 'react-native-confetti-cannon';
-import { useWallet } from '../shared/hooks/useWallet';
-import { useVoiceAI } from '../features/voice/hooks/useVoiceAI';
+import SocialFeed from '../components/SocialFeed';
 
 const { width, height } = Dimensions.get('window');
 
 interface MemeTemplate {
   id: string;
   name: string;
-  image: string;
-  description: string;
+  imageUrl: string;
   culturalTheme: string;
+  description: string;
 }
 
-interface MemeQuest {
+interface MemeCoin {
   id: string;
   name: string;
-  template: string;
-  status: 'active' | 'completed' | 'failed';
-  xpReward: number;
-  streakBonus: number;
+  symbol: string;
+  price: number;
+  change: number;
+  holders: number;
+  marketCap: number;
+  volume24h: number;
 }
 
-const MemeQuestScreen = () => {
-  const [step, setStep] = useState(1); // 1: Create, 2: Raid, 3: Feed
+interface Raid {
+  id: string;
+  name: string;
+  memeCoin: MemeCoin;
+  targetAmount: number;
+  currentAmount: number;
+  participants: number;
+  xpReward: number;
+  timeLeft: string;
+  isActive: boolean;
+}
+
+interface DeFiPool {
+  id: string;
+  name: string;
+  apy: number;
+  tvl: number;
+  token1: string;
+  token2: string;
+  risk: 'low' | 'medium' | 'high';
+}
+
+const MemeQuestScreen: React.FC = () => {
+  const [step, setStep] = useState(1); // 1: Create, 2: Raid, 3: DeFi
   const [memeName, setMemeName] = useState('');
-  const [selectedTemplate, setSelectedTemplate] = useState<string>('');
+  const [memeDescription, setMemeDescription] = useState('');
+  const [selectedTemplate, setSelectedTemplate] = useState<MemeTemplate | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
   const [currentStreak, setCurrentStreak] = useState(7);
   const [totalXP, setTotalXP] = useState(1250);
   const [questProgress, setQuestProgress] = useState(2);
-  const [isVoiceListening, setIsVoiceListening] = useState(false);
-  
-  const { evm, isConnected, address } = useWallet();
-  const { startListening, stopListening, isListening } = useVoiceAI();
+  const [showVoiceModal, setShowVoiceModal] = useState(false);
+  const [voiceCommand, setVoiceCommand] = useState('');
+  const [isListening, setIsListening] = useState(false);
+  const [pulseAnim] = useState(new Animated.Value(1));
+  const [scrollY] = useState(new Animated.Value(0));
+  const [userRank, setUserRank] = useState(5);
+  const [showXPModal, setShowXPModal] = useState(false);
+  const [showStreakModal, setShowStreakModal] = useState(false);
+  const [leaderboard, setLeaderboard] = useState([
+    { id: 1, username: '@CryptoKing', xp: 2500, streak: 15, avatar: '👑' },
+    { id: 2, username: '@MemeMaster', xp: 2200, streak: 12, avatar: '🎭' },
+    { id: 3, username: '@DeFiDiva', xp: 2000, streak: 10, avatar: '💎' },
+    { id: 4, username: '@PumpPro', xp: 1800, streak: 8, avatar: '🚀' },
+    { id: 5, username: '@You', xp: 1250, streak: 7, avatar: '🔥' },
+  ]);
+  const [dailyChallenges, setDailyChallenges] = useState([
+    { id: 1, title: 'Launch 3 Memes', progress: 2, total: 3, reward: 100, completed: false },
+    { id: 2, title: 'Join 5 Raids', progress: 3, total: 5, reward: 150, completed: false },
+    { id: 3, title: 'Stake in DeFi Pool', progress: 0, total: 1, reward: 200, completed: false },
+  ]);
+  const [weeklyTournament, setWeeklyTournament] = useState({
+    title: 'Meme Masters Tournament',
+    prize: '$1,000 USDC',
+    participants: 1247,
+    timeLeft: '3d 12h 45m',
+    yourPosition: 47,
+  });
 
-  // BIPOC-themed meme templates
-  const memeTemplates: MemeTemplate[] = [
+  // Enhanced templates with more cultural themes
+  const templates: MemeTemplate[] = [
     {
-      id: 'hoodie-bear',
+      id: '1',
+      name: 'Frog',
+      imageUrl: 'https://via.placeholder.com/80x80/4ECDC4/FFFFFF?text=🐸',
+      culturalTheme: 'community',
+      description: 'Hop to wealth! Community-driven success',
+    },
+    {
+      id: '2',
+      name: 'Dog',
+      imageUrl: 'https://via.placeholder.com/80x80/FF6B6B/FFFFFF?text=🐕',
+      culturalTheme: 'loyalty',
+      description: 'Loyal to the community, loyal to the gains',
+    },
+    {
+      id: '3',
       name: 'Hoodie Bear',
-      image: 'https://example.com/hoodie-bear.png',
-      description: 'Resilience & Community Strength',
-      culturalTheme: 'BIPOC Empowerment'
+      imageUrl: 'https://via.placeholder.com/80x80/FFEAA7/333333?text=🐻',
+      culturalTheme: 'resilience',
+      description: 'Stay warm, stay strong, stay wealthy',
     },
     {
-      id: 'wealth-frog',
-      name: 'Wealth Frog',
-      image: 'https://example.com/wealth-frog.png',
-      description: 'Hop to Financial Freedom',
-      culturalTheme: 'Wealth Building'
+      id: '4',
+      name: 'Lion',
+      imageUrl: 'https://via.placeholder.com/80x80/FFD700/333333?text=🦁',
+      culturalTheme: 'leadership',
+      description: 'Lead the pride to financial freedom',
     },
     {
-      id: 'community-dog',
-      name: 'Community Dog',
-      image: 'https://example.com/community-dog.png',
-      description: 'Loyalty & Collective Growth',
-      culturalTheme: 'Community Unity'
+      id: '5',
+      name: 'Phoenix',
+      imageUrl: 'https://via.placeholder.com/80x80/FF4500/FFFFFF?text=🔥',
+      culturalTheme: 'rebirth',
+      description: 'Rise from ashes to financial glory',
     },
-    {
-      id: 'ai-generated',
-      name: 'AI Generated',
-      image: 'https://example.com/ai-gen.png',
-      description: 'Custom AI Creation',
-      culturalTheme: 'Innovation'
-    }
   ];
 
-  // Voice command handling
-  const handleVoiceCommand = async (command: string) => {
-    if (command.includes('launch') || command.includes('create')) {
-      const memeName = command.replace(/launch|create|meme/gi, '').trim();
-      if (memeName) {
-        setMemeName(memeName);
-        Speech.speak(`Creating ${memeName} meme! Let's make it viral! 🚀`);
-      }
-    } else if (command.includes('raid') || command.includes('join')) {
-      setStep(2);
-      Speech.speak('Joining the raid! Let\'s pump together! ⚔️');
-    }
+  // Enhanced raids with more data
+  const raids: Raid[] = [
+    {
+      id: '1',
+      name: 'Community Frog Raid',
+      memeCoin: {
+        id: '1',
+        name: 'CommunityFrog',
+        symbol: 'FROG',
+        price: 0.0001,
+        change: 12.5,
+        holders: 234,
+        marketCap: 125000,
+        volume24h: 45000,
+      },
+      targetAmount: 10000,
+      currentAmount: 3500,
+      participants: 23,
+      xpReward: 100,
+      timeLeft: '2h 15m',
+      isActive: true,
+    },
+    {
+      id: '2',
+      name: 'Wealth Dog Pump',
+      memeCoin: {
+        id: '2',
+        name: 'WealthDog',
+        symbol: 'DOG',
+        price: 0.0002,
+        change: 8.3,
+        holders: 156,
+        marketCap: 89000,
+        volume24h: 23000,
+      },
+      targetAmount: 15000,
+      currentAmount: 8900,
+      participants: 45,
+      xpReward: 150,
+      timeLeft: '1h 30m',
+      isActive: true,
+    },
+    {
+      id: '3',
+      name: 'Lion Pride Rally',
+      memeCoin: {
+        id: '3',
+        name: 'LionPride',
+        symbol: 'LION',
+        price: 0.0003,
+        change: -2.1,
+        holders: 89,
+        marketCap: 67000,
+        volume24h: 12000,
+      },
+      targetAmount: 20000,
+      currentAmount: 12000,
+      participants: 67,
+      xpReward: 200,
+      timeLeft: '45m',
+      isActive: true,
+    },
+  ];
+
+  // DeFi pools for yield farming
+  const defiPools: DeFiPool[] = [
+    {
+      id: '1',
+      name: 'ETH/USDC',
+      apy: 8.5,
+      tvl: 1250000,
+      token1: 'ETH',
+      token2: 'USDC',
+      risk: 'low',
+    },
+    {
+      id: '2',
+      name: 'MATIC/USDC',
+      apy: 12.3,
+      tvl: 890000,
+      token1: 'MATIC',
+      token2: 'USDC',
+      risk: 'medium',
+    },
+    {
+      id: '3',
+      name: 'FROG/DOG',
+      apy: 25.7,
+      tvl: 45000,
+      token1: 'FROG',
+      token2: 'DOG',
+      risk: 'high',
+    },
+  ];
+
+  // Voice commands mapping
+  const voiceCommands = {
+    'launch meme': () => launchMeme(),
+    'join raid': () => setStep(2),
+    'defi yield': () => setStep(3),
+    'show templates': () => setStep(1),
+    'my xp': () => setShowXPModal(true),
+    'streak status': () => setShowStreakModal(true),
+    'help': () => setShowVoiceModal(true),
   };
 
-  // Launch meme function
+  useEffect(() => {
+    // Start pulse animation for voice orb
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.2,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    pulse.start();
+    
+    // Debug: Log when animations start
+    console.log('🎤 Starting microphone animations - Pulse only (scroll-based movement)');
+
+    return () => {
+      pulse.stop();
+      console.log('🎤 Stopping microphone animations');
+    };
+  }, []);
+
+  const showStreakInfo = () => {
+    Alert.alert(
+      'Streak Status 🔥',
+      `Current Streak: ${currentStreak} days\nNext Reward: ${(currentStreak + 1) * 10} XP\nFreeze Cost: 1 Gem`,
+      [{ text: 'Keep Going!', style: 'default' }]
+    );
+  };
+
+  const showVoiceHelp = () => {
+    Alert.alert(
+      'Voice Commands 🎤',
+      'Available commands:\n• "Launch meme" - Start meme creation\n• "Join raid" - Go to raids\n• "Defi yield" - Go to yield farming\n• "Show templates" - Go to templates\n• "My xp" - Show XP status\n• "Streak status" - Show streak info',
+      [{ text: 'Got it!', style: 'default' }]
+    );
+  };
+
+  const handleVoiceCommand = (command: string) => {
+    const normalizedCommand = command.toLowerCase().trim();
+    
+    for (const [key, action] of Object.entries(voiceCommands)) {
+      if (normalizedCommand.includes(key)) {
+        action();
+        Speech.speak(`Executing ${key} command!`);
+        return;
+      }
+    }
+    
+    Speech.speak('Command not recognized. Say "help" for available commands.');
+  };
+
+  const completeChallenge = (challengeId: number) => {
+    setDailyChallenges(prev => 
+      prev.map(challenge => 
+        challenge.id === challengeId 
+          ? { ...challenge, completed: true, progress: challenge.total }
+          : challenge
+      )
+    );
+    const reward = dailyChallenges.find(c => c.id === challengeId)?.reward || 0;
+    setTotalXP(prev => prev + reward);
+    setShowConfetti(true);
+    setTimeout(() => setShowConfetti(false), 2000);
+    Speech.speak(`Challenge completed! +${reward} XP earned!`);
+  };
+
+  const joinTournament = () => {
+    setWeeklyTournament(prev => ({
+      ...prev,
+      participants: prev.participants + 1,
+      yourPosition: prev.participants + 1
+    }));
+    setTotalXP(prev => prev + 50);
+    Speech.speak('Joined tournament! +50 XP bonus!');
+  };
+
   const launchMeme = async () => {
-    if (!memeName || !selectedTemplate) {
-      Alert.alert('Missing Info', 'Please enter a meme name and select a template');
+    if (!memeName.trim() || !selectedTemplate) {
+      Alert.alert('Missing Info', 'Please enter a meme name and select a template!');
       return;
     }
 
-    if (!isConnected) {
-      Alert.alert('Wallet Required', 'Please connect your wallet to launch memes');
+    // Validate required fields
+    if (!memeDescription.trim()) {
+      Alert.alert('Missing Description', 'Please enter a description for your meme!');
       return;
     }
 
     try {
-      // Voice feedback
-      Speech.speak(`Launching ${memeName}! Hop to the moon! 🚀`);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
       
-      // Show confetti
-      setShowConfetti(true);
-      
-      // Simulate Pump.fun API call
-      const launchResult = await simulatePumpFunLaunch({
-        name: memeName,
-        template: selectedTemplate,
-        wallet: address,
-        network: 'solana'
+      // Real Pump.fun API call simulation
+      const response = await fetch('http://localhost:8001/api/pump-fun/launch', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: memeName.trim(),
+          symbol: memeName.substring(0, 4).toUpperCase(),
+          description: memeDescription.trim(),
+          template: selectedTemplate.id,
+          culturalTheme: selectedTemplate.culturalTheme || 'community',
+        }),
       });
 
-      if (launchResult.success) {
-        // Award XP and update streak
-        const xpGain = 100 + (currentStreak * 10);
-        setTotalXP(prev => prev + xpGain);
-        setCurrentStreak(prev => prev + 1);
-        setQuestProgress(prev => prev + 1);
+      if (response.ok) {
+        const result = await response.json();
+        Speech.speak(`Launching ${memeName}! Hop to the moon! 🚀`);
         
-        // Move to raid feed
+        setShowConfetti(true);
+        
         setTimeout(() => {
           setShowConfetti(false);
           setStep(2);
+          setTotalXP(prev => prev + 50);
+          setQuestProgress(prev => prev + 1);
+          
+          Alert.alert(
+            'Meme Launched! 🚀',
+            `${memeName} has been launched successfully!\nContract: ${result.contractAddress}\nYou earned 50 XP!`,
+            [{ text: 'Awesome!', style: 'default' }]
+          );
         }, 2000);
+      } else {
+        // Get detailed error information
+        const errorText = await response.text();
+        let errorMessage = 'Launch failed';
+        
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.message || errorData.detail || errorMessage;
+        } catch {
+          errorMessage = `Server error: ${response.status} ${response.statusText}`;
+        }
+        
+        throw new Error(errorMessage);
       }
-    } catch (error) {
-      Alert.alert('Launch Failed', 'Failed to launch meme. Please try again.');
-    }
-  };
-
-  // Join raid function
-  const joinRaid = async (raidId: string) => {
-    try {
-      Speech.speak('Joining raid! Let\'s pump together! ⚔️');
       
-      // Simulate raid participation
-      const raidResult = await simulateRaidParticipation({
-        raidId,
-        wallet: address,
-        amount: 0.1 // SOL
-      });
-
-      if (raidResult.success) {
-        const xpGain = 50;
-        setTotalXP(prev => prev + xpGain);
-        Alert.alert('Raid Joined!', `+${xpGain} XP earned!`);
-      }
     } catch (error) {
-      Alert.alert('Raid Failed', 'Failed to join raid. Please try again.');
+      console.error('MemeQuest Launch Error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      Alert.alert('Launch Failed', `Failed to launch meme: ${errorMessage}`);
     }
   };
 
-  // Simulate Pump.fun launch
-  const simulatePumpFunLaunch = async (params: any) => {
-    // This would integrate with actual Pump.fun SDK
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          success: true,
-          tokenAddress: '0x' + Math.random().toString(16).substr(2, 40),
-          initialPrice: 0.0001,
-          bondingCurve: 'active'
-        });
-      }, 1000);
-    });
+  const joinRaid = (raid: Raid) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    
+    Alert.alert(
+      'Join Raid? ⚔️',
+      `Join ${raid.name} and earn ${raid.xpReward} XP?\n\nTarget: $${raid.targetAmount.toLocaleString()}\nCurrent: $${raid.currentAmount.toLocaleString()}\nTime Left: ${raid.timeLeft}`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Join!',
+          onPress: () => {
+            setTotalXP(prev => prev + raid.xpReward);
+            Alert.alert('Raid Joined!', `You joined ${raid.name}! +${raid.xpReward} XP`);
+          },
+        },
+      ]
+    );
   };
 
-  // Simulate raid participation
-  const simulateRaidParticipation = async (params: any) => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          success: true,
-          participationReward: 0.05,
-          xpGain: 50
-        });
-      }, 1000);
-    });
+  const stakeInPool = (pool: DeFiPool) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    
+    Alert.alert(
+      'Stake in Pool? 💰',
+      `Stake in ${pool.name} pool?\n\nAPY: ${pool.apy}%\nTVL: $${pool.tvl.toLocaleString()}\nRisk: ${pool.risk.toUpperCase()}`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Stake!',
+          onPress: () => {
+            setTotalXP(prev => prev + 75);
+            Alert.alert('Staked!', `You staked in ${pool.name}! +75 XP`);
+          },
+        },
+      ]
+    );
   };
+
+  const renderCreateStep = () => (
+    <ScrollView style={styles.createScroll} showsVerticalScrollIndicator={false}>
+      <Text style={styles.stepTitle}>Step 1: Craft Your Meme 🎨</Text>
+      
+      {/* Template Grid */}
+      <View style={styles.templateSection}>
+        <Text style={styles.sectionTitle}>Choose Your Template</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.templateGrid}>
+          {templates.map((template) => (
+            <TouchableOpacity
+              key={template.id}
+              style={[
+                styles.templateCard,
+                selectedTemplate?.id === template.id && styles.selectedTemplate,
+              ]}
+              onPress={() => {
+                setSelectedTemplate(template);
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                Speech.speak(`Selected ${template.name} template`);
+              }}
+            >
+              <Image source={{ uri: template.imageUrl }} style={styles.templateImage} />
+              <Text style={styles.templateLabel}>{template.name}</Text>
+              <Text style={styles.templateTheme}>{template.culturalTheme}</Text>
+              <Text style={styles.templateDescription}>{template.description}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+
+      {/* Input Fields */}
+      <View style={styles.inputSection}>
+        <Text style={styles.sectionTitle}>Meme Details</Text>
+        
+        <TextInput
+          style={styles.input}
+          placeholder="Meme Name (e.g., RichesFrog)"
+          value={memeName}
+          onChangeText={setMemeName}
+          placeholderTextColor="#999"
+        />
+        
+        <TextInput
+          style={[styles.input, styles.textArea]}
+          placeholder="Description (e.g., Hop to wealth! BIPOC vibes)"
+          value={memeDescription}
+          onChangeText={setMemeDescription}
+          multiline
+          numberOfLines={3}
+          placeholderTextColor="#999"
+        />
+      </View>
+
+      {/* Launch Button */}
+      <TouchableOpacity style={styles.launchButton} onPress={launchMeme}>
+        <LinearGradient
+          colors={['#4ECDC4', '#44A08D']}
+          style={styles.launchGradient}
+        >
+          <Text style={styles.launchText}>Pump It! 🚀</Text>
+        </LinearGradient>
+      </TouchableOpacity>
+    </ScrollView>
+  );
+
+  const renderRaidStep = () => (
+    <ScrollView style={styles.raidScroll} showsVerticalScrollIndicator={false}>
+      <Text style={styles.stepTitle}>Step 2: Join the Raid! 📈</Text>
+      
+      {/* Active Raids */}
+      <View style={styles.raidsSection}>
+        <Text style={styles.sectionTitle}>Active Raids</Text>
+        {raids.map((raid) => (
+          <View key={raid.id} style={styles.raidCard}>
+            <View style={styles.raidHeader}>
+              <Text style={styles.raidName}>{raid.name}</Text>
+              <View style={styles.raidBadges}>
+                <Text style={styles.raidXP}>+{raid.xpReward} XP</Text>
+                <Text style={styles.timeLeft}>{raid.timeLeft}</Text>
+              </View>
+            </View>
+            
+            <View style={styles.memeInfo}>
+              <Text style={styles.memeSymbol}>${raid.memeCoin.symbol}</Text>
+              <Text style={styles.memePrice}>${raid.memeCoin.price.toFixed(4)}</Text>
+              <Text style={[
+                styles.memeChange,
+                { color: raid.memeCoin.change >= 0 ? '#4ECDC4' : '#FF6B6B' }
+              ]}>
+                {raid.memeCoin.change >= 0 ? '+' : ''}{raid.memeCoin.change}%
+              </Text>
+            </View>
+            
+            <View style={styles.raidStats}>
+              <Text style={styles.statText}>💰 MC: ${raid.memeCoin.marketCap.toLocaleString()}</Text>
+              <Text style={styles.statText}>📊 Vol: ${raid.memeCoin.volume24h.toLocaleString()}</Text>
+            </View>
+            
+            <View style={styles.raidProgress}>
+              <View style={styles.progressBar}>
+                <View style={[
+                  styles.progressFill,
+                  { width: `${(raid.currentAmount / raid.targetAmount) * 100}%` }
+                ]} />
+              </View>
+              <Text style={styles.progressText}>
+                ${raid.currentAmount.toLocaleString()} / ${raid.targetAmount.toLocaleString()}
+              </Text>
+            </View>
+            
+            <View style={styles.raidStats}>
+              <Text style={styles.statText}>👥 {raid.participants} participants</Text>
+              <Text style={styles.statText}>👀 {raid.memeCoin.holders} holders</Text>
+            </View>
+            
+            <TouchableOpacity
+              style={styles.joinRaidButton}
+              onPress={() => joinRaid(raid)}
+            >
+              <LinearGradient
+                colors={['#FF6B6B', '#FF8E8E']}
+                style={styles.joinRaidGradient}
+              >
+                <Text style={styles.joinRaidText}>Join Raid! ⚔️</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        ))}
+      </View>
+
+      {/* Social Feed */}
+      <View style={styles.socialSection}>
+        <Text style={styles.sectionTitle}>Social Feed</Text>
+        <SocialFeed />
+      </View>
+    </ScrollView>
+  );
+
+  const renderDeFiStep = () => (
+    <ScrollView style={styles.defiScroll} showsVerticalScrollIndicator={false}>
+      <Text style={styles.stepTitle}>Step 3: DeFi Yield Farming 💰</Text>
+      
+      {/* DeFi Pools */}
+      <View style={styles.poolsSection}>
+        <Text style={styles.sectionTitle}>Available Pools</Text>
+        {defiPools.map((pool) => (
+          <View key={pool.id} style={styles.poolCard}>
+            <View style={styles.poolHeader}>
+              <Text style={styles.poolName}>{pool.name}</Text>
+              <View style={[
+                styles.riskBadge,
+                { backgroundColor: pool.risk === 'low' ? '#4ECDC4' : pool.risk === 'medium' ? '#FFEAA7' : '#FF6B6B' }
+              ]}>
+                <Text style={styles.riskText}>{pool.risk.toUpperCase()}</Text>
+              </View>
+            </View>
+            
+            <View style={styles.poolStats}>
+              <Text style={styles.apyText}>APY: {pool.apy}%</Text>
+              <Text style={styles.tvlText}>TVL: ${pool.tvl.toLocaleString()}</Text>
+            </View>
+            
+            <View style={styles.poolTokens}>
+              <Text style={styles.tokenText}>{pool.token1}</Text>
+              <Text style={styles.tokenSeparator}>/</Text>
+              <Text style={styles.tokenText}>{pool.token2}</Text>
+            </View>
+            
+            <TouchableOpacity
+              style={styles.stakeButton}
+              onPress={() => stakeInPool(pool)}
+            >
+              <LinearGradient
+                colors={['#4ECDC4', '#44A08D']}
+                style={styles.stakeGradient}
+              >
+                <Text style={styles.stakeText}>Stake & Earn! 💰</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        ))}
+      </View>
+    </ScrollView>
+  );
 
   return (
-    <View style={styles.container}>
-      {/* Header with Streak */}
-      <LinearGradient colors={['#FF6B6B', '#FFEAA7']} style={styles.header}>
-        <Text style={styles.headerTitle}>🔥 MemeQuest Raid!</Text>
-        <Text style={styles.streakText}>Streak: {currentStreak} Days ✨</Text>
-        <Text style={styles.xpText}>XP: {totalXP.toLocaleString()}</Text>
+    <Animated.ScrollView 
+      style={styles.container}
+      onScroll={Animated.event(
+        [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+        { useNativeDriver: true }
+      )}
+      scrollEventThrottle={16}
+    >
+      {/* Enhanced Header with Tournament Info */}
+      <LinearGradient
+        colors={['#FF6B6B', '#FFEAA7']}
+        style={styles.header}
+      >
+        <View style={styles.headerTop}>
+          <Text style={styles.headerTitle}>🔥 MemeQuest Raid!</Text>
+          <TouchableOpacity style={styles.tournamentBadge} onPress={joinTournament}>
+            <Text style={styles.tournamentText}>🏆 Tournament</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.headerStats}>
+          <TouchableOpacity style={styles.statItem} onPress={() => setShowXPModal(true)}>
+            <Text style={styles.statValue}>{totalXP}</Text>
+            <Text style={styles.statLabel}>XP</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.statItem} onPress={() => setShowStreakModal(true)}>
+            <Text style={styles.statValue}>{currentStreak}</Text>
+            <Text style={styles.statLabel}>Streak</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.statItem} onPress={() => setShowXPModal(true)}>
+            <Text style={styles.statValue}>#{userRank}</Text>
+            <Text style={styles.statLabel}>Rank</Text>
+          </TouchableOpacity>
+        </View>
       </LinearGradient>
 
-      {/* Voice Orb */}
-      <TouchableOpacity 
-        style={[styles.voiceOrb, isVoiceListening && styles.voiceOrbActive]}
-        onPress={() => {
-          if (isVoiceListening) {
-            stopListening();
-          } else {
-            startListening(handleVoiceCommand);
-          }
-        }}
-      >
-        <Text style={styles.voiceIcon}>🎤</Text>
-        <Text style={styles.voiceText}>
-          {isVoiceListening ? 'Listening...' : 'Voice Launch'}
-        </Text>
-      </TouchableOpacity>
-
-      {/* Step 1: Create Meme */}
-      {step === 1 && (
-        <ScrollView style={styles.createScroll}>
-          <Text style={styles.stepTitle}>Step 1: Craft Your Meme 🎨</Text>
-          
-          {/* Template Grid */}
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false} 
-            style={styles.templateGrid}
-          >
-            {memeTemplates.map((template) => (
-              <TouchableOpacity 
-                key={template.id} 
-                style={[
-                  styles.templateCard, 
-                  selectedTemplate === template.id && styles.selectedTemplate
-                ]} 
-                onPress={() => setSelectedTemplate(template.id)}
-              >
-                <Image source={{ uri: template.image }} style={styles.templateImg} />
-                <Text style={styles.templateLabel}>{template.name}</Text>
-                <Text style={styles.templateTheme}>{template.culturalTheme}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-
-          {/* Meme Name Input */}
-          <TextInput
-            style={styles.input}
-            placeholder="Meme Name (e.g., RichesFrog)"
-            value={memeName}
-            onChangeText={setMemeName}
-            placeholderTextColor="#999"
-          />
-
-          {/* Description Input */}
-          <TextInput
-            style={[styles.input, styles.descriptionInput]}
-            placeholder="Vibe Description (e.g., BIPOC wealth hop!)"
-            multiline
-            numberOfLines={3}
-            placeholderTextColor="#999"
-          />
-
-          {/* Launch Button */}
-          <TouchableOpacity style={styles.launchBtn} onPress={launchMeme}>
-            <LinearGradient colors={['#4ECDC4', '#44A08D']} style={styles.launchGradient}>
-              <Text style={styles.launchText}>Pump It! 🚀</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        </ScrollView>
-      )}
-
-      {/* Step 2: Raid Feed */}
-      {step === 2 && (
-        <ScrollView style={styles.feedScroll}>
-          <Text style={styles.stepTitle}>Step 2: Join the Raid! 📈</Text>
-          
-          {/* Sample Raid Feed */}
-          {[
+      {/* Enhanced Voice Orb */}
+      <Animated.View style={[
+        styles.voiceOrb, 
+        { 
+          transform: [
+            { scale: pulseAnim },
             { 
-              id: 1, 
-              user: '@BIPOCTrader', 
-              meme: '$FROG', 
-              gain: '+12%', 
-              video: true,
-              spotlight: false,
-              xpReward: 50
-            },
-            { 
-              id: 2, 
-              user: '@CommunityHero', 
-              meme: '$BEAR', 
-              gain: '+8%', 
-              video: false,
-              spotlight: true,
-              xpReward: 75
-            },
-            { 
-              id: 3, 
-              user: '@WealthBuilder', 
-              meme: '$DOG', 
-              gain: '+25%', 
-              video: true,
-              spotlight: false,
-              xpReward: 100
+              translateY: scrollY.interpolate({
+                inputRange: [0, 1000],
+                outputRange: [0, -50],
+                extrapolate: 'clamp',
+              })
             }
-          ].map((item) => (
-            <View key={item.id} style={styles.feedItem}>
-              <View style={styles.feedHeader}>
-                <Text style={styles.feedUser}>@{item.user}</Text>
-                {item.spotlight && (
-                  <View style={styles.spotlightBadge}>
-                    <Text style={styles.spotlightText}>🌟 BIPOC Spotlight</Text>
-                  </View>
-                )}
-              </View>
-              
-              <Text style={styles.feedMeme}>${item.meme} {item.gain}</Text>
-              
-              {item.video && (
-                <View style={styles.videoPlaceholder}>
-                  <Text style={styles.videoText}>📹 Video Raid</Text>
-                </View>
-              )}
-              
-              <TouchableOpacity 
-                style={styles.joinBtn}
-                onPress={() => joinRaid(item.id.toString())}
-              >
-                <Text style={styles.joinText}>Join Raid! ⚔️</Text>
-              </TouchableOpacity>
-              
-              <Text style={styles.xpReward}>+{item.xpReward} XP</Text>
-            </View>
-          ))}
+          ] 
+        }
+      ]}>
+        <TouchableOpacity
+          style={styles.voiceButton}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            setShowVoiceModal(true);
+            Speech.speak('Ready to launch? Say your command!');
+          }}
+        >
+          <Text style={styles.voiceIcon}>🎤</Text>
+        </TouchableOpacity>
+      </Animated.View>
 
-          {/* Leaderboard */}
-          <View style={styles.leaderboard}>
-            <Text style={styles.lbTitle}>Top Raiders 🔥</Text>
-            <Text style={styles.lbItem}>#1 @You: +150 XP</Text>
-            <Text style={styles.lbItem}>#2 @BIPOCTrader: +120 XP</Text>
-            <Text style={styles.lbItem}>#3 @CommunityHero: +100 XP</Text>
-          </View>
+      {/* Step Navigation */}
+      <View style={styles.stepNavigation}>
+        <TouchableOpacity
+          style={[styles.stepButton, step === 1 && styles.activeStep]}
+          onPress={() => setStep(1)}
+        >
+          <Text style={[styles.stepButtonText, step === 1 && styles.activeStepText]}>
+            🎨 Create
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.stepButton, step === 2 && styles.activeStep]}
+          onPress={() => setStep(2)}
+        >
+          <Text style={[styles.stepButtonText, step === 2 && styles.activeStepText]}>
+            ⚔️ Raid
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.stepButton, step === 3 && styles.activeStep]}
+          onPress={() => setStep(3)}
+        >
+          <Text style={[styles.stepButtonText, step === 3 && styles.activeStepText]}>
+            💰 DeFi
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Daily Challenges */}
+      <View style={styles.challengesSection}>
+        <Text style={styles.challengesTitle}>🎯 Daily Challenges</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.challengesScroll}>
+          {dailyChallenges.map((challenge) => (
+            <TouchableOpacity 
+              key={challenge.id} 
+              style={[styles.challengeCard, challenge.completed && styles.challengeCompleted]}
+              onPress={() => !challenge.completed && completeChallenge(challenge.id)}
+            >
+              <Text style={styles.challengeTitle}>{challenge.title}</Text>
+              <Text style={styles.challengeProgress}>{challenge.progress}/{challenge.total}</Text>
+              <Text style={styles.challengeReward}>+{challenge.reward} XP</Text>
+              {challenge.completed && <Text style={styles.challengeCheck}>✅</Text>}
+            </TouchableOpacity>
+          ))}
         </ScrollView>
-      )}
+      </View>
+
+      {/* Weekly Tournament */}
+      <View style={styles.tournamentSection}>
+        <Text style={styles.tournamentTitle}>🏆 {weeklyTournament.title}</Text>
+        <View style={styles.tournamentInfo}>
+          <Text style={styles.tournamentPrize}>Prize: {weeklyTournament.prize}</Text>
+          <Text style={styles.tournamentParticipants}>{weeklyTournament.participants} participants</Text>
+          <Text style={styles.tournamentTime}>Time Left: {weeklyTournament.timeLeft}</Text>
+          <Text style={styles.tournamentPosition}>Your Position: #{weeklyTournament.yourPosition}</Text>
+        </View>
+      </View>
+
+      {/* Main Content */}
+      {step === 1 && renderCreateStep()}
+      {step === 2 && renderRaidStep()}
+      {step === 3 && renderDeFiStep()}
 
       {/* Footer Progress */}
       <View style={styles.footer}>
-        <View style={styles.progressBar}>
-          <View style={[styles.progressFill, { width: `${(questProgress / 5) * 100}%` }]} />
+        <View style={styles.progressContainer}>
+          <View style={styles.progressBar}>
+            <View style={[styles.progressFill, { width: `${(questProgress / 5) * 100}%` }]} />
+          </View>
+          <Text style={styles.progressText}>Quest Progress: {questProgress}/5</Text>
         </View>
-        <Text style={styles.progressText}>{questProgress}/5 Raids Complete</Text>
         
-        <TouchableOpacity style={styles.freezeBtn}>
+        <TouchableOpacity style={styles.freezeButton}>
           <Text style={styles.freezeText}>Freeze Streak? ❄️ (1 Gem)</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Confetti Animation */}
+      {/* Voice Command Modal */}
+      <Modal
+        visible={showVoiceModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowVoiceModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Voice Commands 🎤</Text>
+            <Text style={styles.modalSubtitle}>Say a command to execute</Text>
+            
+            <View style={styles.commandList}>
+              <Text style={styles.commandItem}>• "Launch meme" - Start meme creation</Text>
+              <Text style={styles.commandItem}>• "Join raid" - Go to raids</Text>
+              <Text style={styles.commandItem}>• "Defi yield" - Go to yield farming</Text>
+              <Text style={styles.commandItem}>• "My xp" - Show XP status</Text>
+              <Text style={styles.commandItem}>• "Help" - Show this help</Text>
+            </View>
+            
+            <TouchableOpacity
+              style={styles.listenButton}
+              onPress={() => {
+                setIsListening(!isListening);
+                if (!isListening) {
+                  Speech.speak('Listening... Say your command');
+                } else {
+                  Speech.speak('Command received!');
+                  handleVoiceCommand('launch meme'); // Simulate command
+                  setShowVoiceModal(false);
+                }
+              }}
+            >
+              <LinearGradient
+                colors={isListening ? ['#FF6B6B', '#FF8E8E'] : ['#4ECDC4', '#44A08D']}
+                style={styles.listenGradient}
+              >
+                <Text style={styles.listenText}>
+                  {isListening ? '🎤 Listening...' : '🎤 Start Listening'}
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => setShowVoiceModal(false)}
+            >
+              <Text style={styles.closeButtonText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Enhanced Leaderboard Modal */}
+      <Modal
+        visible={showXPModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowXPModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>🏆 Leaderboard</Text>
+            <Text style={styles.modalSubtitle}>Top MemeQuest Players</Text>
+            <ScrollView style={styles.leaderboardList}>
+              {leaderboard.map((player, index) => (
+                <View key={player.id} style={[styles.leaderboardItem, index < 3 && styles.topPlayer]}>
+                  <Text style={styles.rankNumber}>#{index + 1}</Text>
+                  <Text style={styles.playerAvatar}>{player.avatar}</Text>
+                  <View style={styles.playerInfo}>
+                    <Text style={styles.playerName}>{player.username}</Text>
+                    <Text style={styles.playerStats}>{player.xp} XP • {player.streak} day streak</Text>
+                  </View>
+                  {index < 3 && <Text style={styles.trophy}>🏆</Text>}
+                </View>
+              ))}
+            </ScrollView>
+            <TouchableOpacity style={styles.closeButton} onPress={() => setShowXPModal(false)}>
+              <Text style={styles.closeButtonText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Confetti */}
       {showConfetti && (
-        <ConfettiCannon 
-          count={150} 
-          origin={{ x: width / 2, y: 0 }} 
-          colors={['#FF6B6B', '#4ECDC4', '#FFEAA7']} 
+        <ConfettiCannon
+          count={150}
+          origin={{ x: width / 2, y: 0 }}
+          colors={['#FF6B6B', '#4ECDC4', '#FFEAA7']}
         />
       )}
-    </View>
+    </Animated.ScrollView>
   );
 };
 
@@ -400,62 +863,126 @@ const styles = StyleSheet.create({
   },
   header: {
     padding: 20,
+    paddingTop: 50,
+    paddingBottom: 25,
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
+    alignItems: 'center',
+  },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+    width: '100%',
+  },
+  tournamentBadge: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 15,
+  },
+  tournamentText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  headerStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
+  },
+  statItem: {
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  statLabel: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.8)',
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
     color: 'white',
-    textAlign: 'center',
+    marginBottom: 8,
   },
   streakText: {
-    fontSize: 14,
+    fontSize: 16,
     color: 'rgba(255,255,255,0.9)',
-    textAlign: 'center',
-    marginTop: 4,
+    marginBottom: 4,
   },
   xpText: {
-    fontSize: 12,
+    fontSize: 14,
     color: 'rgba(255,255,255,0.8)',
-    textAlign: 'center',
-    marginTop: 2,
   },
   voiceOrb: {
     position: 'absolute',
-    top: 100,
+    top: -10,
     alignSelf: 'center',
     zIndex: 10,
+  },
+  voiceButton: {
     backgroundColor: '#FF6B6B',
     borderRadius: 30,
     width: 60,
     height: 60,
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 5,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-  voiceOrbActive: {
-    backgroundColor: '#4ECDC4',
-    transform: [{ scale: 1.1 }],
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
   voiceIcon: {
     fontSize: 24,
     color: 'white',
   },
-  voiceText: {
-    fontSize: 10,
+  stepNavigation: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    backgroundColor: 'white',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+    marginBottom: 10,
+  },
+  stepButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    backgroundColor: '#F0F0F0',
+  },
+  activeStep: {
+    backgroundColor: '#4ECDC4',
+  },
+  stepButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+  },
+  activeStepText: {
     color: 'white',
-    textAlign: 'center',
-    marginTop: 2,
   },
   createScroll: {
     flex: 1,
     padding: 20,
-    marginTop: 80,
+    paddingTop: 15,
+  },
+  raidScroll: {
+    flex: 1,
+    padding: 20,
+    paddingTop: 15,
+  },
+  defiScroll: {
+    flex: 1,
+    padding: 20,
+    paddingTop: 15,
   },
   stepTitle: {
     fontSize: 20,
@@ -464,41 +991,61 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     color: '#333',
   },
+  templateSection: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 12,
+  },
   templateGrid: {
-    height: 120,
-    marginBottom: 20,
+    flexDirection: 'row',
   },
   templateCard: {
-    width: 100,
-    height: 100,
-    marginRight: 15,
-    borderRadius: 20,
-    backgroundColor: '#E0E0E0',
-    justifyContent: 'center',
+    width: 120,
+    marginRight: 12,
     alignItems: 'center',
-    padding: 10,
+    padding: 12,
+    backgroundColor: 'white',
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   selectedTemplate: {
-    backgroundColor: '#4ECDC4',
-    borderWidth: 3,
-    borderColor: '#44A08D',
+    borderWidth: 2,
+    borderColor: '#4ECDC4',
   },
-  templateImg: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+  templateImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    marginBottom: 8,
   },
   templateLabel: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    marginTop: 4,
-    textAlign: 'center',
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
   },
   templateTheme: {
-    fontSize: 10,
+    fontSize: 12,
     color: '#666',
     textAlign: 'center',
-    marginTop: 2,
+    marginBottom: 4,
+  },
+  templateDescription: {
+    fontSize: 10,
+    color: '#999',
+    textAlign: 'center',
+    lineHeight: 12,
+  },
+  inputSection: {
+    marginBottom: 24,
   },
   input: {
     borderWidth: 1,
@@ -509,11 +1056,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     backgroundColor: 'white',
   },
-  descriptionInput: {
+  textArea: {
     height: 80,
     textAlignVertical: 'top',
   },
-  launchBtn: {
+  launchButton: {
     alignItems: 'center',
     marginTop: 20,
   },
@@ -521,101 +1068,197 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: 32,
     borderRadius: 25,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
   launchText: {
     color: 'white',
     fontWeight: 'bold',
     fontSize: 18,
   },
-  feedScroll: {
-    flex: 1,
-    padding: 20,
-    marginTop: 80,
+  raidsSection: {
+    marginBottom: 24,
   },
-  feedItem: {
+  raidCard: {
     backgroundColor: 'white',
     padding: 16,
     borderRadius: 16,
-    marginBottom: 12,
-    elevation: 2,
+    marginBottom: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.22,
-    shadowRadius: 2.22,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  feedHeader: {
+  raidHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
-  },
-  feedUser: {
-    fontWeight: 'bold',
-    fontSize: 16,
-    color: '#333',
-  },
-  spotlightBadge: {
-    backgroundColor: '#FFD700',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  spotlightText: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#B8860B',
-  },
-  feedMeme: {
-    fontSize: 18,
-    color: '#4ECDC4',
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  videoPlaceholder: {
-    backgroundColor: '#F0F0F0',
-    padding: 12,
-    borderRadius: 8,
     marginBottom: 12,
-    alignItems: 'center',
   },
-  videoText: {
+  raidName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    flex: 1,
+  },
+  raidBadges: {
+    alignItems: 'flex-end',
+  },
+  raidXP: {
     fontSize: 14,
+    color: '#4ECDC4',
+    fontWeight: '600',
+  },
+  timeLeft: {
+    fontSize: 12,
+    color: '#FF6B6B',
+    fontWeight: '600',
+  },
+  memeInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  memeSymbol: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginRight: 12,
+  },
+  memePrice: {
+    fontSize: 16,
+    color: '#666',
+    marginRight: 12,
+  },
+  memeChange: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  raidProgress: {
+    marginBottom: 12,
+  },
+  progressBar: {
+    height: 8,
+    backgroundColor: '#E0E0E0',
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 4,
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#4ECDC4',
+    borderRadius: 4,
+  },
+  progressText: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+  },
+  raidStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 12,
+  },
+  statText: {
+    fontSize: 12,
     color: '#666',
   },
-  joinBtn: {
-    backgroundColor: '#FF6B6B',
-    padding: 12,
-    borderRadius: 12,
+  joinRaidButton: {
     alignItems: 'center',
-    marginBottom: 8,
   },
-  joinText: {
+  joinRaidGradient: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 20,
+  },
+  joinRaidText: {
     color: 'white',
     fontWeight: 'bold',
     fontSize: 16,
   },
-  xpReward: {
-    fontSize: 12,
-    color: '#4ECDC4',
-    fontWeight: 'bold',
-    textAlign: 'center',
+  socialSection: {
+    marginBottom: 24,
   },
-  leaderboard: {
-    backgroundColor: '#E8F5E8',
+  poolsSection: {
+    marginBottom: 24,
+  },
+  poolCard: {
+    backgroundColor: 'white',
     padding: 16,
-    borderRadius: 12,
-    marginTop: 20,
+    borderRadius: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  lbTitle: {
+  poolHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  poolName: {
+    fontSize: 18,
     fontWeight: 'bold',
-    textAlign: 'center',
-    fontSize: 16,
-    marginBottom: 8,
+    color: '#333',
   },
-  lbItem: {
-    textAlign: 'center',
-    marginBottom: 4,
+  riskBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  riskText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#333',
+  },
+  poolStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  apyText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#4ECDC4',
+  },
+  tvlText: {
+    fontSize: 16,
+    color: '#666',
+  },
+  poolTokens: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  tokenText: {
     fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+  },
+  tokenSeparator: {
+    fontSize: 14,
+    color: '#666',
+    marginHorizontal: 8,
+  },
+  stakeButton: {
+    alignItems: 'center',
+  },
+  stakeGradient: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 20,
+  },
+  stakeText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16,
   },
   footer: {
     padding: 20,
@@ -623,24 +1266,10 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderColor: '#EEE',
   },
-  progressBar: {
-    height: 8,
-    backgroundColor: '#E0E0E0',
-    borderRadius: 4,
-    overflow: 'hidden',
-    marginBottom: 8,
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#58CC02',
-  },
-  progressText: {
-    textAlign: 'center',
+  progressContainer: {
     marginBottom: 12,
-    fontSize: 14,
-    fontWeight: 'bold',
   },
-  freezeBtn: {
+  freezeButton: {
     backgroundColor: '#FFF3CD',
     padding: 12,
     borderRadius: 12,
@@ -649,99 +1278,195 @@ const styles = StyleSheet.create({
   freezeText: {
     color: '#856404',
     fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 24,
+    margin: 20,
+    maxWidth: width * 0.9,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  modalSubtitle: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  commandList: {
+    marginBottom: 20,
+  },
+  commandItem: {
     fontSize: 14,
+    color: '#333',
+    marginBottom: 8,
+    lineHeight: 20,
+  },
+  listenButton: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  listenGradient: {
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 25,
+  },
+  listenText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  closeButton: {
+    alignItems: 'center',
+  },
+  closeButtonText: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: '600',
+  },
+  // Competitive Gaming Styles
+  challengesSection: {
+    padding: 20,
+    paddingTop: 15,
+    paddingBottom: 15,
+    backgroundColor: '#F8F9FA',
+    marginBottom: 10,
+  },
+  challengesTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  challengesScroll: {
+    height: 120,
+  },
+  challengeCard: {
+    width: 140,
+    backgroundColor: 'white',
+    padding: 15,
+    borderRadius: 12,
+    marginRight: 10,
+    alignItems: 'center',
+    elevation: 2,
+  },
+  challengeCompleted: {
+    backgroundColor: '#E8F5E8',
+    borderColor: '#4CAF50',
+    borderWidth: 2,
+  },
+  challengeTitle: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 5,
+  },
+  challengeProgress: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 5,
+  },
+  challengeReward: {
+    fontSize: 12,
+    color: '#4CAF50',
+    fontWeight: 'bold',
+  },
+  challengeCheck: {
+    position: 'absolute',
+    top: 5,
+    right: 5,
+    fontSize: 16,
+  },
+  tournamentSection: {
+    padding: 20,
+    paddingTop: 15,
+    paddingBottom: 15,
+    backgroundColor: '#FFF3E0',
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#FFB74D',
+    marginBottom: 10,
+  },
+  tournamentTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  tournamentInfo: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  tournamentPrize: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#FF6B6B',
+    width: '50%',
+  },
+  tournamentParticipants: {
+    fontSize: 12,
+    color: '#666',
+    width: '50%',
+  },
+  tournamentTime: {
+    fontSize: 12,
+    color: '#666',
+    width: '50%',
+  },
+  tournamentPosition: {
+    fontSize: 12,
+    color: '#666',
+    width: '50%',
+  },
+  leaderboardList: {
+    maxHeight: 300,
+  },
+  leaderboardItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEE',
+  },
+  topPlayer: {
+    backgroundColor: '#FFF8E1',
+  },
+  rankNumber: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    width: 30,
+  },
+  playerAvatar: {
+    fontSize: 24,
+    marginHorizontal: 10,
+  },
+  playerInfo: {
+    flex: 1,
+  },
+  playerName: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  playerStats: {
+    fontSize: 12,
+    color: '#666',
+  },
+  trophy: {
+    fontSize: 20,
   },
 });
 
 export default MemeQuestScreen;
-```
-
----
-
-## 🎯 **INTEGRATION WITH EXISTING SCREENS**
-
-### **TutorScreen Integration**
-Add MemeQuest as a new tab in your existing TutorScreen:
-
-```typescript
-// In TutorScreen.tsx
-import MemeQuestScreen from './MemeQuestScreen';
-
-const TutorScreen = () => {
-  const [activeTab, setActiveTab] = useState('education');
-
-  const tabs = [
-    { id: 'education', label: 'Education', icon: '📚' },
-    { id: 'trading', label: 'Trading', icon: '📈' },
-    { id: 'memequest', label: 'MemeQuest', icon: '🔥' },
-    { id: 'voice', label: 'Voice AI', icon: '🎤' },
-  ];
-
-  return (
-    <View style={styles.container}>
-      {/* Tab Navigation */}
-      <View style={styles.tabContainer}>
-        {tabs.map((tab) => (
-          <TouchableOpacity
-            key={tab.id}
-            style={[styles.tab, activeTab === tab.id && styles.activeTab]}
-            onPress={() => setActiveTab(tab.id)}
-          >
-            <Text style={styles.tabIcon}>{tab.icon}</Text>
-            <Text style={styles.tabLabel}>{tab.label}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {/* Content */}
-      {activeTab === 'memequest' && <MemeQuestScreen />}
-      {/* Other tab content... */}
-    </View>
-  );
-};
-```
-
----
-
-## 🚀 **COMPETITIVE ADVANTAGES**
-
-### **Your Edge vs Competitors:**
-
-| Feature | RichesReach MemeQuest | Hana Network | Pump.fun | Robinhood Social |
-|---------|----------------------|--------------|----------|------------------|
-| **Voice Control** | ✅ Voice-launched memes | ❌ TikTok UI only | ❌ No voice | ❌ Basic feeds |
-| **Education** | ✅ IRT quests (68% completion) | ❌ Hype-only | ❌ No education | ❌ No education |
-| **BIPOC Focus** | ✅ Cultural templates | ❌ Generic | ❌ Generic | ❌ Generic |
-| **Multi-Chain** | ✅ 6 chains | ❌ ETH/BNB only | ❌ Solana only | ❌ ETH/BSC only |
-| **AI Integration** | ✅ R² ML risk management | ❌ No AI | ❌ No AI | ❌ No AI |
-| **Gamification** | ✅ XP/streaks/quests | ❌ Basic social | ❌ Pump/dump | ❌ Basic sharing |
-
----
-
-## 📈 **PROJECTED IMPACT**
-
-### **Q4 2025 Beta:**
-- **1K Beta Users** → 25% engagement lift
-- **MemeQuest Integration** → +30% user retention
-- **Voice-Launched Memes** → 51% completion rate
-
-### **Q1 2026 Launch:**
-- **Full Social Feed** → TikTok-style meme trading
-- **AI Risk Management** → R² ML prevents rug pulls
-- **DeFi Integration** → Meme-to-earn yield farming
-- **Projected Growth** → +30% user growth, +$50M AUM
-
----
-
-## 🎯 **NEXT STEPS**
-
-1. **Integrate MemeQuestScreen** into TutorScreen
-2. **Add Pump.fun SDK** for actual meme launches
-3. **Implement Voice Commands** for meme creation
-4. **Add Social Feed** with TikTok-style videos
-5. **Integrate AI Risk Management** using your R² ML
-6. **Add DeFi Yield Farming** for meme-to-earn
-
-This MemeQuest integration will make RichesReach AI the **"TikTok of hybrid DeFi"** - fun, viral, and financially smart! 🚀
-
-Want me to implement any specific part of this integration?

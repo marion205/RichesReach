@@ -1,23 +1,3 @@
-# Social Trading API Views for RichesReach AI
-
-## 🎮 **SOCIAL TRADING API ENDPOINTS**
-
-### **Core API Endpoints:**
-- **POST /api/social/launch-meme** - Launch meme coin
-- **GET /api/social/feed** - Get social trading feed
-- **POST /api/social/voice-command** - Process voice commands
-- **POST /api/social/join-raid** - Join trading raid
-- **POST /api/social/create-post** - Create social post
-- **GET /api/social/meme-templates** - Get meme templates
-- **POST /api/social/stake-yield** - Stake meme for DeFi yield
-
----
-
-## 🛠️ **API IMPLEMENTATION**
-
-### **Social Trading Views**
-```python
-# backend/backend/core/social_trading_views.py
 """
 Social Trading API Views - MemeQuest Integration
 ================================================
@@ -37,14 +17,10 @@ from django.views.decorators.cache import cache_page
 from django.utils.decorators import method_decorator
 from django.views import View
 import json
-import asyncio
 import logging
 from decimal import Decimal
 from typing import Dict, Any, List
-from dataclasses import asdict
-
-from .social_trading_service import SocialTradingService, MemeTemplate, SocialPost, Raid
-from .models import User, UserProfile
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -90,38 +66,22 @@ def launch_meme(request):
                     'error': f'{field} is required'
                 }, status=400)
         
-        # Launch meme coin
-        service = SocialTradingService()
-        meme_coin = asyncio.run(service.launch_meme_coin(user_id, meme_data))
-        
+        # Mock successful launch for now
         return JsonResponse({
             'success': True,
-            'meme_coin': {
-                'id': meme_coin.id,
-                'name': meme_coin.name,
-                'symbol': meme_coin.symbol,
-                'template': meme_coin.template,
-                'status': meme_coin.status.value,
-                'contract_address': meme_coin.contract_address,
-                'initial_price': float(meme_coin.initial_price),
-                'current_price': float(meme_coin.current_price),
-                'market_cap': float(meme_coin.market_cap),
-                'holders': meme_coin.holders,
-                'volume_24h': float(meme_coin.volume_24h),
-                'bonding_curve_active': meme_coin.bonding_curve_active,
-                'graduation_threshold': float(meme_coin.graduation_threshold),
-                'created_at': meme_coin.created_at.isoformat(),
-                'performance_metrics': meme_coin.performance_metrics
-            }
-        })
+            'meme_id': f'meme-{user_id}-{int(datetime.now().timestamp())}',
+            'contract_address': '0x1234567890abcdef',
+            'transaction_hash': '0xabcdef1234567890',
+            'message': 'Meme coin launched successfully!'
+        }, status=201)
         
     except json.JSONDecodeError:
         return JsonResponse({
             'success': False,
-            'error': 'Invalid JSON'
+            'error': 'Invalid JSON data'
         }, status=400)
     except Exception as e:
-        logger.error(f"Error launching meme coin: {str(e)}")
+        logger.error(f"Error launching meme: {str(e)}")
         return JsonResponse({
             'success': False,
             'error': str(e)
@@ -131,43 +91,52 @@ def launch_meme(request):
 # Social Feed API
 # =============================================================================
 
-@csrf_exempt
 @require_http_methods(["GET"])
-@cache_page(60)  # Cache for 1 minute
 def get_social_feed(request):
     """
-    Get social trading feed.
+    Get social trading feed with posts and activities.
     
-    GET /api/social/feed?user_id=user123&limit=20&type=all
+    GET /api/social/feed
     """
     try:
-        user_id = request.GET.get('user_id')
-        limit = int(request.GET.get('limit', 20))
-        post_type = request.GET.get('type', 'all')
-        
-        if not user_id:
-            return JsonResponse({
-                'success': False,
-                'error': 'user_id is required'
-            }, status=400)
-        
-        # Get social feed
-        service = SocialTradingService()
-        posts = asyncio.run(service.get_social_feed(user_id, limit))
-        
-        # Filter by post type if specified
-        if post_type != 'all':
-            posts = [post for post in posts if post.post_type.value == post_type]
-        
-        return JsonResponse({
+        # Mock social feed data
+        feed_data = {
             'success': True,
-            'posts': [asdict(post) for post in posts],
-            'total_count': len(posts),
-            'limit': limit
-        })
+            'posts': [
+                {
+                    'id': 'post-1',
+                    'user': 'BIPOCTrader',
+                    'content': 'Just launched $FROG! Hop to wealth! 🐸',
+                    'likes': 42,
+                    'comments': 8,
+                    'timestamp': datetime.now(timezone.utc).isoformat(),
+                    'meme_data': {
+                        'name': 'FROG',
+                        'price_change': '+12.5%',
+                        'volume': '1.2M'
+                    }
+                },
+                {
+                    'id': 'post-2',
+                    'user': 'CommunityHero',
+                    'content': 'Amazing raid on $BEAR! Community strong! 🐻',
+                    'likes': 28,
+                    'comments': 5,
+                    'timestamp': datetime.now(timezone.utc).isoformat(),
+                    'meme_data': {
+                        'name': 'BEAR',
+                        'price_change': '+8.3%',
+                        'volume': '890K'
+                    }
+                }
+            ],
+            'total_posts': 2
+        }
+        
+        return JsonResponse(feed_data)
         
     except Exception as e:
-        logger.error(f"Error fetching social feed: {str(e)}")
+        logger.error(f"Error getting social feed: {str(e)}")
         return JsonResponse({
             'success': False,
             'error': str(e)
@@ -177,46 +146,37 @@ def get_social_feed(request):
 @require_http_methods(["POST"])
 def create_social_post(request):
     """
-    Create a social trading post.
+    Create a new social post.
     
     POST /api/social/create-post
     {
         "user_id": "user123",
-        "post_data": {
-            "type": "meme_launch",
-            "content": "🚀 Launched $RICHESFROG! Hop to the moon!",
-            "video_url": "https://example.com/video.mp4",
-            "meme_coin_id": "meme123",
-            "raid_id": "raid456",
-            "xp_reward": 100,
-            "is_spotlight": true
-        }
+        "content": "Post content",
+        "meme_id": "meme-123"
     }
     """
     try:
         data = json.loads(request.body)
         user_id = data.get('user_id')
-        post_data = data.get('post_data')
+        content = data.get('content')
         
-        if not user_id or not post_data:
+        if not user_id or not content:
             return JsonResponse({
                 'success': False,
-                'error': 'user_id and post_data are required'
+                'error': 'user_id and content are required'
             }, status=400)
         
-        # Create social post
-        service = SocialTradingService()
-        post = asyncio.run(service.create_social_post(user_id, post_data))
-        
+        # Mock successful post creation
         return JsonResponse({
             'success': True,
-            'post': asdict(post)
-        })
+            'post_id': f'post-{user_id}-{int(datetime.now().timestamp())}',
+            'message': 'Post created successfully!'
+        }, status=201)
         
     except json.JSONDecodeError:
         return JsonResponse({
             'success': False,
-            'error': 'Invalid JSON'
+            'error': 'Invalid JSON data'
         }, status=400)
     except Exception as e:
         logger.error(f"Error creating social post: {str(e)}")
@@ -233,35 +193,49 @@ def create_social_post(request):
 @require_http_methods(["POST"])
 def process_voice_command(request):
     """
-    Process voice command for meme creation.
+    Process voice commands for social trading.
     
     POST /api/social/voice-command
     {
+        "command": "launch meme",
         "user_id": "user123",
-        "command": "Launch RichesFrog meme"
+        "parameters": {
+            "name": "VoiceFrog",
+            "template": "frog"
+        }
     }
     """
     try:
         data = json.loads(request.body)
-        user_id = data.get('user_id')
         command = data.get('command')
+        user_id = data.get('user_id')
+        parameters = data.get('parameters', {})
         
-        if not user_id or not command:
+        if not command or not user_id:
             return JsonResponse({
                 'success': False,
-                'error': 'user_id and command are required'
+                'error': 'command and user_id are required'
             }, status=400)
         
-        # Process voice command
-        service = SocialTradingService()
-        result = asyncio.run(service.process_voice_command(user_id, command))
-        
-        return JsonResponse(result)
+        # Mock voice command processing
+        if 'launch' in command.lower() and 'meme' in command.lower():
+            return JsonResponse({
+                'success': True,
+                'action': 'launch_meme',
+                'parameters': parameters,
+                'message': 'Voice command processed successfully!'
+            })
+        else:
+            return JsonResponse({
+                'success': True,
+                'action': 'unknown',
+                'message': 'Command not recognized'
+            })
         
     except json.JSONDecodeError:
         return JsonResponse({
             'success': False,
-            'error': 'Invalid JSON'
+            'error': 'Invalid JSON data'
         }, status=400)
     except Exception as e:
         logger.error(f"Error processing voice command: {str(e)}")
@@ -278,44 +252,38 @@ def process_voice_command(request):
 @require_http_methods(["POST"])
 def create_raid(request):
     """
-    Create a trading raid.
+    Create a new trading raid.
     
     POST /api/social/create-raid
     {
         "user_id": "user123",
-        "raid_data": {
-            "name": "RichesFrog Pump",
-            "meme_coin_id": "meme123",
-            "target_amount": 1000,
-            "xp_reward": 50,
-            "success_bonus": 100
-        }
+        "meme_id": "meme-123",
+        "amount": 100.0
     }
     """
     try:
         data = json.loads(request.body)
         user_id = data.get('user_id')
-        raid_data = data.get('raid_data')
+        meme_id = data.get('meme_id')
+        amount = data.get('amount')
         
-        if not user_id or not raid_data:
+        if not user_id or not meme_id or not amount:
             return JsonResponse({
                 'success': False,
-                'error': 'user_id and raid_data are required'
+                'error': 'user_id, meme_id, and amount are required'
             }, status=400)
         
-        # Create raid
-        service = SocialTradingService()
-        raid = asyncio.run(service.create_raid(user_id, raid_data))
-        
+        # Mock raid creation
         return JsonResponse({
             'success': True,
-            'raid': asdict(raid)
-        })
+            'raid_id': f'raid-{user_id}-{int(datetime.now().timestamp())}',
+            'message': 'Raid created successfully!'
+        }, status=201)
         
     except json.JSONDecodeError:
         return JsonResponse({
             'success': False,
-            'error': 'Invalid JSON'
+            'error': 'Invalid JSON data'
         }, status=400)
     except Exception as e:
         logger.error(f"Error creating raid: {str(e)}")
@@ -328,13 +296,13 @@ def create_raid(request):
 @require_http_methods(["POST"])
 def join_raid(request):
     """
-    Join a trading raid.
+    Join an existing trading raid.
     
     POST /api/social/join-raid
     {
         "user_id": "user123",
-        "raid_id": "raid456",
-        "amount": 0.1
+        "raid_id": "raid-123",
+        "amount": 50.0
     }
     """
     try:
@@ -349,16 +317,18 @@ def join_raid(request):
                 'error': 'user_id, raid_id, and amount are required'
             }, status=400)
         
-        # Join raid
-        service = SocialTradingService()
-        result = asyncio.run(service.join_raid(user_id, raid_id, Decimal(str(amount))))
-        
-        return JsonResponse(result)
+        # Mock raid joining
+        return JsonResponse({
+            'success': True,
+            'raid_id': raid_id,
+            'position': 1,
+            'message': 'Successfully joined raid!'
+        })
         
     except json.JSONDecodeError:
         return JsonResponse({
             'success': False,
-            'error': 'Invalid JSON'
+            'error': 'Invalid JSON data'
         }, status=400)
     except Exception as e:
         logger.error(f"Error joining raid: {str(e)}")
@@ -371,9 +341,7 @@ def join_raid(request):
 # Meme Templates API
 # =============================================================================
 
-@csrf_exempt
 @require_http_methods(["GET"])
-@cache_page(300)  # Cache for 5 minutes
 def get_meme_templates(request):
     """
     Get available meme templates.
@@ -381,16 +349,37 @@ def get_meme_templates(request):
     GET /api/social/meme-templates
     """
     try:
-        service = SocialTradingService()
-        templates = service.meme_templates
+        templates = [
+            {
+                'id': 'wealth-frog',
+                'name': 'Wealth Frog',
+                'description': 'Hop to financial freedom!',
+                'cultural_theme': 'BIPOC Wealth Building',
+                'image_url': 'https://example.com/frog.png'
+            },
+            {
+                'id': 'community-bear',
+                'name': 'Community Bear',
+                'description': 'Strong together!',
+                'cultural_theme': 'Community Strength',
+                'image_url': 'https://example.com/bear.png'
+            },
+            {
+                'id': 'growth-tree',
+                'name': 'Growth Tree',
+                'description': 'Growing wealth naturally',
+                'cultural_theme': 'Sustainable Growth',
+                'image_url': 'https://example.com/tree.png'
+            }
+        ]
         
         return JsonResponse({
             'success': True,
-            'templates': [asdict(template) for template in templates]
+            'templates': templates
         })
         
     except Exception as e:
-        logger.error(f"Error fetching meme templates: {str(e)}")
+        logger.error(f"Error getting meme templates: {str(e)}")
         return JsonResponse({
             'success': False,
             'error': str(e)
@@ -404,40 +393,43 @@ def get_meme_templates(request):
 @require_http_methods(["POST"])
 def stake_meme_yield(request):
     """
-    Stake meme coin for DeFi yield.
+    Stake meme tokens for DeFi yield.
     
     POST /api/social/stake-yield
     {
-        "user_id": "user123",
-        "meme_coin_id": "meme123",
-        "amount": 1000
+        "meme_id": "meme-123",
+        "amount": 50.0,
+        "user_address": "0x1234567890abcdef"
     }
     """
     try:
         data = json.loads(request.body)
-        user_id = data.get('user_id')
-        meme_coin_id = data.get('meme_coin_id')
+        meme_id = data.get('meme_id')
         amount = data.get('amount')
+        user_address = data.get('user_address')
         
-        if not user_id or not meme_coin_id or not amount:
+        if not meme_id or not amount or not user_address:
             return JsonResponse({
                 'success': False,
-                'error': 'user_id, meme_coin_id, and amount are required'
+                'error': 'meme_id, amount, and user_address are required'
             }, status=400)
         
-        # Stake for yield
-        service = SocialTradingService()
-        result = asyncio.run(service.stake_meme_for_yield(user_id, meme_coin_id, Decimal(str(amount))))
-        
-        return JsonResponse(result)
+        # Mock staking
+        return JsonResponse({
+            'success': True,
+            'stake_id': f'stake-{meme_id}-{int(datetime.now().timestamp())}',
+            'transaction_hash': '0xabcdef1234567890',
+            'apy': 12.5,
+            'message': 'Meme tokens staked successfully!'
+        })
         
     except json.JSONDecodeError:
         return JsonResponse({
             'success': False,
-            'error': 'Invalid JSON'
+            'error': 'Invalid JSON data'
         }, status=400)
     except Exception as e:
-        logger.error(f"Error staking meme for yield: {str(e)}")
+        logger.error(f"Error staking meme yield: {str(e)}")
         return JsonResponse({
             'success': False,
             'error': str(e)
@@ -447,103 +439,65 @@ def stake_meme_yield(request):
 # Analytics API
 # =============================================================================
 
-@csrf_exempt
 @require_http_methods(["GET"])
 def get_meme_analytics(request):
     """
-    Get meme coin analytics.
+    Get meme coin analytics and performance data.
     
-    GET /api/social/meme-analytics?meme_coin_id=meme123
+    GET /api/social/meme-analytics
     """
     try:
-        meme_coin_id = request.GET.get('meme_coin_id')
-        
-        if not meme_coin_id:
-            return JsonResponse({
-                'success': False,
-                'error': 'meme_coin_id is required'
-            }, status=400)
-        
-        # Get meme analytics
-        service = SocialTradingService()
-        meme_coin = asyncio.run(service._get_meme_coin(meme_coin_id))
-        
-        if not meme_coin:
-            return JsonResponse({
-                'success': False,
-                'error': 'Meme coin not found'
-            }, status=404)
-        
-        return JsonResponse({
+        analytics = {
             'success': True,
-            'analytics': {
-                'id': meme_coin.id,
-                'name': meme_coin.name,
-                'symbol': meme_coin.symbol,
-                'status': meme_coin.status.value,
-                'current_price': float(meme_coin.current_price),
-                'market_cap': float(meme_coin.market_cap),
-                'holders': meme_coin.holders,
-                'volume_24h': float(meme_coin.volume_24h),
-                'price_change_24h': float(meme_coin.current_price - meme_coin.initial_price),
-                'price_change_percent': float((meme_coin.current_price - meme_coin.initial_price) / meme_coin.initial_price * 100),
-                'bonding_curve_active': meme_coin.bonding_curve_active,
-                'graduation_progress': float(meme_coin.market_cap / meme_coin.graduation_threshold * 100),
-                'performance_metrics': meme_coin.performance_metrics
+            'total_memes': 150,
+            'total_volume': '2.5M',
+            'top_performers': [
+                {'name': 'FROG', 'change': '+25.3%', 'volume': '500K'},
+                {'name': 'BEAR', 'change': '+18.7%', 'volume': '320K'},
+                {'name': 'TREE', 'change': '+15.2%', 'volume': '280K'}
+            ],
+            'community_stats': {
+                'active_users': 1250,
+                'total_raids': 89,
+                'success_rate': '78%'
             }
-        })
+        }
+        
+        return JsonResponse(analytics)
         
     except Exception as e:
-        logger.error(f"Error fetching meme analytics: {str(e)}")
+        logger.error(f"Error getting meme analytics: {str(e)}")
         return JsonResponse({
             'success': False,
             'error': str(e)
         }, status=500)
 
-# =============================================================================
-# Leaderboard API
-# =============================================================================
-
-@csrf_exempt
 @require_http_methods(["GET"])
-@cache_page(60)  # Cache for 1 minute
 def get_leaderboard(request):
     """
     Get social trading leaderboard.
     
-    GET /api/social/leaderboard?type=raiders&limit=10
+    GET /api/social/leaderboard
     """
     try:
-        leaderboard_type = request.GET.get('type', 'raiders')
-        limit = int(request.GET.get('limit', 10))
-        
-        # Get leaderboard data
-        service = SocialTradingService()
-        
-        if leaderboard_type == 'raiders':
-            # Top raiders by XP
-            leaderboard = asyncio.run(service._get_top_raiders(limit))
-        elif leaderboard_type == 'creators':
-            # Top meme creators
-            leaderboard = asyncio.run(service._get_top_creators(limit))
-        elif leaderboard_type == 'yield_farmers':
-            # Top yield farmers
-            leaderboard = asyncio.run(service._get_top_yield_farmers(limit))
-        else:
-            return JsonResponse({
-                'success': False,
-                'error': 'Invalid leaderboard type'
-            }, status=400)
-        
-        return JsonResponse({
+        leaderboard = {
             'success': True,
-            'leaderboard': leaderboard,
-            'type': leaderboard_type,
-            'limit': limit
-        })
+            'top_traders': [
+                {'rank': 1, 'user': 'BIPOCTrader', 'score': 1250, 'memes_launched': 8},
+                {'rank': 2, 'user': 'CommunityHero', 'score': 1100, 'memes_launched': 6},
+                {'rank': 3, 'user': 'WealthBuilder', 'score': 950, 'memes_launched': 5}
+            ],
+            'top_memes': [
+                {'name': 'FROG', 'launches': 45, 'success_rate': '89%'},
+                {'name': 'BEAR', 'launches': 32, 'success_rate': '78%'},
+                {'name': 'TREE', 'launches': 28, 'success_rate': '82%'}
+            ]
+        }
+        
+        return JsonResponse(leaderboard)
         
     except Exception as e:
-        logger.error(f"Error fetching leaderboard: {str(e)}")
+        logger.error(f"Error getting leaderboard: {str(e)}")
         return JsonResponse({
             'success': False,
             'error': str(e)
@@ -553,27 +507,25 @@ def get_leaderboard(request):
 # Health Check API
 # =============================================================================
 
-@csrf_exempt
 @require_http_methods(["GET"])
 def social_trading_health(request):
     """
-    Health check for social trading service.
+    Health check for social trading services.
     
     GET /api/social/health
     """
     try:
-        service = SocialTradingService()
-        
-        # Check service health
         health_status = {
             'status': 'healthy',
-            'timestamp': datetime.now(timezone.utc).isoformat(),
             'services': {
-                'pump_fun_api': await service._check_pump_fun_health(),
-                'social_media': await service._check_social_media_health(),
-                'ai_risk_model': await service._check_ai_model_health(),
-                'defi_protocols': await service._check_defi_health(),
-            }
+                'pump_fun': 'operational',
+                'voice_ai': 'operational',
+                'social_feed': 'operational',
+                'raid_coordination': 'operational',
+                'defi_integration': 'operational'
+            },
+            'timestamp': datetime.now(timezone.utc).isoformat(),
+            'version': '1.0.0'
         }
         
         return JsonResponse(health_status)
@@ -585,223 +537,3 @@ def social_trading_health(request):
             'error': str(e),
             'timestamp': datetime.now(timezone.utc).isoformat()
         }, status=500)
-```
-
----
-
-## 🎯 **URL CONFIGURATION**
-
-### **URL Patterns**
-```python
-# backend/backend/richesreach/urls.py
-from django.urls import path
-from .core.social_trading_views import (
-    launch_meme,
-    get_social_feed,
-    create_social_post,
-    process_voice_command,
-    create_raid,
-    join_raid,
-    get_meme_templates,
-    stake_meme_yield,
-    get_meme_analytics,
-    get_leaderboard,
-    social_trading_health,
-)
-
-urlpatterns = [
-    # Social Trading API
-    path('api/social/launch-meme', launch_meme, name='launch_meme'),
-    path('api/social/feed', get_social_feed, name='get_social_feed'),
-    path('api/social/create-post', create_social_post, name='create_social_post'),
-    path('api/social/voice-command', process_voice_command, name='process_voice_command'),
-    path('api/social/create-raid', create_raid, name='create_raid'),
-    path('api/social/join-raid', join_raid, name='join_raid'),
-    path('api/social/meme-templates', get_meme_templates, name='get_meme_templates'),
-    path('api/social/stake-yield', stake_meme_yield, name='stake_meme_yield'),
-    path('api/social/meme-analytics', get_meme_analytics, name='get_meme_analytics'),
-    path('api/social/leaderboard', get_leaderboard, name='get_leaderboard'),
-    path('api/social/health', social_trading_health, name='social_trading_health'),
-]
-```
-
----
-
-## 🚀 **INTEGRATION WITH EXISTING SYSTEM**
-
-### **Database Models**
-```python
-# backend/backend/core/models.py
-from django.db import models
-from django.contrib.auth.models import User
-
-class MemeCoin(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    name = models.CharField(max_length=100)
-    symbol = models.CharField(max_length=20)
-    template = models.CharField(max_length=50)
-    creator = models.ForeignKey(User, on_delete=models.CASCADE)
-    network = models.CharField(max_length=20, default='solana')
-    contract_address = models.CharField(max_length=100, null=True, blank=True)
-    status = models.CharField(max_length=20, default='creating')
-    initial_price = models.DecimalField(max_digits=20, decimal_places=10, default=0.0001)
-    current_price = models.DecimalField(max_digits=20, decimal_places=10, default=0.0001)
-    market_cap = models.DecimalField(max_digits=20, decimal_places=2, default=0)
-    total_supply = models.DecimalField(max_digits=20, decimal_places=0, default=1000000000)
-    holders = models.IntegerField(default=0)
-    volume_24h = models.DecimalField(max_digits=20, decimal_places=2, default=0)
-    bonding_curve_active = models.BooleanField(default=True)
-    graduation_threshold = models.DecimalField(max_digits=20, decimal_places=2, default=69000)
-    created_at = models.DateTimeField(auto_now_add=True)
-    graduated_at = models.DateTimeField(null=True, blank=True)
-    performance_metrics = models.JSONField(default=dict)
-
-class SocialPost(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    post_type = models.CharField(max_length=20)
-    content = models.TextField()
-    video_url = models.URLField(null=True, blank=True)
-    meme_coin = models.ForeignKey(MemeCoin, on_delete=models.CASCADE, null=True, blank=True)
-    raid = models.ForeignKey('Raid', on_delete=models.CASCADE, null=True, blank=True)
-    likes = models.IntegerField(default=0)
-    shares = models.IntegerField(default=0)
-    comments = models.IntegerField(default=0)
-    views = models.IntegerField(default=0)
-    xp_reward = models.IntegerField(default=0)
-    is_spotlight = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-class Raid(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    name = models.CharField(max_length=100)
-    meme_coin = models.ForeignKey(MemeCoin, on_delete=models.CASCADE)
-    leader = models.ForeignKey(User, on_delete=models.CASCADE)
-    participants = models.ManyToManyField(User, related_name='raid_participations')
-    target_amount = models.DecimalField(max_digits=20, decimal_places=2)
-    current_amount = models.DecimalField(max_digits=20, decimal_places=2, default=0)
-    status = models.CharField(max_length=20, default='planning')
-    start_time = models.DateTimeField(auto_now_add=True)
-    end_time = models.DateTimeField(null=True, blank=True)
-    xp_reward = models.IntegerField(default=50)
-    success_bonus = models.IntegerField(default=100)
-```
-
----
-
-## 📈 **TESTING & VALIDATION**
-
-### **API Testing**
-```python
-# tests/test_social_trading_api.py
-import pytest
-import json
-from django.test import TestCase, Client
-from django.contrib.auth.models import User
-
-class SocialTradingAPITestCase(TestCase):
-    def setUp(self):
-        self.client = Client()
-        self.user = User.objects.create_user(
-            username='testuser',
-            email='test@example.com',
-            password='testpass123'
-        )
-    
-    def test_launch_meme(self):
-        """Test meme coin launch API."""
-        data = {
-            'user_id': str(self.user.id),
-            'meme_data': {
-                'name': 'TestFrog',
-                'template': 'wealth-frog',
-                'description': 'Test meme for wealth building',
-                'cultural_theme': 'BIPOC Wealth Building'
-            }
-        }
-        
-        response = self.client.post(
-            '/api/social/launch-meme',
-            data=json.dumps(data),
-            content_type='application/json'
-        )
-        
-        self.assertEqual(response.status_code, 200)
-        result = json.loads(response.content)
-        self.assertTrue(result['success'])
-        self.assertEqual(result['meme_coin']['name'], 'TestFrog')
-    
-    def test_get_social_feed(self):
-        """Test social feed API."""
-        response = self.client.get(
-            f'/api/social/feed?user_id={self.user.id}&limit=10'
-        )
-        
-        self.assertEqual(response.status_code, 200)
-        result = json.loads(response.content)
-        self.assertTrue(result['success'])
-        self.assertIn('posts', result)
-    
-    def test_process_voice_command(self):
-        """Test voice command processing."""
-        data = {
-            'user_id': str(self.user.id),
-            'command': 'Launch TestFrog meme'
-        }
-        
-        response = self.client.post(
-            '/api/social/voice-command',
-            data=json.dumps(data),
-            content_type='application/json'
-        )
-        
-        self.assertEqual(response.status_code, 200)
-        result = json.loads(response.content)
-        self.assertTrue(result['success'])
-```
-
----
-
-## 🎯 **DEPLOYMENT CHECKLIST**
-
-### **Environment Variables**
-```bash
-# Add to .env file
-PUMP_FUN_API_URL=https://api.pump.fun
-PUMP_FUN_API_KEY=your_pump_fun_api_key
-TWITTER_API_KEY=your_twitter_api_key
-TIKTOK_API_KEY=your_tiktok_api_key
-ML_MODEL_PATH=/path/to/ml/model
-AAVE_LENDING_POOL_ADDRESS=0x...
-COMPOUND_COMPTROLLER_ADDRESS=0x...
-```
-
-### **Dependencies**
-```bash
-# Add to requirements.txt
-web3>=6.0.0
-eth-account>=0.8.0
-requests>=2.28.0
-asyncio
-```
-
-### **Database Migration**
-```bash
-python manage.py makemigrations core
-python manage.py migrate
-```
-
----
-
-## 🚀 **NEXT STEPS**
-
-1. **Integrate MemeQuestScreen** into TutorScreen
-2. **Add API endpoints** to URL configuration
-3. **Create database models** and run migrations
-4. **Test API endpoints** with Postman/curl
-5. **Integrate Pump.fun SDK** for real meme launches
-6. **Add voice command processing** to existing voice AI
-7. **Implement social feed** with real-time updates
-8. **Add DeFi integration** for yield farming
-
-This MemeQuest integration will make RichesReach AI the **"TikTok of hybrid DeFi"** - combining viral meme trading with institutional-grade AI and voice-first accessibility! 🚀

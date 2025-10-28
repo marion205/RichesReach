@@ -1,783 +1,542 @@
 import React, { useState, useEffect } from 'react';
 import {
-View,
-Text,
-StyleSheet,
-TouchableOpacity,
-ScrollView,
-Image,
-RefreshControl,
-Alert,
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  Image,
+  StyleSheet,
+  Dimensions,
+  RefreshControl,
 } from 'react-native';
-import Icon from 'react-native-vector-icons/Feather';
-import { gql, useQuery, useMutation } from '@apollo/client';
-// Mock service removed - using real API
-// GraphQL Queries
-const GET_SOCIAL_FEED = gql`
-query GetSocialFeed($limit: Int, $offset: Int) {
-socialFeed(limit: $limit, offset: $offset) {
-id
-type
-createdAt
-user {
-id
-name
-profilePic
-experienceLevel
-}
-content
-portfolio {
-id
-name
-totalValue
-totalReturnPercent
-}
-stock {
-symbol
-companyName
-currentPrice
-changePercent
-}
-likesCount
-commentsCount
-isLiked
-comments {
-id
-content
-createdAt
-user {
-id
-name
-profilePic
-}
-}
-}
-}
-`;
-const LIKE_POST = gql`
-mutation LikePost($postId: ID!) {
-likePost(postId: $postId) {
-success
-message
-}
-}
-`;
-const UNLIKE_POST = gql`
-mutation UnlikePost($postId: ID!) {
-unlikePost(postId: $postId) {
-success
-message
-}
-}
-`;
-const ADD_COMMENT = gql`
-mutation AddComment($postId: ID!, $content: String!) {
-addComment(postId: $postId, content: $content) {
-success
-message
-comment {
-id
-content
-createdAt
-user {
-id
-name
-profilePic
-}
-}
-}
-}
-`;
-interface SocialFeedProps {
-onNavigate: (screen: string, params?: any) => void;
-userId?: string; // If provided, shows feed for specific user
-}
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
+
+const { width, height } = Dimensions.get('window');
+
 interface SocialPost {
-id: string;
-type: 'portfolio_update' | 'stock_purchase' | 'stock_sale' | 'achievement' | 'learning_complete' | 'market_comment';
-createdAt: string;
-user: {
-id: string;
-name: string;
-profilePic?: string;
-experienceLevel: string;
-};
-content: string;
-portfolio?: {
-id: string;
-name: string;
-totalValue: number;
-totalReturnPercent: number;
-};
-stock?: {
-symbol: string;
-companyName: string;
-currentPrice: number;
-changePercent: number;
-};
-likesCount: number;
-commentsCount: number;
-isLiked: boolean;
-comments: Array<{
-id: string;
-content: string;
-createdAt: string;
-user: {
-id: string;
-name: string;
-profilePic?: string;
-};
-}>;
+  id: string;
+  user: {
+    username: string;
+    avatar: string;
+    isBipoc: boolean;
+  };
+  content: string;
+  postType: 'meme_launch' | 'raid_join' | 'trade_share' | 'yield_farm' | 'educational' | 'general';
+  memeCoin?: {
+    name: string;
+    symbol: string;
+    price: number;
+    change: number;
+  };
+  raid?: {
+    name: string;
+    target: number;
+    current: number;
+    participants: number;
+  };
+  imageUrl?: string;
+  videoUrl?: string;
+  likes: number;
+  shares: number;
+  comments: number;
+  views: number;
+  isSpotlight: boolean;
+  createdAt: string;
 }
-const SocialFeed: React.FC<SocialFeedProps> = ({ onNavigate, userId }) => {
-const [refreshing, setRefreshing] = useState(false);
-const [showComments, setShowComments] = useState<{ [key: string]: boolean }>({});
-const [posts, setPosts] = useState<any[]>([]);
-const [loading, setLoading] = useState(false);
-const [error, setError] = useState<string | null>(null);
 
-// Mock posts for Following tab - friendly message since everything is brand new
-const MOCK_POSTS = [
-  {
-    id: '1',
-    type: 'portfolio_update',
-    createdAt: new Date().toISOString(),
-    user: { id: '1', name: 'Alex Chen', profilePic: null, experienceLevel: 'advanced' },
-    content: 'Just rebalanced my portfolio after the recent market volatility. Increased exposure to defensive sectors.',
-    portfolio: { id: '1', name: 'Growth Portfolio', totalValue: 125000, totalReturnPercent: 15.2 },
-    stock: { symbol: 'AAPL', companyName: 'Apple Inc.', currentPrice: 175.50, changePercent: 2.1 },
-    likesCount: 12,
-    commentsCount: 3,
-    isLiked: false,
-    comments: []
-  },
-  {
-    id: '2',
-    type: 'stock_analysis',
-    createdAt: new Date(Date.now() - 3600000).toISOString(),
-    user: { id: '2', name: 'Sarah Johnson', profilePic: null, experienceLevel: 'intermediate' },
-    content: 'TSLA showing strong technical patterns. Watching for breakout above $250 resistance level.',
-    portfolio: null,
-    stock: { symbol: 'TSLA', companyName: 'Tesla Inc.', currentPrice: 245.80, changePercent: -1.2 },
-    likesCount: 8,
-    commentsCount: 1,
-    isLiked: true,
-    comments: []
+interface SocialFeedProps {
+  onPostPress?: (post: SocialPost) => void;
+  onUserPress?: (user: SocialPost['user']) => void;
+  onMemePress?: (meme: SocialPost['memeCoin']) => void;
+  onRaidPress?: (raid: SocialPost['raid']) => void;
+}
+
+const SocialFeed: React.FC<SocialFeedProps> = ({
+  onPostPress,
+  onUserPress,
+  onMemePress,
+  onRaidPress,
+}) => {
+  const [posts, setPosts] = useState<SocialPost[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  // Mock data for demonstration
+  const mockPosts: SocialPost[] = [
+    {
+      id: '1',
+      user: {
+        username: '@BIPOCTrader',
+        avatar: 'https://via.placeholder.com/50',
+        isBipoc: true,
+      },
+      content: 'Just launched $COMMUNITY! Moon mission for BIPOC wealth! 🚀',
+      postType: 'meme_launch',
+      memeCoin: {
+        name: 'CommunityCoin',
+        symbol: 'COMMUNITY',
+        price: 0.0001,
+        change: 12.5,
+      },
+      imageUrl: 'https://via.placeholder.com/300x200',
+      likes: 45,
+      shares: 12,
+      comments: 8,
+      views: 234,
+      isSpotlight: true,
+      createdAt: '2m ago',
+    },
+    {
+      id: '2',
+      user: {
+        username: '@YieldFarmer',
+        avatar: 'https://via.placeholder.com/50',
+        isBipoc: false,
+      },
+      content: 'Staking $ETH in AAVE pool for 8.5% APY! Auto-compound enabled 💰',
+      postType: 'yield_farm',
+      likes: 23,
+      shares: 5,
+      comments: 3,
+      views: 156,
+      isSpotlight: false,
+      createdAt: '5m ago',
+    },
+    {
+      id: '3',
+      user: {
+        username: '@RaidLeader',
+        avatar: 'https://via.placeholder.com/50',
+        isBipoc: true,
+      },
+      content: 'Starting a raid on $FROG! Target: $10k. Join the community pump! 🐸',
+      postType: 'raid_join',
+      raid: {
+        name: 'Frog Raid',
+        target: 10000,
+        current: 3500,
+        participants: 23,
+      },
+      likes: 67,
+      shares: 18,
+      comments: 12,
+      views: 445,
+      isSpotlight: true,
+      createdAt: '8m ago',
+    },
+  ];
+
+  useEffect(() => {
+    loadPosts();
+  }, []);
+
+  const loadPosts = async () => {
+    try {
+      setLoading(true);
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      setPosts(mockPosts);
+    } catch (error) {
+      console.error('Error loading posts:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadPosts();
+    setRefreshing(false);
+  };
+
+  const handlePostPress = (post: SocialPost) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onPostPress?.(post);
+  };
+
+  const handleUserPress = (user: SocialPost['user']) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onUserPress?.(user);
+  };
+
+  const handleMemePress = (meme: SocialPost['memeCoin']) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    onMemePress?.(meme);
+  };
+
+  const handleRaidPress = (raid: SocialPost['raid']) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    onRaidPress?.(raid);
+  };
+
+  const renderPost = (post: SocialPost) => (
+    <TouchableOpacity
+      key={post.id}
+      style={styles.postCard}
+      onPress={() => handlePostPress(post)}
+      activeOpacity={0.8}
+    >
+      {/* User Header */}
+      <View style={styles.postHeader}>
+        <TouchableOpacity
+          style={styles.userInfo}
+          onPress={() => handleUserPress(post.user)}
+        >
+          <Image source={{ uri: post.user.avatar }} style={styles.avatar} />
+          <View style={styles.userDetails}>
+            <Text style={styles.username}>{post.user.username}</Text>
+            <Text style={styles.timestamp}>{post.createdAt}</Text>
+          </View>
+        </TouchableOpacity>
+        
+        {post.isSpotlight && (
+          <View style={styles.spotlightBadge}>
+            <Text style={styles.spotlightText}>🌟 BIPOC Spotlight</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Post Content */}
+      <Text style={styles.postContent}>{post.content}</Text>
+
+      {/* Meme Coin Info */}
+      {post.memeCoin && (
+        <TouchableOpacity
+          style={styles.memeInfo}
+          onPress={() => handleMemePress(post.memeCoin!)}
+        >
+          <LinearGradient
+            colors={['#FF6B6B', '#FF8E8E']}
+            style={styles.memeGradient}
+          >
+            <Text style={styles.memeSymbol}>${post.memeCoin.symbol}</Text>
+            <Text style={styles.memePrice}>${post.memeCoin.price.toFixed(4)}</Text>
+            <Text style={[
+              styles.memeChange,
+              { color: post.memeCoin.change >= 0 ? '#4ECDC4' : '#FF6B6B' }
+            ]}>
+              {post.memeCoin.change >= 0 ? '+' : ''}{post.memeCoin.change}%
+            </Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      )}
+
+      {/* Raid Info */}
+      {post.raid && (
+        <TouchableOpacity
+          style={styles.raidInfo}
+          onPress={() => handleRaidPress(post.raid!)}
+        >
+          <LinearGradient
+            colors={['#4ECDC4', '#44A08D']}
+            style={styles.raidGradient}
+          >
+            <Text style={styles.raidName}>{post.raid.name}</Text>
+            <View style={styles.raidProgress}>
+              <View style={styles.raidProgressBar}>
+                <View style={[
+                  styles.raidProgressFill,
+                  { width: `${(post.raid.current / post.raid.target) * 100}%` }
+                ]} />
+              </View>
+              <Text style={styles.raidProgressText}>
+                ${post.raid.current.toLocaleString()} / ${post.raid.target.toLocaleString()}
+              </Text>
+            </View>
+            <Text style={styles.raidParticipants}>
+              {post.raid.participants} participants
+            </Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      )}
+
+      {/* Post Image */}
+      {post.imageUrl && (
+        <Image source={{ uri: post.imageUrl }} style={styles.postImage} />
+      )}
+
+      {/* Engagement Stats */}
+      <View style={styles.engagementStats}>
+        <Text style={styles.statsText}>
+          👀 {post.views} views
+        </Text>
+        <Text style={styles.statsText}>
+          ❤️ {post.likes} likes
+        </Text>
+        <Text style={styles.statsText}>
+          🔄 {post.shares} shares
+        </Text>
+        <Text style={styles.statsText}>
+          💬 {post.comments} comments
+        </Text>
+      </View>
+
+      {/* Action Buttons */}
+      <View style={styles.actionButtons}>
+        <TouchableOpacity style={styles.actionButton}>
+          <Text style={styles.actionButtonText}>❤️ Like</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.actionButton}>
+          <Text style={styles.actionButtonText}>🔄 Share</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.actionButton}>
+          <Text style={styles.actionButtonText}>💬 Comment</Text>
+        </TouchableOpacity>
+        {post.memeCoin && (
+          <TouchableOpacity
+            style={[styles.actionButton, styles.primaryAction]}
+            onPress={() => handleMemePress(post.memeCoin!)}
+          >
+            <Text style={styles.primaryActionText}>🚀 Trade</Text>
+          </TouchableOpacity>
+        )}
+        {post.raid && (
+          <TouchableOpacity
+            style={[styles.actionButton, styles.primaryAction]}
+            onPress={() => handleRaidPress(post.raid!)}
+          >
+            <Text style={styles.primaryActionText}>⚔️ Join Raid</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </TouchableOpacity>
+  );
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.loadingText}>Loading social feed...</Text>
+      </View>
+    );
   }
-];
 
-// Load posts from mock data
-const loadPosts = () => {
-setLoading(true);
-setError(null);
-try {
-// For now, show friendly message since everything is brand new
-setPosts([]);
-setError('friendly_message'); // Use this to show friendly message instead of error
-} catch (err) {
-setError('Failed to load posts');
-console.error('Error loading posts:', err);
-} finally {
-setLoading(false);
-}
+  return (
+    <ScrollView
+      style={styles.container}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={styles.feedHeader}>
+        <Text style={styles.feedTitle}>🔥 Social Trading Feed</Text>
+        <Text style={styles.feedSubtitle}>Real-time meme launches & raids</Text>
+      </View>
+
+      {posts.map(renderPost)}
+
+      <View style={styles.feedFooter}>
+        <Text style={styles.footerText}>
+          Pull to refresh for new posts! 🔄
+        </Text>
+      </View>
+    </ScrollView>
+  );
 };
-const handleRefresh = async () => {
-setRefreshing(true);
-try {
-loadPosts();
-} catch (error) {
-console.error('Error refreshing feed:', error);
-} finally {
-setRefreshing(false);
-}
-};
-// Load posts when component mounts
-useEffect(() => {
-loadPosts();
-}, []);
-const handleLikeToggle = async (postId: string, isLiked: boolean) => {
-try {
-// For now, just update the local state since we're using mock data
-setPosts(prevPosts => 
-prevPosts.map(post => 
-post.id === postId 
-? { 
-...post, 
-isLiked: !isLiked, 
-likesCount: isLiked ? post.likesCount - 1 : post.likesCount + 1 
-}
-: post
-)
-);
-} catch (error) {
-console.error('Error toggling like:', error);
-Alert.alert('Error', 'Failed to update like status. Please try again.');
-}
-};
-const handleAddComment = async (postId: string, content: string) => {
-try {
-// For now, just update the local state since we're using mock data
-setPosts(prevPosts => 
-prevPosts.map(post => 
-post.id === postId 
-? { 
-...post, 
-commentsCount: post.commentsCount + 1,
-comments: [
-...post.comments,
-{
-id: `comment-${Date.now()}`,
-content,
-createdAt: new Date().toISOString(),
-user: { name: 'You', profilePic: null }
-}
-]
-}
-: post
-)
-);
-} catch (error) {
-console.error('Error adding comment:', error);
-Alert.alert('Error', 'Failed to add comment. Please try again.');
-}
-};
-const toggleComments = (postId: string) => {
-setShowComments(prev => ({
-...prev,
-[postId]: !prev[postId],
-}));
-};
-const getPostIcon = (type: string) => {
-switch (type) {
-case 'portfolio_update': return 'pie-chart';
-case 'stock_purchase': return 'trending-up';
-case 'stock_sale': return 'trending-down';
-case 'achievement': return 'award';
-case 'learning_complete': return 'book-open';
-case 'market_comment': return 'message-circle';
-default: return 'activity';
-}
-};
-const getPostColor = (type: string) => {
-switch (type) {
-case 'portfolio_update': return '#007AFF';
-case 'stock_purchase': return '#34C759';
-case 'stock_sale': return '#FF3B30';
-case 'achievement': return '#FFD700';
-case 'learning_complete': return '#AF52DE';
-case 'market_comment': return '#FF9500';
-default: return '#8E8E93';
-}
-};
-const formatTimeAgo = (dateString: string) => {
-const date = new Date(dateString);
-const now = new Date();
-const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-if (diffInSeconds < 60) return 'Just now';
-if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
-if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
-if (diffInSeconds < 2592000) return `${Math.floor(diffInSeconds / 86400)}d ago`;
-return date.toLocaleDateString();
-};
-const renderPost = (post: SocialPost) => (
-<View key={post.id} style={styles.postCard}>
-{/* Post Header */}
-<View style={styles.postHeader}>
-<TouchableOpacity
-style={styles.userInfo}
-onPress={() => onNavigate('user-profile', { userId: post.user.id })}
->
-{post.user.profilePic ? (
-<Image source={{ uri: post.user.profilePic }} style={styles.userAvatar} />
-) : (
-<View style={styles.userAvatarPlaceholder}>
-<Text style={styles.userAvatarText}>{post.user.name.charAt(0).toUpperCase()}</Text>
-</View>
-)}
-<View style={styles.userDetails}>
-<Text style={styles.userName}>{post.user.name}</Text>
-<Text style={styles.userLevel}>
-{post.user.experienceLevel.charAt(0).toUpperCase()}{post.user.experienceLevel.slice(1)} Investor
-</Text>
-</View>
-</TouchableOpacity>
-<View style={styles.postMeta}>
-<Icon name={getPostIcon(post.type)} size={16} color={getPostColor(post.type)} />
-<Text style={styles.postTime}>{formatTimeAgo(post.createdAt)}</Text>
-</View>
-</View>
-{/* Post Content */}
-<View style={styles.postContent}>
-<Text style={styles.postText}>{post.content}</Text>
-{/* Portfolio Info */}
-{post.portfolio && (
-<TouchableOpacity
-style={styles.portfolioInfo}
-onPress={() => onNavigate('portfolio-detail', { portfolioId: post.portfolio?.id })}
->
-<View style={styles.portfolioHeader}>
-<Text style={styles.portfolioName}>{post.portfolio.name}</Text>
-<View style={[
-styles.returnBadge,
-{ backgroundColor: post.portfolio.totalReturnPercent >= 0 ? '#E8F5E8' : '#FFE8E8' }
-]}>
-<Text style={[
-styles.returnText,
-{ color: post.portfolio.totalReturnPercent >= 0 ? '#34C759' : '#FF3B30' }
-]}>
-{post.portfolio.totalReturnPercent >= 0 ? '+' : ''}{post.portfolio.totalReturnPercent.toFixed(2)}%
-</Text>
-</View>
-</View>
-<Text style={styles.portfolioValue}>
-${post.portfolio.totalValue.toLocaleString()}
-</Text>
-</TouchableOpacity>
-)}
-{/* Stock Info */}
-{post.stock && (
-<TouchableOpacity
-style={styles.stockInfo}
-onPress={() => onNavigate('stock-detail', { symbol: post.stock?.symbol })}
->
-<View style={styles.stockHeader}>
-<Text style={styles.stockSymbol}>{post.stock.symbol}</Text>
-<Text style={styles.stockName}>{post.stock.companyName}</Text>
-</View>
-<View style={styles.stockPrice}>
-<Text style={styles.stockPriceValue}>${post.stock.currentPrice.toFixed(2)}</Text>
-<Text style={[
-styles.stockChange,
-{ color: post.stock.changePercent >= 0 ? '#34C759' : '#FF3B30' }
-]}>
-{post.stock.changePercent >= 0 ? '+' : ''}{post.stock.changePercent.toFixed(2)}%
-</Text>
-</View>
-</TouchableOpacity>
-)}
-</View>
-{/* Post Actions */}
-<View style={styles.postActions}>
-<TouchableOpacity
-style={styles.actionButton}
-onPress={() => handleLikeToggle(post.id, post.isLiked)}
->
-<Icon
-name={post.isLiked ? 'heart' : 'heart'}
-size={18}
-color={post.isLiked ? '#FF3B30' : '#8E8E93'}
-/>
-<Text style={[styles.actionText, post.isLiked && styles.actionTextActive]}>
-{post.likesCount}
-</Text>
-</TouchableOpacity>
-<TouchableOpacity
-style={styles.actionButton}
-onPress={() => toggleComments(post.id)}
->
-<Icon name="message-circle" size={18} color="#8E8E93" />
-<Text style={styles.actionText}>{post.commentsCount}</Text>
-</TouchableOpacity>
-<TouchableOpacity
-style={styles.actionButton}
-onPress={() => onNavigate('share-post', { postId: post.id })}
->
-<Icon name="share" size={18} color="#8E8E93" />
-<Text style={styles.actionText}>Share</Text>
-</TouchableOpacity>
-</View>
-{/* Comments Section */}
-{showComments[post.id] && (
-<View style={styles.commentsSection}>
-{post.comments && post.comments.map((comment) => (
-<View key={comment.id} style={styles.comment}>
-<View style={styles.commentHeader}>
-{comment.user.profilePic ? (
-<Image source={{ uri: comment.user.profilePic }} style={styles.commentAvatar} />
-) : (
-<View style={styles.commentAvatarPlaceholder}>
-<Text style={styles.commentAvatarText}>{comment.user.name.charAt(0).toUpperCase()}</Text>
-</View>
-)}
-<View style={styles.commentDetails}>
-<Text style={styles.commentUserName}>{comment.user.name}</Text>
-<Text style={styles.commentTime}>{formatTimeAgo(comment.createdAt)}</Text>
-</View>
-</View>
-<Text style={styles.commentText}>{comment.content}</Text>
-</View>
-))}
-<TouchableOpacity
-style={styles.addCommentButton}
-onPress={() => onNavigate('add-comment', { postId: post.id })}
->
-<Icon name="plus" size={16} color="#007AFF" />
-<Text style={styles.addCommentText}>Add a comment</Text>
-</TouchableOpacity>
-</View>
-)}
-</View>
-);
-if (loading) {
-return (
-<View style={styles.loadingContainer}>
-<Text style={styles.loadingText}>Loading social feed...</Text>
-</View>
-);
-}
-if (error) {
-return (
-<View style={styles.errorContainer}>
-<Icon name="users" size={48} color="#8E8E93" />
-<Text style={styles.errorText}>Welcome to the community!</Text>
-<Text style={styles.errorSubText}>
-  You're one of the first members here. Follow other investors to see their portfolio updates and market insights.
-</Text>
-<TouchableOpacity style={styles.retryButton} onPress={handleRefresh}>
-<Text style={styles.retryButtonText}>Refresh</Text>
-</TouchableOpacity>
-</View>
-);
-}
-return (
-<ScrollView
-style={styles.container}
-refreshControl={
-<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-}
-showsVerticalScrollIndicator={false}
->
-{!posts || posts.length === 0 ? (
-<View style={styles.emptyContainer}>
-<Icon name="users" size={48} color="#8E8E93" />
-<Text style={styles.emptyTitle}>No Activity Yet</Text>
-<Text style={styles.emptyText}>
-Follow other investors to see their portfolio updates and market insights
-</Text>
-<TouchableOpacity
-style={styles.exploreButton}
-onPress={() => onNavigate('discover-users')}
->
-<Text style={styles.exploreButtonText}>Discover Investors</Text>
-</TouchableOpacity>
-</View>
-) : (
-posts && Array.isArray(posts) ? posts.map(renderPost) : null
-)}
-</ScrollView>
-);
-};
+
 const styles = StyleSheet.create({
-container: {
-flex: 1,
-backgroundColor: '#F2F2F7',
-},
-loadingContainer: {
-flex: 1,
-justifyContent: 'center',
-alignItems: 'center',
-padding: 20,
-},
-loadingText: {
-fontSize: 16,
-color: '#8E8E93',
-},
-errorContainer: {
-flex: 1,
-justifyContent: 'center',
-alignItems: 'center',
-padding: 20,
-},
-errorText: {
-fontSize: 18,
-fontWeight: '600',
-color: '#1C1C1E',
-marginTop: 12,
-marginBottom: 8,
-textAlign: 'center',
-},
-errorSubText: {
-fontSize: 14,
-color: '#8E8E93',
-marginBottom: 20,
-textAlign: 'center',
-lineHeight: 20,
-},
-retryButton: {
-backgroundColor: '#007AFF',
-paddingVertical: 12,
-paddingHorizontal: 24,
-borderRadius: 20,
-},
-retryButtonText: {
-fontSize: 16,
-color: '#FFFFFF',
-fontWeight: '600',
-},
-emptyContainer: {
-flex: 1,
-justifyContent: 'center',
-alignItems: 'center',
-padding: 40,
-},
-emptyTitle: {
-fontSize: 20,
-fontWeight: 'bold',
-color: '#1C1C1E',
-marginTop: 16,
-marginBottom: 8,
-},
-emptyText: {
-fontSize: 16,
-color: '#8E8E93',
-textAlign: 'center',
-lineHeight: 22,
-marginBottom: 24,
-},
-exploreButton: {
-backgroundColor: '#007AFF',
-paddingVertical: 12,
-paddingHorizontal: 24,
-borderRadius: 20,
-},
-exploreButtonText: {
-fontSize: 16,
-color: '#FFFFFF',
-fontWeight: '600',
-},
-// Post Card
-postCard: {
-backgroundColor: '#FFFFFF',
-marginHorizontal: 16,
-marginVertical: 8,
-borderRadius: 16,
-padding: 16,
-shadowColor: '#000',
-shadowOffset: { width: 0, height: 2 },
-shadowOpacity: 0.1,
-shadowRadius: 8,
-elevation: 5,
-borderWidth: 1,
-borderColor: '#E5E5EA',
-},
-// Post Header
-postHeader: {
-flexDirection: 'row',
-justifyContent: 'space-between',
-alignItems: 'center',
-marginBottom: 12,
-},
-userInfo: {
-flexDirection: 'row',
-alignItems: 'center',
-flex: 1,
-},
-userAvatar: {
-width: 40,
-height: 40,
-borderRadius: 20,
-marginRight: 12,
-},
-userAvatarPlaceholder: {
-width: 40,
-height: 40,
-borderRadius: 20,
-backgroundColor: '#007AFF',
-justifyContent: 'center',
-alignItems: 'center',
-marginRight: 12,
-},
-userAvatarText: {
-fontSize: 16,
-fontWeight: 'bold',
-color: '#FFFFFF',
-},
-userDetails: {
-flex: 1,
-},
-userName: {
-fontSize: 16,
-fontWeight: '600',
-color: '#1C1C1E',
-marginBottom: 2,
-},
-userLevel: {
-fontSize: 12,
-color: '#8E8E93',
-},
-postMeta: {
-flexDirection: 'row',
-alignItems: 'center',
-},
-postTime: {
-fontSize: 12,
-color: '#8E8E93',
-marginLeft: 6,
-},
-// Post Content
-postContent: {
-marginBottom: 16,
-},
-postText: {
-fontSize: 16,
-color: '#1C1C1E',
-lineHeight: 22,
-marginBottom: 12,
-},
-// Portfolio Info
-portfolioInfo: {
-backgroundColor: '#F2F2F7',
-borderRadius: 12,
-padding: 12,
-marginBottom: 8,
-},
-portfolioHeader: {
-flexDirection: 'row',
-justifyContent: 'space-between',
-alignItems: 'center',
-marginBottom: 8,
-},
-portfolioName: {
-fontSize: 14,
-fontWeight: '600',
-color: '#1C1C1E',
-},
-returnBadge: {
-paddingHorizontal: 8,
-paddingVertical: 4,
-borderRadius: 12,
-},
-returnText: {
-fontSize: 12,
-fontWeight: '600',
-},
-portfolioValue: {
-fontSize: 16,
-fontWeight: 'bold',
-color: '#1C1C1E',
-},
-// Stock Info
-stockInfo: {
-backgroundColor: '#F2F2F7',
-borderRadius: 12,
-padding: 12,
-marginBottom: 8,
-},
-stockHeader: {
-marginBottom: 8,
-},
-stockSymbol: {
-fontSize: 16,
-fontWeight: 'bold',
-color: '#1C1C1E',
-},
-stockName: {
-fontSize: 12,
-color: '#8E8E93',
-},
-stockPrice: {
-flexDirection: 'row',
-justifyContent: 'space-between',
-alignItems: 'center',
-},
-stockPriceValue: {
-fontSize: 16,
-fontWeight: 'bold',
-color: '#1C1C1E',
-},
-stockChange: {
-fontSize: 14,
-fontWeight: '600',
-},
-// Post Actions
-postActions: {
-flexDirection: 'row',
-justifyContent: 'space-around',
-paddingTop: 12,
-borderTopWidth: 1,
-borderTopColor: '#E5E5EA',
-},
-actionButton: {
-flexDirection: 'row',
-alignItems: 'center',
-paddingVertical: 8,
-paddingHorizontal: 12,
-},
-actionText: {
-fontSize: 14,
-color: '#8E8E93',
-marginLeft: 6,
-},
-actionTextActive: {
-color: '#FF3B30',
-},
-// Comments Section
-commentsSection: {
-marginTop: 16,
-paddingTop: 16,
-borderTopWidth: 1,
-borderTopColor: '#E5E5EA',
-},
-comment: {
-marginBottom: 12,
-},
-commentHeader: {
-flexDirection: 'row',
-alignItems: 'center',
-marginBottom: 6,
-},
-commentAvatar: {
-width: 24,
-height: 24,
-borderRadius: 12,
-marginRight: 8,
-},
-commentAvatarPlaceholder: {
-width: 24,
-height: 24,
-borderRadius: 12,
-backgroundColor: '#8E8E93',
-justifyContent: 'center',
-alignItems: 'center',
-marginRight: 8,
-},
-commentAvatarText: {
-fontSize: 10,
-fontWeight: 'bold',
-color: '#FFFFFF',
-},
-commentDetails: {
-flex: 1,
-},
-commentUserName: {
-fontSize: 12,
-fontWeight: '600',
-color: '#1C1C1E',
-},
-commentTime: {
-fontSize: 10,
-color: '#8E8E93',
-},
-commentText: {
-fontSize: 14,
-color: '#1C1C1E',
-lineHeight: 20,
-marginLeft: 32,
-},
-addCommentButton: {
-flexDirection: 'row',
-alignItems: 'center',
-paddingVertical: 8,
-paddingHorizontal: 12,
-backgroundColor: '#F2F2F7',
-borderRadius: 20,
-alignSelf: 'flex-start',
-},
-addCommentText: {
-fontSize: 14,
-color: '#007AFF',
-marginLeft: 6,
-fontWeight: '500',
-},
+  container: {
+    flex: 1,
+    backgroundColor: '#F8F9FA',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F8F9FA',
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#666',
+  },
+  feedHeader: {
+    padding: 20,
+    backgroundColor: '#FFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  feedTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+    textAlign: 'center',
+  },
+  feedSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  postCard: {
+    backgroundColor: '#FFF',
+    marginHorizontal: 16,
+    marginVertical: 8,
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  postHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  userInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+  },
+  userDetails: {
+    flex: 1,
+  },
+  username: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  timestamp: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+  },
+  spotlightBadge: {
+    backgroundColor: '#FFD700',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  spotlightText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#333',
+  },
+  postContent: {
+    fontSize: 16,
+    color: '#333',
+    lineHeight: 22,
+    marginBottom: 12,
+  },
+  memeInfo: {
+    marginBottom: 12,
+  },
+  memeGradient: {
+    padding: 12,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  memeSymbol: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FFF',
+  },
+  memePrice: {
+    fontSize: 16,
+    color: '#FFF',
+  },
+  memeChange: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  raidInfo: {
+    marginBottom: 12,
+  },
+  raidGradient: {
+    padding: 12,
+    borderRadius: 12,
+  },
+  raidName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FFF',
+    marginBottom: 8,
+  },
+  raidProgress: {
+    marginBottom: 8,
+  },
+  raidProgressBar: {
+    height: 8,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 4,
+  },
+  raidProgressFill: {
+    height: '100%',
+    backgroundColor: '#FFF',
+    borderRadius: 4,
+  },
+  raidProgressText: {
+    fontSize: 12,
+    color: '#FFF',
+    textAlign: 'center',
+  },
+  raidParticipants: {
+    fontSize: 12,
+    color: '#FFF',
+    textAlign: 'center',
+  },
+  postImage: {
+    width: '100%',
+    height: 200,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  engagementStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 12,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+  },
+  statsText: {
+    fontSize: 12,
+    color: '#666',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  actionButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#F0F0F0',
+  },
+  actionButtonText: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+  },
+  primaryAction: {
+    backgroundColor: '#4ECDC4',
+  },
+  primaryActionText: {
+    color: '#FFF',
+    fontWeight: '600',
+  },
+  feedFooter: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  footerText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+  },
 });
+
 export default SocialFeed;

@@ -1,40 +1,67 @@
+# WebSocket Service for Real-Time Social Feed
+
+## 🔌 **REAL-TIME WEBSOCKET SERVICE**
+
+### **Core Features:**
+- **Real-Time Updates**: Live social feed updates
+- **Engagement Tracking**: Likes, shares, comments
+- **Meme Launches**: Live meme launch notifications
+- **Raid Coordination**: Real-time raid updates
+- **Yield Farming**: Live yield farming updates
+- **BIPOC Spotlight**: Community creator highlights
+
+---
+
+## 🛠️ **WEBSOCKET SERVICE IMPLEMENTATION**
+
+### **WebSocket Consumer**
+```python
+# backend/backend/core/websocket_service.py
+"""
+Real-Time WebSocket Service for Social Feed
+==========================================
+
+This service provides real-time updates for:
+1. New social posts
+2. Engagement updates (likes, shares, comments)
+3. Meme launches and updates
+4. Raid coordination
+5. Yield farming updates
+6. BIPOC spotlight features
+"""
+
 import asyncio
 import json
 import logging
-from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional, Set
+from typing import Dict, List, Any, Optional
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.contrib.auth.models import User
-from .real_market_data_service import real_market_data_service
-from .advanced_analytics_service import advanced_analytics_service
-from .custom_benchmark_service import custom_benchmark_service
-from .smart_alerts_service import smart_alerts_service
+from django.core.cache import cache
+from datetime import datetime, timezone
+import uuid
 
 logger = logging.getLogger(__name__)
 
-class RealTimeDataConsumer(AsyncWebsocketConsumer):
-    """WebSocket consumer for real-time market data and portfolio updates"""
+class SocialFeedConsumer(AsyncWebsocketConsumer):
+    """
+    WebSocket consumer for real-time social feed updates.
     
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.user = None
-        self.subscribed_symbols = set()
-        self.subscribed_portfolios = set()
-        self.subscribed_benchmarks = set()
-        self.update_interval = 5  # seconds
-        self.is_running = False
-        self.update_task = None
-        self.alerts_service = smart_alerts_service
+    Handles:
+    - New post notifications
+    - Engagement updates
+    - Meme launch events
+    - Raid coordination
+    - Yield farming updates
+    - BIPOC spotlight features
+    """
     
     async def connect(self):
-        """Handle WebSocket connection"""
-        self.user = self.scope.get("user")
-        if not self.user or not self.user.is_authenticated:
-            await self.close(code=4001)  # Unauthorized
-            return
-        
-        self.room_group_name = f"user_{self.user.id}_realtime"
+        """Connect to WebSocket and join social feed group."""
+        self.room_name = 'social_feed'
+        self.room_group_name = f'feed_{self.room_name}'
+        self.user_id = None
+        self.subscribed_feeds = set()
         
         # Join room group
         await self.channel_layer.group_add(
@@ -43,541 +70,631 @@ class RealTimeDataConsumer(AsyncWebsocketConsumer):
         )
         
         await self.accept()
-        logger.info(f"WebSocket connected for user {self.user.id}")
         
-        # Start update task
-        self.is_running = True
-        self.update_task = asyncio.create_task(self.periodic_update())
+        # Send connection confirmation
+        await self.send(text_data=json.dumps({
+            'type': 'connection_established',
+            'message': 'Connected to social feed',
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }))
+        
+        logger.info(f'WebSocket connected: {self.channel_name}')
     
     async def disconnect(self, close_code):
-        """Handle WebSocket disconnection"""
-        self.is_running = False
-        if self.update_task:
-            self.update_task.cancel()
-        
-        # Leave room group
+        """Disconnect from WebSocket and leave all groups."""
+        # Leave main room group
         await self.channel_layer.group_discard(
             self.room_group_name,
             self.channel_name
         )
         
-        logger.info(f"WebSocket disconnected for user {self.user.id}")
+        # Leave all subscribed feed groups
+        for feed_type in self.subscribed_feeds:
+            await self.channel_layer.group_discard(
+                f'feed_{feed_type}',
+                self.channel_name
+            )
+        
+        logger.info(f'WebSocket disconnected: {self.channel_name}')
     
     async def receive(self, text_data):
-        """Handle incoming WebSocket messages"""
+        """Handle incoming WebSocket messages."""
         try:
             data = json.loads(text_data)
             message_type = data.get('type')
             
-            if message_type == 'subscribe_symbols':
-                await self.handle_subscribe_symbols(data.get('symbols', []))
-            elif message_type == 'subscribe_portfolio':
-                await self.handle_subscribe_portfolio(data.get('portfolio_id'))
-            elif message_type == 'subscribe_benchmark':
-                await self.handle_subscribe_benchmark(data.get('benchmark_id'))
-            elif message_type == 'unsubscribe_symbols':
-                await self.handle_unsubscribe_symbols(data.get('symbols', []))
-            elif message_type == 'unsubscribe_portfolio':
-                await self.handle_unsubscribe_portfolio(data.get('portfolio_id'))
-            elif message_type == 'unsubscribe_benchmark':
-                await self.handle_unsubscribe_benchmark(data.get('benchmark_id'))
-            elif message_type == 'get_analytics':
-                await self.handle_get_analytics(data.get('portfolio_data'), data.get('benchmark_data'))
+            if message_type == 'ping':
+                await self.handle_ping(data)
+            elif message_type == 'subscribe':
+                await self.handle_subscription(data)
+            elif message_type == 'unsubscribe':
+                await self.handle_unsubscription(data)
+            elif message_type == 'interaction':
+                await self.handle_interaction(data)
+            elif message_type == 'authenticate':
+                await self.handle_authentication(data)
+            elif message_type == 'get_feed':
+                await self.handle_get_feed(data)
             else:
-                await self.send(text_data=json.dumps({
-                    'type': 'error',
-                    'message': f'Unknown message type: {message_type}'
-                }))
+                logger.warning(f'Unknown message type: {message_type}')
                 
         except json.JSONDecodeError:
+            logger.error('Invalid JSON received')
             await self.send(text_data=json.dumps({
                 'type': 'error',
-                'message': 'Invalid JSON'
+                'message': 'Invalid JSON format'
             }))
         except Exception as e:
-            logger.error(f"Error handling WebSocket message: {e}")
+            logger.error(f'Error processing message: {str(e)}')
             await self.send(text_data=json.dumps({
                 'type': 'error',
                 'message': 'Internal server error'
             }))
     
-    async def handle_subscribe_symbols(self, symbols: List[str]):
-        """Subscribe to real-time updates for specific symbols"""
-        self.subscribed_symbols.update(symbols)
+    async def handle_ping(self, data):
+        """Handle ping messages for connection health check."""
         await self.send(text_data=json.dumps({
-            'type': 'subscription_confirmed',
-            'subscribed_symbols': list(self.subscribed_symbols)
+            'type': 'pong',
+            'timestamp': data.get('timestamp'),
+            'server_time': datetime.now(timezone.utc).isoformat()
         }))
-        logger.info(f"User {self.user.id} subscribed to symbols: {symbols}")
-    
-    async def handle_subscribe_portfolio(self, portfolio_id: str):
-        """Subscribe to real-time updates for a portfolio"""
-        self.subscribed_portfolios.add(portfolio_id)
-        await self.send(text_data=json.dumps({
-            'type': 'subscription_confirmed',
-            'subscribed_portfolios': list(self.subscribed_portfolios)
-        }))
-        logger.info(f"User {self.user.id} subscribed to portfolio: {portfolio_id}")
-    
-    async def handle_subscribe_benchmark(self, benchmark_id: str):
-        """Subscribe to real-time updates for a benchmark"""
-        self.subscribed_benchmarks.add(benchmark_id)
-        await self.send(text_data=json.dumps({
-            'type': 'subscription_confirmed',
-            'subscribed_benchmarks': list(self.subscribed_benchmarks)
-        }))
-        logger.info(f"User {self.user.id} subscribed to benchmark: {benchmark_id}")
-    
-    async def handle_unsubscribe_symbols(self, symbols: List[str]):
-        """Unsubscribe from real-time updates for specific symbols"""
-        self.subscribed_symbols.difference_update(symbols)
-        await self.send(text_data=json.dumps({
-            'type': 'unsubscription_confirmed',
-            'subscribed_symbols': list(self.subscribed_symbols)
-        }))
-    
-    async def handle_unsubscribe_portfolio(self, portfolio_id: str):
-        """Unsubscribe from real-time updates for a portfolio"""
-        self.subscribed_portfolios.discard(portfolio_id)
-        await self.send(text_data=json.dumps({
-            'type': 'unsubscription_confirmed',
-            'subscribed_portfolios': list(self.subscribed_portfolios)
-        }))
-    
-    async def handle_unsubscribe_benchmark(self, benchmark_id: str):
-        """Unsubscribe from real-time updates for a benchmark"""
-        self.subscribed_benchmarks.discard(benchmark_id)
-        await self.send(text_data=json.dumps({
-            'type': 'unsubscription_confirmed',
-            'subscribed_benchmarks': list(self.subscribed_benchmarks)
-        }))
-    
-    async def handle_get_analytics(self, portfolio_data: Dict, benchmark_data: Dict):
-        """Calculate and return advanced analytics"""
-        try:
-            analytics = await self.calculate_analytics_async(portfolio_data, benchmark_data)
-            await self.send(text_data=json.dumps({
-                'type': 'analytics_update',
-                'analytics': analytics,
-                'timestamp': datetime.now().isoformat()
-            }))
-        except Exception as e:
-            logger.error(f"Error calculating analytics: {e}")
-            await self.send(text_data=json.dumps({
-                'type': 'error',
-                'message': 'Failed to calculate analytics'
-            }))
-    
-    async def periodic_update(self):
-        """Periodic update task for real-time data"""
-        while self.is_running:
-            try:
-                await asyncio.sleep(self.update_interval)
-                
-                if not self.is_running:
-                    break
-                
-                # Update subscribed symbols
-                if self.subscribed_symbols:
-                    await self.update_symbol_data()
-                
-                # Update subscribed portfolios
-                if self.subscribed_portfolios:
-                    await self.update_portfolio_data()
-                
-                # Update subscribed benchmarks
-                if self.subscribed_benchmarks:
-                    await self.update_benchmark_data()
-                
-                # Check for new smart alerts
-                await self.check_smart_alerts()
-                
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                logger.error(f"Error in periodic update: {e}")
-                await asyncio.sleep(1)  # Brief pause before retry
-    
-    async def update_symbol_data(self):
-        """Update real-time data for subscribed symbols"""
-        try:
-            symbol_data = {}
-            for symbol in self.subscribed_symbols:
-                # Get latest data (1D timeframe for real-time updates)
-                data = await self.get_symbol_data_async(symbol, '1D')
-                if data:
-                    symbol_data[symbol] = {
-                        'current_price': data.get('endValue', 0),
-                        'change': data.get('totalReturn', 0),
-                        'change_percent': data.get('totalReturnPercent', 0),
-                        'volume': data.get('dataPoints', [{}])[-1].get('volume', 0) if data.get('dataPoints') else 0,
-                        'timestamp': datetime.now().isoformat()
-                    }
-            
-            if symbol_data:
-                await self.send(text_data=json.dumps({
-                    'type': 'symbol_update',
-                    'data': symbol_data,
-                    'timestamp': datetime.now().isoformat()
-                }))
-                
-        except Exception as e:
-            logger.error(f"Error updating symbol data: {e}")
-    
-    async def update_portfolio_data(self):
-        """Update real-time data for subscribed portfolios"""
-        try:
-            portfolio_data = {}
-            for portfolio_id in self.subscribed_portfolios:
-                # Get portfolio performance data
-                data = await self.get_portfolio_data_async(portfolio_id)
-                if data:
-                    portfolio_data[portfolio_id] = {
-                        'total_value': data.get('totalValue', 0),
-                        'total_return': data.get('totalReturn', 0),
-                        'total_return_percent': data.get('totalReturnPercent', 0),
-                        'day_change': data.get('dayChange', 0),
-                        'day_change_percent': data.get('dayChangePercent', 0),
-                        'timestamp': datetime.now().isoformat()
-                    }
-            
-            if portfolio_data:
-                await self.send(text_data=json.dumps({
-                    'type': 'portfolio_update',
-                    'data': portfolio_data,
-                    'timestamp': datetime.now().isoformat()
-                }))
-                
-        except Exception as e:
-            logger.error(f"Error updating portfolio data: {e}")
-    
-    async def update_benchmark_data(self):
-        """Update real-time data for subscribed benchmarks"""
-        try:
-            benchmark_data = {}
-            for benchmark_id in self.subscribed_benchmarks:
-                # Get benchmark performance data
-                data = await self.get_benchmark_data_async(benchmark_id)
-                if data:
-                    benchmark_data[benchmark_id] = {
-                        'current_value': data.get('endValue', 0),
-                        'total_return': data.get('totalReturn', 0),
-                        'total_return_percent': data.get('totalReturnPercent', 0),
-                        'volatility': data.get('volatility', 0),
-                        'sharpe_ratio': data.get('sharpeRatio', 0),
-                        'timestamp': datetime.now().isoformat()
-                    }
-            
-            if benchmark_data:
-                await self.send(text_data=json.dumps({
-                    'type': 'benchmark_update',
-                    'data': benchmark_data,
-                    'timestamp': datetime.now().isoformat()
-                }))
-                
-        except Exception as e:
-            logger.error(f"Error updating benchmark data: {e}")
-    
-    @database_sync_to_async
-    def get_symbol_data_async(self, symbol: str, timeframe: str) -> Optional[Dict]:
-        """Get symbol data asynchronously"""
-        try:
-            return real_market_data_service.get_benchmark_data(symbol, timeframe)
-        except Exception as e:
-            logger.error(f"Error getting symbol data for {symbol}: {e}")
-            return None
-    
-    @database_sync_to_async
-    def get_portfolio_data_async(self, portfolio_id: str) -> Optional[Dict]:
-        """Get portfolio data asynchronously"""
-        try:
-            # This would integrate with your portfolio service
-            # For now, return mock data
-            return {
-                'totalValue': 100000,
-                'totalReturn': 5000,
-                'totalReturnPercent': 5.0,
-                'dayChange': 250,
-                'dayChangePercent': 0.25
-            }
-        except Exception as e:
-            logger.error(f"Error getting portfolio data for {portfolio_id}: {e}")
-            return None
-    
-    @database_sync_to_async
-    def get_benchmark_data_async(self, benchmark_id: str) -> Optional[Dict]:
-        """Get benchmark data asynchronously"""
-        try:
-            if benchmark_id.startswith('CUSTOM_'):
-                custom_id = benchmark_id.replace('CUSTOM_', '')
-                return custom_benchmark_service.get_custom_benchmark_data(int(custom_id), self.user, '1D')
-            else:
-                return real_market_data_service.get_benchmark_data(benchmark_id, '1D')
-        except Exception as e:
-            logger.error(f"Error getting benchmark data for {benchmark_id}: {e}")
-            return None
-    
-    @database_sync_to_async
-    def calculate_analytics_async(self, portfolio_data: Dict, benchmark_data: Dict) -> Dict:
-        """Calculate analytics asynchronously"""
-        try:
-            return advanced_analytics_service.calculate_comprehensive_metrics(portfolio_data, benchmark_data)
-        except Exception as e:
-            logger.error(f"Error calculating analytics: {e}")
-            return {}
 
-class RiskAlertConsumer(AsyncWebsocketConsumer):
-    """WebSocket consumer for real-time risk monitoring and alerts"""
-    
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.user = None
-        self.risk_thresholds = {}
-        self.monitoring_task = None
-        self.is_running = False
-    
-    async def connect(self):
-        """Handle WebSocket connection for risk monitoring"""
-        self.user = self.scope.get("user")
-        if not self.user or not self.user.is_authenticated:
-            await self.close(code=4001)  # Unauthorized
-            return
+    async def handle_subscription(self, data):
+        """Handle user subscription to specific feeds."""
+        feed_type = data.get('feed_type', 'all')
+        user_id = data.get('user_id')
         
-        self.room_group_name = f"user_{self.user.id}_risk_alerts"
+        if user_id:
+            self.user_id = user_id
         
-        # Join room group
-        await self.channel_layer.group_add(
-            self.room_group_name,
-            self.channel_name
-        )
-        
-        await self.accept()
-        logger.info(f"Risk monitoring WebSocket connected for user {self.user.id}")
-        
-        # Start risk monitoring task
-        self.is_running = True
-        self.monitoring_task = asyncio.create_task(self.risk_monitoring_loop())
-    
-    async def disconnect(self, close_code):
-        """Handle WebSocket disconnection"""
-        self.is_running = False
-        if self.monitoring_task:
-            self.monitoring_task.cancel()
-        
-        # Leave room group
-        await self.channel_layer.group_discard(
-            self.room_group_name,
-            self.channel_name
-        )
-        
-        logger.info(f"Risk monitoring WebSocket disconnected for user {self.user.id}")
-    
-    async def receive(self, text_data):
-        """Handle incoming WebSocket messages for risk monitoring"""
-        try:
-            data = json.loads(text_data)
-            message_type = data.get('type')
-            
-            if message_type == 'set_risk_thresholds':
-                await self.handle_set_risk_thresholds(data.get('thresholds', {}))
-            elif message_type == 'get_risk_status':
-                await self.handle_get_risk_status()
-            else:
-                await self.send(text_data=json.dumps({
-                    'type': 'error',
-                    'message': f'Unknown message type: {message_type}'
-                }))
-                
-        except json.JSONDecodeError:
-            await self.send(text_data=json.dumps({
-                'type': 'error',
-                'message': 'Invalid JSON'
-            }))
-        except Exception as e:
-            logger.error(f"Error handling risk monitoring message: {e}")
-            await self.send(text_data=json.dumps({
-                'type': 'error',
-                'message': 'Internal server error'
-            }))
-    
-    async def handle_set_risk_thresholds(self, thresholds: Dict):
-        """Set risk monitoring thresholds"""
-        self.risk_thresholds = thresholds
-        await self.send(text_data=json.dumps({
-            'type': 'thresholds_updated',
-            'thresholds': self.risk_thresholds
-        }))
-        logger.info(f"Risk thresholds updated for user {self.user.id}: {thresholds}")
-    
-    async def handle_get_risk_status(self):
-        """Get current risk status"""
-        try:
-            risk_status = await self.calculate_risk_status_async()
-            await self.send(text_data=json.dumps({
-                'type': 'risk_status',
-                'status': risk_status,
-                'timestamp': datetime.now().isoformat()
-            }))
-        except Exception as e:
-            logger.error(f"Error getting risk status: {e}")
-            await self.send(text_data=json.dumps({
-                'type': 'error',
-                'message': 'Failed to get risk status'
-            }))
-    
-    async def risk_monitoring_loop(self):
-        """Main risk monitoring loop"""
-        while self.is_running:
-            try:
-                await asyncio.sleep(10)  # Check every 10 seconds
-                
-                if not self.is_running:
-                    break
-                
-                # Calculate current risk metrics
-                risk_status = await self.calculate_risk_status_async()
-                
-                # Check for threshold breaches
-                alerts = await self.check_risk_alerts_async(risk_status)
-                
-                if alerts:
-                    await self.send(text_data=json.dumps({
-                        'type': 'risk_alert',
-                        'alerts': alerts,
-                        'timestamp': datetime.now().isoformat()
-                    }))
-                
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                logger.error(f"Error in risk monitoring loop: {e}")
-                await asyncio.sleep(1)
-    
-    @database_sync_to_async
-    def calculate_risk_status_async(self) -> Dict:
-        """Calculate current risk status asynchronously"""
-        try:
-            # This would integrate with your portfolio and risk calculation services
-            # For now, return mock risk data
-            return {
-                'portfolio_var_95': -2.5,
-                'portfolio_var_99': -4.1,
-                'max_drawdown': -8.3,
-                'volatility': 15.2,
-                'beta': 1.1,
-                'sharpe_ratio': 0.85,
-                'correlation_to_market': 0.78,
-                'concentration_risk': 0.35,
-                'liquidity_risk': 0.12,
-                'overall_risk_score': 6.5  # 1-10 scale
-            }
-        except Exception as e:
-            logger.error(f"Error calculating risk status: {e}")
-            return {}
-    
-    @database_sync_to_async
-    def check_risk_alerts_async(self, risk_status: Dict) -> List[Dict]:
-        """Check for risk threshold breaches and generate alerts"""
-        try:
-            alerts = []
-            
-            # Check VaR thresholds
-            if 'var_95_threshold' in self.risk_thresholds:
-                if risk_status.get('portfolio_var_95', 0) < -self.risk_thresholds['var_95_threshold']:
-                    alerts.append({
-                        'type': 'var_breach',
-                        'level': 'warning',
-                        'message': f"95% VaR exceeded threshold: {risk_status.get('portfolio_var_95', 0):.2f}%",
-                        'metric': 'portfolio_var_95',
-                        'value': risk_status.get('portfolio_var_95', 0),
-                        'threshold': -self.risk_thresholds['var_95_threshold']
-                    })
-            
-            # Check volatility threshold
-            if 'volatility_threshold' in self.risk_thresholds:
-                if risk_status.get('volatility', 0) > self.risk_thresholds['volatility_threshold']:
-                    alerts.append({
-                        'type': 'volatility_breach',
-                        'level': 'warning',
-                        'message': f"Volatility exceeded threshold: {risk_status.get('volatility', 0):.2f}%",
-                        'metric': 'volatility',
-                        'value': risk_status.get('volatility', 0),
-                        'threshold': self.risk_thresholds['volatility_threshold']
-                    })
-            
-            # Check drawdown threshold
-            if 'drawdown_threshold' in self.risk_thresholds:
-                if risk_status.get('max_drawdown', 0) < -self.risk_thresholds['drawdown_threshold']:
-                    alerts.append({
-                        'type': 'drawdown_breach',
-                        'level': 'critical',
-                        'message': f"Maximum drawdown exceeded threshold: {risk_status.get('max_drawdown', 0):.2f}%",
-                        'metric': 'max_drawdown',
-                        'value': risk_status.get('max_drawdown', 0),
-                        'threshold': -self.risk_thresholds['drawdown_threshold']
-                    })
-            
-            # Check overall risk score
-            if 'risk_score_threshold' in self.risk_thresholds:
-                if risk_status.get('overall_risk_score', 0) > self.risk_thresholds['risk_score_threshold']:
-                    alerts.append({
-                        'type': 'risk_score_breach',
-                        'level': 'warning',
-                        'message': f"Overall risk score exceeded threshold: {risk_status.get('overall_risk_score', 0):.1f}",
-                        'metric': 'overall_risk_score',
-                        'value': risk_status.get('overall_risk_score', 0),
-                        'threshold': self.risk_thresholds['risk_score_threshold']
-                    })
-            
-            return alerts
-            
-        except Exception as e:
-            logger.error(f"Error checking risk alerts: {e}")
-            return []
-    
-    async def check_smart_alerts(self):
-        """Check for new smart alerts and send them via WebSocket"""
-        try:
-            # Get smart alerts for the user
-            alerts = await self.get_smart_alerts_async()
-            
-            if alerts:
-                # Send alerts to the user
-                await self.send(text_data=json.dumps({
-                    'type': 'smart_alerts',
-                    'alerts': alerts,
-                    'timestamp': datetime.now().isoformat()
-                }))
-                
-                logger.info(f"Sent {len(alerts)} smart alerts to user {self.user.id}")
-                
-        except Exception as e:
-            logger.error(f"Error checking smart alerts: {e}")
-    
-    @database_sync_to_async
-    def get_smart_alerts_async(self):
-        """Get smart alerts for the user (async wrapper)"""
-        try:
-            # Get alerts for the first subscribed portfolio or default
-            portfolio_id = list(self.subscribed_portfolios)[0] if self.subscribed_portfolios else None
-            
-            alerts = self.alerts_service.generate_smart_alerts(
-                user=self.user,
-                portfolio_id=portfolio_id,
-                timeframe='1M'
+        # Add user to specific feed group
+        if feed_type != 'all':
+            self.subscribed_feeds.add(feed_type)
+            await self.channel_layer.group_add(
+                f'feed_{feed_type}',
+                self.channel_name
             )
             
-            # Filter alerts by priority and recent timestamp
-            recent_alerts = []
-            cutoff_time = datetime.now() - timedelta(hours=1)  # Only alerts from last hour
+            await self.send(text_data=json.dumps({
+                'type': 'subscription_confirmed',
+                'feed_type': feed_type,
+                'message': f'Subscribed to {feed_type} feed'
+            }))
+
+    async def handle_unsubscription(self, data):
+        """Handle user unsubscription from specific feeds."""
+        feed_type = data.get('feed_type', 'all')
+        
+        if feed_type in self.subscribed_feeds:
+            self.subscribed_feeds.remove(feed_type)
+            await self.channel_layer.group_discard(
+                f'feed_{feed_type}',
+                self.channel_name
+            )
             
-            for alert in alerts:
-                alert_time = datetime.fromisoformat(alert.get('timestamp', ''))
-                if alert_time > cutoff_time and alert.get('priority') in ['high', 'medium']:
-                    recent_alerts.append(alert)
+            await self.send(text_data=json.dumps({
+                'type': 'unsubscription_confirmed',
+                'feed_type': feed_type,
+                'message': f'Unsubscribed from {feed_type} feed'
+            }))
+
+    async def handle_interaction(self, data):
+        """Handle social interactions (like, share, comment)."""
+        post_id = data.get('post_id')
+        action = data.get('action')
+        user_id = data.get('user_id')
+        
+        if not all([post_id, action, user_id]):
+            await self.send(text_data=json.dumps({
+                'type': 'error',
+                'message': 'Missing required fields for interaction'
+            }))
+            return
+        
+        # Update engagement in database
+        await self.update_engagement(post_id, action, user_id)
+        
+        # Broadcast interaction to all connected clients
+        await self.channel_layer.group_send(
+            self.room_group_name,
+            {
+                'type': 'engagement_update',
+                'post_id': post_id,
+                'action': action,
+                'user_id': user_id,
+                'timestamp': datetime.now(timezone.utc).isoformat()
+            }
+        )
+
+    async def handle_authentication(self, data):
+        """Handle user authentication."""
+        user_id = data.get('user_id')
+        token = data.get('token')
+        
+        if user_id and token:
+            # Validate token (implement your auth logic)
+            is_valid = await self.validate_token(user_id, token)
             
-            return recent_alerts[:5]  # Limit to 5 most recent alerts
+            if is_valid:
+                self.user_id = user_id
+                await self.send(text_data=json.dumps({
+                    'type': 'authentication_success',
+                    'user_id': user_id,
+                    'message': 'Authentication successful'
+                }))
+            else:
+                await self.send(text_data=json.dumps({
+                    'type': 'authentication_failed',
+                    'message': 'Invalid token'
+                }))
+
+    async def handle_get_feed(self, data):
+        """Handle feed data requests."""
+        feed_type = data.get('feed_type', 'all')
+        limit = data.get('limit', 20)
+        offset = data.get('offset', 0)
+        
+        # Get feed data from database
+        feed_data = await self.get_feed_data(feed_type, limit, offset)
+        
+        await self.send(text_data=json.dumps({
+            'type': 'feed_data',
+            'feed_type': feed_type,
+            'data': feed_data,
+            'limit': limit,
+            'offset': offset
+        }))
+
+    # =========================================================================
+    # WebSocket Event Handlers
+    # =========================================================================
+
+    async def new_post(self, event):
+        """Send new post to WebSocket group."""
+        await self.send(text_data=json.dumps({
+            'type': 'new_post',
+            'post': event['post'],
+            'timestamp': event.get('timestamp', datetime.now(timezone.utc).isoformat())
+        }))
+    
+    async def post_update(self, event):
+        """Send post update to WebSocket group."""
+        await self.send(text_data=json.dumps({
+            'type': 'post_update',
+            'post_id': event['post_id'],
+            'updates': event['updates'],
+            'timestamp': event.get('timestamp', datetime.now(timezone.utc).isoformat())
+        }))
+
+    async def engagement_update(self, event):
+        """Send engagement update to WebSocket group."""
+        await self.send(text_data=json.dumps({
+            'type': 'engagement_update',
+            'post_id': event['post_id'],
+            'action': event['action'],
+            'user_id': event['user_id'],
+            'timestamp': event['timestamp']
+        }))
+
+    async def spotlight_update(self, event):
+        """Send spotlight update to WebSocket group."""
+        await self.send(text_data=json.dumps({
+            'type': 'spotlight_update',
+            'post_id': event['post_id'],
+            'is_spotlight': event['is_spotlight'],
+            'timestamp': event.get('timestamp', datetime.now(timezone.utc).isoformat())
+        }))
+
+    async def meme_launch(self, event):
+        """Send meme launch update to WebSocket group."""
+            await self.send(text_data=json.dumps({
+            'type': 'meme_launch',
+            'meme_data': event['meme_data'],
+            'timestamp': event.get('timestamp', datetime.now(timezone.utc).isoformat())
+        }))
+
+    async def raid_update(self, event):
+        """Send raid update to WebSocket group."""
+            await self.send(text_data=json.dumps({
+            'type': 'raid_update',
+            'raid_data': event['raid_data'],
+            'timestamp': event.get('timestamp', datetime.now(timezone.utc).isoformat())
+        }))
+
+    async def yield_update(self, event):
+        """Send yield farming update to WebSocket group."""
+                await self.send(text_data=json.dumps({
+            'type': 'yield_update',
+            'yield_data': event['yield_data'],
+            'timestamp': event.get('timestamp', datetime.now(timezone.utc).isoformat())
+        }))
+
+    async def bipoc_spotlight(self, event):
+        """Send BIPOC spotlight update to WebSocket group."""
+                await self.send(text_data=json.dumps({
+            'type': 'bipoc_spotlight',
+            'creator_data': event['creator_data'],
+            'timestamp': event.get('timestamp', datetime.now(timezone.utc).isoformat())
+        }))
+
+    # =========================================================================
+    # Database Operations
+    # =========================================================================
+
+    @database_sync_to_async
+    def update_engagement(self, post_id: str, action: str, user_id: str):
+        """Update engagement in database."""
+        try:
+            # This would update your database
+            # For now, just log the interaction
+            logger.info(f'Engagement update: {action} on post {post_id} by user {user_id}')
+            
+            # Update cache for real-time stats
+            cache_key = f'engagement_{post_id}_{action}'
+            current_count = cache.get(cache_key, 0)
+            cache.set(cache_key, current_count + 1, 300)  # 5 minutes
+                
+        except Exception as e:
+            logger.error(f'Error updating engagement: {str(e)}')
+    
+    @database_sync_to_async
+    def validate_token(self, user_id: str, token: str) -> bool:
+        """Validate user token."""
+        try:
+            # Implement your token validation logic
+            # For now, return True for demo
+            return True
+        except Exception as e:
+            logger.error(f'Error validating token: {str(e)}')
+            return False
+    
+    @database_sync_to_async
+    def get_feed_data(self, feed_type: str, limit: int, offset: int) -> List[Dict[str, Any]]:
+        """Get feed data from database."""
+        try:
+            # This would fetch from your database
+            # For now, return mock data
+            mock_posts = [
+                {
+                    'id': str(uuid.uuid4()),
+                    'user': {
+                        'id': 'user1',
+                        'username': 'BIPOCTrader',
+                        'avatar': 'https://example.com/avatar1.png',
+                        'isVerified': True,
+                        'isBIPOC': True,
+                        'followers': 1250
+                    },
+                    'content': {
+                        'type': 'meme_launch',
+                        'text': 'Just launched $FROG! Hop to the moon! 🚀',
+                        'memeData': {
+                            'name': 'RichesFrog',
+                            'symbol': 'FROG',
+                            'price': 0.0001,
+                            'change24h': 12.5,
+                            'contractAddress': '0x123...'
+                        }
+                    },
+                    'engagement': {
+                        'likes': 45,
+                        'shares': 12,
+                        'comments': 8,
+                        'views': 234
+                    },
+                    'timestamp': datetime.now(timezone.utc).isoformat(),
+                    'isLiked': False,
+                    'isShared': False,
+                    'isSpotlight': True,
+                    'xpReward': 100
+                },
+                {
+                    'id': str(uuid.uuid4()),
+                    'user': {
+                        'id': 'user2',
+                        'username': 'CommunityHero',
+                        'avatar': 'https://example.com/avatar2.png',
+                        'isVerified': True,
+                        'isBIPOC': True,
+                        'followers': 890
+                    },
+                    'content': {
+                        'type': 'raid_join',
+                        'text': 'Joining the $BEAR raid! Let\'s pump together! ⚔️',
+                        'raidData': {
+                            'name': 'Bear Pump',
+                            'targetAmount': 1000,
+                            'currentAmount': 750,
+                            'participants': 25
+                        }
+                    },
+                    'engagement': {
+                        'likes': 32,
+                        'shares': 8,
+                        'comments': 15,
+                        'views': 156
+                    },
+                    'timestamp': datetime.now(timezone.utc).isoformat(),
+                    'isLiked': False,
+                    'isShared': False,
+                    'isSpotlight': True,
+                    'xpReward': 75
+                }
+            ]
+            
+            return mock_posts[offset:offset + limit]
             
         except Exception as e:
-            logger.error(f"Error getting smart alerts: {e}")
+            logger.error(f'Error getting feed data: {str(e)}')
             return []
+
+# =============================================================================
+# WebSocket Broadcasting Service
+# =============================================================================
+
+class SocialFeedBroadcaster:
+    """
+    Service for broadcasting social feed events to WebSocket groups.
+    """
+    
+    def __init__(self, channel_layer):
+        self.channel_layer = channel_layer
+    
+    async def broadcast_new_post(self, post_data: Dict[str, Any]):
+        """Broadcast new post to all connected clients."""
+        await self.channel_layer.group_send(
+            'feed_social_feed',
+            {
+                'type': 'new_post',
+                'post': post_data,
+                'timestamp': datetime.now(timezone.utc).isoformat()
+            }
+        )
+    
+    async def broadcast_engagement_update(self, post_id: str, action: str, user_id: str):
+        """Broadcast engagement update to all connected clients."""
+        await self.channel_layer.group_send(
+            'feed_social_feed',
+            {
+                'type': 'engagement_update',
+                'post_id': post_id,
+                'action': action,
+                'user_id': user_id,
+                'timestamp': datetime.now(timezone.utc).isoformat()
+            }
+        )
+    
+    async def broadcast_meme_launch(self, meme_data: Dict[str, Any]):
+        """Broadcast meme launch to all connected clients."""
+        await self.channel_layer.group_send(
+            'feed_social_feed',
+            {
+                'type': 'meme_launch',
+                'meme_data': meme_data,
+                'timestamp': datetime.now(timezone.utc).isoformat()
+            }
+        )
+    
+    async def broadcast_raid_update(self, raid_data: Dict[str, Any]):
+        """Broadcast raid update to all connected clients."""
+        await self.channel_layer.group_send(
+            'feed_social_feed',
+            {
+                'type': 'raid_update',
+                'raid_data': raid_data,
+                'timestamp': datetime.now(timezone.utc).isoformat()
+            }
+        )
+    
+    async def broadcast_yield_update(self, yield_data: Dict[str, Any]):
+        """Broadcast yield farming update to all connected clients."""
+        await self.channel_layer.group_send(
+            'feed_social_feed',
+            {
+                'type': 'yield_update',
+                'yield_data': yield_data,
+                'timestamp': datetime.now(timezone.utc).isoformat()
+            }
+        )
+    
+    async def broadcast_bipoc_spotlight(self, creator_data: Dict[str, Any]):
+        """Broadcast BIPOC spotlight update to all connected clients."""
+        await self.channel_layer.group_send(
+            'feed_social_feed',
+            {
+                'type': 'bipoc_spotlight',
+                'creator_data': creator_data,
+                'timestamp': datetime.now(timezone.utc).isoformat()
+            }
+        )
+```
+
+---
+
+## 🎯 **WEBSOCKET URL CONFIGURATION**
+
+### **URL Patterns**
+```python
+# backend/backend/richesreach/routing.py
+from django.urls import path
+from . import consumers
+
+websocket_urlpatterns = [
+    path('ws/social-feed/', consumers.SocialFeedConsumer.as_asgi()),
+]
+```
+
+### **ASGI Configuration**
+```python
+# backend/backend/richesreach/asgi.py
+import os
+from django.core.asgi import get_asgi_application
+from channels.routing import ProtocolTypeRouter, URLRouter
+from channels.auth import AuthMiddlewareStack
+from .routing import websocket_urlpatterns
+
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'richesreach.settings')
+
+application = ProtocolTypeRouter({
+    "http": get_asgi_application(),
+    "websocket": AuthMiddlewareStack(
+        URLRouter(
+            websocket_urlpatterns
+        )
+    ),
+})
+```
+
+---
+
+## 🚀 **INTEGRATION WITH SOCIAL FEED**
+
+### **Updated Social Feed Integration**
+```typescript
+// In SocialFeed.tsx - Enhanced WebSocket integration
+const connectWebSocket = () => {
+  try {
+    const wsUrl = process.env.EXPO_PUBLIC_WS_URL || 'ws://localhost:8000/ws/social-feed/';
+    webSocketRef.current = new WebSocket(wsUrl);
+
+    webSocketRef.current.onopen = () => {
+      console.log('WebSocket connected');
+      setIsConnected(true);
+      
+      // Send authentication
+      webSocketRef.current?.send(JSON.stringify({
+        type: 'authenticate',
+        user_id: address,
+        token: 'your_auth_token'
+      }));
+      
+      // Subscribe to all feeds
+      webSocketRef.current?.send(JSON.stringify({
+        type: 'subscribe',
+        feed_type: 'all',
+        user_id: address
+      }));
+    };
+
+    webSocketRef.current.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        handleWebSocketMessage(data);
+      } catch (error) {
+        console.error('Error parsing WebSocket message:', error);
+      }
+    };
+
+    webSocketRef.current.onclose = () => {
+      console.log('WebSocket disconnected');
+      setIsConnected(false);
+      // Reconnect after 3 seconds
+      setTimeout(connectWebSocket, 3000);
+    };
+
+    webSocketRef.current.onerror = (error) => {
+      console.error('WebSocket error:', error);
+      setIsConnected(false);
+    };
+  } catch (error) {
+    console.error('Error connecting WebSocket:', error);
+  }
+};
+
+const handleWebSocketMessage = (data: any) => {
+  switch (data.type) {
+    case 'new_post':
+      setPosts(prev => [data.post, ...prev]);
+      break;
+    case 'post_update':
+      setPosts(prev => prev.map(post => 
+        post.id === data.post_id ? { ...post, ...data.updates } : post
+      ));
+      break;
+    case 'engagement_update':
+      setPosts(prev => prev.map(post => 
+        post.id === data.post_id ? {
+          ...post,
+          engagement: { ...post.engagement, ...data.engagement }
+        } : post
+      ));
+      break;
+    case 'spotlight_update':
+      setPosts(prev => prev.map(post => 
+        post.id === data.post_id ? { ...post, isSpotlight: data.is_spotlight } : post
+      ));
+      break;
+    case 'meme_launch':
+      // Handle meme launch notification
+      console.log('New meme launched:', data.meme_data);
+      break;
+    case 'raid_update':
+      // Handle raid update notification
+      console.log('Raid updated:', data.raid_data);
+      break;
+    case 'yield_update':
+      // Handle yield farming update notification
+      console.log('Yield farming updated:', data.yield_data);
+      break;
+    case 'bipoc_spotlight':
+      // Handle BIPOC spotlight notification
+      console.log('BIPOC creator spotlighted:', data.creator_data);
+      break;
+  }
+};
+```
+
+---
+
+## 📈 **REAL-TIME ANALYTICS**
+
+### **Analytics Service**
+```python
+# backend/backend/core/social_analytics_service.py
+class SocialAnalyticsService:
+    """Service for tracking social feed analytics."""
+    
+    def __init__(self):
+        self.engagement_stats = {}
+        self.user_behavior = {}
+    
+    async def track_engagement(self, post_id: str, action: str, user_id: str):
+        """Track engagement metrics."""
+        key = f"{post_id}_{action}"
+        self.engagement_stats[key] = self.engagement_stats.get(key, 0) + 1
+        
+        # Store in cache for real-time access
+        cache.set(f'engagement_{key}', self.engagement_stats[key], 300)
+    
+    async def track_user_behavior(self, user_id: str, behavior: Dict[str, Any]):
+        """Track user behavior patterns."""
+        if user_id not in self.user_behavior:
+            self.user_behavior[user_id] = []
+        
+        self.user_behavior[user_id].append({
+            **behavior,
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        })
+    
+    def get_analytics(self) -> Dict[str, Any]:
+        """Get analytics data."""
+        return {
+            'engagement_stats': self.engagement_stats,
+            'user_behavior': self.user_behavior,
+            'total_engagements': sum(self.engagement_stats.values())
+        }
+```
+
+---
+
+## 🎯 **NEXT STEPS**
+
+1. **Set up WebSocket** routing and ASGI configuration
+2. **Integrate SocialFeed** component into MemeQuestScreen
+3. **Add real-time engagement** tracking
+4. **Implement BIPOC spotlight** features
+5. **Add voice comments** for social interactions
+6. **Test WebSocket** connections with multiple users
+7. **Add social analytics** for user insights
+
+This real-time WebSocket service will make MemeQuest **highly engaging** with **live social interactions** and **instant updates**! 🔌🚀

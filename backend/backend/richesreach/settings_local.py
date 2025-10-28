@@ -128,7 +128,7 @@ USE_REAL_MARKET_DATA = True
 USE_ALPHA_MOCK = False
 USE_POLYGON_MOCK = False
 USE_FINNHUB_MOCK = False
-USE_MARKET_MOCK = False  # Use real market data
+USE_MARKET_MOCK = True  # Use mock market data for mobile app
 
 # Real API keys (from environment)
 ALPHA_VANTAGE_API_KEY = os.getenv('ALPHA_VANTAGE_API_KEY', '')

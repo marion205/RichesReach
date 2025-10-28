@@ -7,7 +7,7 @@
 const ENV_API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 
 const prodHost = "http://54.160.139.56:8000";
-const localHost = "http://localhost:8002";
+const localHost = "http://localhost:8000";
 
 // Use environment variable if available, otherwise use localhost for development
 export const API_BASE = ENV_API_BASE_URL || localHost;

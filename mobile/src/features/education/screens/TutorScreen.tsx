@@ -17,6 +17,7 @@ import * as Speech from 'expo-speech';
 import * as Haptics from 'expo-haptics';
 import { useVoice } from '../../../contexts/VoiceContext';
 import { LinearGradient } from 'expo-linear-gradient';
+import MemeQuestScreen from '../../social/screens/MemeQuestScreen';
 // import ConfettiCannon from 'react-native-confetti-cannon';
 
 const { width, height } = Dimensions.get('window');
@@ -427,7 +428,7 @@ const TutorScreen: React.FC<TutorScreenProps> = ({ navigation }) => {
   const [isListening, setIsListening] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [quizResults, setQuizResults] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<'learn' | 'quest' | 'sim' | 'progress'>('learn');
+  const [activeTab, setActiveTab] = useState<'learn' | 'quest' | 'sim' | 'progress' | 'memequest'>('learn');
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [showConfetti, setShowConfetti] = useState(false);
   
@@ -1706,7 +1707,8 @@ const TutorScreen: React.FC<TutorScreenProps> = ({ navigation }) => {
           { key: 'learn', label: 'Learn', icon: '📚' },
           { key: 'quest', label: 'Quest', icon: '🎯' },
           { key: 'sim', label: 'Sim', icon: '📈' },
-          { key: 'progress', label: 'Progress', icon: '📊' }
+          { key: 'progress', label: 'Progress', icon: '📊' },
+          { key: 'memequest', label: 'MemeQuest', icon: '🔥' }
         ].map((tab) => (
           <TouchableOpacity
             key={tab.key}
@@ -1725,6 +1727,7 @@ const TutorScreen: React.FC<TutorScreenProps> = ({ navigation }) => {
       {activeTab === 'quest' && renderQuestSection()}
       {activeTab === 'sim' && renderSimulationSection()}
       {activeTab === 'progress' && renderProgressSection()}
+      {activeTab === 'memequest' && <MemeQuestScreen />}
     </ScrollView>
   );
 };
@@ -1789,12 +1792,15 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    flexWrap: 'wrap',
   },
   tab: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
     borderRadius: 10,
+    minWidth: 60,
   },
   activeTab: {
     backgroundColor: '#667eea',
@@ -1804,9 +1810,10 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   tabLabel: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '600',
     color: '#666',
+    textAlign: 'center',
   },
   activeTabLabel: {
     color: 'white',

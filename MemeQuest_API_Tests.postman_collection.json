@@ -1,0 +1,704 @@
+{
+  "info": {
+    "name": "RichesReach MemeQuest API Tests",
+    "description": "Comprehensive testing for MemeQuest social trading features",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "auth_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "user_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "template_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "meme_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "post_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "raid_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "pool_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "position_id",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"testpassword123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/login/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "login", ""]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('auth_token', response.token);",
+                  "    pm.collectionVariables.set('user_id', response.user.id);",
+                  "    console.log('Authentication successful');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "MemeQuest Core",
+      "item": [
+        {
+          "name": "Get Meme Templates",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/memequest/templates/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "memequest", "templates", ""]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const templates = pm.response.json();",
+                  "    if (templates.length > 0) {",
+                  "        pm.collectionVariables.set('template_id', templates[0].id);",
+                  "        console.log('Template ID set:', templates[0].id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Meme Coin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"TestMeme\",\n  \"symbol\": \"TEST\",\n  \"template_id\": \"{{template_id}}\",\n  \"description\": \"A test meme coin for API testing\",\n  \"cultural_theme\": \"community\",\n  \"network\": \"solana\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/memequest/create/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "memequest", "create", ""]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const meme = pm.response.json();",
+                  "    pm.collectionVariables.set('meme_id', meme.id);",
+                  "    console.log('Meme ID set:', meme.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Meme Coins",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/memequest/coins/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "memequest", "coins", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Pump.fun Integration",
+      "item": [
+        {
+          "name": "Launch Meme on Pump.fun",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"meme_id\": \"{{meme_id}}\",\n  \"initial_price\": 0.0001,\n  \"target_market_cap\": 69000,\n  \"metadata\": {\n    \"name\": \"TestMeme\",\n    \"symbol\": \"TEST\",\n    \"description\": \"Test meme for Pump.fun integration\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/pump-fun/launch/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "pump-fun", "launch", ""]
+            }
+          }
+        },
+        {
+          "name": "Get Bonding Curve",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/pump-fun/bonding-curve/{{meme_id}}/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "pump-fun", "bonding-curve", "{{meme_id}}", ""]
+            }
+          }
+        },
+        {
+          "name": "Execute Trade",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"meme_id\": \"{{meme_id}}\",\n  \"trade_type\": \"buy\",\n  \"amount\": 100,\n  \"slippage\": 5\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/pump-fun/trade/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "pump-fun", "trade", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Social Trading",
+      "item": [
+        {
+          "name": "Create Social Post",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"post_type\": \"meme_launch\",\n  \"content\": \"Just launched $TEST! Moon mission! 🚀\",\n  \"meme_coin_id\": \"{{meme_id}}\",\n  \"image_url\": \"https://example.com/meme.png\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/social/posts/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "social", "posts", ""]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const post = pm.response.json();",
+                  "    pm.collectionVariables.set('post_id', post.id);",
+                  "    console.log('Post ID set:', post.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Social Feed",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/social/feed/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "social", "feed", ""]
+            }
+          }
+        },
+        {
+          "name": "Engage with Post",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"post_id\": \"{{post_id}}\",\n  \"engagement_type\": \"like\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/social/engage/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "social", "engage", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Raid Management",
+      "item": [
+        {
+          "name": "Create Raid",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test Raid\",\n  \"meme_coin_id\": \"{{meme_id}}\",\n  \"target_amount\": 1000,\n  \"xp_reward\": 100\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/raids/create/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "raids", "create", ""]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const raid = pm.response.json();",
+                  "    pm.collectionVariables.set('raid_id', raid.id);",
+                  "    console.log('Raid ID set:', raid.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Join Raid",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"raid_id\": \"{{raid_id}}\",\n  \"amount\": 100\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/raids/join/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "raids", "join", ""]
+            }
+          }
+        },
+        {
+          "name": "Get Active Raids",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/raids/active/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "raids", "active", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Voice Commands",
+      "item": [
+        {
+          "name": "Process Voice Command",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"command_type\": \"memequest\",\n  \"original_command\": \"Launch a meme called TestCoin\",\n  \"current_screen\": \"memequest\",\n  \"active_tab\": \"create\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/voice/process/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "voice", "process", ""]
+            }
+          }
+        },
+        {
+          "name": "Get Voice Command History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/voice/history/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "voice", "history", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "DeFi Yield Farming",
+      "item": [
+        {
+          "name": "Get Yield Pools",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/defi/pools/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "defi", "pools", ""]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const pools = pm.response.json();",
+                  "    if (pools.length > 0) {",
+                  "        pm.collectionVariables.set('pool_id', pools[0].id);",
+                  "        console.log('Pool ID set:', pools[0].id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Stake in Yield Pool",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pool_id\": \"{{pool_id}}\",\n  \"amount\": 1000,\n  \"strategy\": \"simple_stake\",\n  \"auto_compound\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/defi/stake/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "defi", "stake", ""]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const position = pm.response.json();",
+                  "    pm.collectionVariables.set('position_id', position.id);",
+                  "    console.log('Position ID set:', position.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get User Yield Positions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/defi/positions/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "defi", "positions", ""]
+            }
+          }
+        },
+        {
+          "name": "Harvest Yield",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"position_id\": \"{{position_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/defi/harvest/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "defi", "harvest", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "User Management",
+      "item": [
+        {
+          "name": "Get User Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/user/profile/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "user", "profile", ""]
+            }
+          }
+        },
+        {
+          "name": "Update User Profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"voice_enabled\": true,\n  \"selected_voice\": \"alloy\",\n  \"voice_speed\": 1.0,\n  \"is_bipoc\": true,\n  \"cultural_theme\": \"community\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/user/profile/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "user", "profile", ""]
+            }
+          }
+        },
+        {
+          "name": "Get User Achievements",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/user/achievements/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "user", "achievements", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Analytics",
+      "item": [
+        {
+          "name": "Get MemeQuest Analytics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/analytics/memequest/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "analytics", "memequest", ""]
+            }
+          }
+        },
+        {
+          "name": "Get User Analytics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/analytics/user/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "analytics", "user", ""]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

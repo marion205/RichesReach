@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import { useQuery, useMutation, gql } from '@apollo/client';
 import { Ionicons } from '@expo/vector-icons';
+import NewsFeed from '../features/social/components/NewsFeed';
 
 // GraphQL Queries and Mutations
 const GET_SOCIAL_FEEDS = gql`
@@ -226,7 +227,7 @@ export const SocialTrading: React.FC<SocialTradingProps> = ({
   onTraderSelect,
   onTradeCopy,
 }) => {
-  const [activeTab, setActiveTab] = useState<'feed' | 'traders' | 'signals'>('feed');
+  const [activeTab, setActiveTab] = useState<'feed' | 'traders' | 'signals' | 'news'>('feed');
   const [refreshing, setRefreshing] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState('1M');
 
@@ -622,6 +623,8 @@ export const SocialTrading: React.FC<SocialTradingProps> = ({
             />
           </View>
         );
+      case 'news':
+        return <NewsFeed />;
       default:
         return null;
     }
@@ -652,6 +655,7 @@ export const SocialTrading: React.FC<SocialTradingProps> = ({
           { key: 'feed', label: 'Feed', icon: 'home-outline' },
           { key: 'traders', label: 'Top Traders', icon: 'trophy-outline' },
           { key: 'signals', label: 'Signals', icon: 'trending-up-outline' },
+          { key: 'news', label: 'News', icon: 'newspaper-outline' },
         ].map((tab) => (
           <TouchableOpacity
             key={tab.key}

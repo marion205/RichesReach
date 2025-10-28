@@ -39,6 +39,7 @@ def _get_mock_quote(symbol: str) -> dict:
         "price": round(current_price, 2),
         "change": round(current_price - base_price, 2),
         "change_percent": round(variation * 100, 2),
+        "volume": random.randint(1000000, 10000000),
         "timestamp": int(time.time() * 1000),
         "provider": "mock"
     }

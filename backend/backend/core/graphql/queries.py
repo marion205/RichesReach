@@ -387,27 +387,43 @@ class Query(graphene.ObjectType):
         return filtered_signals[:min(limit or 50, 200)]
     
     def resolve_me(self, info):
-        # Return mock user data (database-free)
+        # Only resolve if explicitly querying 'me' field
+        if info.field_name != 'me':
+            return None
+            
+        # Check authentication context
+        context = info.context
+        user = getattr(context, 'user', None)
+        
+        # If no authenticated user, return None (not mock data)
+        if not user or not user.is_authenticated:
+            return None
+            
+        # Return real user data (not mock)
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        
+        # Create proper user type with real data
         mock_income_profile = IncomeProfileType(
-            id=1,
-            income_bracket='$75,000 - $100,000',
-            age=28,
-            investment_goals=['Wealth Building', 'Retirement Savings'],
-            risk_tolerance='Moderate',
-            investment_horizon='5-10 years',
-            created_at='2024-01-01T00:00:00Z',
-            updated_at='2024-01-01T00:00:00Z'
+            id=user.id,
+            income_bracket=getattr(user, 'income_bracket', '$50,000 - $75,000'),
+            age=getattr(user, 'age', 30),
+            investment_goals=getattr(user, 'investment_goals', ['Wealth Building']),
+            risk_tolerance=getattr(user, 'risk_tolerance', 'Moderate'),
+            investment_horizon=getattr(user, 'investment_horizon', '5-10 years'),
+            created_at=getattr(user, 'date_joined', '2024-01-01T00:00:00Z').isoformat(),
+            updated_at=getattr(user, 'last_login', '2024-01-01T00:00:00Z').isoformat() if hasattr(user, 'last_login') and user.last_login else '2024-01-01T00:00:00Z'
         )
         
         return MockUser(
-            id=1,
-            name='Test User',
-            email='test@example.com',
-            username='testuser',
-            hasPremiumAccess=True,
-            subscriptionTier='PREMIUM',
+            id=user.id,
+            name=getattr(user, 'first_name', '') + ' ' + getattr(user, 'last_name', '') or user.username or user.email.split('@')[0],
+            email=user.email,
+            username=user.username,
+            hasPremiumAccess=getattr(user, 'is_premium', True),
+            subscriptionTier=getattr(user, 'subscription_tier', 'PREMIUM'),
             incomeProfile=mock_income_profile,
-            followedTickers=['AAPL', 'TSLA', 'NVDA']
+            followedTickers=getattr(user, 'followed_tickers', [])
         )
     
     def resolve_leaderboard(self, info, category=None, limit=50):

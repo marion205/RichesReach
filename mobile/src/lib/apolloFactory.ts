@@ -3,8 +3,9 @@ import { ApolloClient, InMemoryCache, createHttpLink, ApolloLink } from '@apollo
 import { persistCache, AsyncStorageWrapper } from 'apollo3-cache-persist';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Force the correct IP address for local development
-const GRAPHQL_URL = "http://localhost:8002/graphql/";
+// Use the same configuration as the main API
+import { API_GRAPHQL } from '../config/api';
+const GRAPHQL_URL = API_GRAPHQL;
 
 if (!GRAPHQL_URL) {
   throw new Error(
