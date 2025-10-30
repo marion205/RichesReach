@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, TouchableOpacity, Text, StyleSheet, StatusBar } from 'react-native';
 import Feather from 'react-native-vector-icons/Feather';
+import { navigate as navServiceNavigate } from '../../navigation/NavigationService';
 
 interface TopHeaderProps {
   currentScreen: string;
@@ -36,7 +37,13 @@ const TopHeader: React.FC<TopHeaderProps> = ({ currentScreen, onNavigate, title 
         <View style={styles.rightSection}>
           <TouchableOpacity
             style={styles.profileButton}
-            onPress={() => onNavigate('profile')}
+            onPress={() => {
+              try {
+                navServiceNavigate('Profile');
+              } catch {
+                onNavigate('profile');
+              }
+            }}
           >
             <Feather
               name="user"

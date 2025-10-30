@@ -44,6 +44,7 @@ const pushNotificationService = expoGoCompatibleNotificationService;
 const priceAlertService = expoGoCompatiblePriceAlertService;
 // Screens
 import HomeScreen from './navigation/HomeScreen';
+import AppNavigator from './navigation/AppNavigator';
 import LoginScreen from './features/auth/screens/LoginScreen';
 import ForgotPasswordScreen from './features/auth/screens/ForgotPasswordScreen';
 import SignUpScreen from './features/auth/screens/SignUpScreen';
@@ -118,7 +119,7 @@ import DynamicContentScreen from './features/personalization/screens/DynamicCont
 import TradingCoachScreen from './features/coach/screens/TradingCoachScreen';
 import AITradingCoachScreen from './features/coach/screens/AITradingCoachScreen';
 // Components
-import { BottomTabBar, TopHeader, PersonalizedDashboard } from './components';
+import { TopHeader, PersonalizedDashboard } from './components';
 // Services
 import UserProfileService from './features/user/services/UserProfileService';
 // Contexts
@@ -377,6 +378,10 @@ setCurrentScreen('home');
 />
 );
 }
+// If logged in and onboarding complete, use new tab/stack navigator
+if (isLoggedIn && hasCompletedOnboarding) {
+  return <AppNavigator />;
+}
 console.log('🔍 Main switch statement, currentScreen:', currentScreen);
 switch (currentScreen) {
 case 'home':
@@ -615,9 +620,7 @@ return (
     <TopHeader currentScreen={currentScreen} onNavigate={navigateTo} />
   )}
   {renderScreen()}
-  {isLoggedIn && currentScreen !== 'login' && currentScreen !== 'signup' && (
-    <BottomTabBar currentScreen={currentScreen} onNavigate={navigateTo} />
-  )}
+  {null}
 </GestureNavigation>
 
 {/* Version 2 Features */}
