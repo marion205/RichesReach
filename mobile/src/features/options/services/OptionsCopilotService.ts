@@ -13,7 +13,7 @@ class OptionsCopilotService {
   private tokenProvider: TokenProvider;
 
   constructor(tokenProvider?: TokenProvider) {
-    this.baseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+    this.baseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000";
     this.tokenProvider = tokenProvider ?? (async () => 'your-auth-token');
   }
 

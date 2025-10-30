@@ -27,7 +27,7 @@ class AlpacaIntegrationTestSuite:
     """Comprehensive test suite for Alpaca integration"""
     
     def __init__(self):
-        self.base_url = "http://localhost:8000"
+        self.base_url = "process.env.API_BASE_URL || "http://localhost:8000""
         self.client = Client()
         self.test_user = None
         self.test_results = []

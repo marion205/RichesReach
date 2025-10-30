@@ -145,7 +145,7 @@ class EnterpriseOptionsService:
             connector=aiohttp.TCPConnector(limit=100, limit_per_host=30)
         )
         self.redis_client = await aioredis.create_redis_pool(
-            self.config.get('redis_url', 'redis://localhost:6379'),
+            self.config.get('redis_url', 'redis://process.env.REDIS_HOST || "localhost:6379"'),
             encoding='utf-8'
         )
         return self

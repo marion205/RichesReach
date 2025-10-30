@@ -95,7 +95,7 @@ export default function OracleInsights({ onInsightPress, onGenerateInsight }: Or
       setLoading(true);
       
       // Use real API endpoint
-      const response = await fetch('http://127.0.0.1:8000/api/oracle/insights/', {
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000"}/api/oracle/insights/`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',

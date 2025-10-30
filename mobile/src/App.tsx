@@ -32,6 +32,7 @@ import Toast from 'react-native-toast-message';
 import { ThemeProvider } from './theme/PersonalizedThemes';
 import GestureNavigation from './components/GestureNavigation';
 import ZeroFrictionOnboarding from './features/onboarding/ZeroFrictionOnboarding';
+import ErrorBoundary from './components/ErrorBoundary';
 import WellnessScoreDashboard from './components/WellnessScoreDashboard';
 import ARPortfolioPreview from './components/ARPortfolioPreview';
 import OfflineInsightsService from './services/OfflineInsightsService';
@@ -649,17 +650,19 @@ return (
 }
 
 export default function App() {
-return (
-<SafeAreaProvider>
-<ApolloProvider>
-<AuthProvider>
-<VoiceProvider>
-<AppContent />
-</VoiceProvider>
-</AuthProvider>
-</ApolloProvider>
-</SafeAreaProvider>
-);
+  return (
+    <ErrorBoundary>
+      <SafeAreaProvider>
+        <ApolloProvider>
+          <AuthProvider>
+            <VoiceProvider>
+              <AppContent />
+            </VoiceProvider>
+          </AuthProvider>
+        </ApolloProvider>
+      </SafeAreaProvider>
+    </ErrorBoundary>
+  );
 }
 const styles = StyleSheet.create({
 container: {

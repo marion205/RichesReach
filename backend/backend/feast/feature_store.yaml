@@ -1,7 +1,7 @@
 project: richesreach_ai
 registry:
   registry_type: sql
-  path: postgresql://admin:password@localhost:5432/dev
+  path: postgresql://admin:password@process.env.DB_HOST || "localhost:5432"/dev
 provider: local
 online_store:
   type: postgres

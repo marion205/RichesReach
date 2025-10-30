@@ -16,7 +16,7 @@ class OptionsConfig:
     polygon_api_key: str = os.getenv('POLYGON_API_KEY', '')
     
     # Redis Configuration
-    redis_url: str = os.getenv('REDIS_URL', 'redis://localhost:6379')
+    redis_url: str = os.getenv('REDIS_URL', 'redis://process.env.REDIS_HOST || "localhost:6379"')
     cache_ttl: int = int(os.getenv('OPTIONS_CACHE_TTL', '30'))
     
     # Rate Limiting

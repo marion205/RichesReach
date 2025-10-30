@@ -23,6 +23,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import TradingButton from '../../../components/forms/TradingButton';
 import { StableNumberInput } from '../../../components/StableNumberInput';
 
+// Module-level sentinel to avoid React 18 StrictMode double-fire of auto-generation in dev
+const GEN_ONCE_SENTINEL = { fired: false };
+
 /* -------------------------------- THEME ---------------------------------- */
 const COLORS = {
   bg: '#F2F2F7',
@@ -59,8 +62,8 @@ const GET_USER_PROFILE = gql`
 `;
 
 const GET_AI_RECOMMENDATIONS = gql`
-  query GetAIRecommendations {
-    aiRecommendations {
+  query GetAIRecommendations($profile: ProfileInput, $usingDefaults: Boolean) {
+    aiRecommendations(profile: $profile, usingDefaults: $usingDefaults) {
       portfolioAnalysis {
         totalValue
         numHoldings
@@ -813,9 +816,18 @@ type ListHeaderProps = {
   recommendationsError?: any;
   refetchRecommendations: (opts?: any) => Promise<any>;
   Recommendations: React.ComponentType;
+  SummaryCards?: React.ComponentType;
   hideStockPicks?: boolean;
   isGeneratingRecommendations?: boolean;
   handleGenerateRecommendations?: () => void;
+  optimizing?: boolean;
+  paused?: boolean;
+  policy?: any;
+  personalizedRecs?: any[];
+  zBySymbol?: any;
+  optResult?: any;
+  setOptimizing?: (value: boolean) => void;
+  setOptResult?: (value: any) => void;
 };
 
 const ListHeader = React.memo((props: ListHeaderProps) => {
@@ -830,14 +842,44 @@ const ListHeader = React.memo((props: ListHeaderProps) => {
     recommendationsError,
     refetchRecommendations,
     Recommendations,
+    SummaryCards,
     hideStockPicks = false,
     isGeneratingRecommendations = false,
-    handleGenerateRecommendations = () => {}
+    handleGenerateRecommendations = () => {},
+    optimizing = false,
+    paused = false,
+    policy = {},
+    personalizedRecs = [],
+    zBySymbol = {},
+    optResult = null,
+    setOptimizing = () => {},
+    setOptResult = () => {}
   } = props;
 
-  // dev-only debug
-  if (__DEV__) console.log('hideStockPicks:', hideStockPicks);
+  // dev-only debug - ALWAYS LOG (removed __DEV__ check)
+  console.log('🔴🔴🔴 CRITICAL: ListHeader render:', {
+    hideStockPicks,
+    hasProfile,
+    recommendationsLoading,
+    hasAi: !!ai,
+    hasPortfolioAnalysis: !!ai?.portfolioAnalysis,
+    hasSummaryCards: !!SummaryCards,
+    SummaryCardsValue: SummaryCards,
+    recommendationsError: !!recommendationsError,
+    willRenderRecommendations: !hideStockPicks && ai, // Updated condition
+    willRenderSummaryCards: !!ai?.portfolioAnalysis && !!SummaryCards,
+    portfolioAnalysisKeys: ai?.portfolioAnalysis ? Object.keys(ai.portfolioAnalysis) : []
+  });
 
+  console.log('🔴🔴🔴 CRITICAL: ListHeader return statement executing!', {
+    hasAi: !!ai,
+    hasPortfolioAnalysis: !!ai?.portfolioAnalysis,
+    hasSummaryCards: !!SummaryCards,
+    SummaryCardsIsFunction: typeof SummaryCards === 'function',
+    aiKeys: ai ? Object.keys(ai) : [],
+    portfolioAnalysisValue: ai?.portfolioAnalysis
+  });
+  
   return (
     <View>
       {/* Profile status + CTA */}
@@ -866,26 +908,113 @@ const ListHeader = React.memo((props: ListHeaderProps) => {
 
       {showProfileForm && <Form />}
 
-      {hasProfile ? (
-        recommendationsLoading && !ai ? (
-          <View style={[styles.recommendationsContainer, { alignItems: 'center' }]}>
-            <ActivityIndicator size="small" color={COLORS.primary} />
-            <Text style={[styles.loadingText, { marginTop: 8 }]}>Loading AI recommendations…</Text>
-          </View>
-        ) : recommendationsError ? (
-          <View style={[styles.recommendationsContainer, { alignItems: 'center' }]}>
-            <Icon name="alert-triangle" size={20} color={COLORS.danger} />
-            <Text style={[styles.loadingText, { marginTop: 8 }]}>Couldn't load recommendations.</Text>
-            <TouchableOpacity
-              style={[styles.saveButton, { marginTop: 12 }]}
-              onPress={() => refetchRecommendations({ fetchPolicy: 'network-only' })}
-            >
-              <Text style={styles.saveButtonText}>Retry</Text>
-            </TouchableOpacity>
-          </View>
-        ) : !hideStockPicks ? (
+      {/* Always show SummaryCards when we have AI data */}
+      {(() => {
+        const hasPortfolioAnalysis = !!ai?.portfolioAnalysis;
+        const hasSummaryCards = !!SummaryCards;
+        console.log('🔴🔴🔴 BREAKPOINT: Checking SummaryCards render (FORCE LOG):', {
+          hasPortfolioAnalysis,
+          hasSummaryCards,
+          hasAi: !!ai,
+          portfolioAnalysisKeys: ai?.portfolioAnalysis ? Object.keys(ai.portfolioAnalysis) : [],
+          willRender: hasPortfolioAnalysis && hasSummaryCards,
+          aiPortfolioAnalysisType: typeof ai?.portfolioAnalysis,
+          SummaryCardsType: typeof SummaryCards
+        });
+        if (hasPortfolioAnalysis && hasSummaryCards) {
+          console.log('✅ WILL RENDER SummaryCards!');
+          return <SummaryCards />;
+        } else {
+          console.log('❌ WILL NOT RENDER SummaryCards!', {
+            reason: !hasPortfolioAnalysis ? 'no portfolioAnalysis' : 'no SummaryCards component'
+          });
+          return null;
+        }
+      })()}
+
+      {/* Show recommendations if we have data, regardless of profile status */}
+      {(() => {
+        if (__DEV__) {
+          console.log('🔴🔴🔴 BREAKPOINT: ListHeader recommendations render decision', {
+            recommendationsLoading,
+            hasAi: !!ai,
+            hasRecommendationsError: !!recommendationsError,
+            hideStockPicks,
+            hasPortfolioAnalysis: !!ai?.portfolioAnalysis
+          });
+        }
+        return recommendationsLoading && !ai ? (
+        <View style={[styles.recommendationsContainer, { alignItems: 'center' }]}>
+          <ActivityIndicator size="small" color={COLORS.primary} />
+          <Text style={[styles.loadingText, { marginTop: 8 }]}>Loading AI recommendations…</Text>
+        </View>
+      ) : recommendationsError ? (
+        <View style={[styles.recommendationsContainer, { alignItems: 'center' }]}>
+          <Icon name="alert-triangle" size={20} color={COLORS.danger} />
+          <Text style={[styles.loadingText, { marginTop: 8 }]}>Couldn't load recommendations.</Text>
+          <TouchableOpacity
+            style={[styles.saveButton, { marginTop: 12 }]}
+            onPress={() => refetchRecommendations({ fetchPolicy: 'network-only' })}
+          >
+            <Text style={styles.saveButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      ) : !hideStockPicks && ai ? (
+        <>
+          {__DEV__ && <Text style={{ color: 'blue', padding: 10 }}>DEBUG: Rendering Recommendations component</Text>}
           <Recommendations />
-        ) : ai ? (
+        </>
+      ) : hideStockPicks && ai ? (
+        // Show Regenerate button when hiding stock picks (FlatList path)
+        <View style={styles.recommendationsContainer}>
+          <View style={styles.recommendationHeader}>
+            <Text style={styles.recommendationTitle}>Quantitative AI Portfolio Analysis</Text>
+            <View style={styles.buttonRow}>
+              <TouchableOpacity
+                style={[styles.regenerateButton, isGeneratingRecommendations && { opacity: 0.7 }]}
+                onPress={handleGenerateRecommendations}
+                disabled={isGeneratingRecommendations}
+              >
+                <Icon name="refresh-cw" size={16} color={COLORS.primary} />
+                <Text style={styles.regenerateButtonText}>
+                  {isGeneratingRecommendations ? 'Regenerating...' : 'Regenerate'}
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.regenerateButton, (optimizing || paused) && { opacity: 0.7 }]}
+                onPress={async () => {
+                  try {
+                    setOptimizing(true);
+                    const result = await optimizeWeights(personalizedRecs, {
+                      volTarget: policy.volTarget,        // from profile
+                      nameCap: policy.nameCap,            // e.g. 0.06
+                      sectorCap: policy.sectorCap,        // e.g. 0.30
+                      turnoverBudget: policy.turnoverBudget, // optional
+                    }, zBySymbol);
+                    const wmap = Object.fromEntries(result.weights.map((w:any)=>[w.symbol, w.weight]));
+                    setOptResult({weights: wmap, vol: result.portfolioVol});
+                  } catch (e) {
+                    Alert.alert("Optimization failed", `${e}`);
+                  } finally {
+                    setOptimizing(false);
+                  }
+                }}
+                disabled={optimizing || paused}
+              >
+                <Icon name="sliders" size={16} color={COLORS.primary} />
+                <Text style={styles.regenerateButtonText}>
+                  {optimizing ? "Optimizing..." : paused ? "Paused (Build Emergency Cash)" : "Optimize Weights"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+          <SummaryCards />
+        </View>
+      ) : hasProfile && ai ? (
+        (() => {
+          if (__DEV__) console.log('🔴 BREAKPOINT: Rendering alternative view (hasProfile && ai path)');
+          return (
           <View style={styles.recommendationsContainer}>
             <View style={styles.recommendationHeader}>
               <Text style={styles.recommendationTitle}>Quantitative AI Portfolio Analysis</Text>
@@ -1018,8 +1147,10 @@ const ListHeader = React.memo((props: ListHeaderProps) => {
               </>
             )}
           </View>
-        ) : null
-      ) : null}
+          );
+        })()
+      ) : null;
+      })()}
     </View>
   );
 });
@@ -1049,13 +1180,39 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
     error: userError,
     refetch: refetchUser,
   } = useQuery(GET_USER_PROFILE, {
-    fetchPolicy: 'cache-first',
+    fetchPolicy: 'cache-and-network',
     nextFetchPolicy: 'cache-first',
     notifyOnNetworkStatusChange: true,
   });
 
   const user = userData?.me;
-  // Check if profile exists AND has meaningful data (not just empty strings)
+  
+  // ✅ Canonical wiring: Safe defaults + mapping (memoized for stability)
+  const mapHorizonToYears = useCallback((s?: string): number => {
+    if (!s) return 5;
+    if (s.includes('10+')) return 12;
+    if (s.includes('5-10')) return 8;
+    if (s.includes('3-5')) return 4;
+    if (s.includes('1-3')) return 2;
+    return 5; // Default to 5 years
+  }, []);
+  
+  // Memoized profile input and defaults detection
+  const { profileInput, usingDefaults } = useMemo(() => {
+    const p = user?.incomeProfile ?? {};
+    const hasRT = !!p?.riskTolerance;
+    const hasHZ = !!p?.investmentHorizon;
+    const input = {
+      riskTolerance: p?.riskTolerance ?? 'Moderate',
+      investmentHorizonYears: mapHorizonToYears(p?.investmentHorizon),
+      age: typeof p?.age === 'number' ? p.age : 30,
+      incomeBracket: p?.incomeBracket ?? 'Unknown',
+      investmentGoals: Array.isArray(p?.investmentGoals) ? p.investmentGoals : [],
+    };
+    return { profileInput: input, usingDefaults: !(hasRT && hasHZ) };
+  }, [user?.incomeProfile, mapHorizonToYears]);
+  
+  // Check if profile exists AND has meaningful data (for UI display purposes)
   const hasProfile = !!user?.incomeProfile && 
     user.incomeProfile.age && 
     user.incomeProfile.incomeBracket && 
@@ -1066,26 +1223,41 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
   // Debug logging for profile validation
   console.log('🔍 Profile Debug:', {
     hasIncomeProfile: !!user?.incomeProfile,
+    incomeProfileObject: user?.incomeProfile,
     age: user?.incomeProfile?.age,
     incomeBracket: user?.incomeProfile?.incomeBracket,
     investmentHorizon: user?.incomeProfile?.investmentHorizon,
     riskTolerance: user?.incomeProfile?.riskTolerance,
     investmentGoals: user?.incomeProfile?.investmentGoals,
-    hasProfile: hasProfile
+    hasProfile: hasProfile,
+    profileInput,
+    usingDefaults,
+    fullUserData: userData,
+    userDataMe: userData?.me
   });
 
-  // Pre-populate form fields when profile form is shown and user has existing profile
+  // Pre-populate form fields when profile form is shown (only once)
   useEffect(() => {
-    if (showProfileForm && user?.incomeProfile && hasProfile) {
-      setIncomeBracket(user.incomeProfile.incomeBracket || '');
-      setAge(user.incomeProfile.age?.toString() || '');
-      setSelectedGoals(user.incomeProfile.investmentGoals || []);
-      setRiskTolerance(user.incomeProfile.riskTolerance || '');
-      setInvestmentHorizon(user.incomeProfile.investmentHorizon || '');
+    console.log('🔍 Form initialization useEffect called, showProfileForm:', showProfileForm);
+    if (showProfileForm) {
+      console.log('🔍 Initializing form fields with user profile:', user?.incomeProfile);
+      // Initialize with existing profile data if available, otherwise use empty defaults
+      setIncomeBracket(user?.incomeProfile?.incomeBracket || '');
+      setAge(user?.incomeProfile?.age?.toString() || '');
+      setSelectedGoals(user?.incomeProfile?.investmentGoals || []);
+      setRiskTolerance(user?.incomeProfile?.riskTolerance || '');
+      setInvestmentHorizon(user?.incomeProfile?.investmentHorizon || '');
+      console.log('🔍 Form fields initialized - age set to:', user?.incomeProfile?.age?.toString() || '');
     }
-  }, [showProfileForm, user?.incomeProfile, hasProfile]);
+  }, [showProfileForm]); // Only depend on showProfileForm to avoid unnecessary re-runs
+
+  // Track age state changes
+  useEffect(() => {
+    console.log('🔍 Age state changed to:', age);
+  }, [age]);
   
 
+  // ✅ AI recs (skip only while ME is loading)
   const {
     data: recommendationsData,
     loading: recommendationsLoading,
@@ -1093,9 +1265,30 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
     refetch: refetchRecommendations,
     networkStatus,
   } = useQuery(GET_AI_RECOMMENDATIONS, {
-    fetchPolicy: 'network-only',          // ✅ Always fetch fresh data
-    skip: !hasProfile,                    // ✅ don't fetch until profile exists
+    variables: { 
+      profile: profileInput, 
+      usingDefaults 
+    },
+    skip: userLoading, // Only skip while ME is loading
+    fetchPolicy: 'network-only',
+    nextFetchPolicy: 'cache-first',
+    errorPolicy: 'all',
     notifyOnNetworkStatusChange: true,
+    onCompleted: (data) => {
+      const recs = data?.aiRecommendations?.buyRecommendations?.length ?? 0;
+      console.log('✅ AI Recommendations Query Completed:', {
+        usingDefaults,
+        recs,
+        portfolioValue: data?.aiRecommendations?.portfolioAnalysis?.totalValue,
+        hasData: !!data,
+        keys: Object.keys(data?.aiRecommendations ?? {}),
+      });
+    },
+    onError: (error) => {
+      console.error('❌ AI Recommendations Query Error:', error?.message);
+      console.error('   GraphQL errors:', error?.graphQLErrors);
+      console.error('   Network error:', error?.networkError);
+    },
   });
 
   // Quant screener for factor analysis
@@ -1105,13 +1298,36 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
   });
 
   // mutations
-  const [createIncomeProfile, { loading: creatingProfile }] = useMutation(CREATE_INCOME_PROFILE);
+  const [createIncomeProfile, { loading: creatingProfile }] = useMutation(CREATE_INCOME_PROFILE, {
+    // Update cache after mutation to reflect new profile
+    refetchQueries: [{ query: GET_USER_PROFILE }],
+    awaitRefetchQueries: true,
+  });
   const [generateAIRecommendations] = useMutation(GENERATE_AI_RECOMMENDATIONS);
   const client = useApolloClient();
 
   const rt = (user?.incomeProfile?.riskTolerance as RT) || '';
 
   const ai = recommendationsData?.aiRecommendations;
+  
+  // Debug logging for AI recommendations
+  React.useEffect(() => {
+    const recs = ai?.buyRecommendations ?? [];
+    console.log('🤖 AI Recommendations Debug:', {
+      hasProfile,
+      userLoading,
+      querySkipped: userLoading,
+      recommendationsLoading,
+      recommendationsError: recommendationsError?.message,
+      hasRecommendationsData: !!recommendationsData,
+      hasAi: !!ai,
+      buyRecommendationsCount: recs.length,
+      portfolioValue: ai?.portfolioAnalysis?.totalValue,
+      usingDefaults,
+      aiKeys: Object.keys(ai ?? {}),
+      firstRec: recs[0] ? Object.keys(recs[0]) : null,
+    });
+  }, [hasProfile, userLoading, recommendationsLoading, recommendationsError, recommendationsData, ai, usingDefaults]);
   const totalValue = ai?.portfolioAnalysis?.totalValue as number | undefined;
   
   // Profile-based policy and factor tilts
@@ -1196,8 +1412,19 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
     const finalRiskTolerance = riskTolerance || user?.incomeProfile?.riskTolerance || '';
     const finalInvestmentHorizon = investmentHorizon || user?.incomeProfile?.investmentHorizon || '';
 
-    if (!finalIncomeBracket || !finalAge || finalSelectedGoals.length === 0 || !finalRiskTolerance || !finalInvestmentHorizon) {
-      Alert.alert('Missing Information', 'Please fill in all fields.');
+    // Provide specific error messages for missing fields
+    const missingFields: string[] = [];
+    if (!finalIncomeBracket) missingFields.push('Annual Income');
+    if (!finalAge) missingFields.push('Age');
+    if (finalSelectedGoals.length === 0) missingFields.push('Investment Goals');
+    if (!finalRiskTolerance) missingFields.push('Risk Tolerance');
+    if (!finalInvestmentHorizon) missingFields.push('Investment Time Horizon');
+
+    if (missingFields.length > 0) {
+      Alert.alert(
+        'Missing Information',
+        `Please fill in the following fields:\n\n• ${missingFields.join('\n• ')}`
+      );
       return;
     }
     const parsedAge = parseInt(finalAge, 10);
@@ -1226,7 +1453,21 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
       if (data?.createIncomeProfile?.success) {
         Alert.alert('Success', 'Income profile saved.');
         setShowProfileForm(false);
-        await refetchUser();
+        
+        // Clear the cache for the user profile query to force fresh fetch
+        try {
+          await client.cache.evict({ fieldName: 'me' });
+          await client.cache.gc();
+        } catch (e) {
+          console.warn('Cache eviction warning:', e);
+        }
+        
+        // Force refetch from network to get updated profile
+        const refetchResult = await refetchUser({ fetchPolicy: 'network-only' });
+        console.log('🔄 Refetch result:', refetchResult.data?.me?.incomeProfile);
+        
+        // Small delay to ensure Apollo cache updates
+        await new Promise(resolve => setTimeout(resolve, 200));
         await handleGenerateRecommendations();
       } else {
         Alert.alert('Error', data?.createIncomeProfile?.message || 'Failed to create profile');
@@ -1252,23 +1493,26 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
     });
     console.log('🔍 hasProfile value:', hasProfile);
     
-    // Check if profile is complete before proceeding
+    // Proceed with defaults if profile is incomplete
     if (!hasProfile) {
-      console.log('❌ Profile incomplete - cannot generate recommendations');
-      Alert.alert(
-        'Profile Required', 
-        'Please complete your financial profile first to generate AI recommendations.',
-        [{ text: 'OK', onPress: () => setShowProfileForm(true) }]
-      );
-      return;
+      console.log('⚙️ Profile incomplete - proceeding with safe defaults');
+    } else {
+      console.log('✅ Profile complete - proceeding with generation');
     }
-    
-    console.log('✅ Profile complete - proceeding with generation');
     
     setIsGeneratingRecommendations(true);
     try {
+      console.log('⚙️ Generating AI recs (defaults ok):', { 
+        usingDefaults: !hasProfile,
+        profileInput 
+      });
       console.log('🚀 Calling generateAIRecommendations GraphQL mutation...');
-      const res = await generateAIRecommendations();
+      const res = await generateAIRecommendations({
+        variables: {
+          profile: profileInput,
+          usingDefaults: !hasProfile
+        }
+      });
       
       console.log('📥 GraphQL Response received:', {
         success: res.data?.generateAiRecommendations?.success,
@@ -1319,6 +1563,33 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
       refetchRecommendations({ fetchPolicy: 'network-only' });
     }
   }, [hasProfile, refetchRecommendations]);
+
+  // Auto-generate recommendations once if AI data is missing (works with defaults)
+  const autoGenTriggeredRef = React.useRef(false);
+  useEffect(() => {
+    const recsLength = ai?.buyRecommendations?.length ?? 0;
+    if (userLoading || recommendationsLoading) return;
+    // Don't check hasProfile - proceed with defaults if needed
+    if (recsLength > 0) return;
+
+    // Prevent double-fire in StrictMode and during fast refresh
+    if (autoGenTriggeredRef.current || GEN_ONCE_SENTINEL.fired) return;
+
+    console.log('Auto-gen guard:', { hasProfile, recsLength, usingDefaults: !hasProfile });
+    autoGenTriggeredRef.current = true;
+    GEN_ONCE_SENTINEL.fired = true;
+
+    handleGenerateRecommendations()
+      .then(async () => {
+        await refetchRecommendations({ fetchPolicy: 'network-only' });
+        console.log('✅ Auto-generation complete; list refetched.');
+      })
+      .catch((e: any) => {
+        console.log('❌ Auto-generation failed:', e?.message || String(e));
+        // Release only local guard to allow manual retry
+        autoGenTriggeredRef.current = false;
+      });
+  }, [userLoading, recommendationsLoading, hasProfile, ai?.buyRecommendations?.length, handleGenerateRecommendations, refetchRecommendations]);
 
   const onRefresh = useCallback(async () => {
     setIsRefreshing(true);
@@ -1371,19 +1642,32 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
       {/* Age */}
       <View style={styles.formGroup}>
         <Text style={styles.label}>Age</Text>
-        <StableNumberInput
+        <TextInput
           value={age}
-          onSubmitValue={(n) => {
-            // Validate when user submits or blurs
-            if (n === null || n < 18) {
+          onChangeText={(text) => {
+            console.log('🔍 Age onChangeText called with:', text);
+            // Only allow digits and limit to 3 characters
+            const cleaned = text.replace(/\D+/g, '').slice(0, 3);
+            setAge(cleaned);
+          }}
+          onBlur={() => {
+            console.log('🔍 Age onBlur called, current age:', age);
+            // Validate when user blurs
+            const numAge = parseInt(age, 10);
+            if (!age || isNaN(numAge) || numAge < 18) {
+              console.log('🔍 Age validation failed, setting to 18');
               setAge('18');
             } else {
-              setAge(String(n));
+              console.log('🔍 Age validation passed, keeping:', age);
             }
           }}
           style={styles.input}
           placeholder="Enter your age (minimum 18)"
           maxLength={3}
+          keyboardType="number-pad"
+          inputMode="numeric"
+          autoCorrect={false}
+          autoCapitalize="none"
         />
       </View>
 
@@ -1480,7 +1764,17 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
     </View>
   );
 
-  const SummaryCards = () => (
+  const SummaryCards = () => {
+    // ALWAYS LOG - no __DEV__ check
+    console.log('🟢🟢🟢🟢🟢 CRITICAL: SummaryCards FUNCTION CALLED!', {
+      hasAi: !!ai,
+      hasPortfolioAnalysis: !!ai?.portfolioAnalysis,
+      totalValue,
+      portfolioAnalysisKeys: ai?.portfolioAnalysis ? Object.keys(ai.portfolioAnalysis) : [],
+      portfolioAnalysisExpectedImpact: ai?.portfolioAnalysis?.expectedImpact,
+      portfolioAnalysisType: typeof ai?.portfolioAnalysis
+    });
+    return (
     <>
       {/* Portfolio Summary */}
       <View style={styles.portfolioSummary}>
@@ -1500,22 +1794,40 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
         </View>
       </View>
 
-      {/* Expected Impact (from new recommendations) */}
+      {/* Expected Impact */}
       <View style={styles.expectedImpactCard}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
           <Icon name="activity" size={18} color={COLORS.primary} />
-          <Text style={styles.sectionTitle}>Expected Impact (from new data)</Text>
+          <Text style={styles.sectionTitle}>Expected Impact</Text>
         </View>
         <Text style={styles.expectedLine}>
-          EV Return: <Text style={styles.boldText}>{evPct != null ? fmtPct(evPct * 100) : 'N/A'}</Text>
+          EV Return: <Text style={styles.boldText}>
+            {ai?.portfolioAnalysis?.expectedImpact?.evPct != null
+              ? fmtPct(ai.portfolioAnalysis.expectedImpact.evPct * 100)
+              : evPct != null 
+                ? fmtPct(evPct * 100) 
+                : 'N/A'}
+          </Text>
         </Text>
         {totalValue != null ? (
           <Text style={styles.expectedLine}>
-            EV Change: <Text style={styles.boldText}>{evAbs != null ? fmtMoney(evAbs) : 'N/A'}</Text> (this period)
+            EV Change: <Text style={styles.boldText}>
+              {ai?.portfolioAnalysis?.expectedImpact?.evAbs != null
+                ? fmtMoney(ai.portfolioAnalysis.expectedImpact.evAbs)
+                : evAbs != null 
+                  ? fmtMoney(evAbs) 
+                  : 'N/A'}
+            </Text> (this period)
           </Text>
         ) : (
           <Text style={styles.expectedLine}>
-            EV per $10k: <Text style={styles.boldText}>{per10k != null ? fmtMoney(per10k) : 'N/A'}</Text>
+            EV per $10k: <Text style={styles.boldText}>
+              {ai?.portfolioAnalysis?.expectedImpact?.per10k != null
+                ? fmtMoney(ai.portfolioAnalysis.expectedImpact.per10k)
+                : per10k != null 
+                  ? fmtMoney(per10k) 
+                  : 'N/A'}
+            </Text>
           </Text>
         )}
         <Text style={styles.expectedHint}>
@@ -1547,7 +1859,11 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
           <View style={styles.riskMetricItem}>
             <Icon name="alert-circle" size={20} color={COLORS.warning} />
             <Text style={styles.riskMetricLabel}>Max Drawdown</Text>
-            <Text style={styles.riskMetricValue}>{getMaxDrawdown(rt)}</Text>
+            <Text style={styles.riskMetricValue}>
+              {ai?.portfolioAnalysis?.risk?.maxDrawdownPct 
+                ? `${ai.portfolioAnalysis.risk.maxDrawdownPct}%` 
+                : getMaxDrawdown(rt || 'Moderate')}
+            </Text>
             <TouchableOpacity
               style={styles.infoButtonBottomRight}
               onPress={() =>
@@ -1564,7 +1880,7 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
           <View style={styles.riskMetricItem}>
             <Icon name="lock" size={20} color={COLORS.success} />
             <Text style={styles.riskMetricLabel}>Risk Level</Text>
-            <Text style={styles.riskMetricValue}>{rt || 'N/A'}</Text>
+            <Text style={styles.riskMetricValue}>{rt || 'Moderate'}</Text>
             <TouchableOpacity
               style={styles.infoButtonBottomRight}
               onPress={() =>
@@ -1584,12 +1900,34 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
       <View style={styles.allocationSection}>
         <Text style={styles.sectionTitle}>Asset Allocation</Text>
         <View style={styles.allocationGrid}>
-          {(['stocks', 'bonds', 'etfs', 'cash'] as const).map((k) => (
-            <View key={k} style={styles.allocationItem}>
-              <Text style={styles.allocationLabel}>{k[0].toUpperCase() + k.slice(1)}</Text>
-              <Text style={styles.allocationValue}>{riskAlloc[k]}</Text>
-            </View>
-          ))}
+          <View style={styles.allocationItem}>
+            <Text style={styles.allocationLabel}>Stocks</Text>
+            <Text style={styles.allocationValue}>
+              {ai?.portfolioAnalysis?.assetAllocation?.stocks 
+                ? `${(ai.portfolioAnalysis.assetAllocation.stocks * 100).toFixed(0)}%` 
+                : riskAlloc.stocks}
+            </Text>
+          </View>
+          <View style={styles.allocationItem}>
+            <Text style={styles.allocationLabel}>Bonds</Text>
+            <Text style={styles.allocationValue}>
+              {ai?.portfolioAnalysis?.assetAllocation?.bonds 
+                ? `${(ai.portfolioAnalysis.assetAllocation.bonds * 100).toFixed(0)}%` 
+                : riskAlloc.bonds}
+            </Text>
+          </View>
+          <View style={styles.allocationItem}>
+            <Text style={styles.allocationLabel}>ETFs</Text>
+            <Text style={styles.allocationValue}>{riskAlloc.etfs}</Text>
+          </View>
+          <View style={styles.allocationItem}>
+            <Text style={styles.allocationLabel}>Cash</Text>
+            <Text style={styles.allocationValue}>
+              {ai?.portfolioAnalysis?.assetAllocation?.cash 
+                ? `${(ai.portfolioAnalysis.assetAllocation.cash * 100).toFixed(0)}%` 
+                : riskAlloc.cash}
+            </Text>
+          </View>
         </View>
       </View>
 
@@ -1597,20 +1935,53 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
       <View style={styles.sectorSection}>
         <Text style={styles.sectionTitle}>Portfolio Allocation</Text>
         <View style={styles.sectorGrid}>
-          {(['Technology', 'Healthcare', 'Financials'] as const).map((sector) => (
-            <View key={sector} style={styles.sectorItem}>
-              <Text style={styles.sectorLabel}>{sector}</Text>
-              <Text style={styles.sectorValue}>
-                {ai?.portfolioAnalysis?.sectorBreakdown?.[sector] ?? 0}%
-              </Text>
-            </View>
-          ))}
+          {(() => {
+            // Parse sectorBreakdown if it's a string, otherwise use as object
+            let sectorData: Record<string, number> = {};
+            if (ai?.portfolioAnalysis?.sectorBreakdown) {
+              if (typeof ai.portfolioAnalysis.sectorBreakdown === 'string') {
+                try {
+                  sectorData = JSON.parse(ai.portfolioAnalysis.sectorBreakdown);
+                } catch (e) {
+                  console.warn('Failed to parse sectorBreakdown:', e);
+                }
+              } else {
+                sectorData = ai.portfolioAnalysis.sectorBreakdown as Record<string, number>;
+              }
+            }
+            
+            // Get unique sectors from backend data or use defaults
+            const sectors = Object.keys(sectorData).length > 0 
+              ? Object.keys(sectorData).slice(0, 6) 
+              : ['Technology', 'Healthcare', 'Financials', 'Consumer', 'Energy', 'Other'];
+            
+            return sectors.map((sector) => {
+              const pct = sectorData[sector] ?? 0;
+              return (
+                <View key={sector} style={styles.sectorItem}>
+                  <Text style={styles.sectorLabel} numberOfLines={1} adjustsFontSizeToFit minimumScaleFactor={0.8}>
+                    {sector}
+                  </Text>
+                  <Text style={styles.sectorValue}>
+                    {(pct * 100).toFixed(0)}%
+                  </Text>
+                </View>
+              );
+            });
+          })()}
         </View>
       </View>
     </>
   );
+  };
 
   const Recommendations = () => {
+    if (__DEV__) {
+      console.log('🔵🔵🔵 BREAKPOINT: Recommendations component rendered', {
+        hasAi: !!ai,
+        buyRecommendationsCount: ai?.buyRecommendations?.length || 0
+      });
+    }
     if (!ai) return <EmptyRecs />;
 
     return (
@@ -1629,7 +2000,10 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
           </TouchableOpacity>
         </View>
 
-        <SummaryCards />
+        {(() => {
+          if (__DEV__) console.log('🔵 BREAKPOINT: About to render SummaryCards inside Recommendations');
+          return <SummaryCards />;
+        })()}
 
         {/* Stock Picks - only show if not hidden */}
         <View style={styles.stocksSection}>
@@ -1710,13 +2084,14 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
           </View>
 
           <FlatList
-            data={(showPersonalized ? personalizedRecs : ai.buyRecommendations) || []}
+            data={(showPersonalized ? personalizedRecs : ai?.buyRecommendations) || []}
             keyExtractor={(it: any, idx: number) => {
-              const symbol = it?.symbol || `unknown-${idx}`;
-              return `${symbol}-${idx}`;
+              // Use id if available, otherwise symbol, otherwise index
+              return it?.id ?? it?.symbol ?? `rec-${idx}`;
             }}
             renderItem={({ item }) => <StockCard item={item} showPersonalized={showPersonalized} optResult={optResult} />}
             scrollEnabled={false}
+            removeClippedSubviews={false} // ✅ Disable virtualization for debugging
             ListEmptyComponent={
               <View style={{ padding: 20, alignItems: 'center' }}>
                 {paused ? (
@@ -1730,8 +2105,42 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
                       equity recommendations will be available.
                     </Text>
                   </>
+                ) : recommendationsLoading ? (
+                  <View style={{ alignItems: 'center' }}>
+                    <ActivityIndicator size="small" color={COLORS.primary} />
+                    <Text style={{ color: COLORS.subtext, textAlign: 'center', marginTop: 8 }}>Loading recommendations...</Text>
+                  </View>
+                ) : !hasProfile ? (
+                  <View style={{ alignItems: 'center' }}>
+                    <Text style={{ color: COLORS.subtext, textAlign: 'center', marginBottom: 8 }}>
+                      Showing recommendations with default settings.
+                    </Text>
+                    <Text style={{ color: COLORS.subtext, textAlign: 'center', marginBottom: 12, fontSize: 12 }}>
+                      Complete your profile for personalized recommendations.
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => setShowProfileForm(true)}
+                      style={{ padding: 10, backgroundColor: COLORS.primary, borderRadius: 6 }}
+                    >
+                      <Text style={{ color: 'white', fontWeight: '600' }}>Complete Profile</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : recommendationsError ? (
+                  <View style={{ alignItems: 'center' }}>
+                    <Text style={{ color: COLORS.danger, textAlign: 'center', marginBottom: 8 }}>
+                      Error loading recommendations.
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => refetchRecommendations()}
+                      style={{ padding: 8, backgroundColor: COLORS.primary, borderRadius: 4 }}
+                    >
+                      <Text style={{ color: 'white', fontSize: 12 }}>Retry</Text>
+                    </TouchableOpacity>
+                  </View>
                 ) : (
-              <Text style={{ color: COLORS.subtext, textAlign: 'center' }}>No buy recommendations yet.</Text>
+                  <Text style={{ color: COLORS.subtext, textAlign: 'center' }}>
+                    No buy recommendations available.
+                  </Text>
                 )}
               </View>
             }
@@ -1844,7 +2253,18 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
       </View>
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        {showProfileForm || (!hasProfile && !ai?.buyRecommendations?.length) ? (
+        {(() => {
+          const useScrollView = showProfileForm || (!hasProfile && !ai?.buyRecommendations?.length);
+          if (__DEV__) {
+            console.log('🔵 Render path check:', {
+              showProfileForm,
+              hasProfile,
+              buyRecsLength: ai?.buyRecommendations?.length || 0,
+              useScrollView
+            });
+          }
+          return useScrollView;
+        })() ? (
           // Use ScrollView when form is open, no profile, or no recommendations to ensure proper scrolling
           <ScrollView
             style={styles.content}
@@ -1864,48 +2284,119 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
               recommendationsError={recommendationsError}
               refetchRecommendations={refetchRecommendations}
               Recommendations={Recommendations}
+              SummaryCards={SummaryCards}
+              hideStockPicks={false} // Show stocks in ScrollView path
               isGeneratingRecommendations={isGeneratingRecommendations}
               handleGenerateRecommendations={handleGenerateRecommendations}
             />
           </ScrollView>
         ) : (
           // Use FlatList only when we have actual stock recommendations to display
+          (() => {
+            if (__DEV__) {
+              console.log('🔵🔵🔵 BREAKPOINT: Rendering FlatList path', {
+                hasAi: !!ai,
+                buyRecommendationsCount: ai?.buyRecommendations?.length || 0,
+                hasSummaryCards: !!SummaryCards,
+                hasPortfolioAnalysis: !!ai?.portfolioAnalysis
+              });
+            }
+            return (
           <FlatList
-            key={`flatlist-${ai?.buyRecommendations?.length || 0}-${Date.now()}`}
+            key={`flatlist-${usingDefaults ? 'defaults' : 'personalized'}-${ai?.buyRecommendations?.length || 0}`}
             style={{ flex: 1 }}
             data={(showPersonalized ? personalizedRecs : ai?.buyRecommendations) || []}
             keyExtractor={(it: any, idx: number) => {
-              const symbol = it?.symbol || `unknown-${idx}`;
-              return `${symbol}-${idx}`;
+              // Use id if available, otherwise symbol, otherwise index
+              return it?.id ?? it?.symbol ?? `rec-${idx}`;
             }}
-            renderItem={({ item }: { item: any; index: number }) => (
-              <StockCard item={item} showPersonalized={showPersonalized} optResult={optResult} />
-            )}
+            removeClippedSubviews={false} // ✅ Disable virtualization for debugging
+            renderItem={({ item, index }: { item: any; index: number }) => {
+              if (__DEV__) {
+                console.log('🔵 FlatList renderItem called:', { symbol: item?.symbol, index });
+              }
+              return <StockCard item={item} showPersonalized={showPersonalized} optResult={optResult} />;
+            }}
             ListHeaderComponent={
-              <ListHeader 
-                hasProfile={hasProfile}
-                user={user}
-                showProfileForm={showProfileForm}
-                setShowProfileForm={setShowProfileForm}
-                Form={Form}
-                recommendationsLoading={recommendationsLoading}
-                ai={ai}
-                recommendationsError={recommendationsError}
-                refetchRecommendations={refetchRecommendations}
-                Recommendations={Recommendations}
-                hideStockPicks={true} // Hide stock picks in header since they're rendered as FlatList items
-                isGeneratingRecommendations={isGeneratingRecommendations}
-                handleGenerateRecommendations={handleGenerateRecommendations}
-              />
+              (() => {
+                if (__DEV__) {
+                  console.log('🔵🔵🔵 BREAKPOINT: FlatList ListHeaderComponent rendering', {
+                    hasSummaryCards: !!SummaryCards,
+                    hasAi: !!ai,
+                    hasPortfolioAnalysis: !!ai?.portfolioAnalysis
+                  });
+                }
+                return (
+                  <ListHeader 
+                    hasProfile={hasProfile}
+                    user={user}
+                    showProfileForm={showProfileForm}
+                    setShowProfileForm={setShowProfileForm}
+                    Form={Form}
+                    recommendationsLoading={recommendationsLoading}
+                    ai={ai}
+                    recommendationsError={recommendationsError}
+                    refetchRecommendations={refetchRecommendations}
+                    Recommendations={Recommendations}
+                    SummaryCards={SummaryCards}
+                    hideStockPicks={true} // Hide stock picks in header since main FlatList shows them
+                    isGeneratingRecommendations={isGeneratingRecommendations}
+                    handleGenerateRecommendations={handleGenerateRecommendations}
+                    optimizing={optimizing}
+                    paused={paused}
+                    policy={policy}
+                    personalizedRecs={personalizedRecs}
+                    zBySymbol={zBySymbol}
+                    optResult={optResult}
+                    setOptimizing={setOptimizing}
+                    setOptResult={setOptResult}
+                  />
+                );
+              })()
             }
             ListFooterComponent={
               // Add Analysis Methodology as footer to ensure it's always last
               <AnalysisMethodology ai={ai} />
             }
             ListEmptyComponent={
-              hasProfile
-                ? (!recommendationsLoading ? <Text style={{ color: COLORS.subtext, textAlign: 'center' }}>No buy recommendations yet.</Text> : null)
-                : null
+              recommendationsLoading ? null : (
+                hasProfile ? (
+                  !ai?.buyRecommendations?.length ? (
+                    <View style={{ padding: 20, alignItems: 'center' }}>
+                      <Text style={{ color: COLORS.subtext, textAlign: 'center', marginBottom: 12 }}>
+                        {recommendationsError ? 'Error loading recommendations. Pull to refresh.' : 'No buy recommendations yet.'}
+                      </Text>
+                      {recommendationsError && (
+                        <TouchableOpacity
+                          onPress={() => refetchRecommendations()}
+                          style={{ padding: 8, backgroundColor: COLORS.primary, borderRadius: 4 }}
+                        >
+                          <Text style={{ color: 'white', fontSize: 12 }}>Retry</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  ) : null
+                ) : (
+                  <View style={{ padding: 20, alignItems: 'center' }}>
+                    <Text style={{ color: COLORS.subtext, textAlign: 'center', marginBottom: 8 }}>
+                      {hasProfile ? 'No buy recommendations available.' : 'Showing recommendations with default settings.'}
+                    </Text>
+                    {!hasProfile && (
+                      <>
+                        <Text style={{ color: COLORS.subtext, textAlign: 'center', marginBottom: 12, fontSize: 12 }}>
+                          Complete your profile for personalized recommendations.
+                        </Text>
+                        <TouchableOpacity
+                          onPress={() => setShowProfileForm(true)}
+                          style={{ padding: 10, backgroundColor: COLORS.primary, borderRadius: 6 }}
+                        >
+                          <Text style={{ color: 'white', fontWeight: '600' }}>Complete Profile</Text>
+                        </TouchableOpacity>
+                      </>
+                    )}
+                  </View>
+                )
+              )
             }
             refreshing={isRefreshing || networkStatus === 4}
             onRefresh={onRefresh}
@@ -1918,6 +2409,8 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
             windowSize={5}
             removeClippedSubviews
           />
+            )
+          })()
         )}
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -2027,20 +2520,36 @@ const styles = StyleSheet.create({
 
   /* Recs container */
   recommendationsContainer: { backgroundColor: COLORS.card, borderRadius: 12, padding: SPACING },
-  recommendationHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, gap: 12, paddingLeft: 0 },
-  recommendationTitle: { fontSize: 20, fontWeight: 'bold', color: COLORS.text, flex: 1, marginRight: 12 },
+  recommendationHeader: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    marginBottom: 20, 
+    gap: 8, 
+    paddingLeft: 0,
+    flexWrap: 'wrap'
+  },
+  recommendationTitle: { 
+    fontSize: 18, 
+    fontWeight: 'bold', 
+    color: COLORS.text, 
+    flexShrink: 1, 
+    marginRight: 8,
+    maxWidth: '70%'
+  },
   regenerateButton: { 
     flexDirection: 'row', 
     alignItems: 'center', 
     gap: 6, 
-    paddingHorizontal: 12, 
-    paddingVertical: 8, 
+    paddingHorizontal: 10, 
+    paddingVertical: 6, 
     backgroundColor: COLORS.muted, 
     borderRadius: 20, 
     borderWidth: 1, 
-    borderColor: COLORS.primary 
+    borderColor: COLORS.primary,
+    flexShrink: 0
   },
-  regenerateButtonText: { fontSize: 12, fontWeight: '600', color: COLORS.primary },
+  regenerateButtonText: { fontSize: 11, fontWeight: '600', color: COLORS.primary },
 
   portfolioSummary: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
   summaryItem: { alignItems: 'center', flex: 1 },
@@ -2119,10 +2628,36 @@ const styles = StyleSheet.create({
   },
 
   sectorSection: { marginBottom: 24 },
-  sectorGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-around', gap: 10 },
-  sectorItem: { alignItems: 'center', padding: 16, backgroundColor: COLORS.pill, borderRadius: 8, flex: 1 },
-  sectorLabel: { fontSize: 12, color: COLORS.subtext, marginBottom: 4 },
-  sectorValue: { fontSize: 18, fontWeight: 'bold', color: COLORS.primary },
+  sectorGrid: { 
+    flexDirection: 'row', 
+    flexWrap: 'wrap', 
+    justifyContent: 'space-between', 
+    gap: 8
+  },
+  sectorItem: { 
+    alignItems: 'center', 
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    backgroundColor: COLORS.pill, 
+    borderRadius: 8, 
+    flexBasis: '18%',
+    flexGrow: 0,
+    flexShrink: 0
+  },
+  sectorLabel: { 
+    fontSize: 11, 
+    color: COLORS.subtext, 
+    marginBottom: 6,
+    textAlign: 'center',
+    fontWeight: '500'
+  },
+  sectorValue: { 
+    fontSize: 16, 
+    fontWeight: 'bold', 
+    color: COLORS.primary,
+    textAlign: 'center'
+  },
 
   methodologySection: { marginTop: 24 },
   methodologyItem: { marginBottom: 16, padding: 12, backgroundColor: COLORS.card, borderRadius: 8, borderWidth: 1, borderColor: COLORS.border },

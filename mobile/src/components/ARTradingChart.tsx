@@ -1,8 +1,3 @@
-"""
-Advanced Mobile Features for Day Trading
-AR gestures, haptic feedback, and mobile-optimized trading
-"""
-
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,

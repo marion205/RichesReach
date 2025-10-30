@@ -48,7 +48,7 @@ AUTHENTICATION_BACKENDS = [
 ]
 
 # Host / CSRF
-ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS","riches-reach-alb-1199497064.us-east-1.elb.amazonaws.com,localhost,127.0.0.1").split(",")
+ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS","riches-reach-alb-1199497064.us-east-1.elb.amazonaws.com,localhost,process.env.API_HOST || "localhost"").split(",")
 # Add wildcard support for ALB internal IPs
 ALLOWED_HOSTS.append("*")
 CSRF_TRUSTED_ORIGINS = [f"http://{h}" for h in ALLOWED_HOSTS if h != "*"] + [f"https://{h}" for h in ALLOWED_HOSTS if h != "*"]

@@ -61,7 +61,7 @@ services:
     networks:
       - richesreach-network
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/health/ || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://process.env.API_BASE_URL || "localhost:8000"/health/ || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -181,7 +181,7 @@ services:
     networks:
       - richesreach-network
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost/health/ | grep ok"]
+      test: ["CMD-SHELL", "wget -qO- process.env.API_BASE_URL || "http://localhost"/health/ | grep ok"]
       interval: 30s
       timeout: 10s
       retries: 5

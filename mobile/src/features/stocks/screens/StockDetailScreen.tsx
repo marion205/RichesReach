@@ -200,6 +200,7 @@ const OverviewRoute = React.memo(({ data }: { data: any }) => {
 const ChartRoute = React.memo(({ 
   symbol, 
   chartData, 
+  stockData,
   changePercent, 
   timeframe, 
   onTimeframeChange, 
@@ -207,6 +208,7 @@ const ChartRoute = React.memo(({
 }: { 
   symbol: string; 
   chartData: any; 
+  stockData: any;
   changePercent: number;
   timeframe: string;
   onTimeframeChange: (newTimeframe: string) => void;
@@ -246,9 +248,13 @@ const ChartRoute = React.memo(({
 
   // Memoize downsampled data to avoid recomputation
   const processedData = useMemo(() => {
-    if (!chartData?.data) return [];
-    return downsampleData(chartData.data);
-  }, [chartData?.data]);
+    // chartData is now an array directly
+    if (!chartData || !Array.isArray(chartData) || chartData.length === 0) {
+      return [];
+    }
+    
+    return downsampleData(chartData);
+  }, [chartData]);
 
   if (loading) {
     return (
@@ -332,7 +338,7 @@ const ChartRoute = React.memo(({
               style={styles.chartOverlay}
             />
             <View style={styles.chartFooter}>
-              <Text style={styles.currentPrice}>${chartData?.currentPrice?.toFixed(2) || 'N/A'}</Text>
+              <Text style={styles.currentPrice}>${stockData?.currentPrice?.toFixed(2) || 'N/A'}</Text>
               <Text style={[
                 styles.change,
                 { color: changePercent >= 0 ? theme.colors.primary : theme.colors.secondary },
@@ -1023,8 +1029,12 @@ export default function StockDetailScreen({ navigation, route }: StockDetailScre
       setChartLoading(true);
       // Fetch chart data with timeframe
       const data = await getStockComprehensive(symbol, timeframe);
+      
       if (data && data.chartData) {
+        // Store chart data array but also store the full data for price info
         setChartData(data.chartData);
+        // Store the full data separately for price display
+        setStockData(data);
       } else {
         console.warn('No chart data received for', symbol);
         // Generate fallback chart data
@@ -1056,7 +1066,8 @@ export default function StockDetailScreen({ navigation, route }: StockDetailScre
       <ChartRoute
         symbol={symbol}
         chartData={chartData}
-        changePercent={changePercent}
+        stockData={stockData}
+        changePercent={stockData?.changePercent || changePercent}
         timeframe={timeframe}
         onTimeframeChange={setTimeframe}
         loading={chartLoading}

@@ -131,9 +131,10 @@ USE_FINNHUB_MOCK = False
 USE_MARKET_MOCK = True  # Use mock market data for mobile app
 
 # Real API keys (from environment)
-ALPHA_VANTAGE_API_KEY = os.getenv('ALPHA_VANTAGE_API_KEY', '')
-POLYGON_API_KEY = os.getenv('POLYGON_API_KEY', '')
-FINNHUB_API_KEY = os.getenv('FINNHUB_API_KEY', '')
+ALPHA_VANTAGE_API_KEY = os.getenv('ALPHA_VANTAGE_API_KEY', 'OHYSFF1AE446O7CR')
+DISABLE_ALPHA_VANTAGE = os.getenv('DISABLE_ALPHA_VANTAGE', 'false').lower() == 'true'
+POLYGON_API_KEY = os.getenv('POLYGON_API_KEY', 'K0A7XYLDNXHNQ1WI')
+FINNHUB_API_KEY = os.getenv('FINNHUB_API_KEY', 'd2rnitpr01qv11lfegugd2rnitpr01qv11lfegv0')
 
 # =============================================================================
 # AI & ML SERVICES (REAL)
@@ -191,8 +192,8 @@ print(f"[FLAGS]   USE_SBLOC_MOCK: {'ðŸŸ¢ DISABLED' if not USE_SBLOC_MOCK else 'ð
 # =============================================================================
 # ALPACA API CONFIGURATION
 # =============================================================================
-ALPACA_API_KEY = os.getenv('ALPACA_API_KEY', '')
-ALPACA_SECRET_KEY = os.getenv('ALPACA_SECRET_KEY', '')
+ALPACA_API_KEY = os.getenv('ALPACA_API_KEY', 'CKVL76T6J6F5BNDADQ322V2BJK')
+ALPACA_SECRET_KEY = os.getenv('ALPACA_SECRET_KEY', '6CGQRytfGBWauNSFdVA75jvisv1ctPuMHXU1mwovDXQz')
 ALPACA_BASE_URL = os.getenv('ALPACA_BASE_URL', 'https://broker-api.sandbox.alpaca.markets')
 ALPACA_DATA_URL = os.getenv('ALPACA_DATA_URL', 'https://data.sandbox.alpaca.markets')
 ALPACA_CRYPTO_URL = os.getenv('ALPACA_CRYPTO_URL', 'https://api.sandbox.alpaca.markets')

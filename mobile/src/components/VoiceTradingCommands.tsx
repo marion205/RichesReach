@@ -1,8 +1,3 @@
-"""
-Voice AI Trading Commands Component
-React Native component for voice trading integration
-"""
-
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -70,7 +65,7 @@ const VoiceTradingCommands: React.FC<VoiceTradingCommandsProps> = ({
     setIsProcessing(true);
     
     try {
-      const response = await fetch('http://localhost:8000/api/voice-trading/process-command/', {
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000"}/api/voice-trading/process-command/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -166,7 +161,7 @@ const VoiceTradingCommands: React.FC<VoiceTradingCommandsProps> = ({
 
   const getHelpCommands = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/voice-trading/help-commands/');
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000"}/api/voice-trading/help-commands/`);
       const data = await response.json();
       
       if (data.success) {

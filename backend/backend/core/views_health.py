@@ -41,7 +41,7 @@ def health_check(request):
     # Redis check
     try:
         redis_client = redis.Redis.from_url(
-            getattr(settings, 'REDIS_URL', 'redis://localhost:6379/0'),
+            getattr(settings, 'REDIS_URL', 'redis://process.env.REDIS_HOST || "localhost:6379"/0'),
             socket_connect_timeout=2,
             socket_timeout=2
         )

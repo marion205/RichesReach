@@ -247,9 +247,9 @@ const LessonCard: React.FC<{
                   },
                 ]}
               >
-                <Text style={styles.lessonIcon}>{lesson.icon} ✨</Text> {/* Playful sparkle emoji */}
+                <Text style={styles.lessonIcon}>{lesson.icon} ✨</Text>
               </Animated.View>
-              <Text style={styles.lessonCardTitle}>{lesson.topic} 🎯</Text> {/* Emojis for fun */}
+              <Text style={styles.lessonCardTitle}>{lesson.topic} 🎯</Text>
               <Text style={styles.lessonDifficulty}>{lesson.difficulty} Level</Text>
               <View style={styles.lessonReward}>
                 <Text style={styles.lessonRewardText}>✨ {lesson.xpReward} XP ✨</Text>
@@ -723,7 +723,7 @@ const TutorScreen: React.FC<TutorScreenProps> = ({ navigation }) => {
   const startNewLesson = async (topic: string) => {
     try {
       console.log('Starting lesson with topic:', topic);
-      console.log('API endpoint:', process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8002');
+      console.log('API endpoint:', process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8000');
       
       const { data } = await startLesson({
         variables: { topic, regime: 'BULL' }

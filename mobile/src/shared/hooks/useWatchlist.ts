@@ -7,6 +7,10 @@ export const GET_MY_WATCHLIST = gql`
       id
       stock {
         symbol
+        companyName
+        currentPrice
+        change
+        changePercent
       }
       addedAt
       notes
@@ -16,8 +20,8 @@ export const GET_MY_WATCHLIST = gql`
 `;
 
 const ADD_TO_WATCHLIST = gql`
-  mutation AddToWatchlist($symbol: String!, $companyName: String, $notes: String) {
-    addToWatchlist(symbol: $symbol, companyName: $companyName, notes: $notes) {
+  mutation AddToWatchlist($symbol: String!, $company_name: String, $notes: String) {
+    addToWatchlist(symbol: $symbol, company_name: $company_name, notes: $notes) {
       success
       message
     }
@@ -42,14 +46,50 @@ export function useWatchlist(skip = false) {
   const [add] = useMutation(ADD_TO_WATCHLIST, {
     onCompleted: (res) => {
       if (res?.addToWatchlist?.success) {
-        Alert.alert('Success', res.addToWatchlist.message);
+        // Don't show alert here - let the calling component handle it
+        console.log('✅ Watchlist item added successfully');
       }
     },
-    update: (cache) => {
-      // Simple refetch; if you prefer, write cache manually
-      cache.evict({ fieldName: 'myWatchlist' });
-      cache.gc();
+    update: (cache, { data }, { variables }) => {
+      if (data?.addToWatchlist?.success && variables) {
+        // Try optimistic update first
+        try {
+          const existing = cache.readQuery({ query: GET_MY_WATCHLIST });
+          const newItem = {
+            __typename: 'WatchlistItem',
+            id: `temp-${variables.symbol}-${Date.now()}`,
+            stock: {
+              __typename: 'Stock',
+              symbol: variables.symbol,
+              companyName: variables.company_name || variables.symbol,
+              currentPrice: null,
+              change: null,
+              changePercent: null,
+            },
+            addedAt: new Date().toISOString(),
+            notes: variables.notes || '',
+            targetPrice: null,
+          };
+          
+          cache.writeQuery({
+            query: GET_MY_WATCHLIST,
+            data: {
+              myWatchlist: [
+                ...(existing?.myWatchlist || []),
+                newItem,
+              ],
+            },
+          });
+        } catch (e) {
+          // If optimistic update fails, evict and refetch
+          console.log('Optimistic update failed, evicting cache');
+          cache.evict({ fieldName: 'myWatchlist' });
+          cache.gc();
+        }
+      }
     },
+    refetchQueries: [{ query: GET_MY_WATCHLIST }], // Force refetch after mutation
+    awaitRefetchQueries: true, // Wait for refetch to complete
   });
 
   const [remove] = useMutation(REMOVE_FROM_WATCHLIST, {
@@ -70,7 +110,7 @@ export function useWatchlist(skip = false) {
 
   return {
     list,
-    addToWatchlist: (symbol: string, companyName?: string, notes?: string) => add({ variables: { symbol, companyName, notes } }),
+    addToWatchlist: (symbol: string, companyName?: string, notes?: string) => add({ variables: { symbol, company_name: companyName, notes } }),
     removeFromWatchlist: (symbol: string) => remove({ variables: { symbol } }),
   };
 }

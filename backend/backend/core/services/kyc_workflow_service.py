@@ -97,12 +97,12 @@ class KYCWorkflowService:
                     {
                         "agreement": "customer_agreement",
                         "signed_at": datetime.now().isoformat(),
-                        "ip_address": kyc_data.get('ip_address', '127.0.0.1')
+                        "ip_address": kyc_data.get('ip_address', 'process.env.API_HOST || "localhost"')
                     },
                     {
                         "agreement": "disclosure_day_trading",
                         "signed_at": datetime.now().isoformat(),
-                        "ip_address": kyc_data.get('ip_address', '127.0.0.1')
+                        "ip_address": kyc_data.get('ip_address', 'process.env.API_HOST || "localhost"')
                     }
                 ],
                 "trusted_contact": {

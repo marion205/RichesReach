@@ -30,14 +30,14 @@ ALLOWED_HOSTS = ['*']
 # CORS settings for local development
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://192.168.1.236:3000",  # Your local IP
-    "http://localhost:19006",  # Expo dev server
-    "http://192.168.1.236:19006",  # Expo dev server on your IP
+    "http://localhost:3000",
+    "http://localhost:3000",  # Your local IP
+    "process.env.API_BASE_URL || "http://localhost":19006",  # Expo dev server
+    "http://localhost:19006",  # Expo dev server on your IP
     "http://localhost:8081",  # Metro bundler
-    "http://192.168.1.236:8081",  # Metro bundler on your IP
-    "http://localhost:8082",  # Alternative Metro port
-    "http://192.168.1.236:8082",  # Alternative Metro port on your IP
+    "http://localhost:8081",  # Metro bundler on your IP
+    "process.env.API_BASE_URL || "http://localhost":8082",  # Alternative Metro port
+    "http://localhost:8082",  # Alternative Metro port on your IP
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -48,15 +48,15 @@ SECURE_SSL_REDIRECT = False
 # CSRF settings for local development
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:8000",
-    "http://127.0.0.1:8000",
-    "http://192.168.1.236:8000",
+    "http://localhost:8000",
+    "http://localhost:8000",
     "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://192.168.1.236:3000",
+    "http://localhost:3000",
+    "http://localhost:3000",
     "http://localhost:8081",
-    "http://192.168.1.236:8081",
+    "http://localhost:8081",
+    "process.env.API_BASE_URL || "http://localhost":8082",
     "http://localhost:8082",
-    "http://192.168.1.236:8082",
 ]
 
 # Enable GraphiQL for local development

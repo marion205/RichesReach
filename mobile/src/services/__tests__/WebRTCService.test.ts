@@ -68,7 +68,7 @@ describe('WebRTCService', () => {
     });
     
     webRTCService = new WebRTCService({
-      serverUrl: 'http://localhost:3001',
+      serverUrl: 'process.env.WHISPER_API_URL || "http://localhost:3001"',
       stunServers: ['stun:stun.l.google.com:19302'],
     });
   });

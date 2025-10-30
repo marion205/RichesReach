@@ -234,7 +234,7 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
       } as any);
 
       // Send to backend for Whisper transcription and AI processing
-      const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://127.0.0.1:8000';
+      const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000";
       console.log('🎤 Sending to API:', `${API_BASE_URL}/api/voice/process/`);
       const response = await fetch(`${API_BASE_URL}/api/voice/process/`, {
         method: 'POST',
@@ -300,7 +300,7 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
       Speech.stop();
       
       // Use the voice synthesis API with selected voice
-      const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+      const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000";
       const response = await fetch(`${API_BASE_URL}/api/voice-ai/synthesize/`, {
         method: 'POST',
         headers: {

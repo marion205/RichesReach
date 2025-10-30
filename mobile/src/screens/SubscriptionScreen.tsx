@@ -51,13 +51,13 @@ const SubscriptionScreen: React.FC = () => {
     setLoading(true);
     try {
       const [plansResponse, subscriptionResponse] = await Promise.allSettled([
-        fetch(`${process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/billing/plans/`, {
+        fetch(`${process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000"}/api/billing/plans/`, {
           headers: {
             'Authorization': `Token ${token}`,
             'Content-Type': 'application/json',
           },
         }),
-        fetch(`${process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/billing/subscription/`, {
+        fetch(`${process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000"}/api/billing/subscription/`, {
           headers: {
             'Authorization': `Token ${token}`,
             'Content-Type': 'application/json',
@@ -95,7 +95,7 @@ const SubscriptionScreen: React.FC = () => {
     }
 
     try {
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/billing/subscribe/`, {
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000"}/api/billing/subscribe/`, {
         method: 'POST',
         headers: {
           'Authorization': `Token ${token}`,
@@ -137,7 +137,7 @@ const SubscriptionScreen: React.FC = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              const response = await fetch(`${process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/billing/cancel/`, {
+              const response = await fetch(`${process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000"}/api/billing/cancel/`, {
                 method: 'POST',
                 headers: {
                   'Authorization': `Token ${token}`,

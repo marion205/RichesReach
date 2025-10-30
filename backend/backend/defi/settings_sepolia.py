@@ -15,9 +15,9 @@ SEPOLIA_ASSETS = {
 
 # CORS Configuration for Sepolia testing
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:19006",   # Expo web
+    "process.env.API_BASE_URL || "http://localhost":19006",   # Expo web
     "exp://192.168.1.151:19000", # Expo dev
-    "exp://127.0.0.1:19000",   # Expo local
+    "exp://process.env.API_HOST || "localhost":19000",   # Expo local
 ]
 
 # Rate limiting for testnet

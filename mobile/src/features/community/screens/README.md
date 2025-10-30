@@ -59,7 +59,7 @@ EXPO_PUBLIC_AGORA_APP_ID=your_agora_app_id_here
 EXPO_PUBLIC_AGORA_TOKEN=your_agora_token_here
 
 # Backend API
-EXPO_PUBLIC_API_BASE_URL=http://localhost:8000
+EXPO_PUBLIC_API_BASE_URL=http://process.env.API_BASE_URL || "localhost:8000"
 ```
 
 ### 2. Update Configuration File

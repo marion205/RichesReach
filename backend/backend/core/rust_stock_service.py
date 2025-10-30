@@ -10,7 +10,7 @@ class RustStockService:
 Service to communicate with the Rust Stock Analysis Engine
 """
 def __init__(self):
-self.base_url = "http://localhost:3001"
+self.base_url = "process.env.WHISPER_API_URL || "http://localhost:3001""
 self.session = requests.Session()
 self.session.headers.update({
 'Content-Type': 'application/json',

@@ -152,10 +152,10 @@ echo "==========================="
 cd ../backend/backend
 
 # Test health endpoints
-run_check "Health endpoint accessible" "curl -s http://localhost:8000/health/ | grep -q 'UP'" "success" || print_status "WARN" "Health endpoint not accessible (server may not be running)"
+run_check "Health endpoint accessible" "curl -s http://process.env.API_BASE_URL || "localhost:8000"/health/ | grep -q 'UP'" "success" || print_status "WARN" "Health endpoint not accessible (server may not be running)"
 
 # Test GraphQL endpoint
-run_check "GraphQL endpoint accessible" "curl -s -X POST http://localhost:8000/graphql/ -H 'Content-Type: application/json' -d '{\"query\":\"{ __schema { types { name } } }\"}' | grep -q 'data'" "success" || print_status "WARN" "GraphQL endpoint not accessible (server may not be running)"
+run_check "GraphQL endpoint accessible" "curl -s -X POST http://process.env.API_BASE_URL || "localhost:8000"/graphql/ -H 'Content-Type: application/json' -d '{\"query\":\"{ __schema { types { name } } }\"}' | grep -q 'data'" "success" || print_status "WARN" "GraphQL endpoint not accessible (server may not be running)"
 
 echo ""
 echo "📋 6. PERFORMANCE VALIDATION"

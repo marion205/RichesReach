@@ -6,7 +6,7 @@ from .settings import *
 
 # Production environment
 DEBUG = False
-ALLOWED_HOSTS = ['api.richesreach.com', 'www.richesreach.com', '127.0.0.1', 'localhost']
+ALLOWED_HOSTS = ['api.richesreach.com', 'www.richesreach.com', 'process.env.API_HOST || "localhost"', 'localhost']
 
 # Database - PostgreSQL for production
 DATABASES = {
@@ -21,8 +21,8 @@ DATABASES = {
 }
 
 # Redis for Celery
-CELERY_BROKER_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
-CELERY_RESULT_BACKEND = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+CELERY_BROKER_URL = os.getenv('REDIS_URL', 'redis://process.env.REDIS_HOST || "localhost:6379"/0')
+CELERY_RESULT_BACKEND = os.getenv('REDIS_URL', 'redis://process.env.REDIS_HOST || "localhost:6379"/0')
 
 # Security settings
 SECRET_KEY = os.getenv('SECRET_KEY', 'your-production-secret-key-here')
@@ -92,7 +92,7 @@ LOGGING = {
 CACHES = {
     'default': {
         'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': os.getenv('REDIS_URL', 'redis://localhost:6379/1'),
+        'LOCATION': os.getenv('REDIS_URL', 'redis://process.env.REDIS_HOST || "localhost:6379"/1'),
         'OPTIONS': {
             'CLIENT_CLASS': 'django_redis.client.DefaultClient',
         }

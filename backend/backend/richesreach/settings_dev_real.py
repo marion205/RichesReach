@@ -65,16 +65,16 @@ assert_no_mocks_in_prod(DEBUG)
 # CORS/CSRF for Expo dev
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
+    "process.env.API_BASE_URL || "http://localhost":19006",
     "http://localhost:19006",
-    "http://127.0.0.1:19006",
-    "http://192.168.1.236:19006",  # Your local IP
+    "http://localhost:19006",  # Your local IP
     "http://localhost:8081",  # Metro bundler
-    "http://192.168.1.236:8081",  # Metro bundler on your IP
-    "http://localhost:8082",  # Alternative Metro port
-    "http://192.168.1.236:8082",  # Alternative Metro port on your IP
+    "http://localhost:8081",  # Metro bundler on your IP
+    "process.env.API_BASE_URL || "http://localhost":8082",  # Alternative Metro port
+    "http://localhost:8082",  # Alternative Metro port on your IP
 ]
 CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS
-ALLOWED_HOSTS = ["*", "localhost", "127.0.0.1", "192.168.1.236"]
+ALLOWED_HOSTS = ["*", "localhost", "localhost", "localhost"]
 
 # Database settings (use local database)
 DATABASES = {

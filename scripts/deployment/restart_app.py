@@ -35,7 +35,7 @@ restart_commands = [
 "sleep 5",
 "cd /tmp && sudo python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 > /var/log/richesreach.log 2>&1 &",
 "sleep 10",
-"curl -f http://localhost:8000/health || echo 'Health check failed'"
+"curl -f http://process.env.API_BASE_URL || "localhost:8000"/health || echo 'Health check failed'"
 ]
 for i, command in enumerate(restart_commands, 1):
 print(f" Step {i}/{len(restart_commands)}: {command}")

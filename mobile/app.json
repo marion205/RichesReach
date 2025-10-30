@@ -7,7 +7,6 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -55,7 +54,8 @@
     "extra": {
       "eas": {
         "projectId": "48317b83-0094-4d6b-8315-c0c2f3a373fa"
-      }
+      },
+      "API_BASE": "http://192.168.1.236:8000"
     },
     "plugins": [
       "expo-image-picker",
@@ -64,7 +64,8 @@
         {
           "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone to record voice input for AI-powered financial assistance."
         }
-      ]
+      ],
+      "expo-font"
     ]
   }
 }

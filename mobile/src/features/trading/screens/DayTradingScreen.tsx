@@ -119,7 +119,7 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
       speakText(`${selectedVoice.name}: Executing ${side} trade for ${pick.symbol}`);
       
       // Mock trade execution (replace with real API call)
-      const response = await fetch('http://localhost:8000/api/mobile/gesture-trade/', {
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000"}/api/mobile/gesture-trade/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

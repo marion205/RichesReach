@@ -79,7 +79,7 @@ cd backend
 python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 &
 # Create a simple health check
 echo "#!/bin/bash" > /usr/local/bin/health-check.sh
-echo "curl -f http://localhost:8000/health || exit 1" >> /usr/local/bin/health-check.sh
+echo "curl -f http://process.env.API_BASE_URL || "localhost:8000"/health || exit 1" >> /usr/local/bin/health-check.sh
 chmod +x /usr/local/bin/health-check.sh
 # Set up log rotation
 echo "*/5 * * * * /usr/local/bin/health-check.sh" | crontab -

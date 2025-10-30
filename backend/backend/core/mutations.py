@@ -148,24 +148,82 @@ class GenerateAIRecommendations(graphene.Mutation):
     success = graphene.Boolean()
     message = graphene.String()
     recommendations = graphene.List('core.types.AIPortfolioRecommendationType')
+    
+    class Arguments:
+        profile = graphene.Argument('core.schema.ProfileInput')
+        usingDefaults = graphene.Boolean()
 
-    def mutate(self, info):
-        user = info.context.user
-        if not user or not hasattr(user, 'is_authenticated') or not user.is_authenticated:
+    def mutate(self, info, profile=None, usingDefaults=False):
+        from django.conf import settings
+        
+        # Get user - in dev mode, use first available user if not authenticated
+        user = None
+        if getattr(settings, 'DEBUG', False):
+            try:
+                user = User.objects.select_related('incomeProfile').first()
+            except Exception:
+                pass
+        
+        # Try to get authenticated user
+        if not user:
+            try:
+                user = info.context.user if hasattr(info, 'context') and hasattr(info.context, 'user') else None
+            except (AttributeError, KeyError):
+                user = None
+            
+            if not user or not hasattr(user, 'is_authenticated') or not user.is_authenticated:
+                user = None
+        
+        if not user:
             return GenerateAIRecommendations(
                 success=False,
                 message="You must be logged in to generate AI recommendations."
             )
         
         try:
-            # Get user's income profile
+            # Get user's income profile - create one if using defaults
             try:
                 income_profile = IncomeProfile.objects.get(user=user)
             except IncomeProfile.DoesNotExist:
-                return GenerateAIRecommendations(
-                    success=False,
-                    message="Please create an income profile first to generate personalized recommendations."
-                )
+                if usingDefaults:
+                    # Handle profile as dict or GraphQL input object
+                    if profile:
+                        if hasattr(profile, '__dict__'):
+                            # GraphQL input object
+                            profile_dict = {k: getattr(profile, k, None) for k in ['age', 'incomeBracket', 'riskTolerance', 'investmentHorizonYears', 'investmentGoals']}
+                        else:
+                            # Regular dict
+                            profile_dict = profile
+                    else:
+                        profile_dict = {}
+                    
+                    # Map investment horizon years to string format
+                    horizon_years = profile_dict.get('investmentHorizonYears', 5)
+                    if horizon_years >= 12:
+                        investment_horizon_str = "10+ years"
+                    elif horizon_years >= 8:
+                        investment_horizon_str = "5-10 years"
+                    elif horizon_years >= 4:
+                        investment_horizon_str = "3-5 years"
+                    elif horizon_years >= 2:
+                        investment_horizon_str = "1-3 years"
+                    else:
+                        investment_horizon_str = "1-3 years"
+                    
+                    # Create a default profile for development
+                    income_profile = IncomeProfile.objects.create(
+                        user=user,
+                        age=profile_dict.get('age', 30),
+                        income_bracket=profile_dict.get('incomeBracket', 'Unknown'),
+                        risk_tolerance=profile_dict.get('riskTolerance', 'Moderate'),
+                        investment_horizon=investment_horizon_str,
+                        investment_goals=profile_dict.get('investmentGoals', [])
+                    )
+                else:
+                    return GenerateAIRecommendations(
+                        success=False,
+                        message="Please create an income profile first to generate personalized recommendations."
+                    )
             
             # Get real market data from Alpaca
             recommendations = []

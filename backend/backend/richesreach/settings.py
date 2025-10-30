@@ -40,7 +40,7 @@ DEFI_ALLOWLIST = [
 ]
 
 # Celery Configuration
-CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://127.0.0.1:6379/0')
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
 CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', CELERY_BROKER_URL)
 CELERY_TASK_ALWAYS_EAGER = False  # True for local debugging only
 CELERY_BEAT_SCHEDULE = {
@@ -580,7 +580,7 @@ else:
 # CSRF Configuration for dev and production
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:8000", 
-    "http://127.0.0.1:8000",
+    "http://localhost:8000",
     "http://riches-reach-alb-1199497064.us-east-1.elb.amazonaws.com"
 ]
 

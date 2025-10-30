@@ -8,7 +8,7 @@ import json
 
 def test_api_endpoints():
     """Test API endpoints to verify real data"""
-    base_url = "http://localhost:8000"
+    base_url = "process.env.API_BASE_URL || "http://localhost:8000""
     
     print("🔍 Testing API Endpoints for Real Data...")
     print("=" * 50)

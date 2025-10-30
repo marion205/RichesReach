@@ -20,7 +20,7 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'your-production-secret-key-here')
 # =============================================================================
 # HOSTS & CORS
 # =============================================================================
-ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "riches-reach-alb-1199497064.us-east-1.elb.amazonaws.com,localhost,127.0.0.1").split(",")
+ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "riches-reach-alb-1199497064.us-east-1.elb.amazonaws.com,localhost,process.env.API_HOST || "localhost"").split(",")
 CSRF_TRUSTED_ORIGINS = [f"http://{h}" for h in ALLOWED_HOSTS] + [f"https://{h}" for h in ALLOWED_HOSTS]
 
 # =============================================================================

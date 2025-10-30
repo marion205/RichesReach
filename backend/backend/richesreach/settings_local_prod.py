@@ -21,7 +21,7 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'your-production-secret-key-here')
 DEBUG = True  # Enable debug for local development
 
 # Host / CSRF
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0', '*']
+ALLOWED_HOSTS = ['localhost', 'process.env.API_HOST || "localhost"', '0.0.0.0', '*']
 
 # Application definition
 INSTALLED_APPS = [
@@ -107,9 +107,9 @@ GRAPHQL_JWT = {
 # CORS settings for local development
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
-    "http://127.0.0.1:3000",
+    "http://localhost:3000",
     "http://localhost:8081",  # Expo dev server
-    "http://127.0.0.1:8081",
+    "http://localhost:8081",
 ]
 
 CORS_ALLOW_CREDENTIALS = True

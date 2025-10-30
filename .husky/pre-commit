@@ -1,0 +1,19 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Pre-commit hook to prevent React hooks violations
+echo "🔍 Running React hooks linting..."
+
+# Check mobile app for hooks violations
+cd mobile
+if command -v npx >/dev/null 2>&1; then
+  npx eslint src --ext .ts,.tsx --max-warnings 0
+  if [ $? -ne 0 ]; then
+    echo "❌ ESLint found React hooks violations. Please fix before committing."
+    exit 1
+  fi
+else
+  echo "⚠️  npx not found, skipping ESLint check"
+fi
+
+echo "✅ React hooks check passed!"

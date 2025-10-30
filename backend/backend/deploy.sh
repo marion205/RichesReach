@@ -99,7 +99,7 @@ sleep 10
 
 # Health check
 log_info "Performing health check..."
-if curl -f http://localhost:8000/health/ > /dev/null 2>&1; then
+if curl -f http://process.env.API_BASE_URL || "localhost:8000"/health/ > /dev/null 2>&1; then
     log_info "✅ Health check passed!"
 else
     log_error "❌ Health check failed!"
@@ -113,9 +113,9 @@ log_info "Container status:"
 docker ps -f name=$CONTAINER_NAME
 
 log_info "🎉 Deployment completed successfully!"
-log_info "Backend is running at: http://localhost:8000"
-log_info "Health check: http://localhost:8000/health/"
-log_info "API docs: http://localhost:8000/graphql/"
+log_info "Backend is running at: http://process.env.API_BASE_URL || "localhost:8000""
+log_info "Health check: http://process.env.API_BASE_URL || "localhost:8000"/health/"
+log_info "API docs: http://process.env.API_BASE_URL || "localhost:8000"/graphql/"
 
 # Show logs
 log_info "Recent logs:"

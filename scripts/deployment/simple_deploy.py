@@ -107,7 +107,7 @@ unzip simple-app.zip
 nohup python3 main.py > /var/log/richesreach.log 2>&1 &
 # Create a simple health check
 echo "#!/bin/bash" > /usr/local/bin/health-check.sh
-echo "curl -f http://localhost:8000/health || exit 1" >> /usr/local/bin/health-check.sh
+echo "curl -f http://process.env.API_BASE_URL || "localhost:8000"/health || exit 1" >> /usr/local/bin/health-check.sh
 chmod +x /usr/local/bin/health-check.sh
 echo "RichesReach AI deployed successfully!" > /var/log/deployment.log
 '''

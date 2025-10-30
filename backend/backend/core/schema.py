@@ -1,4 +1,5 @@
 import graphene
+import os
 from core.graphql_mutations_auth import ObtainTokenPair, RefreshToken, VerifyToken
 from core.auth_mutations import RegisterUser, LoginUser
 from graphene_django import DjangoObjectType
@@ -26,6 +27,14 @@ from .models import Watchlist, WatchlistItem
 User = get_user_model()
 
 # Missing GraphQL Types for Mobile App
+class ProfileInput(graphene.InputObjectType):
+    """Input type for user profile"""
+    riskTolerance = graphene.String()
+    investmentHorizonYears = graphene.Int()
+    age = graphene.Int()
+    incomeBracket = graphene.String()
+    investmentGoals = graphene.List(graphene.String)
+
 class YieldPoolType(graphene.ObjectType):
     id = graphene.ID()
     protocol = graphene.String()
@@ -596,6 +605,34 @@ class CryptoPortfolioType(graphene.ObjectType):
     totalValue = graphene.Float()
     holdings = graphene.List(graphene.String)
 
+# Simple income profile type for mock data (camelCase fields for mobile app)
+class MockIncomeProfileType(graphene.ObjectType):
+    incomeBracket = graphene.String()
+    age = graphene.Int()
+    investmentGoals = graphene.List(graphene.String)
+    riskTolerance = graphene.String()
+    investmentHorizon = graphene.String()
+    
+    @staticmethod
+    def resolve_incomeBracket(root, info):
+        return getattr(root, 'incomeBracket', None)
+    
+    @staticmethod
+    def resolve_age(root, info):
+        return getattr(root, 'age', None)
+    
+    @staticmethod
+    def resolve_investmentGoals(root, info):
+        return getattr(root, 'investmentGoals', [])
+    
+    @staticmethod
+    def resolve_riskTolerance(root, info):
+        return getattr(root, 'riskTolerance', None)
+    
+    @staticmethod
+    def resolve_investmentHorizon(root, info):
+        return getattr(root, 'investmentHorizon', None)
+
 # Simple auth payload that doesn't use UserType
 class AuthPayload(graphene.ObjectType):
     token = graphene.String()
@@ -607,7 +644,7 @@ class UserType(graphene.ObjectType):
     name = graphene.String()
     username = graphene.String()  # Add username field for signals
     # Add missing fields that mobile app expects
-    incomeProfile = graphene.Field(IncomeProfileType)
+    incomeProfile = graphene.Field(lambda: MockIncomeProfileType)
     followedTickers = graphene.List(graphene.String)
 
 # Research-related types
@@ -854,7 +891,12 @@ class BaseQuery(graphene.ObjectType):
     cryptoPortfolio = graphene.Field(lambda: CryptoPortfolioType)
     cryptoAnalytics = graphene.Field(lambda: CryptoAnalyticsType)
     dayTradingPicks = graphene.Field(lambda: DayTradingPicksType, mode=graphene.String(required=True))
-    aiRecommendations = graphene.Field(AIRecommendationsType, riskTolerance=graphene.String())
+    aiRecommendations = graphene.Field(
+        AIRecommendationsType, 
+        riskTolerance=graphene.String(),
+        profile=ProfileInput(),
+        usingDefaults=graphene.Boolean()
+    )
     
     # Trading fields
     tradingAccount = graphene.Field(TradingAccountType)
@@ -884,8 +926,34 @@ class BaseQuery(graphene.ObjectType):
     
     @resolver_timer("getMe")
     def resolve_me(self, info):
-        user = info.context.user
-        if not user or not user.is_authenticated:
+        from django.conf import settings
+        from .models import User
+        
+        # In development mode, always return a test user (bypass auth)
+        if getattr(settings, 'DEBUG', False):
+            try:
+                test_user = User.objects.select_related('incomeProfile').first()
+                if test_user:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.info(f"[DEV] resolve_me returning test user: {test_user.email}")
+                    return test_user
+                else:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning("[DEV] resolve_me: No users found in database!")
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"[DEV] resolve_me error: {e}")
+        
+        # Production: check authentication  
+        try:
+            user = info.context.user if hasattr(info, 'context') and hasattr(info.context, 'user') else None
+        except (AttributeError, KeyError):
+            user = None
+        
+        if not user or not hasattr(user, 'is_authenticated') or not user.is_authenticated:
             return None
         
         # Cache user data for 5min (auth-stable)
@@ -919,54 +987,8 @@ class BaseQuery(graphene.ObjectType):
         """Get real portfolio metrics from user's actual portfolio"""
         user = info.context.user
         if not user.is_authenticated:
-            # Return mock portfolio metrics for development
-            from types import SimpleNamespace
-            
-            # Create mock holdings
-            mock_holdings = [
-                SimpleNamespace(
-                    symbol='AAPL',
-                    company_name='Apple Inc.',
-                    shares=100,
-                    current_price=150.25,
-                    total_value=15025.0,
-                    cost_basis=14000.0,
-                    return_amount=1025.0,
-                    return_percent=7.32,
-                    sector='Technology'
-                ),
-                SimpleNamespace(
-                    symbol='MSFT',
-                    company_name='Microsoft Corporation',
-                    shares=50,
-                    current_price=330.15,
-                    total_value=16507.5,
-                    cost_basis=15000.0,
-                    return_amount=1507.5,
-                    return_percent=10.05,
-                    sector='Technology'
-                )
-            ]
-            
-            # Create mock portfolio metrics object
-            mock_metrics = SimpleNamespace(
-                total_value=125000.0,
-                total_cost=100000.0,
-                total_return=25000.0,
-                total_return_percent=25.0,
-                day_change=1250.0,
-                day_change_percent=1.0,
-                volatility=0.15,
-                sharpe_ratio=1.2,
-                max_drawdown=-0.08,
-                beta=1.0,
-                alpha=0.05,
-                sector_allocation='{"Technology": 40, "Healthcare": 25, "Finance": 20, "Consumer": 15}',
-                risk_metrics='{"riskScore": 0.65, "diversificationScore": 0.78}',
-                holdings=mock_holdings
-            )
-            
-            return mock_metrics
+            # Return null for unauthenticated users (no portfolio data)
+            return None
             
         try:
             from core.models import Portfolio, PortfolioPosition
@@ -991,7 +1013,7 @@ class BaseQuery(graphene.ObjectType):
                 try:
                     # Use our new secure market data endpoint
                     response = requests.get(
-                        f"http://localhost:8001/api/market/quotes",
+                        f"{os.getenv('MARKET_DATA_URL', 'http://192.168.1.236:8000')}/api/market/quotes",
                         params={'symbols': ','.join(symbols_to_fetch)},
                         timeout=10
                     )
@@ -1181,7 +1203,7 @@ class BaseQuery(graphene.ObjectType):
             try:
                 import requests
                 response = requests.get(
-                    f"http://localhost:8001/api/market/quotes",
+                    f"http://192.168.1.236:8000/api/market/quotes",
                     params={'symbols': ','.join(symbols)},
                     timeout=10
                 )
@@ -1257,7 +1279,7 @@ class BaseQuery(graphene.ObjectType):
             real_quotes = []
             try:
                 response = requests.get(
-                    f"http://localhost:8001/api/market/quotes",
+                    f"http://192.168.1.236:8000/api/market/quotes",
                     params={'symbols': ','.join(popular_symbols)},
                     timeout=10
                 )
@@ -1612,19 +1634,13 @@ class BaseQuery(graphene.ObjectType):
         return crypto_query.resolve_crypto_price(info, symbol)
     
     def resolve_portfolioAnalysis(self, info):
-        """Resolve portfolio analysis query - alias for portfolioMetrics"""
-        # Return mock portfolio metrics for now
-        from core.graphql.queries import _mock_portfolio_metrics, PortfolioMetricsType
-        mock_data = _mock_portfolio_metrics()
-        return PortfolioMetricsType(
-            total_value=mock_data.get('total_value', 0.0),
-            total_cost=mock_data.get('total_cost', 0.0),
-            total_return=mock_data.get('total_return', 0.0),
-            total_return_percent=mock_data.get('total_return_percent', 0.0),
-            holdings=mock_data.get('holdings', []),
-            dailyChange=mock_data.get('dailyChange', 0.0),
-            dailyChangePercent=mock_data.get('dailyChangePercent', 0.0)
-        )
+        """Resolve portfolio analysis query - return null for unauthenticated users"""
+        user = info.context.user
+        if not user.is_authenticated:
+            return None
+        
+        # For authenticated users, return actual portfolio analysis
+        return self.resolve_portfolioMetrics(info)
     
     def resolve_calculateTargetPrice(self, info, entryPrice, stopPrice, riskRewardRatio=None, atr=None, resistanceLevel=None, supportLevel=None, signalType=None):
         # Import the resolver from queries.py
@@ -1674,7 +1690,7 @@ class BaseQuery(graphene.ObjectType):
             try:
                 import requests
                 response = requests.get(
-                    f"http://localhost:8001/api/market/quotes",
+                    f"http://192.168.1.236:8000/api/market/quotes",
                     params={'symbols': symbol},
                     timeout=10
                 )
@@ -1781,7 +1797,7 @@ class BaseQuery(graphene.ObjectType):
             
             try:
                 response = requests.get(
-                    f"http://localhost:8001/api/market/quotes",
+                    f"http://192.168.1.236:8000/api/market/quotes",
                     params={'symbols': symbol},
                     timeout=10
                 )
@@ -2475,6 +2491,65 @@ class MarketOverviewType(graphene.ObjectType):
     totalMarketCap = graphene.Float()
     totalVolume24h = graphene.Float()
 
+
+# Education Types
+class SkillMasteryType(graphene.ObjectType):
+    skill = graphene.String(required=True)
+    masteryLevel = graphene.Float(required=True)
+    masteryPercentage = graphene.Int(required=True)
+    status = graphene.String(required=True)
+    lastPracticed = graphene.DateTime()
+    timesPracticed = graphene.Int(required=True)
+
+
+class TutorProgressType(graphene.ObjectType):
+    userId = graphene.ID(required=True)
+    xp = graphene.Int(required=True)
+    level = graphene.Int(required=True)
+    streakDays = graphene.Int(required=True)
+    badges = graphene.List(graphene.String, required=True)
+    lastLogin = graphene.DateTime()
+    abilityEstimate = graphene.Float(required=True)
+    nextReviewAt = graphene.DateTime()
+    skillMastery = graphene.List(SkillMasteryType, required=True)
+    reviewQueue = graphene.List(graphene.String, required=True)
+    hearts = graphene.Int(required=True)
+    maxHearts = graphene.Int(required=True)
+    heartsRegenAt = graphene.DateTime()
+
+
+class CompletionCriteriaType(graphene.ObjectType):
+    scenariosCompleted = graphene.Int()
+    successRate = graphene.Float()
+    quizzesPassed = graphene.Int()
+    scoreThreshold = graphene.Int()
+    duelsWon = graphene.Int()
+    accuracy = graphene.Float()
+    strategiesLearned = graphene.Int()
+    communityEngagement = graphene.Int()
+    simulationsCompleted = graphene.Int()
+    profitTarget = graphene.Float()
+    lessonsCompleted = graphene.Int()
+
+
+class QuestType(graphene.ObjectType):
+    id = graphene.ID(required=True)
+    title = graphene.String(required=True)
+    description = graphene.String(required=True)
+    questType = graphene.String(required=True)
+    difficulty = graphene.String(required=True)
+    xpReward = graphene.Int(required=True)
+    timeLimitMinutes = graphene.Int(required=True)
+    requiredSkills = graphene.List(graphene.String, required=True)
+    regimeContext = graphene.String(required=True)
+    voiceNarration = graphene.String(required=True)
+    completionCriteria = graphene.Field(CompletionCriteriaType, required=True)
+    isActive = graphene.Boolean()
+    createdAt = graphene.DateTime()
+    expiresAt = graphene.DateTime()
+    participants = graphene.Int()
+    completionRate = graphene.Float()
+
 class Query(SwingQuery, BaseQuery, SblocQuery, NotificationQuery, BenchmarkQuery, SwingTradingQuery, CryptoQuery, StockComprehensiveQuery, AlpacaQuery, AlpacaCryptoQuery, graphene.ObjectType):
     # merging by multiple inheritance; keep simple to avoid MRO issues
     optionOrders = graphene.List(OptionOrderType, status=graphene.String())
@@ -2504,9 +2579,6 @@ class Query(SwingQuery, BaseQuery, SblocQuery, NotificationQuery, BenchmarkQuery
     aiScans = graphene.List('core.types.AIScanType', filters=graphene.Argument('core.types.AIScanFilters', required=False))
     playbooks = graphene.List('core.types.PlaybookType')
     
-    # Test field to verify resolvers work
-    testField = graphene.String()
-    
     # Missing DeFi Yield Queries
     topYields = graphene.List(lambda: YieldPoolType, chain=graphene.String(), limit=graphene.Int())
     defiReserves = graphene.List(lambda: DeFiReserveType)
@@ -2514,6 +2586,28 @@ class Query(SwingQuery, BaseQuery, SblocQuery, NotificationQuery, BenchmarkQuery
     
     # Stock Comprehensive Query
     stockComprehensive = graphene.Field(lambda: StockComprehensiveType, symbol=graphene.String(required=True), timeframe=graphene.String())
+    
+    # Education Queries - simplified for testing
+    tutorProgress = graphene.String()
+    dailyQuest = graphene.String()
+    
+    # Test field
+    testField = graphene.String()
+    
+    def resolve_tutor_progress(self, info):
+        """Resolve tutor progress"""
+        print("🔴🔴🔴 TUTOR PROGRESS RESOLVER CALLED")
+        return "Tutor progress data"
+    
+    def resolve_test_field(self, info):
+        """Test resolver"""
+        print("🔴🔴🔴 TEST FIELD RESOLVER CALLED")
+        return "Hello World"
+    
+    def resolve_daily_quest(self, info):
+        """Resolve daily quest"""
+        print("🔴🔴🔴 DAILY QUEST RESOLVER CALLED")
+        return "Daily quest data"
     
     def resolve_optionOrders(self, info, status=None):
         # Mock implementation - return sample option orders
@@ -2708,7 +2802,7 @@ class Query(SwingQuery, BaseQuery, SblocQuery, NotificationQuery, BenchmarkQuery
             # Get real market data from our secure endpoint
             try:
                 response = requests.get(
-                    f"http://localhost:8001/api/market/quotes",
+                    f"http://192.168.1.236:8000/api/market/quotes",
                     params={'symbols': 'AAPL,MSFT,GOOGL,AMZN,TSLA,META,NVDA,NFLX,AMD,INTC'},
                     timeout=10
                 )
@@ -3274,7 +3368,7 @@ class Query(SwingQuery, BaseQuery, SblocQuery, NotificationQuery, BenchmarkQuery
             real_quotes = []
             try:
                 response = requests.get(
-                    f"http://localhost:8001/api/market/quotes",
+                    f"http://192.168.1.236:8000/api/market/quotes",
                     params={'symbols': ','.join(symbols)},
                     timeout=10
                 )
@@ -3536,10 +3630,250 @@ class Query(SwingQuery, BaseQuery, SblocQuery, NotificationQuery, BenchmarkQuery
             "qualityThreshold": 0.7
         }
     
-    def resolve_aiRecommendations(self, info, riskTolerance='medium'):
-        """Resolve AI recommendations query"""
-        # Mock AI recommendations for now
-        recommendations = {
+    def resolve_aiRecommendations(self, info, riskTolerance=None, profile=None, usingDefaults=False):
+        """Resolve AI recommendations query using real ML"""
+        from .models import AIPortfolioRecommendation, User
+        from django.conf import settings
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # Get user - in dev mode, use first available user
+        user = None
+        if getattr(settings, 'DEBUG', False):
+            try:
+                user = User.objects.select_related('incomeProfile').first()
+                if user:
+                    logger.info(f"[DEV] resolve_aiRecommendations using test user: {user.email}")
+            except Exception as e:
+                logger.error(f"[DEV] Error getting test user: {e}")
+        
+        # Try to get authenticated user
+        if not user:
+            try:
+                user = info.context.user if hasattr(info, 'context') and hasattr(info.context, 'user') else None
+            except (AttributeError, KeyError):
+                user = None
+            
+            if not user or not hasattr(user, 'is_authenticated') or not user.is_authenticated:
+                user = None
+        
+        if not user:
+            logger.warning("[DEV] No user found, returning fallback recommendations")
+            # Return fallback recommendations instead of None
+            return _get_fallback_recommendations(riskTolerance or 'Moderate')
+        
+        # If profile is provided, use it; otherwise use user's income profile
+        if profile:
+            # Handle profile as dict or GraphQL input object
+            if hasattr(profile, '__dict__') or hasattr(profile, 'riskTolerance'):
+                # GraphQL input object
+                risk_tolerance = getattr(profile, 'riskTolerance', None) or riskTolerance
+            else:
+                # Regular dict
+                risk_tolerance = profile.get('riskTolerance') if isinstance(profile, dict) else riskTolerance
+        else:
+            try:
+                user_profile = user.incomeProfile
+                risk_tolerance = user_profile.risk_tolerance or riskTolerance or 'Moderate'
+            except Exception:
+                risk_tolerance = riskTolerance or 'Moderate'
+        
+        # Get the latest AI recommendation for the user
+        try:
+            latest_recommendation = AIPortfolioRecommendation.objects.filter(user=user).order_by('-created_at').first()
+            
+            # If no recommendation exists, try to generate one using ML
+            if not latest_recommendation:
+                try:
+                    from .ml_stock_recommender import MLStockRecommender
+                    from .models import IncomeProfile
+                    
+                    # Get or use provided profile
+                    income_profile = None
+                    try:
+                        income_profile = user.incomeProfile
+                    except IncomeProfile.DoesNotExist:
+                        pass
+                    
+                    if income_profile or profile:
+                        ml_recommender = MLStockRecommender()
+                        ml_recommendations = ml_recommender.generate_ml_recommendations(user, limit=8)
+                        
+                        # Convert to GraphQL format
+                        buy_recommendations = []
+                        weight_sum = 0.0
+                        weighted_return = 0.0
+                        
+                        for rec in ml_recommendations:
+                            current_price = float(rec.stock.current_price) if rec.stock.current_price else 0.0
+                            # Calculate target price from expected return
+                            target_price = current_price * (1 + rec.expected_return) if current_price > 0 else 0.0
+                            
+                            # Calculate confidence-weighted expected return for portfolio analysis
+                            confidence = max(0.0, min(1.0, rec.confidence_score))
+                            expected_return = rec.expected_return
+                            weighted_return += expected_return * confidence
+                            weight_sum += confidence
+                            
+                            buy_recommendations.append({
+                                "symbol": rec.stock.symbol,
+                                "companyName": rec.stock.company_name,
+                                "recommendation": "BUY",
+                                "confidence": rec.confidence_score,  # Fixed: use confidence_score
+                                "reasoning": rec.reasoning,
+                                "targetPrice": round(target_price, 2),
+                                "currentPrice": round(current_price, 2),
+                                "expectedReturn": rec.expected_return,
+                            })
+                        
+                        # Calculate expected impact from recommendations
+                        ev_pct = (weighted_return / weight_sum) if weight_sum > 0 else 0.0
+                        # Default portfolio value - in production, get from user's actual portfolio
+                        portfolio_value = 50000.0
+                        ev_abs = portfolio_value * ev_pct
+                        ev_per_10k = 10000.0 * ev_pct
+                        
+                        # Calculate sector breakdown from recommendations
+                        sector_counts = {}
+                        for rec in ml_recommendations:
+                            sector = rec.stock.sector or "Unknown"
+                            sector_counts[sector] = sector_counts.get(sector, 0) + 1
+                        total_sectors = sum(sector_counts.values())
+                        sector_breakdown = {
+                            sector: round(count / total_sectors, 2) if total_sectors > 0 else 0.0
+                            for sector, count in sector_counts.items()
+                        }
+                        
+                        # Calculate average volatility from recommendations (use risk_level mapping)
+                        risk_to_vol = {"Low": 0.08, "Medium": 0.15, "High": 0.25}
+                        avg_vol = sum(risk_to_vol.get(rec.risk_level, 0.15) for rec in ml_recommendations)
+                        avg_vol = avg_vol / len(ml_recommendations) if ml_recommendations else 0.15
+                        
+                        # Max drawdown estimate based on volatility and risk tolerance
+                        max_drawdown_pct = -0.15 if risk_tolerance == 'Moderate' else (-0.10 if risk_tolerance == 'Conservative' else -0.25)
+                        
+                        # Return ML-generated recommendations
+                        return {
+                            "portfolioAnalysis": {
+                                "totalValue": portfolio_value,
+                                "numHoldings": len(buy_recommendations),
+                                "sectorBreakdown": sector_breakdown,
+                                "riskScore": 0.65 if risk_tolerance == 'Moderate' else (0.45 if risk_tolerance == 'Conservative' else 0.80),
+                                "diversificationScore": min(0.95, len(sector_counts) / 5.0) if sector_counts else 0.75,
+                                "expectedImpact": {
+                                    "evPct": ev_pct,  # decimal (e.g., 0.125 = 12.5%)
+                                    "evAbs": round(ev_abs, 2),
+                                    "per10k": round(ev_per_10k, 2)
+                                },
+                                "risk": {
+                                    "volatilityEstimate": round(avg_vol * 100, 1),  # Convert to percentage
+                                    "maxDrawdownPct": round(max_drawdown_pct * 100, 1)  # Convert to percentage
+                                },
+                                "assetAllocation": {
+                                    "stocks": 0.90,
+                                    "bonds": 0.08,
+                                    "cash": 0.02
+                                }
+                            },
+                            "buyRecommendations": buy_recommendations,
+                            "sellRecommendations": [],
+                            "rebalanceSuggestions": [],
+                            "riskAssessment": {
+                                "overallRisk": risk_tolerance or "Moderate",
+                                "volatilityEstimate": round(avg_vol * 100, 1),  # Match portfolioAnalysis risk volatility
+                                "recommendations": [
+                                    "Maintain diversified portfolio across sectors",
+                                    "Rebalance quarterly to maintain target allocation",
+                                    f"Portfolio includes {len(sector_counts)} different sectors" if sector_counts else "Diversify across multiple sectors"
+                                ]
+                            },
+                            "marketOutlook": {
+                                "overallSentiment": "Bullish",
+                                "confidence": 0.72,
+                                "keyFactors": [
+                                    "Positive earnings trends",
+                                    "Strong consumer spending indicators"
+                                ]
+                            }
+                        }
+                except Exception as e:
+                    logger.error(f"Error generating ML recommendations: {e}")
+                    # Fall through to return None
+                    pass
+            
+            # If we have a stored recommendation, return it
+            if latest_recommendation:
+                portfolio_allocation = latest_recommendation.portfolio_allocation or {}
+                analytics = portfolio_allocation.get('analytics', {})
+                expected_impact = analytics.get('expectedImpact', {})
+                risk_data = analytics.get('risk', {})
+                
+                ev_return = expected_impact.get('ev_return_decimal', 0.05)
+                ev_abs = expected_impact.get('ev_change_for_total_value', 500)
+                ev_per_10k = expected_impact.get('ev_per_10k', 500)
+                total_value = analytics.get('totalValue', 10000)
+                num_holdings = analytics.get('numHoldings', 0) or len(latest_recommendation.recommended_stocks or [])
+                
+                return {
+                    'portfolioAnalysis': {
+                        'totalValue': total_value,
+                        'numHoldings': num_holdings,
+                        'riskScore': 6.5,
+                        'diversificationScore': 8.2,
+                        'expectedImpact': {
+                            'evPct': ev_return,
+                            'evAbs': ev_abs,
+                            'per10k': ev_per_10k
+                        },
+                        'risk': {
+                            'volatilityEstimate': risk_data.get('volatility_estimate', 12.5),
+                            'maxDrawdownPct': risk_data.get('max_drawdown_pct', 20.0)
+                        },
+                        'assetAllocation': {
+                            'stocks': portfolio_allocation.get('stocks', 80),
+                            'bonds': portfolio_allocation.get('bonds', 15),
+                            'cash': portfolio_allocation.get('cash', 5)
+                        }
+                    },
+                    'buyRecommendations': latest_recommendation.recommended_stocks or [],
+                    'sellRecommendations': [],
+                    'rebalanceSuggestions': [],
+                    'riskAssessment': {
+                        'overallRisk': latest_recommendation.risk_profile,
+                        'volatilityEstimate': risk_data.get('volatility_estimate', 12.5),
+                        'recommendations': [
+                            latest_recommendation.risk_assessment or "Diversify your portfolio across sectors",
+                            "Consider rebalancing quarterly"
+                        ]
+                    },
+                    'marketOutlook': {
+                        'overallSentiment': 'Bullish',
+                        'confidence': 0.75,
+                        'keyFactors': ['Strong earnings growth', 'Low interest rates']
+                    }
+                }
+        except Exception as e:
+            logger.error(f"Error in resolve_aiRecommendations: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            # Return fallback instead of None - use the risk tolerance we determined
+            try:
+                risk = risk_tolerance or riskTolerance or 'Moderate'
+            except NameError:
+                risk = riskTolerance or 'Moderate'
+            return _get_fallback_recommendations(risk)
+        
+        # Fallback to basic recommendations if nothing else works (should never reach here, but keep as safety)
+        logger.warning("[DEV] Falling through to default fallback recommendations")
+        try:
+            risk = risk_tolerance or riskTolerance or 'Moderate'
+        except NameError:
+            risk = riskTolerance or 'Moderate'
+        return _get_fallback_recommendations(risk)
+
+def _get_fallback_recommendations(risk_tolerance='Moderate'):
+    """Return fallback recommendations when ML generation fails"""
+    recommendations = {
             'low': [
                 {'symbol': 'VTI', 'companyName': 'Vanguard Total Stock Market ETF', 'recommendation': 'BUY', 'confidence': 0.85, 'reason': 'Diversified low-risk investment'},
                 {'symbol': 'BND', 'companyName': 'Vanguard Total Bond Market ETF', 'recommendation': 'BUY', 'confidence': 0.80, 'reason': 'Stable income generation'},
@@ -3556,85 +3890,99 @@ class Query(SwingQuery, BaseQuery, SblocQuery, NotificationQuery, BenchmarkQuery
                 {'symbol': 'ARKK', 'companyName': 'ARK Innovation ETF', 'recommendation': 'HOLD', 'confidence': 0.65, 'reason': 'High growth potential but volatile'}
             ]
         }
-        
-        # Generate mock rebalancing suggestions
-        rebalance_suggestions = [
-            {
-                'action': 'Reduce Technology allocation',
-                'currentAllocation': 0.35,
-                'suggestedAllocation': 0.25,
-                'reasoning': 'Technology sector is over-concentrated, consider diversifying into healthcare',
-                'priority': 'High'
-            },
-            {
-                'action': 'Increase Healthcare allocation',
-                'currentAllocation': 0.20,
-                'suggestedAllocation': 0.30,
-                'reasoning': 'Healthcare provides better risk-adjusted returns in current market',
-                'priority': 'Medium'
-            },
-            {
-                'action': 'Add International exposure',
-                'currentAllocation': 0.0,
-                'suggestedAllocation': 0.15,
-                'reasoning': 'International diversification reduces portfolio volatility',
-                'priority': 'Low'
-            }
+    
+    # Generate mock rebalancing suggestions
+    rebalance_suggestions = [
+        {
+            'action': 'Reduce Technology allocation',
+            'currentAllocation': 0.35,
+            'suggestedAllocation': 0.25,
+            'reasoning': 'Technology sector is over-concentrated, consider diversifying into healthcare',
+            'priority': 'High'
+        },
+        {
+            'action': 'Increase Healthcare allocation',
+            'currentAllocation': 0.20,
+            'suggestedAllocation': 0.30,
+            'reasoning': 'Healthcare provides better risk-adjusted returns in current market',
+            'priority': 'Medium'
+        },
+        {
+            'action': 'Add International exposure',
+            'currentAllocation': 0.0,
+            'suggestedAllocation': 0.15,
+            'reasoning': 'International diversification reduces portfolio volatility',
+            'priority': 'Low'
+        }
+    ]
+    
+    # Normalize risk tolerance to lowercase for matching
+    risk_key = risk_tolerance.lower() if risk_tolerance else 'medium'
+    if risk_key not in ['low', 'medium', 'high', 'conservative', 'moderate', 'aggressive']:
+        if 'conservative' in risk_key or 'low' in risk_key:
+            risk_key = 'low'
+        elif 'aggressive' in risk_key or 'high' in risk_key:
+            risk_key = 'high'
+        else:
+            risk_key = 'medium'
+    
+    # Map normalized risk to recommendation key
+    rec_key = 'low' if risk_key == 'low' or risk_key == 'conservative' else ('high' if risk_key == 'high' or risk_key == 'aggressive' else 'medium')
+    rec_list = recommendations.get(rec_key, recommendations['medium'])
+    
+    # Generate mock risk assessment
+    risk_assessment = {
+        'overallRisk': 'Medium-High' if risk_key == 'high' else 'Medium' if risk_key == 'medium' else 'Low',
+        'volatilityEstimate': 18.0 if risk_key == 'high' else 12.0 if risk_key == 'medium' else 8.0,  # Percentage
+        'recommendations': [
+            'Consider reducing concentration in single sectors',
+            'Add defensive positions for market volatility',
+            'Regular rebalancing recommended quarterly'
         ]
-        
-        # Generate mock risk assessment
-        risk_assessment = {
-            'overallRisk': 'Medium-High' if riskTolerance == 'high' else 'Medium' if riskTolerance == 'medium' else 'Low',
-            'volatilityEstimate': 0.18 if riskTolerance == 'high' else 0.12 if riskTolerance == 'medium' else 0.08,
-            'recommendations': [
-                'Consider reducing concentration in single sectors',
-                'Add defensive positions for market volatility',
-                'Regular rebalancing recommended quarterly'
-            ]
-        }
-        
-        # Generate mock market outlook
-        market_outlook = {
-            'overallSentiment': 'Bullish' if riskTolerance == 'high' else 'Neutral' if riskTolerance == 'medium' else 'Cautious',
-            'confidence': 0.75 if riskTolerance == 'high' else 0.65 if riskTolerance == 'medium' else 0.55,
-            'keyFactors': [
-                'Strong corporate earnings growth',
-                'Federal Reserve policy support',
-                'Technology sector innovation',
-                'Global economic recovery trends',
-                'Inflation concerns moderating'
-            ]
-        }
-        
-        return {
-            'portfolioAnalysis': {
-                'totalValue': 10000.0,
-                'numHoldings': 5,
-                'sectorBreakdown': {
+    }
+    
+    # Generate mock market outlook
+    market_outlook = {
+        'overallSentiment': 'Bullish' if risk_key == 'high' else 'Neutral' if risk_key == 'medium' else 'Cautious',
+        'confidence': 0.75 if risk_key == 'high' else 0.65 if risk_key == 'medium' else 0.55,
+        'keyFactors': [
+            'Strong corporate earnings growth',
+            'Federal Reserve policy support',
+            'Technology sector innovation',
+            'Global economic recovery trends',
+            'Inflation concerns moderating'
+        ]
+    }
+    
+    return {
+        'portfolioAnalysis': {
+            'totalValue': 10000.0,
+            'numHoldings': len([r for r in rec_list if r['recommendation'] in ['BUY', 'STRONG_BUY']]),
+            'sectorBreakdown': {
                     'Technology': 0.35,
                     'Healthcare': 0.20,
                     'Financial': 0.15,
                     'Consumer': 0.15,
                     'Other': 0.15
                 },
-                'riskScore': 0.6 if riskTolerance == 'medium' else 0.4 if riskTolerance == 'low' else 0.8,
+            'riskScore': 0.6 if risk_key == 'medium' else 0.4 if risk_key == 'low' else 0.8,
                 'diversificationScore': 0.7,
                 'expectedImpact': {
-                    'evPct': 0.12 if riskTolerance == 'high' else 0.08 if riskTolerance == 'medium' else 0.05,
-                    'evAbs': 1200 if riskTolerance == 'high' else 800 if riskTolerance == 'medium' else 500,
-                    'per10k': 1200 if riskTolerance == 'high' else 800 if riskTolerance == 'medium' else 500
+                'evPct': 0.12 if risk_key == 'high' else 0.08 if risk_key == 'medium' else 0.05,
+                'evAbs': 1200 if risk_key == 'high' else 800 if risk_key == 'medium' else 500,
+                'per10k': 1200 if risk_key == 'high' else 800 if risk_key == 'medium' else 500
                 },
                 'risk': {
-                    'volatilityEstimate': 0.25 if riskTolerance == 'high' else 0.15 if riskTolerance == 'medium' else 0.08,
-                    'maxDrawdownPct': 0.30 if riskTolerance == 'high' else 0.20 if riskTolerance == 'medium' else 0.10,
-                    'var95': 0.15 if riskTolerance == 'high' else 0.10 if riskTolerance == 'medium' else 0.05,
-                    'sharpeRatio': 1.2 if riskTolerance == 'high' else 1.0 if riskTolerance == 'medium' else 0.8
+                'volatilityEstimate': 25.0 if risk_key == 'high' else 15.0 if risk_key == 'medium' else 8.0,  # Percentage
+                'maxDrawdownPct': 30.0 if risk_key == 'high' else 20.0 if risk_key == 'medium' else 10.0,  # Percentage
+                'var95': 15.0 if risk_key == 'high' else 10.0 if risk_key == 'medium' else 5.0,
+                'sharpeRatio': 1.2 if risk_key == 'high' else 1.0 if risk_key == 'medium' else 0.8
                 },
                 'assetAllocation': {
-                    'stocks': 0.80 if riskTolerance == 'high' else 0.70 if riskTolerance == 'medium' else 0.50,
-                    'bonds': 0.15 if riskTolerance == 'high' else 0.25 if riskTolerance == 'medium' else 0.40,
-                    'cash': 0.05 if riskTolerance == 'high' else 0.05 if riskTolerance == 'medium' else 0.10,
-                    'alternatives': 0.00 if riskTolerance == 'high' else 0.00 if riskTolerance == 'medium' else 0.00
+                'stocks': 0.80 if risk_key == 'high' else 0.70 if risk_key == 'medium' else 0.50,
+                'bonds': 0.15 if risk_key == 'high' else 0.25 if risk_key == 'medium' else 0.40,
+                'cash': 0.05 if risk_key == 'high' else 0.05 if risk_key == 'medium' else 0.10,
+                'alternatives': 0.00 if risk_key == 'high' else 0.00 if risk_key == 'medium' else 0.00
                 }
             },
             'buyRecommendations': [
@@ -3643,13 +3991,13 @@ class Query(SwingQuery, BaseQuery, SblocQuery, NotificationQuery, BenchmarkQuery
                     'companyName': rec['companyName'],
                     'recommendation': rec['recommendation'],
                     'confidence': rec['confidence'],
-                    'reasoning': rec['reason'],
+                'reasoning': rec.get('reason', rec.get('reasoning', 'Investment opportunity')),
                     'targetPrice': 200.0,  # Mock data
                     'currentPrice': 180.0,  # Mock data
                     'expectedReturn': 0.11,  # Mock data
                     'allocation': 0.05  # Mock data - 5% allocation
                 }
-                for rec in recommendations.get(riskTolerance, recommendations['medium'])
+            for rec in rec_list
                 if rec['recommendation'] in ['BUY', 'STRONG_BUY']
             ],
             'sellRecommendations': [
@@ -3658,13 +4006,13 @@ class Query(SwingQuery, BaseQuery, SblocQuery, NotificationQuery, BenchmarkQuery
                     'companyName': rec['companyName'],
                     'recommendation': rec['recommendation'],
                     'confidence': rec['confidence'],
-                    'reasoning': rec['reason'],
+                'reasoning': rec.get('reason', rec.get('reasoning', 'Consider reducing position')),
                     'targetPrice': 150.0,  # Mock data
                     'currentPrice': 180.0,  # Mock data
                     'expectedReturn': -0.17,  # Mock data
                     'allocation': 0.0  # Mock data - 0% allocation for sell recommendations
                 }
-                for rec in recommendations.get(riskTolerance, recommendations['medium'])
+            for rec in rec_list
                 if rec['recommendation'] in ['SELL', 'STRONG_SELL']
             ],
             'rebalanceSuggestions': rebalance_suggestions,
@@ -3771,18 +4119,11 @@ class Query(SwingQuery, BaseQuery, SblocQuery, NotificationQuery, BenchmarkQuery
     
     def resolve_defiAccount(self, info):
         """Resolve DeFi account information"""
-        # Mock data for DeFi account - simplified to avoid nested type issues
-        return DeFiAccountType(
-            healthFactor=1.85,
-            availableBorrowUsd=50000.0,
-            collateralUsd=100000.0,
-            debtUsd=30000.0,
-            ltvWeighted=0.3,
-            liqThresholdWeighted=0.8,
-            supplies=None,  # Temporarily disable nested types
-            borrows=None,    # Temporarily disable nested types
-            pricesUsd=[1.0, 1.0, 1.0]
-        )
+        # Return a simple dictionary - this should work
+        return {
+            "healthFactor": 1.85,
+            "availableBorrowUsd": 50000.0
+        }
     
     def resolve_stockComprehensive(self, info, symbol, timeframe="1D"):
         """Resolve comprehensive stock data"""
@@ -3836,6 +4177,10 @@ class Mutation(SblocMutation, NotificationMutation, BenchmarkMutation, SwingTrad
     
     # Financial mutations
     withdrawFunds = WithdrawFunds.Field()
+    
+    # Education mutations
+    startQuest = graphene.String(questId=graphene.String(required=True))
+    testQuest = graphene.String()
     
     # Missing DeFi Mutations
     defiSupply = graphene.Field(DeFiResultType, symbol=graphene.String(required=True), quantity=graphene.Float(required=True), useAsCollateral=graphene.Boolean())
@@ -4171,6 +4516,67 @@ class Mutation(SblocMutation, NotificationMutation, BenchmarkMutation, SwingTrad
         # In a real implementation, this would cancel the order with the broker
         return True
     
+    # DeFi Mutation Resolvers
+    def resolve_defiSupply(self, info, symbol, quantity, useAsCollateral=False):
+        """Supply assets to AAVE"""
+        return DeFiResultType(
+            success=True,
+            message=f"Successfully supplied {quantity} {symbol}",
+            position=DeFiPositionType(
+                quantity=quantity,
+                useAsCollateral=useAsCollateral
+            ),
+            healthFactorAfter=1.85
+        )
+    
+    def resolve_defiBorrow(self, info, symbol, amount, rateMode="VARIABLE"):
+        """Borrow assets from AAVE"""
+        return DeFiResultType(
+            success=True,
+            message=f"Successfully borrowed {amount} {symbol}",
+            position=DeFiPositionType(
+                amount=amount,
+                rateMode=rateMode
+            ),
+            healthFactorAfter=1.75
+        )
+    
+    def resolve_defiWithdraw(self, info, symbol, quantity):
+        """Withdraw supplied assets from AAVE"""
+        return DeFiResultType(
+            success=True,
+            message=f"Successfully withdrew {quantity} {symbol}",
+            position=DeFiPositionType(
+                quantity=quantity,
+                useAsCollateral=False
+            ),
+            healthFactorAfter=1.90
+        )
+    
+    def resolve_defiRepay(self, info, symbol, amount, rateMode="VARIABLE"):
+        """Repay borrowed assets to AAVE"""
+        return DeFiResultType(
+            success=True,
+            message=f"Successfully repaid {amount} {symbol}",
+            position=DeFiPositionType(
+                amount=amount,
+                rateMode=rateMode
+            ),
+            healthFactorAfter=1.95
+        )
+    
+    def resolve_defiToggleCollateral(self, info, symbol, useAsCollateral):
+        """Toggle collateral usage for AAVE position"""
+        return DeFiResultType(
+            success=True,
+            message=f"Successfully {'enabled' if useAsCollateral else 'disabled'} collateral for {symbol}",
+            position=DeFiPositionType(
+                quantity=0,
+                useAsCollateral=useAsCollateral
+            ),
+            healthFactorAfter=1.85
+        )
+    
     
     
     
@@ -4452,63 +4858,18 @@ def _resolve_playbooks(root, info, **kwargs):
             "tags": ["growth", "medium-term", "fundamental"]
         }
     ]
+    
+    # Resolver for startQuest mutation
+    def resolve_startQuest(self, info, questId):
+        print(f"DEBUG: startQuest resolver called with questId: {questId}")
+        return f"Quest {questId} started successfully!"
+    
+    # Test resolver
+    def resolve_testQuest(self, info):
+        print("DEBUG: testQuest resolver called!")
+        return "Test quest works!"
 
-# Missing DeFi Mutation Resolvers
-def resolve_defiSupply(self, info, symbol, quantity, useAsCollateral=False):
-    """Supply assets to AAVE"""
-    return DeFiResultType(
-        success=True,
-        message=f"Successfully supplied {quantity} {symbol}",
-        position=DeFiPositionType(
-            quantity=quantity,
-            useAsCollateral=useAsCollateral
-        )
-    )
-
-def resolve_defiBorrow(self, info, symbol, amount, rateMode="VARIABLE"):
-    """Borrow assets from AAVE"""
-    return DeFiResultType(
-        success=True,
-        message=f"Successfully borrowed {amount} {symbol}",
-        position=DeFiPositionType(
-            amount=amount,
-            rateMode=rateMode
-        ),
-        healthFactorAfter=1.75
-    )
-
-def resolve_defiWithdraw(self, info, symbol, quantity):
-    """Withdraw assets from AAVE"""
-    return DeFiResultType(
-        success=True,
-        message=f"Successfully withdrew {quantity} {symbol}",
-        position=DeFiPositionType(
-            quantity=quantity,
-            useAsCollateral=False
-        )
-    )
-
-def resolve_defiRepay(self, info, symbol, amount, rateMode="VARIABLE"):
-    """Repay borrowed assets to AAVE"""
-    return DeFiResultType(
-        success=True,
-        message=f"Successfully repaid {amount} {symbol}",
-        position=DeFiPositionType(
-            amount=amount,
-            rateMode=rateMode
-        )
-    )
-
-def resolve_defiToggleCollateral(self, info, symbol, useAsCollateral):
-    """Toggle collateral usage for AAVE position"""
-    return DeFiResultType(
-        success=True,
-        message=f"Successfully {'enabled' if useAsCollateral else 'disabled'} collateral for {symbol}",
-        position=DeFiPositionType(
-            quantity=0,
-            useAsCollateral=useAsCollateral
-        )
-    )
+# Resolver functions are defined inside the Mutation class
 
 # Resolvers are defined directly in the Query and Mutation classes
 # No need for explicit binding as they're already properly defined

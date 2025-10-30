@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -e
+
+echo "🔍 Checking for forbidden localhost:8001 references..."
+
+if grep -r "localhost:8001\|127\.0\.0\.1:8001" mobile/src mobile/app.json mobile/env.localhost 2>/dev/null; then
+  echo "❌ Found forbidden localhost:8001 reference. Remove it before committing."
+  echo "💡 Use environment variables or network IP (192.168.1.236:8000) instead."
+  exit 1
+fi
+
+if grep -r ":8001" mobile/src mobile/app.json mobile/env.localhost 2>/dev/null; then
+  echo "❌ Found port 8001 reference. This should be port 8000."
+  echo "💡 Update to use port 8000 or environment variables."
+  exit 1
+fi
+
+echo "✅ No forbidden localhost:8001 references found."
+echo "🔧 Running TypeScript check..."
+npx tsc --noEmit
+
+echo "✅ Pre-commit checks passed!"

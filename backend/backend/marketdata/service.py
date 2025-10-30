@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 try:
     import redis
     redis_client = redis.Redis.from_url(
-        os.getenv("REDIS_URL", "redis://localhost:6379/0"),
+        os.getenv("REDIS_URL", "redis://process.env.REDIS_HOST || "localhost:6379"/0"),
         decode_responses=True
     )
     REDIS_AVAILABLE = True

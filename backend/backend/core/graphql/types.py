@@ -2,7 +2,34 @@ from graphene_django import DjangoObjectType
 from graphene.types.generic import GenericScalar
 import graphene
 from django.utils import timezone
-from core.types import IncomeProfileType
+
+# Simple income profile type for mock data (camelCase fields for mobile app)
+class MockIncomeProfileType(graphene.ObjectType):
+    incomeBracket = graphene.String()
+    age = graphene.Int()
+    investmentGoals = graphene.List(graphene.String)
+    riskTolerance = graphene.String()
+    investmentHorizon = graphene.String()
+    
+    @staticmethod
+    def resolve_incomeBracket(root, info):
+        return getattr(root, 'incomeBracket', None)
+    
+    @staticmethod
+    def resolve_age(root, info):
+        return getattr(root, 'age', None)
+    
+    @staticmethod
+    def resolve_investmentGoals(root, info):
+        return getattr(root, 'investmentGoals', [])
+    
+    @staticmethod
+    def resolve_riskTolerance(root, info):
+        return getattr(root, 'riskTolerance', None)
+    
+    @staticmethod
+    def resolve_investmentHorizon(root, info):
+        return getattr(root, 'investmentHorizon', None)
 
 # Create a simple ObjectType instead of DjangoObjectType for User (database-free)
 class UserType(graphene.ObjectType):
@@ -17,7 +44,7 @@ class UserType(graphene.ObjectType):
     isFollowedByUser = graphene.Boolean()  # Add isFollowedByUser field
     hasPremiumAccess = graphene.Boolean()
     subscriptionTier = graphene.String()
-    incomeProfile = graphene.Field(IncomeProfileType)  # Add incomeProfile field
+    incomeProfile = graphene.Field(MockIncomeProfileType)  # Add incomeProfile field
     followedTickers = graphene.List(graphene.String)  # Add followedTickers field
 
 # Create a simple ObjectType instead of DjangoObjectType for Signal

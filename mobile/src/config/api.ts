@@ -1,3 +1,6 @@
+import Constants from 'expo-constants';
+import { Platform } from 'react-native';
+
 /**
  * API Configuration
  * Single source of truth for all API endpoints
@@ -6,11 +9,25 @@
 // Check environment variable first, then fallback to hardcoded values
 const ENV_API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 
-const prodHost = "http://54.160.139.56:8000";
-const localHost = "http://localhost:8000";
+const prodHost = "http://api.richesreach.com:8000";
+const localHost = process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
 // Use environment variable if available, otherwise use localhost for development
-export const API_BASE = ENV_API_BASE_URL || localHost;
+export const API_BASE = ENV_API_BASE_URL || Constants.expoConfig?.extra?.API_BASE || localHost;
+
+// Runtime guardrails to prevent bad hosts
+console.log("[API_BASE at runtime]", API_BASE);
+
+// Prevent bad hosts on real devices or release builds
+const badHost = /localhost:8001|127\.0\.0\.1:8001/i.test(API_BASE);
+if (!__DEV__ && badHost) {
+  throw new Error(`Invalid API_BASE in release: ${API_BASE}`);
+}
+
+// Optional stricter guard: even in dev on device, block localhost
+if (Platform.OS !== 'web' && /localhost|127\.0\.0\.1/.test(API_BASE)) {
+  console.warn("⚠️ API_BASE points to localhost on a device. Use LAN IP instead.");
+}
 
 // Fail fast if no API base URL is configured
 if (!API_BASE) {

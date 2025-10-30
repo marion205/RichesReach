@@ -38,7 +38,7 @@ import MediasoupLiveStreaming from '../../../components/MediasoupLiveStreaming';
 
 // Configuration
 const STREAMING_SERVER_URL = process.env.EXPO_PUBLIC_SFU_SERVER_URL || 'http://localhost:8000';
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000";
 const WHISPER_API_URL = process.env.EXPO_PUBLIC_WHISPER_API_URL || 'http://localhost:3001';
 
 // Interfaces

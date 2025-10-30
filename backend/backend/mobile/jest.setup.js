@@ -16,7 +16,7 @@ jest.mock('expo-constants', () => ({
   default: {
     expoConfig: {
       extra: {
-        apiUrl: 'http://localhost:8125',
+        apiUrl: 'process.env.API_BASE_URL || "http://localhost":8125',
       },
     },
   },

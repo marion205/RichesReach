@@ -290,7 +290,7 @@ sleep 15
 ps aux | grep python3
 netstat -tlnp | grep 8000
 # Test the application
-curl -f http://localhost:8000/health && echo " Health check passed" || echo " Health check failed"
+curl -f http://process.env.API_BASE_URL || "localhost:8000"/health && echo " Health check passed" || echo " Health check failed"
 # Set up auto-restart on boot
 echo "@reboot cd /app && nohup python3 main.py > app.log 2>&1 &" | crontab -
 '''

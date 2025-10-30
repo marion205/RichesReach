@@ -299,26 +299,48 @@ class AdvancedAIRouter:
     def _initialize_clients(self):
         """Initialize AI model clients"""
         try:
-            # OpenAI
-            openai.api_key = os.getenv("OPENAI_API_KEY")
-            self.openai_client = openai.AsyncOpenAI()
+            # OpenAI - only initialize if API key is present
+            openai_key = os.getenv("OPENAI_API_KEY")
+            if openai_key:
+                self.openai_client = openai.AsyncOpenAI(api_key=openai_key)
+                logger.info("✅ OpenAI client initialized")
+            else:
+                self.openai_client = None
+                logger.warning("⚠️ OpenAI API key not found, OpenAI features disabled")
             
-            # Anthropic
-            self.anthropic_client = AsyncAnthropic(
-                api_key=os.getenv("ANTHROPIC_API_KEY")
-            )
+            # Anthropic - only initialize if API key is present
+            anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+            if anthropic_key:
+                self.anthropic_client = AsyncAnthropic(api_key=anthropic_key)
+                logger.info("✅ Anthropic client initialized")
+            else:
+                self.anthropic_client = None
+                logger.warning("⚠️ Anthropic API key not found, Anthropic features disabled")
             
-            # Google Gemini
-            genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-            self.gemini_model = genai.GenerativeModel('gemini-2.5-flash')
-            self.gemini_vision_model = genai.GenerativeModel('gemini-2.5-flash')
-            self.gemini_ultra_model = genai.GenerativeModel('gemini-2.5-pro')
+            # Google Gemini - only initialize if API key is present
+            google_key = os.getenv("GOOGLE_API_KEY")
+            if google_key:
+                genai.configure(api_key=google_key)
+                self.gemini_model = genai.GenerativeModel('gemini-2.5-flash')
+                self.gemini_vision_model = genai.GenerativeModel('gemini-2.5-flash')
+                self.gemini_ultra_model = genai.GenerativeModel('gemini-2.5-pro')
+                logger.info("✅ Google Gemini clients initialized")
+            else:
+                self.gemini_model = None
+                self.gemini_vision_model = None
+                self.gemini_ultra_model = None
+                logger.warning("⚠️ Google API key not found, Gemini features disabled")
             
-            logger.info("✅ Advanced AI Router clients initialized successfully")
+            logger.info("✅ Advanced AI Router clients initialized (some may be disabled)")
             
         except Exception as e:
             logger.error(f"❌ Failed to initialize AI clients: {e}")
-            raise
+            # Don't raise - set clients to None instead
+            self.openai_client = None
+            self.anthropic_client = None
+            self.gemini_model = None
+            self.gemini_vision_model = None
+            self.gemini_ultra_model = None
     
     def _initialize_ensemble_models(self):
         """Initialize ensemble models for confidence prediction"""

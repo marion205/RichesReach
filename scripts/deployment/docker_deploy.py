@@ -40,7 +40,7 @@ USER appuser
 EXPOSE 8000
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \\
-CMD curl -f http://localhost:8000/health || exit 1
+CMD curl -f http://process.env.API_BASE_URL || "localhost:8000"/health || exit 1
 # Run the application
 CMD ["python", "app.py"]
 ''')
@@ -148,7 +148,7 @@ environment:
 - HOST=0.0.0.0
 restart: unless-stopped
 healthcheck:
-test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+test: ["CMD", "curl", "-f", "http://process.env.API_BASE_URL || "localhost:8000"/health"]
 interval: 30s
 timeout: 10s
 retries: 3
@@ -177,7 +177,7 @@ sleep 30
 docker ps
 docker logs richesreach-ai_richesreach-ai_1
 # Test the application
-curl -f http://localhost:8000/health || echo "Health check failed"
+curl -f http://process.env.API_BASE_URL || "localhost:8000"/health || echo "Health check failed"
 # Set up auto-restart on boot
 echo "@reboot cd /home/ubuntu/richesreach-main && docker-compose up -d" | crontab -
 '''

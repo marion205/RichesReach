@@ -13,7 +13,7 @@
  * Options:
  *   --viewers <number>    Number of concurrent viewers (default: 50)
  *   --duration <minutes>  Test duration in minutes (default: 10)
- *   --base-url <url>      API base URL (default: http://192.168.1.236:8000)
+ *   --base-url <url>      API base URL (default: http://process.env.EXPO_PUBLIC_API_HOST || "localhost":8000)
  *   --token <token>       Authentication token
  *   --verbose             Enable verbose logging
  *   --help                Show help message
@@ -27,7 +27,7 @@ const readline = require('readline');
 const config = {
   viewers: 50,
   duration: 10, // minutes
-  baseUrl: 'http://192.168.1.236:8000',
+  baseUrl: 'http://process.env.EXPO_PUBLIC_API_HOST || "localhost":8000',
   token: 'test-token',
   verbose: false,
   messageInterval: 5000, // 5 seconds
@@ -66,7 +66,7 @@ function parseArgs() {
         config.duration = parseInt(args[++i]) || 10;
         break;
       case '--base-url':
-        config.baseUrl = args[++i] || 'http://192.168.1.236:8000';
+        config.baseUrl = args[++i] || 'http://process.env.EXPO_PUBLIC_API_HOST || "localhost":8000';
         break;
       case '--token':
         config.token = args[++i] || 'test-token';
@@ -91,14 +91,14 @@ Usage: node scripts/load-test.js [options]
 Options:
   --viewers <number>    Number of concurrent viewers (default: 50)
   --duration <minutes>  Test duration in minutes (default: 10)
-  --base-url <url>      API base URL (default: http://192.168.1.236:8000)
+  --base-url <url>      API base URL (default: http://process.env.EXPO_PUBLIC_API_HOST || "localhost":8000)
   --token <token>       Authentication token
   --verbose             Enable verbose logging
   --help                Show help message
 
 Examples:
   node scripts/load-test.js --viewers 100 --duration 15
-  node scripts/load-test.js --base-url http://localhost:8000 --token my-token
+  node scripts/load-test.js --base-url http://process.env.API_BASE_URL || "localhost:8000" --token my-token
   node scripts/load-test.js --verbose
 `);
 }

@@ -342,7 +342,7 @@ const MemeQuestScreen: React.FC = () => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
       
       // Real Pump.fun API call simulation
-      const response = await fetch('http://localhost:8001/api/pump-fun/launch', {
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_BASE_URL || 'http://192.168.1.236:8000'}/api/pump-fun/launch`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

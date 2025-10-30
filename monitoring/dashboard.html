@@ -467,8 +467,8 @@
     <script>
         // Configuration
         const config = {
-            apiBaseUrl: 'http://192.168.1.236:8000/api',
-            websocketUrl: 'ws://192.168.1.236:8000',
+            apiBaseUrl: 'http://process.env.EXPO_PUBLIC_API_HOST || "localhost":8000/api',
+            websocketUrl: 'ws://process.env.EXPO_PUBLIC_API_HOST || "localhost":8000',
             refreshInterval: 5000, // 5 seconds
             maxDataPoints: 50,
         };

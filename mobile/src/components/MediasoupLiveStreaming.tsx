@@ -405,7 +405,7 @@ const MediasoupLiveStreaming: React.FC<MediasoupLiveStreamingProps> = ({
 
   const createSDPFromIceParameters = (iceParameters: any, iceCandidates: any[]) => {
     // Simplified SDP creation - in real implementation, you'd create proper SDP
-    return `v=0\r\no=- 0 0 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\na=ice-ufrag:${iceParameters.usernameFragment}\r\na=ice-pwd:${iceParameters.password}\r\n`;
+    return `v=0\r\no=- 0 0 IN IP4 ${process.env.EXPO_PUBLIC_API_BASE_URL?.replace('http://', '') || '192.168.1.236'}\r\ns=-\r\nt=0 0\r\na=ice-ufrag:${iceParameters.usernameFragment}\r\na=ice-pwd:${iceParameters.password}\r\n`;
   };
 
   const sendChatMessage = useCallback(() => {

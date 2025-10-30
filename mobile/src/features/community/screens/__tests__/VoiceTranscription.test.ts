@@ -199,7 +199,7 @@ describe('Voice Transcription', () => {
         name: 'voice.m4a',
       } as any);
       
-      const response = await fetch('http://localhost:3001/api/transcribe-audio/', {
+      const response = await fetch('process.env.WHISPER_API_URL || "http://localhost:3001"/api/transcribe-audio/', {
         method: 'POST',
         body: formData,
         headers: {
@@ -211,7 +211,7 @@ describe('Voice Transcription', () => {
       const result = await response.json();
       
       expect(global.fetch).toHaveBeenCalledWith(
-        'http://localhost:3001/api/transcribe-audio/',
+        'process.env.WHISPER_API_URL || "http://localhost:3001"/api/transcribe-audio/',
         expect.objectContaining({
           method: 'POST',
           headers: expect.objectContaining({
@@ -242,7 +242,7 @@ describe('Voice Transcription', () => {
         name: 'voice.m4a',
       } as any);
       
-      const response = await fetch('http://localhost:3001/api/transcribe-audio/', {
+      const response = await fetch('process.env.WHISPER_API_URL || "http://localhost:3001"/api/transcribe-audio/', {
         method: 'POST',
         body: formData,
         headers: {
@@ -267,7 +267,7 @@ describe('Voice Transcription', () => {
       } as any);
       
       await expect(
-        fetch('http://localhost:3001/api/transcribe-audio/', {
+        fetch('process.env.WHISPER_API_URL || "http://localhost:3001"/api/transcribe-audio/', {
           method: 'POST',
           body: formData,
           headers: {

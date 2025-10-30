@@ -1,7 +1,7 @@
 from .settings import *
 
 DEBUG = True
-ALLOWED_HOSTS = ["*", "localhost", "127.0.0.1", "192.168.1.236"]
+ALLOWED_HOSTS = ["*", "localhost", "localhost", "localhost"]
 
 # make these additions safe to import repeatedly
 if "corsheaders" not in INSTALLED_APPS:
@@ -21,6 +21,6 @@ SESSION_COOKIE_SECURE = False
 CSRF_COOKIE_SECURE = False
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:8000",
-    "http://127.0.0.1:8000",
-    "http://192.168.1.236:8000",
+    "http://localhost:8000",
+    "http://localhost:8000",
 ]

@@ -144,7 +144,7 @@ print_status "Step 8: Verifying deployment..."
 # Check service health
 execute_remote "cd $SERVER_PATH/richesreach-production && docker-compose -f docker-compose.production.yml ps"
 # Check application health
-execute_remote "curl -f http://localhost/health/ || echo 'Health check failed'"
+execute_remote "curl -f process.env.API_BASE_URL || "http://localhost"/health/ || echo 'Health check failed'"
 # Check logs
 execute_remote "cd $SERVER_PATH/richesreach-production && docker-compose -f docker-compose.production.yml logs --tail=50"
 print_success "Deployment verification completed"

@@ -36,8 +36,13 @@ export default function BenchmarkSelector({
   const isDark = colorScheme === 'dark';
   const [showModal, setShowModal] = useState(false);
 
-  // Get available benchmarks from GraphQL
-  const { data: availableBenchmarksData } = useQuery(GET_AVAILABLE_BENCHMARKS);
+  // Get available benchmarks from GraphQL with error handling
+  const { data: availableBenchmarksData, error: benchmarksError } = useQuery(GET_AVAILABLE_BENCHMARKS, {
+    errorPolicy: 'all', // Continue rendering even if query has errors
+    onError: (error) => {
+      console.warn('Available benchmarks query error:', error);
+    },
+  });
 
   // Load saved benchmark preference
   useEffect(() => {

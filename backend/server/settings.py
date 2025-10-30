@@ -13,13 +13,13 @@ class Settings:
         self.FINNHUB_KEY = os.getenv("FINNHUB_API_KEY", "d2rnitpr01qv11lfegugd2rnitpr01qv11lfegv0")
         self.FINNHUB_RPS = int(os.getenv("FINNHUB_RPS", "60"))  # Finnhub requests per second limit
         self.NEWS_API_KEY = os.getenv("NEWS_API_KEY", "94a335c7316145f79840edd62f77e11e")
-        self.OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+        self.OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "REDACTED")
         
         # Database
         self.DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./richesreach.db")
         
         # Redis
-        self.REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+        self.REDIS_URL = os.getenv("REDIS_URL", "redis://process.env.REDIS_HOST || "localhost:6379"/0")
         
         # Environment
         self.ENVIRONMENT = os.getenv("ENVIRONMENT", "development")

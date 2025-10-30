@@ -59,7 +59,7 @@ export const LOAN_FIELDS = gql`
 `;
 
 export const HOLDING_FIELDS = gql`
-  fragment HoldingFields on CryptoHolding {
+  fragment HoldingFields on CryptoHoldingType {
     id
     quantity
     averageCost
@@ -73,7 +73,32 @@ export const HOLDING_FIELDS = gql`
     isCollateralized
     collateralValue
     loanAmount
-    cryptocurrency { id symbol name volatilityTier }
+    createdAt
+    updatedAt
+    cryptocurrency { 
+      id 
+      symbol 
+      name 
+      volatilityTier 
+    }
+  }
+`;
+
+export const CRYPTO_ANALYTICS_FIELDS = gql`
+  fragment CryptoAnalyticsFields on CryptoAnalyticsType {
+    totalValueUsd
+    totalCostBasis
+    totalPnl
+    totalPnlPercentage
+    portfolioVolatility
+    sharpeRatio
+    maxDrawdown
+    diversificationScore
+    topHoldingPercentage
+    sectorAllocation
+    bestPerformer
+    worstPerformer
+    lastUpdated
   }
 `;
 
@@ -108,12 +133,6 @@ export const GET_CRYPTO_PORTFOLIO = gql`
       totalCostBasis
       totalPnl
       totalPnlPercentage
-      totalPnl1d
-      totalPnlPct1d
-      totalPnl1w
-      totalPnlPct1w
-      totalPnl1m
-      totalPnlPct1m
       portfolioVolatility
       sharpeRatio
       maxDrawdown
@@ -133,21 +152,10 @@ export const GET_CRYPTO_PORTFOLIO = gql`
 export const GET_CRYPTO_ANALYTICS = gql`
   query GetCryptoAnalytics {
     cryptoAnalytics {
-      totalValueUsd
-      totalCostBasis
-      totalPnl
-      totalPnlPercentage
-      portfolioVolatility
-      sharpeRatio
-      maxDrawdown
-      diversificationScore
-      topHoldingPercentage
-      sectorAllocation
-      bestPerformer { symbol pnlPercentage }
-      worstPerformer { symbol pnlPercentage }
-      lastUpdated
+      ...CryptoAnalyticsFields
     }
   }
+  ${CRYPTO_ANALYTICS_FIELDS}
 `;
 
 // Get crypto trades

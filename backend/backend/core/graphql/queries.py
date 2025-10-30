@@ -395,7 +395,7 @@ class Query(graphene.ObjectType):
         context = info.context
         user = getattr(context, 'user', None)
         
-        # If no authenticated user, return None (not mock data)
+        # If no authenticated user, return null for production-ready behavior
         if not user or not user.is_authenticated:
             return None
             

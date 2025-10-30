@@ -56,7 +56,7 @@ export default function VoiceAI({
   const [pulseAnim] = useState(new Animated.Value(1));
   const [waveAnim] = useState(new Animated.Value(0));
 
-  const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+  const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
   useEffect(() => {
     loadAvailableVoices();

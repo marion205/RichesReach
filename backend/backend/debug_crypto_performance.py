@@ -7,7 +7,7 @@ import requests
 import time
 import json
 
-BASE_URL = "http://localhost:8123"
+BASE_URL = "process.env.API_BASE_URL || "http://localhost":8123"
 
 def test_individual_components():
     """Test each component individually to find bottlenecks"""

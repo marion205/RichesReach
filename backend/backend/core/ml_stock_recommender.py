@@ -511,7 +511,7 @@ class MLStockRecommender:
                 "pe_ratio",
                 "dividend_yield",
                 "current_price",
-                "avg_daily_dollar_volume",
+                # Note: avg_daily_dollar_volume not in model - using getattr with default
             )
             .order_by("symbol")
         )[:80]
@@ -608,7 +608,7 @@ class MLStockRecommender:
                 "pe_ratio",
                 "dividend_yield",
                 "current_price",
-                "avg_daily_dollar_volume",
+                # Note: avg_daily_dollar_volume not in model - using getattr with default
             )
             .order_by("-beginner_friendly_score")
         )[:40]

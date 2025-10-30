@@ -92,18 +92,26 @@ export default function PortfolioPerformanceCard({
   const [tab, setTab] = useState<Timeframe>('1M');
   const [showBenchmark, setShowBenchmark] = useState<boolean>(true);
 
-  // GraphQL queries for benchmark data
+  // GraphQL queries for benchmark data with error handling
   const { data: benchmarkData, loading: benchmarkLoading, error: benchmarkError } = useQuery(
     GET_BENCHMARK_SERIES,
     {
       variables: { symbol: selectedBenchmarkSymbol, timeframe: tab },
       skip: !useRealBenchmarkData || !showBenchmark,
       fetchPolicy: 'cache-and-network',
+      errorPolicy: 'all', // Continue rendering even if query has errors
+      onError: (error) => {
+        console.warn('Benchmark series query error:', error);
+      },
     }
   );
 
-  const { data: availableBenchmarksData } = useQuery(GET_AVAILABLE_BENCHMARKS, {
+  const { data: availableBenchmarksData, error: availableBenchmarksError } = useQuery(GET_AVAILABLE_BENCHMARKS, {
     skip: !useRealBenchmarkData,
+    errorPolicy: 'all', // Continue rendering even if query has errors
+    onError: (error) => {
+      console.warn('Available benchmarks query error:', error);
+    },
   });
 
   const [liveTotalValue, setLiveTotalValue] = useState(totalValue);

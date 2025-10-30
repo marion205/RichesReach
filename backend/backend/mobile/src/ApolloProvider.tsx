@@ -14,10 +14,10 @@ import CSRFService from '../services/CSRFService';
 const getGraphQLURL = () => {
   if (__DEV__) {
     // In development, use the local server (replace with your computer's IP)
-    return 'http://192.168.1.236:8000/graphql/';  // Your computer's IP
+    return 'http://process.env.EXPO_PUBLIC_API_HOST || "localhost":8000/graphql/';  // Your computer's IP
   }
   // In production, use the production URL
-  return 'http://54.160.139.56:8000/graphql/';
+  return 'http://process.env.PRODUCTION_API_HOST || "api.richesreach.com":8000/graphql/';
 };
 
 const HTTP_URL = getGraphQLURL();

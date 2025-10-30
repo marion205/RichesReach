@@ -10,7 +10,7 @@ ALLOWED_HOSTS = [
     'app.richesreach.net',
     'riches-reach-alb-1199497064.us-east-1.elb.amazonaws.com',
     'localhost',
-    '127.0.0.1',
+    'process.env.API_HOST || "localhost"',
 ]
 
 # Security Headers
@@ -51,7 +51,7 @@ DATABASES = {
 }
 
 # Redis Configuration (Production)
-REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+REDIS_URL = os.getenv('REDIS_URL', 'redis://process.env.REDIS_HOST || "localhost:6379"/0')
 CACHES = {
     'default': {
         'BACKEND': 'django_redis.cache.RedisCache',

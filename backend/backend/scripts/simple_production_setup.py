@@ -33,7 +33,7 @@ def setup_production():
 SECRET_KEY={secret_key}
 DEBUG=False
 ENVIRONMENT=production
-ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0
+ALLOWED_HOSTS=localhost,process.env.API_HOST || "localhost",0.0.0.0
 
 # Database Configuration (AWS RDS PostgreSQL)
 DB_NAME=richesreach_prod
@@ -67,7 +67,7 @@ EMAIL_HOST_PASSWORD=your-app-password
 DEFAULT_FROM_EMAIL=noreply@yourdomain.com
 
 # Frontend URL
-FRONTEND_URL=http://localhost:3000
+FRONTEND_URL=process.env.FRONTEND_URL || "http://localhost:3000"
 
 # Monitoring
 SENTRY_DSN=your-sentry-dsn
@@ -200,7 +200,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # CORS settings
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
+    "process.env.FRONTEND_URL || "http://localhost:3000"",
     "https://yourdomain.com",
 ]
 

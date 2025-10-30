@@ -13,8 +13,84 @@ import StockChart from '../components/StockChart';
 import AdvancedChart from '../../../components/charts/AdvancedChart';
 import OptionChainCard from '../../../components/OptionChainCard';
 import { useStockSearch } from '../../../shared/hooks/useStockSearch';
-import { useWatchlist } from '../../../shared/hooks/useWatchlist';
+import { useWatchlist, GET_MY_WATCHLIST } from '../../../shared/hooks/useWatchlist';
 import { UI } from '../../../shared/constants';
+
+// Chart data adapter utilities
+const toMs = (t: string | number | Date) =>
+  typeof t === 'number' ? (t > 1e12 ? t : t * 1000) : new Date(t).getTime();
+
+const toNum = (v: unknown) => (v == null || v === '' ? null : Number(v));
+
+const sortAsc = <T extends { t: number }>(arr: T[]) =>
+  [...arr].sort((a,b) => a.t - b.t);
+
+type GqlBar = {
+  timestamp: string | number;
+  open?: string | number;
+  high?: string | number;
+  low?: string | number;
+  close?: string | number;
+  volume?: string | number;
+};
+
+type GqlIndicators = {
+  BBUpper?: string | number;
+  BBMiddle?: string | number;
+  BBLower?: string | number;
+  SMA20?: string | number;
+  SMA50?: string | number;
+  EMA12?: string | number;
+  EMA26?: string | number;
+  MACD?: string | number;
+  MACDSignal?: string | number;
+  MACDHist?: string | number;
+};
+
+function useChartSeries(data?: { stockChartData?: { data?: GqlBar[]; indicators?: GqlIndicators }}) {
+  // ✅ Resilient: Check for wrong data shape and log warning
+  if (data && !data.stockChartData && Object.keys(data).length > 0) {
+    const dataKeys = Object.keys(data);
+    console.warn('[useChartSeries] ⚠️ Expected stockChartData, got keys:', dataKeys);
+    // If we got 'me' data or other wrong shape, return empty array
+    if (dataKeys.includes('me') || dataKeys.some(k => k !== 'stockChartData')) {
+      console.warn('[useChartSeries] ❌ Wrong data shape detected, returning empty chart data');
+      return useMemo(() => [], []);
+    }
+  }
+  
+  const rows = data?.stockChartData?.data ?? [];
+  const indicators = data?.stockChartData?.indicators;
+  
+  return useMemo(() => {
+    const toMs = (t: any) => typeof t === 'number' ? (t > 1e12 ? t : t * 1000) : new Date(t).getTime();
+    const toNum = (v: any) => (v == null || v === '' ? null : Number(v));
+    
+    if (rows.length === 0) {
+      console.log('[useChartSeries] No rows to map');
+      return [];
+    }
+    
+    const mapped = rows.map((r: any) => ({
+      t: toMs(r.timestamp),
+      o: toNum(r.open),
+      h: toNum(r.high),
+      l: toNum(r.low),
+      c: toNum(r.close),
+      v: toNum(r.volume),
+      bbU: toNum(indicators?.BBUpper),
+      bbM: toNum(indicators?.BBMiddle),
+      bbL: toNum(indicators?.BBLower),
+      macd: toNum(indicators?.MACD),
+      macdSig: toNum(indicators?.MACDSignal),
+      macdHist: toNum(indicators?.MACDHist),
+    })).filter(p => Number.isFinite(p.t) && Number.isFinite(p.c as number))
+      .sort((a, b) => a.t - b.t);
+    
+    console.log('[useChartSeries] ✅ Rows:', rows.length, '→ Mapped:', mapped.length);
+    return mapped;
+  }, [rows, indicators]); // ✅ Stable deps
+}
 
 // Responsive chart wrapper that measures actual available width
 const ResponsiveChart: React.FC<{
@@ -395,13 +471,13 @@ const getDividendYieldForSymbol = (symbol: string): number => {
   return dividendYields[symbol] || 0.0; // Default 0%
 };
 
-export default function StockScreen({ navigateTo }: { navigateTo: (s: string, d?: any) => void }) {
+export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s: string, d?: any) => void }) {
   const [activeTab, setActiveTab] = useState<'browse' | 'beginner' | 'watchlist' | 'research' | 'options'>('browse');
   
   const handleRowPress = (item: Stock) => {
     console.log('🔍 ROW PRESS', item.symbol);
     // Navigate to stock detail screen
-    navigateTo('StockDetail', {
+    navigateTo?.('StockDetail', {
       symbol: item.symbol,
     });
   };
@@ -409,7 +485,7 @@ export default function StockScreen({ navigateTo }: { navigateTo: (s: string, d?
   const openTrade = (item: Stock) => {
     console.log('🔍 TRADE PRESS', item.symbol);
     // Navigate to stock detail - user can use the Trade tab
-    navigateTo('StockDetail', {
+    navigateTo?.('StockDetail', {
       symbol: item.symbol,
     });
   };
@@ -444,32 +520,36 @@ export default function StockScreen({ navigateTo }: { navigateTo: (s: string, d?
   const client = useApolloClient();
   const { stocks, screening } = useStockSearch(searchQuery, false); // Always run the query
   
-  // Watchlist mutations
+  // Watchlist mutations with proper cache updates
   const [addToWatchlistMutation, { loading: addingToWatchlist, error: watchlistError }] = useMutation(ADD_TO_WATCHLIST, {
+    errorPolicy: 'none', // Don't return partial data that might be from cache
+    // Note: fetchPolicy is set per-call, not in useMutation config
     onError: (error) => {
-      console.error('🔍 Watchlist Mutation Error:', error);
+      console.error('🔍 Watchlist Mutation onError:', error);
       console.error('🔍 GraphQL Errors:', error?.graphQLErrors);
       console.error('🔍 Network Error:', error?.networkError);
+      console.error('🔍 Error message:', error?.message);
+      console.error('🔍 Full error object:', JSON.stringify(error, null, 2));
     },
     onCompleted: (data) => {
-      console.log('🔍 Watchlist Mutation Completed:', data);
-    }
+      console.log('🔍 Watchlist Mutation onCompleted:', JSON.stringify(data, null, 2));
+    },
+    // Don't use refetchQueries here - it's causing Apollo to return wrong data
+    // We'll manually refetch after mutation succeeds
   });
   const [removeFromWatchlistMutation] = useMutation(REMOVE_FROM_WATCHLIST);
   const { data: beginnerData, loading: beginnerLoading, refetch: refetchBeginner, error: beginnerError } =
     useQuery(GET_BEGINNER_FRIENDLY_STOCKS_ALT, { 
-      fetchPolicy: 'network-only', 
+      fetchPolicy: 'cache-and-network', 
       errorPolicy: 'all',
-      notifyOnNetworkStatusChange: true,
-      skip: activeTab !== 'beginner' // Only run when beginner tab is active
+      notifyOnNetworkStatusChange: true
     });
 
   // AI-powered recommendations for Browse All tab
   const { data: aiRecommendationsData, loading: aiRecommendationsLoading, error: aiRecommendationsError } =
     useQuery(GET_AI_STOCK_RECOMMENDATIONS, {
       fetchPolicy: 'cache-and-network',
-      errorPolicy: 'all',
-      skip: activeTab !== 'browse' // Only run when browse tab is active
+      errorPolicy: 'all'
     });
 
   // ML-powered screening for Beginner Friendly tab
@@ -477,8 +557,7 @@ export default function StockScreen({ navigateTo }: { navigateTo: (s: string, d?
     useQuery(GET_ML_STOCK_SCREENING, {
       variables: { limit: 50 },
       fetchPolicy: 'cache-and-network',
-      errorPolicy: 'all',
-      skip: activeTab !== 'beginner' // Only run when beginner tab is active
+      errorPolicy: 'all'
     });
 
   // User profile for income-based recommendations
@@ -490,7 +569,7 @@ export default function StockScreen({ navigateTo }: { navigateTo: (s: string, d?
   // Research queries
   const { data: researchData, loading: researchLoading, error: researchError, refetch: refetchResearch } = useQuery(RESEARCH_QUERY, {
     variables: { s: researchSymbol },
-    skip: activeTab !== 'research' || !researchSymbol,
+    skip: !researchSymbol,
   });
 
   const { data: chartData, loading: chartLoading, error: chartError, refetch: refetchChart } = useQuery(CHART_QUERY, {
@@ -501,11 +580,12 @@ export default function StockScreen({ navigateTo }: { navigateTo: (s: string, d?
       limit: 180,
       inds: ["SMA20","SMA50","EMA12","EMA26","RSI","MACD","MACDHist","BB"],
     },
-    skip: activeTab !== 'research' || !researchSymbol,
+    skip: !researchSymbol,
     fetchPolicy: 'cache-and-network',
     nextFetchPolicy: 'cache-first',
     errorPolicy: 'all',
   });
+
 
   // Options trading mutations
   const [placeOptionOrder, { loading: placingOrder }] = useMutation(gql`
@@ -586,7 +666,7 @@ export default function StockScreen({ navigateTo }: { navigateTo: (s: string, d?
     }
   `, {
     variables: { status: 'ALL' },
-    skip: activeTab !== 'options',
+    skip: false,
     fetchPolicy: 'cache-and-network',
     });
 
@@ -601,6 +681,41 @@ export default function StockScreen({ navigateTo }: { navigateTo: (s: string, d?
   }, [stocks.loading, stocks.data, stocks.error, activeTab, searchQuery]);
 
   const { list: watchlistQ, addToWatchlist, removeFromWatchlist } = useWatchlist();
+
+  // ✅ Sanity checks: Verify data keys match expected queries
+  React.useEffect(() => {
+    if (chartData) {
+      const chartKeys = Object.keys(chartData);
+      if (!chartKeys.includes('stockChartData') && chartKeys.length > 0) {
+        console.warn('[Sanity] Chart query returned unexpected keys:', chartKeys);
+      }
+    }
+    if (userProfileData) {
+      const profileKeys = Object.keys(userProfileData);
+      console.log('[Sanity] User profile keys:', profileKeys);
+    }
+  }, [chartData, userProfileData]);
+  
+  // Chart series data - must be called at top level to avoid hooks rule violation
+  const chartSeries = useChartSeries(chartData);
+  
+  // ✅ Derived values after all hooks are declared
+  const hasChartData = chartSeries.length > 0;
+  const isResearchTab = activeTab === 'research';
+  const isChartLoading = chartLoading || !chartData;
+
+  // 🔍 Debug chart data
+  React.useEffect(() => {
+    if (isResearchTab) {
+      console.log('🔍 CHART DEBUG - researchSymbol:', researchSymbol);
+      console.log('🔍 CHART DEBUG - chartInterval:', chartInterval);
+      console.log('🔍 CHART DEBUG - chartLoading:', chartLoading);
+      console.log('🔍 CHART DEBUG - chartError:', chartError);
+      console.log('🔍 CHART DEBUG - chartData:', chartData);
+      console.log('🔍 CHART DEBUG - chartSeries.length:', chartSeries.length);
+      console.log('🔍 CHART DEBUG - hasChartData:', hasChartData);
+    }
+  }, [isResearchTab, researchSymbol, chartInterval, chartLoading, chartError, chartData, chartSeries.length, hasChartData]);
 
   // Note: Removed automatic refetch on tab change to prevent infinite loop
   // Data will be refetched when user manually switches tabs via handleTabChange
@@ -645,30 +760,91 @@ export default function StockScreen({ navigateTo }: { navigateTo: (s: string, d?
     // Debug: Log the variables being sent
     const variables = {
       symbol: watchlistModal.stock.symbol,
-      companyName: watchlistModal.stock.companyName || null,
+      company_name: watchlistModal.stock.companyName || null, // Backend expects snake_case
       notes: notes || ""
     };
     console.log('🔍 Watchlist Debug - Variables being sent:', variables);
     console.log('🔍 Watchlist Debug - Stock data:', watchlistModal.stock);
     
     try {
-      const { data } = await addToWatchlistMutation({
-        variables: variables
+      console.log('🔍 Watchlist Debug - About to call mutation with variables:', variables);
+      console.log('🔍 Watchlist Debug - Mutation definition:', ADD_TO_WATCHLIST.loc?.source?.body);
+      
+      const { data, errors } = await addToWatchlistMutation({
+        variables: variables,
+        fetchPolicy: 'no-cache', // Force network request, don't use cache
+        context: {
+          fetchOptions: {
+            headers: {
+              'X-Debug-Request': 'watchlist-mutation',
+            },
+          },
+        },
       });
       
-      console.log('🔍 Watchlist Debug - Response data:', data);
+      console.log('🔍 Watchlist Debug - Mutation response received');
+      console.log('🔍 Watchlist Debug - Data type:', typeof data);
+      console.log('🔍 Watchlist Debug - Data keys:', data ? Object.keys(data) : 'null');
+      console.log('🔍 Watchlist Debug - Full data:', JSON.stringify(data, null, 2));
+      console.log('🔍 Watchlist Debug - Errors:', errors);
       
-      if (data?.addToWatchlist?.success) {
+      // Handle GraphQL errors that might be returned with data
+      if (errors && errors.length > 0) {
+        console.error('🔍 Watchlist Debug - GraphQL errors in response:', errors);
+        const errorMessage = errors[0]?.message || 'Failed to add to watchlist';
+        Alert.alert('Error', errorMessage);
+        return;
+      }
+      
+      console.log('🔍 Watchlist Debug - Full response data:', JSON.stringify(data, null, 2));
+      
+      // Check if we got a response
+      if (!data) {
+        console.error('🔍 Watchlist Debug - No data in response');
+        Alert.alert('Error', 'No response from server. Please try again.');
+        return;
+      }
+      
+      // ✅ Sanity check: Log what we actually received
+      const responseKeys = Object.keys(data || {});
+      console.log('[Watchlist] Mutation response keys:', responseKeys);
+      
+      // Check if addToWatchlist exists in response
+      if (!data.addToWatchlist) {
+        console.error('🔍 Watchlist Debug - No addToWatchlist in response. Received keys:', responseKeys);
+        console.error('🔍 Watchlist Debug - Full response:', JSON.stringify(data, null, 2));
+        
+        // More helpful error message
+        const receivedData = responseKeys.length > 0 ? responseKeys.join(', ') : 'empty response';
+        Alert.alert(
+          'Error', 
+          `Expected 'addToWatchlist' in response, but got: ${receivedData}. This usually means the backend mutation handler didn't fire. Check backend logs.`
+        );
+        return;
+      }
+      
+      console.log('🔍 Watchlist Debug - Success value:', data.addToWatchlist.success);
+      console.log('🔍 Watchlist Debug - Message:', data.addToWatchlist.message);
+      
+      if (data.addToWatchlist.success === true) {
         Alert.alert('Success', data.addToWatchlist.message);
         setWatchlistModal({ open: false, stock: null });
         setNotes('');
-        // Refresh watchlist data
+        // Refresh watchlist data - force immediate refetch
         if (watchlistQ?.refetch) {
-          watchlistQ.refetch();
+          await watchlistQ.refetch({ fetchPolicy: 'network-only' });
+        }
+        // Also force refetch via Apollo client
+        if (GET_MY_WATCHLIST) {
+          await client.query({
+            query: GET_MY_WATCHLIST,
+            fetchPolicy: 'network-only',
+            errorPolicy: 'all',
+          });
         }
       } else {
-        console.log('🔍 Watchlist Debug - Success false, message:', data?.addToWatchlist?.message);
-        Alert.alert('Error', data?.addToWatchlist?.message || 'Failed to add to watchlist');
+        console.log('🔍 Watchlist Debug - Success false, message:', data.addToWatchlist.message);
+        Alert.alert('Error', data.addToWatchlist.message || 'Failed to add to watchlist');
       }
     } catch (error) {
       console.error('🔍 Watchlist Debug - Full error:', error);
@@ -795,6 +971,12 @@ export default function StockScreen({ navigateTo }: { navigateTo: (s: string, d?
 
   // Function to determine if a stock is good for the user's income profile
   const isStockGoodForIncomeProfile = useCallback((stock: Stock) => {
+    // For development/demo purposes, show budget impact for all stocks
+    // In production, this would check user's income profile
+    return true;
+    
+    // Original logic (commented out for development):
+    /*
     const userProfile = userProfileData?.me?.incomeProfile;
     if (!userProfile) return false;
 
@@ -824,7 +1006,8 @@ export default function StockScreen({ navigateTo }: { navigateTo: (s: string, d?
     const isHighQuality = stock.beginnerFriendlyScore > 80;
     
     return hasIncomeGoals || (isHighIncome && isConservative) || hasGoodDividend || isHighQuality;
-  }, [userProfileData]);
+    */
+  }, []);
 
   // Function to get user's budget based on income profile
   const getUserBudget = useCallback(() => {
@@ -856,6 +1039,7 @@ export default function StockScreen({ navigateTo }: { navigateTo: (s: string, d?
       dividendYield={item.dividendYield}
       beginnerFriendlyScore={item.beginnerFriendlyScore}
       beginnerScoreBreakdown={item.beginnerScoreBreakdown}
+      currentPrice={typeof item.currentPrice === 'number' ? item.currentPrice : parseFloat(item.currentPrice || '0')}
       isGoodForIncomeProfile={isStockGoodForIncomeProfile(item)}
       onPressAdd={() => onPressAdd(item)}
       onPressAnalysis={() => openAnalysis(item)}
@@ -1144,7 +1328,7 @@ export default function StockScreen({ navigateTo }: { navigateTo: (s: string, d?
     if (activeTab === 'beginner') {
       // Use ML screening if available, otherwise fall back to beginner data
       const mlData = mlScreeningData?.advancedStockScreening ?? [];
-      const beginnerData = beginnerData?.beginnerFriendlyStocks ?? [];
+      const beginnerStocks = beginnerData?.beginnerFriendlyStocks ?? [];
       
       // Get real-time prices from stocks.data to override cached prices
       const realTimeStocks = stocks.data?.stocks ?? [];
@@ -1216,7 +1400,7 @@ export default function StockScreen({ navigateTo }: { navigateTo: (s: string, d?
       }));
       
       // Ensure we always have at least 5 stocks for Beginner Friendly
-      let data = transformedMlData.length > 0 ? transformedMlData : beginnerData;
+      let data = transformedMlData.length > 0 ? transformedMlData : beginnerStocks;
       
       // If we still don't have enough stocks, add beginner-friendly stocks to reach minimum of 5
       if (data.length < 5) {
@@ -1325,7 +1509,7 @@ return (
 <View style={styles.container}>
 {/* Header */}
 <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigateTo('Home')}>
+        <TouchableOpacity style={styles.backButton} onPress={() => navigateTo?.('Home')}>
 <Icon name="arrow-left" size={24} color="#00cc99" />
 </TouchableOpacity>
 <Text style={styles.headerTitle}>Stocks & Investing</Text>
@@ -1455,25 +1639,68 @@ placeholderTextColor="#999"
                     ))}
         </View>
                 </View>
-                {chartLoading ? (
+                {isChartLoading ? (
                   <View style={styles.chartLoading}>
                     <Text style={{ color: '#666' }}>Loading chart...</Text>
                   </View>
-                ) : chartData?.stockChartData?.data?.length ? (
-                  <ResponsiveChart height={220}>
-                    {(w) => (
-                      <AdvancedChart
-                        key={`${researchSymbol}-${chartInterval}-${chartData.stockChartData.data.length}`}
-                        data={chartData.stockChartData.data}
-                        indicators={chartData.stockChartData.indicators || {}}
-                        width={w}
-                        height={220}
-                      />
-                    )}
-                  </ResponsiveChart>
-                ) : (
+                ) : !chartLoading && chartError ? (
+                  // ✅ Error state
+                  <View style={[styles.chartLoading, { padding: 16 }]}>
+                    <Text style={{ color: '#EF4444', marginBottom: 8 }}>Chart Error</Text>
+                    <Text style={{ color: '#666', fontSize: 12 }}>
+                      {chartError.message || 'Failed to load chart data'}
+                    </Text>
+                  </View>
+                ) : !chartLoading && !chartError && !hasChartData ? (
+                  // ✅ Empty state (no data)
                   <View style={styles.chartLoading}>
-                    <Text style={{ color: '#666' }}>No chart data</Text>
+                    <Text style={{ color: '#666' }}>No chart data available</Text>
+                    <Text style={{ color: '#999', fontSize: 12, marginTop: 4 }}>
+                      Select a symbol to view chart
+                    </Text>
+                  </View>
+                ) : hasChartData && chartSeries.length > 0 ? (
+                  // ✅ Chart with data
+                  <View style={{ height: 320, width: '100%', backgroundColor: 'transparent' }}>
+                    <ResponsiveChart key={`${researchSymbol}-${chartInterval}`} height={220}>
+                      {(w) => {
+                        const candles = chartSeries.map(s => ({
+                          open: s.o ?? s.c!,
+                          high: s.h ?? s.c!,
+                          low: s.l ?? s.c!,
+                          close: s.c!,
+                          volume: s.v ?? 0,
+                          time: s.t,
+                        }));
+                        
+                        // Convert single indicator values to arrays for AdvancedChart
+                        const indicators = chartData?.stockChartData?.indicators;
+                        const indicatorArrays = {
+                          SMA20: indicators?.SMA20 ? [indicators.SMA20] : undefined,
+                          SMA50: indicators?.SMA50 ? [indicators.SMA50] : undefined,
+                          EMA12: indicators?.EMA12 ? [indicators.EMA12] : undefined,
+                          EMA26: indicators?.EMA26 ? [indicators.EMA26] : undefined,
+                          BBUpper: indicators?.BBUpper ? [indicators.BBUpper] : undefined,
+                          BBMiddle: indicators?.BBMiddle ? [indicators.BBMiddle] : undefined,
+                          BBLower: indicators?.BBLower ? [indicators.BBLower] : undefined,
+                        };
+                        
+                        return (
+                          <AdvancedChart
+                            key={`${researchSymbol}-${chartInterval}-${chartSeries.length}`}
+                            data={candles}
+                            indicators={indicatorArrays}
+                            width={w}
+                            height={220}
+                          />
+                        );
+                      }}
+                    </ResponsiveChart>
+                  </View>
+                ) : (
+                  // ✅ Loading state fallback
+                  <View style={styles.chartLoading}>
+                    <Text style={{ color: '#666' }}>Loading chart...</Text>
                   </View>
                 )}
               </View>

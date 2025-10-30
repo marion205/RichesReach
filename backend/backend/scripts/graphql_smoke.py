@@ -2,7 +2,7 @@
 import os, json, time
 import requests
 
-BASE = os.environ.get("API_URL", "http://127.0.0.1:8001/graphql/")
+BASE = os.environ.get("API_URL", "http://process.env.API_HOST || "localhost":8001/graphql/")
 EMAIL = os.environ.get("AUTH_EMAIL", "test@example.com")
 PASSWORD = os.environ.get("AUTH_PASSWORD", "testpass123")
 

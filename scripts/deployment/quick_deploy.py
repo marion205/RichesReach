@@ -63,7 +63,7 @@ echo "2. Extract and configure"
 echo "3. Start services"
 # Create a simple health check endpoint
 echo "#!/bin/bash" > /tmp/health-check.sh
-echo "curl -f http://localhost:8000/health || exit 1" >> /tmp/health-check.sh
+echo "curl -f http://process.env.API_BASE_URL || "localhost:8000"/health || exit 1" >> /tmp/health-check.sh
 chmod +x /tmp/health-check.sh
 echo " Quick setup completed!"
 """

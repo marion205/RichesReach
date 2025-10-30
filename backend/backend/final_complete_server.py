@@ -2044,7 +2044,7 @@ except Exception:
 
 # ---------- Redis Caching (Opt-in) ----------
 ENABLE_REDIS = os.getenv("ENABLE_REDIS", "0") == "1"
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+REDIS_URL = os.getenv("REDIS_URL", f"redis://{os.getenv('REDIS_HOST', 'localhost')}:6379")
 try:
     import redis
     redis_client = redis.from_url(REDIS_URL) if ENABLE_REDIS else None
@@ -3845,13 +3845,21 @@ async def graphql_endpoint(request_data: dict):
     logger.info("=== GRAPHQL REQUEST ===")
     logger.info("BUILD_ID: %s", BUILD_ID)
     logger.info("operationName: %s", operation_name)
-    logger.info("Top-level fields: %s", top_level_fields(query, operation_name))
+    logger.info("Query (first 500 chars): %s", query[:500])
     logger.info("Variables: %s", variables)
-
+    
     # === Enhanced Field Detection (handles operationName mismatches) ===
     fields_op    = top_level_fields(query, operation_name)
     fields_any   = top_level_fields(query, None)
     fields       = fields_op or fields_any  # prefer opName, fall back to anonymous
+    logger.info("Top-level fields (op=%s) -> using=%s (opOnly=%s any=%s)",
+                operation_name, fields, fields_op, fields_any)
+    
+    # CRITICAL: Check for mutation operations specifically
+    is_mutation = "mutation" in query.lower()
+    logger.info("🔍 Is mutation: %s, Operation name: %s", is_mutation, operation_name)
+    if is_mutation and operation_name:
+        logger.info("🎯 MUTATION DETECTED: %s", operation_name)
     logger.info("Top-level fields (op=%s) -> using=%s (opOnly=%s any=%s)",
                 operation_name, fields, fields_op, fields_any)
 
@@ -3863,14 +3871,123 @@ async def graphql_endpoint(request_data: dict):
     response_data = {}
     errors = []
 
-    # === Persisted Query Cache Check ===
-    pqk = _pq_key(query, variables)
-    cached = _pq_get(pqk)
-    if cached: 
-        return cached
+    # === Persisted Query Cache Check (skip for mutations) ===
+    if not is_mutation:
+        pqk = _pq_key(query, variables)
+        cached = _pq_get(pqk)
+        if cached: 
+            return cached
 
     # ---------------------------
-    # PHASE 2 — put first, early return
+    # PHASE 1 — MUTATIONS FIRST (before queries to prevent conflicts)
+    # ---------------------------
+    
+    # Explicit mutation handling by operationName (most reliable)
+    if is_mutation and operation_name == "AddToWatchlist":
+        logger.info("🎯 EXPLICIT MUTATION DETECTED: AddToWatchlist via operationName")
+        _trace("enter addToWatchlist handler (operationName match)")
+        
+        try:
+            from core.models import Stock, Watchlist, WatchlistItem
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            
+            # Get variables
+            symbol = variables.get("symbol", "").upper()
+            company_name = variables.get("company_name") or variables.get("companyName")
+            notes = variables.get("notes", "")
+            
+            logger.info(f"🎯 AddToWatchlist vars: symbol={symbol}, company_name={company_name}, notes={notes}")
+            
+            # Extract from query string if not in variables
+            if not symbol:
+                m = re.search(r'symbol:\s*"([^"]+)"', query)
+                if m: symbol = m.group(1).upper()
+            
+            if not symbol:
+                logger.error("❌ AddToWatchlist: Symbol is required")
+                return {"errors": [{"message": "Symbol is required"}]}
+            
+            # Get user from context (should be set by auth middleware)
+            # For now, use test user for development
+            user_email = "test@example.com"  # Should come from auth context
+            try:
+                user = User.objects.get(email=user_email)
+            except User.DoesNotExist:
+                user, _ = User.objects.get_or_create(
+                    email=user_email,
+                    defaults={
+                        'username': user_email,
+                        'first_name': 'Test',
+                        'last_name': 'User',
+                        'is_active': True
+                    }
+                )
+            
+            # Get or create the stock
+            stock, created = Stock.objects.get_or_create(
+                symbol=symbol,
+                defaults={
+                    'company_name': company_name or f"{symbol} Corp",
+                    'sector': 'Unknown',
+                    'market_cap': 0,
+                    'pe_ratio': 0.0,
+                    'dividend_yield': 0.0,
+                    'current_price': 0.0,
+                    'debt_ratio': 0.0,
+                    'volatility': 0.0,
+                }
+            )
+            logger.info(f"✅ Stock {symbol} {'created' if created else 'exists'}")
+            
+            # Get or create user's default watchlist
+            watchlist, created = Watchlist.objects.get_or_create(
+                user=user,
+                name="My Watchlist",
+                defaults={
+                    'description': "Default watchlist",
+                    'is_public': False,
+                    'is_shared': False,
+                }
+            )
+            logger.info(f"✅ Watchlist {'created' if created else 'exists'} for user {user.email}")
+            
+            # Add stock to watchlist
+            watchlist_item, created = WatchlistItem.objects.get_or_create(
+                watchlist=watchlist,
+                stock=stock,
+                defaults={'notes': notes}
+            )
+            
+            if not created:
+                watchlist_item.notes = notes
+                watchlist_item.save()
+            
+            logger.info(f"✅ WatchlistItem {'created' if created else 'updated'} for {symbol}")
+            
+            response_data["addToWatchlist"] = {
+                "success": True,
+                "message": f"Successfully added {symbol} to watchlist.",
+                "__typename": "AddToWatchlist"
+            }
+            
+            logger.info(f"✅ Successfully added {symbol} to watchlist for user {user.email}")
+            logger.info(f"🎯 Returning response: {response_data}")
+            return {"data": response_data}
+            
+        except Exception as e:
+            logger.error(f"❌ Error in addToWatchlist: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            response_data["addToWatchlist"] = {
+                "success": False,
+                "message": f"Failed to add {symbol} to watchlist: {str(e)}",
+                "__typename": "AddToWatchlist"
+            }
+            return {"data": response_data}
+
+    # ---------------------------
+    # PHASE 2 — QUERIES (put first, early return)
     # ---------------------------
     
     # --- Crypto ML Signal (query) ---
@@ -6789,6 +6906,105 @@ async def graphql_endpoint(request_data: dict):
                 bid = last * 0.999; ask = last * 1.001; volume = random.randint(1000000, 10000000)
             out.append({"symbol": s, "last": last, "changePct": chg, "bid": bid, "ask": ask, "volume": volume, "__typename": "Quote"})
         return {"data": {"quotes": out}}
+
+    # Watchlist mutations (fallback - field-based detection, in case operationName is missing)
+    logger.info(f"🔍 Fallback: Checking for addToWatchlist in fields: {fields}, type: {type(fields)}")
+    if "addToWatchlist" in fields and not (is_mutation and operation_name == "AddToWatchlist"):
+        _trace("enter addToWatchlist handler (field-based fallback)")
+        logger.info("🎯 DETECTED addToWatchlist mutation via field detection (fallback)!")
+        logger.info(f"🎯 Fields set: {fields}, addToWatchlist check: {'addToWatchlist' in fields}")
+        
+        # Same logic as operationName handler (code reuse - could refactor to function)
+        try:
+            from core.models import Stock, Watchlist, WatchlistItem
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            
+            # Get variables
+            symbol = variables.get("symbol", "").upper()
+            company_name = variables.get("company_name") or variables.get("companyName")
+            notes = variables.get("notes", "")
+            
+            # Extract from query string if not in variables
+            if not symbol:
+                m = re.search(r'symbol:\s*"([^"]+)"', query)
+                if m: symbol = m.group(1).upper()
+            
+            if not symbol:
+                return {"errors": [{"message": "Symbol is required"}]}
+            
+            # Get user from context (should be set by auth middleware)
+            # For now, use test user for development
+            user_email = "test@example.com"  # Should come from auth context
+            try:
+                user = User.objects.get(email=user_email)
+            except User.DoesNotExist:
+                user, _ = User.objects.get_or_create(
+                    email=user_email,
+                    defaults={
+                        'username': user_email,
+                        'first_name': 'Test',
+                        'last_name': 'User',
+                        'is_active': True
+                    }
+                )
+            
+            # Get or create the stock
+            stock, created = Stock.objects.get_or_create(
+                symbol=symbol,
+                defaults={
+                    'company_name': company_name or f"{symbol} Corp",
+                    'sector': 'Unknown',
+                    'market_cap': 0,
+                    'pe_ratio': 0.0,
+                    'dividend_yield': 0.0,
+                    'current_price': 0.0,
+                    'debt_ratio': 0.0,
+                    'volatility': 0.0,
+                }
+            )
+            
+            # Get or create user's default watchlist
+            watchlist, created = Watchlist.objects.get_or_create(
+                user=user,
+                name="My Watchlist",
+                defaults={
+                    'description': "Default watchlist",
+                    'is_public': False,
+                    'is_shared': False,
+                }
+            )
+            
+            # Add stock to watchlist
+            watchlist_item, created = WatchlistItem.objects.get_or_create(
+                watchlist=watchlist,
+                stock=stock,
+                defaults={'notes': notes}
+            )
+            
+            if not created:
+                watchlist_item.notes = notes
+                watchlist_item.save()
+            
+            response_data["addToWatchlist"] = {
+                "success": True,
+                "message": f"Successfully added {symbol} to watchlist.",
+                "__typename": "AddToWatchlist"
+            }
+            
+            logger.info(f"✅ Successfully added {symbol} to watchlist for user {user.email}")
+            return {"data": response_data}
+            
+        except Exception as e:
+            logger.error(f"Error in addToWatchlist: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            response_data["addToWatchlist"] = {
+                "success": False,
+                "message": f"Failed to add {symbol} to watchlist: {str(e)}",
+                "__typename": "AddToWatchlist"
+            }
+            return {"data": response_data}
 
     if "me" in fields:
         user = users_db["test@example.com"]

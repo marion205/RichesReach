@@ -36,16 +36,30 @@ const CryptoScreen: React.FC<CryptoScreenProps> = ({ navigation }) => {
   const [hideBalances, setHideBalances] = useState(false);
   const [tabsLoaded, setTabsLoaded] = useState<Set<string>>(new Set(['portfolio'])); // Track which tabs have been loaded
 
-  // Real GraphQL queries for crypto data
+  // Real GraphQL queries for crypto data with proper guards
   const { data: portfolioData, loading: portfolioLoading, error: portfolioError, refetch: refetchPortfolio } = useQuery(GET_CRYPTO_PORTFOLIO, {
-    fetchPolicy: 'cache-and-network',
+    skip: false, // No required variables for this query
+    fetchPolicy: 'cache-first',
     errorPolicy: 'all',
+    onError: (error) => console.log('[GQL] Portfolio error:', error.message, error.graphQLErrors),
   });
 
   const { data: analyticsData, loading: analyticsLoading, error: analyticsError, refetch: refetchAnalytics } = useQuery(GET_CRYPTO_ANALYTICS, {
-    fetchPolicy: 'cache-and-network',
+    skip: false, // No required variables for this query
+    fetchPolicy: 'cache-first',
     errorPolicy: 'all',
+    onError: (error) => console.log('[GQL] Analytics error:', error.message, error.graphQLErrors),
   });
+
+  // Debug crypto queries
+  React.useEffect(() => {
+    console.log('🔍 CRYPTO DEBUG - portfolioLoading:', portfolioLoading);
+    console.log('🔍 CRYPTO DEBUG - portfolioError:', portfolioError);
+    console.log('🔍 CRYPTO DEBUG - portfolioData:', portfolioData);
+    console.log('🔍 CRYPTO DEBUG - analyticsLoading:', analyticsLoading);
+    console.log('🔍 CRYPTO DEBUG - analyticsError:', analyticsError);
+    console.log('🔍 CRYPTO DEBUG - analyticsData:', analyticsData);
+  }, [portfolioLoading, portfolioError, portfolioData, analyticsLoading, analyticsError, analyticsData]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -66,6 +80,24 @@ const CryptoScreen: React.FC<CryptoScreenProps> = ({ navigation }) => {
     setActiveTab(tab as any);
     setTabsLoaded(prev => new Set([...prev, tab]));
   }, []);
+
+  // Check for GraphQL errors and show error UI
+  const gqlErr = portfolioError?.graphQLErrors?.[0] || analyticsError?.graphQLErrors?.[0];
+  if (gqlErr) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorTitle}>Crypto data failed to load</Text>
+          <Text style={styles.errorDetails}>
+            {gqlErr.message} @ {gqlErr.path?.join('.') ?? 'unknown'}
+          </Text>
+          <TouchableOpacity style={styles.retryButton} onPress={onRefresh}>
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const renderTabContent = useMemo(() => {
     switch (activeTab) {
@@ -108,7 +140,7 @@ const CryptoScreen: React.FC<CryptoScreenProps> = ({ navigation }) => {
             brand="RichesReach"
             networkName="Sepolia"
             walletAddress={null} // TODO: Connect to wallet address when available
-            backendBaseUrl={process.env.EXPO_PUBLIC_API_URL || "http://localhost:8000"} // Updated to localhost
+            backendBaseUrl={process.env.EXPO_PUBLIC_API_URL || "http://localhost:8000"}
             explorerTxUrl={(hash) => `https://sepolia.etherscan.io/tx/${hash}`}
             getBalance={async (symbol) => {
               // Mock balance - in production, read from wallet
@@ -337,6 +369,36 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6c757d',
     textAlign: 'center',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#dc3545',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  errorDetails: {
+    fontSize: 14,
+    color: '#6c757d',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: '#2563EB',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 

@@ -117,15 +117,34 @@ export class SecureMarketDataService {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      const data = await response.json();
+      // Get raw response text first for debugging
+      const text = await response.text();
+      console.log(`📦 Raw response: ${text.substring(0, 200)}...`);
       
-      // Validate response format
-      if (!Array.isArray(data)) {
-        throw new Error('Invalid response format from backend');
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (parseError) {
+        console.error('❌ JSON parse error:', parseError, 'Raw:', text);
+        throw new Error(`Invalid JSON response from backend: ${parseError.message}`);
+      }
+      
+      // Handle both formats: {quotes: [...]} and [...]
+      let quotes: Quote[];
+      if (Array.isArray(data)) {
+        quotes = data;
+      } else if (data && Array.isArray(data.quotes)) {
+        quotes = data.quotes;
+      } else if (data && data.quotes && typeof data.quotes === 'object') {
+        // Handle case where quotes might be an object
+        quotes = Object.values(data.quotes) as Quote[];
+      } else {
+        console.error('❌ Unexpected response format:', JSON.stringify(data, null, 2));
+        throw new Error(`Invalid response format from backend. Expected array or {quotes: [...]}, got: ${typeof data}`);
       }
 
-      console.log(`✅ Successfully fetched ${data.length} quotes`);
-      return data as Quote[];
+      console.log(`✅ Successfully fetched ${quotes.length} quotes`);
+      return quotes;
 
     } catch (error) {
       console.error(`❌ Error fetching quotes: ${error.message}`);
@@ -236,15 +255,34 @@ export class SecureMarketDataService {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      const data = await response.json();
+      // Get raw response text first for debugging
+      const text = await response.text();
+      console.log(`📦 Raw options response: ${text.substring(0, 200)}...`);
       
-      // Validate response format
-      if (!Array.isArray(data)) {
-        throw new Error('Invalid response format from backend');
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (parseError) {
+        console.error('❌ JSON parse error:', parseError, 'Raw:', text);
+        throw new Error(`Invalid JSON response from backend: ${parseError.message}`);
+      }
+      
+      // Handle both formats: {options: [...]} and [...]
+      let options: Option[];
+      if (Array.isArray(data)) {
+        options = data;
+      } else if (data && Array.isArray(data.options)) {
+        options = data.options;
+      } else if (data && data.options && typeof data.options === 'object') {
+        // Handle case where options might be an object
+        options = Object.values(data.options) as Option[];
+      } else {
+        console.error('❌ Unexpected options response format:', JSON.stringify(data, null, 2));
+        throw new Error(`Invalid response format from backend. Expected array or {options: [...]}, got: ${typeof data}`);
       }
 
-      console.log(`✅ Successfully fetched ${data.length} options contracts`);
-      return data as Option[];
+      console.log(`✅ Successfully fetched ${options.length} options contracts`);
+      return options;
 
     } catch (error) {
       console.error(`❌ Error fetching options: ${error.message}`);

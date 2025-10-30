@@ -14,8 +14,8 @@ CORS_ALLOW_CREDENTIALS = True
 # CSRF Configuration (Development)
 CSRF_TRUSTED_ORIGINS = [
     "http://172.20.10.8:8000",
-    "http://localhost:8000", 
-    "http://127.0.0.1:8000",
+    "process.env.API_BASE_URL || "http://localhost:8000"", 
+    "http://process.env.API_HOST || "localhost":8000",
     "http://192.168.1.151:8000"
 ]
 
@@ -32,7 +32,7 @@ DATABASES = {
 }
 
 # Development Redis
-REDIS_URL = 'redis://localhost:6379/0'
+REDIS_URL = 'redis://process.env.REDIS_HOST || "localhost:6379"/0'
 CACHES = {
     'default': {
         'BACKEND': 'django_redis.cache.RedisCache',

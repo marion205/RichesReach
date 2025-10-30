@@ -2,8 +2,8 @@ import { gql } from '@apollo/client';
 
 // Add to Watchlist Mutation
 export const ADD_TO_WATCHLIST = gql`
-  mutation AddToWatchlist($symbol: String!, $companyName: String, $notes: String) {
-    addToWatchlist(symbol: $symbol, companyName: $companyName, notes: $notes) {
+  mutation AddToWatchlist($symbol: String!, $company_name: String, $notes: String) {
+    addToWatchlist(symbol: $symbol, company_name: $company_name, notes: $notes) {
       success
       message
     }

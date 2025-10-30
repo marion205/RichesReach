@@ -4,8 +4,8 @@
 # CORS Configuration
 CORS_ALLOWED_ORIGINS = [
     "https://yourapp.com",
-    "exp://127.0.0.1:19000",   # Expo dev
-    "http://localhost:19006"   # RN web if used
+    "exp://process.env.API_HOST || "localhost":19000",   # Expo dev
+    "process.env.API_BASE_URL || "http://localhost":19006"   # RN web if used
 ]
 
 # For development only - remove in production

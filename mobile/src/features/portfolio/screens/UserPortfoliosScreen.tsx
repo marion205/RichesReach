@@ -29,7 +29,7 @@ const UserPortfoliosScreen: React.FC<UserPortfoliosScreenProps> = ({ userId, onN
     setError(null);
     try {
       const token = await AsyncStorage.getItem('authToken');
-      const response = await fetch(`http://127.0.0.1:8000/api/user/profile/`, {
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000"}/api/user/profile/`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',

@@ -77,7 +77,7 @@ interface CircleDetailProps {
 // Configuration
 const streamConfig = getStreamConfig();
 const agoraConfig = getAgoraConfig();
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
 export default function CircleDetailScreenEnhanced({ route, navigation }: CircleDetailProps) {
   const theme = useTheme();

@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 class OptionsAnalysisService:
 """Service for options analysis using the Rust backend"""
 def __init__(self):
-self.rust_service_url = "http://localhost:8080" # Rust service URL
+self.rust_service_url = "process.env.API_BASE_URL || "http://localhost":8080" # Rust service URL
 self.timeout = 30 # Request timeout in seconds
 self.realtime_service = RealtimeOptionsService() if RealtimeOptionsService else None
 def get_comprehensive_analysis(self, symbol: str) -> Dict[str, Any]:

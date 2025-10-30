@@ -9,7 +9,7 @@ import json
 import statistics
 from datetime import datetime
 
-BASE_URL = "http://localhost:8123"
+BASE_URL = "process.env.API_BASE_URL || "http://localhost":8123"
 
 def test_ml_performance():
     """Test ML prediction performance and accuracy"""

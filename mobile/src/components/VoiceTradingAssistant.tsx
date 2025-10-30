@@ -1,8 +1,3 @@
-"""
-Voice AI Trading Integration for React Native
-Voice command parsing, order execution, and real-time feedback
-"""
-
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,

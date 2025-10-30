@@ -21,7 +21,7 @@ ALPHA_VANTAGE_KEY=OHYSFF1AE446O7CR
 FINNHUB_KEY=d2rnitpr01qv11lfegugd2rnitpr01qv11lfegv0
 NEWS_API_KEY=94a335c7316145f79840edd62f77e11e
 SECRET_KEY=change-this-in-production
-REDIS_URL=redis://localhost:6379/0
+REDIS_URL=redis://process.env.REDIS_HOST || "localhost:6379"/0
 EOF
     echo "✅ Created .env file with default values"
 fi
@@ -36,10 +36,10 @@ else
     source venv/bin/activate
 fi
 
-echo "🔧 Starting server on http://localhost:8000"
-echo "📊 GraphQL Playground: http://localhost:8000/graphql"
-echo "❤️  Health Check: http://localhost:8000/health"
-echo "📈 Metrics: http://localhost:8000/metrics"
+echo "🔧 Starting server on http://process.env.API_BASE_URL || "localhost:8000""
+echo "📊 GraphQL Playground: http://process.env.API_BASE_URL || "localhost:8000"/graphql"
+echo "❤️  Health Check: http://process.env.API_BASE_URL || "localhost:8000"/health"
+echo "📈 Metrics: http://process.env.API_BASE_URL || "localhost:8000"/metrics"
 echo ""
 echo "Press Ctrl+C to stop the server"
 echo ""

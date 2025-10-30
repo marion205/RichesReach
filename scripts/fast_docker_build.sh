@@ -31,7 +31,7 @@ docker run --rm -d --name test-container -p 8000:8000 richesreach-ai:latest
 # Wait for service to start
 sleep 10
 # Test health endpoint
-if curl -f http://localhost:8000/health; then
+if curl -f http://process.env.API_BASE_URL || "localhost:8000"/health; then
 echo " Health check passed!"
 else
 echo " Health check failed!"

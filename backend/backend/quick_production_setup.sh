@@ -66,7 +66,7 @@ sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE richesreach_prod TO r
 
 # Step 5: Configure Redis
 print_info "Configuring Redis..."
-sudo sed -i 's/^# bind 127.0.0.1/bind 127.0.0.1/' /etc/redis/redis.conf
+sudo sed -i 's/^# bind localhost/bind localhost/' /etc/redis/redis.conf
 sudo systemctl restart redis-server
 
 # Step 6: Create virtual environment
@@ -172,7 +172,7 @@ print_info "Testing services..."
 sleep 5
 
 # Test Django
-if curl -s http://localhost:8001/graphql/ -d '{"query":"{ ping }"}' | grep -q "pong"; then
+if curl -s http://process.env.MARKET_DATA_URL || "localhost:8001"/graphql/ -d '{"query":"{ ping }"}' | grep -q "pong"; then
     print_status "Django service is running correctly"
 else
     print_warning "Django service may not be running correctly"

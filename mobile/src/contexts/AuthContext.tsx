@@ -132,8 +132,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const restLoginFlexible = async (emailOrUsername: string, password: string): Promise<string | null> => {
-    // Hardcode the correct URL for now to ensure it works
-    const baseUrl = 'http://localhost:8000';
+    // Use environment variable or fallback to localhost
+    const baseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000";
     const identifier = emailOrUsername.trim();
     
     console.log('🔍 AuthContext: Using baseUrl:', baseUrl);

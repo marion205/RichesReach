@@ -24,6 +24,7 @@ export type StockCardProps = {
     notes: string[];
   };
   isGoodForIncomeProfile?: boolean;
+  currentPrice?: number; // Add current price for affordability calculation
   onPressAdd: () => void;
   onPressAnalysis: () => void;
   onPressMetric: (k: 'marketCap' | 'peRatio' | 'dividendYield') => void;
@@ -35,6 +36,19 @@ export type StockCardProps = {
 
 function StockCard(props: StockCardProps) {
   const rec = getBuyRecommendation(props.beginnerFriendlyScore);
+  
+  // Calculate affordability based on price
+  const getAffordabilityInfo = () => {
+    if (!props.currentPrice) return null;
+    
+    const price = Number(props.currentPrice);
+    if (price <= 50) return { label: 'Budget', color: '#4CAF50', icon: 'dollar-sign' };
+    if (price <= 100) return { label: 'Affordable', color: '#8BC34A', icon: 'check-circle' };
+    if (price <= 200) return { label: 'Moderate', color: '#FF9800', icon: 'minus-circle' };
+    return { label: 'Premium', color: '#F44336', icon: 'trending-up' };
+  };
+  
+  const affordability = getAffordabilityInfo();
 
   return (
     <View style={[styles.card, props.isSelected && styles.selectedCard]}>
@@ -62,13 +76,25 @@ function StockCard(props: StockCardProps) {
               <Icon name="plus" size={16} color="#007AFF" />
             </TouchableOpacity>
             {props.isGoodForIncomeProfile && (
-              <TouchableOpacity 
-                style={styles.budgetBtn} 
-                onPress={props.onPressBudgetImpact} 
-                activeOpacity={0.85}
-              >
-                <Icon name="dollar-sign" size={14} color="#FF6B35" />
-              </TouchableOpacity>
+              <View style={styles.budgetContainer}>
+                <TouchableOpacity 
+                  style={styles.budgetBtn} 
+                  onPress={props.onPressBudgetImpact} 
+                  activeOpacity={0.85}
+                >
+                  <Icon name="dollar-sign" size={14} color="#FF6B35" />
+                </TouchableOpacity>
+                {affordability && (
+                  <TouchableOpacity 
+                    style={[styles.affordabilityBadge, { backgroundColor: affordability.color }]}
+                    onPress={props.onPressBudgetImpact}
+                    activeOpacity={0.85}
+                  >
+                    <Icon name={affordability.icon} size={10} color="#fff" />
+                    <Text style={styles.affordabilityText}>{affordability.label}</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             )}
           </View>
         </View>
@@ -160,6 +186,26 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF5F0', paddingHorizontal: 8, paddingVertical: 6, borderRadius: 8, 
     alignItems: 'center', justifyContent: 'center', 
     borderWidth: 1, borderColor: '#FF6B35', marginLeft: 8
+  },
+  budgetContainer: {
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  affordabilityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginTop: 4,
+    minWidth: 60,
+    justifyContent: 'center',
+  },
+  affordabilityText: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginLeft: 3,
   },
   // Trade button styles removed
   analysisBtn: {
