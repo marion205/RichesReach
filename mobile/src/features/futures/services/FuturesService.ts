@@ -3,8 +3,7 @@
  */
 
 import { FuturesRecommendation, FuturesOrderRequest, FuturesPosition } from '../types/FuturesTypes';
-
-const API_BASE = process.env.API_BASE_URL || 'http://localhost:8000';
+import { API_BASE } from '../../../config/api';
 
 class FuturesService {
   async getRecommendations(): Promise<{ recommendations: FuturesRecommendation[] }> {
