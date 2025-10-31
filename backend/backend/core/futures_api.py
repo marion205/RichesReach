@@ -6,7 +6,7 @@ Phase 1: Paper trading with realistic mock data
 """
 
 from fastapi import APIRouter, HTTPException, Depends, Header
-from typing import List, Optional
+from typing import Dict, List, Optional, Any
 from pydantic import BaseModel
 import logging
 import time
