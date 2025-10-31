@@ -3,7 +3,7 @@
  * Adaptive AI Options Strategy Engine
  */
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -18,9 +18,7 @@ import {
   Dimensions,
   FlatList,
 } from 'react-native';
-import { useQuery, NetworkStatus } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
-import { gql } from '@apollo/client';
 import { LineChart } from 'react-native-chart-kit';
 
 import OptionsCopilotService from '../services/OptionsCopilotService';
@@ -30,28 +28,6 @@ import {
 } from '../types/OptionsCopilotTypes';
 
 const { width } = Dimensions.get('window');
-
-// GraphQL — minimal set for performance
-const GET_OPTIONS_CHAIN = gql`
-  query GetOptionsChain($symbol: String!) {
-    optionsChain(symbol: $symbol) {
-      symbol
-      underlyingPrice
-      calls {
-        strike
-        impliedVolatility
-        delta
-        gamma
-      }
-      puts {
-        strike
-        impliedVolatility
-        delta
-        gamma
-      }
-    }
-  }
-`;
 
 export default function OptionsCopilotScreen({ navigation }: any) {
   const [symbol, setSymbol] = useState('AAPL');
@@ -64,16 +40,21 @@ export default function OptionsCopilotScreen({ navigation }: any) {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [showModal, setShowModal] = useState(false);
-
-  const { data, refetch, networkStatus } = useQuery(GET_OPTIONS_CHAIN, {
-    variables: { symbol },
-    notifyOnNetworkStatusChange: true,
-    fetchPolicy: 'cache-and-network',
-  });
+  const [optionsChain, setOptionsChain] = useState<any>(null);
 
   const logEvent = useCallback((event: string, meta?: any) => {
     console.log(JSON.stringify({ event, meta, t: new Date().toISOString() }));
   }, []);
+
+  const loadOptionsChain = useCallback(async () => {
+    try {
+      const chain = await OptionsCopilotService.getOptionsChain(symbol);
+      setOptionsChain(chain);
+    } catch (e) {
+      console.warn('Failed to load options chain:', e);
+      // Don't show alert for chain failure, it's not critical
+    }
+  }, [symbol]);
 
   const loadAI = useCallback(async () => {
     try {
@@ -87,21 +68,26 @@ export default function OptionsCopilotScreen({ navigation }: any) {
         maxRisk,
       };
       const resp = await OptionsCopilotService.getRecommendations(req);
-      setRecommendations(resp.recommendedStrategies);
-      logEvent('options_copilot_success', { count: resp.recommendedStrategies.length });
-    } catch (e) {
+      setRecommendations(resp.recommendedStrategies || []);
+      logEvent('options_copilot_success', { count: resp.recommendedStrategies?.length || 0 });
+    } catch (e: any) {
       Alert.alert('Error', 'Failed to load AI strategies');
       logEvent('options_copilot_error', { error: e?.message });
     } finally {
       setLoading(false);
     }
-  }, [symbol, riskTolerance, marketOutlook, accountValue, maxRisk]);
+  }, [symbol, riskTolerance, marketOutlook, accountValue, maxRisk, logEvent]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([refetch(), loadAI()]);
+    await Promise.all([loadOptionsChain(), loadAI()]);
     setRefreshing(false);
-  }, [refetch, loadAI]);
+  }, [loadOptionsChain, loadAI]);
+
+  // Load options chain on mount and when symbol changes
+  useEffect(() => {
+    loadOptionsChain();
+  }, [loadOptionsChain]);
 
   const handleTrade = useCallback(
     (s: OptionsStrategy) => {

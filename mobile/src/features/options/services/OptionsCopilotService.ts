@@ -3,73 +3,74 @@
  * Advanced, production-grade AI-powered options strategy engine
  */
 
-import { httpFetch, TokenProvider } from '../../aiScans/services/http';
+import { API_BASE } from '../../../config/api';
 import type {
   OptionsCopilotRequest, OptionsCopilotResponse, OptionsStrategy, RiskAssessment
 } from '../types/OptionsCopilotTypes';
 
 class OptionsCopilotService {
   private baseUrl: string;
-  private tokenProvider: TokenProvider;
 
-  constructor(tokenProvider?: TokenProvider) {
-    this.baseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000";
-    this.tokenProvider = tokenProvider ?? (async () => 'your-auth-token');
+  constructor() {
+    this.baseUrl = API_BASE;
   }
 
-  private async authHeaders() {
-    const tok = await this.tokenProvider();
+  private getHeaders() {
     return {
       'Content-Type': 'application/json',
-      ...(tok ? { 'Authorization': `Bearer ${tok}` } : {}),
     };
   }
 
   async getRecommendations(request: OptionsCopilotRequest): Promise<OptionsCopilotResponse> {
-    const res = await httpFetch(`${this.baseUrl}/api/options/copilot/recommendations`, {
+    const res = await fetch(`${this.baseUrl}/api/options/copilot/recommendations`, {
       method: 'POST',
-      headers: await this.authHeaders(),
-      timeoutMs: 15_000,
-      idempotencyKey: `opts-reco-${request.symbol}-${Date.now()}`,
+      headers: this.getHeaders(),
       body: JSON.stringify(request),
-    }, 1);
-    if (!res.ok) throw new Error(`Failed to get recommendations (${res.status})`);
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
+      throw new Error(error.detail || `Failed to get recommendations (${res.status})`);
+    }
     return res.json();
   }
 
   async getOptionsChain(symbol: string, expirationDate?: string): Promise<any> {
     const qs = new URLSearchParams({ symbol });
     if (expirationDate) qs.set('expiration', expirationDate);
-    const res = await httpFetch(`${this.baseUrl}/api/options/chain?${qs.toString()}`, {
+    const res = await fetch(`${this.baseUrl}/api/options/copilot/chain?${qs.toString()}`, {
       method: 'GET',
-      headers: await this.authHeaders(),
-      timeoutMs: 10_000,
+      headers: this.getHeaders(),
     });
-    if (!res.ok) throw new Error(`Failed to get options chain (${res.status})`);
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
+      throw new Error(error.detail || `Failed to get options chain (${res.status})`);
+    }
     return res.json();
   }
 
   async calculateStrategyPnL(strategy: OptionsStrategy, priceScenarios: number[]): Promise<any> {
-    const res = await httpFetch(`${this.baseUrl}/api/options/copilot/calculate-pnl`, {
+    const res = await fetch(`${this.baseUrl}/api/options/copilot/calculate-pnl`, {
       method: 'POST',
-      headers: await this.authHeaders(),
-      timeoutMs: 12_000,
-      idempotencyKey: `opts-pnl-${strategy.id}-${Date.now()}`,
+      headers: this.getHeaders(),
       body: JSON.stringify({ strategy, priceScenarios }),
     });
-    if (!res.ok) throw new Error(`Failed to calculate P&L (${res.status})`);
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
+      throw new Error(error.detail || `Failed to calculate P&L (${res.status})`);
+    }
     return res.json();
   }
 
   async getRiskAnalysis(strategy: OptionsStrategy): Promise<RiskAssessment> {
-    const res = await httpFetch(`${this.baseUrl}/api/options/copilot/risk-analysis`, {
+    const res = await fetch(`${this.baseUrl}/api/options/copilot/risk-analysis`, {
       method: 'POST',
-      headers: await this.authHeaders(),
-      timeoutMs: 12_000,
-      idempotencyKey: `opts-risk-${strategy.id}-${Date.now()}`,
+      headers: this.getHeaders(),
       body: JSON.stringify({ strategy }),
     });
-    if (!res.ok) throw new Error(`Failed to get risk analysis (${res.status})`);
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
+      throw new Error(error.detail || `Failed to get risk analysis (${res.status})`);
+    }
     return res.json();
   }
 }
