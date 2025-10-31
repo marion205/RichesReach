@@ -1341,6 +1341,14 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Failed to include ML API router: {e}")
 
+# Import and include Futures API router
+try:
+    from core.futures_api import futures_router
+    app.include_router(futures_router)
+    logger.info("✅ Futures API router included")
+except Exception as e:
+    logger.warning(f"⚠️ Failed to include Futures API router: {e}")
+
 # Include Phase 3 AI Router API
 if AI_ROUTER_AVAILABLE:
     app.include_router(ai_router_api)

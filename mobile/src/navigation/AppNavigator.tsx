@@ -30,6 +30,7 @@ import AIScansScreen from '../features/aiScans/screens/AIScansScreen';
 import ScanPlaybookScreen from '../features/aiScans/screens/ScanPlaybookScreen';
 import AIOptionsScreen from '../features/options/screens/AIOptionsScreen';
 import OptionsCopilotScreen from '../features/options/screens/OptionsCopilotScreen';
+import TomorrowScreen from '../features/futures/screens/TomorrowScreen';
 import DayTradingScreen from '../features/trading/screens/DayTradingScreen';
 import TradingScreenWrapper from './TradingScreenWrapper';
 import MLSystemScreen from '../features/ml/screens/MLSystemScreen';
@@ -188,6 +189,7 @@ function InvestStack() {
       <Stack.Screen name="AIOptions" component={AIOptionsScreen} options={{ headerShown: true, title: 'Options' }} />
       <Stack.Screen name="OptionsCopilot" component={OptionsCopilotScreen} options={{ headerShown: true, title: 'Advanced' }} />
       <Stack.Screen name="options-copilot" component={OptionsCopilotScreen} options={{ headerShown: true, title: 'Advanced' }} />
+      <Stack.Screen name="Tomorrow" component={TomorrowScreen} options={{ headerShown: true, title: 'Tomorrow' }} />
       <Stack.Screen name="DayTrading" component={TradingScreenWrapper} options={{ headerShown: false }} />
       <Stack.Screen name="MLSystem" component={MLSystemScreen} options={{ headerShown: true, title: 'ML System' }} />
       <Stack.Screen name="RiskManagement" component={RiskManagementScreen} options={{ headerShown: true, title: 'Risk Management' }} />
