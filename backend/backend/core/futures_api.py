@@ -20,6 +20,10 @@ from core.futures_service import (
 )
 from core.futures_policy import get_policy_engine, SuitabilityLevel
 from core.ibkr_adapter import get_ibkr_adapter
+from core.futures.order_ids import client_order_id, is_duplicate_order
+from core.futures.state import OrderStateMachine, OrderState
+from core.futures.why_not import WhyNotResponse
+from core.futures.slippage import simulate_fill, get_quote_for_symbol
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +53,8 @@ class FuturesOrderResponse(BaseModel):
     order_id: str
     status: str
     message: str
+    client_order_id: Optional[str] = None
+    why_not: Optional[Dict[str, Any]] = None  # If blocked, explains why
 
 
 class FuturesPosition(BaseModel):
@@ -116,16 +122,39 @@ async def place_order(
         
         contract = FUTURES_CONTRACTS[symbol_base]
         
+        # Generate idempotent client order ID
+        client_oid = client_order_id({
+            "symbol": order.symbol,
+            "side": order.side,
+            "quantity": order.quantity,
+            "order_type": order.order_type or "MARKET",
+            "limit_price": order.limit_price,
+        })
+        
+        # Check for duplicate orders (in production, use Redis/DB)
+        account = get_paper_account(user_id)
+        if is_duplicate_order(client_oid, account._seen_order_ids):
+            return FuturesOrderResponse(
+                order_id=client_oid,
+                status="duplicate",
+                message="Order already submitted (idempotent check)",
+                client_order_id=client_oid,
+            )
+        
         # Phase 3: Policy engine checks
         policy = get_policy_engine()
         user_profile = policy.get_user_profile(user_id)
         
+        # Get recommendation for max_loss check
+        engine = get_recommendation_engine()
+        recs = engine.get_recommendations(user_id=user_id)
+        recommendation = next((r for r in recs if r["symbol"] == order.symbol), None)
+        
         # Get existing positions for guardrail checks
-        account = get_paper_account(user_id)
         existing_positions = account.get_positions({})  # Empty prices for guardrail check
         
-        # Check guardrails
-        allowed, reason = policy.check_guardrails(
+        # Check guardrails with "Why not" messages
+        allowed, why_not = policy.check_guardrails(
             user_profile=user_profile,
             order={
                 "symbol": order.symbol,
@@ -133,14 +162,26 @@ async def place_order(
                 "quantity": order.quantity,
             },
             existing_positions=existing_positions,
+            recommendation=recommendation,
         )
         
         if not allowed:
-            raise HTTPException(status_code=403, detail=f"Guardrail violation: {reason}")
+            # Return "Why not" response
+            return FuturesOrderResponse(
+                order_id=client_oid,
+                status="blocked",
+                message=why_not.reason if why_not else "Order blocked by policy",
+                client_order_id=client_oid,
+                why_not=why_not.dict() if why_not else None,
+            )
         
         # Phase 2: Try IBKR adapter first
         ibkr = get_ibkr_adapter()
         use_ibkr = ibkr.is_connected()
+        
+        # Create state machine for order
+        state_machine = OrderStateMachine(client_oid, OrderState.NEW)
+        state_machine.transition(OrderState.SUBMITTED, "Order submitted")
         
         if use_ibkr:
             # Route to IBKR
@@ -151,24 +192,42 @@ async def place_order(
                     quantity=order.quantity,
                     order_type=order.order_type or "MKT",
                     limit_price=order.limit_price,
+                    client_order_id=client_oid,
                 )
+                
+                # Update state machine
+                status_map = {
+                    "submitted": OrderState.SUBMITTED,
+                    "filled": OrderState.FILLED,
+                    "partial": OrderState.PARTIAL,
+                    "canceled": OrderState.CANCELED,
+                    "rejected": OrderState.REJECTED,
+                }
+                ibkr_state = status_map.get(ibkr_result.get("status", "submitted"), OrderState.SUBMITTED)
+                state_machine.transition(ibkr_state, f"IBKR order {ibkr_result['status']}")
                 
                 logger.info(f"IBKR order placed: {ibkr_result['order_id']}")
                 
                 return FuturesOrderResponse(
-                    order_id=ibkr_result["order_id"],
-                    status=ibkr_result["status"],
+                    order_id=ibkr_result.get("order_id", client_oid),
+                    status=ibkr_state.value.lower(),
                     message=f"Order {ibkr_result['status']} via IBKR: {order.side} {order.quantity} {order.symbol}",
+                    client_order_id=client_oid,
                 )
             except Exception as e:
                 logger.warning(f"IBKR order failed, falling back to paper: {e}")
+                state_machine.transition(OrderState.REJECTED, f"IBKR error: {e}")
                 use_ibkr = False
         
-        # Phase 1 fallback: Paper trading
-        # Simulate realistic fill price (small slippage)
-        base_price = 5000.0  # Simplified - would come from market data
-        slippage = random.uniform(-0.1, 0.1) if order.order_type == "MARKET" else 0.0
-        fill_price = base_price + slippage
+        # Phase 1 fallback: Paper trading with realistic slippage
+        quote = get_quote_for_symbol(order.symbol)
+        fill_price = simulate_fill(
+            quote=quote,
+            side=order.side,
+            quantity=order.quantity,
+            order_type=order.order_type or "MARKET",
+            limit_price=order.limit_price,
+        )
         
         # Add position to paper account
         account.add_position(
@@ -179,22 +238,25 @@ async def place_order(
         )
         
         # Record order
-        order_id = f"FUT_{user_id}_{order.symbol}_{order.side}_{order.quantity}_{int(time.time())}"
+        state_machine.transition(OrderState.FILLED, "Paper order filled")
         account.order_history.append({
-            "order_id": order_id,
+            "order_id": client_oid,
+            "client_order_id": client_oid,
             "symbol": order.symbol,
             "side": order.side,
             "quantity": order.quantity,
             "fill_price": fill_price,
+            "state": state_machine.state.value,
             "timestamp": datetime.now().isoformat(),
         })
         
-        logger.info(f"Paper order executed: {order_id} @ {fill_price}")
+        logger.info(f"Paper order executed: {client_oid} @ {fill_price}")
         
         return FuturesOrderResponse(
-            order_id=order_id,
+            order_id=client_oid,
             status="filled",
             message=f"Order filled (paper): {order.side} {order.quantity} {order.symbol} @ ${fill_price:.2f}",
+            client_order_id=client_oid,
         )
     except HTTPException:
         raise

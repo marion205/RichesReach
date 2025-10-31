@@ -22,7 +22,7 @@ class FuturesService {
     return response.json();
   }
 
-  async placeOrder(order: FuturesOrderRequest): Promise<{ order_id: string; status: string }> {
+  async placeOrder(order: FuturesOrderRequest): Promise<{ order_id: string; status: string; message?: string; why_not?: any; client_order_id?: string }> {
     const response = await fetch(`${API_BASE}/api/futures/order`, {
       method: 'POST',
       headers: {

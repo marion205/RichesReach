@@ -71,15 +71,28 @@ export default function TomorrowScreen({ navigation }: any) {
           text: 'Trade',
           onPress: async () => {
             try {
-              await FuturesService.placeOrder({
+              const result = await FuturesService.placeOrder({
                 symbol: rec.symbol,
                 side: rec.action === 'Buy' ? 'BUY' : 'SELL',
                 quantity: 1, // Start with 1 micro contract
               });
-              Alert.alert('Success', 'Order placed');
-              handleRefresh();
-            } catch (e) {
-              Alert.alert('Error', 'Failed to place order');
+              
+              // Check if blocked with "Why not"
+              if (result.status === 'blocked' && result.why_not) {
+                const whyNot = result.why_not;
+                Alert.alert(
+                  'Order Blocked',
+                  `${whyNot.reason}\n\n${whyNot.fix || ''}`,
+                  [{ text: 'OK' }]
+                );
+              } else if (result.status === 'duplicate') {
+                Alert.alert('Info', 'Order already submitted');
+              } else {
+                Alert.alert('Success', result.message || 'Order placed');
+                handleRefresh();
+              }
+            } catch (e: any) {
+              Alert.alert('Error', e.message || 'Failed to place order');
             }
           },
         },

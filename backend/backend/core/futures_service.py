@@ -48,6 +48,7 @@ class FuturesPaperAccount:
         self.positions: Dict[str, Dict] = {}
         self.order_history: List[Dict] = []
         self.total_pnl = 0.0
+        self._seen_order_ids: set = set()  # For idempotency
     
     def add_position(self, symbol: str, side: str, quantity: int, entry_price: float):
         """Add a new position"""
