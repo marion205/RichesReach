@@ -31,6 +31,12 @@ yarn-error.log*
 *.pt
 *.onnx
 *.h5
+*.joblib
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
 
 # Images/logs you don't want in git (tune as needed)
 *.log
