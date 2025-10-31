@@ -49,7 +49,7 @@ class IBKRAdapter:
     
     async def connect(self, client_id: int = 1) -> bool:
         """
-        Connect to TWS/Gateway.
+        Connect to TWS/Gateway with auto-retry.
         
         Args:
             client_id: Unique client ID for this connection
@@ -57,27 +57,42 @@ class IBKRAdapter:
         Returns:
             True if connected successfully
         """
-        try:
-            self.connection_status = IBKRConnectionStatus.CONNECTING
-            logger.info(f"Connecting to IBKR TWS at {self.tws_host}:{self.tws_port}")
-            
-            # TODO: Implement actual IB API connection
-            # from ib_insync import IB
-            # self.client = IB()
-            # await self.client.connect(self.tws_host, self.tws_port, clientId=client_id)
-            
-            # For now, simulate connection
-            await asyncio.sleep(0.1)  # Simulate connection delay
-            
-            self.connection_status = IBKRConnectionStatus.CONNECTED
-            self.client_id = client_id
-            logger.info("✅ Connected to IBKR TWS")
-            return True
-            
-        except Exception as e:
-            self.connection_status = IBKRConnectionStatus.ERROR
-            logger.error(f"❌ Failed to connect to IBKR: {e}")
-            return False
+        attempts = 0
+        initial_delay = self.reconnect_delay
+        
+        while attempts < self.max_reconnect_attempts:
+            try:
+                self.connection_status = IBKRConnectionStatus.CONNECTING
+                logger.info(f"Connecting to IBKR TWS at {self.tws_host}:{self.tws_port} (attempt {attempts + 1})")
+                
+                # TODO: Implement actual IB API connection
+                # from ib_insync import IB, util
+                # self.client = IB()
+                # await self.client.connectAsync(self.tws_host, self.tws_port, clientId=client_id, timeout=5)
+                
+                # For now, simulate connection
+                await asyncio.sleep(0.1)
+                
+                self.connection_status = IBKRConnectionStatus.CONNECTED
+                self.client_id = client_id
+                self.last_heartbeat = time.time()
+                self.reconnect_delay = initial_delay  # Reset on success
+                logger.info("✅ Connected to IBKR TWS")
+                return True
+                
+            except Exception as e:
+                attempts += 1
+                logger.warning(f"IBKR connect failed (attempt {attempts}): {e}")
+                
+                if attempts < self.max_reconnect_attempts:
+                    await asyncio.sleep(self.reconnect_delay)
+                    self.reconnect_delay = min(self.reconnect_delay * 1.5, 30)  # Exponential backoff
+                else:
+                    self.connection_status = IBKRConnectionStatus.ERROR
+                    self.reconnect_delay = initial_delay  # Reset on final failure
+                    logger.error(f"❌ Failed to connect to IBKR after {attempts} attempts")
+        
+        return False
     
     async def disconnect(self):
         """Disconnect from TWS/Gateway"""
