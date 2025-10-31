@@ -72,6 +72,50 @@ import LeaderboardScreen from '../features/swingTrading/screens/LeaderboardScree
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
+// Wrapper components for screens that need props
+function SubscriptionScreenWrapper(props: any) {
+  return (
+    <SubscriptionScreen
+      navigateTo={(screen) => {
+        try {
+          props.navigation.navigate(screen as never);
+        } catch (error) {
+          console.log('Navigation error:', error);
+        }
+      }}
+    />
+  );
+}
+
+function SecurityFortressWrapper(props: any) {
+  return (
+    <SecurityFortress
+      onBiometricSetup={() => console.log('Biometric setup requested')}
+      onSecurityEventPress={(event) => console.log('Security event:', event)}
+    />
+  );
+}
+
+function ViralGrowthWrapper(props: any) {
+  return (
+    <ViralGrowthSystem
+      onRewardClaimed={(reward) => console.log('Reward claimed:', reward)}
+      onChallengeJoined={(challenge) => console.log('Challenge joined:', challenge)}
+    />
+  );
+}
+
+function OnboardingScreenWrapper(props: any) {
+  return (
+    <OnboardingScreen
+      onComplete={(profile) => {
+        console.log('Onboarding completed:', profile);
+        props.navigation.goBack();
+      }}
+    />
+  );
+}
+
 function HomeStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -83,20 +127,9 @@ function HomeStack() {
       <Stack.Screen name="bank-accounts" component={BankAccountScreen} options={{ headerShown: true, title: 'Bank Accounts' }} />
       <Stack.Screen 
         name="subscription" 
+        component={SubscriptionScreenWrapper}
         options={{ headerShown: true, title: 'Subscription' }}
-      >
-        {(props) => (
-          <SubscriptionScreen
-            navigateTo={(screen) => {
-              try {
-                props.navigation.navigate(screen as never);
-              } catch (error) {
-                console.log('Navigation error:', error);
-              }
-            }}
-          />
-        )}
-      </Stack.Screen>
+      />
       {/* V2 utility routes triggered from Home cards */}
       <Stack.Screen name="oracle-insights" component={OracleInsights} />
       <Stack.Screen name="voice-ai" component={VoiceAIAssistant} />
@@ -118,39 +151,19 @@ function HomeStack() {
       <Stack.Screen name="dynamic-content" component={DynamicContentScreen} />
       <Stack.Screen 
         name="security-fortress" 
+        component={SecurityFortressWrapper}
         options={{ headerShown: false }}
-      >
-        {(props) => (
-          <SecurityFortress
-            onBiometricSetup={() => console.log('Biometric setup requested')}
-            onSecurityEventPress={(event) => console.log('Security event:', event)}
-          />
-        )}
-      </Stack.Screen>
+      />
       <Stack.Screen 
         name="viral-growth" 
+        component={ViralGrowthWrapper}
         options={{ headerShown: false }}
-      >
-        {(props) => (
-          <ViralGrowthSystem
-            onRewardClaimed={(reward) => console.log('Reward claimed:', reward)}
-            onChallengeJoined={(challenge) => console.log('Challenge joined:', challenge)}
-          />
-        )}
-      </Stack.Screen>
+      />
       <Stack.Screen 
         name="onboarding" 
+        component={OnboardingScreenWrapper}
         options={{ headerShown: false }}
-      >
-        {(props) => (
-          <OnboardingScreen
-            onComplete={(profile) => {
-              console.log('Onboarding completed:', profile);
-              props.navigation.goBack();
-            }}
-          />
-        )}
-      </Stack.Screen>
+      />
       {/* Convenience: allow Home to open these without switching tabs */}
       <Stack.Screen name="ai-options" component={AIOptionsScreen} />
       <Stack.Screen name="ai-scans" component={AIScansScreen} />
