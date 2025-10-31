@@ -608,9 +608,9 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
         {/* Header */}
         <TouchableOpacity style={styles.headerCard} onLongPress={handleVoiceHint}>
           <Ionicons name="bulb" size={32} color="#3b82f6" />
-          <View>
-            <Text style={styles.title}>Ignite Your Strategy</Text>
-            <Text style={styles.subtitle}>Drag, swipe, speak—AI adapts instantly</Text>
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.title} numberOfLines={2}>Ignite Your Strategy</Text>
+            <Text style={styles.subtitle} numberOfLines={2}>Drag, swipe, speak—AI adapts instantly</Text>
           </View>
           <Ionicons name="mic" size={20} color={voiceActive ? '#10b981' : '#9ca3af'} />
         </TouchableOpacity>
@@ -811,9 +811,9 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
 
         <View style={styles.headerCard}>
           <Ionicons name="play-circle" size={28} color="#10b981" />
-          <View>
-            <Text style={styles.title}>Your Live Trading Arena</Text>
-            <Text style={styles.subtitle}>Real-time AI co-pilot at your side</Text>
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.title} numberOfLines={2}>Your Live Trading Arena</Text>
+            <Text style={styles.subtitle} numberOfLines={2}>Real-time AI co-pilot at your side</Text>
           </View>
         </View>
 
@@ -949,9 +949,9 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
       <Animated.View style={{ opacity: cardOpacity }} entering={FadeIn.duration(600).delay(200)}>
         <View style={styles.headerCard}>
           <Ionicons name="analytics" size={28} color="#8b5cf6" />
-          <View>
-            <Text style={styles.title}>Trade Performance Analysis</Text>
-            <Text style={styles.subtitle}>AI-powered insights and lessons</Text>
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.title} numberOfLines={2}>Trade Performance Analysis</Text>
+            <Text style={styles.subtitle} numberOfLines={2}>AI-powered insights and lessons</Text>
           </View>
         </View>
 
@@ -1131,9 +1131,9 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
       <Animated.View style={{ opacity: cardOpacity }} entering={FadeIn.duration(600).delay(200)}>
         <View style={styles.headerCard}>
           <Ionicons name="shield-checkmark" size={28} color="#10b981" />
-          <View>
-            <Text style={styles.title}>Build Trading Confidence</Text>
-            <Text style={styles.subtitle}>AI-powered explanations and motivation</Text>
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.title} numberOfLines={2}>Build Trading Confidence</Text>
+            <Text style={styles.subtitle} numberOfLines={2}>AI-powered explanations and motivation</Text>
           </View>
         </View>
 
@@ -1406,12 +1406,17 @@ const styles = StyleSheet.create({
     elevation: 4,
     gap: 16,
   },
+  headerTextContainer: {
+    flex: 1,
+    flexShrink: 1,
+  },
   title: {
     fontSize: 28,
     fontWeight: '800',
     color: '#111827',
     marginBottom: 4,
     letterSpacing: -0.5,
+    flexWrap: 'wrap',
   },
   subtitle: {
     fontSize: 16,

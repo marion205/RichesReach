@@ -13,8 +13,28 @@ import {
   Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { RTCView, RTCPeerConnection, RTCIceCandidate, RTCSessionDescription, mediaDevices } from 'react-native-webrtc';
+import { isExpoGo } from '../utils/expoGoCheck';
 import io from 'socket.io-client';
+
+// Conditionally import WebRTC (not available in Expo Go)
+let RTCView: any = null;
+let RTCPeerConnection: any = null;
+let RTCIceCandidate: any = null;
+let RTCSessionDescription: any = null;
+let mediaDevices: any = null;
+
+try {
+  if (!isExpoGo()) {
+    const webrtc = require('react-native-webrtc');
+    RTCView = webrtc.RTCView;
+    RTCPeerConnection = webrtc.RTCPeerConnection;
+    RTCIceCandidate = webrtc.RTCIceCandidate;
+    RTCSessionDescription = webrtc.RTCSessionDescription;
+    mediaDevices = webrtc.mediaDevices;
+  }
+} catch (e) {
+  console.warn('WebRTC not available in Expo Go');
+}
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width, height } = Dimensions.get('window');

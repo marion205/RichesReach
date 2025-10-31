@@ -10,9 +10,11 @@ import {
   Dimensions,
 } from 'react-native';
 import { Audio } from 'expo-av';
+import * as FileSystem from 'expo-file-system';
+import { synthesize, TTSConfig } from '../voice/ttsClient';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import LinearGradient from 'expo-linear-gradient';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useVoice } from '../contexts/VoiceContext';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -75,7 +77,8 @@ export default function VoiceAI({
 
   const loadAvailableVoices = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/voice-ai/voices/`);
+      const voicesPath = (process.env.EXPO_PUBLIC_TTS_VOICES_PATH || '/api/voices/').replace(/^\/?/, '/');
+      const response = await fetch(`${API_BASE_URL}${voicesPath}`);
       if (response.ok) {
         const data = await response.json();
         setAvailableVoices(data.voices || {});
@@ -88,36 +91,22 @@ export default function VoiceAI({
   const synthesizeSpeech = async (): Promise<string | null> => {
     try {
       setIsLoading(true);
-      
-      const token = await AsyncStorage.getItem('token');
-      const response = await fetch(`${API_BASE_URL}/api/voice-ai/synthesize/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token && { Authorization: `Bearer ${token}` }),
-        },
-        body: JSON.stringify({
-          text,
-          voice: selectedVoice,
-          speed,
-          emotion,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to synthesize speech');
-      }
-
-      return `${API_BASE_URL}${data.audio_url}`;
-    } catch (error) {
-      console.error('TTS synthesis error:', error);
-      onError?.(error instanceof Error ? error.message : 'Failed to generate speech');
+      const cfg: TTSConfig = {
+        provider: (process.env.EXPO_PUBLIC_TTS_PROVIDER as any) || 'polly',
+        baseUrl: process.env.EXPO_PUBLIC_TTS_BASE_URL || API_BASE_URL,
+        apiKey: process.env.EXPO_PUBLIC_TTS_API_KEY,
+        voiceId: process.env.EXPO_PUBLIC_TTS_VOICE || 'Joanna',
+        model: process.env.EXPO_PUBLIC_TTS_MODEL,
+        format: 'mp3',
+      };
+      const buf = await synthesize(text, cfg);
+      const b64 = arrayBufferToBase64(buf);
+      const path = FileSystem.cacheDirectory + `tts_${Date.now()}.mp3`;
+      await FileSystem.writeAsStringAsync(path, b64, { encoding: FileSystem.EncodingType.Base64 });
+      return path;
+    } catch (error: any) {
+      console.error('TTS synthesis error:', error?.message || String(error));
+      onError?.(error?.message || 'Failed to generate speech');
       return null;
     } finally {
       setIsLoading(false);
@@ -127,20 +116,30 @@ export default function VoiceAI({
   const previewVoice = async (): Promise<string | null> => {
     try {
       const token = await AsyncStorage.getItem('token');
-      const response = await fetch(`${API_BASE_URL}/api/voice-ai/preview/`, {
+      const previewPath = (process.env.EXPO_PUBLIC_TTS_PREVIEW_PATH || '/api/preview/').replace(/^[^/]/, (m) => `/${m}`);
+      const response = await fetch(`${API_BASE_URL}${previewPath}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(token && { Authorization: `Bearer ${token}` }),
         },
         body: JSON.stringify({
+          // Many backends expect voiceId instead of voice; include both
+          voiceId: selectedVoice,
           voice: selectedVoice,
           speed,
           emotion,
+          sample: process.env.EXPO_PUBLIC_TTS_PREVIEW_SAMPLE || 'This is a quick voice preview.',
+          text: process.env.EXPO_PUBLIC_TTS_PREVIEW_SAMPLE || 'This is a quick voice preview.',
+          format: 'mp3'
         }),
       });
 
       if (!response.ok) {
+        try {
+          const errText = await response.text();
+          console.error('Voice preview server error:', errText.slice(0, 600));
+        } catch {}
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
@@ -264,6 +263,15 @@ export default function VoiceAI({
     return availableVoices[selectedVoice]?.description || 'Natural voice synthesis';
   };
 
+  function arrayBufferToBase64(buffer: ArrayBuffer) {
+    let binary = '';
+    const bytes = new Uint8Array(buffer);
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) binary += String.fromCharCode(bytes[i]);
+    // @ts-ignore
+    return typeof btoa === 'function' ? btoa(binary) : Buffer.from(binary, 'binary').toString('base64');
+  }
+
   return (
     <View style={[styles.container, style]}>
       {/* Voice Info */}
@@ -298,21 +306,54 @@ export default function VoiceAI({
           </LinearGradient>
         </TouchableOpacity>
 
-        {/* Preview Button */}
+        {/* Preview Button (fallback to synthesize if preview route fails) */}
         <TouchableOpacity
           style={styles.previewButton}
           onPress={async () => {
-            const previewUrl = await previewVoice();
-            if (previewUrl) {
-              const { sound: previewSound } = await Audio.Sound.createAsync(
-                { uri: previewUrl },
-                { shouldPlay: true }
-              );
-              previewSound.setOnPlaybackStatusUpdate((status) => {
-                if (status.isLoaded && status.didJustFinish) {
-                  previewSound.unloadAsync();
-                }
-              });
+            try {
+              // Try server preview first
+              const previewUrl = await previewVoice();
+              if (previewUrl) {
+                const { sound: previewSound } = await Audio.Sound.createAsync(
+                  { uri: previewUrl },
+                  { shouldPlay: true }
+                );
+                previewSound.setOnPlaybackStatusUpdate((status) => {
+                  if (status.isLoaded && status.didJustFinish) {
+                    previewSound.unloadAsync();
+                  }
+                });
+                return;
+              }
+            } catch (e) {
+              // Fallback to direct synthesize of a short sample
+              try {
+                const cfg: TTSConfig = {
+                  provider: (process.env.EXPO_PUBLIC_TTS_PROVIDER as any) || 'polly',
+                  baseUrl: process.env.EXPO_PUBLIC_TTS_BASE_URL || API_BASE_URL,
+                  apiKey: process.env.EXPO_PUBLIC_TTS_API_KEY,
+                  voiceId: process.env.EXPO_PUBLIC_TTS_VOICE || selectedVoice || 'Joanna',
+                  model: process.env.EXPO_PUBLIC_TTS_MODEL,
+                  format: 'mp3',
+                };
+                const sample = process.env.EXPO_PUBLIC_TTS_PREVIEW_SAMPLE || 'This is a quick voice preview.';
+                const buf = await synthesize(sample, cfg);
+                const b64 = arrayBufferToBase64(buf);
+                const path = FileSystem.cacheDirectory + `tts_preview_${Date.now()}.mp3`;
+                await FileSystem.writeAsStringAsync(path, b64, { encoding: FileSystem.EncodingType.Base64 });
+                const { sound: previewSound } = await Audio.Sound.createAsync(
+                  { uri: path },
+                  { shouldPlay: true }
+                );
+                previewSound.setOnPlaybackStatusUpdate((status) => {
+                  if (status.isLoaded && status.didJustFinish) {
+                    previewSound.unloadAsync();
+                  }
+                });
+                return;
+              } catch (fallbackErr) {
+                console.error('Preview fallback synth error:', fallbackErr);
+              }
             }
           }}
           disabled={isLoading}

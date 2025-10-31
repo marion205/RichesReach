@@ -11,6 +11,7 @@ import {
   FlatList,
   ActivityIndicator,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 // import { BlurView } from 'expo-blur'; // Removed for Expo Go compatibility
 // import LottieView from 'lottie-react-native'; // Removed for Expo Go compatibility
@@ -66,6 +67,7 @@ export default function BlockchainIntegration({
   onDeFiPositionCreate, 
   onGovernanceVote 
 }: BlockchainIntegrationProps) {
+  const navigation = useNavigation<any>();
   const theme = useTheme();
   const [activeTab, setActiveTab] = useState<'tokenized' | 'defi' | 'governance' | 'bridge'>('tokenized');
   const [tokenizedPortfolios, setTokenizedPortfolios] = useState<TokenizedPortfolio[]>([]);
@@ -476,7 +478,65 @@ export default function BlockchainIntegration({
                   ))}
                 </View>
                 
-                <TouchableOpacity style={styles.bridgeButton}>
+                <TouchableOpacity 
+                  style={styles.bridgeButton}
+                  onPress={() => {
+                    console.log('Start Bridge pressed');
+                    
+                    // Strategy: Use parent navigator to navigate across tabs
+                    // This avoids the React Navigation warning about screens not in current navigator
+                    
+                    // Get the parent navigator (the tab navigator)
+                    const parentNav = navigation.getParent?.();
+                    
+                    if (parentNav) {
+                      console.log('Found parent navigator, navigating via tab');
+                      // Try Home tab first (bridge-screen is in HomeStack)
+                      try {
+                        parentNav.navigate('Home' as never, {
+                          screen: 'bridge-screen',
+                        } as never);
+                        console.log('✅ Navigated via Home tab -> bridge-screen');
+                        return;
+                      } catch (homeError) {
+                        console.log('Home tab navigation failed, trying Invest:', homeError);
+                        // Try Invest tab (bridge-screen is also in InvestStack)
+                        try {
+                          parentNav.navigate('Invest' as never, {
+                            screen: 'bridge-screen',
+                          } as never);
+                          console.log('✅ Navigated via Invest tab -> bridge-screen');
+                          return;
+                        } catch (investError) {
+                          console.error('Both tab navigations failed:', { homeError, investError });
+                        }
+                      }
+                    } else {
+                      console.log('No parent navigator found, trying direct navigation');
+                      // Fallback: try direct navigation (might work if in same stack)
+                      try {
+                        navigation.navigate('bridge-screen' as never);
+                        console.log('✅ Direct navigation succeeded');
+                        return;
+                      } catch (directError) {
+                        console.log('Direct navigation also failed:', directError);
+                      }
+                    }
+                    
+                    // Final fallback: use globalNavigate
+                    try {
+                      const { globalNavigate } = require('../navigation/NavigationService');
+                      console.log('Using globalNavigate fallback');
+                      globalNavigate('Home', { screen: 'bridge-screen' });
+                    } catch (globalError) {
+                      console.error('All navigation methods failed:', globalError);
+                      Alert.alert(
+                        'Navigation Error',
+                        'Unable to open bridge screen. Please try again.'
+                      );
+                    }
+                  }}
+                >
                   <LinearGradient
                     colors={['#667eea', '#764ba2']}
                     style={styles.bridgeButtonGradient}
@@ -1055,3 +1115,4 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+

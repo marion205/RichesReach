@@ -11,7 +11,15 @@ const path = require('path');
 
 class WorkingAutomatedDemoRecorder {
     constructor() {
-        this.deviceId = 'D6659EB1-443D-411A-903B-88A0AEA5CCDD'; // iPhone 16 Pro (Booted)
+        // Auto-detect booted simulator instead of hardcoded ID
+        try {
+            const { execSync } = require('child_process');
+            const bootedDevices = execSync('xcrun simctl list devices booted', { encoding: 'utf8' });
+            const match = bootedDevices.match(/iPhone[^(]+\(([A-F0-9-]+)\)/);
+            this.deviceId = match ? match[1] : null;
+        } catch (e) {
+            this.deviceId = null; // Will need to boot a simulator first
+        }
         this.demoDir = './automated-demo-recordings';
         this.timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         this.isRecording = false;

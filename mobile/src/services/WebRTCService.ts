@@ -1,5 +1,41 @@
+// Minimal interface for future WebRTC integration (signaling to be added server-side)
+export interface RTCConfig {
+  iceServers: { urls: string }[];
+}
+
+export interface SignalingClient {
+  send(event: string, payload: any): void;
+  on(event: string, handler: (payload: any) => void): void;
+}
+
+export class WebRTCServiceStub {
+  constructor(private signaling?: SignalingClient, private config?: RTCConfig) {}
+  async joinRoom(_roomId: string) {
+    // no-op stub for now
+  }
+  async leaveRoom() {}
+}
+
 import io, { Socket } from 'socket.io-client';
-import { RTCPeerConnection, RTCView, MediaStream, mediaDevices } from 'react-native-webrtc';
+import { isExpoGo } from '../utils/expoGoCheck';
+
+// Conditionally import WebRTC (not available in Expo Go)
+let RTCPeerConnection: any = null;
+let RTCView: any = null;
+let MediaStream: any = null;
+let mediaDevices: any = null;
+
+try {
+  if (!isExpoGo()) {
+    const webrtc = require('react-native-webrtc');
+    RTCPeerConnection = webrtc.RTCPeerConnection;
+    RTCView = webrtc.RTCView;
+    MediaStream = webrtc.MediaStream;
+    mediaDevices = webrtc.mediaDevices;
+  }
+} catch (e) {
+  console.warn('react-native-webrtc not available (Expo Go mode)');
+}
 
 export interface WebRTCConfig {
   serverUrl: string;
@@ -30,13 +66,24 @@ export interface Message {
 
 export class WebRTCService {
   private socket: Socket | null = null;
-  private peerConnection: RTCPeerConnection | null = null;
-  private localStream: MediaStream | null = null;
-  private remoteStreams: Map<string, MediaStream> = new Map();
+  private peerConnection: any = null; // RTCPeerConnection | null
+  private localStream: any = null; // MediaStream | null
+  private remoteStreams: Map<string, any> = new Map(); // Map<string, MediaStream>
   private config: WebRTCConfig;
   private currentRoom: string | null = null;
   private userId: string | null = null;
   private isHost: boolean = false;
+  private isAvailable: boolean;
+
+  constructor(config: WebRTCConfig) {
+    this.config = config;
+    this.isAvailable = RTCPeerConnection !== null && !isExpoGo();
+  }
+
+  // Check if WebRTC is available
+  static isAvailable(): boolean {
+    return RTCPeerConnection !== null && !isExpoGo();
+  }
 
   // Event callbacks
   private onRoomJoined?: (roomInfo: RoomInfo) => void;
@@ -53,6 +100,11 @@ export class WebRTCService {
 
   // Initialize the service
   async initialize(): Promise<void> {
+    if (!this.isAvailable) {
+      console.warn('⚠️ WebRTC not available in Expo Go. Service will use fallback mode.');
+      return;
+    }
+
     try {
       // Initialize socket connection
       this.socket = io(this.config.serverUrl, {
@@ -169,6 +221,11 @@ export class WebRTCService {
 
   // Initialize peer connection
   private async initializePeerConnection(): Promise<void> {
+    if (!RTCPeerConnection) {
+      console.warn('⚠️ RTCPeerConnection not available (Expo Go)');
+      return;
+    }
+
     const iceServers: RTCIceServer[] = this.config.stunServers.map(stun => ({ urls: stun }));
     if (this.config.turnServers) {
       iceServers.push(...this.config.turnServers);
@@ -202,6 +259,11 @@ export class WebRTCService {
 
   // Start local media stream
   private async startLocalStream(): Promise<void> {
+    if (!mediaDevices) {
+      console.warn('⚠️ mediaDevices not available (Expo Go)');
+      return;
+    }
+
     try {
       const stream = await mediaDevices.getUserMedia({
         video: {

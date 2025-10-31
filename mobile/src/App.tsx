@@ -419,7 +419,7 @@ return <StockScreen navigateTo={navigateTo} />;
 case 'ai-recommendations':
 return <AIPortfolioScreen navigateTo={navigateTo} />;
 case 'social':
-return <SocialTrading onNavigate={navigateTo} />;
+return <SocialTrading userId={user?.id || 'me'} onNavigate={navigateTo} initialTab='news' />;
 case 'learning-paths':
 return <LearningPathsScreen />;
 case 'discover-users':

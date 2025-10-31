@@ -1,7 +1,7 @@
 import React from 'react';
-import { View, TouchableOpacity, Text, StyleSheet, StatusBar } from 'react-native';
+import { View, TouchableOpacity, Text, StyleSheet, StatusBar, DeviceEventEmitter } from 'react-native';
 import Feather from 'react-native-vector-icons/Feather';
-import { navigate as navServiceNavigate } from '../../navigation/NavigationService';
+import { globalNavigate } from '../../navigation/NavigationService';
 
 interface TopHeaderProps {
   currentScreen: string;
@@ -36,12 +36,27 @@ const TopHeader: React.FC<TopHeaderProps> = ({ currentScreen, onNavigate, title 
         <Text style={styles.title}>{getScreenTitle()}</Text>
         <View style={styles.rightSection}>
           <TouchableOpacity
+            style={styles.micButton}
+            onPress={() => {
+              try { globalNavigate('Home'); } catch {}
+              setTimeout(() => DeviceEventEmitter.emit('calm_goal_mic'), 150);
+            }}
+            accessibilityLabel="Voice"
+          >
+            <Feather name="mic" size={20} color="#1C1C1E" />
+          </TouchableOpacity>
+          <TouchableOpacity
             style={styles.profileButton}
             onPress={() => {
               try {
-                navServiceNavigate('Profile');
+                // Profile is in HomeStack, use nested navigation
+                globalNavigate('Home', { screen: 'Profile' });
               } catch {
-                onNavigate('profile');
+                try {
+                  globalNavigate('Profile');
+                } catch {
+                  onNavigate('profile');
+                }
               }
             }}
           >
@@ -80,6 +95,12 @@ const styles = StyleSheet.create({
   rightSection: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  micButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#F2F2F7',
+    marginRight: 8,
   },
   profileButton: {
     padding: 8,

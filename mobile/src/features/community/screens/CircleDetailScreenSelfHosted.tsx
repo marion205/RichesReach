@@ -18,15 +18,30 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import { Video, Audio } from 'expo-av';
 import * as Notifications from 'expo-notifications';
-import {
-  RTCIceCandidate,
-  RTCPeerConnection,
-  RTCSessionDescription,
-  RTCView,
-  MediaStream,
-  MediaStreamTrack,
-} from 'react-native-webrtc';
+import { isExpoGo } from '../../../utils/expoGoCheck';
 import * as Device from 'expo-device';
+
+// Conditionally import WebRTC (not available in Expo Go)
+let RTCIceCandidate: any = null;
+let RTCPeerConnection: any = null;
+let RTCSessionDescription: any = null;
+let RTCView: any = null;
+let MediaStream: any = null;
+let MediaStreamTrack: any = null;
+
+try {
+  if (!isExpoGo()) {
+    const webrtc = require('react-native-webrtc');
+    RTCIceCandidate = webrtc.RTCIceCandidate;
+    RTCPeerConnection = webrtc.RTCPeerConnection;
+    RTCSessionDescription = webrtc.RTCSessionDescription;
+    RTCView = webrtc.RTCView;
+    MediaStream = webrtc.MediaStream;
+    MediaStreamTrack = webrtc.MediaStreamTrack;
+  }
+} catch (e) {
+  console.warn('WebRTC not available in Expo Go');
+}
 import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../../../theme/PersonalizedThemes';

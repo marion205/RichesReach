@@ -1188,6 +1188,11 @@ from core.social_trading_views import (
 )
 urlpatterns.append(path("api/social/launch-meme", launch_meme))
 urlpatterns.append(path("api/social/feed", get_social_feed))
+
+# Wake word model endpoints
+from backend.views_wake_word import serve_normalization_params, serve_model_info
+urlpatterns.append(path("api/wake-word/normalization/", serve_normalization_params))
+urlpatterns.append(path("api/wake-word/info/", serve_model_info))
 urlpatterns.append(path("api/social/create-post", create_social_post))
 urlpatterns.append(path("api/social/voice-command", process_voice_command))
 urlpatterns.append(path("api/social/create-raid", create_raid))

@@ -12,7 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
-export default function WealthCirclesScreen() {
+export default function WealthCirclesScreen({ navigation }: { navigation?: any }) {
   const [loading, setLoading] = useState(false);
   const [circles, setCircles] = useState([
     {
@@ -118,32 +118,33 @@ export default function WealthCirclesScreen() {
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
     const diffDays = Math.floor(diffHours / 24);
 
-    if (diffDays > 0) {
-      return `${diffDays}d ago`;
-    } else if (diffHours > 0) {
-      return `${diffHours}h ago`;
-    } else {
-      const diffMinutes = Math.floor(diffMs / (1000 * 60));
-      return `${diffMinutes}m ago`;
-    }
+    if (diffDays > 0) return `${diffDays}d ago`;
+    if (diffHours > 0) return `${diffHours}h ago`;
+    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+    return `${diffMinutes}m ago`;
   };
+
+  useEffect(() => {
+    setLoading(false);
+  }, []);
 
   return (
     <ScrollView style={styles.container}>
+      {/* Header */}
       <LinearGradient
-        colors={['#8B5CF6', '#7C3AED']}
-        style={styles.headerGradient}
+        colors={["#8B5CF6", "#6366F1"]}
         start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.headerGradient}
       >
         <View style={styles.headerContent}>
-          <Ionicons name="people" size={32} color="#fff" />
+          <Ionicons name="people" size={28} color="#fff" />
           <Text style={styles.headerTitle}>Wealth Circles</Text>
-          <Text style={styles.headerSubtitle}>Connect with your community</Text>
+          <Text style={styles.headerSubtitle}>Connect, learn, and grow together</Text>
         </View>
       </LinearGradient>
 
-      {/* Create Circle Section */}
+      {/* Create Circle Button */}
       <View style={styles.section}>
         <TouchableOpacity 
           style={styles.createButton}
@@ -162,14 +163,13 @@ export default function WealthCirclesScreen() {
               onChangeText={setNewCircleName}
             />
             <TextInput
-              style={[styles.input, styles.textArea]}
+              style={[styles.input, { height: 80 }]}
               placeholder="Description"
               value={newCircleDescription}
               onChangeText={setNewCircleDescription}
               multiline
-              numberOfLines={3}
             />
-            <View style={styles.formButtons}>
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 12 }}>
               <TouchableOpacity 
                 style={styles.cancelButton}
                 onPress={() => setShowCreateCircle(false)}
@@ -191,7 +191,7 @@ export default function WealthCirclesScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Your Circles</Text>
         {circles.map((circle) => (
-          <TouchableOpacity key={circle.id} style={styles.circleCard}>
+          <TouchableOpacity key={circle.id} style={styles.circleCard} onPress={() => navigation?.navigate?.('circle-detail', { circle })}>
             <View style={styles.circleHeader}>
               <View style={styles.circleIcon}>
                 <Ionicons name="people-circle" size={24} color="#8B5CF6" />
@@ -297,211 +297,164 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f3f4f6',
-    padding: 16,
+    padding: 12,
     borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#8B5CF6',
-    borderStyle: 'dashed',
+    justifyContent: 'center',
+    gap: 8,
   },
   createButtonText: {
-    marginLeft: 10,
-    fontSize: 16,
-    fontWeight: '600',
     color: '#8B5CF6',
+    fontWeight: '700',
   },
   
   createForm: {
+    marginTop: 12,
     backgroundColor: '#ffffff',
     borderRadius: 12,
-    padding: 16,
-    marginTop: 12,
+    padding: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   input: {
+    backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: '#e5e7eb',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    marginBottom: 12,
-    backgroundColor: '#ffffff',
-  },
-  textArea: {
-    height: 80,
-    textAlignVertical: 'top',
-  },
-  formButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 10,
+    color: '#111827'
   },
   cancelButton: {
-    flex: 1,
-    padding: 12,
-    marginRight: 8,
-    borderRadius: 8,
     backgroundColor: '#f3f4f6',
-    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
   },
   cancelButtonText: {
     color: '#6b7280',
     fontWeight: '600',
   },
   submitButton: {
-    flex: 1,
-    padding: 12,
-    marginLeft: 8,
-    borderRadius: 8,
     backgroundColor: '#8B5CF6',
-    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
   },
   submitButtonText: {
-    color: '#ffffff',
-    fontWeight: '600',
+    color: '#fff',
+    fontWeight: '700',
   },
-  
+
   circleCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
     marginBottom: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    elevation: 1,
   },
   circleHeader: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   circleIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: '#f3f4f6',
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
     marginRight: 12,
   },
   circleInfo: {
     flex: 1,
   },
   circleName: {
-    fontSize: 16,
+    color: '#111827',
+    fontSize: 18,
     fontWeight: '700',
-    color: '#1f2937',
-    marginBottom: 4,
   },
   circleDescription: {
-    fontSize: 14,
     color: '#6b7280',
-    marginBottom: 8,
-    lineHeight: 20,
+    marginTop: 2,
   },
   circleMeta: {
     flexDirection: 'row',
-    alignItems: 'center',
+    gap: 12,
+    marginTop: 6,
   },
   memberCount: {
-    fontSize: 12,
-    color: '#8B5CF6',
-    fontWeight: '600',
-    marginRight: 12,
+    color: '#7c3aed'
   },
   culturalFocus: {
-    fontSize: 12,
-    color: '#6b7280',
-    backgroundColor: '#f3f4f6',
+    backgroundColor: '#eef2ff',
+    color: '#6d28d9',
     paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 4,
+    borderRadius: 6,
+    overflow: 'hidden'
   },
-  
+
   postCard: {
     backgroundColor: '#ffffff',
     borderRadius: 12,
-    padding: 16,
+    padding: 12,
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
   },
   postHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   postAuthor: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
   },
   postAuthorName: {
-    marginLeft: 6,
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#8B5CF6',
+    color: '#111827'
   },
   postTime: {
-    fontSize: 12,
-    color: '#9ca3af',
+    color: '#6b7280'
   },
   postTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1f2937',
-    marginBottom: 8,
+    color: '#111827',
+    fontWeight: '600',
+    marginBottom: 4,
   },
   postContent: {
-    fontSize: 14,
-    color: '#4b5563',
-    lineHeight: 20,
-    marginBottom: 12,
+    color: '#374151'
   },
   postFooter: {
+    marginTop: 8,
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    justifyContent: 'space-between'
   },
   postStats: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
   postStatText: {
-    marginLeft: 4,
-    marginRight: 12,
-    fontSize: 12,
-    color: '#6b7280',
+    color: '#111827'
   },
   postCircle: {
-    fontSize: 12,
-    color: '#8B5CF6',
-    backgroundColor: '#f3f4f6',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
+    color: '#6b7280'
   },
-  
+
   guidelinesCard: {
     backgroundColor: '#ffffff',
     borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    padding: 12,
   },
   guidelineText: {
-    fontSize: 14,
-    color: '#4b5563',
-    lineHeight: 22,
-    marginBottom: 8,
-  },
+    color: '#374151',
+    marginBottom: 4,
+  }
 });

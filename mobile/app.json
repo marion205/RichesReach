@@ -18,18 +18,19 @@
       "buildNumber": "1",
       "infoPlist": {
         "NSUserTrackingUsageDescription": "This app uses tracking to provide personalized financial insights and recommendations.",
-        "NSCameraUsageDescription": "This app uses the camera to scan financial documents and QR codes.",
+        "NSCameraUsageDescription": "AR preview requires camera",
         "NSPhotoLibraryUsageDescription": "This app accesses your photo library to upload profile pictures and financial documents.",
         "NSLocationWhenInUseUsageDescription": "This app uses location to provide location-based financial services and market data.",
-        "NSMicrophoneUsageDescription": "This app uses the microphone to record voice input for AI-powered financial assistance and voice commands.",
-        "NSSpeechRecognitionUsageDescription": "This app uses speech recognition to convert your voice commands into text for AI processing.",
+        "NSMicrophoneUsageDescription": "Voice wake-word and ASR",
+        "NSSpeechRecognitionUsageDescription": "Voice commands for coaching",
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true
         }
       },
       "config": {
         "usesNonExemptEncryption": false
-      }
+      },
+      "newArchEnabled": true
     },
     "android": {
       "package": "com.richesreach.app",
@@ -54,10 +55,10 @@
     "extra": {
       "eas": {
         "projectId": "48317b83-0094-4d6b-8315-c0c2f3a373fa"
-      },
-      "API_BASE": "http://192.168.1.236:8000"
+      }
     },
     "plugins": [
+      "expo-dev-client",
       "expo-image-picker",
       [
         "expo-av",

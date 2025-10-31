@@ -1,3 +1,5 @@
+source 'https://cdn.cocoapods.org/'
+
 require File.join(File.dirname(`node --print "require.resolve('expo/package.json')"`), "scripts/autolinking")
 require File.join(File.dirname(`node --print "require.resolve('react-native/package.json')"`), "scripts/react_native_pods")
 
@@ -48,6 +50,24 @@ target 'RichesReach' do
     :app_path => "#{Pod::Config.instance.installation_root}/..",
     :privacy_file_aggregation_enabled => podfile_properties['apple.privacyManifestAggregationEnabled'] != 'false',
   )
+
+  # --- React Native third-party podspecs (make them visible to CocoaPods) ---
+  rn_root = File.join(__dir__, '..', 'node_modules', 'react-native')
+  
+  pod 'RCT-Folly',    :podspec => "#{rn_root}/third-party-podspecs/RCT-Folly.podspec"
+  pod 'glog',         :podspec => "#{rn_root}/third-party-podspecs/glog.podspec"
+  pod 'fast_float',   :podspec => "#{rn_root}/third-party-podspecs/fast_float.podspec"
+  pod 'fmt',          :podspec => "#{rn_root}/third-party-podspecs/fmt.podspec"
+  # --------------------------------------------------------------------------
+
+  pre_install do |installer|
+    Pod::UI.puts "Forcing static libraries for key RN pods"
+    installer.pod_targets.each do |pod|
+      if ['RCT-Folly','Folly','React-Core','React-graphics','React-Fabric','React-RCTFabric','React-Codegen','hermes-engine','glog'].include?(pod.name)
+        def pod.build_type; Pod::BuildType.static_library end
+      end
+    end
+  end
 
   post_install do |installer|
     react_native_post_install(
