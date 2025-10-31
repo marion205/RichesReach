@@ -1344,8 +1344,11 @@ except Exception as e:
 # Import and include Futures API router
 try:
     from core.futures_api import futures_router
+    from core.futures_policy_api import policy_router
     app.include_router(futures_router)
+    app.include_router(policy_router)
     logger.info("✅ Futures API router included")
+    logger.info("✅ Futures Policy API router included")
 except Exception as e:
     logger.warning(f"⚠️ Failed to include Futures API router: {e}")
 

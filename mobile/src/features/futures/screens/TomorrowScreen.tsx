@@ -19,7 +19,7 @@ import { useQuery } from '@apollo/client';
 import { gql } from '@apollo/client';
 
 import FuturesService from '../services/FuturesService';
-import { FuturesRecommendation } from '../types/FuturesTypes';
+import { FuturesRecommendation, FuturesPosition } from '../types/FuturesTypes';
 
 const GET_FUTURES_RECOMMENDATIONS = gql`
   query GetFuturesRecommendations($user_id: ID) {
@@ -39,6 +39,8 @@ export default function TomorrowScreen({ navigation }: any) {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [recommendations, setRecommendations] = useState<FuturesRecommendation[]>([]);
+  const [positions, setPositions] = useState<FuturesPosition[]>([]);
+  const [showPositions, setShowPositions] = useState(false);
 
   const { data, refetch } = useQuery(GET_FUTURES_RECOMMENDATIONS, {
     fetchPolicy: 'cache-and-network',
@@ -61,12 +63,22 @@ export default function TomorrowScreen({ navigation }: any) {
     }
   }, []);
 
+  const loadPositions = useCallback(async () => {
+    try {
+      const resp = await FuturesService.getPositions();
+      setPositions(resp.positions || []);
+    } catch (e) {
+      // Silent fail for positions
+    }
+  }, []);
+
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     await refetch();
     await loadRecommendations();
+    await loadPositions();
     setRefreshing(false);
-  }, [refetch, loadRecommendations]);
+  }, [refetch, loadRecommendations, loadPositions]);
 
   const handleTrade = useCallback(async (rec: FuturesRecommendation) => {
     Alert.alert(
@@ -94,17 +106,54 @@ export default function TomorrowScreen({ navigation }: any) {
     );
   }, [handleRefresh]);
 
+  // Load positions on mount
+  React.useEffect(() => {
+    loadPositions();
+  }, [loadPositions]);
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Tomorrow</Text>
         <Text style={styles.headerSubtitle}>Trade tomorrow's markets today</Text>
+        {positions.length > 0 && (
+          <TouchableOpacity
+            style={styles.positionsButton}
+            onPress={() => setShowPositions(!showPositions)}
+          >
+            <Text style={styles.positionsButtonText}>
+              {showPositions ? 'Hide' : 'Show'} Positions ({positions.length})
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <ScrollView
         style={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
       >
+        {showPositions && positions.length > 0 && (
+          <View style={styles.positionsSection}>
+            <Text style={styles.sectionTitle}>Open Positions</Text>
+            {positions.map((pos, idx) => (
+              <View key={idx} style={styles.positionCard}>
+                <View style={styles.positionHeader}>
+                  <Text style={styles.positionSymbol}>{pos.symbol}</Text>
+                  <Text style={[styles.positionPnl, pos.pnl >= 0 ? styles.positive : styles.negative]}>
+                    {pos.pnl >= 0 ? '+' : ''}${pos.pnl.toFixed(2)}
+                  </Text>
+                </View>
+                <Text style={styles.positionDetails}>
+                  {pos.side} {pos.quantity} @ ${pos.entry_price.toFixed(2)} • Now: ${pos.current_price.toFixed(2)}
+                </Text>
+                <Text style={styles.positionPercent}>
+                  {pos.pnl_percent >= 0 ? '+' : ''}{pos.pnl_percent.toFixed(2)}%
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+        
         {loading && !recommendations.length ? (
           <View style={styles.center}>
             <ActivityIndicator size="large" color="#007AFF" />
@@ -280,6 +329,67 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '600',
     color: '#007AFF',
+  },
+  positionsButton: {
+    marginTop: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: '#007AFF',
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  positionsButtonText: {
+    color: 'white',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  positionsSection: {
+    padding: 16,
+  },
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#000',
+    marginBottom: 12,
+  },
+  positionCard: {
+    backgroundColor: 'white',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  positionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  positionSymbol: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#000',
+  },
+  positionPnl: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  positionDetails: {
+    fontSize: 15,
+    color: '#8E8E93',
+    marginBottom: 4,
+  },
+  positionPercent: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#8E8E93',
+  },
+  negative: {
+    color: '#FF3B30',
   },
 });
 

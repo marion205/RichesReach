@@ -2,7 +2,7 @@
  * Futures Service - Simple API client
  */
 
-import { FuturesRecommendation, FuturesOrderRequest } from '../types/FuturesTypes';
+import { FuturesRecommendation, FuturesOrderRequest, FuturesPosition } from '../types/FuturesTypes';
 
 const API_BASE = process.env.API_BASE_URL || 'http://localhost:8000';
 
@@ -39,7 +39,7 @@ class FuturesService {
     return response.json();
   }
 
-  async getPositions(): Promise<{ positions: any[] }> {
+  async getPositions(): Promise<{ positions: FuturesPosition[]; account_balance?: number; total_pnl?: number }> {
     const response = await fetch(`${API_BASE}/api/futures/positions`, {
       method: 'GET',
       headers: {
