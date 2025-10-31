@@ -15,7 +15,6 @@ import {
   Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import React from 'react';
 
 import FuturesService from '../services/FuturesService';
 import { FuturesRecommendation, FuturesPosition } from '../types/FuturesTypes';
