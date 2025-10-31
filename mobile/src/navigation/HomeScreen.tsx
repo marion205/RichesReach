@@ -3,8 +3,9 @@ import React, {
   } from 'react';
   import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView,
-    FlatList, TextInput, RefreshControl,
+    FlatList, TextInput, RefreshControl, DeviceEventEmitter,
   } from 'react-native';
+  import { useNavigation } from '@react-navigation/native';
   import { useApolloClient, useQuery, gql } from '@apollo/client';
   import Icon from 'react-native-vector-icons/Feather';
   import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -26,6 +27,18 @@ import { FEATURE_PORTFOLIO_METRICS } from '../config/flags';
 import { isMarketDataHealthy } from '../services/healthService';
 import { mark, PerformanceMarkers } from '../utils/timing';
 import { API_BASE } from '../config/api';
+import AuraHalo from '../components/AuraHalo';
+import CalmGoalNudge from '../components/CalmGoalNudge';
+import { recognizeCalmGoalIntent } from '../services/VoiceCoachIntent';
+import CalmGoalSheet from '../components/CalmGoalSheet';
+import { navigate as globalNavigate } from './NavigationService';
+import NextMoveModal from '../components/NextMoveModal';
+import BreathCheck from '../components/BreathCheck';
+import BreathCheckModal from '../components/BreathCheckModal';
+import { onHotword, triggerHotword } from '../services/VoiceHotword';
+import { personaCopy, inferPersona } from '../services/IntentPersona';
+import VoiceCaptureSheet from '../features/voice/VoiceCaptureSheet';
+import { parseIntent } from '../features/voice/intent';
   
   /* ===================== GraphQL ===================== */
   const GET_PORTFOLIO_METRICS = gql`
@@ -267,8 +280,9 @@ import { API_BASE } from '../config/api';
   });
   
   /* ===================== Home Screen ===================== */
-  const HomeScreen = ({ navigateTo }: { navigateTo: (screen: string, data?: any) => void }) => {
+  const HomeScreen = ({ navigateTo }: { navigateTo?: (screen: string, data?: any) => void }) => {
     const client = useApolloClient();
+    const navigation = useNavigation<any>();
     
     // Smart portfolio metrics state
     const [canQueryMetrics, setCanQueryMetrics] = useState(false);
@@ -360,7 +374,141 @@ import { API_BASE } from '../config/api';
   
     // Chat
     const [chatOpen, setChatOpen] = useState(false);
+    const [showCalmSheet, setShowCalmSheet] = useState(false);
+    const [showCalmNudge, setShowCalmNudge] = useState(false);
+    const [nudgeCopy, setNudgeCopy] = useState<{title: string; subtitle: string}>({title: 'You seem anxious about spending.', subtitle: 'Want to set a calm investing goal?'});
+    const [showNextMove, setShowNextMove] = useState(false);
+    const [showBreathCheck, setShowBreathCheck] = useState(false);
+    const micHoldRef = useRef(false);
+    const [showVoice, setShowVoice] = useState(false);
+
+    // Derived anxiousness score (fallback until on-device model is wired)
+    const anxiousnessScore = React.useMemo(() => {
+      const ret = Number(resolved?.totalReturnPercent ?? 0);
+      if (isNaN(ret)) return 0.3;
+      if (ret >= 0) return 0.3;
+      // Map -10% to ~1.0, small losses to lower scores
+      const score = Math.min(1, Math.abs(ret) / 10);
+      return Math.max(0.3, score);
+    }, [resolved?.totalReturnPercent]);
+
+    // Hotword subscription - listens for "Hey Riches"
+    useEffect(() => {
+      const off = onHotword(() => {
+        const copy = personaCopy(inferPersona({ anxiety: anxiousnessScore, opportunity: 0.5 }));
+        console.log('🎤 "Hey Riches" detected → opening voice assistant', copy);
+        setShowNextMove(true);
+      });
+      return off;
+    }, [anxiousnessScore]);
+
+    // Initialize wake word detection - tries ML first, then Whisper, then Porcupine
+    useEffect(() => {
+      let cleanup: (() => Promise<void>) | null = null;
+      
+      const initWakeWord = async () => {
+        // Priority 1: ML-based detection (fastest, most efficient)
+        try {
+          const { mlWakeWordService } = await import('../services/MLWakeWordService');
+          const started = await mlWakeWordService.start();
+          if (started) {
+            console.log('✅ "Hey Riches" wake word detection active (ML-based)');
+            cleanup = async () => {
+              await mlWakeWordService.stop();
+            };
+            return; // Success with ML service
+          }
+        } catch (error: any) {
+          console.log('ℹ️ ML wake word not available, trying Whisper-based...');
+        }
+
+        // Priority 2: Whisper-based (uses your server, no API keys)
+        try {
+          const { customWakeWordService } = await import('../services/CustomWakeWordService');
+          const started = await customWakeWordService.start();
+          if (started) {
+            console.log('✅ "Hey Riches" wake word detection active (Whisper-based)');
+            cleanup = async () => {
+              await customWakeWordService.stop();
+            };
+            return; // Success with custom service
+          }
+        } catch (error: any) {
+          console.log('ℹ️ Whisper wake word not available, trying Porcupine...');
+        }
+
+        // Priority 3: Porcupine (requires API key)
+        try {
+          const { porcupineWakeWordService } = await import('../services/PorcupineWakeWordService');
+          const started = await porcupineWakeWordService.start();
+          if (started) {
+            console.log('✅ "Hey Riches" wake word detection active (Porcupine)');
+            cleanup = async () => {
+              await porcupineWakeWordService.stop();
+              await porcupineWakeWordService.release();
+            };
+          } else {
+            console.log('ℹ️ Wake word detection not available');
+          }
+        } catch (error: any) {
+          console.log('ℹ️ Wake word detection not available:', error.message);
+        }
+      };
+
+      initWakeWord();
+
+      return () => {
+        if (cleanup) {
+          cleanup();
+        }
+      };
+    }, []);
+    const [showLiquidityChip, setShowLiquidityChip] = useState(false);
+    // Mic button listener from TopHeader -> open calm goal flow
+    useEffect(() => {
+      const sub = DeviceEventEmitter.addListener('calm_goal_mic', () => {
+        setShowCalmSheet(true);
+      });
+      return () => sub.remove();
+    }, []);
+    
   
+    // Evaluate CalmGoal nudge (Predictive Empathy)
+    useEffect(() => {
+      const evaluate = async () => {
+        try {
+          const now = Date.now();
+          const lastStr = await AsyncStorage.getItem('nudge:lastShown');
+          const last = lastStr ? Number(lastStr) : 0;
+          const cooldownMs = 1000 * 60 * 60 * 20; // 20h cooldown
+          if (now - last < cooldownMs) { setShowCalmNudge(false); return; }
+
+          const retPct = Number(resolved?.totalReturnPercent ?? 0);
+          const streak = Number(userProfile?.stats?.streakDays ?? 0);
+          const hour = new Date().getHours();
+          const evening = hour >= 18 && hour <= 23;
+
+          // Simple anxiety score
+          let score = 0;
+          if (retPct < -2) score += Math.min(10, Math.abs(retPct));
+          if (streak <= 2) score += 3;
+          if (evening) score += 2;
+
+          // A/B copy selection (sticky)
+          const savedVariant = await AsyncStorage.getItem('nudge:variant');
+          let variant = savedVariant || (Math.random() < 0.5 ? 'calm' : 'coach');
+          if (!savedVariant) await AsyncStorage.setItem('nudge:variant', variant);
+          const copy = variant === 'coach'
+            ? { title: 'Let’s steady the wheel.', subtitle: 'Set a calm investing goal in 30 seconds.' }
+            : { title: 'You seem anxious about spending.', subtitle: 'Want to set a calm investing goal?' };
+          setNudgeCopy(copy);
+
+          setShowCalmNudge(score >= 6);
+        } catch {}
+      };
+      evaluate();
+    }, [resolved?.totalReturnPercent, userProfile?.stats?.streakDays]);
+
     // Refresh
     const [refreshing, setRefreshing] = useState(false);
   
@@ -446,6 +594,40 @@ import { API_BASE } from '../config/api';
     }, [userData?.me?.id, userProfile?.id]);
   
     /* ---------- helpers ---------- */
+    const go = useCallback((screen: string, params?: any) => {
+      console.log('HomeScreen.go() called with:', screen, params);
+      
+      // Swing trading screens are in InvestStack, need nested navigation
+      const swingTradingScreens = ['swing-signals', 'swing-risk-coach', 'swing-backtesting', 'swing-leaderboard', 'swing-trading-test'];
+      if (swingTradingScreens.includes(screen)) {
+        try {
+          globalNavigate('Invest', { screen, params });
+          return;
+        } catch (error) {
+          console.error('HomeScreen.go() nested navigation error:', error);
+        }
+      }
+      
+      try { 
+        // Try direct navigation first
+        navigation.navigate(screen as never, params as never);
+      } catch (directError) {
+        // Fallback to globalNavigate
+        try {
+          globalNavigate(screen as any, params);
+        } catch (error) {
+          console.error('HomeScreen.go() globalNavigate error:', error);
+        }
+      }
+      
+      if (typeof navigateTo === 'function') {
+        try { 
+          (navigateTo as any)(screen, params);
+        } catch (error) {
+          console.error('HomeScreen.go() navigateTo error:', error);
+        }
+      }
+    }, [navigateTo, navigation]);
     const getExperienceIcon = useCallback((level: string) => {
       switch (level) {
         case 'beginner': return 'book-open';
@@ -572,18 +754,25 @@ import { API_BASE } from '../config/api';
             </>
           ) : (
             <>
-              <PortfolioPerformanceCard
-                totalValue={resolved.totalValue}
-                totalReturn={resolved.totalReturn}
-                totalReturnPercent={resolved.totalReturnPercent}
-                benchmarkSymbol="SPY"
-                useRealBenchmarkData={true}
-              />
+              {/* Aura around the portfolio card */}
+              <View style={{ marginHorizontal: 16 }}>
+                <AuraHalo
+                  score={Math.max(-1, Math.min(1, (resolved.totalReturnPercent ?? 0) / 20))}
+                >
+                  <PortfolioPerformanceCard
+                    totalValue={resolved.totalValue}
+                    totalReturn={resolved.totalReturn}
+                    totalReturnPercent={resolved.totalReturnPercent}
+                    benchmarkSymbol="SPY"
+                    useRealBenchmarkData={true}
+                  />
+                </AuraHalo>
+              </View>
 
               {resolved.holdings?.length > 0 ? (
                 <PortfolioHoldings
                   holdings={resolved.holdings}
-                  onStockPress={(symbol) => navigateTo('StockDetail', { symbol })}
+                  onStockPress={(symbol) => go('StockDetail', { symbol })}
                 />
               ) : (
                 <HoldingsSkeleton />
@@ -591,6 +780,23 @@ import { API_BASE } from '../config/api';
             </>
           )}
   
+          {/* Predictive empathy nudge (enhanced heuristic + cooldown + A/B copy) */}
+          {showCalmNudge && (
+            <CalmGoalNudge
+              title={nudgeCopy.title}
+              subtitle={nudgeCopy.subtitle}
+              onStart={async () => {
+                await AsyncStorage.setItem('nudge:lastShown', String(Date.now()));
+                setShowCalmNudge(false);
+                setShowCalmSheet(true);
+              }}
+              onDismiss={async () => {
+                await AsyncStorage.setItem('nudge:lastShown', String(Date.now()));
+                setShowCalmNudge(false);
+              }}
+            />
+          )}
+
           {/* Risk & Diversification */}
           {resolved.holdings?.length > 0 && (
             <BasicRiskMetrics
@@ -623,7 +829,64 @@ import { API_BASE } from '../config/api';
             </View>
             
             <View style={styles.learningCards}>
-              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('oracle-insights')}>
+              {/* Breath Check card */}
+              <BreathCheck onSuggest={() => {
+                console.log('BreathCheck: Starting breathing exercise');
+                setShowBreathCheck(true);
+              }} />
+
+              <TouchableOpacity style={styles.learningCard} onPress={() => setShowNextMove(true)} onLongPress={() => setShowVoice(true)}>
+                <View style={styles.learningCardIcon}>
+                  <Icon name="compass" size={24} color="#0EA5E9" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={styles.learningCardTitle}>Next Move (Voice)</Text>
+                  <Text style={styles.learningCardDescription}>Simulated trades based on your profile</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+
+              {/* Fireside quick entry */}
+              <TouchableOpacity style={styles.learningCard} onPress={() => {
+                console.log('Fireside Exchanges pressed');
+                try {
+                  navigation.navigate('fireside' as never);
+                } catch (error) {
+                  console.error('Navigation error:', error);
+                  globalNavigate('fireside');
+                }
+              }}>
+                <View style={styles.learningCardIcon}>
+                  <Icon name="mic" size={24} color="#8B5CF6" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={styles.learningCardTitle}>Fireside Exchanges</Text>
+                  <Text style={styles.learningCardDescription}>Invite-only voice rooms with AI summaries</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+              {showLiquidityChip && (
+                <TouchableOpacity style={styles.learningCard} onPress={() => globalNavigate('Learn', { screen: 'tutor-module' })}>
+                  <View style={styles.learningCardIcon}>
+                    <Icon name="droplet" size={24} color="#34C759" />
+                  </View>
+                  <View style={styles.learningCardContent}>
+                    <Text style={styles.learningCardTitle}>Liquidity 101</Text>
+                    <Text style={styles.learningCardDescription}>Unlock achieved – Learn while doing</Text>
+                    <Text style={styles.learningCardMeta}>Lesson • 3 min</Text>
+                  </View>
+                  <Icon name="chevron-right" size={16} color="#8E8E93" />
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity style={styles.learningCard} onPress={() => {
+                console.log('Oracle Insights pressed');
+                try {
+                  navigation.navigate('oracle-insights' as never);
+                } catch (error) {
+                  console.error('Navigation error:', error);
+                  globalNavigate('oracle-insights');
+                }
+              }}>
                 <View style={styles.learningCardIcon}>
                   <Icon name="eye" size={24} color="#8B5CF6" />
                 </View>
@@ -635,7 +898,15 @@ import { API_BASE } from '../config/api';
                 <Icon name="chevron-right" size={16} color="#8E8E93" />
               </TouchableOpacity>
               
-              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('voice-ai')}>
+              <TouchableOpacity style={styles.learningCard} onPress={() => {
+                console.log('Voice AI Assistant pressed');
+                try {
+                  navigation.navigate('voice-ai' as never);
+                } catch (error) {
+                  console.error('Navigation error:', error);
+                  globalNavigate('voice-ai');
+                }
+              }}>
                 <View style={styles.learningCardIcon}>
                   <Icon name="mic" size={24} color="#10B981" />
                 </View>
@@ -647,7 +918,15 @@ import { API_BASE } from '../config/api';
                 <Icon name="chevron-right" size={16} color="#8E8E93" />
               </TouchableOpacity>
               
-              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('blockchain-integration')}>
+              <TouchableOpacity style={styles.learningCard} onPress={() => {
+                console.log('Blockchain Integration pressed');
+                try {
+                  navigation.navigate('blockchain-integration' as never);
+                } catch (error) {
+                  console.error('Navigation error:', error);
+                  globalNavigate('blockchain-integration');
+                }
+              }}>
                 <View style={styles.learningCardIcon}>
                   <Icon name="link" size={24} color="#8B5CF6" />
                 </View>
@@ -655,6 +934,51 @@ import { API_BASE } from '../config/api';
                   <Text style={styles.learningCardTitle}>Blockchain Integration</Text>
                   <Text style={styles.learningCardDescription}>Tokenize your portfolio & access DeFi</Text>
                   <Text style={styles.learningCardMeta}>DeFi • Tokenization • Advanced</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Community Features Section (moved up) */}
+          <View style={styles.learningSection}>
+            <View style={styles.learningHeader}>
+              <View style={styles.learningHeaderLeft}>
+                <Icon name="users" size={20} color="#10B981" />
+                <Text style={styles.learningTitle}>Community Features</Text>
+              </View>
+            </View>
+            
+            <View style={styles.learningCards}>
+              <TouchableOpacity style={styles.learningCard} onPress={() => go('wealth-circles')}>
+                <View style={styles.learningCardIcon}>
+                  <Icon name="circle" size={24} color="#10B981" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={styles.learningCardTitle}>Wealth Circles</Text>
+                  <Text style={styles.learningCardDescription}>Connect with your community</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.learningCard} onPress={() => go('peer-progress')}>
+                <View style={styles.learningCardIcon}>
+                  <Icon name="trending-up" size={24} color="#F59E0B" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={styles.learningCardTitle}>Peer Progress</Text>
+                  <Text style={styles.learningCardDescription}>See community achievements</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.learningCard} onPress={() => go('trade-challenges')}>
+                <View style={styles.learningCardIcon}>
+                  <Icon name="trending-up" size={24} color="#EF4444" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={styles.learningCardTitle}>Trade Challenges</Text>
+                  <Text style={styles.learningCardDescription}>Compete with the community</Text>
                 </View>
                 <Icon name="chevron-right" size={16} color="#8E8E93" />
               </TouchableOpacity>
@@ -672,7 +996,7 @@ import { API_BASE } from '../config/api';
             
             <View style={styles.learningCards}>
               
-              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('tutor-ask-explain')}>
+              <TouchableOpacity style={styles.learningCard} onPress={() => globalNavigate('Learn', { screen: 'tutor-ask-explain' })}>
                 <View style={styles.learningCardIcon}>
                   <Icon name="help-circle" size={24} color="#34C759" />
                 </View>
@@ -683,7 +1007,7 @@ import { API_BASE } from '../config/api';
                 <Icon name="chevron-right" size={16} color="#8E8E93" />
               </TouchableOpacity>
               
-              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('tutor-quiz')}>
+              <TouchableOpacity style={styles.learningCard} onPress={() => globalNavigate('Learn', { screen: 'tutor-quiz' })}>
                 <View style={styles.learningCardIcon}>
                   <Icon name="check-circle" size={24} color="#FF9500" />
                 </View>
@@ -694,7 +1018,7 @@ import { API_BASE } from '../config/api';
                 <Icon name="chevron-right" size={16} color="#8E8E93" />
               </TouchableOpacity>
               
-              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('tutor-module')}>
+              <TouchableOpacity style={styles.learningCard} onPress={() => go('Learn', { screen: 'tutor-module' })}>
                 <View style={styles.learningCardIcon}>
                   <Icon name="book" size={24} color="#AF52DE" />
                 </View>
@@ -705,7 +1029,7 @@ import { API_BASE } from '../config/api';
                 <Icon name="chevron-right" size={16} color="#8E8E93" />
               </TouchableOpacity>
               
-              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('market-commentary')}>
+              <TouchableOpacity style={styles.learningCard} onPress={() => go('market-commentary')}>
                 <View style={styles.learningCardIcon}>
                   <Icon name="trending-up" size={24} color="#FF3B30" />
                 </View>
@@ -716,7 +1040,7 @@ import { API_BASE } from '../config/api';
                 <Icon name="chevron-right" size={16} color="#8E8E93" />
               </TouchableOpacity>
               
-              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('ai-scans')}>
+              <TouchableOpacity style={styles.learningCard} onPress={() => go('ai-scans')}>
                 <View style={styles.learningCardIcon}>
                   <Icon name="search" size={24} color="#007AFF" />
                 </View>
@@ -727,7 +1051,7 @@ import { API_BASE } from '../config/api';
                 <Icon name="chevron-right" size={16} color="#8E8E93" />
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('ai-trading-coach')}>
+              <TouchableOpacity style={styles.learningCard} onPress={() => go('ai-trading-coach')}>
                 <View style={styles.learningCardIcon}>
                   <Icon name="zap" size={24} color="#3B82F6" />
                 </View>
@@ -738,7 +1062,7 @@ import { API_BASE } from '../config/api';
                 <Icon name="chevron-right" size={16} color="#8E8E93" />
               </TouchableOpacity>
               
-              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('daily-voice-digest')}>
+              <TouchableOpacity style={styles.learningCard} onPress={() => go('daily-voice-digest')}>
                 <View style={styles.learningCardIcon}>
                   <Icon name="mic" size={24} color="#F59E0B" />
                 </View>
@@ -748,64 +1072,10 @@ import { API_BASE } from '../config/api';
                 </View>
                 <Icon name="chevron-right" size={16} color="#8E8E93" />
               </TouchableOpacity>
-              
-              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('notification-center')}>
-                <View style={styles.learningCardIcon}>
-                  <Icon name="bell" size={24} color="#8B5CF6" />
-                </View>
-                <View style={styles.learningCardContent}>
-                  <Text style={styles.learningCardTitle}>Notification Center</Text>
-                  <Text style={styles.learningCardDescription}>Manage alerts and stay informed</Text>
-                </View>
-                <Icon name="chevron-right" size={16} color="#8E8E93" />
-              </TouchableOpacity>
             </View>
           </View>
 
-          {/* Community Features Section */}
-          <View style={styles.learningSection}>
-            <View style={styles.learningHeader}>
-              <View style={styles.learningHeaderLeft}>
-                <Icon name="users" size={20} color="#10B981" />
-                <Text style={styles.learningTitle}>Community Features</Text>
-              </View>
-            </View>
-            
-            <View style={styles.learningCards}>
-              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('wealth-circles')}>
-                <View style={styles.learningCardIcon}>
-                  <Icon name="circle" size={24} color="#10B981" />
-                </View>
-                <View style={styles.learningCardContent}>
-                  <Text style={styles.learningCardTitle}>Wealth Circles</Text>
-                  <Text style={styles.learningCardDescription}>Connect with your community</Text>
-                </View>
-                <Icon name="chevron-right" size={16} color="#8E8E93" />
-              </TouchableOpacity>
-              
-              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('peer-progress')}>
-                <View style={styles.learningCardIcon}>
-                  <Icon name="trending-up" size={24} color="#F59E0B" />
-                </View>
-                <View style={styles.learningCardContent}>
-                  <Text style={styles.learningCardTitle}>Peer Progress</Text>
-                  <Text style={styles.learningCardDescription}>See community achievements</Text>
-                </View>
-                <Icon name="chevron-right" size={16} color="#8E8E93" />
-              </TouchableOpacity>
-              
-              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('trade-challenges')}>
-                <View style={styles.learningCardIcon}>
-                  <Icon name="trending-up" size={24} color="#EF4444" />
-                </View>
-                <View style={styles.learningCardContent}>
-                  <Text style={styles.learningCardTitle}>Trade Challenges</Text>
-                  <Text style={styles.learningCardDescription}>Compete with the community</Text>
-                </View>
-                <Icon name="chevron-right" size={16} color="#8E8E93" />
-              </TouchableOpacity>
-            </View>
-          </View>
+          
 
           {/* Advanced Personalization Section */}
           <View style={styles.learningSection}>
@@ -817,7 +1087,7 @@ import { API_BASE } from '../config/api';
             </View>
             
             <View style={styles.learningCards}>
-              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('personalization-dashboard')}>
+              <TouchableOpacity style={styles.learningCard} onPress={() => go('personalization-dashboard')}>
                 <View style={styles.learningCardIcon}>
                   <Icon name="user" size={24} color="#8B5CF6" />
                 </View>
@@ -828,7 +1098,7 @@ import { API_BASE } from '../config/api';
                 <Icon name="chevron-right" size={16} color="#8E8E93" />
               </TouchableOpacity>
               
-              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('behavioral-analytics')}>
+              <TouchableOpacity style={styles.learningCard} onPress={() => go('behavioral-analytics')}>
                 <View style={styles.learningCardIcon}>
                   <Icon name="trending-up" size={24} color="#10B981" />
                 </View>
@@ -839,7 +1109,7 @@ import { API_BASE } from '../config/api';
                 <Icon name="chevron-right" size={16} color="#8E8E93" />
               </TouchableOpacity>
               
-              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('dynamic-content')}>
+              <TouchableOpacity style={styles.learningCard} onPress={() => go('dynamic-content')}>
                 <View style={styles.learningCardIcon}>
                   <Icon name="zap" size={24} color="#F59E0B" />
                 </View>
@@ -850,7 +1120,7 @@ import { API_BASE } from '../config/api';
                 <Icon name="chevron-right" size={16} color="#8E8E93" />
               </TouchableOpacity>
               
-              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('ai-options')}>
+              <TouchableOpacity style={styles.learningCard} onPress={() => go('ai-options')}>
                 <View style={styles.learningCardIcon}>
                   <Icon name="layers" size={24} color="#FF2D92" />
                 </View>
@@ -870,14 +1140,14 @@ import { API_BASE } from '../config/api';
                 <Icon name="trending-up" size={20} color="#FF6B35" />
                 <Text style={styles.learningTitle}>Swing Trading</Text>
               </View>
-              <TouchableOpacity style={styles.learningButton} onPress={() => navigateTo('swing-trading-test')}>
+              <TouchableOpacity style={styles.learningButton} onPress={() => go('swing-trading-test')}>
                 <Text style={styles.learningButtonText}>Explore All</Text>
                 <Icon name="chevron-right" size={16} color="#AF52DE" />
               </TouchableOpacity>
             </View>
 
             <View style={styles.learningCards}>
-              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('swing-signals')}>
+              <TouchableOpacity style={styles.learningCard} onPress={() => go('swing-signals')}>
                 <View style={styles.learningCardIcon}>
                   <Icon name="activity" size={24} color="#FF6B35" />
                 </View>
@@ -889,7 +1159,7 @@ import { API_BASE } from '../config/api';
                 <Icon name="chevron-right" size={16} color="#8E8E93" />
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('swing-risk-coach')}>
+              <TouchableOpacity style={styles.learningCard} onPress={() => go('swing-risk-coach')}>
                 <View style={styles.learningCardIcon}>
                   <Icon name="shield" size={24} color="#10B981" />
                 </View>
@@ -901,7 +1171,7 @@ import { API_BASE } from '../config/api';
                 <Icon name="chevron-right" size={16} color="#8E8E93" />
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('swing-backtesting')}>
+              <TouchableOpacity style={styles.learningCard} onPress={() => go('swing-backtesting')}>
                 <View style={styles.learningCardIcon}>
                   <Icon name="bar-chart-2" size={24} color="#3B82F6" />
                 </View>
@@ -913,7 +1183,7 @@ import { API_BASE } from '../config/api';
                 <Icon name="chevron-right" size={16} color="#8E8E93" />
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.learningCard} onPress={() => navigateTo('swing-leaderboard')}>
+              <TouchableOpacity style={styles.learningCard} onPress={() => go('swing-leaderboard')}>
                 <View style={styles.learningCardIcon}>
                   <Icon name="award" size={24} color="#F59E0B" />
                 </View>
@@ -944,6 +1214,58 @@ import { API_BASE } from '../config/api';
   
         {/* Chat modal */}
         <ChatPanel open={chatOpen} onClose={() => setChatOpen(false)} generateAIResponse={generateAIResponse} />
+
+        {/* Calm Goal Sheet */}
+        <CalmGoalSheet
+          visible={showCalmSheet}
+          onClose={() => setShowCalmSheet(false)}
+          onConfirm={(plan) => {
+            setShowCalmSheet(false);
+            console.log('Calm goal confirmed', plan);
+            setShowLiquidityChip(true);
+            // Navigate: Home -> Invest tab -> Portfolio
+            try {
+              globalNavigate('Invest');
+              setTimeout(() => globalNavigate('Invest', { screen: 'Portfolio' }), 50);
+            } catch (e) {
+              // Fallback for legacy routing
+              go('portfolio');
+            }
+          }}
+        />
+
+        {/* Breath Check Modal */}
+        <BreathCheckModal 
+          visible={showBreathCheck} 
+          onClose={() => setShowBreathCheck(false)}
+          onComplete={(suggestion) => {
+            setShowBreathCheck(false);
+            if (suggestion) {
+              console.log('BreathCheck completed with suggestion:', suggestion);
+              setShowNextMove(true);
+            }
+          }}
+        />
+
+        {/* Next Move Modal */}
+        <NextMoveModal visible={showNextMove} onClose={() => setShowNextMove(false)} portfolioValue={resolved?.totalValue ?? 0} />
+
+        {/* Voice Capture Sheet */}
+        <VoiceCaptureSheet
+          visible={showVoice}
+          onClose={() => setShowVoice(false)}
+          onResult={(text) => {
+            const intent = parseIntent(text);
+            if (intent.type === 'calm-goal') {
+              setShowCalmSheet(true);
+              return;
+            }
+            if (intent.type === 'next-move') {
+              setShowNextMove(true);
+              return;
+            }
+          }}
+        />
       </View>
     );
   };

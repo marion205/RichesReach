@@ -28,8 +28,8 @@ REPLACEMENTS = {
     # Protocol + localhost
     'http://localhost': 'process.env.API_BASE_URL || "http://localhost"',
     'https://localhost': 'process.env.API_BASE_URL || "https://localhost"',
-    'ws://localhost': 'process.env.WS_URL || "ws://localhost"',
-    'wss://localhost': 'process.env.WS_URL || "wss://localhost"',
+    'ws://localhost': 'process.env.WS_URL || process.env.EXPO_PUBLIC_WS_URL || "ws://localhost"',
+    'wss://localhost': 'process.env.WS_URL || process.env.EXPO_PUBLIC_WS_URL || "wss://localhost"',
     
     # Specific endpoints
     'http://localhost:8000': 'process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000"',
@@ -37,6 +37,7 @@ REPLACEMENTS = {
     'http://localhost:3000': 'process.env.FRONTEND_URL || "http://localhost:3000"',
     'http://localhost:3001': 'process.env.WHISPER_API_URL || "http://localhost:3001"',
     'http://localhost:8081': 'process.env.MOBILE_SERVER_URL || "http://localhost:8081"',
+    'ws://localhost:8000/ws/': 'process.env.EXPO_PUBLIC_WS_URL || process.env.WS_URL || "ws://localhost:8000/ws/"',
     
     # Production URLs
     'http://54.160.139.56:8000': 'process.env.PRODUCTION_API_URL || "https://api.richesreach.com"',
@@ -181,9 +182,19 @@ EXPO_PUBLIC_MOBILE_SERVER_URL=http://localhost:8081
 # WEBSOCKET CONFIGURATION
 # =============================================================================
 
-# WebSocket URLs
+# WebSocket / Signaling URLs
 WS_URL=ws://localhost:8000/ws/
 EXPO_PUBLIC_WS_URL=ws://localhost:8000/ws/
+EXPO_PUBLIC_SIGNAL_URL=ws://localhost:8000/fireside
+
+# ICE/TURN (comma-separated for multiple URLs)
+EXPO_PUBLIC_TURN_URLS=
+EXPO_PUBLIC_TURN_USERNAME=
+EXPO_PUBLIC_TURN_CREDENTIAL=
+
+# Auth refresh (mobile)
+EXPO_PUBLIC_AUTH_REFRESH_PATH=/auth/refresh
+EXPO_PUBLIC_AUTH_REFRESH_MODE=cookie
 
 # =============================================================================
 # DATABASE CONFIGURATION

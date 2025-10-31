@@ -218,6 +218,17 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
     loadPosts();
   }, [loadPosts]);
 
+  // Debug: log post shape to catch invalid children
+  useEffect(() => {
+    try {
+      if (posts && posts.length) {
+        console.log('🔍 Posts Data Dump:', JSON.stringify(posts.slice(0, 2), null, 2));
+        console.log('🚨 First Post Keys:', Object.keys(posts[0] || {}));
+        console.log('🚨 User Shape:', posts[0]?.user);
+      }
+    } catch {}
+  }, [posts]);
+
   // Pick Media Function (Image or Video)
   const pickMedia = async (mediaType: 'image' | 'video') => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -337,19 +348,36 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
     transform: [{ scale: mediaScale.value }],
   }));
 
-  const renderPost = ({ item }: { item: Post }) => (
+  const renderPost = ({ item }: { item: Post }) => {
+    const safeUser = typeof (item as any).user === 'object'
+      ? (item as any).user?.name || 'Anonymous'
+      : String((item as any).user ?? 'Unknown');
+    const safeContent = typeof (item as any).content === 'object'
+      ? JSON.stringify((item as any).content).slice(0, 200)
+      : String((item as any).content ?? '');
+    const safeTimestamp = (item as any).timestamp instanceof Date
+      ? (item as any).timestamp.toLocaleString()
+      : new Date((item as any).timestamp || Date.now()).toLocaleString();
+    const safeLikes = typeof (item as any).likes === 'number'
+      ? String((item as any).likes)
+      : String(((item as any).likes?.count) ?? 0);
+    const safeComments = typeof (item as any).comments === 'number'
+      ? String((item as any).comments)
+      : String(((item as any).comments?.count) ?? 0);
+
+    return (
     <TouchableOpacity style={styles.postContainer} onPress={() => onPostPress(item.id)} activeOpacity={0.7}>
       {/* User Header */}
       <View style={styles.postHeader}>
         <Image source={{ uri: item.user.avatar }} style={styles.userAvatar} />
         <View style={styles.userInfo}>
-          <Text style={styles.userName}>{item.user.name}</Text>
-          <Text style={styles.postTimestamp}>{item.timestamp}</Text>
+          <Text style={styles.userName}>{safeUser}</Text>
+          <Text style={styles.postTimestamp}>{safeTimestamp}</Text>
         </View>
       </View>
 
       {/* Content */}
-      <Text style={styles.postContent}>{item.content}</Text>
+      <Text style={styles.postContent}>{safeContent}</Text>
 
       {/* Media */}
       {item.media && (
@@ -373,12 +401,12 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
       <View style={styles.interactions}>
         <Animated.View style={[styles.interactionButton, animatedLikeStyle]}>
           <TouchableOpacity onPress={() => toggleLike(item.id)}>
-            <Text style={[styles.interactionText, item.isLiked && styles.likedText]}>Like {item.likes}</Text>
+            <Text style={[styles.interactionText, item.isLiked && styles.likedText]}>Like {safeLikes}</Text>
           </TouchableOpacity>
         </Animated.View>
         <Animated.View style={[styles.interactionButton, animatedCommentStyle]}>
           <TouchableOpacity>
-            <Text style={styles.interactionText}>Comment {item.comments}</Text>
+            <Text style={styles.interactionText}>Comment {safeComments}</Text>
           </TouchableOpacity>
         </Animated.View>
         <TouchableOpacity style={styles.interactionButton}>
@@ -391,7 +419,7 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
         <View style={styles.voiceAIContainer}>
           <Text style={styles.voiceAILabel}>AI Financial Advisor</Text>
           <VoiceAI
-            text={generateAIResponse(item.content)}
+            text={generateAIResponse(safeContent)}
             voice={voiceAISettings.voice as any}
             speed={voiceAISettings.speed}
             emotion={voiceAISettings.emotion as any}
@@ -404,6 +432,7 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
       <View style={styles.divider} />
     </TouchableOpacity>
   );
+  };
 
   const startLiveStream = () => {
     setIsLiveHost(true);
@@ -441,7 +470,7 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
     setVoiceAISettings(settings);
   };
 
-  const generateAIResponse = async (postContent: string): Promise<string> => {
+  const generateAIResponse = (postContent: string): string => {
     // Simulate AI response generation
     const responses = [
       `Based on your post about "${postContent.slice(0, 30)}...", here's my analysis: The market trends suggest a positive outlook for this sector. Consider diversifying your portfolio to manage risk effectively.`,
@@ -462,8 +491,8 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
             <Text style={styles.backButtonText}>←</Text>
           </TouchableOpacity>
           <View style={styles.headerContent}>
-            <Text style={styles.headerTitle}>{circle.name}</Text>
-            <Text style={styles.memberCount}>{circle.memberCount} members • {circle.category}</Text>
+            <Text style={styles.headerTitle}>{String(circle.name)}</Text>
+            <Text style={styles.memberCount}>{String((circle as any).memberCount || (circle as any).member_count || 0)} members • {String((circle as any).category || (circle as any).cultural_focus || '')}</Text>
           </View>
           <TouchableOpacity style={styles.headerAction}>
             <Text style={styles.headerActionText}>...</Text>
@@ -472,7 +501,7 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
 
         {/* Circle Description */}
         <ScrollView style={styles.descriptionScroll} showsVerticalScrollIndicator={false}>
-          <Text style={styles.circleDescription}>{circle.description}</Text>
+          <Text style={styles.circleDescription}>{String(circle.description)}</Text>
         </ScrollView>
 
         {/* Quick Actions Bar */}

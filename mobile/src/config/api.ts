@@ -10,6 +10,8 @@ import { Platform } from 'react-native';
 const ENV_API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 
 const prodHost = "http://api.richesreach.com:8000";
+// Default to localhost - works for iOS Simulator
+// For physical devices, set EXPO_PUBLIC_API_BASE_URL to your Mac's LAN IP
 const localHost = process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
 // Use environment variable if available, otherwise use localhost for development
@@ -24,9 +26,10 @@ if (!__DEV__ && badHost) {
   throw new Error(`Invalid API_BASE in release: ${API_BASE}`);
 }
 
-// Optional stricter guard: even in dev on device, block localhost
-if (Platform.OS !== 'web' && /localhost|127\.0\.0\.1/.test(API_BASE)) {
-  console.warn("⚠️ API_BASE points to localhost on a device. Use LAN IP instead.");
+// iOS Simulator can use localhost, physical devices need LAN IP
+// Only warn for physical devices (not simulator)
+if (Platform.OS !== 'web' && Platform.OS !== 'ios' && /localhost|127\.0\.0\.1/.test(API_BASE)) {
+  console.warn("⚠️ API_BASE points to localhost on a physical device. Use LAN IP instead.");
 }
 
 // Fail fast if no API base URL is configured

@@ -72,14 +72,19 @@ interface CircleActivity {
 }
 
 interface WealthCircles2Props {
-  onCirclePress: (circle: WealthCircle) => void;
-  onCreateCircle: () => void;
-  onJoinCircle: (circleId: string) => void;
+  onCirclePress?: (circle: WealthCircle) => void;
+  onCreateCircle?: () => void;
+  onJoinCircle?: (circleId: string) => void;
 }
 
 export default function WealthCircles2({ onCirclePress, onCreateCircle, onJoinCircle }: WealthCircles2Props) {
   console.log('🚀 WealthCircles2: Component rendering - Version 2.3');
   
+  // Provide safe no-ops if not supplied (when used via navigator)
+  onCirclePress = onCirclePress || (() => {});
+  onCreateCircle = onCreateCircle || (() => {});
+  onJoinCircle = onJoinCircle || (() => {});
+
   try {
     const theme = useTheme();
   // Force component refresh - Version 2.1 - Fixed prop mismatch

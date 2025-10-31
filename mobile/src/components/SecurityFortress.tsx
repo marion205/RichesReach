@@ -241,7 +241,7 @@ export default function SecurityFortress({ onBiometricSetup, onSecurityEventPres
           <View style={styles.overviewContent}>
             {/* Security Score */}
             <View style={styles.securityScoreCard}>
-              <View intensity={20} style={styles.securityScoreBlur}>
+              <View style={styles.securityScoreBlur}>
                 <View style={styles.securityScoreHeader}>
                   <Text style={styles.securityScoreTitle}>Security Score</Text>
                   <Animated.View
@@ -387,7 +387,7 @@ export default function SecurityFortress({ onBiometricSetup, onSecurityEventPres
               },
             ].map((setting) => (
               <View key={setting.key} style={styles.biometricSetting}>
-                <View intensity={20} style={styles.biometricSettingBlur}>
+                <View style={styles.biometricSettingBlur}>
                   <View style={styles.biometricSettingHeader}>
                     <View style={[styles.biometricIcon, { backgroundColor: setting.color }]}>
                       <Text style={styles.biometricIconText}>{setting.icon}</Text>
@@ -495,7 +495,7 @@ export default function SecurityFortress({ onBiometricSetup, onSecurityEventPres
 function SecurityEventCard({ event, onPress, getThreatLevelColor, getThreatLevelIcon }: any) {
   return (
     <TouchableOpacity style={styles.eventCard} onPress={onPress}>
-      <View intensity={20} style={styles.eventBlur}>
+      <View style={styles.eventBlur}>
         <View style={styles.eventHeader}>
           <Text style={styles.eventIcon}>{getThreatLevelIcon(event.threatLevel)}</Text>
           <View style={styles.eventInfo}>
@@ -526,7 +526,7 @@ function SecurityEventCard({ event, onPress, getThreatLevelColor, getThreatLevel
 function ComplianceCard({ compliance }: any) {
   return (
     <View style={styles.complianceCard}>
-      <View intensity={20} style={styles.complianceBlur}>
+      <View style={styles.complianceBlur}>
         <View style={styles.complianceHeader}>
           <Text style={styles.complianceStandard}>{compliance.standard}</Text>
           <View style={[styles.complianceStatus, { backgroundColor: compliance.color }]}>

@@ -123,6 +123,7 @@ export default function LoginScreen({ onLogin, onNavigateToSignUp, onNavigateToF
   return (
     <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
       <Image source={require('../../../../assets/whitelogo1.png')} style={styles.logo} resizeMode="contain" />
+      <Text style={styles.tagline}>Think Rich. Reach Further.</Text>
       <View style={styles.form}>
         <TextInput
           placeholder="Email"
@@ -179,6 +180,13 @@ const styles = StyleSheet.create({
     height: 200,
     marginBottom: 30,
     resizeMode: 'contain',
+  },
+  tagline: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#00cc99',
+    marginTop: -20,
+    marginBottom: 20,
   },
   form: {
     width: '100%',

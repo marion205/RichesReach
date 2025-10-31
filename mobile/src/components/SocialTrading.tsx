@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import { useQuery, useMutation, gql } from '@apollo/client';
 import { Ionicons } from '@expo/vector-icons';
+import { globalNavigate } from '../navigation/NavigationService';
 import NewsFeed from '../features/social/components/NewsFeed';
 
 // GraphQL Queries and Mutations
@@ -220,14 +221,16 @@ interface SocialTradingProps {
   userId: string;
   onTraderSelect?: (trader: TopTrader) => void;
   onTradeCopy?: (trade: TradeData) => void;
+  initialTab?: 'feed' | 'traders' | 'signals' | 'news';
 }
 
 export const SocialTrading: React.FC<SocialTradingProps> = ({
   userId,
   onTraderSelect,
   onTradeCopy,
+  initialTab = 'feed',
 }) => {
-  const [activeTab, setActiveTab] = useState<'feed' | 'traders' | 'signals' | 'news'>('feed');
+  const [activeTab, setActiveTab] = useState<'feed' | 'traders' | 'signals' | 'news'>(initialTab);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState('1M');
 
@@ -644,9 +647,25 @@ export const SocialTrading: React.FC<SocialTradingProps> = ({
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Social Trading</Text>
-        <TouchableOpacity style={styles.headerButton}>
-          <Ionicons name="search-outline" size={24} color="#fff" />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <TouchableOpacity style={styles.headerButton} onPress={() => {
+            try {
+              // Profile is in HomeStack, use nested navigation
+              globalNavigate('Home', { screen: 'Profile' });
+            } catch {
+              try {
+                globalNavigate('Profile');
+              } catch (error) {
+                console.error('Profile navigation error:', error);
+              }
+            }
+          }}>
+            <Ionicons name="person-circle-outline" size={26} color="#1a1a1a" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.headerButton}>
+            <Ionicons name="search-outline" size={24} color="#1a1a1a" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Tab Navigation */}

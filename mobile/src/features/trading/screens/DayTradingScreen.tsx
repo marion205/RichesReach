@@ -17,6 +17,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import SparkMini from '../../../components/charts/SparkMini';
 import * as Haptics from 'expo-haptics';
 import * as Speech from 'expo-speech';
+import { API_HTTP } from '../../../config/api';
 import { useVoice } from '../../../contexts/VoiceContext';
 
 type TradingMode = 'SAFE' | 'AGGRESSIVE';
@@ -119,7 +120,7 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
       speakText(`${selectedVoice.name}: Executing ${side} trade for ${pick.symbol}`);
       
       // Mock trade execution (replace with real API call)
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000"}/api/mobile/gesture-trade/`, {
+      const response = await fetch(`${API_HTTP}/api/mobile/gesture-trade/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -252,7 +253,37 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
   });
 
   const dayTradingData: DayTradingData | null = data?.dayTradingPicks ?? null;
-  const picks = dayTradingData?.picks ?? [];
+
+  // Mock data to allow UI preview when server is unreachable
+  const getMockDayTradingData = useCallback((): DayTradingData => ({
+    as_of: new Date().toISOString(),
+    mode,
+    universe_size: 150,
+    quality_threshold: 1.2,
+    picks: [
+      {
+        symbol: 'AAPL', side: 'LONG', score: 1.8,
+        features: { momentum_15m: 0.12, rvol_10m: 1.8, vwap_dist: 0.03, breakout_pct: 0.04, spread_bps: 2, catalyst_score: 0.6 },
+        risk: { atr_5m: 0.5, size_shares: 50, stop: 171.2, targets: [173.8, 175.2], time_stop_min: 45 },
+        notes: 'VWAP reclaim + earnings drift'
+      },
+      {
+        symbol: 'NVDA', side: 'LONG', score: 2.3,
+        features: { momentum_15m: 0.18, rvol_10m: 2.1, vwap_dist: 0.02, breakout_pct: 0.06, spread_bps: 3, catalyst_score: 0.7 },
+        risk: { atr_5m: 1.6, size_shares: 20, stop: 120.1, targets: [122.4, 124.0], time_stop_min: 45 },
+        notes: 'High RVOL momentum with clean levels'
+      },
+      {
+        symbol: 'TSLA', side: 'SHORT', score: 1.1,
+        features: { momentum_15m: -0.09, rvol_10m: 1.3, vwap_dist: -0.04, breakout_pct: -0.03, spread_bps: 4, catalyst_score: 0.3 },
+        risk: { atr_5m: 1.2, size_shares: 15, stop: 245.5, targets: [242.1, 240.7], time_stop_min: 30 },
+        notes: 'Rejection at premarket high; mean reversion'
+      },
+    ],
+  }), [mode]);
+
+  const effectiveData: DayTradingData | null = dayTradingData || (error ? getMockDayTradingData() : null);
+  const picks = effectiveData?.picks ?? [];
 
   // --- helpers ---
   const isMarketHours = useCallback(() => {
@@ -640,8 +671,8 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
               </TouchableOpacity>
             )}
             <View style={styles.headerText}>
-              <Text style={[styles.title, { color: C.text }]}>Daily Top-3 Picks</Text>
-              <Text style={[styles.subtitle, { color: C.sub }]}>Intraday Trading Opportunities</Text>
+              <Text style={[styles.title, { color: C.text }]}>Trading</Text>
+              <Text style={[styles.subtitle, { color: C.sub }]}>Execute trades and manage signals</Text>
             </View>
           </View>
           {navigateTo && (
@@ -739,21 +770,7 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
     );
   }
 
-  if (error) {
-    return (
-      <View style={[styles.container, { backgroundColor: C.bg }]}>
-        <View style={styles.errorContainer}>
-          <Icon name="alert-triangle" size={48} color={C.short} />
-          <Text style={[styles.errorText, { color: C.short }]}>
-            Error loading picks: {error.message}
-          </Text>
-          <TouchableOpacity style={[styles.retryBtn, { backgroundColor: C.primary }]} onPress={onRefresh}>
-            <Text style={styles.retryBtnText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
+  // If network fails, we still render the mock data to preview the UI
 
   return (
     <PanGestureHandler

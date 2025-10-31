@@ -1,6 +1,6 @@
 import React, { useCallback } from 'react';
 import { useNavigation } from '@react-navigation/native';
-import DayTradingScreen from '../features/trading/screens/DayTradingScreen';
+import TradingScreen from '../features/stocks/screens/TradingScreen';
 
 export default function TradingScreenWrapper() {
   const navigation = useNavigation<any>();
@@ -22,7 +22,7 @@ export default function TradingScreenWrapper() {
     navigation.navigate(screen as never, params as never);
   }, [navigation]);
 
-  return <DayTradingScreen navigateTo={navigateTo} />;
+  return <TradingScreen navigateTo={navigateTo} />;
 }
 
 

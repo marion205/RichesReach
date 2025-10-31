@@ -14,6 +14,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { useQuery, useMutation, useApolloClient } from '@apollo/client';
+import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import RebalancingStorageService from '../features/portfolio/services/RebalancingStorageService';
 import RebalancingResultsDisplay from '../features/portfolio/components/RebalancingResultsDisplay';
@@ -385,6 +386,7 @@ const mockOptionsData = {
 };
 
 const PremiumAnalyticsScreen = ({ navigateTo }) => {
+  const navigation = useNavigation<any>();
   const [activeTab, setActiveTab] = useState('metrics');
   const [refreshing, setRefreshing] = useState(false);
   const [selectedSymbol, setSelectedSymbol] = useState('AAPL');
@@ -394,6 +396,11 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
   
   // Apollo Client for manual queries
   const client = useApolloClient();
+  
+  // Fallback navigateTo if not provided
+  const safeNavigateTo = navigateTo || ((screen: string, params?: any) => {
+    navigation.navigate(screen as never, params as never);
+  });
   
   // Stock Screening state
   const [screeningFilters, setScreeningFilters] = useState({
@@ -1473,11 +1480,11 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigateTo('portfolio')}>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
           <Icon name="arrow-left" size={24} color="#1f2937" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Premium Analytics</Text>
-        <TouchableOpacity onPress={() => navigateTo('subscription')}>
+        <TouchableOpacity onPress={() => safeNavigateTo('subscription')}>
           <Icon name="star" size={24} color="#FFD700" />
         </TouchableOpacity>
       </View>

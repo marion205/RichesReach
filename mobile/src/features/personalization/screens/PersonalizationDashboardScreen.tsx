@@ -11,10 +11,12 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useNavigation } from '@react-navigation/native';
 
 const { width } = Dimensions.get('window');
 
 export default function PersonalizationDashboardScreen() {
+  const navigation = useNavigation<any>();
   const [loading, setLoading] = useState(false);
   const [engagementProfile, setEngagementProfile] = useState({
     engagement_level: 'high',
@@ -246,17 +248,26 @@ export default function PersonalizationDashboardScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>⚙️ Personalization Settings</Text>
         <View style={styles.settingsCard}>
-          <TouchableOpacity style={styles.settingItem}>
+          <TouchableOpacity 
+            style={styles.settingItem}
+            onPress={() => navigation.navigate('notification-center')}
+          >
             <Ionicons name="notifications" size={24} color="#8B5CF6" />
             <Text style={styles.settingText}>Smart Notifications</Text>
             <Ionicons name="chevron-forward" size={20} color="#8E8E93" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.settingItem}>
+          <TouchableOpacity 
+            style={styles.settingItem}
+            onPress={() => navigation.navigate('dynamic-content')}
+          >
             <Ionicons name="refresh" size={24} color="#8B5CF6" />
             <Text style={styles.settingText}>Content Adaptation</Text>
             <Ionicons name="chevron-forward" size={20} color="#8E8E93" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.settingItem}>
+          <TouchableOpacity 
+            style={styles.settingItem}
+            onPress={() => navigation.navigate('behavioral-analytics')}
+          >
             <Ionicons name="analytics" size={24} color="#8B5CF6" />
             <Text style={styles.settingText}>Behavior Tracking</Text>
             <Ionicons name="chevron-forward" size={20} color="#8E8E93" />

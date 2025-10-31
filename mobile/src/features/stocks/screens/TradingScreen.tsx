@@ -349,8 +349,38 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
     stopPolling: stopOrdersPolling,
   } = useQuery(GET_TRADING_ORDERS, { variables: { limit: 20 }, errorPolicy: 'all', notifyOnNetworkStatusChange: true });
 
-  const { data: dayTradingData, loading: dayTradingLoading, refetch: refetchDayTrading } =
-    useQuery(GET_DAY_TRADING_PICKS, { variables: { mode: dayTradingMode }, errorPolicy: 'all' });
+  const { data: dayTradingData, loading: dayTradingLoading, refetch: refetchDayTrading, startPolling: startDayTradingPolling, stopPolling: stopDayTradingPolling } =
+    useQuery(GET_DAY_TRADING_PICKS, { variables: { mode: dayTradingMode }, errorPolicy: 'all', notifyOnNetworkStatusChange: true });
+
+  // Track new day-trading picks for badge
+  const prevAsOfRef = useRef<string | null>(null);
+  const [hasNewPicks, setHasNewPicks] = useState(false);
+
+  const isMarketHours = useCallback(() => {
+    const now = new Date();
+    const day = now.getDay(); // 0 Sun .. 6 Sat
+    if (day === 0 || day === 6) return false;
+    const mins = now.getHours() * 60 + now.getMinutes();
+    return mins >= 9 * 60 + 30 && mins <= 16 * 60; // 9:30 - 16:00
+  }, []);
+
+  useEffect(() => {
+    const asOf: string | undefined = dayTradingData?.dayTradingPicks?.as_of || dayTradingData?.dayTradingPicks?.asOf;
+    if (asOf) {
+      if (prevAsOfRef.current && prevAsOfRef.current !== asOf) {
+        setHasNewPicks(true);
+        setTimeout(() => setHasNewPicks(false), 120000); // clear after 2 min
+      }
+      prevAsOfRef.current = asOf;
+    }
+  }, [dayTradingData]);
+
+  // Light polling during market hours to surface the badge
+  useEffect(() => {
+    if (isMarketHours()) startDayTradingPolling?.(90_000);
+    else stopDayTradingPolling?.();
+    return () => stopDayTradingPolling?.();
+  }, [isMarketHours, startDayTradingPolling, stopDayTradingPolling]);
 
   // Debounced quote fetch when typing a symbol
   const {
@@ -703,7 +733,7 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
                 </View>
               )}
 
-              {/* Day Trading Button - Always Visible */}
+        {/* Day Trading Button - Always Visible */}
               <TouchableOpacity 
                 style={styles.dayTradingButton}
                 onPress={() => navigateTo('day-trading')}
@@ -714,6 +744,11 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
                     <Text style={styles.dayTradingButtonTitle}>Daily Top-3 Picks</Text>
                     <Text style={styles.dayTradingButtonSubtitle}>AI-powered intraday opportunities</Text>
                   </View>
+            {hasNewPicks && (
+              <View style={styles.newBadge}>
+                <Text style={styles.newBadgeText}>NEW</Text>
+              </View>
+            )}
                   <Icon name="chevron-right" size={20} color="#fff" />
                 </View>
               </TouchableOpacity>
@@ -736,6 +771,22 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
           </View>
           <Text style={styles.coachDescription}>Get quick trading advice & strategies</Text>
           <Text style={styles.coachMeta}>Real-time • Assistance</Text>
+        </TouchableOpacity>
+
+        {/* Day Trading - Always Visible Link */}
+        <TouchableOpacity 
+          style={styles.card}
+          onPress={() => navigateTo('day-trading')}
+        >
+          <View style={styles.cardHeader}>
+            <View style={styles.coachHeader}>
+              <Icon name="trending-up" size={20} color="#2196F3" />
+              <Text style={styles.cardTitle}>Daily Top-3 Picks</Text>
+            </View>
+            <Icon name="chevron-right" size={16} color="#8E8E93" />
+          </View>
+          <Text style={styles.coachDescription}>AI-powered intraday opportunities</Text>
+          <Text style={styles.coachMeta}>Intraday • Signals</Text>
         </TouchableOpacity>
 
         {/* Positions Header */}
@@ -1063,10 +1114,19 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
           <Icon name="arrow-left" size={22} color={C.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Trading</Text>
-        <TouchableOpacity onPress={() => setShowOrderModal(true)} style={styles.headerAction}>
-          <Icon name="plus" size={20} color={C.primary} />
-          <Text style={styles.headerActionText}>Order</Text>
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity onPress={() => navigateTo('risk-management')} style={[styles.headerPill, { backgroundColor: '#FEE2E2' }]}
+            accessibilityLabel="Risk">
+            <Icon name="shield" size={16} color="#EF4444" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => navigateTo('ml-system')} style={[styles.headerPill, { backgroundColor: '#EDE9FE' }]} accessibilityLabel="ML">
+            <Icon name="cpu" size={16} color="#7C3AED" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setShowOrderModal(true)} style={styles.headerAction} accessibilityLabel="New order">
+            <Icon name="plus" size={20} color={C.primary} />
+            <Text style={styles.headerActionText}>Order</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Tabs */}
@@ -1173,8 +1233,10 @@ const styles = StyleSheet.create({
     shadowColor: C.shadow, shadowOpacity: 1, shadowRadius: 8, shadowOffset: { width:0, height:2 }, elevation:2,
   },
   headerTitle: { fontSize:18, fontWeight:'700', color: C.text },
+  headerActions: { flexDirection:'row', alignItems:'center', gap:8 },
   headerAction: { flexDirection:'row', alignItems:'center', gap:6, paddingHorizontal:10, paddingVertical:6, borderRadius:8, backgroundColor:'#F4F7FF' },
   headerActionText: { color: C.primary, fontWeight:'700' },
+  headerPill: { paddingHorizontal:10, paddingVertical:6, borderRadius:8 },
 
   tabs: {
     flexDirection:'row', backgroundColor: C.bg, padding:12, gap:8,
@@ -1454,6 +1516,18 @@ const styles = StyleSheet.create({
   dayTradingButtonSubtitle: {
     fontSize: 12,
     color: 'rgba(255, 255, 255, 0.8)',
+  },
+  newBadge: {
+    backgroundColor: '#34C759',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    marginRight: 8,
+  },
+  newBadgeText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '800',
   },
 
   // Daily Picks Styles

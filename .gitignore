@@ -89,3 +89,15 @@ setup-aws-secrets.sh
 backend/constraints.lock
 backend/backend/env.secrets
 backend/backend/env.secrets
+
+# Development-only files (don't commit to production)
+*.bak.*
+*.bak
+mobile/app.json.bak.*
+mobile/automated-demo-recordings/
+mobile/demo-recordings/
+backend/create_sample_training_data.py
+backend/train_wake_word_model.py
+setup_ml_wake_word.sh
+free_mac_space.sh
+.env.example

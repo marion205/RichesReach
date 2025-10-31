@@ -30,6 +30,12 @@
           <string>com.richesreach.app</string>
         </array>
       </dict>
+      <dict>
+        <key>CFBundleURLSchemes</key>
+        <array>
+          <string>exp+richesreach-ai</string>
+        </array>
+      </dict>
     </array>
     <key>CFBundleVersion</key>
     <string>1</string>
@@ -45,7 +51,7 @@
       <true/>
     </dict>
     <key>NSCameraUsageDescription</key>
-    <string>This app uses the camera to scan financial documents and QR codes.</string>
+    <string>AR preview requires camera</string>
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>This app uses location to provide location-based financial services and market data.</string>
     <key>NSMicrophoneUsageDescription</key>
@@ -53,11 +59,11 @@
     <key>NSPhotoLibraryUsageDescription</key>
     <string>This app accesses your photo library to upload profile pictures and financial documents.</string>
     <key>NSSpeechRecognitionUsageDescription</key>
-    <string>This app uses speech recognition to convert your voice commands into text for AI processing.</string>
+    <string>Voice commands for coaching</string>
     <key>NSUserTrackingUsageDescription</key>
     <string>This app uses tracking to provide personalized financial insights and recommendations.</string>
     <key>RCTNewArchEnabled</key>
-    <false/>
+    <true/>
     <key>UILaunchStoryboardName</key>
     <string>SplashScreen</string>
     <key>UIRequiredDeviceCapabilities</key>
