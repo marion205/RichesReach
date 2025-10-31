@@ -13,7 +13,7 @@ class Settings:
         self.FINNHUB_KEY = os.getenv("FINNHUB_API_KEY", "d2rnitpr01qv11lfegugd2rnitpr01qv11lfegv0")
         self.FINNHUB_RPS = int(os.getenv("FINNHUB_RPS", "60"))  # Finnhub requests per second limit
         self.NEWS_API_KEY = os.getenv("NEWS_API_KEY", "94a335c7316145f79840edd62f77e11e")
-        self.OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", """")
+        self.OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")  # No default - must be set via environment
         
         # Database
         self.DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./richesreach.db")
