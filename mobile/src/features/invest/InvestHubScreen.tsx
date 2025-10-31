@@ -20,7 +20,6 @@ export default function InvestHubScreen() {
       { key: 'crypto', title: 'Crypto', subtitle: 'Track & research', icon: 'zap', to: 'Crypto' },
       { key: 'ai', title: 'AI Portfolio', subtitle: 'Smart recs & rebalance', icon: 'cpu', to: 'AIPortfolio' },
       { key: 'tomorrow', title: 'Tomorrow', subtitle: 'Trade tomorrow\'s markets today', icon: 'calendar', to: 'Tomorrow' },
-      { key: 'screen', title: 'Screeners', subtitle: 'Find opportunities', icon: 'filter', to: 'stock-screening' },
       { key: 'trade', title: 'Trading', subtitle: 'Live & options', icon: 'activity', to: 'trading' },
       { key: 'portfolio', title: 'Portfolio', subtitle: 'Positions & P/L', icon: 'pie-chart', to: 'Portfolio' },
     ],
