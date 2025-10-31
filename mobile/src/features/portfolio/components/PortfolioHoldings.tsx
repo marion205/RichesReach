@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Icon from 'react-native-vector-icons/Feather';
 
 interface Holding {
   symbol: string;
@@ -9,53 +10,130 @@ interface Holding {
   totalValue: number;
   change: number;
   changePercent: number;
+  name?: string; // Optional company name
 }
 
 interface PortfolioHoldingsProps {
   holdings: Holding[];
   onStockPress: (symbol: string) => void;
+  onAddHoldings?: () => void; // Callback for empty state action
 }
 
 const PortfolioHoldings: React.FC<PortfolioHoldingsProps> = ({ 
   holdings, 
-  onStockPress 
+  onStockPress,
+  onAddHoldings,
 }) => {
+  // Calculate total portfolio value
+  const totalValue = holdings.reduce((sum, h) => sum + (h.totalValue || 0), 0);
+
+  // Empty state - Steve Jobs style: Inspiring, not discouraging
   if (!holdings || holdings.length === 0) {
     return (
       <View style={styles.emptyContainer}>
-        <Ionicons name="pie-chart-outline" size={48} color="#666" />
-        <Text style={styles.emptyText}>No holdings available</Text>
+        <View style={styles.emptyIllustration}>
+          <Icon name="trending-up" size={64} color="#007AFF" />
+        </View>
+        <Text style={styles.emptyTitle}>Your portfolio journey starts here</Text>
+        <Text style={styles.emptySubtitle}>
+          Add your first stock to begin tracking your investment performance
+        </Text>
+        {onAddHoldings && (
+          <TouchableOpacity 
+            style={styles.emptyActionButton}
+            onPress={onAddHoldings}
+            activeOpacity={0.8}
+          >
+            <Icon name="plus" size={20} color="#FFFFFF" />
+            <Text style={styles.emptyActionText}>Add Your First Stock</Text>
+          </TouchableOpacity>
+        )}
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Portfolio Holdings</Text>
-      {holdings.map((holding, index) => (
-        <TouchableOpacity
-          key={`${holding.symbol}-${index}`}
-          style={styles.holdingItem}
-          onPress={() => onStockPress(holding.symbol)}
-        >
-          <View style={styles.holdingInfo}>
-            <Text style={styles.symbol}>{holding.symbol}</Text>
-            <Text style={styles.quantity}>{holding.quantity} shares</Text>
+      {/* Header with total value */}
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.title}>Portfolio Holdings</Text>
+          <Text style={styles.count}>{holdings.length} {holdings.length === 1 ? 'holding' : 'holdings'}</Text>
+        </View>
+        {totalValue > 0 && (
+          <View style={styles.totalContainer}>
+            <Text style={styles.totalLabel}>Total</Text>
+            <Text style={styles.totalValue}>${totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
           </View>
-          <View style={styles.holdingValue}>
-            <Text style={styles.totalValue}>
-              ${(holding.totalValue || 0).toFixed(2)}
-            </Text>
-            <Text style={[
-              styles.change,
-              { color: (holding.change || 0) >= 0 ? '#4CAF50' : '#F44336' }
-            ]}>
-              {(holding.change || 0) >= 0 ? '+' : ''}${(holding.change || 0).toFixed(2)} 
-              ({(holding.changePercent || 0) >= 0 ? '+' : ''}{(holding.changePercent || 0).toFixed(2)}%)
-            </Text>
-          </View>
-        </TouchableOpacity>
-      ))}
+        )}
+      </View>
+
+      {/* Holdings list */}
+      {holdings.map((holding, index) => {
+        const isPositive = (holding.change || 0) >= 0;
+        const changeColor = isPositive ? '#34C759' : '#FF3B30';
+        const allocationPercent = totalValue > 0 ? ((holding.totalValue || 0) / totalValue) * 100 : 0;
+        
+        return (
+          <TouchableOpacity
+            key={`${holding.symbol}-${index}`}
+            style={[
+              styles.holdingCard,
+              index === holdings.length - 1 && styles.lastCard,
+            ]}
+            onPress={() => onStockPress(holding.symbol)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.holdingContent}>
+              {/* Left: Symbol and details */}
+              <View style={styles.holdingLeft}>
+                <View style={styles.symbolRow}>
+                  <Text style={styles.symbol}>{holding.symbol}</Text>
+                  {allocationPercent > 0 && (
+                    <View style={styles.allocationBadge}>
+                      <Text style={styles.allocationText}>{allocationPercent.toFixed(0)}%</Text>
+                    </View>
+                  )}
+                </View>
+                {holding.name && (
+                  <Text style={styles.companyName} numberOfLines={1}>
+                    {holding.name}
+                  </Text>
+                )}
+                <Text style={styles.quantity}>
+                  {holding.quantity} {holding.quantity === 1 ? 'share' : 'shares'}
+                </Text>
+              </View>
+
+              {/* Right: Value and performance */}
+              <View style={styles.holdingRight}>
+                <Text style={styles.holdingValue}>
+                  ${(holding.totalValue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </Text>
+                
+                {/* Performance indicator */}
+                <View style={styles.performanceRow}>
+                  <View style={[styles.performanceBadge, { backgroundColor: `${changeColor}15` }]}>
+                    <Icon 
+                      name={isPositive ? 'trending-up' : 'trending-down'} 
+                      size={12} 
+                      color={changeColor} 
+                    />
+                    <Text style={[styles.performanceText, { color: changeColor }]}>
+                      {isPositive ? '+' : ''}{holding.changePercent?.toFixed(2) || '0.00'}%
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Gain/Loss amount */}
+                <Text style={[styles.changeAmount, { color: changeColor }]}>
+                  {isPositive ? '+' : ''}${(holding.change || 0).toFixed(2)}
+                </Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+        );
+      })}
     </View>
   );
 };
@@ -63,66 +141,175 @@ const PortfolioHoldings: React.FC<PortfolioHoldingsProps> = ({
 const styles = StyleSheet.create({
   container: {
     backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginVertical: 8,
+    borderRadius: 16,
+    padding: 20,
+    marginVertical: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 20,
+    paddingBottom: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E5E5EA',
   },
   title: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 12,
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#000',
+    marginBottom: 4,
   },
-  holdingItem: {
+  count: {
+    fontSize: 15,
+    color: '#8E8E93',
+  },
+  totalContainer: {
+    alignItems: 'flex-end',
+  },
+  totalLabel: {
+    fontSize: 13,
+    color: '#8E8E93',
+    marginBottom: 2,
+  },
+  totalValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#000',
+  },
+  holdingCard: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+  },
+  lastCard: {
+    marginBottom: 0,
+  },
+  holdingContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
   },
-  holdingInfo: {
+  holdingLeft: {
     flex: 1,
+    marginRight: 12,
+  },
+  symbolRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
   },
   symbol: {
-    fontSize: 16,
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#000',
+    marginRight: 8,
+  },
+  allocationBadge: {
+    backgroundColor: '#E5E5EA',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  allocationText: {
+    fontSize: 11,
     fontWeight: '600',
-    color: '#333',
+    color: '#8E8E93',
+  },
+  companyName: {
+    fontSize: 15,
+    color: '#8E8E93',
+    marginBottom: 6,
   },
   quantity: {
     fontSize: 14,
-    color: '#666',
-    marginTop: 2,
+    color: '#8E8E93',
   },
-  holdingValue: {
+  holdingRight: {
     alignItems: 'flex-end',
   },
-  totalValue: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
+  holdingValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#000',
+    marginBottom: 6,
   },
-  change: {
-    fontSize: 14,
-    marginTop: 2,
+  performanceRow: {
+    marginBottom: 4,
+  },
+  performanceBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    gap: 4,
+  },
+  performanceText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  changeAmount: {
+    fontSize: 15,
+    fontWeight: '600',
   },
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 32,
+    padding: 48,
     backgroundColor: '#fff',
-    borderRadius: 12,
-    marginVertical: 8,
+    borderRadius: 16,
+    marginVertical: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  emptyText: {
+  emptyIllustration: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: '#F0F8FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+  emptyTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#000',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  emptySubtitle: {
     fontSize: 16,
-    color: '#666',
-    marginTop: 8,
+    color: '#8E8E93',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 24,
+  },
+  emptyActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 8,
+  },
+  emptyActionText: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 });
 
