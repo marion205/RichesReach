@@ -6,7 +6,7 @@ Simple: Check before every trade
 """
 
 import logging
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 from enum import Enum
 
 from core.futures.why_not import WhyNotResponse, why_not_guardrail, why_not_suitability
