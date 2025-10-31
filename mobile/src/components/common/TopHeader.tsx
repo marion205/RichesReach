@@ -21,9 +21,9 @@ const TopHeader: React.FC<TopHeaderProps> = ({ currentScreen, onNavigate, title 
       case 'trading': return 'Trading';
       case 'portfolio': return 'Portfolio';
       case 'social': return 'Community';
-      case 'tutor': return 'AI Tutor';
+      case 'tutor': return 'Learn';
       case 'ai-options': return 'AI Options';
-      case 'options-copilot': return 'Options Copilot';
+      case 'options-copilot': return 'Advanced';
       case 'scan-playbook': return 'Scan Details';
       default: return 'RichesReach';
     }

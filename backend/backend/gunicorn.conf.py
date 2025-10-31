@@ -1,4 +1,4 @@
-# Gunicorn configuration for production
+# Gunicorn configuration for production (optimized for FastAPI/Uvicorn)
 import multiprocessing
 import os
 
@@ -6,12 +6,13 @@ import os
 bind = "0.0.0.0:8000"
 backlog = 2048
 
-# Worker processes
-workers = int(os.getenv('GUNICORN_WORKERS', multiprocessing.cpu_count() * 2 + 1))
-worker_class = "sync"
-worker_connections = 1000
+# Worker processes - use UvicornWorker for async FastAPI
+workers = int(os.getenv('GUNICORN_WORKERS', multiprocessing.cpu_count()))
+worker_class = "uvicorn.workers.UvicornWorker"
+threads = 1  # Uvicorn handles async, no threads needed
 timeout = 60
-keepalive = 2
+graceful_timeout = 30
+keepalive = 75  # Longer keepalive for better HTTP/2 support
 
 # Restart workers after this many requests, to help prevent memory leaks
 max_requests = 1000
@@ -37,8 +38,14 @@ tmp_upload_dir = None
 # keyfile = '/path/to/keyfile'
 # certfile = '/path/to/certfile'
 
-# Preload app for better performance
-preload_app = True
+# Preload app - disable if ONNX/ORT models aren't fork-safe
+preload_app = False
+
+# Uvicorn tuning via environment
+raw_env = [
+    "UVICORN_HTTP=httptools",
+    "UVICORN_LOOP=uvloop",
+]
 
 # Worker timeout for health checks
 worker_tmp_dir = '/dev/shm'

@@ -2,6 +2,15 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { tutorQuiz, tutorRegimeAdaptiveQuiz, QuizResponse } from '../../../services/aiClient';
 
+// Map regime types to simple labels
+function getRegimeLabel(regime: string): string {
+  const normalized = regime?.toLowerCase() || '';
+  if (normalized.includes('bull') || normalized.includes('calm')) return 'Calm';
+  if (normalized.includes('bear') || normalized.includes('storm')) return 'Storm';
+  if (normalized.includes('sideways') || normalized.includes('choppy') || normalized.includes('volatile')) return 'Choppy';
+  return 'Choppy'; // Default
+}
+
 export default function TutorQuizScreen() {
   const [userId] = useState('demo-user');
   const [topic, setTopic] = useState('Options Basics');
@@ -137,8 +146,8 @@ export default function TutorQuizScreen() {
       {/* Regime Context Display */}
       {quiz?.regime_context && (
         <View style={styles.regimeContext}>
-          <Text style={styles.regimeTitle}>📊 Current Market Regime</Text>
-          <Text style={styles.regimeName}>{quiz.regime_context.current_regime.replace('_', ' ').toUpperCase()}</Text>
+          <Text style={styles.regimeTitle}>📊 Today's Conditions</Text>
+          <Text style={styles.regimeName}>{getRegimeLabel(quiz.regime_context.current_regime)}</Text>
           <Text style={styles.regimeDescription}>{quiz.regime_context.regime_description}</Text>
           <Text style={styles.regimeConfidence}>
             Confidence: {(quiz.regime_context.regime_confidence * 100).toFixed(1)}%

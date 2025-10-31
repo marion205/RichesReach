@@ -164,7 +164,7 @@ export default function OptionsCopilotScreen({ navigation }: any) {
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Icon name="arrow-left" size={22} color="#000" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Options Copilot</Text>
+        <Text style={styles.headerTitle}>Advanced</Text>
         <TouchableOpacity onPress={loadAI} disabled={loading}>
           <Icon name="refresh-ccw" size={20} color="#00cc99" />
         </TouchableOpacity>

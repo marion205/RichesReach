@@ -1,20 +1,28 @@
 project: richesreach_ai
 registry:
   registry_type: sql
-  path: postgresql://admin:password@process.env.DB_HOST || "localhost:5432"/dev
+  path: ${FEAST_REGISTRY_PATH:-postgresql://dev:dev@db:5432/feast_registry}
 provider: local
+
+# Online store - Redis for fast feature serving
 online_store:
-  type: postgres
-  host: localhost
-  port: 5432
-  database: dev
-  user: admin
-  password: password
+  type: redis
+  connection_string: ${REDIS_URL:-redis://redis:6379/2}
+  redis_type: redis
+
+# Offline store - PostgreSQL for historical features
 offline_store:
   type: postgres
-  host: localhost
-  port: 5432
-  database: dev
-  user: admin
-  password: password
+  host: ${DB_HOST:-db}
+  port: ${DB_PORT:-5432}
+  database: ${POSTGRES_DB:-dev}
+  user: ${POSTGRES_USER:-dev}
+  password: ${POSTGRES_PASSWORD:-dev}
+
 entity_key_serialization_version: 2
+
+# Feature server configuration
+feature_server:
+  enabled: true
+  host: 0.0.0.0
+  port: 6566

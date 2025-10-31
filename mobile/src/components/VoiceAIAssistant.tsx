@@ -491,7 +491,7 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
           </TouchableOpacity>
           <View style={styles.titleContainer}>
             <Text style={styles.title}>Wealth Oracle</Text>
-            <Text style={styles.subtitle}>Your AI Financial Assistant</Text>
+            <Text style={styles.subtitle}>Ask</Text>
           </View>
         </View>
 

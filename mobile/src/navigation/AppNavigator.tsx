@@ -186,8 +186,8 @@ function InvestStack() {
       <Stack.Screen name="Screeners" component={AIScansScreen} options={{ headerShown: true, title: 'Screeners' }} />
       <Stack.Screen name="scan-playbook" component={ScanPlaybookScreen} options={{ headerShown: true, title: 'Scan Playbook' }} />
       <Stack.Screen name="AIOptions" component={AIOptionsScreen} options={{ headerShown: true, title: 'Options' }} />
-      <Stack.Screen name="OptionsCopilot" component={OptionsCopilotScreen} options={{ headerShown: true, title: 'Options Copilot' }} />
-      <Stack.Screen name="options-copilot" component={OptionsCopilotScreen} options={{ headerShown: true, title: 'Options Copilot' }} />
+      <Stack.Screen name="OptionsCopilot" component={OptionsCopilotScreen} options={{ headerShown: true, title: 'Advanced' }} />
+      <Stack.Screen name="options-copilot" component={OptionsCopilotScreen} options={{ headerShown: true, title: 'Advanced' }} />
       <Stack.Screen name="DayTrading" component={TradingScreenWrapper} options={{ headerShown: false }} />
       <Stack.Screen name="MLSystem" component={MLSystemScreen} options={{ headerShown: true, title: 'ML System' }} />
       <Stack.Screen name="RiskManagement" component={RiskManagementScreen} options={{ headerShown: true, title: 'Risk Management' }} />
@@ -199,7 +199,7 @@ function InvestStack() {
       {/* Swing Trading screens */}
       <Stack.Screen name="swing-trading-test" component={SwingTradingDashboard} options={{ headerShown: true, title: 'Swing Trading' }} />
       <Stack.Screen name="swing-signals" component={SignalsScreen} options={{ headerShown: true, title: 'Swing Signals' }} />
-      <Stack.Screen name="swing-risk-coach" component={RiskCoachScreen} options={{ headerShown: true, title: 'Risk Coach' }} />
+      <Stack.Screen name="swing-risk-coach" component={RiskCoachScreen} options={{ headerShown: true, title: 'Guardrails' }} />
       <Stack.Screen name="swing-backtesting" component={BacktestingScreen} options={{ headerShown: true, title: 'Backtesting' }} />
       <Stack.Screen name="swing-leaderboard" component={LeaderboardScreen} options={{ headerShown: true, title: 'Leaderboard' }} />
       <Stack.Screen

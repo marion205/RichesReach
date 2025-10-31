@@ -15,7 +15,7 @@ export default function InvestAdvancedSheet() {
           <Text style={styles.rowText}>Options (AI)</Text>
         </Pressable>
         <Pressable style={styles.row} onPress={() => navigation.navigate('OptionsCopilot')}>
-          <Text style={styles.rowText}>Options Copilot</Text>
+          <Text style={styles.rowText}>Advanced</Text>
         </Pressable>
         <Pressable style={styles.row} onPress={() => navigation.navigate('Screeners')}>
           <Text style={styles.rowText}>Screeners</Text>

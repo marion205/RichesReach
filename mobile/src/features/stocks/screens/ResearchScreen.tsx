@@ -17,6 +17,15 @@ import StockTradingModal from '../../../components/forms/StockTradingModal';
 
 const RECENTS_KEY = 'research_recent_symbols';
 
+// Map regime types to simple labels
+function getRegimeLabel(regime: string): string {
+  const normalized = regime?.toLowerCase() || '';
+  if (normalized.includes('bull') || normalized.includes('calm')) return 'Calm';
+  if (normalized.includes('bear') || normalized.includes('storm')) return 'Storm';
+  if (normalized.includes('sideways') || normalized.includes('choppy') || normalized.includes('volatile')) return 'Choppy';
+  return 'Choppy'; // Default
+}
+
 // Debounce hook for search
 const useDebounce = (value: string, ms = 300) => {
   const [debouncedValue, setDebouncedValue] = useState(value);
@@ -385,12 +394,12 @@ function ResearchBody({ data }: { data: any }) {
         </View>
       )}
 
-      {/* Market Regime */}
+      {/* Today's Conditions */}
       {marketRegime && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Market Regime</Text>
+          <Text style={styles.sectionTitle}>Today's Conditions</Text>
           <View style={styles.regimeContainer}>
-            <Text style={styles.regimeText}>Regime: {marketRegime.market_regime || '—'}</Text>
+            <Text style={styles.regimeText}>{getRegimeLabel(marketRegime.market_regime || '—')}</Text>
             <Text style={styles.regimeText}>Confidence: {safePct(marketRegime.confidence)}</Text>
             <Text style={styles.regimeText}>Strategy: {marketRegime.recommended_strategy || '—'}</Text>
           </View>

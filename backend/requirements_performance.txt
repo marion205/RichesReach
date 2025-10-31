@@ -1,0 +1,43 @@
+# Performance Optimization Dependencies
+# Install with: pip install -r requirements_performance.txt
+
+# ONNX Runtime for fast ML inference
+onnxruntime>=1.16.0
+onnx>=1.14.0
+
+# Fast JSON serialization
+orjson>=3.9.0
+
+# Fast async event loop (already in main requirements)
+# uvloop>=0.19.0
+
+# Fast HTTP parsing (already in uvicorn[standard])
+# httptools>=0.6.0
+
+# Fast hashing for cache keys
+blake3>=0.3.1
+
+# Redis client (may already be installed)
+redis>=5.0.0
+hiredis>=2.2.0  # C extension for faster Redis
+
+# OpenTelemetry for observability
+opentelemetry-api>=1.21.0
+opentelemetry-sdk>=1.21.0
+opentelemetry-instrumentation-fastapi>=0.42b0
+opentelemetry-instrumentation-psycopg2>=0.42b0
+opentelemetry-instrumentation-redis>=0.42b0
+opentelemetry-exporter-otlp-proto-http>=1.21.0
+
+# Pyroscope for continuous profiling
+pyroscope-io>=0.5.0
+
+# Prometheus client for metrics
+prometheus-client>=0.19.0
+
+# Feast for feature store (optional but recommended)
+# feast>=0.36.0
+
+# PgBouncer connection pooling (client libraries)
+psycopg2-binary>=2.9.9  # PostgreSQL adapter
+

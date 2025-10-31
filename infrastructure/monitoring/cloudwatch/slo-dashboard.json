@@ -1,0 +1,171 @@
+{
+  "widgets": [
+    {
+      "type": "metric",
+      "properties": {
+        "metrics": [
+          ["RichesReach", "API_Latency_p50", {"stat": "Average", "label": "p50"}],
+          [".", ".", {"stat": "Average", "label": "p95", "yAxis": "left"}]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "us-east-1",
+        "title": "API Latency p50/p95",
+        "period": 300
+      }
+    },
+    {
+      "type": "metric",
+      "properties": {
+        "metrics": [
+          ["RichesReach", "ML_Inference_Latency_p95", {"stat": "Average"}]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "us-east-1",
+        "title": "ML Inference Latency p95",
+        "period": 300,
+        "yAxis": {
+          "left": {
+            "label": "ms",
+            "max": 100
+          }
+        },
+        "annotations": {
+          "horizontal": [
+            {
+              "value": 50,
+              "label": "SLO Target",
+              "color": "#ff0000"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "properties": {
+        "metrics": [
+          [
+            "RichesReach",
+            "API_Success_Rate",
+            {"stat": "Average", "label": "Success Rate"}
+          ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "us-east-1",
+        "title": "Success Rate (Target: 99.9%)",
+        "period": 300,
+        "yAxis": {
+          "left": {
+            "label": "percent",
+            "min": 0.99,
+            "max": 1.0
+          }
+        },
+        "annotations": {
+          "horizontal": [
+            {
+              "value": 0.999,
+              "label": "SLO Target",
+              "color": "#ff0000"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "properties": {
+        "metrics": [
+          [
+            "RichesReach",
+            "Cache_Hit_Rate",
+            {"stat": "Average", "label": "Hit Rate"}
+          ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "us-east-1",
+        "title": "Redis Cache Hit Rate",
+        "period": 300,
+        "yAxis": {
+          "left": {
+            "label": "percent",
+            "min": 0,
+            "max": 1
+          }
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "properties": {
+        "metrics": [
+          [
+            "RichesReach",
+            "LLM_Cost_Per_MAU",
+            {"stat": "Average", "label": "Cost/MAU"}
+          ]
+        ],
+        "view": "singleValue",
+        "region": "us-east-1",
+        "title": "LLM Cost per MAU (Target: ≤ $0.05)",
+        "period": 3600,
+        "annotations": {
+          "horizontal": [
+            {
+              "value": 0.05,
+              "label": "Target",
+              "color": "#ff0000"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "properties": {
+        "metrics": [
+          [
+            "RichesReach",
+            "Cost_Per_Decision",
+            {"stat": "Average", "label": "Cost/Decision"}
+          ]
+        ],
+        "view": "singleValue",
+        "region": "us-east-1",
+        "title": "Cost per Decision (Target: ≤ $0.01)",
+        "period": 3600
+      }
+    },
+    {
+      "type": "metric",
+      "properties": {
+        "metrics": [
+          [
+            {"expression": "m1 + m2", "label": "Total Errors", "id": "e1"},
+            {"id": "m1", "metric": {"namespace": "RichesReach", "metricName": "API_5xx_Errors", "stat": "Sum"}},
+            {"id": "m2", "metric": {"namespace": "RichesReach", "metricName": "API_4xx_Errors", "stat": "Sum"}}
+          ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "us-east-1",
+        "title": "Error Rate",
+        "period": 300
+      }
+    },
+    {
+      "type": "log",
+      "properties": {
+        "query": "SOURCE '/aws/ecs/richesreach-backend' | fields @timestamp, @message\n| filter @message like /ERROR/ or @message like /WARN/\n| sort @timestamp desc\n| limit 100",
+        "region": "us-east-1",
+        "title": "Recent Errors",
+        "view": "table"
+      }
+    }
+  ]
+}
+

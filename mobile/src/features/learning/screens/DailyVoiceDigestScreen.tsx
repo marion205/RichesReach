@@ -12,6 +12,15 @@ import {
 import { generateDailyDigest, createRegimeAlert, VoiceDigestResponse } from '../../../services/aiClient';
 import * as Speech from 'expo-speech';
 
+// Map regime types to simple labels
+function getRegimeLabel(regime: string): string {
+  const normalized = regime?.toLowerCase() || '';
+  if (normalized.includes('bull') || normalized.includes('calm')) return 'Calm';
+  if (normalized.includes('bear') || normalized.includes('storm')) return 'Storm';
+  if (normalized.includes('sideways') || normalized.includes('choppy') || normalized.includes('volatile')) return 'Choppy';
+  return 'Choppy'; // Default
+}
+
 export default function DailyVoiceDigestScreen() {
   const [userId] = useState('demo-user');
   const [digest, setDigest] = useState<VoiceDigestResponse | null>(null);
@@ -143,9 +152,9 @@ export default function DailyVoiceDigestScreen() {
         <View style={styles.digestContainer}>
           {/* Regime Context */}
           <View style={styles.regimeContext}>
-            <Text style={styles.regimeTitle}>📊 Current Market Regime</Text>
+            <Text style={styles.regimeTitle}>📊 Today's Conditions</Text>
             <Text style={styles.regimeName}>
-              {digest.regime_context.current_regime.replace('_', ' ').toUpperCase()}
+              {getRegimeLabel(digest.regime_context.current_regime)}
             </Text>
             <Text style={styles.regimeDescription}>
               {digest.regime_context.regime_description}

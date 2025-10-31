@@ -15,8 +15,34 @@ services:
       timeout: 5s
       retries: 5
 
+  # PgBouncer - Connection pooler for PostgreSQL
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    environment:
+      DATABASES_HOST: db
+      DATABASES_PORT: 5432
+      DATABASES_USER: dev
+      DATABASES_PASSWORD: dev
+      DATABASES_DBNAME: dev
+      PGBOUNCER_POOL_MODE: transaction
+      PGBOUNCER_MAX_CLIENT_CONN: 1000
+      PGBOUNCER_DEFAULT_POOL_SIZE: 50
+      PGBOUNCER_MIN_POOL_SIZE: 10
+      PGBOUNCER_RESERVE_POOL_SIZE: 20
+    ports:
+      - "6432:6432"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "psql -h localhost -p 6432 -U dev -d dev -c 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   redis:
     image: redis:7-alpine
+    command: redis-server --maxmemory 1gb --maxmemory-policy allkeys-lru --appendonly yes
     ports:
       - "6379:6379"
     volumes:
@@ -27,6 +53,47 @@ services:
       timeout: 3s
       retries: 5
 
+  # Pyroscope - Continuous profiling
+  pyroscope:
+    image: pyroscope/pyroscope:latest
+    command:
+      - "server"
+    ports:
+      - "4040:4040"  # UI
+    volumes:
+      - pyroscope_data:/var/lib/pyroscope
+    environment:
+      PYROSCOPE_STORAGE_PATH: /var/lib/pyroscope
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:4040/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Grafana - Monitoring dashboards
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_INSTALL_PLUGINS: grafana-piechart-panel,grafana-cloudwatch-datasource
+      GF_PATHS_PROVISIONING: /etc/grafana/provisioning
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infrastructure/monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./infrastructure/monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+    depends_on:
+      - pyroscope
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
 volumes:
   pgdata: {}
   redis_data: {}
+  pyroscope_data: {}
+  grafana_data: {}

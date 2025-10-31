@@ -359,7 +359,7 @@ const RiskCoachScreen: React.FC<RiskCoachScreenProps> = ({ navigateTo }) => {
       >
         <Icon name="arrow-left" size={24} color="#6B7280" />
       </TouchableOpacity>
-      <Text style={styles.headerTitle}>Risk Coach</Text>
+      <Text style={styles.headerTitle}>Guardrails</Text>
       <TouchableOpacity
         style={styles.advancedToggle}
         onPress={() => setShowAdvanced((s) => !s)}

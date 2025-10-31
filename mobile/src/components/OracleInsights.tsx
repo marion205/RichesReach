@@ -185,7 +185,7 @@ export default function OracleInsights({ onInsightPress, onGenerateInsight }: Or
       setInsights(mockInsights);
     } catch (error) {
       console.error('Error loading insights:', error);
-      Alert.alert('Error', 'Failed to load oracle insights');
+      Alert.alert('Error', 'Failed to load insights');
     } finally {
       setLoading(false);
     }
@@ -268,7 +268,7 @@ export default function OracleInsights({ onInsightPress, onGenerateInsight }: Or
           color="#7C3AED"
           style={styles.loadingAnimation}
         />
-        <Text style={styles.loadingText}>Oracle is analyzing your portfolio...</Text>
+        <Text style={styles.loadingText}>Analyzing your portfolio...</Text>
       </View>
     );
   }
@@ -297,8 +297,8 @@ export default function OracleInsights({ onInsightPress, onGenerateInsight }: Or
             <Text style={styles.oracleEmoji}>🔮</Text>
           </Animated.View>
           <View>
-            <Text style={styles.headerTitle}>Wealth Oracle</Text>
-            <Text style={styles.headerSubtitle}>AI-powered insights</Text>
+            <Text style={styles.headerTitle}>Why Now</Text>
+            <Text style={styles.headerSubtitle}>One sentence, one visual</Text>
           </View>
         </View>
         
@@ -332,7 +332,7 @@ export default function OracleInsights({ onInsightPress, onGenerateInsight }: Or
             <Text style={styles.emptyStateIcon}>🔮</Text>
             <Text style={styles.emptyStateTitle}>No insights yet</Text>
             <Text style={styles.emptyStateText}>
-              The Oracle is analyzing your portfolio and market conditions. 
+              Analyzing your portfolio and market conditions. 
               Check back soon for personalized insights!
             </Text>
             <TouchableOpacity

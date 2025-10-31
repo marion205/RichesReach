@@ -1,0 +1,35 @@
+# Prometheus Configuration for RichesReach
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'richesreach'
+    environment: 'production'
+
+# Scrape configurations
+scrape_configs:
+  # FastAPI/Django application metrics
+  - job_name: 'richesreach-backend'
+    static_configs:
+      - targets: ['backend:8000']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  # Redis metrics (if using redis_exporter)
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:9121']
+    scrape_interval: 15s
+
+  # PostgreSQL metrics (if using postgres_exporter)
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres:9187']
+    scrape_interval: 30s
+
+  # Pyroscope metrics
+  - job_name: 'pyroscope'
+    static_configs:
+      - targets: ['pyroscope:4040']
+    scrape_interval: 30s
+

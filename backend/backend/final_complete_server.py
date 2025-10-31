@@ -1227,12 +1227,30 @@ def initialize_phase2():
 # Initialize Phase 2 on startup
 initialize_phase2()
 
+# Performance Optimizations Integration
+try:
+    from core.performance_integration import initialize_performance_optimizations, add_performance_middleware
+    PERFORMANCE_INTEGRATION_AVAILABLE = True
+    print("✅ Performance integration module available")
+except ImportError as e:
+    PERFORMANCE_INTEGRATION_AVAILABLE = False
+    print(f"⚠️ Performance integration not available: {e}")
+
 # ---------- App ----------
 app = FastAPI(
     title="RichesReach Final Complete Server",
     description="Complete server with ALL GraphQL fields",
     version="1.0.0"
 )
+
+# Initialize performance optimizations
+if PERFORMANCE_INTEGRATION_AVAILABLE:
+    try:
+        initialize_performance_optimizations(app)
+        add_performance_middleware(app)
+        print("✅ Performance optimizations initialized")
+    except Exception as e:
+        print(f"⚠️ Performance optimizations initialization failed: {e}")
 
 @app.on_event("startup")
 async def _market_startup_check():

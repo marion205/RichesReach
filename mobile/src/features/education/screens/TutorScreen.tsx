@@ -1688,7 +1688,7 @@ const TutorScreen: React.FC<TutorScreenProps> = ({ navigation }) => {
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <View style={styles.headerText}>
-            <Text style={styles.headerTitle}>AI Tutor</Text>
+            <Text style={styles.headerTitle}>Learn</Text>
             <Text style={styles.headerSubtitle}>Adaptive Learning</Text>
           </View>
           <TouchableOpacity

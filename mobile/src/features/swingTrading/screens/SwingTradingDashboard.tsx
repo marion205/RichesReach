@@ -30,7 +30,7 @@ const SwingTradingDashboard: React.FC<SwingTradingDashboardProps> = ({ navigateT
     },
     {
       id: 'risk-coach',
-      title: 'Risk Coach',
+      title: 'Guardrails',
       description: 'Position sizing & risk management',
       details: 'Calculator • Analysis',
       icon: 'shield',

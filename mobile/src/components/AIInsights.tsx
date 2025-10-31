@@ -192,6 +192,15 @@ interface AIInsightsProps {
   onPredictionSelect?: (prediction: AIPrediction) => void;
 }
 
+// Map regime types to simple labels
+function getRegimeLabel(regime: string): string {
+  const normalized = regime?.toLowerCase() || '';
+  if (normalized.includes('bull') || normalized.includes('calm')) return 'Calm';
+  if (normalized.includes('bear') || normalized.includes('storm')) return 'Storm';
+  if (normalized.includes('sideways') || normalized.includes('choppy') || normalized.includes('volatile')) return 'Choppy';
+  return 'Choppy'; // Default
+}
+
 export const AIInsights: React.FC<AIInsightsProps> = ({
   userId,
   onInsightSelect,
@@ -534,9 +543,9 @@ export const AIInsights: React.FC<AIInsightsProps> = ({
     return (
       <ScrollView style={styles.tabContent}>
         <View style={styles.regimeCard}>
-          <Text style={styles.regimeTitle}>Current Market Regime</Text>
+          <Text style={styles.regimeTitle}>Today's Conditions</Text>
           <View style={styles.regimeHeader}>
-            <Text style={styles.regimeCurrent}>{regime.current.toUpperCase()}</Text>
+            <Text style={styles.regimeCurrent}>{getRegimeLabel(regime.current)}</Text>
             <Text style={styles.regimeConfidence}>
               Confidence: {regime.confidence.toFixed(1)}%
             </Text>

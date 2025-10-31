@@ -1,0 +1,48 @@
+apiVersion: 1
+
+datasources:
+  # Prometheus for metrics
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
+
+  # Pyroscope for profiling
+  - name: Pyroscope
+    type: pyroscope
+    access: proxy
+    url: http://pyroscope:4040
+    editable: true
+
+  # PostgreSQL for database metrics
+  - name: PostgreSQL
+    type: postgres
+    access: proxy
+    url: db:5432
+    database: dev
+    user: dev
+    secureJsonData:
+      password: dev
+    jsonData:
+      sslmode: disable
+    editable: true
+
+  # Redis metrics via Prometheus (use redis_exporter)
+  - name: Redis Metrics
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    editable: true
+
+  # CloudWatch (for AWS production - optional)
+  - name: CloudWatch
+    type: cloudwatch
+    access: proxy
+    jsonData:
+      authType: default
+      defaultRegion: us-east-1
+    editable: true
+    # Note: Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in Grafana environment
+

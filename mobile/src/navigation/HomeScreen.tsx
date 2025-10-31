@@ -132,7 +132,7 @@ import { parseIntent } from '../features/voice/intent';
               id: String(Date.now()),
               role: 'assistant',
               content:
-                'Welcome to your AI Financial Assistant!\n\nI can help you with:\n• Investment strategies and portfolio analysis\n• Market insights and economic trends\n• Financial planning and budgeting\n• Risk assessment and diversification\n• Trading education and terminology\n• Real-time market commentary\n• Personalized financial advice\n\nNote: I\'m currently setting up my advanced AI capabilities. I can still provide helpful financial guidance and answer your questions!',
+                'Ask me anything about your finances. I can help with:\n• Investment strategies and portfolio analysis\n• Market insights and economic trends\n• Financial planning and budgeting\n• Risk assessment and diversification\n• Trading education and terminology\n• Real-time market commentary\n• Personalized financial advice\n\nType or use voice—grounded in your data.',
             }]);
           }
         } catch { /* ignore */ }
@@ -205,7 +205,7 @@ import { parseIntent } from '../features/voice/intent';
         <View style={styles.chatHeader}>
           <View style={styles.chatTitleContainer}>
             <Icon name="flash-on" size={20} color="#00cc99" style={styles.chatTitleIcon} />
-            <Text style={styles.chatTitle}>AI Financial Assistant</Text>
+            <Text style={styles.chatTitle}>Ask</Text>
           </View>
           <View style={styles.chatHeaderActions}>
             <TouchableOpacity onPress={clear} style={styles.chatActionButton} accessibilityLabel="Clear chat">
@@ -879,7 +879,7 @@ import { parseIntent } from '../features/voice/intent';
                 </TouchableOpacity>
               )}
               <TouchableOpacity style={styles.learningCard} onPress={() => {
-                console.log('Oracle Insights pressed');
+                console.log('Why Now pressed');
                 try {
                   navigation.navigate('oracle-insights' as never);
                 } catch (error) {
@@ -891,15 +891,15 @@ import { parseIntent } from '../features/voice/intent';
                   <Icon name="eye" size={24} color="#8B5CF6" />
                 </View>
                 <View style={styles.learningCardContent}>
-                  <Text style={styles.learningCardTitle}>Oracle Insights</Text>
-                  <Text style={styles.learningCardDescription}>AI-powered market predictions</Text>
+                  <Text style={styles.learningCardTitle}>Why Now</Text>
+                  <Text style={styles.learningCardDescription}>One sentence, one visual</Text>
                   <Text style={styles.learningCardMeta}>Predictive • AI</Text>
                 </View>
                 <Icon name="chevron-right" size={16} color="#8E8E93" />
               </TouchableOpacity>
               
               <TouchableOpacity style={styles.learningCard} onPress={() => {
-                console.log('Voice AI Assistant pressed');
+                console.log('Ask pressed');
                 try {
                   navigation.navigate('voice-ai' as never);
                 } catch (error) {
@@ -911,7 +911,7 @@ import { parseIntent } from '../features/voice/intent';
                   <Icon name="mic" size={24} color="#10B981" />
                 </View>
                 <View style={styles.learningCardContent}>
-                  <Text style={styles.learningCardTitle}>Voice AI Assistant</Text>
+                  <Text style={styles.learningCardTitle}>Ask</Text>
                   <Text style={styles.learningCardDescription}>Hands-free trading & insights</Text>
                   <Text style={styles.learningCardMeta}>Voice • AI</Text>
                 </View>
@@ -1164,7 +1164,7 @@ import { parseIntent } from '../features/voice/intent';
                   <Icon name="shield" size={24} color="#10B981" />
                 </View>
                 <View style={styles.learningCardContent}>
-                  <Text style={styles.learningCardTitle}>Risk Coach</Text>
+                  <Text style={styles.learningCardTitle}>Guardrails</Text>
                   <Text style={styles.learningCardDescription}>Position sizing & risk management</Text>
                   <Text style={styles.learningCardMeta}>Calculator • Analysis</Text>
                 </View>
@@ -1206,7 +1206,7 @@ import { parseIntent } from '../features/voice/intent';
         <TouchableOpacity
           style={styles.chatButton}
           onPress={() => setChatOpen(true)}
-          accessibilityLabel="Open AI Financial Assistant"
+          accessibilityLabel="Open Ask"
           testID="chat-fab"
         >
           <Icon name="message-circle" size={24} color="#fff" />
