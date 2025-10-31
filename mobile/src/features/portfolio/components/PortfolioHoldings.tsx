@@ -1,9 +1,9 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useCallback, useMemo } from 'react';
+import { View, Text, StyleSheet, FlatList, ListRenderItem } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
+import { HoldingRow } from './HoldingRow';
 
-interface Holding {
+export interface Holding {
   symbol: string;
   quantity: number;
   currentPrice: number;
@@ -17,15 +17,22 @@ interface PortfolioHoldingsProps {
   holdings: Holding[];
   onStockPress: (symbol: string) => void;
   onAddHoldings?: () => void; // Callback for empty state action
+  onBuy?: (holding: Holding) => void; // Phase 2: Buy action
+  onSell?: (holding: Holding) => void; // Phase 2: Sell action
 }
 
 const PortfolioHoldings: React.FC<PortfolioHoldingsProps> = ({ 
   holdings, 
   onStockPress,
   onAddHoldings,
+  onBuy,
+  onSell,
 }) => {
-  // Calculate total portfolio value
-  const totalValue = holdings.reduce((sum, h) => sum + (h.totalValue || 0), 0);
+  // Calculate total portfolio value (precomputed for performance)
+  const totalValue = useMemo(
+    () => holdings.reduce((sum, h) => sum + (h.totalValue || 0), 0),
+    [holdings]
+  );
 
   // Empty state - Steve Jobs style: Inspiring, not discouraging
   if (!holdings || holdings.length === 0) {
@@ -52,6 +59,24 @@ const PortfolioHoldings: React.FC<PortfolioHoldingsProps> = ({
     );
   }
 
+  // Memoized render function for performance
+  const renderHolding: ListRenderItem<Holding> = useCallback(
+    ({ item, index }) => {
+      const allocationPercent = totalValue > 0 ? ((item.totalValue || 0) / totalValue) * 100 : 0;
+      return (
+        <HoldingRow
+          holding={item}
+          allocationPercent={allocationPercent}
+          onPress={onStockPress}
+          onBuy={onBuy}
+          onSell={onSell}
+          isLast={index === holdings.length - 1}
+        />
+      );
+    },
+    [totalValue, onStockPress, onBuy, onSell, holdings.length]
+  );
+
   return (
     <View style={styles.container}>
       {/* Header with total value */}
@@ -68,72 +93,18 @@ const PortfolioHoldings: React.FC<PortfolioHoldingsProps> = ({
         )}
       </View>
 
-      {/* Holdings list */}
-      {holdings.map((holding, index) => {
-        const isPositive = (holding.change || 0) >= 0;
-        const changeColor = isPositive ? '#34C759' : '#FF3B30';
-        const allocationPercent = totalValue > 0 ? ((holding.totalValue || 0) / totalValue) * 100 : 0;
-        
-        return (
-          <TouchableOpacity
-            key={`${holding.symbol}-${index}`}
-            style={[
-              styles.holdingCard,
-              index === holdings.length - 1 && styles.lastCard,
-            ]}
-            onPress={() => onStockPress(holding.symbol)}
-            activeOpacity={0.7}
-          >
-            <View style={styles.holdingContent}>
-              {/* Left: Symbol and details */}
-              <View style={styles.holdingLeft}>
-                <View style={styles.symbolRow}>
-                  <Text style={styles.symbol}>{holding.symbol}</Text>
-                  {allocationPercent > 0 && (
-                    <View style={styles.allocationBadge}>
-                      <Text style={styles.allocationText}>{allocationPercent.toFixed(0)}%</Text>
-                    </View>
-                  )}
-                </View>
-                {holding.name && (
-                  <Text style={styles.companyName} numberOfLines={1}>
-                    {holding.name}
-                  </Text>
-                )}
-                <Text style={styles.quantity}>
-                  {holding.quantity} {holding.quantity === 1 ? 'share' : 'shares'}
-                </Text>
-              </View>
-
-              {/* Right: Value and performance */}
-              <View style={styles.holdingRight}>
-                <Text style={styles.holdingValue}>
-                  ${(holding.totalValue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </Text>
-                
-                {/* Performance indicator */}
-                <View style={styles.performanceRow}>
-                  <View style={[styles.performanceBadge, { backgroundColor: `${changeColor}15` }]}>
-                    <Icon 
-                      name={isPositive ? 'trending-up' : 'trending-down'} 
-                      size={12} 
-                      color={changeColor} 
-                    />
-                    <Text style={[styles.performanceText, { color: changeColor }]}>
-                      {isPositive ? '+' : ''}{holding.changePercent?.toFixed(2) || '0.00'}%
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Gain/Loss amount */}
-                <Text style={[styles.changeAmount, { color: changeColor }]}>
-                  {isPositive ? '+' : ''}${(holding.change || 0).toFixed(2)}
-                </Text>
-              </View>
-            </View>
-          </TouchableOpacity>
-        );
-      })}
+      {/* Holdings list - Virtualized for performance */}
+      <FlatList
+        data={holdings}
+        keyExtractor={(item) => item.symbol}
+        renderItem={renderHolding}
+        scrollEnabled={false} // Disable scroll since parent ScrollView handles it
+        removeClippedSubviews={true}
+        initialNumToRender={10}
+        maxToRenderPerBatch={5}
+        windowSize={5}
+        ListEmptyComponent={null} // Empty state handled above
+      />
     </View>
   );
 };
@@ -181,85 +152,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: '#000',
-  },
-  holdingCard: {
-    backgroundColor: '#F8F9FA',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#E5E5EA',
-  },
-  lastCard: {
-    marginBottom: 0,
-  },
-  holdingContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  holdingLeft: {
-    flex: 1,
-    marginRight: 12,
-  },
-  symbolRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  symbol: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#000',
-    marginRight: 8,
-  },
-  allocationBadge: {
-    backgroundColor: '#E5E5EA',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  allocationText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#8E8E93',
-  },
-  companyName: {
-    fontSize: 15,
-    color: '#8E8E93',
-    marginBottom: 6,
-  },
-  quantity: {
-    fontSize: 14,
-    color: '#8E8E93',
-  },
-  holdingRight: {
-    alignItems: 'flex-end',
-  },
-  holdingValue: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#000',
-    marginBottom: 6,
-  },
-  performanceRow: {
-    marginBottom: 4,
-  },
-  performanceBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    gap: 4,
-  },
-  performanceText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  changeAmount: {
-    fontSize: 15,
-    fontWeight: '600',
   },
   emptyContainer: {
     alignItems: 'center',
