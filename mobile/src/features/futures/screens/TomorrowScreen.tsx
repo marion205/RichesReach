@@ -15,25 +15,10 @@ import {
   Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import { useQuery } from '@apollo/client';
-import { gql } from '@apollo/client';
+import React from 'react';
 
 import FuturesService from '../services/FuturesService';
 import { FuturesRecommendation, FuturesPosition } from '../types/FuturesTypes';
-
-const GET_FUTURES_RECOMMENDATIONS = gql`
-  query GetFuturesRecommendations($user_id: ID) {
-    futuresRecommendations(user_id: $user_id) {
-      symbol
-      name
-      why_now
-      max_loss
-      max_gain
-      probability
-      action
-    }
-  }
-`;
 
 export default function TomorrowScreen({ navigation }: any) {
   const [loading, setLoading] = useState(false);
@@ -42,26 +27,23 @@ export default function TomorrowScreen({ navigation }: any) {
   const [positions, setPositions] = useState<FuturesPosition[]>([]);
   const [showPositions, setShowPositions] = useState(false);
 
-  const { data, refetch } = useQuery(GET_FUTURES_RECOMMENDATIONS, {
-    fetchPolicy: 'cache-and-network',
-    onCompleted: (data) => {
-      if (data?.futuresRecommendations) {
-        setRecommendations(data.futuresRecommendations);
-      }
-    },
-  });
-
+  // Use REST API (more reliable than GraphQL for now)
   const loadRecommendations = useCallback(async () => {
     try {
       setLoading(true);
       const resp = await FuturesService.getRecommendations();
-      setRecommendations(resp.recommendations);
+      setRecommendations(resp.recommendations || []);
     } catch (e) {
       Alert.alert('Error', 'Failed to load recommendations');
     } finally {
       setLoading(false);
     }
   }, []);
+
+  // Load recommendations on mount
+  React.useEffect(() => {
+    loadRecommendations();
+  }, [loadRecommendations]);
 
   const loadPositions = useCallback(async () => {
     try {
@@ -74,11 +56,10 @@ export default function TomorrowScreen({ navigation }: any) {
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    await refetch();
     await loadRecommendations();
     await loadPositions();
     setRefreshing(false);
-  }, [refetch, loadRecommendations, loadPositions]);
+  }, [loadRecommendations, loadPositions]);
 
   const handleTrade = useCallback(async (rec: FuturesRecommendation) => {
     Alert.alert(

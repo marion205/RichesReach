@@ -1168,6 +1168,18 @@ class OptionOrderType(graphene.ObjectType):
     updatedAt = graphene.DateTime()
     notes = graphene.String()
 
+# Futures Types
+class FuturesRecommendationType(graphene.ObjectType):
+    """Futures recommendation type"""
+    symbol = graphene.String()
+    name = graphene.String()
+    why_now = graphene.String()
+    max_loss = graphene.Float()
+    max_gain = graphene.Float()
+    probability = graphene.Float()
+    action = graphene.String()
+
+
 # AI Scans Types
 class ScanResultType(graphene.ObjectType):
     """Scan Result type"""

@@ -2,8 +2,11 @@
 from __future__ import annotations
 
 import graphene
+import logging
 from django.contrib.auth import get_user_model
 from django.db import models as djmodels
+
+logger = logging.getLogger(__name__)
 
 from .types import (
     UserType,

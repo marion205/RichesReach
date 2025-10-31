@@ -2594,6 +2594,13 @@ class Query(SwingQuery, BaseQuery, SblocQuery, NotificationQuery, BenchmarkQuery
     # Test field
     testField = graphene.String()
     
+    # Futures Queries
+    futuresRecommendations = graphene.List(
+        'core.types.FuturesRecommendationType',
+        user_id=graphene.ID(required=False),
+        description="Get futures trading recommendations"
+    )
+    
     def resolve_tutor_progress(self, info):
         """Resolve tutor progress"""
         print("🔴🔴🔴 TUTOR PROGRESS RESOLVER CALLED")
@@ -2608,6 +2615,35 @@ class Query(SwingQuery, BaseQuery, SblocQuery, NotificationQuery, BenchmarkQuery
         """Resolve daily quest"""
         print("🔴🔴🔴 DAILY QUEST RESOLVER CALLED")
         return "Daily quest data"
+    
+    def resolve_futuresRecommendations(self, info, user_id=None):
+        """Resolve futures recommendations"""
+        try:
+            from core.futures_service import get_recommendation_engine
+            from core.types import FuturesRecommendationType
+            
+            engine = get_recommendation_engine()
+            user_id_int = int(user_id) if user_id else None
+            recs = engine.get_recommendations(user_id=user_id_int)
+            
+            # Convert to GraphQL types
+            return [
+                FuturesRecommendationType(
+                    symbol=rec["symbol"],
+                    name=rec["name"],
+                    why_now=rec["why_now"],
+                    max_loss=rec["max_loss"],
+                    max_gain=rec["max_gain"],
+                    probability=rec["probability"],
+                    action=rec["action"],
+                )
+                for rec in recs
+            ]
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error resolving futures recommendations: {e}")
+            return []
     
     def resolve_optionOrders(self, info, status=None):
         # Mock implementation - return sample option orders
