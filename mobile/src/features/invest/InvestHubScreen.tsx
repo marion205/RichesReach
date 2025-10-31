@@ -9,7 +9,6 @@ type HubItem = {
   subtitle?: string;
   icon: keyof typeof Feather.glyphMap;
   to: string;
-  featured?: boolean;
 };
 
 export default function InvestHubScreen() {
@@ -17,10 +16,10 @@ export default function InvestHubScreen() {
 
   const items: HubItem[] = useMemo(
     () => [
-      { key: 'tomorrow', title: 'Tomorrow', subtitle: 'Trade tomorrow\'s markets today', icon: 'calendar', to: 'Tomorrow', featured: true },
       { key: 'stocks', title: 'Stocks', subtitle: 'Browse & analyze', icon: 'trending-up', to: 'Stocks' },
       { key: 'crypto', title: 'Crypto', subtitle: 'Track & research', icon: 'zap', to: 'Crypto' },
       { key: 'ai', title: 'AI Portfolio', subtitle: 'Smart recs & rebalance', icon: 'cpu', to: 'AIPortfolio' },
+      { key: 'tomorrow', title: 'Tomorrow', subtitle: 'Trade tomorrow\'s markets today', icon: 'calendar', to: 'Tomorrow' },
       { key: 'screen', title: 'Screeners', subtitle: 'Find opportunities', icon: 'filter', to: 'stock-screening' },
       { key: 'trade', title: 'Trading', subtitle: 'Live & options', icon: 'activity', to: 'trading' },
       { key: 'portfolio', title: 'Portfolio', subtitle: 'Positions & P/L', icon: 'pie-chart', to: 'Portfolio' },
@@ -38,38 +37,16 @@ export default function InvestHubScreen() {
         keyExtractor={(it) => it.key}
         contentContainerStyle={styles.list}
         numColumns={2}
-        renderItem={({ item }) => {
-          // Featured card spans full width
-          if (item.featured) {
-            return (
-              <Pressable
-                style={({ pressed }) => [styles.featuredCard, pressed && styles.cardPressed]}
-                onPress={() => navigation.navigate(item.to)}
-              >
-                <View style={styles.featuredContent}>
-                  <Feather name={item.icon} size={28} color="#007AFF" />
-                  <View style={styles.featuredText}>
-                    <Text style={styles.featuredTitle}>{item.title}</Text>
-                    {!!item.subtitle && <Text style={styles.featuredSub}>{item.subtitle}</Text>}
-                  </View>
-                  <Feather name="chevron-right" size={20} color="#8E8E93" />
-                </View>
-              </Pressable>
-            );
-          }
-          
-          // Regular 2-column cards
-          return (
-            <Pressable
-              style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-              onPress={() => navigation.navigate(item.to)}
-            >
-              <Feather name={item.icon} size={22} />
-              <Text style={styles.cardTitle}>{item.title}</Text>
-              {!!item.subtitle && <Text style={styles.cardSub}>{item.subtitle}</Text>}
-            </Pressable>
-          );
-        }}
+        renderItem={({ item }) => (
+          <Pressable
+            style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+            onPress={() => navigation.navigate(item.to)}
+          >
+            <Feather name={item.icon} size={22} />
+            <Text style={styles.cardTitle}>{item.title}</Text>
+            {!!item.subtitle && <Text style={styles.cardSub}>{item.subtitle}</Text>}
+          </Pressable>
+        )}
       />
 
       <Pressable
@@ -101,35 +78,6 @@ const styles = StyleSheet.create({
   cardPressed: { opacity: 0.7 },
   cardTitle: { fontSize: 16, fontWeight: '600' },
   cardSub: { fontSize: 12, opacity: 0.6 },
-  featuredCard: {
-    width: '100%',
-    marginHorizontal: 6,
-    marginVertical: 6,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#007AFF',
-    backgroundColor: '#F0F8FF',
-    padding: 16,
-  },
-  featuredContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  featuredText: {
-    flex: 1,
-    gap: 4,
-  },
-  featuredTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#000',
-  },
-  featuredSub: {
-    fontSize: 14,
-    opacity: 0.7,
-    color: '#000',
-  },
   fab: {
     position: 'absolute',
     right: 16,
