@@ -307,46 +307,33 @@ export default function PortfolioPerformanceCard({
   
   const bStart = benchmarkSummary?.startValue ?? (bench[0] ?? pStart);
   const bEnd = benchmarkSummary?.endValue ?? (bench[bench.length - 1] ?? pEnd);
-  const bRetPct = benchmarkSummary?.totalReturnPercent ?? (((bEnd - bStart) / bStart) * 100);
+  // Prevent division by zero in benchmark return calculation
+  const bRetPct = benchmarkSummary?.totalReturnPercent ?? ((bStart && bStart > 0) ? (((bEnd - bStart) / bStart) * 100) : 0);
   const vsBenchmark = calculateAlpha(pRetPct, bRetPct); // + means outperformance
 
   // Datasets (portfolio + optional benchmark)
-  // Normalize data to prevent extreme scaling issues
-  const chartData = useMemo(() => {
-    // Ensure data has reasonable bounds to prevent chart scaling issues
-    const portfolioData = history.length ? history : [curValue];
-    const benchmarkData = bench.length ? bench : [curValue];
-    
-    // If all values are zero or very small, add minimal padding to prevent chart confusion
-    const allValues = [...portfolioData, ...benchmarkData];
-    const allZero = allValues.every(v => Math.abs(v) < 0.01);
-    const normalizedPortfolio = allZero 
-      ? portfolioData.map(() => 1) // Show at least a baseline
-      : portfolioData;
-    const normalizedBenchmark = allZero
-      ? benchmarkData.map(() => 1)
-      : benchmarkData;
-
-    return {
+  const chartData = useMemo(
+    () => ({
       labels: new Array(6).fill(''),
       datasets: [
         // Portfolio (accent)
         {
-          data: normalizedPortfolio,
+          data: history.length ? history : [curValue],
           color: () => accent,
           strokeWidth: 2.6,
         } as any,
         // Benchmark (faint)
         ...(showBenchmark
           ? [{
-              data: normalizedBenchmark,
+              data: bench.length ? bench : [curValue],
               color: (opacity = 1) => `${palette.bench}${Math.round(opacity * 200).toString(16).padStart(2, '0')}`,
               strokeWidth: 2,
             } as any]
           : []),
       ],
-    };
-  }, [history, bench, curValue, accent, palette.bench, showBenchmark]);
+    }),
+    [history, bench, curValue, accent, palette.bench, showBenchmark]
+  );
 
   const chartConfig = useMemo(
     () => ({
