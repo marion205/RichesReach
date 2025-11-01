@@ -112,13 +112,16 @@ export default function ZeroFrictionOnboarding({ onComplete, onSkip }: ZeroFrict
     setLoading(true);
     try {
       // Simulate AI processing
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      console.log('✅ ZeroFrictionOnboarding: Calling onComplete with profile:', wealthProfile);
       onComplete(wealthProfile);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to complete onboarding');
-    } finally {
+    } catch (error: any) {
+      console.error('❌ Error completing onboarding:', error);
+      Alert.alert('Error', 'Failed to complete onboarding. Please try again.');
       setLoading(false);
     }
+    // Note: Don't set loading to false here - let parent handle navigation
+    // The loading state will be reset when the component unmounts
   };
 
   const updateProfile = (updates: any) => {

@@ -347,8 +347,10 @@ case 'signup':
 return (
 <ZeroFrictionOnboarding
 onComplete={(profile) => {
+console.log('✅ Onboarding completed with profile:', profile);
 setHasCompletedOnboarding(true);
-handleSignUp(profile);
+setIsLoggedIn(true);
+setCurrentScreen('home');
 }}
 onSkip={() => {
 setCurrentScreen('login');
@@ -368,8 +370,9 @@ if (isLoggedIn && !hasCompletedOnboarding) {
 return (
 <ZeroFrictionOnboarding
 onComplete={(profile) => {
+console.log('✅ Onboarding completed with profile:', profile);
 setHasCompletedOnboarding(true);
-handleSignUp(profile);
+setCurrentScreen('home');
 }}
 onSkip={() => {
 setHasCompletedOnboarding(true);
