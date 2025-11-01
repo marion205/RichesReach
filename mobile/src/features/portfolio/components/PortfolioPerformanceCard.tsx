@@ -33,6 +33,7 @@ import {
   getBenchmarkColor
 } from '../../../graphql/benchmarkQueries';
 import BenchmarkSelector from './BenchmarkSelector';
+import { computeYDomain, getPeriodReturnLabel } from '../utils/chartUtils';
 
 const { width } = Dimensions.get('window');
 const PREF_SHOW_BENCH = 'rr.pref.show_benchmark'; // NEW
@@ -235,8 +236,32 @@ export default function PortfolioPerformanceCard({
     setTimeout(() => wsRef.current?.subscribeToPortfolio(), 600);
   }, [tab]);
 
-  const minAll = useMemo(() => Math.min(...[(history.length ? Math.min(...history) : curValue), (showBenchmark && bench.length ? Math.min(...bench) : curValue)]), [history, bench, curValue, showBenchmark]);
-  const maxAll = useMemo(() => Math.max(...[(history.length ? Math.max(...history) : curValue), (showBenchmark && bench.length ? Math.max(...bench) : curValue)]), [history, bench, curValue, showBenchmark]);
+  // Use chartUtils to compute proper y-domain (prevents -100% issues)
+  const chartPoints = useMemo(() => {
+    const allPoints: { t: number; v: number }[] = [];
+    // Portfolio points
+    history.forEach((val, idx) => {
+      allPoints.push({ t: idx, v: val });
+    });
+    // Benchmark points
+    if (showBenchmark && bench.length) {
+      bench.forEach((val, idx) => {
+        allPoints.push({ t: idx, v: val });
+      });
+    }
+    // If no history, use current value
+    if (!allPoints.length) {
+      allPoints.push({ t: 0, v: curValue });
+    }
+    return allPoints;
+  }, [history, bench, curValue, showBenchmark]);
+
+  const [yMin, yMax] = useMemo(() => {
+    return computeYDomain(chartPoints, false); // false = dollar values, not percentages
+  }, [chartPoints]);
+
+  const minAll = yMin;
+  const maxAll = yMax;
 
   // ---- Crosshair / Tooltip state ----
   const [pointer, setPointer] = useState<{ index: number; x: number; y: number; value: number } | null>(null);
@@ -270,9 +295,10 @@ export default function PortfolioPerformanceCard({
   );
 
   // period returns - use real benchmark data if available
+  // Prevent -100% issues when start value is 0 or very small
   const pStart = history[0] ?? curValue;
   const pEnd = history[history.length - 1] ?? curValue;
-  const pRetPct = ((pEnd - pStart) / pStart) * 100;
+  const pRetPct = (pStart && pStart > 0) ? ((pEnd - pStart) / pStart) * 100 : 0;
   
   // Use real benchmark performance if available
   const benchmarkSummary = useRealBenchmarkData && benchmarkData?.benchmarkSeries 
@@ -506,6 +532,14 @@ export default function PortfolioPerformanceCard({
             style={styles.chart}
             fromZero={false}
             segments={4}
+            yAxisInterval={1}
+            formatYLabel={(value) => {
+              // Format y-axis labels using chartUtils
+              const numValue = Number(value);
+              if (numValue >= 1000000) return `$${(numValue / 1000000).toFixed(1)}M`;
+              if (numValue >= 1000) return `$${(numValue / 1000).toFixed(1)}K`;
+              return `$${numValue.toFixed(0)}`;
+            }}
             onDataPointClick={(dp) => {
               setPointer({ index: dp.index, x: dp.x, y: dp.y, value: dp.value as number });
             }}
