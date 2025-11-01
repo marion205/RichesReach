@@ -238,7 +238,7 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: mediaType === 'image' ? ImagePicker.MediaType.Images : ImagePicker.MediaType.Videos,
+      mediaTypes: mediaType === 'image' ? 'images' : 'videos',
       allowsEditing: true,
       aspect: [4, 3],
       quality: 0.8,

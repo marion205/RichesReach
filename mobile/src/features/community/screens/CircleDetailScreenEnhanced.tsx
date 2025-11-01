@@ -365,7 +365,7 @@ export default function CircleDetailScreenEnhanced({ route, navigation }: Circle
   const pickMedia = useCallback(async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: [ImagePicker.MediaType.Images, ImagePicker.MediaType.Videos],
+        mediaTypes: ['images', 'videos'],
         allowsEditing: true,
         aspect: [16, 9],
         quality: 0.8,

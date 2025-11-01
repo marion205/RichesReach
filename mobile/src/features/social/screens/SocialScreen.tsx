@@ -563,7 +563,7 @@ setIsCommenting(false);
 const pickImage = async () => {
 try {
 const result = await ImagePicker.launchImageLibraryAsync({
-mediaTypes: ImagePicker.MediaType.Images,
+mediaTypes: 'images',
 allowsEditing: true,
 aspect: [16, 9],
 quality: 0.8,
@@ -582,7 +582,7 @@ Alert.alert('Error', 'Failed to pick image');
 const pickVideo = async () => {
 try {
 const result = await ImagePicker.launchImageLibraryAsync({
-mediaTypes: ImagePicker.MediaType.Videos,
+mediaTypes: 'videos',
 allowsEditing: true,
 quality: 0.8,
 });

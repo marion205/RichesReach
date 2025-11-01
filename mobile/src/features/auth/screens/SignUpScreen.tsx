@@ -90,7 +90,7 @@ Alert.alert('Permission needed', 'Please allow camera access to take a photo.');
 return;
 }
 result = await ImagePicker.launchCameraAsync({
-mediaTypes: ImagePicker.MediaType.Images,
+mediaTypes: 'images',
 allowsEditing: true,
 aspect: [1, 1],
 quality: 0.8,
@@ -102,7 +102,7 @@ Alert.alert('Permission needed', 'Please allow photo library access to select an
 return;
 }
 result = await ImagePicker.launchImageLibraryAsync({
-mediaTypes: ImagePicker.MediaType.Images,
+mediaTypes: 'images',
 allowsEditing: true,
 aspect: [1, 1],
 quality: 0.8,

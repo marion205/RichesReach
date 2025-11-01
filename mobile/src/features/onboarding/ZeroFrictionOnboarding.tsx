@@ -263,7 +263,7 @@ function KYCStep({ profile, updateProfile, hasPermission, setHasPermission, isSc
     setIsScanning(true);
     try {
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaType.Images,
+        mediaTypes: 'images',
         allowsEditing: true,
         aspect: [16, 10],
         quality: 0.8,
