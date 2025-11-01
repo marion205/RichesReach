@@ -36,10 +36,19 @@ jest.mock('expo-av', () => ({
 
 jest.mock('expo-image-picker', () => ({
   requestMediaLibraryPermissionsAsync: jest.fn(),
+  requestCameraPermissionsAsync: jest.fn(),
   launchImageLibraryAsync: jest.fn(),
+  launchCameraAsync: jest.fn(),
+  MediaType: {
+    Images: 'Images',
+    Videos: 'Videos',
+    All: 'All',
+  },
+  // Keep MediaTypeOptions for backward compatibility in tests
   MediaTypeOptions: {
     Images: 'Images',
     Videos: 'Videos',
+    All: 'All',
   },
 }));
 
