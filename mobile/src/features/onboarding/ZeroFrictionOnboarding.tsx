@@ -263,7 +263,7 @@ function KYCStep({ profile, updateProfile, hasPermission, setHasPermission, isSc
     setIsScanning(true);
     try {
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ImagePicker.MediaType.Images,
         allowsEditing: true,
         aspect: [16, 10],
         quality: 0.8,
@@ -285,9 +285,17 @@ function KYCStep({ profile, updateProfile, hasPermission, setHasPermission, isSc
           setIsScanning(false);
         }, 2000);
       }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to take picture');
+    } catch (error: any) {
+      console.error('Camera error:', error);
+      Alert.alert(
+        'Error', 
+        error?.message || 'Failed to take picture. Please check camera permissions and try again.'
+      );
       setIsScanning(false);
+    } finally {
+      if (!idImage) {
+        setIsScanning(false);
+      }
     }
   };
 

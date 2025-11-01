@@ -462,8 +462,8 @@ export default function CircleDetailScreenSelfHosted({ route, navigation }: Circ
 
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: mediaType === 'image' 
-          ? ImagePicker.MediaTypeOptions.Images 
-          : ImagePicker.MediaTypeOptions.Videos,
+          ? ImagePicker.MediaType.Images 
+          : ImagePicker.MediaType.Videos,
         allowsEditing: true,
         aspect: [4, 3],
         quality: 0.8,
