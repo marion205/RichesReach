@@ -8,6 +8,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import Icon from 'react-native-vector-icons/Feather';
+import { useHoldingInsight } from '../hooks/useHoldingInsight';
 
 interface Holding {
   symbol: string;
@@ -73,6 +74,12 @@ export const HoldingRow: React.FC<HoldingRowProps> = ({
 }) => {
   const isPositive = (holding.change || 0) >= 0;
   const changeColor = isPositive ? '#34C759' : '#FF3B30';
+  
+  // Phase 3: AI insights (optional, graceful fallback)
+  const { data: insight, isLoading: insightLoading } = useHoldingInsight(
+    holding.symbol,
+    true // Enable by default
+  );
   
   const handlePress = () => {
     Haptics.selectionAsync();
@@ -252,6 +259,21 @@ const styles = StyleSheet.create({
   changeAmount: {
     fontSize: 15,
     fontWeight: '600',
+  },
+  insightContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#E5E5EA',
+    gap: 6,
+  },
+  insightText: {
+    fontSize: 13,
+    color: '#007AFF',
+    flex: 1,
+    fontStyle: 'italic',
   },
   swipeActionsContainer: {
     flexDirection: 'row',

@@ -138,6 +138,15 @@ except ImportError as e:
     AI_SCANS_AVAILABLE = False
     print(f"⚠️ AI Scans API not available: {e}")
 
+# Holding Insights API (Phase 3)
+try:
+    from core.holding_insight_api import router as holding_insight_router
+    HOLDING_INSIGHT_AVAILABLE = True
+    print("✅ Holding Insight API loaded successfully")
+except ImportError as e:
+    HOLDING_INSIGHT_AVAILABLE = False
+    print(f"⚠️ Holding Insight API not available: {e}")
+
 # Options Copilot Integration
 try:
     from core.options_copilot_api import router as options_copilot_api
@@ -1434,6 +1443,14 @@ try:
     logger.info("✅ AI Trading Coach API router included")
 except Exception as e:
     logger.warning(f"⚠️ Failed to include AI Trading Coach API router: {e}")
+
+# Include Holding Insight API (Phase 3)
+try:
+    if HOLDING_INSIGHT_AVAILABLE:
+        app.include_router(holding_insight_router)
+        logger.info("✅ Holding Insight API router included")
+except Exception as e:
+    logger.warning(f"⚠️ Failed to include Holding Insight API router: {e}")
 
 # Include Market Data endpoints with robust provider fallback
 try:

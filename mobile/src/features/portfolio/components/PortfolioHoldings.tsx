@@ -1,7 +1,10 @@
-import React, { useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, ListRenderItem } from 'react-native';
+import React, { useCallback, useMemo, useEffect } from 'react';
+import { View, Text, StyleSheet, FlatList, ListRenderItem, Animated, TouchableOpacity } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { HoldingRow } from './HoldingRow';
+import { SkeletonHoldings } from './SkeletonHoldings';
+import { useFadeIn } from '../utils/animationUtils';
+import { measureRenderStart } from '../utils/performanceTests';
 
 export interface Holding {
   symbol: string;
@@ -19,6 +22,7 @@ interface PortfolioHoldingsProps {
   onAddHoldings?: () => void; // Callback for empty state action
   onBuy?: (holding: Holding) => void; // Phase 2: Buy action
   onSell?: (holding: Holding) => void; // Phase 2: Sell action
+  loading?: boolean; // Phase 3: Show skeleton while loading
 }
 
 const PortfolioHoldings: React.FC<PortfolioHoldingsProps> = ({ 
@@ -27,12 +31,27 @@ const PortfolioHoldings: React.FC<PortfolioHoldingsProps> = ({
   onAddHoldings,
   onBuy,
   onSell,
+  loading = false,
 }) => {
+  // Phase 3: Fade-in animation
+  const fadeOpacity = useFadeIn(300);
+
+  // Phase 3: Performance measurement
+  useEffect(() => {
+    const endMeasurement = measureRenderStart('PortfolioHoldings');
+    return endMeasurement;
+  }, [holdings]);
+
   // Calculate total portfolio value (precomputed for performance)
   const totalValue = useMemo(
     () => holdings.reduce((sum, h) => sum + (h.totalValue || 0), 0),
     [holdings]
   );
+
+  // Phase 3: Show skeleton while loading
+  if (loading) {
+    return <SkeletonHoldings count={holdings.length || 3} />;
+  }
 
   // Empty state - Steve Jobs style: Inspiring, not discouraging
   if (!holdings || holdings.length === 0) {
@@ -78,7 +97,7 @@ const PortfolioHoldings: React.FC<PortfolioHoldingsProps> = ({
   );
 
   return (
-    <View style={styles.container}>
+    <Animated.View style={[styles.container, { opacity: fadeOpacity }]}>
       {/* Header with total value */}
       <View style={styles.header}>
         <View>
@@ -105,7 +124,7 @@ const PortfolioHoldings: React.FC<PortfolioHoldingsProps> = ({
         windowSize={5}
         ListEmptyComponent={null} // Empty state handled above
       />
-    </View>
+    </Animated.View>
   );
 };
 
