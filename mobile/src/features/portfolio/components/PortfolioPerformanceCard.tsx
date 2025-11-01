@@ -311,28 +311,42 @@ export default function PortfolioPerformanceCard({
   const vsBenchmark = calculateAlpha(pRetPct, bRetPct); // + means outperformance
 
   // Datasets (portfolio + optional benchmark)
-  const chartData = useMemo(
-    () => ({
+  // Normalize data to prevent extreme scaling issues
+  const chartData = useMemo(() => {
+    // Ensure data has reasonable bounds to prevent chart scaling issues
+    const portfolioData = history.length ? history : [curValue];
+    const benchmarkData = bench.length ? bench : [curValue];
+    
+    // If all values are zero or very small, add minimal padding to prevent chart confusion
+    const allValues = [...portfolioData, ...benchmarkData];
+    const allZero = allValues.every(v => Math.abs(v) < 0.01);
+    const normalizedPortfolio = allZero 
+      ? portfolioData.map(() => 1) // Show at least a baseline
+      : portfolioData;
+    const normalizedBenchmark = allZero
+      ? benchmarkData.map(() => 1)
+      : benchmarkData;
+
+    return {
       labels: new Array(6).fill(''),
       datasets: [
         // Portfolio (accent)
         {
-          data: history.length ? history : [curValue],
+          data: normalizedPortfolio,
           color: () => accent,
           strokeWidth: 2.6,
         } as any,
         // Benchmark (faint)
         ...(showBenchmark
           ? [{
-              data: bench.length ? bench : [curValue],
+              data: normalizedBenchmark,
               color: (opacity = 1) => `${palette.bench}${Math.round(opacity * 200).toString(16).padStart(2, '0')}`,
               strokeWidth: 2,
             } as any]
           : []),
       ],
-    }),
-    [history, bench, curValue, accent, palette.bench, showBenchmark]
-  );
+    };
+  }, [history, bench, curValue, accent, palette.bench, showBenchmark]);
 
   const chartConfig = useMemo(
     () => ({
@@ -354,6 +368,16 @@ export default function PortfolioPerformanceCard({
       fillShadowGradientTo: accent,
       fillShadowGradientFromOpacity: 0.12,
       fillShadowGradientToOpacity: 0.02,
+      // Format y-axis labels to prevent confusing scales
+      formatYLabel: (value: string) => {
+        const numValue = Number(value);
+        if (isNaN(numValue)) return value;
+        // Handle very small values
+        if (Math.abs(numValue) < 0.01) return '$0';
+        if (numValue >= 1000000) return `$${(numValue / 1000000).toFixed(1)}M`;
+        if (numValue >= 1000) return `$${(numValue / 1000).toFixed(1)}K`;
+        return `$${numValue.toFixed(0)}`;
+      },
     }),
     [accent, palette]
   );
@@ -533,13 +557,6 @@ export default function PortfolioPerformanceCard({
             fromZero={false}
             segments={4}
             yAxisInterval={1}
-            formatYLabel={(value) => {
-              // Format y-axis labels using chartUtils
-              const numValue = Number(value);
-              if (numValue >= 1000000) return `$${(numValue / 1000000).toFixed(1)}M`;
-              if (numValue >= 1000) return `$${(numValue / 1000).toFixed(1)}K`;
-              return `$${numValue.toFixed(0)}`;
-            }}
             onDataPointClick={(dp) => {
               setPointer({ index: dp.index, x: dp.x, y: dp.y, value: dp.value as number });
             }}
