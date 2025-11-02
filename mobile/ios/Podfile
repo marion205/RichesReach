@@ -3,70 +3,66 @@ source 'https://cdn.cocoapods.org/'
 # Skip xcframework validation to bypass AgoraInfra_iOS/aosl.xcframework Info.plist issue
 ENV['COCOAPODS_SKIP_XCFRAMEWORK_VALIDATION'] = '1'
 
-# Monkey-patch CocoaPods XCFramework validation to handle missing Info.plist gracefully
-if defined?(Pod::Installer)
-  module Pod
-    class Installer
-      class Xcode
-        class TargetValidator
-          class XCFrameworkValidator
-            def validate!
-              # Skip validation if env var is set OR create missing Info.plist files
-              return if ENV['COCOAPODS_SKIP_XCFRAMEWORK_VALIDATION'] == '1'
-              
-              begin
-                super
-              rescue => e
-                # If validation fails on missing Info.plist, try to create it
-                if e.message.include?('Info.plist') && e.message.include?("doesn't exist")
-                  xcframework_path = e.message.match(/`([^`]+\.xcframework)/)&.captures&.first
-                  if xcframework_path && File.exist?(File.dirname(xcframework_path))
-                    puts "🔧 Auto-fixing missing Info.plist for #{File.basename(xcframework_path)}..."
-                    info_plist = File.join(xcframework_path, 'Info.plist')
-                    unless File.exist?(info_plist)
-                      File.write(info_plist, <<~XML
-                        <?xml version="1.0" encoding="UTF-8"?>
-                        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-                        <plist version="1.0">
-                        <dict>
-                          <key>CFBundlePackageType</key>
-                          <string>XFWK</string>
-                          <key>XCFrameworkFormatVersion</key>
-                          <string>1.0</string>
-                          <key>AvailableLibraries</key>
-                          <array>
-                            <dict>
-                              <key>LibraryIdentifier</key>
-                              <string>ios-arm64</string>
-                              <key>LibraryPath</key>
-                              <string>aosl.framework</string>
-                              <key>SupportedPlatform</key>
-                              <string>ios</string>
-                            </dict>
-                            <dict>
-                              <key>LibraryIdentifier</key>
-                              <string>ios-arm64_x86_64-simulator</string>
-                              <key>LibraryPath</key>
-                              <string>aosl.framework</string>
-                              <key>SupportedPlatform</key>
-                              <string>ios</string>
-                              <key>SupportedPlatformVariant</key>
-                              <string>simulator</string>
-                            </dict>
-                          </array>
-                        </dict>
-                        </plist>
-                      XML
-                      )
-                      puts "✅ Auto-created Info.plist - retrying validation..."
-                      retry
-                    end
-                  end
-                end
-                raise e
+# Monkey-patch CocoaPods to handle missing Agora xcframework Info.plist
+# This catches the error during "Generating Pods project" phase
+module Pod
+  class Installer
+    class Xcode
+      class TargetValidator
+        alias_method :original_validate_xcframeworks, :validate_xcframeworks if method_defined?(:validate_xcframeworks)
+        
+        def validate_xcframeworks
+          return if ENV['COCOAPODS_SKIP_XCFRAMEWORK_VALIDATION'] == '1'
+          original_validate_xcframeworks if defined?(original_validate_xcframeworks)
+        rescue => e
+          # Auto-fix missing Info.plist for Agora
+          if e.message.include?('Info.plist') && e.message.include?("doesn't exist")
+            xcframework_match = e.message.match(/path `([^`]+\.xcframework)\/Info\.plist`/)
+            if xcframework_match
+              xcframework_path = xcframework_match[1]
+              info_plist = File.join(xcframework_path, 'Info.plist')
+              if File.exist?(xcframework_path) && !File.exist?(info_plist)
+                puts "🔧 Auto-creating missing Info.plist for #{File.basename(xcframework_path)}..."
+                File.write(info_plist, <<~XML
+                  <?xml version="1.0" encoding="UTF-8"?>
+                  <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+                  <plist version="1.0">
+                  <dict>
+                    <key>CFBundlePackageType</key>
+                    <string>XFWK</string>
+                    <key>XCFrameworkFormatVersion</key>
+                    <string>1.0</string>
+                    <key>AvailableLibraries</key>
+                    <array>
+                      <dict>
+                        <key>LibraryIdentifier</key>
+                        <string>ios-arm64</string>
+                        <key>LibraryPath</key>
+                        <string>aosl.framework</string>
+                        <key>SupportedPlatform</key>
+                        <string>ios</string>
+                      </dict>
+                      <dict>
+                        <key>LibraryIdentifier</key>
+                        <string>ios-arm64_x86_64-simulator</string>
+                        <key>LibraryPath</key>
+                        <string>aosl.framework</string>
+                        <key>SupportedPlatform</key>
+                        <string>ios</string>
+                        <key>SupportedPlatformVariant</key>
+                        <string>simulator</string>
+                      </dict>
+                    </array>
+                  </dict>
+                  </plist>
+                XML
+                )
+                puts "✅ Created Info.plist - continuing..."
+                return  # Skip validation for this framework
               end
             end
           end
+          raise e  # Re-raise if we can't fix it
         end
       end
     end
