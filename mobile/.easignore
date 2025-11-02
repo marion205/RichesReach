@@ -1,0 +1,80 @@
+# Git
+.git
+.git/**
+**/.git/objects/pack/*.pack
+
+# Backend (critical - 4.2GB!)
+backend/
+**/backend/**
+../backend/
+backend
+
+# Python virtual environments
+.venv/
+**/.venv/
+**/.venv/**
+venv/
+**/venv/**
+
+# Expo
+.expo
+.expo-shared
+.expo/**
+dist
+web-build
+
+# Node
+node_modules/
+node_modules/.cache
+npm-debug.log*
+yarn-error.log*
+
+# Build Artifacts
+ios/build
+ios/DerivedData
+ios/Pods
+ios/Pods/**
+ios/**/Pods/**
+**/hermes-engine-artifacts/**
+**/*.tar.gz
+android/build
+android/app/build
+**/*.aab
+**/*.apk
+
+# Large Pods artifacts
+**/*.xcframework/**
+**/*.dSYM/**
+**/*.framework/**
+ios/Pods/JitsiWebRTC/**
+ios/Pods/React-Core-prebuilt/**
+
+# Media & Archives
+**/*.mp4
+**/*.mov
+**/*.avi
+**/*.zip
+**/*.z*
+**/*.dmg
+**/*.ipa
+**/*.app
+
+# Assets
+assets/raw/**
+
+# Dev files
+*.DS_Store
+.vscode
+.idea
+*.swp
+*.swo
+
+# Tests
+**/__tests__/**
+**/*.snap
+coverage
+
+# Logs
+**/*.log
+tmp/
+.cache/
