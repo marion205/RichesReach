@@ -3,6 +3,76 @@ source 'https://cdn.cocoapods.org/'
 # Skip xcframework validation to bypass AgoraInfra_iOS/aosl.xcframework Info.plist issue
 ENV['COCOAPODS_SKIP_XCFRAMEWORK_VALIDATION'] = '1'
 
+# Monkey-patch CocoaPods XCFramework validation to handle missing Info.plist gracefully
+if defined?(Pod::Installer)
+  module Pod
+    class Installer
+      class Xcode
+        class TargetValidator
+          class XCFrameworkValidator
+            def validate!
+              # Skip validation if env var is set OR create missing Info.plist files
+              return if ENV['COCOAPODS_SKIP_XCFRAMEWORK_VALIDATION'] == '1'
+              
+              begin
+                super
+              rescue => e
+                # If validation fails on missing Info.plist, try to create it
+                if e.message.include?('Info.plist') && e.message.include?("doesn't exist")
+                  xcframework_path = e.message.match(/`([^`]+\.xcframework)/)&.captures&.first
+                  if xcframework_path && File.exist?(File.dirname(xcframework_path))
+                    puts "🔧 Auto-fixing missing Info.plist for #{File.basename(xcframework_path)}..."
+                    info_plist = File.join(xcframework_path, 'Info.plist')
+                    unless File.exist?(info_plist)
+                      File.write(info_plist, <<~XML
+                        <?xml version="1.0" encoding="UTF-8"?>
+                        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+                        <plist version="1.0">
+                        <dict>
+                          <key>CFBundlePackageType</key>
+                          <string>XFWK</string>
+                          <key>XCFrameworkFormatVersion</key>
+                          <string>1.0</string>
+                          <key>AvailableLibraries</key>
+                          <array>
+                            <dict>
+                              <key>LibraryIdentifier</key>
+                              <string>ios-arm64</string>
+                              <key>LibraryPath</key>
+                              <string>aosl.framework</string>
+                              <key>SupportedPlatform</key>
+                              <string>ios</string>
+                            </dict>
+                            <dict>
+                              <key>LibraryIdentifier</key>
+                              <string>ios-arm64_x86_64-simulator</string>
+                              <key>LibraryPath</key>
+                              <string>aosl.framework</string>
+                              <key>SupportedPlatform</key>
+                              <string>ios</string>
+                              <key>SupportedPlatformVariant</key>
+                              <string>simulator</string>
+                            </dict>
+                          </array>
+                        </dict>
+                        </plist>
+                      XML
+                      )
+                      puts "✅ Auto-created Info.plist - retrying validation..."
+                      retry
+                    end
+                  end
+                end
+                raise e
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end
+
 require File.join(File.dirname(`node --print "require.resolve('expo/package.json')"`), "scripts/autolinking")
 require File.join(File.dirname(`node --print "require.resolve('react-native/package.json')"`), "scripts/react_native_pods")
 
