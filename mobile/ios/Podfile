@@ -29,6 +29,7 @@ ENV['RCT_NEW_ARCH_ENABLED'] ||= '0' if podfile_properties['newArchEnabled'] == '
 ENV['EX_DEV_CLIENT_NETWORK_INSPECTOR'] ||= podfile_properties['EX_DEV_CLIENT_NETWORK_INSPECTOR']
 ENV['RCT_USE_RN_DEP'] ||= '1' if podfile_properties['ios.buildReactNativeFromSource'] != 'true' && podfile_properties['newArchEnabled'] != 'false'
 ENV['RCT_USE_PREBUILT_RNCORE'] ||= '1' if podfile_properties['ios.buildReactNativeFromSource'] != 'true' && podfile_properties['newArchEnabled'] != 'false'
+# iOS 18 SDK requires minimum 13.4, using 15.1 for better compatibility
 platform :ios, podfile_properties['ios.deploymentTarget'] || '15.1'
 
 # Install with custom settings
@@ -234,7 +235,8 @@ target 'RichesReach' do
         s['OTHER_CFLAGS'] = ['$(inherited)']
         
         # --- C++ (C++ only) - GUARDED ---
-        s['CLANG_CXX_LANGUAGE_STANDARD'] = 'gnu++20'
+        # iOS 18 SDK compatibility: Use C++17 with libc++
+        s['CLANG_CXX_LANGUAGE_STANDARD'] = 'c++17'
         s['CLANG_CXX_LIBRARY'] = 'libc++'
         
         # Ensure file-type compilation
@@ -247,10 +249,9 @@ target 'RichesReach' do
         cpp = cpp + ['$(inherited)'] unless cpp.include?('$(inherited)')
         # Remove any accidental flags and normalize
         cpp = cpp.reject { |f| f.to_s =~ /-std=c\+\+\d+|--std=c\+\+\d+/ }
-        cpp << '-std=gnu++20'
+        cpp << '-std=c++17'
         cpp << '-stdlib=libc++'
         cpp << '-fmodules' unless cpp.any? { |f| f.to_s.include?('fmodules') }
-        cpp << '-fcxx-modules' unless cpp.any? { |f| f.to_s.include?('fcxx-modules') }
         s['OTHER_CPLUSPLUSFLAGS'] = cpp.uniq
         
         # Make sure compiler honors file extensions (.c vs .mm/.cc/.cpp)
@@ -285,12 +286,13 @@ target 'RichesReach' do
     end
     
     # 💥 CRITICAL: RCT-Folly module fix - enables C++ standard library module imports
-    installer.pod_targets.each do |pt|
-      if pt.name == 'RCT-Folly'
-        pt.native_target.build_configurations.each do |cfg|
+    installer.pods_project.targets.each do |target|
+      if target.name == 'RCT-Folly'
+        target.build_configurations.each do |cfg|
           cfg.build_settings['CLANG_ENABLE_MODULES'] = 'YES'
           cfg.build_settings['DEFINES_MODULE'] = 'YES'  # THIS fixes std module import
-          cfg.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'gnu++20'
+          # iOS 18 compatibility: Use C++17 with libc++
+          cfg.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'c++17'
           cfg.build_settings['CLANG_CXX_LIBRARY'] = 'libc++'
           
           # C++17 compatibility flags (fixes __unary_function errors)
