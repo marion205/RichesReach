@@ -1,55 +1,41 @@
 {
-"cli": {
-"version": ">= 5.9.0"
-},
-"build": {
-"development": {
-"developmentClient": true,
-"distribution": "internal"
-},
-"preview": {
-"distribution": "internal",
-"ios": {
-"simulator": true
-}
-},
-"production": {
-"ios": {
-"autoIncrement": "buildNumber"
-},
-"android": {
-"buildType": "app-bundle"
-},
-"env": {
-"EXPO_PUBLIC_API_URL": "http://riches-reach-alb-1199497064.us-east-1.elb.amazonaws.com",
-"EXPO_PUBLIC_GRAPHQL_URL": "http://riches-reach-alb-1199497064.us-east-1.elb.amazonaws.com/graphql",
-"EXPO_PUBLIC_RUST_API_URL": "http://riches-reach-alb-1199497064.us-east-1.elb.amazonaws.com:3001",
-"EXPO_PUBLIC_ENVIRONMENT": "production"
-}
-},
-"internal": {
-"android": {
-"buildType": "apk"
-},
-"env": {
-"EXPO_PUBLIC_API_URL": "http://riches-reach-alb-1199497064.us-east-1.elb.amazonaws.com",
-"EXPO_PUBLIC_GRAPHQL_URL": "http://riches-reach-alb-1199497064.us-east-1.elb.amazonaws.com/graphql",
-"EXPO_PUBLIC_RUST_API_URL": "http://riches-reach-alb-1199497064.us-east-1.elb.amazonaws.com:3001",
-"EXPO_PUBLIC_ENVIRONMENT": "production"
-}
-}
-},
-"submit": {
-"production": {
-"ios": {
-"appleId": "marion@richesreach.com",
-"ascAppId": "com.richesreach.app",
-"appleTeamId": "YOUR_APPLE_TEAM_ID"
-},
-"android": {
-"serviceAccountKeyPath": "./google-service-account.json",
-"track": "production"
-}
-}
-}
+  "cli": {
+    "version": ">= 12.0.0"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "env": {
+        "COCOAPODS_SKIP_XCFRAMEWORK_VALIDATION": "1"
+      },
+      "ios": {
+        "simulator": true,
+        "image": "macos-sonoma-14.6-xcode-16.1"
+      }
+    },
+    "simulator": {
+      "developmentClient": true,
+      "env": {
+        "COCOAPODS_SKIP_XCFRAMEWORK_VALIDATION": "1"
+      },
+      "ios": {
+        "simulator": true,
+        "image": "macos-sonoma-14.6-xcode-16.1"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "env": {
+        "COCOAPODS_SKIP_XCFRAMEWORK_VALIDATION": "1"
+      }
+    },
+    "production": {
+      "env": {
+        "COCOAPODS_SKIP_XCFRAMEWORK_VALIDATION": "1"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
 }
