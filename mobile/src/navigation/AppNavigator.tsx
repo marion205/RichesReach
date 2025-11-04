@@ -9,9 +9,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ProfileScreen from '../features/user/screens/ProfileScreen';
 import BankAccountScreen from '../features/user/screens/BankAccountScreen';
 import { setNavigator } from './NavigationService';
+import GestureNavigation from '../components/GestureNavigation';
 
 // Existing screens (paths reflect current project structure)
 import HomeScreen from '../navigation/HomeScreen';
+import ChartTestScreen from '../components/charts/ChartTestScreen';
 import CryptoScreen from '../navigation/CryptoScreen';
 import AIPortfolioScreen from '../features/portfolio/screens/AIPortfolioScreen';
 import TutorScreen from '../features/education/screens/TutorScreen';
@@ -144,6 +146,7 @@ function HomeStack() {
       <Stack.Screen name="circle-detail" component={SimpleCircleDetailScreen} />
       <Stack.Screen name="fireside" component={FiresideRoomsScreen} />
       <Stack.Screen name="fireside-room" component={FiresideRoomScreen} />
+      <Stack.Screen name="chart-test" component={ChartTestScreen} options={{ headerShown: false }} />
       <Stack.Screen name="ar-preview" component={ARNextMovePreview} />
       <Stack.Screen name="peer-progress" component={PeerProgressScreen} />
       <Stack.Screen name="trade-challenges" component={TradeChallengesScreen} />
@@ -259,6 +262,7 @@ function CommunityStack() {
       <Stack.Screen name="circle-detail" component={SimpleCircleDetailScreen} />
       <Stack.Screen name="fireside" component={FiresideRoomsScreen} />
       <Stack.Screen name="fireside-room" component={FiresideRoomScreen} />
+      <Stack.Screen name="chart-test" component={ChartTestScreen} options={{ headerShown: false }} />
     </Stack.Navigator>
   );
 }
@@ -285,8 +289,37 @@ export default function AppNavigator() {
 
   return (
     <NavigationContainer ref={navRef} onStateChange={handleStateChange}>
-      <View style={{ flex: 1 }}>
-        <Tab.Navigator
+      <GestureNavigation
+        onNavigate={(screen) => {
+          const { globalNavigate } = require('../navigation/NavigationService');
+          if (screen === 'InvestMain' || screen === 'invest') {
+            globalNavigate('Invest');
+          } else if (screen === 'home') {
+            globalNavigate('Home');
+          } else {
+            globalNavigate(screen);
+          }
+        }}
+        currentScreen={tabOrder[currentTabIndex] || 'Home'}
+        onBack={() => {
+          // Swipe left = go back (previous tab)
+          if (currentTabIndex > 0) {
+            const prevTab = tabOrder[currentTabIndex - 1];
+            const { globalNavigate } = require('../navigation/NavigationService');
+            globalNavigate(prevTab);
+          }
+        }}
+        onForward={() => {
+          // Swipe right = go forward (next tab)
+          if (currentTabIndex < tabOrder.length - 1) {
+            const nextTab = tabOrder[currentTabIndex + 1];
+            const { globalNavigate } = require('../navigation/NavigationService');
+            globalNavigate(nextTab);
+          }
+        }}
+      >
+        <View style={{ flex: 1 }}>
+          <Tab.Navigator
           screenOptions={({ route }) => ({
             headerShown: false,
             tabBarLabelStyle: { fontSize: 12, fontWeight: '700', marginBottom: 4 },
@@ -324,41 +357,22 @@ export default function AppNavigator() {
           <Tab.Screen 
             name="Home" 
             component={HomeStack}
-            listeners={{
-              tabPress: (e) => {
-                console.log('Home tab pressed');
-              },
-            }}
           />
           <Tab.Screen 
             name="Invest" 
             component={InvestStack}
-            listeners={{
-              tabPress: (e) => {
-                console.log('Invest tab pressed');
-              },
-            }}
           />
           <Tab.Screen 
             name="Learn" 
             component={LearnStack}
-            listeners={{
-              tabPress: (e) => {
-                console.log('Learn tab pressed');
-              },
-            }}
           />
           <Tab.Screen 
             name="Community" 
             component={CommunityStack}
-            listeners={{
-              tabPress: (e) => {
-                console.log('Community tab pressed');
-              },
-            }}
           />
         </Tab.Navigator>
       </View>
+      </GestureNavigation>
     </NavigationContainer>
   );
 }

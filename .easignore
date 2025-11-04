@@ -1,0 +1,88 @@
+# Backend (CRITICAL - 4.2GB!)
+backend/
+**/backend/**
+../backend/
+backend
+**/target/
+**/target/**
+*.o
+*.rcgu.o
+**/rust-executor/**
+**/rust-executor
+**/venv/
+.venv/
+**/.venv/
+**/.venv/**
+venv/
+**/venv/****
+
+# Git (large pack files)
+.git
+.git/**
+**/.git/objects/pack/*.pack
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node (rebuilds on CI)
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# Expo
+.expo/
+*.expo.*
+.expo-dev-client
+dist/
+web-build/
+
+# iOS Build Artifacts (CRITICAL)
+ios/build/
+ios/DerivedData/
+ios/Pods/
+ios/Pods/**
+ios/**/Pods/**
+**/hermes-engine-artifacts/**
+**/*.xcframework/**
+**/*.dSYM/**
+ios/Pods/JitsiWebRTC/**
+ios/Pods/React-Core-prebuilt/**
+
+# Android
+android/app/build/
+android/build/
+**/*.aab
+**/*.apk
+
+# Archives
+**/*.tar.gz
+**/*.zip
+**/*.z*
+**/*.dmg
+
+# Media
+*.mov
+*.mp4
+*.avi
+
+# Logs & Temps
+*.log
+tmp/
+.cache/
+
+# ML/AR
+*.pkl
+*.onnx
+*.tflite
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Tests
+__tests__/
+coverage/
+**/*.snap

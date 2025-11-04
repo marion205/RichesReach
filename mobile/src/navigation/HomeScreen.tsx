@@ -668,11 +668,22 @@ import { parseIntent } from '../features/voice/intent';
         (isFinite(Number(livePct)) ? Number(livePct) : undefined) ??
         g?.totalReturnPercent ?? 17.65;
   
-      const holdings =
+      const rawHoldings =
         realPortfolio?.holdings ??
         live?.holdings ??
         g?.holdings ??
         [];
+  
+      // Transform holdings to match PortfolioHoldings interface
+      const holdings = rawHoldings.map((h: any) => ({
+        symbol: h.symbol || h.stock?.symbol || '',
+        quantity: h.shares || h.quantity || 0,
+        currentPrice: h.currentPrice || 0,
+        totalValue: h.totalValue || 0,
+        change: h.returnAmount || h.change || 0,
+        changePercent: h.returnPercent || h.changePercent || 0,
+        name: h.companyName || h.stock?.companyName || h.name,
+      }));
   
       return { totalValue, totalReturn, totalReturnPercent, holdings };
     }, [realPortfolio, live, portfolioData]);

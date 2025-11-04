@@ -1,9 +1,86 @@
 source 'https://cdn.cocoapods.org/'
 
+# Skip xcframework validation to bypass AgoraInfra_iOS/aosl.xcframework Info.plist issue
+ENV['COCOAPODS_SKIP_XCFRAMEWORK_VALIDATION'] = '1'
+
+# Monkey-patch CocoaPods to handle missing Agora xcframework Info.plist
+# This catches the error during "Generating Pods project" phase
+module Pod
+  class Installer
+    class Xcode
+      class TargetValidator
+        alias_method :original_validate_xcframeworks, :validate_xcframeworks if method_defined?(:validate_xcframeworks)
+        
+        def validate_xcframeworks
+          return if ENV['COCOAPODS_SKIP_XCFRAMEWORK_VALIDATION'] == '1'
+          original_validate_xcframeworks if defined?(original_validate_xcframeworks)
+        rescue => e
+          # Auto-fix missing Info.plist for Agora
+          if e.message.include?('Info.plist') && e.message.include?("doesn't exist")
+            xcframework_match = e.message.match(/path `([^`]+\.xcframework)\/Info\.plist`/)
+            if xcframework_match
+              xcframework_path = xcframework_match[1]
+              info_plist = File.join(xcframework_path, 'Info.plist')
+              if File.exist?(xcframework_path) && !File.exist?(info_plist)
+                puts "🔧 Auto-creating missing Info.plist for #{File.basename(xcframework_path)}..."
+                File.write(info_plist, <<~XML
+                  <?xml version="1.0" encoding="UTF-8"?>
+                  <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+                  <plist version="1.0">
+                  <dict>
+                    <key>CFBundlePackageType</key>
+                    <string>XFWK</string>
+                    <key>XCFrameworkFormatVersion</key>
+                    <string>1.0</string>
+                    <key>AvailableLibraries</key>
+                    <array>
+                      <dict>
+                        <key>LibraryIdentifier</key>
+                        <string>ios-arm64</string>
+                        <key>LibraryPath</key>
+                        <string>aosl.framework</string>
+                        <key>SupportedPlatform</key>
+                        <string>ios</string>
+                      </dict>
+                      <dict>
+                        <key>LibraryIdentifier</key>
+                        <string>ios-arm64_x86_64-simulator</string>
+                        <key>LibraryPath</key>
+                        <string>aosl.framework</string>
+                        <key>SupportedPlatform</key>
+                        <string>ios</string>
+                        <key>SupportedPlatformVariant</key>
+                        <string>simulator</string>
+                      </dict>
+                    </array>
+                  </dict>
+                  </plist>
+                XML
+                )
+                puts "✅ Created Info.plist - continuing..."
+                return  # Skip validation for this framework
+              end
+            end
+          end
+          raise e  # Re-raise if we can't fix it
+        end
+      end
+    end
+  end
+end
+
 require File.join(File.dirname(`node --print "require.resolve('expo/package.json')"`), "scripts/autolinking")
 require File.join(File.dirname(`node --print "require.resolve('react-native/package.json')"`), "scripts/react_native_pods")
 
 require 'json'
+require 'fileutils'
+require 'logger'  # Fix for ActiveSupport LoggerThreadSafeLevel issue (Rails 6.1.7.2 + concurrent-ruby 1.3.5+)
+
+# CRITICAL: Set CURRENT_ARCH BEFORE any pod processing (glog's prepare_command needs this)
+# Must be set in ENV so it's available to shell scripts (prepare_command runs in subprocess)
+ENV['CURRENT_ARCH'] = 'arm64' unless ENV['CURRENT_ARCH']
+ENV['PLATFORM_NAME'] = 'iphonesimulator' if ENV['PLATFORM_NAME'].nil? && RbConfig::CONFIG['host_os'] =~ /darwin/
+
 podfile_properties = JSON.parse(File.read(File.join(__dir__, 'Podfile.properties.json'))) rescue {}
 
 def ccache_enabled?(podfile_properties)
@@ -18,7 +95,11 @@ ENV['RCT_NEW_ARCH_ENABLED'] ||= '0' if podfile_properties['newArchEnabled'] == '
 ENV['EX_DEV_CLIENT_NETWORK_INSPECTOR'] ||= podfile_properties['EX_DEV_CLIENT_NETWORK_INSPECTOR']
 ENV['RCT_USE_RN_DEP'] ||= '1' if podfile_properties['ios.buildReactNativeFromSource'] != 'true' && podfile_properties['newArchEnabled'] != 'false'
 ENV['RCT_USE_PREBUILT_RNCORE'] ||= '1' if podfile_properties['ios.buildReactNativeFromSource'] != 'true' && podfile_properties['newArchEnabled'] != 'false'
+# iOS 18 SDK requires minimum 13.4, using 15.1 for better compatibility
 platform :ios, podfile_properties['ios.deploymentTarget'] || '15.1'
+
+# Install with custom settings
+install! 'cocoapods', :deterministic_uuids => false, :warn_for_unused_master_specs_repo => false
 
 prepare_react_native_project!
 
@@ -40,8 +121,8 @@ target 'RichesReach' do
 
   config = use_native_modules!(config_command)
 
-  use_frameworks! :linkage => podfile_properties['ios.useFrameworks'].to_sym if podfile_properties['ios.useFrameworks']
-  use_frameworks! :linkage => ENV['USE_FRAMEWORKS'].to_sym if ENV['USE_FRAMEWORKS']
+  # Force static linkage to fix Xcode 16.3+ libc++ header issues
+  use_frameworks! :linkage => :static
 
   use_react_native!(
     :path => config[:reactNativePath],
@@ -50,31 +131,504 @@ target 'RichesReach' do
     :app_path => "#{Pod::Config.instance.installation_root}/..",
     :privacy_file_aggregation_enabled => podfile_properties['apple.privacyManifestAggregationEnabled'] != 'false',
   )
-
-  # --- React Native third-party podspecs (make them visible to CocoaPods) ---
-  rn_root = File.join(__dir__, '..', 'node_modules', 'react-native')
   
-  pod 'RCT-Folly',    :podspec => "#{rn_root}/third-party-podspecs/RCT-Folly.podspec"
-  pod 'glog',         :podspec => "#{rn_root}/third-party-podspecs/glog.podspec"
-  pod 'fast_float',   :podspec => "#{rn_root}/third-party-podspecs/fast_float.podspec"
-  pod 'fmt',          :podspec => "#{rn_root}/third-party-podspecs/fmt.podspec"
-  # --------------------------------------------------------------------------
+  # Add dependencies required by RCT-Folly (for stream-chat-react-native compatibility)
+  # These use React Native's local podspecs to avoid CocoaPods repo dependency issues
+  react_native_path = File.join(File.dirname(`node --print "require.resolve('react-native/package.json')"`))
+  pod 'fast_float', :podspec => "#{react_native_path}/third-party-podspecs/fast_float.podspec"
+  pod 'fmt', :podspec => "#{react_native_path}/third-party-podspecs/fmt.podspec"
+  pod 'RCT-Folly', :podspec => "#{react_native_path}/third-party-podspecs/RCT-Folly.podspec", :modular_headers => true
+  
+  # Note: glog is installed as a dependency of RCT-Folly
+  # We'll patch it in pre_install hook instead
 
   pre_install do |installer|
-    Pod::UI.puts "Forcing static libraries for key RN pods"
-    installer.pod_targets.each do |pod|
-      if ['RCT-Folly','Folly','React-Core','React-graphics','React-Fabric','React-RCTFabric','React-Codegen','hermes-engine','glog'].include?(pod.name)
-        def pod.build_type; Pod::BuildType.static_library end
+    # CRITICAL: Set CURRENT_ARCH BEFORE any pod prepare_command runs
+    # glog's prepare_command checks this variable early
+    ENV['CURRENT_ARCH'] = 'arm64'
+    
+    # Also set for simulator builds
+    ENV['PLATFORM_NAME'] = 'iphonesimulator' if ENV['PLATFORM_NAME'].nil?
+    
+    # Fix Agora xcframework Info.plist BEFORE CocoaPods tries to validate it
+    # This must happen in pre_install, not post_install, because validation happens during install
+    pods_root = installer.sandbox.root
+    agora_infra_dir = File.join(pods_root, 'AgoraInfra_iOS')
+    
+    # Also check in the temp download location during install
+    download_cache = File.join(Dir.home, 'Library/Caches/CocoaPods/Pods/Release/AgoraInfra_iOS')
+    [agora_infra_dir, download_cache].each do |check_dir|
+      if Dir.exist?(check_dir)
+        Dir.glob(File.join(check_dir, '*.xcframework')).each do |xcframework_path|
+          info_plist_path = File.join(xcframework_path, 'Info.plist')
+          
+          unless File.exist?(info_plist_path)
+            puts "🔧 [PRE_INSTALL] Creating missing Agora Info.plist for #{File.basename(xcframework_path)}..."
+            
+            # Create safe minimal Info.plist
+            info_plist_content = <<~XML
+              <?xml version="1.0" encoding="UTF-8"?>
+              <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+              <plist version="1.0">
+              <dict>
+                <key>CFBundlePackageType</key>
+                <string>XFWK</string>
+                <key>XCFrameworkFormatVersion</key>
+                <string>1.0</string>
+                <key>AvailableLibraries</key>
+                <array>
+                  <dict>
+                    <key>LibraryIdentifier</key>
+                    <string>ios-arm64</string>
+                    <key>LibraryPath</key>
+                    <string>aosl.framework</string>
+                    <key>SupportedPlatform</key>
+                    <string>ios</string>
+                  </dict>
+                  <dict>
+                    <key>LibraryIdentifier</key>
+                    <string>ios-arm64_x86_64-simulator</string>
+                    <key>LibraryPath</key>
+                    <string>aosl.framework</string>
+                    <key>SupportedPlatform</key>
+                    <string>ios</string>
+                    <key>SupportedPlatformVariant</key>
+                    <string>simulator</string>
+                  </dict>
+                </array>
+              </dict>
+              </plist>
+            XML
+            
+            FileUtils.mkdir_p(xcframework_path) unless Dir.exist?(xcframework_path)
+            File.write(info_plist_path, info_plist_content)
+            puts "✅ Created Agora Info.plist in pre_install for #{File.basename(xcframework_path)}"
+          end
+        end
+      end
+    end
+    
+    # Fix glog in cache BEFORE installation (works for both local and EAS cloud)
+    glog_cache_paths = [
+      "#{Dir.home}/Library/Caches/CocoaPods/Pods/Release/glog",
+      "/Users/expo/Library/Caches/CocoaPods/Pods/Release/glog"  # EAS cloud path
+    ]
+    
+    glog_cache_paths.each do |glog_cache_path|
+      Dir.glob("#{glog_cache_path}*").each do |glog_dir|
+        next unless File.directory?(glog_dir)
+        
+        # Fix missing script (remove --is-lightweight option)
+        missing_file = File.join(glog_dir, 'missing')
+        if File.exist?(missing_file)
+          content = File.read(missing_file)
+          original_content = content.dup
+          content.gsub!(/--is-lightweight/, '')
+          if content != original_content
+            File.write(missing_file, content)
+            FileUtils.chmod(0755, missing_file)
+            puts "✅ Patched glog missing script in #{glog_dir}"
+          end
+        end
+        
+        # Fix configure script - replace ALL instances of armv7/arm-apple-darwin
+        configure_file = File.join(glog_dir, 'configure')
+        if File.exist?(configure_file)
+          content = File.read(configure_file)
+          original_content = content.dup
+          # Replace armv7 with arm64 in architecture strings
+          content.gsub!(/-arch armv7/, '-arch arm64')
+          content.gsub!(/arch armv7/, 'arch arm64')
+          content.gsub!(/CURRENT_ARCH=\"\$\{CURRENT_ARCH:-armv7\}\"/, 'CURRENT_ARCH="${CURRENT_ARCH:-arm64}"')
+          content.gsub!(/CURRENT_ARCH=\$\{CURRENT_ARCH:-armv7\}/, 'CURRENT_ARCH=${CURRENT_ARCH:-arm64}')
+          content.gsub!(/CURRENT_ARCH=\"armv7\"/, 'CURRENT_ARCH="arm64"')
+          # Fix host architecture - change arm-apple-darwin to arm64-apple-darwin
+          content.gsub!(/arm-apple-darwin/, 'arm64-apple-darwin')
+          # Also fix in compiler commands
+          content.gsub!(/arm-apple-darwin-gcc/, 'arm64-apple-darwin-gcc')
+          content.gsub!(/arm-apple-darwin-strip/, 'arm64-apple-darwin-strip')
+          
+          if content != original_content
+            File.write(configure_file, content)
+            FileUtils.chmod(0755, configure_file)
+            puts "✅ Patched glog configure in #{glog_dir}"
+          end
+        end
+        
+        # Also patch the ios-configure-glog.sh script if it exists in the cache
+        config_script = File.join(glog_dir, '../..', 'scripts', 'ios-configure-glog.sh')
+        if File.exist?(config_script)
+          content = File.read(config_script)
+          original_content = content.dup
+          # Force CURRENT_ARCH default to arm64
+          content.gsub!(/CURRENT_ARCH=\"\$\{CURRENT_ARCH\}\"/, 'CURRENT_ARCH="${CURRENT_ARCH:-arm64}"')
+          content.gsub!(/CURRENT_ARCH=\$\{CURRENT_ARCH\}/, 'CURRENT_ARCH=${CURRENT_ARCH:-arm64}')
+          # Fix configure host
+          content.gsub!(/\.\/configure --host arm-apple-darwin/, './configure --host arm64-apple-darwin')
+          if content != original_content
+            File.write(config_script, content)
+            FileUtils.chmod(0755, config_script)
+            puts "✅ Patched ios-configure-glog.sh in cache"
+          end
+        end
       end
     end
   end
 
   post_install do |installer|
+    # DEBUG: Verify hook runs in EAS
+    puts "🔧 [EAS DEBUG] Podfile post_install hook running..."
+    puts "🔧 [EAS DEBUG] SDKROOT = #{ENV['SDKROOT'] || 'not set'}"
+    
+    # Fix Agora xcframework Info.plist issue (fallback - validation is skipped via ENV flag)
+    # This creates the plist after install so Xcode can use the framework properly
+    pods_root = installer.sandbox.root
+    agora_infra_dir = File.join(pods_root, 'AgoraInfra_iOS')
+    
+    if Dir.exist?(agora_infra_dir)
+      # Find all xcframeworks in AgoraInfra_iOS
+      Dir.glob(File.join(agora_infra_dir, '*.xcframework')).each do |xcframework_path|
+        info_plist_path = File.join(xcframework_path, 'Info.plist')
+        
+        unless File.exist?(info_plist_path)
+          puts "🔧 [EAS DEBUG] Fixing Agora xcframework - creating missing Info.plist for #{File.basename(xcframework_path)}..."
+          
+          # Create safe minimal Info.plist template
+          info_plist_content = <<~XML
+            <?xml version="1.0" encoding="UTF-8"?>
+            <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+            <plist version="1.0">
+            <dict>
+              <key>CFBundlePackageType</key>
+              <string>XFWK</string>
+              <key>XCFrameworkFormatVersion</key>
+              <string>1.0</string>
+              <key>AvailableLibraries</key>
+              <array>
+                <dict>
+                  <key>LibraryIdentifier</key>
+                  <string>ios-arm64</string>
+                  <key>LibraryPath</key>
+                  <string>aosl.framework</string>
+                  <key>SupportedPlatform</key>
+                  <string>ios</string>
+                </dict>
+                <dict>
+                  <key>LibraryIdentifier</key>
+                  <string>ios-arm64_x86_64-simulator</string>
+                  <key>LibraryPath</key>
+                  <string>aosl.framework</string>
+                  <key>SupportedPlatform</key>
+                  <string>ios</string>
+                  <key>SupportedPlatformVariant</key>
+                  <string>simulator</string>
+                </dict>
+              </array>
+            </dict>
+            </plist>
+          XML
+          
+          FileUtils.mkdir_p(xcframework_path) unless Dir.exist?(xcframework_path)
+          File.write(info_plist_path, info_plist_content)
+          puts "✅ Created Agora Info.plist for #{File.basename(xcframework_path)}"
+        end
+      end
+    end
+    
     react_native_post_install(
       installer,
       config[:reactNativePath],
       :mac_catalyst_enabled => false,
       :ccache_enabled => ccache_enabled?(podfile_properties),
     )
+    
+    puts "🔧 [LOCAL] Applying hardened C/C++ flag separation..."
+    
+    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |config|
+        s = config.build_settings
+        
+        # Arch Safety (no armv7)
+        s['VALID_ARCHS[sdk=iphonesimulator*]'] = 'arm64 x86_64'
+        s['EXCLUDED_ARCHS[sdk=iphonesimulator*]'] = 'i386 armv7 armv7s'
+        s['EXCLUDED_ARCHS[sdk=iphoneos*]'] = 'armv7 armv7s'
+        
+        # --- C (C only) - GUARDED ---
+        s['GCC_C_LANGUAGE_STANDARD'] = 'gnu11'
+        # CRITICAL: Reset OTHER_CFLAGS - no C++ flags allowed
+        s['OTHER_CFLAGS'] = ['$(inherited)']
+        
+        # --- C++ (C++ only) - GUARDED ---
+        # iOS 18 SDK compatibility: Use C++17 with libc++
+        s['CLANG_CXX_LANGUAGE_STANDARD'] = 'c++17'
+        s['CLANG_CXX_LIBRARY'] = 'libc++'
+        
+        # Ensure file-type compilation
+        s['CLANG_ENABLE_MODULES'] = 'YES'
+        s['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
+        
+        # CRITICAL: Configure ONLY OTHER_CPLUSPLUSFLAGS for C++
+        cpp = s['OTHER_CPLUSPLUSFLAGS'] || ['$(inherited)']
+        cpp = [cpp] unless cpp.is_a?(Array)
+        cpp = cpp + ['$(inherited)'] unless cpp.include?('$(inherited)')
+        # Remove any accidental flags and normalize
+        cpp = cpp.reject { |f| f.to_s =~ /-std=c\+\+\d+|--std=c\+\+\d+/ }
+        cpp << '-std=c++17'
+        cpp << '-stdlib=libc++'
+        cpp << '-fmodules' unless cpp.any? { |f| f.to_s.include?('fmodules') }
+        s['OTHER_CPLUSPLUSFLAGS'] = cpp.uniq
+        
+        # Make sure compiler honors file extensions (.c vs .mm/.cc/.cpp)
+        # Don't force "Compile Sources As" - let compiler detect
+        
+        # glog/RCT-Folly: Library Distribution & No Availability Checks
+        if ['glog', 'RCT-Folly', 'boost', 'fmt'].include?(target.name)
+          s['BUILD_LIBRARY_FOR_DISTRIBUTION'] = 'YES'
+          s['GCC_PREPROCESSOR_DEFINITIONS'] ||= ['$(inherited)']
+          s['GCC_PREPROCESSOR_DEFINITIONS'] << '_LIBCPP_DISABLE_AVAILABILITY=1'
+          if target.name == 'glog'
+            s['GCC_PREPROCESSOR_DEFINITIONS'] << 'GLOG_NO_ABBREVIATED_SEVERITIES=1'
+          end
+        end
+        
+        # glog/boost/DoubleConversion: Disable modules (prevents Darwin cycles)
+        # NOTE: RCT-Folly needs modules enabled (see pod_targets section below)
+        if ['glog', 'boost', 'DoubleConversion'].include?(target.name)
+          s['DEFINES_MODULE'] = 'NO'
+          s['CLANG_ENABLE_MODULES'] = 'NO'
+        end
+        
+        # Fix header search paths for DoubleConversion
+        if target.name == 'DoubleConversion'
+          headers = s['HEADER_SEARCH_PATHS'] || ['$(inherited)']
+          headers = [headers] unless headers.is_a?(Array)
+          double_conversion_path = File.join(pods_root, 'DoubleConversion')
+          headers << "#{double_conversion_path}" unless headers.any? { |h| h.to_s.include?('DoubleConversion') }
+          s['HEADER_SEARCH_PATHS'] = headers.uniq
+        end
+      end
+    end
+    
+    # 💥 CRITICAL: RCT-Folly module fix - enables C++ standard library module imports
+    installer.pods_project.targets.each do |target|
+      if target.name == 'RCT-Folly'
+        target.build_configurations.each do |cfg|
+          cfg.build_settings['CLANG_ENABLE_MODULES'] = 'YES'
+          cfg.build_settings['DEFINES_MODULE'] = 'YES'  # THIS fixes std module import
+          # iOS 18 compatibility: Use C++17 with libc++
+          cfg.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'c++17'
+          cfg.build_settings['CLANG_CXX_LIBRARY'] = 'libc++'
+          
+          # C++17 compatibility flags (fixes __unary_function errors)
+          preprocessor_defs = cfg.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] || ['$(inherited)']
+          preprocessor_defs = [preprocessor_defs] unless preprocessor_defs.is_a?(Array)
+          preprocessor_defs << '_LIBCPP_ENABLE_CXX17_REMOVED_UNARY_FUNCTION' unless preprocessor_defs.any? { |d| d.to_s.include?('UNARY_FUNCTION') }
+          preprocessor_defs << '_LIBCPP_ENABLE_CXX17_REMOVED_AUTO_PTR' unless preprocessor_defs.any? { |d| d.to_s.include?('AUTO_PTR') }
+          cfg.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] = preprocessor_defs.uniq
+          
+          # Add header search paths for Folly (CRITICAL: include folly/ subdirectory)
+          headers = cfg.build_settings['HEADER_SEARCH_PATHS'] || ['$(inherited)']
+          headers = [headers] unless headers.is_a?(Array)
+          react_native_path = File.join(File.dirname(`node --print "require.resolve('react-native/package.json')"`))
+          folly_podspec_path = File.join(react_native_path, 'third-party-podspecs/RCT-Folly')
+          folly_root = File.join(pods_root, 'RCT-Folly')
+          
+          # Add paths if not already present
+          headers << "#{folly_podspec_path}" unless headers.any? { |h| h.to_s.include?('third-party-podspecs/RCT-Folly') }
+          headers << "#{folly_root}" unless headers.any? { |h| h.to_s == folly_root || h.to_s.include?('RCT-Folly') }
+          headers << "#{folly_root}/folly" unless headers.any? { |h| h.to_s.include?('RCT-Folly/folly') }
+          
+          cfg.build_settings['HEADER_SEARCH_PATHS'] = headers.uniq
+        end
+      end
+    end
+    
+    # Patch glog's configure script AFTER pods are downloaded (post_install runs after download)
+    glog_path = File.join(pods_root, 'glog')
+    
+    if Dir.exist?(glog_path)
+      configure_script = File.join(glog_path, 'configure')
+      if File.exist?(configure_script)
+        puts "🔧 Patching glog configure script in #{glog_path}..."
+        # Backup original
+        FileUtils.cp(configure_script, configure_script + '.bak') unless File.exist?(configure_script + '.bak')
+        
+        # Read and patch
+        content = File.read(configure_script)
+        original_content = content.dup
+        
+        # Replace armv7 defaults with arm64
+        content.gsub!(/CURRENT_ARCH=\"\$\{CURRENT_ARCH:-armv7\}\"/, 'CURRENT_ARCH="${CURRENT_ARCH:-arm64}"')
+        content.gsub!(/CURRENT_ARCH=\$\{CURRENT_ARCH:-armv7\}/, 'CURRENT_ARCH=${CURRENT_ARCH:-arm64}')
+        content.gsub!(/CURRENT_ARCH=\"armv7\"/, 'CURRENT_ARCH="arm64"')
+        
+        # Replace arm-apple-darwin with aarch64-apple-darwin (modern host)
+        content.gsub!(/--host arm-apple-darwin/, '--host aarch64-apple-darwin')
+        content.gsub!(/arm-apple-darwin/, 'aarch64-apple-darwin')
+        content.gsub!(/arm-apple-darwin-gcc/, 'aarch64-apple-darwin-gcc')
+        content.gsub!(/arm-apple-darwin-strip/, 'aarch64-apple-darwin-strip')
+        
+        # Also patch arch references
+        content.gsub!(/-arch armv7/, '-arch arm64')
+        content.gsub!(/arch armv7/, 'arch arm64')
+        
+        if content != original_content
+          File.write(configure_script, content)
+          FileUtils.chmod(0755, configure_script)
+          puts "✅ Patched glog configure script"
+        else
+          puts "⚠️  glog configure already patched or no changes needed"
+        end
+      end
+      
+      # Also patch missing script
+      missing_script = File.join(glog_path, 'missing')
+      if File.exist?(missing_script)
+        content = File.read(missing_script)
+        if content.include?('--is-lightweight')
+          content.gsub!(/--is-lightweight/, '')
+          File.write(missing_script, content)
+          FileUtils.chmod(0755, missing_script)
+          puts "✅ Patched glog missing script"
+        end
+      end
+    end
+    
+    # Also fix the main app target (RichesReach) - ensure C++ headers are prioritized
+    installer.aggregate_targets.each do |aggregate_target|
+      aggregate_target.user_project.targets.each do |target|
+        if target.name == 'RichesReach'
+          target.build_configurations.each do |config|
+            # Sanitize header paths in main app target too
+            headers = config.build_settings['HEADER_SEARCH_PATHS'] || ['$(inherited)']
+            headers = [headers] unless headers.is_a?(Array)
+            headers = headers.reject { |h| h.to_s =~ %r{(^|/)usr/include($|/)} }
+            headers = headers.reject { |h| h.to_s.include?('/opt/homebrew/include') || h.to_s.include?('CommandLineTools') }
+            
+            # CRITICAL: C++ headers MUST be first
+            cpp_include_path = '$(SDKROOT)/usr/include/c++/v1'
+            cpp_stdlib_path = '$(SDKROOT)/usr/include/c++/v1/experimental'
+            headers = headers.reject { |h| h == '$(inherited)' || h.to_s == '$(inherited)' }
+            headers = [cpp_include_path, cpp_stdlib_path] + headers.reject { |h|
+              h == cpp_include_path || h.to_s == cpp_include_path ||
+              h == cpp_stdlib_path || h.to_s == cpp_stdlib_path
+            }
+            headers << '$(inherited)'
+            config.build_settings['HEADER_SEARCH_PATHS'] = headers.uniq
+            
+            # System headers too
+            system_headers = config.build_settings['SYSTEM_HEADER_SEARCH_PATHS'] || ['$(inherited)']
+            system_headers = [system_headers] unless system_headers.is_a?(Array)
+            system_headers = system_headers.reject { |h| h.to_s =~ %r{(^|/)usr/include($|/)} }
+            system_headers = system_headers.reject { |h| h.to_s.include?('/opt/homebrew/include') || h.to_s.include?('CommandLineTools') }
+            system_headers = system_headers.reject { |h| h == '$(inherited)' || h.to_s == '$(inherited)' }
+            system_headers = [cpp_include_path, cpp_stdlib_path] + system_headers.reject { |h|
+              h == cpp_include_path || h.to_s == cpp_include_path ||
+              h == cpp_stdlib_path || h.to_s == cpp_stdlib_path
+            }
+            system_headers << '$(inherited)'
+            config.build_settings['SYSTEM_HEADER_SEARCH_PATHS'] = system_headers.uniq
+            
+            # C++ standard
+            config.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'gnu++17'
+            config.build_settings['CLANG_CXX_LIBRARY'] = 'libc++'
+          end
+        end
+      end
+    end
+    
+    # C++17 compatibility flags + C++ header priority (AFTER sanitization above)
+    # CRITICAL FIX: Ensure C++ headers are found BEFORE C headers for all targets
+    installer.pods_project.targets.each do |t|
+      t.build_configurations.each do |config|
+        # C++ standard and compatibility flags
+        config.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'gnu++17'
+        config.build_settings['CLANG_CXX_LIBRARY'] = 'libc++'
+        
+        # CRITICAL: C++ header path - MUST be absolute and prioritized
+        cpp_include_path = '$(SDKROOT)/usr/include/c++/v1'
+        
+        # SYSTEM_HEADER_SEARCH_PATHS: Put C++ headers FIRST, before any C headers
+        system_headers = config.build_settings['SYSTEM_HEADER_SEARCH_PATHS'] || ['$(inherited)']
+        system_headers = [system_headers] unless system_headers.is_a?(Array)
+        # Remove any existing C++ paths and any C header paths that might shadow
+        system_headers = system_headers.reject { |h| 
+          h.to_s.include?('/usr/include/c++') || 
+          h.to_s =~ %r{(^|/)usr/include($|/)} ||
+          h.to_s.include?('/usr/include')
+        }
+        # C++ headers MUST be first - REMOVE $(inherited) temporarily to ensure our paths come first
+        system_headers = system_headers.reject { |h| h == '$(inherited)' || h.to_s == '$(inherited)' }
+        system_headers = [cpp_include_path] + system_headers
+        system_headers << '$(inherited)'  # Add back at end
+        config.build_settings['SYSTEM_HEADER_SEARCH_PATHS'] = system_headers.uniq
+        
+        # CRITICAL: Also add to HEADER_SEARCH_PATHS with highest priority
+        headers = config.build_settings['HEADER_SEARCH_PATHS'] || ['$(inherited)']
+        headers = [headers] unless headers.is_a?(Array)
+        headers = headers.reject { |h| 
+          h.to_s.include?('/usr/include/c++') ||
+          h.to_s =~ %r{(^|/)usr/include($|/)}
+        }
+        headers = headers.reject { |h| h == '$(inherited)' || h.to_s == '$(inherited)' }
+        headers = [cpp_include_path] + headers
+        headers += ['$(PODS_ROOT)/RCT-Folly', '$(PODS_ROOT)/RCT-Folly/folly', '$(PODS_ROOT)/boost']
+        headers << '$(inherited)'
+        config.build_settings['HEADER_SEARCH_PATHS'] = headers.uniq
+        
+        # OTHER_CFLAGS: Add -isystem for C++ headers (applies to all compilation units)
+        cflags = config.build_settings['OTHER_CFLAGS'] || '$(inherited)'
+        cflags = [cflags] unless cflags.is_a?(Array)
+        # Remove any existing C++ header flags
+        cflags = cflags.reject { |f| 
+          f.to_s.include?('usr/include/c++') ||
+          f.to_s.include?('-isystem')
+        }
+        # Add -isystem for C++ headers FIRST (highest priority)
+        cflags = ["-isystem#{cpp_include_path}"] + cflags
+        config.build_settings['OTHER_CFLAGS'] = cflags
+        
+        # OTHER_CPLUSPLUSFLAGS: C++-specific flags (ONLY for .cpp/.cc/.mm files)
+        cppflags = config.build_settings['OTHER_CPLUSPLUSFLAGS'] || '$(inherited)'
+        cppflags = [cppflags] unless cppflags.is_a?(Array)
+        # Remove any existing C++ header or standard flags
+        cppflags = cppflags.reject { |f| 
+          f.to_s.include?('usr/include/c++') || 
+          f.to_s.include?('-I$(SDKROOT)/usr/include') || 
+          f.to_s.include?('-isystem') ||
+          f.to_s.include?('std=c++') ||
+          f.to_s.include?('stdlib=libc++')
+        }
+        # CRITICAL: C++ headers first with multiple methods to ensure they're found
+        # 1. -isystem for system header priority
+        cppflags = ["-isystem#{cpp_include_path}"] + cppflags
+        # 2. -I for regular include path
+        cppflags = ["-I#{cpp_include_path}"] + cppflags unless cppflags.any? { |f| f.to_s.include?("-I#{cpp_include_path}") }
+        # 3. -Xclang -isystem for low-level Clang control
+        cppflags << '-Xclang'
+        cppflags << '-isystem'
+        cppflags << '-Xclang'
+        cppflags << cpp_include_path
+        # 4. C++ standard and library
+        cppflags << '-stdlib=libc++'
+        cppflags << '-std=c++17'
+        # 5. C++ compatibility flags
+        cppflags << '-D_LIBCPP_ENABLE_CXX17_REMOVED_AUTO_PTR'
+        cppflags << '-D_LIBCPP_ENABLE_CXX17_REMOVED_UNARY_FUNCTION'
+        config.build_settings['OTHER_CPLUSPLUSFLAGS'] = cppflags
+        
+        # Also set CLANG_CXX_LIBRARY to ensure libc++ is used
+        config.build_settings['CLANG_CXX_LIBRARY'] = 'libc++'
+        
+        # CRITICAL: Disable module maps for problematic pods to avoid cyclic dependencies
+        if ['glog', 'RCT-Folly', 'DoubleConversion'].include?(t.name)
+          config.build_settings['DEFINES_MODULE'] = 'NO'
+          config.build_settings['CLANG_ENABLE_MODULES'] = 'NO'
+        end
+        
+        # NOTE: Attempted -nostdsysteminc approach but it broke other header lookups
+        # The C++ header path issues persist, suggesting this may be an Xcode/RN version incompatibility
+      end
+    end
   end
 end

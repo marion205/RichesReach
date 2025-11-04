@@ -112,13 +112,16 @@ export default function ZeroFrictionOnboarding({ onComplete, onSkip }: ZeroFrict
     setLoading(true);
     try {
       // Simulate AI processing
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      console.log('✅ ZeroFrictionOnboarding: Calling onComplete with profile:', wealthProfile);
       onComplete(wealthProfile);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to complete onboarding');
-    } finally {
+    } catch (error: any) {
+      console.error('❌ Error completing onboarding:', error);
+      Alert.alert('Error', 'Failed to complete onboarding. Please try again.');
       setLoading(false);
     }
+    // Note: Don't set loading to false here - let parent handle navigation
+    // The loading state will be reset when the component unmounts
   };
 
   const updateProfile = (updates: any) => {
@@ -263,7 +266,7 @@ function KYCStep({ profile, updateProfile, hasPermission, setHasPermission, isSc
     setIsScanning(true);
     try {
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: 'images',
         allowsEditing: true,
         aspect: [16, 10],
         quality: 0.8,
@@ -285,9 +288,17 @@ function KYCStep({ profile, updateProfile, hasPermission, setHasPermission, isSc
           setIsScanning(false);
         }, 2000);
       }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to take picture');
+    } catch (error: any) {
+      console.error('Camera error:', error);
+      Alert.alert(
+        'Error', 
+        error?.message || 'Failed to take picture. Please check camera permissions and try again.'
+      );
       setIsScanning(false);
+    } finally {
+      if (!idImage) {
+        setIsScanning(false);
+      }
     }
   };
 
