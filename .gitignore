@@ -43,6 +43,8 @@ yarn-error.log*
 node_modules/
 deployment/
 rust_crypto_engine/target/
+backend/hft/rust-executor/target/
+**/target/
 *.pyc
 __pycache__/
 
