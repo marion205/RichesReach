@@ -1,162 +1,117 @@
-import React, { useRef, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Animated,
-  Dimensions,
-  TouchableOpacity,
-  Vibration,
-  Platform,
-} from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { PanGestureHandler, State, GestureHandlerRootView } from 'react-native-gesture-handler';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+// src/components/GestureNavigation.tsx
+import React, { useMemo } from 'react';
+import { View, StyleSheet } from 'react-native';
+import Animated, {
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
-const { width, height } = Dimensions.get('window');
+type Props = {
+  onNavigate?: (screen: string, params?: any) => void;
+  currentScreen?: string;
+  onBack?: () => void;       // e.g., navigation.goBack()
+  onForward?: () => void;    // e.g., navigation.navigate('Next')
+  children?: React.ReactNode;
+  swipeThreshold?: number;   // px
+};
 
-interface GestureNavigationProps {
-  onNavigate: (screen: string, params?: any) => void;
-  currentScreen: string;
-  children: React.ReactNode;
-}
+const SWIPE_DEFAULT = 60;
 
-export default function GestureNavigation({ onNavigate, currentScreen, children }: GestureNavigationProps) {
-  const insets = useSafeAreaInsets();
-  const [isGestureActive, setIsGestureActive] = useState(false);
-  
-  // Animation values
-  const translateX = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(0)).current;
-  const scale = useRef(new Animated.Value(1)).current;
+export default function GestureNavigation({
+  onNavigate,
+  currentScreen,
+  onBack,
+  onForward,
+  children,
+  swipeThreshold = SWIPE_DEFAULT,
+}: Props) {
+  const translateX = useSharedValue(0);
+  const startX = useSharedValue(0);
 
-  // Navigation screens with gesture mappings
-  const navigationScreens = {
-    home: { left: 'portfolio', right: 'social', up: 'ai-coach', down: 'crypto' },
-    portfolio: { left: 'trading', right: 'home', up: 'analytics', down: 'tax-optimization' },
-    social: { left: 'home', right: 'community', up: 'wealth-circles', down: 'leaderboard' },
-    trading: { left: 'options', right: 'portfolio', up: 'signals', down: 'risk-management' },
-    'ai-coach': { left: 'tutor', right: 'assistant', up: 'market-commentary', down: 'home' },
-    crypto: { left: 'defi', right: 'nft', up: 'home', down: 'wallet' },
-  };
-
-  const onGestureEvent = Animated.event(
-    [{ nativeEvent: { translationX: translateX, translationY: translateY } }],
-    { useNativeDriver: true }
-  );
-
-  const onHandlerStateChange = ({ nativeEvent }: any) => {
-    if (nativeEvent.state === State.ACTIVE) {
-      setIsGestureActive(true);
-      if (Platform.OS === 'ios') {
-        Vibration.vibrate(50);
-      }
-    } else if (nativeEvent.state === State.END) {
-      setIsGestureActive(false);
-      
-      const { translationX: tx, translationY: ty, velocityX: vx, velocityY: vy } = nativeEvent;
-      const threshold = 50;
-      const velocityThreshold = 0.5;
-
-      // Determine gesture direction
-      let direction: 'left' | 'right' | 'up' | 'down' | null = null;
-      
-      if (Math.abs(tx) > Math.abs(ty)) {
-        if (tx > threshold || vx > velocityThreshold) {
-          direction = 'right';
-        } else if (tx < -threshold || vx < -velocityThreshold) {
-          direction = 'left';
-        }
-      } else {
-        if (ty > threshold || vy > velocityThreshold) {
-          direction = 'down';
-        } else if (ty < -threshold || vy < -velocityThreshold) {
-          direction = 'up';
-        }
-      }
-
-      // Navigate if gesture is valid
-      if (direction) {
-        const targetScreen = navigationScreens[currentScreen as keyof typeof navigationScreens]?.[direction];
-        if (targetScreen) {
-          onNavigate(targetScreen);
-        }
-      }
-
-      // Reset animations
-      Animated.parallel([
-        Animated.spring(translateX, {
-          toValue: 0,
-          useNativeDriver: true,
-        }),
-        Animated.spring(translateY, {
-          toValue: 0,
-          useNativeDriver: true,
-        }),
-        Animated.spring(scale, {
-          toValue: 1,
-          useNativeDriver: true,
-        }),
-      ]).start();
+  // Handle navigation via onNavigate if provided, otherwise use onBack/onForward
+  const handleNavigate = (screen: string, params?: any) => {
+    if (onNavigate) {
+      onNavigate(screen, params);
     }
   };
 
-  const animatedStyle = {
-    transform: [
-      { translateX },
-      { translateY },
-      { scale },
-    ],
-  };
+  const handleBackJS = onBack || (() => {
+    // Fallback navigation logic if needed
+    if (currentScreen && onNavigate) {
+      // Simple back logic - go to home if on other screens
+      if (currentScreen !== 'home') {
+        handleNavigate('home');
+      }
+    }
+  });
+
+  const handleForwardJS = onForward || (() => {
+    // Fallback forward logic if needed
+    if (currentScreen && onNavigate) {
+      // Navigate forward based on current screen
+      if (currentScreen === 'home') {
+        handleNavigate('InvestMain'); // Swipe left from home goes to invest
+      } else if (currentScreen === 'InvestMain' || currentScreen === 'invest') {
+        handleNavigate('portfolio'); // Swipe left from invest goes to portfolio
+      } else {
+        handleNavigate('portfolio'); // Default fallback
+      }
+    }
+  });
+
+  const pan = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetX([-10, 10]) // Activate quickly on horizontal movement for navigation
+        .failOffsetY([-15, 15]) // Fail on vertical movement to allow scrolling
+        .onBegin(() => {
+          'worklet';
+          startX.value = translateX.value;
+        })
+        .onUpdate((e) => {
+          'worklet';
+          translateX.value = startX.value + e.translationX;
+        })
+        .onEnd((e) => {
+          'worklet';
+          const dx = e.translationX;
+          const vx = e.velocityX;
+
+          // Swipe right (positive dx) = go forward (to next screen)
+          // Swipe left (negative dx) = go back (to previous screen)
+          const shouldForward =
+            dx > swipeThreshold && Math.abs(vx) > 150 && !!handleForwardJS;
+          const shouldBack =
+            dx < -swipeThreshold && Math.abs(vx) > 150 && !!handleBackJS;
+
+          if (shouldBack) {
+            runOnJS(handleBackJS)();
+          } else if (shouldForward) {
+            runOnJS(handleForwardJS)();
+          }
+
+          translateX.value = withSpring(0, { damping: 18, stiffness: 180 });
+        }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [onBack, onForward, swipeThreshold]
+  );
+
+  const style = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }],
+  }));
 
   return (
-    <GestureHandlerRootView style={styles.container}>
-      <PanGestureHandler
-        onGestureEvent={onGestureEvent}
-        onHandlerStateChange={onHandlerStateChange}
-      >
-        <Animated.View style={[styles.gestureContainer, animatedStyle]}>
-          {children}
-          
-          {/* Gesture Indicator */}
-          {isGestureActive && (
-            <View style={[styles.gestureIndicator, { top: insets.top + 10 }]}>
-              <LinearGradient
-                colors={['#667eea', '#764ba2']}
-                style={styles.gestureIndicatorGradient}
-              >
-                <Text style={styles.gestureIndicatorText}>👆 Swipe to navigate</Text>
-              </LinearGradient>
-            </View>
-          )}
-        </Animated.View>
-      </PanGestureHandler>
-    </GestureHandlerRootView>
+    <GestureDetector gesture={pan}>
+      <Animated.View style={[styles.container, style]}>
+        {children ?? <View />}
+      </Animated.View>
+    </GestureDetector>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  gestureContainer: {
-    flex: 1,
-  },
-  gestureIndicator: {
-    position: 'absolute',
-    left: 20,
-    right: 20,
-    zIndex: 1000,
-  },
-  gestureIndicatorGradient: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    alignItems: 'center',
-  },
-  gestureIndicatorText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '600',
-  },
+  container: { flex: 1 },
 });
