@@ -261,129 +261,7 @@ const GET_OPTIONS_ANALYSIS_TEST = gql`
   }
 `;
 
-// Mock data for when backend returns null
-const mockMetrics = {
-  totalValue: 125000.0,
-  totalCost: 100000.0,
-  totalReturn: 25000.0,
-  totalReturnPercent: 25.0,
-  dayChange: 1250.0,
-  dayChangePercent: 1.0,
-  volatility: 0.15,
-  sharpeRatio: 1.2,
-  maxDrawdown: -0.08,
-  beta: 1.0,
-  alpha: 0.05,
-  sectorAllocation: JSON.stringify({
-    "Technology": 40,
-    "Healthcare": 25,
-    "Finance": 20,
-    "Consumer": 15
-  }),
-  riskMetrics: JSON.stringify({
-    "riskScore": 0.65,
-    "diversificationScore": 0.78
-  }),
-  holdings: [
-    {
-      symbol: "AAPL",
-      companyName: "Apple Inc.",
-      shares: 100,
-      currentPrice: 150.25,
-      totalValue: 15025.0,
-      costBasis: 14000.0,
-      returnAmount: 1025.0,
-      returnPercent: 7.32,
-      sector: "Technology"
-    },
-    {
-      symbol: "MSFT",
-      companyName: "Microsoft Corporation",
-      shares: 50,
-      currentPrice: 330.15,
-      totalValue: 16507.5,
-      costBasis: 15000.0,
-      returnAmount: 1507.5,
-      returnPercent: 10.05,
-      sector: "Technology"
-    }
-  ]
-};
-
-const mockOptionsData = {
-  underlyingSymbol: 'AAPL',
-  underlyingPrice: 175.50,
-  marketSentiment: {
-    sentiment: 'Bullish',
-    sentimentDescription: 'Strong earnings growth and positive analyst sentiment'
-  },
-  putCallRatio: 0.65,
-  impliedVolatilityRank: 0.45,
-  skew: 0.12,
-  sentimentScore: 0.75,
-  recommendedStrategies: [
-    {
-      strategyName: 'Covered Call',
-      strategyType: 'Income',
-      marketOutlook: 'Bullish',
-      riskLevel: 'Low',
-      maxProfit: 850.00,
-      maxLoss: -1750.00,
-      probabilityOfProfit: 0.68,
-      riskRewardRatio: 0.49,
-      description: 'Generate income by selling call options on stocks you own',
-      setup: 'Sell 1 call option for every 100 shares owned',
-      breakevenPoints: [175.50],
-      timeDecay: 'Positive',
-      volatilityImpact: 'Negative'
-    },
-    {
-      strategyName: 'Protective Put',
-      strategyType: 'Protective',
-      marketOutlook: 'Bearish',
-      riskLevel: 'Low',
-      maxProfit: Infinity,
-      maxLoss: -250.00,
-      probabilityOfProfit: 0.45,
-      riskRewardRatio: Infinity,
-      description: 'Hedge downside risk by buying put options',
-      setup: 'Buy 1 put option for every 100 shares owned',
-      breakevenPoints: [173.00],
-      timeDecay: 'Negative',
-      volatilityImpact: 'Positive'
-    },
-    {
-      strategyName: 'Iron Condor',
-      strategyType: 'Neutral',
-      marketOutlook: 'Neutral',
-      riskLevel: 'Medium',
-      maxProfit: 400.00,
-      maxLoss: -600.00,
-      probabilityOfProfit: 0.55,
-      riskRewardRatio: 0.67,
-      description: 'Profit from range-bound markets with limited risk',
-      setup: 'Sell call spread + sell put spread',
-      breakevenPoints: [170.00, 180.00],
-      timeDecay: 'Positive',
-      volatilityImpact: 'Negative'
-    },
-    {
-      strategyName: 'Bull Put Spread',
-      strategyType: 'Bullish',
-      marketOutlook: 'Bullish',
-      riskLevel: 'Medium',
-      maxProfit: 300.00,
-      maxLoss: -700.00,
-      probabilityOfProfit: 0.62,
-      riskRewardRatio: 0.43,
-      description: 'Bullish strategy with limited risk and reward',
-      setup: 'Sell put + buy lower strike put',
-      breakevenPoints: [172.00],
-      timeDecay: 'Positive',
-      volatilityImpact: 'Negative'
-    }
-  ]
-};
+// Removed all mock data - using real GraphQL queries only
 
 const PremiumAnalyticsScreen = ({ navigateTo }) => {
   const navigation = useNavigation<any>();
@@ -518,21 +396,20 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
     }
   );
 
-  // Options data - accessible throughout component
-  const options = optionsData?.optionsAnalysis || mockOptionsData;
+  // Options data - only use real data, no mock fallback
+  const options = optionsData?.optionsAnalysis || null;
   const isUsingMockOptionsData = !optionsData?.optionsAnalysis;
   
   // Debug logging
   console.log('🔍 Options Debug:', {
     optionsData: optionsData?.optionsAnalysis,
-    mockOptionsData: mockOptionsData,
     finalOptions: options,
     isUsingMockOptionsData,
     hasStrategies: options?.recommendedStrategies?.length
   });
 
-  // Use mock data if backend returns null
-  const displayMetrics = metricsData?.portfolioMetrics || mockMetrics;
+  // Only use real data - no mock fallback
+  const displayMetrics = metricsData?.portfolioMetrics || null;
   const isUsingMockData = !metricsData?.portfolioMetrics;
 
   const onRefresh = useCallback(async () => {
@@ -640,6 +517,18 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
       );
     }
 
+    if (!displayMetrics) {
+      return (
+        <View style={styles.errorContainer}>
+          <Icon name="alert-circle" size={48} color="#ef4444" />
+          <Text style={styles.errorText}>No portfolio data available</Text>
+          <Text style={styles.errorDetails}>
+            Please add holdings to your portfolio to view metrics
+          </Text>
+        </View>
+      );
+    }
+
     return (
       <ScrollView 
         style={styles.tabContent} 
@@ -657,11 +546,6 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Performance Overview</Text>
-            {isUsingMockData && (
-              <View style={styles.mockDataIndicator}>
-                <Text style={styles.mockDataText}>Demo Data</Text>
-              </View>
-            )}
           </View>
           
           <View style={styles.metricsGrid}>
@@ -1327,7 +1211,7 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
         <View style={styles.section}>
           <TouchableOpacity
             style={styles.aiOptionsButton}
-            onPress={() => navigateTo('ai-options')}
+            onPress={() => safeNavigateTo('ai-options')}
           >
             <View style={styles.aiOptionsContent}>
               <View style={styles.aiOptionsHeader}>
@@ -1364,11 +1248,6 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Market Outlook Filter</Text>
-              {isUsingMockOptionsData && (
-                <View style={styles.mockDataIndicator}>
-                  <Text style={styles.mockDataText}>Demo Data</Text>
-                </View>
-              )}
             </View>
             <View style={styles.outlookSelector}>
               {['Bullish', 'Neutral', 'Bearish'].map((outlook) => (
@@ -1392,8 +1271,8 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
           </View>
         )}
 
-        {/* Recommended Strategies */}
-        {options?.recommendedStrategies && options.recommendedStrategies.length > 0 && (
+        {/* Recommended Strategies - only show if real data available */}
+        {options && options.recommendedStrategies && options.recommendedStrategies.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>
               Recommended Strategies
@@ -1452,16 +1331,25 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
           </View>
         )}
 
-        {/* Error Message */}
-        {!options && !optionsLoading && (
+        {/* Error Message - only show if there's an actual error */}
+        {!options && !optionsLoading && optionsError && (
           <View style={styles.errorContainer}>
             <Icon name="alert-circle" size={48} color="#ef4444" />
             <Text style={styles.errorText}>Unable to load options data</Text>
-            {optionsError && (
-              <Text style={styles.errorDetails}>
-                Error: {optionsError.message}
-              </Text>
-            )}
+            <Text style={styles.errorDetails}>
+              Error: {optionsError.message}
+            </Text>
+          </View>
+        )}
+        
+        {/* No data message when no error but also no data */}
+        {!options && !optionsLoading && !optionsError && (
+          <View style={styles.errorContainer}>
+            <Icon name="info" size={48} color="#007AFF" />
+            <Text style={styles.errorText}>No options data available</Text>
+            <Text style={styles.errorDetails}>
+              Please select a stock symbol to view options analysis
+            </Text>
           </View>
         )}
       </ScrollView>
@@ -1710,7 +1598,7 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
                     style={[styles.modalActionButton, styles.secondaryButton]}
                     onPress={() => {
                       setShowStockDetailsModal(false);
-                      navigateTo('stock');
+                      safeNavigateTo('stock');
                     }}
                   >
                     <Icon name="search" size={20} color="#007AFF" />

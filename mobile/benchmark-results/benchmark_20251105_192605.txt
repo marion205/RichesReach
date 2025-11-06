@@ -1,0 +1,55 @@
+----------------------------
+Timestamp: Wed Nov  5 19:26:05 EST 2025
+
+❌ Android bundle failed to build
+❌ iOS bundle failed to build
+
+📚 2. Dependency Analysis
+----------------------------
+Total dependencies: 82
+Heavy dependencies (>1MB):
+ 93M	total
+ 88M	total
+ 72M	total
+ 28M	total
+8.7M	node_modules/typescript/lib/typescript.js
+5.9M	node_modules/typescript/lib/_tsc.js
+3.7M	node_modules/babel-plugin-react-compiler/dist/index.js
+3.4M	node_modules/@storybook/mdx2-csf/dist/index.js
+2.1M	node_modules/react-devtools-core/dist/parseHookNames.chunk.js
+2.1M	node_modules/@react-native/debugger-frontend/dist/third-party/front_end/third_party/lighthouse/lighthouse-dt-bundle.js
+
+🖼️  3. Asset Analysis
+----------------------------
+Image files: 5
+Total asset size: 380K
+
+Largest assets:
+   assets/whitelogo1.png (307K)
+   assets/icon.png (22K)
+   assets/splash-icon.png (17K)
+   assets/adaptive-icon.png (17K)
+   assets/favicon.png (1.4K)
+
+📊 4. Code Metrics
+----------------------------
+TypeScript files (.tsx): 252
+TypeScript files (.ts): 144
+JavaScript files (.js): 1
+Total lines of code: 165631
+
+🎯 5. Performance Targets
+----------------------------
+✅ Build Time: 1s < 60s target
+
+⚡ 6. Optimization Status
+----------------------------
+✅ Metro config: Optimized (inline requires)
+✅ Code splitting: 5 lazy-loaded components
+✅ Dependencies: lodash-es (tree-shakeable)
+
+==========================================
+✅ Benchmark Complete!
+Total time: 9s
+Report saved: ./benchmark-results/benchmark_20251105_192605.txt
+

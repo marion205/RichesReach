@@ -428,6 +428,19 @@ function AIRecommendationsCard({ wellnessScore, onActionPress }: any) {
         <Text style={styles.recommendationsSubtitle}>Personalized insights for your portfolio</Text>
       </View>
 
+      {/* Educational Disclaimer */}
+      <View style={styles.disclaimerBox}>
+        <Text style={styles.disclaimerIcon}>⚠️</Text>
+        <View style={styles.disclaimerContent}>
+          <Text style={styles.disclaimerTitle}>Educational Purpose Only</Text>
+          <Text style={styles.disclaimerText}>
+            AI recommendations are for educational and informational purposes only. 
+            This is not investment advice. Consult a qualified financial advisor before 
+            making investment decisions.
+          </Text>
+        </View>
+      </View>
+
       {recommendations.map((rec, index) => (
         <TouchableOpacity
           key={index}
@@ -534,6 +547,34 @@ function getAIRecommendations(wellnessScore: number) {
 }
 
 const styles = StyleSheet.create({
+  disclaimerBox: {
+    flexDirection: 'row',
+    backgroundColor: '#FFF3E0',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    borderLeftWidth: 3,
+    borderLeftColor: '#F59E0B',
+    alignItems: 'flex-start',
+  },
+  disclaimerIcon: {
+    fontSize: 16,
+    marginRight: 8,
+  },
+  disclaimerContent: {
+    flex: 1,
+  },
+  disclaimerTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#92400E',
+    marginBottom: 4,
+  },
+  disclaimerText: {
+    fontSize: 11,
+    color: '#92400E',
+    lineHeight: 16,
+  },
   modalContainer: {
     flex: 1,
     backgroundColor: '#f8f9fa',

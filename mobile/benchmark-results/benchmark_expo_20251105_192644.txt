@@ -1,0 +1,82 @@
+📊 1. Code Metrics Analysis
+----------------------------
+Timestamp: Wed Nov  5 19:26:44 EST 2025
+
+TypeScript React files (.tsx): 252
+TypeScript files (.ts): 144
+JavaScript files (.js): 1
+JavaScript React files (.jsx): 0
+Total lines of code: 165631
+Estimated components: 784
+
+Largest files (top 10):
+  165609 total
+    3164 src/features/education/screens/TutorScreen.tsx
+    2872 src/features/stocks/screens/StockScreen.tsx
+    2853 src/features/portfolio/screens/AIPortfolioScreen.tsx
+    2824 src/navigation/PremiumAnalyticsScreen.tsx
+    2189 src/features/social/screens/SocialScreen.tsx
+    2147 src/features/coach/screens/AITradingCoachScreen.tsx
+    2092 src/features/stocks/screens/StockDetailScreen.tsx
+    1764 src/features/stocks/screens/TradingScreen.tsx
+    1748 src/features/community/screens/CircleDetailScreenSelfHosted.tsx
+
+📚 2. Dependency Analysis
+----------------------------
+Production dependencies: 109
+Dev dependencies: 22
+
+Heavy dependencies (checking node_modules):
+   node_modules/typescript/lib/typescript.js (8.7M)
+   node_modules/typescript/lib/_tsc.js (5.9M)
+   node_modules/babel-plugin-react-compiler/dist/index.js (3.6M)
+   node_modules/@storybook/mdx2-csf/dist/index.js (3.4M)
+   node_modules/react-devtools-core/dist/parseHookNames.chunk.js (2.1M)
+   node_modules/@react-native/debugger-frontend/dist/third-party/front_end/third_party/lighthouse/lighthouse-dt-bundle.js (2.1M)
+   node_modules/@react-native/debugger-frontend/dist/third-party/front_end/third_party/react-devtools/react-devtools.js (1.5M)
+   node_modules/react-devtools-core/dist/standalone.js (1.4M)
+   node_modules/ethers/dist/ethers.umd.js (1.2M)
+   node_modules/@expo/apple-utils/build/index.js (1.2M)
+
+🖼️  3. Asset Analysis
+----------------------------
+Total image files: 5
+  - PNG: 5
+  - JPG/JPEG: 0
+  - SVG: 0
+Total asset size: 380K
+
+Largest assets (top 5):
+   assets/whitelogo1.png (307K)
+   assets/icon.png (22K)
+   assets/splash-icon.png (17K)
+   assets/adaptive-icon.png (17K)
+   assets/favicon.png (1.4K)
+
+⚡ 4. Optimization Status
+----------------------------
+✅ Metro config: Optimized (inline requires)
+✅ Metro config: Minification enabled
+✅ Metro config: Tree-shaking enabled
+✅ Code splitting: 5 lazy-loaded components
+✅ Suspense boundaries: 13 found
+✅ Dependencies: lodash-es (tree-shakeable)
+⚠️  Potential unused imports: 17 found
+
+🎯 5. Performance Targets & Recommendations
+----------------------------
+⚠️  Code size: 165631 lines (Consider code splitting - >100K)
+✅ Image optimization: 5 PNG files (manageable)
+⚠️  Dependencies: 109 packages (consider audit for unused deps)
+
+📦 6. Estimated Bundle Size (Expo)
+----------------------------
+Estimated bundle size (minified): 7.89 MB (8087 KB)
+Note: Actual size depends on dependencies and Metro bundler optimizations
+✅ Estimated size: <10MB target (Good)
+
+==============================================
+✅ Benchmark Complete!
+Total time: 5s
+Report saved: ./benchmark-results/benchmark_expo_20251105_192644.txt
+

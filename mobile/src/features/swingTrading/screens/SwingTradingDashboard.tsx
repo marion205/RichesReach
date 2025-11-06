@@ -11,11 +11,29 @@ import {
 import { Feather as Icon } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
+import { useNavigation } from '@react-navigation/native';
+
 interface SwingTradingDashboardProps {
-  navigateTo: (screen: string) => void;
+  navigateTo?: (screen: string) => void;
 }
 
-const SwingTradingDashboard: React.FC<SwingTradingDashboardProps> = ({ navigateTo }) => {
+const SwingTradingDashboard: React.FC<SwingTradingDashboardProps> = ({ navigateTo: navigateToProp }) => {
+  const navigation = useNavigation<any>();
+  
+  // Use React Navigation if navigateTo prop not provided
+  const navigateTo = navigateToProp || ((screen: string) => {
+    try {
+      // Since these screens are in the same InvestStack, use direct navigation
+      navigation.navigate(screen as never);
+    } catch (error) {
+      // If direct navigation fails, try nested navigation
+      try {
+        navigation.navigate('Invest' as never, { screen } as never);
+      } catch (nestedError) {
+        console.warn('Navigation error for screen:', screen, nestedError);
+      }
+    }
+  });
   const [activeTab, setActiveTab] = useState<'overview' | 'features'>('overview');
 
   const features = [

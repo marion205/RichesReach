@@ -26,7 +26,8 @@ import { CandlestickChart } from 'react-native-wagmi-charts'; // New advanced ch
 import Svg, { Rect } from 'react-native-svg'; // For volume bars
 import StockTradingModal from '../../../components/forms/StockTradingModal';
 import { getStockComprehensive, StockData } from '../../../services/stockDataService';
-import { debounce } from 'lodash'; // Add lodash for debouncing (npm i lodash)
+// ✅ Optimized: Use lodash-es for tree-shaking (only imports debounce, not entire library)
+import { debounce } from 'lodash-es';
 
 const { width } = Dimensions.get('window');
 

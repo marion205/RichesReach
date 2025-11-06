@@ -3,58 +3,58 @@ import django.db.models.deletion
 from django.conf import settings
 from django.db import migrations, models
 class Migration(migrations.Migration):
-dependencies = [
-('core', '0008_post_image'),
+    dependencies = [
+        ('core', '0008_post_image'),
 ]
-operations = [
-migrations.CreateModel(
-name='Stock',
-fields=[
-('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-('symbol', models.CharField(max_length=10, unique=True)),
-('company_name', models.CharField(max_length=255)),
-('sector', models.CharField(blank=True, max_length=100, null=True)),
-('market_cap', models.BigIntegerField(blank=True, null=True)),
-('pe_ratio', models.DecimalField(blank=True, decimal_places=2, max_digits=10, null=True)),
-('dividend_yield', models.DecimalField(blank=True, decimal_places=2, max_digits=5, null=True)),
-('debt_ratio', models.DecimalField(blank=True, decimal_places=2, max_digits=5, null=True)),
-('volatility', models.DecimalField(blank=True, decimal_places=2, max_digits=5, null=True)),
-('beginner_friendly_score', models.IntegerField(default=0)),
-('last_updated', models.DateTimeField(auto_now=True)),
+    operations = [
+        migrations.CreateModel(
+        name='Stock',
+        fields=[
+        ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+        ('symbol', models.CharField(max_length=10, unique=True)),
+        ('company_name', models.CharField(max_length=255)),
+        ('sector', models.CharField(blank=True, max_length=100, null=True)),
+        ('market_cap', models.BigIntegerField(blank=True, null=True)),
+        ('pe_ratio', models.DecimalField(blank=True, decimal_places=2, max_digits=10, null=True)),
+        ('dividend_yield', models.DecimalField(blank=True, decimal_places=2, max_digits=5, null=True)),
+        ('debt_ratio', models.DecimalField(blank=True, decimal_places=2, max_digits=5, null=True)),
+        ('volatility', models.DecimalField(blank=True, decimal_places=2, max_digits=5, null=True)),
+        ('beginner_friendly_score', models.IntegerField(default=0)),
+        ('last_updated', models.DateTimeField(auto_now=True)),
 ],
-options={
-'ordering': ['symbol'],
+        options={
+        'ordering': ['symbol'],
 },
 ),
-migrations.CreateModel(
-name='StockData',
-fields=[
-('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-('date', models.DateField()),
-('open_price', models.DecimalField(decimal_places=2, max_digits=10)),
-('high_price', models.DecimalField(decimal_places=2, max_digits=10)),
-('low_price', models.DecimalField(decimal_places=2, max_digits=10)),
-('close_price', models.DecimalField(decimal_places=2, max_digits=10)),
-('volume', models.BigIntegerField()),
-('stock', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='price_data', to='core.stock')),
+        migrations.CreateModel(
+        name='StockData',
+        fields=[
+        ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+        ('date', models.DateField()),
+        ('open_price', models.DecimalField(decimal_places=2, max_digits=10)),
+        ('high_price', models.DecimalField(decimal_places=2, max_digits=10)),
+        ('low_price', models.DecimalField(decimal_places=2, max_digits=10)),
+        ('close_price', models.DecimalField(decimal_places=2, max_digits=10)),
+        ('volume', models.BigIntegerField()),
+        ('stock', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='price_data', to='core.stock')),
 ],
-options={
-'ordering': ['-date'],
-'unique_together': {('stock', 'date')},
+        options={
+        'ordering': ['-date'],
+        'unique_together': {('stock', 'date')},
 },
 ),
-migrations.CreateModel(
-name='Watchlist',
-fields=[
-('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-('added_at', models.DateTimeField(auto_now_add=True)),
-('notes', models.TextField(blank=True, null=True)),
-('stock', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='watchlisted_by', to='core.stock')),
-('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='watchlists', to=settings.AUTH_USER_MODEL)),
+        migrations.CreateModel(
+        name='Watchlist',
+        fields=[
+        ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+        ('added_at', models.DateTimeField(auto_now_add=True)),
+        ('notes', models.TextField(blank=True, null=True)),
+        ('stock', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='watchlisted_by', to='core.stock')),
+        ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='watchlists', to=settings.AUTH_USER_MODEL)),
 ],
-options={
-'ordering': ['-added_at'],
-'unique_together': {('user', 'stock')},
+        options={
+        'ordering': ['-added_at'],
+        'unique_together': {('user', 'stock')},
 },
 ),
 ]

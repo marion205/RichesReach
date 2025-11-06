@@ -34,6 +34,14 @@ import {
 } from '../../../graphql/benchmarkQueries';
 import BenchmarkSelector from './BenchmarkSelector';
 import { computeYDomain, getPeriodReturnLabel } from '../utils/chartUtils';
+// Conditionally import Skia chart - only available in development builds, not Expo Go
+let InnovativeChart: any = null;
+try {
+  InnovativeChart = require('../../../components/charts/InnovativeChartSkia').default;
+} catch (e) {
+  // Skia not available - will use fallback chart
+  console.warn('Skia chart not available, using fallback chart');
+}
 
 const { width } = Dimensions.get('window');
 const PREF_SHOW_BENCH = 'rr.pref.show_benchmark'; // NEW
@@ -92,6 +100,8 @@ export default function PortfolioPerformanceCard({
   const [clickedElement, setClickedElement] = useState<string>('');
   const [tab, setTab] = useState<Timeframe>('1M');
   const [showBenchmark, setShowBenchmark] = useState<boolean>(true);
+  // Only enable advanced chart if Skia is available
+  const [useAdvancedChart, setUseAdvancedChart] = useState<boolean>(false); // Start with regular chart, can switch to advanced
 
   // GraphQL queries for benchmark data with error handling
   const { data: benchmarkData, loading: benchmarkLoading, error: benchmarkError } = useQuery(
@@ -216,6 +226,27 @@ export default function PortfolioPerformanceCard({
     const tid = setTimeout(() => setIsLoading(false), 200);
     return () => clearTimeout(tid);
   }, [tab, genPortfolioSeries, genBenchmarkSeries]);
+
+  // Transform data for InnovativeChartSkia (advanced AR chart)
+  const innovativeChartSeries = useMemo(() => {
+    if (!history.length) return [];
+    const now = Date.now();
+    const pointsPerDay = Math.max(1, Math.floor(history.length / 30)); // Approximate days
+    return history.map((price, idx) => ({
+      t: now - (history.length - idx - 1) * (24 * 60 * 60 * 1000 / pointsPerDay),
+      price,
+    }));
+  }, [history]);
+
+  const innovativeChartBenchmark = useMemo(() => {
+    if (!showBenchmark || !bench.length) return [];
+    const now = Date.now();
+    const pointsPerDay = Math.max(1, Math.floor(bench.length / 30));
+    return bench.map((price, idx) => ({
+      t: now - (bench.length - idx - 1) * (24 * 60 * 60 * 1000 / pointsPerDay),
+      price,
+    }));
+  }, [bench, showBenchmark]);
 
   // live updates push to tail (portfolio only here)
   useEffect(() => {
@@ -482,74 +513,128 @@ export default function PortfolioPerformanceCard({
               <View style={{ width: 10, height: 2, backgroundColor: palette.bench, marginRight: 6 }} />
               <Text style={{ color: palette.text, fontSize: 12, fontWeight: '600' }}>{selectedBenchmarkSymbol}</Text>
             </TouchableOpacity>
+            
+            {/* Chart Type Toggle - Switch between Regular and Advanced AR Chart (only if Skia is available) */}
+            {InnovativeChart && (
+              <TouchableOpacity
+                onPress={() => setUseAdvancedChart(v => !v)}
+                accessibilityRole="button"
+                accessibilityLabel={useAdvancedChart ? 'Switch to regular chart' : 'Switch to advanced AR chart'}
+                style={[
+                  styles.chartTypeToggle,
+                  { 
+                    borderColor: palette.border, 
+                    backgroundColor: useAdvancedChart ? `${palette.accent}22` : palette.chipBg,
+                    marginLeft: 8,
+                  },
+                ]}
+              >
+                <Icon 
+                  name={useAdvancedChart ? 'zap' : 'bar-chart-2'} 
+                  size={14} 
+                  color={useAdvancedChart ? palette.accent : palette.text} 
+                  style={{ marginRight: 4 }}
+                />
+                <Text style={{ color: useAdvancedChart ? palette.accent : palette.text, fontSize: 12, fontWeight: '600' }}>
+                  {useAdvancedChart ? 'AR' : 'Chart'}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
         {/* KPI Row */}
         <View style={styles.kpiRow}>
           {/* Total value */}
-          <EducationalTooltip term="Total Value" explanation={getTermExplanation('Total Value')} position="top">
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onLongPress={() => Alert.alert('Total Value', fmtUsd(curValue))}
-              onPress={() => { setClickedElement('totalValue'); setShowEducationModal(true); }}
-            >
-              <Text style={[styles.value, { color: palette.text }]}>{fmtCompactUsd(curValue)}</Text>
-              <Text style={[styles.kpiLabel, { color: palette.sub }]}>Total Value</Text>
-            </TouchableOpacity>
-          </EducationalTooltip>
+          <View style={styles.kpiLeft}>
+            <EducationalTooltip term="Total Value" explanation={getTermExplanation('Total Value')} position="top">
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onLongPress={() => Alert.alert('Total Value', fmtUsd(curValue))}
+                onPress={() => { setClickedElement('totalValue'); setShowEducationModal(true); }}
+              >
+                <Text style={[styles.value, { color: palette.text }]} numberOfLines={1} adjustsFontSizeToFit={true} minimumFontScale={0.8}>
+                {fmtCompactUsd(curValue)}
+              </Text>
+                <Text style={[styles.kpiLabel, { color: palette.sub }]}>Total Value</Text>
+              </TouchableOpacity>
+            </EducationalTooltip>
+          </View>
 
           {/* Return pill */}
-          <EducationalTooltip term="Total Return" explanation={getTermExplanation('Total Return')} position="top">
-            <View>
-              <TouchableOpacity activeOpacity={0.8} onPress={() => { setClickedElement('return'); setShowEducationModal(true); }}>
+          <View style={styles.kpiRight}>
+            <EducationalTooltip term="Total Return" explanation={getTermExplanation('Total Return')} position="top">
+              <View>
+                <TouchableOpacity activeOpacity={0.8} onPress={() => { setClickedElement('return'); setShowEducationModal(true); }}>
                 <View style={[styles.deltaPill, { backgroundColor: `${accent}1A`, borderColor: `${accent}33` }]}>
-                  <Icon name={trendIcon} size={14} color={accent} />
-                  <Text style={[styles.deltaText, { color: accent }]}>
+                  <Icon name={trendIcon} size={12} color={accent} />
+                  <Text style={[styles.deltaText, { color: accent }]} numberOfLines={1}>
                     {`${fmtUsd(Math.abs(curReturn))} (${fmtPct(curReturnPct)})`}
                   </Text>
                 </View>
-              </TouchableOpacity>
+                </TouchableOpacity>
 
-              {/* vs benchmark pill */}
-              {showBenchmark && (
-                <View style={[styles.vsPill, { borderColor: palette.border }]}>
-                  <Text style={{ fontSize: 11, color: palette.sub, marginRight: 6 }}>
-                    vs {useRealBenchmarkData ? formatBenchmarkSymbol(selectedBenchmarkSymbol) : selectedBenchmarkSymbol}
-                  </Text>
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: vsBenchmark >= 0 ? palette.green : palette.red }}>
-                    {fmtPct(vsBenchmark)}
-                  </Text>
-                </View>
-              )}
-            </View>
-          </EducationalTooltip>
+                {/* vs benchmark pill */}
+                {showBenchmark && (
+                  <View style={[styles.vsPill, { borderColor: palette.border }]}>
+                    <Text style={{ fontSize: 10, color: palette.sub, marginRight: 4 }}>
+                      vs {useRealBenchmarkData ? formatBenchmarkSymbol(selectedBenchmarkSymbol) : selectedBenchmarkSymbol}
+                    </Text>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: vsBenchmark >= 0 ? palette.green : palette.red }}>
+                      {fmtPct(vsBenchmark)}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </EducationalTooltip>
+          </View>
         </View>
 
-        {/* Chart + Crosshair */}
-        <View style={styles.chartShell} {...panResponder.panHandlers}>
-          <LineChart
-            data={chartData}
-            width={chartWidth}
-            height={200}
-            chartConfig={chartConfig}
-            bezier
-            withDots={false}
-            withShadow
-            withInnerLines
-            withOuterLines={false}
-            withVerticalLines={false}
-            withHorizontalLines
-            style={styles.chart}
-            fromZero={false}
-            segments={4}
-            yAxisInterval={1}
-            onDataPointClick={(dp) => {
-              setPointer({ index: dp.index, x: dp.x, y: dp.y, value: dp.value as number });
-            }}
-            decorator={Decorator}
-          />
-          <View style={StyleSheet.absoluteFillObject} pointerEvents="none" />
+        {/* Chart + Crosshair - Advanced AR Chart or Regular Chart */}
+        <View style={styles.chartShell}>
+          {useAdvancedChart && innovativeChartSeries.length > 0 && InnovativeChart ? (
+            <InnovativeChart
+              series={innovativeChartSeries}
+              benchmarkData={innovativeChartBenchmark}
+              costBasis={curValue - curReturn}
+              palette={{
+                bg: palette.bg,
+                grid: palette.grid,
+                price: accent,
+                text: palette.text,
+                card: palette.bg,
+                moneyGreen: palette.green,
+                moneyRed: palette.red,
+              }}
+              height={chartHeight}
+              margin={16}
+            />
+          ) : (
+            <View {...panResponder.panHandlers}>
+              <LineChart
+                data={chartData}
+                width={chartWidth}
+                height={200}
+                chartConfig={chartConfig}
+                bezier
+                withDots={false}
+                withShadow
+                withInnerLines
+                withOuterLines={false}
+                withVerticalLines={false}
+                withHorizontalLines
+                style={styles.chart}
+                fromZero={false}
+                segments={4}
+                yAxisInterval={1}
+                onDataPointClick={(dp) => {
+                  setPointer({ index: dp.index, x: dp.x, y: dp.y, value: dp.value as number });
+                }}
+                decorator={Decorator}
+              />
+              <View style={StyleSheet.absoluteFillObject} pointerEvents="none" />
+            </View>
+          )}
         </View>
 
         {/* NEW: Legend */}
@@ -597,12 +682,63 @@ const styles = StyleSheet.create({
   tabsWrap: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   chip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 1, minWidth: 36, alignItems: 'center' },
   benchToggle: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1, maxWidth: 120 },
-  kpiRow: { marginTop: 4, marginBottom: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
-  value: { fontSize: 24, fontWeight: '700' },
-  kpiLabel: { fontSize: 12, marginTop: 2, opacity: 0.7 },
-  deltaPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, borderWidth: 1, alignSelf: 'flex-start' },
-  vsPill: { marginTop: 4, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, borderWidth: 1 },
-  deltaText: { fontSize: 14, fontWeight: '700' },
+  chartTypeToggle: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1 },
+  kpiRow: { 
+    marginTop: 4, 
+    marginBottom: 12, 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'flex-end',
+    paddingHorizontal: 0,
+    gap: 16, // Increased gap to prevent overlap
+  },
+  kpiLeft: {
+    flex: 1,
+    minWidth: 0,
+    maxWidth: '55%', // Limit width to prevent wrapping
+    marginRight: 12,
+    paddingRight: 20, // Extra padding to account for EducationalTooltip info icon (right: -16)
+    flexShrink: 1,
+  },
+  kpiRight: {
+    flexShrink: 0,
+    alignItems: 'flex-end',
+    marginLeft: 12,
+    paddingLeft: 4, // Small padding for the return pill
+  },
+  value: { 
+    fontSize: 20, 
+    fontWeight: '700',
+    flexShrink: 0, // Prevent wrapping
+  },
+  kpiLabel: { 
+    fontSize: 12, 
+    marginTop: 2, 
+    opacity: 0.7,
+  },
+  deltaPill: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 4, 
+    paddingHorizontal: 8, 
+    paddingVertical: 4, 
+    borderRadius: 999, 
+    borderWidth: 1, 
+    alignSelf: 'flex-end',
+    flexShrink: 0,
+  },
+  vsPill: { 
+    marginTop: 3, 
+    alignSelf: 'flex-end', 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingHorizontal: 6, 
+    paddingVertical: 2, 
+    borderRadius: 999, 
+    borderWidth: 1,
+    flexShrink: 0,
+  },
+  deltaText: { fontSize: 12, fontWeight: '700' },
   chartShell: { alignItems: 'center', marginTop: 4, marginBottom: 12 },
   chart: { borderRadius: 16 },
   // NEW: Legend styles

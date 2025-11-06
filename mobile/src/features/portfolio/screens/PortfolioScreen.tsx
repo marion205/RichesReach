@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
 View,
 Text,
@@ -17,6 +17,8 @@ import { GET_MY_PORTFOLIOS } from '../../../portfolioQueries';
 import MilestonesTimeline, { Milestone } from '../../../components/MilestonesTimeline';
 import MilestoneUnlockOverlay from '../../../components/MilestoneUnlockOverlay';
 import { useNavigation } from '@react-navigation/native';
+import PortfolioHoldings, { Holding } from '../components/PortfolioHoldings';
+import { getMockMyPortfolios } from '../../../services/mockPortfolioData';
 interface PortfolioScreenProps {
 navigateTo?: (screen: string) => void;
 }
@@ -50,9 +52,10 @@ const insets = useSafeAreaInsets();
       // Try alternative navigation approach
       try {
         // If direct navigation fails, try nested navigation for InvestStack screens
-        if (name === 'premium-analytics') {
+        const investStackScreens = ['premium-analytics', 'portfolio-management', 'trading', 'stock', 'StockDetail'];
+        if (investStackScreens.includes(name)) {
           (navigation as any).navigate('Invest' as never, {
-            screen: 'premium-analytics',
+            screen: name,
             params: params
           } as never);
           return;
@@ -75,26 +78,36 @@ fetchRealTimePrices(allHoldings);
 }, [portfolioData]);
 // Fetch real-time prices for portfolio holdings
 const fetchRealTimePrices = async (holdings: any[]) => {
-if (holdings.length === 0) return;
-setLoadingPrices(true);
-try {
-const symbols = holdings.map(holding => holding.stock.symbol);
-const service = SecureMarketDataService.getInstance();
-const quotes = await service.fetchQuotes(symbols);
-const prices: { [key: string]: number } = {};
-quotes.forEach((quote) => {
-if (quote.price > 0) {
-prices[quote.symbol] = quote.price;
-}
-});
-setRealTimePrices(prices);
-} catch (error) {
-console.error('Failed to fetch real-time prices for portfolio:', error);
-} finally {
-setLoadingPrices(false);
-}
+  if (holdings.length === 0) return;
+  setLoadingPrices(true);
+  try {
+    const symbols = holdings.map(holding => holding.stock.symbol);
+    const service = SecureMarketDataService.getInstance();
+    const quotes = await service.fetchQuotes(symbols);
+    const prices: { [key: string]: number } = {};
+    quotes.forEach((quote) => {
+      if (quote.price > 0) {
+        prices[quote.symbol] = quote.price;
+      }
+    });
+    setRealTimePrices(prices);
+  } catch (error) {
+    console.error('Failed to fetch real-time prices for portfolio:', error);
+    // Use prices from mock portfolio data as fallback
+    const mockPrices: { [key: string]: number } = {};
+    holdings.forEach((holding: any) => {
+      const symbol = holding.stock?.symbol || holding.symbol;
+      const price = holding.currentPrice || holding.stock?.currentPrice || 0;
+      if (symbol && price > 0) {
+        mockPrices[symbol] = price;
+      }
+    });
+    setRealTimePrices(mockPrices);
+  } finally {
+    setLoadingPrices(false);
+  }
 };
-const onRefresh = async () => {
+  const onRefresh = async () => {
 setRefreshing(true);
 try {
 await refetch();
@@ -104,51 +117,100 @@ await refetch();
 setRefreshing(false);
 }
 };
-if (portfolioLoading) {
-return (
-<View style={styles.container}>
-<View style={styles.header}>
-<Icon name="bar-chart-2" size={24} color="#34C759" />
-<Text style={styles.headerTitle}>Portfolio</Text>
-</View>
-<View style={styles.loadingContainer}>
-<Icon name="refresh-cw" size={32} color="#34C759" />
-<Text style={styles.loadingText}>Loading your portfolio...</Text>
-</View>
-</View>
-);
-}
-// Log error for debugging but don't block rendering
-if (portfolioError) {
-  console.warn('Portfolio query error:', portfolioError);
-  // Continue to render with demo data instead of showing error screen
-}
-// Fallback demo data when backend has no portfolios yet or on error
-const demoPortfolios = [
-{ name: 'Main', totalValue: 14303.52, holdingsCount: 3, holdings: [
-  { id: 'h1', stock: { symbol: 'AAPL' }, shares: 10, averagePrice: 150, currentPrice: 180, totalValue: 1800 },
-  { id: 'h2', stock: { symbol: 'MSFT' }, shares: 8, averagePrice: 230, currentPrice: 320, totalValue: 2560 },
-  { id: 'h3', stock: { symbol: 'SPY' }, shares: 15, averagePrice: 380, currentPrice: 420, totalValue: 6300 },
-]},
-];
-// Use data if available, otherwise fall back to demo data
-const rawPortfolios = portfolioData?.myPortfolios?.portfolios || [];
-const portfolios = (rawPortfolios.length > 0 && !portfolioError) ? rawPortfolios : demoPortfolios;
-const totalValue = (portfolioData?.myPortfolios?.totalValue != null)
-  ? portfolioData.myPortfolios.totalValue
-  : portfolios.reduce((sum: number, p: any) => sum + (p.totalValue || 0), 0);
-const totalPortfolios = (portfolioData?.myPortfolios?.totalPortfolios != null)
-  ? portfolioData.myPortfolios.totalPortfolios
-  : portfolios.length;
 
-// Basic milestones (v1)
-const milestones: Milestone[] = [
-  { id: 'm1', title: 'First $1,000 invested', subtitle: 'A solid foundation' },
-  { id: 'm2', title: 'First dividend received', subtitle: 'Income begins to compound' },
-  { id: 'm3', title: 'Best month performance', subtitle: '+5% return month' },
-];
+  // Log error for debugging but don't block rendering
+  if (portfolioError) {
+    console.warn('Portfolio query error:', portfolioError);
+    // Continue to render with demo data instead of showing error screen
+  }
+  
+  // Fallback demo data when backend has no portfolios yet or on error
+  // Use comprehensive mock data that matches chart values
+  const mockPortfoliosData = getMockMyPortfolios();
+  const demoPortfolios = mockPortfoliosData.portfolios.map(p => ({
+    name: p.name,
+    totalValue: p.totalValue,
+    holdingsCount: p.holdingsCount,
+    holdings: p.holdings.map(h => ({
+      id: h.id,
+      stock: {
+        symbol: h.stock.symbol,
+        companyName: h.stock.companyName,
+        currentPrice: h.stock.currentPrice,
+      },
+      shares: h.shares,
+      averagePrice: h.averagePrice,
+      currentPrice: h.currentPrice,
+      totalValue: h.totalValue,
+    })),
+  }));
+  
+  // Use data if available, otherwise fall back to demo data
+  const rawPortfolios = portfolioData?.myPortfolios?.portfolios || [];
+  const portfolios = (rawPortfolios.length > 0 && !portfolioError) ? rawPortfolios : demoPortfolios;
+  const totalValue = (portfolioData?.myPortfolios?.totalValue != null)
+    ? portfolioData.myPortfolios.totalValue
+    : portfolios.reduce((sum: number, p: any) => sum + (p.totalValue || 0), 0);
+  const totalPortfolios = (portfolioData?.myPortfolios?.totalPortfolios != null)
+    ? portfolioData.myPortfolios.totalPortfolios
+    : portfolios.length;
 
-if (portfolios.length === 0) {
+  // Transform portfolio holdings into format expected by PortfolioHoldings component
+  // MUST BE BEFORE ANY EARLY RETURNS
+  const allHoldings: Holding[] = useMemo(() => {
+  const holdings = portfolios.flatMap((portfolio: any) => {
+    if (!portfolio.holdings || portfolio.holdings.length === 0) return [];
+    return portfolio.holdings.map((holding: any) => {
+      const symbol = holding.stock?.symbol || holding.symbol || '';
+      const quantity = holding.shares || holding.quantity || 0;
+      const currentPrice = realTimePrices[symbol] || holding.currentPrice || holding.stock?.currentPrice || 0;
+      const totalValue = quantity * currentPrice || holding.totalValue || 0;
+      const averagePrice = holding.averagePrice || holding.stock?.averagePrice || currentPrice;
+      const change = currentPrice - averagePrice;
+      const changePercent = averagePrice > 0 ? (change / averagePrice) * 100 : 0;
+      
+      return {
+        symbol,
+        quantity,
+        currentPrice,
+        totalValue,
+        change: change * quantity, // Total change in value
+        changePercent,
+        name: holding.stock?.companyName || holding.stock?.name || holding.name,
+      };
+    });
+  });
+  
+  console.log('PortfolioScreen: Transformed holdings:', holdings.length, holdings);
+  console.log('PortfolioScreen: Portfolios data:', portfolios);
+  console.log('PortfolioScreen: Real-time prices:', realTimePrices);
+  return holdings;
+  }, [portfolios, realTimePrices]);
+
+  // Basic milestones (v1)
+  const milestones: Milestone[] = [
+    { id: 'm1', title: 'First $1,000 invested', subtitle: 'A solid foundation' },
+    { id: 'm2', title: 'First dividend received', subtitle: 'Income begins to compound' },
+    { id: 'm3', title: 'Best month performance', subtitle: '+5% return month' },
+  ];
+
+  // NOW SAFE TO DO EARLY RETURNS - ALL HOOKS HAVE BEEN CALLED
+  if (portfolioLoading) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Icon name="bar-chart-2" size={24} color="#34C759" />
+          <Text style={styles.headerTitle}>Portfolio</Text>
+        </View>
+        <View style={styles.loadingContainer}>
+          <Icon name="refresh-cw" size={32} color="#34C759" />
+          <Text style={styles.loadingText}>Loading your portfolio...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (portfolios.length === 0) {
 return (
 <View style={styles.container}>
 <View style={styles.header}>
@@ -219,6 +281,23 @@ ${portfolio.totalValue ? portfolio.totalValue.toLocaleString() : '0'}
 <MilestonesTimeline milestones={milestones} onCelebrate={(t) => setCelebrateTitle(t)} />
 
 </View>
+
+{/* Portfolio Holdings - NEW from portfolio-holdings-v1 branch (merged from feat/portfolio-holdings-v1) */}
+<View style={{ marginTop: 24, marginBottom: 16, paddingHorizontal: 16 }}>
+  <PortfolioHoldings
+    holdings={allHoldings}
+    onStockPress={(symbol) => go('StockDetail', { symbol })}
+    onBuy={(holding) => {
+      go('trading', { symbol: holding.symbol, action: 'buy' });
+    }}
+    onSell={(holding) => {
+      go('trading', { symbol: holding.symbol, action: 'sell' });
+    }}
+    loading={loadingPrices || portfolioLoading}
+    onAddHoldings={() => go('portfolio-management')}
+  />
+</View>
+
 {/* Portfolio Actions */}
 <View style={styles.actionsSection}>
 <Text style={styles.actionsTitle}>Portfolio Management</Text>

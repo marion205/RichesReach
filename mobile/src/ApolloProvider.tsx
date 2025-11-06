@@ -11,8 +11,8 @@ import JWTAuthService from './features/auth/services/JWTAuthService';
     if (baseUrl) {
       const response = await fetch(`${baseUrl}/health`, { 
         method: 'GET',
-        timeout: 5000 
-      });
+        signal: AbortSignal.timeout(5000), // 5 second timeout
+      } as RequestInit);
       console.log('[health] Status:', response.status, 'Text:', await response.text());
     } else {
       console.log('[health] Skipping - no API base URL set yet');

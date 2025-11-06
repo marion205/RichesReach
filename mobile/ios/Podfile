@@ -91,6 +91,9 @@ def ccache_enabled?(podfile_properties)
   podfile_properties['apple.ccacheEnabled'] == 'true'
 end
 
+# ✅ Disable Flipper to avoid Folly conflicts
+ENV['NO_FLIPPER'] = '1'
+
 ENV['RCT_NEW_ARCH_ENABLED'] ||= '0' if podfile_properties['newArchEnabled'] == 'false'
 ENV['EX_DEV_CLIENT_NETWORK_INSPECTOR'] ||= podfile_properties['EX_DEV_CLIENT_NETWORK_INSPECTOR']
 ENV['RCT_USE_RN_DEP'] ||= '1' if podfile_properties['ios.buildReactNativeFromSource'] != 'true' && podfile_properties['newArchEnabled'] != 'false'
@@ -342,6 +345,7 @@ target 'RichesReach' do
       :ccache_enabled => ccache_enabled?(podfile_properties),
     )
     
+<<<<<<< Updated upstream
     puts "🔧 [LOCAL] Applying hardened C/C++ flag separation..."
     
     installer.pods_project.targets.each do |target|
@@ -537,6 +541,63 @@ target 'RichesReach' do
       end
     end
     
+    # ✅ Fix Node binary path for React Codegen scripts
+    node_binary = `which node`.strip
+    if node_binary.empty?
+      node_binary = '/opt/homebrew/bin/node' # Default for Apple Silicon
+      Pod::UI.puts "⚠️  Node not found in PATH, using default: #{node_binary}"
+    else
+      Pod::UI.puts "✅ Found Node binary: #{node_binary}"
+    end
+    
+    # Fix Node path in all build phases
+    installer.pods_project.targets.each do |target|
+      target.build_phases.each do |phase|
+        if phase.is_a?(Xcodeproj::Project::Object::PBXShellScriptBuildPhase)
+          script = phase.shell_script
+          # Skip if already has NODE_BINARY export
+          next if script.include?('export NODE_BINARY')
+          
+          # Add Node binary export at the top of React Native/Codegen scripts
+          if script.include?('react-native') || script.include?('codegen') || 
+             script.include?('React-Codegen') || script.include?('Bundle React Native') ||
+             script.include?('Generate Specs') || target.name.include?('Codegen')
+            # Prepend NODE_BINARY and PATH exports
+            phase.shell_script = <<~SCRIPT
+              export NODE_BINARY="#{node_binary}"
+              export PATH="#{File.dirname(node_binary)}:$PATH"
+              #{script}
+            SCRIPT
+            Pod::UI.puts "✅ Fixed Node path in #{target.name} → #{phase.name || 'script'}"
+          end
+        end
+      end
+    end
+    
+    # Also fix the main app target's React Native scripts
+    installer.aggregate_targets.each do |aggregate_target|
+      aggregate_target.user_project.targets.each do |target|
+        target.build_phases.each do |phase|
+          if phase.is_a?(Xcodeproj::Project::Object::PBXShellScriptBuildPhase)
+            script = phase.shell_script || ''
+            # Skip if already has NODE_BINARY export
+            next if script.include?('export NODE_BINARY')
+            
+            # Add to React Native related scripts
+            if script.include?('react-native') || script.include?('Bundle React Native') ||
+               script.include?('codegen') || phase.name&.include?('React') || phase.name&.include?('Codegen')
+              phase.shell_script = <<~SCRIPT
+                export NODE_BINARY="#{node_binary}"
+                export PATH="#{File.dirname(node_binary)}:$PATH"
+                #{script}
+              SCRIPT
+              Pod::UI.puts "✅ Fixed Node path in app target → #{phase.name || 'script'}"
+            end
+          end
+        end
+      end
+    end
+    
     # C++17 compatibility flags + C++ header priority (AFTER sanitization above)
     # CRITICAL FIX: Ensure C++ headers are found BEFORE C headers for all targets
     installer.pods_project.targets.each do |t|
@@ -628,6 +689,133 @@ target 'RichesReach' do
         
         # NOTE: Attempted -nostdsysteminc approach but it broke other header lookups
         # The C++ header path issues persist, suggesting this may be an Xcode/RN version incompatibility
+      end
+    end
+    
+    # ✅ Create TSan stub header (for AtFork and other Folly code)
+    pods_root = installer.sandbox.root
+    tsan_stub_path = File.join(pods_root, 'tsan_stub.h')
+    File.write(tsan_stub_path, <<~'HDR'
+      #ifndef RICHESREACH_TSAN_STUB_H
+      #define RICHESREACH_TSAN_STUB_H
+      #ifdef __cplusplus
+      struct annotate_ignore_thread_sanitizer_guard {
+        annotate_ignore_thread_sanitizer_guard() noexcept {}
+        template <class... Args>
+        explicit annotate_ignore_thread_sanitizer_guard(Args&&...) noexcept {}
+        ~annotate_ignore_thread_sanitizer_guard() noexcept {}
+      };
+      #else
+      typedef struct annotate_ignore_thread_sanitizer_guard { int _dummy; } annotate_ignore_thread_sanitizer_guard;
+      #endif
+      #endif // RICHESREACH_TSAN_STUB_H
+    HDR
+    )
+    Pod::UI.puts "✅ Created TSan stub header (variadic constructor)"
+    
+    # ✅ Create missing Folly compatibility headers
+    sync_dir = File.join(installer.sandbox.root, 'RCT-Folly/folly/synchronization')
+    FileUtils.mkdir_p(sync_dir)
+    
+    # RelaxedAtomic.h
+    relaxed_atomic_path = File.join(sync_dir, 'RelaxedAtomic.h')
+    unless File.exist?(relaxed_atomic_path)
+      File.write(relaxed_atomic_path, <<~EOF
+        #ifndef FOLLY_SYNCHRONIZATION_RELAXED_ATOMIC_H
+        #define FOLLY_SYNCHRONIZATION_RELAXED_ATOMIC_H
+        #include <atomic>
+        namespace folly {
+          namespace detail {
+            template<typename T> using RelaxedAtomic = std::atomic<T>;
+            template<typename T> using relaxed_atomic = RelaxedAtomic<T>;
+          }
+          template<typename T> using relaxed_atomic = detail::RelaxedAtomic<T>;
+        }
+        #endif
+      EOF
+      )
+      Pod::UI.puts "✅ Created RelaxedAtomic.h"
+    end
+    
+    # SanitizeThread.h
+    sanitize_thread_path = File.join(sync_dir, 'SanitizeThread.h')
+    unless File.exist?(sanitize_thread_path)
+      File.write(sanitize_thread_path, <<~EOF
+        #ifndef FOLLY_SYNCHRONIZATION_SANITIZE_THREAD_H
+        #define FOLLY_SYNCHRONIZATION_SANITIZE_THREAD_H
+        #include <folly/Portability.h>
+        namespace folly { namespace detail {
+          using annotate_rwlock_cd_t = void (*)(const char* f, int l, const volatile void* addr);
+          using annotate_rwlock_ar_t = void (*)(const char* f, int l, const volatile void* addr, long w);
+          using annotate_benign_race_sized_t = void (*)(const char* f, int l, const volatile void* addr, long size, const char* desc);
+          using annotate_ignore_t = void (*)(const char* f, int l);
+          FOLLY_STORAGE_CONSTEXPR void annotate_rwlock_create(const char* f, int l, const volatile void* addr);
+          FOLLY_STORAGE_CONSTEXPR void annotate_rwlock_create_static(const char* f, int l, const volatile void* addr);
+          FOLLY_STORAGE_CONSTEXPR void annotate_rwlock_destroy(const char* f, int l, const volatile void* addr);
+          FOLLY_STORAGE_CONSTEXPR void annotate_rwlock_acquired(const char* f, int l, const volatile void* addr, long w);
+          FOLLY_STORAGE_CONSTEXPR void annotate_rwlock_try_acquired(const char* f, int l, const volatile void* addr, long w, bool success);
+          FOLLY_STORAGE_CONSTEXPR void annotate_rwlock_released(const char* f, int l, const volatile void* addr, long w);
+          FOLLY_STORAGE_CONSTEXPR void annotate_benign_race_sized(const char* f, int l, const volatile void* addr, long size, const char* desc);
+          FOLLY_STORAGE_CONSTEXPR void annotate_ignore_reads_begin(const char* f, int l);
+          FOLLY_STORAGE_CONSTEXPR void annotate_ignore_reads_end(const char* f, int l);
+          FOLLY_STORAGE_CONSTEXPR void annotate_ignore_writes_begin(const char* f, int l);
+          FOLLY_STORAGE_CONSTEXPR void annotate_ignore_writes_end(const char* f, int l);
+          FOLLY_STORAGE_CONSTEXPR void annotate_ignore_sync_begin(const char* f, int l);
+          FOLLY_STORAGE_CONSTEXPR void annotate_ignore_sync_end(const char* f, int l);
+        }}
+        #endif
+      EOF
+      )
+      Pod::UI.puts "✅ Created SanitizeThread.h"
+    end
+    
+    # ✅ Force arm64-only for simulator to avoid x86_64 Boost/C++17 issues
+    installer.pods_project.targets.each do |t|
+      t.build_configurations.each do |c|
+        # Exclude x86_64 for simulator builds
+        c.build_settings['EXCLUDED_ARCHS[sdk=iphonesimulator*]'] = 'x86_64'
+        c.build_settings['ONLY_ACTIVE_ARCH'] = 'YES'
+        
+        # ✅ Fix RCT-Folly C++17 compatibility issues and disable TSan
+        if t.name == 'RCT-Folly'
+          # Remove SanitizeThread files from build (causes TSan signature mismatches)
+          begin
+            sources_phase = t.build_phases.find { |phase| phase.is_a?(Xcodeproj::Project::Object::PBXSourcesBuildPhase) }
+            if sources_phase
+              files_to_remove = sources_phase.files.select do |file|
+                file.file_ref && file.file_ref.path && file.file_ref.path.include?('SanitizeThread')
+              end
+              files_to_remove.each { |file| sources_phase.remove_file_reference(file.file_ref) }
+              Pod::UI.puts "✅ Removed #{files_to_remove.length} SanitizeThread files from RCT-Folly"
+            end
+          rescue => e
+            Pod::UI.puts "⚠️  Could not remove SanitizeThread files: #{e.message}"
+          end
+          
+          # RCT-Folly requires C++17, but needs compatibility for deprecated features
+          c.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'c++17'
+          c.build_settings['CLANG_CXX_LIBRARY'] = 'libc++'
+          # Suppress deprecated warnings and errors
+          c.build_settings['OTHER_CPLUSPLUSFLAGS'] ||= ['$(inherited)']
+          c.build_settings['OTHER_CPLUSPLUSFLAGS'] << '-Wno-deprecated-declarations'
+          c.build_settings['OTHER_CPLUSPLUSFLAGS'] << '-Wno-error=deprecated-declarations'
+          c.build_settings['OTHER_CPLUSPLUSFLAGS'] << '-Wno-deprecated'
+          # Disable Thread Sanitizer (TSan) to avoid signature mismatches
+          c.build_settings['OTHER_CPLUSPLUSFLAGS'] << '-DFOLLY_DISABLE_TSAN=1'
+          c.build_settings['OTHER_CFLAGS'] ||= ['$(inherited)']
+          c.build_settings['OTHER_CFLAGS'] << '-DFOLLY_DISABLE_TSAN=1'
+          # Force-include TSan stub so AtFork sees the guard type
+          # Use PODS_ROOT variable for proper path resolution
+          c.build_settings['OTHER_CFLAGS'] << '-include $(PODS_ROOT)/tsan_stub.h'
+          c.build_settings['OTHER_CPLUSPLUSFLAGS'] << '-include $(PODS_ROOT)/tsan_stub.h'
+          # Enable compatibility mode for removed C++17 features
+          c.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= ['$(inherited)']
+          c.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] << '_LIBCPP_ENABLE_CXX17_REMOVED_UNARY_BINARY_FUNCTION=1'
+          c.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] << '_LIBCPP_ENABLE_CXX17_REMOVED_AUTO_PTR=1'
+          # Allow deprecated std features to be available
+          c.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] << '_LIBCPP_DISABLE_DEPRECATION_WARNINGS=1'
+        end
+>>>>>>> Stashed changes
       end
     end
   end

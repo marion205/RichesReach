@@ -45,12 +45,12 @@ interface SimpleCircleDetailProps {
   navigation: any;
 }
 
-// Mock posts data (updated with videos)
+// Mock posts data for demo - BIPOC Investment Strategies focused
 const mockPosts = [
   {
     id: '1',
     user: { id: 'user1', name: 'Marcus Johnson', avatar: 'https://via.placeholder.com/40/007AFF/ffffff?text=MJ' },
-    content: 'Just closed a deal on a multi-family property in Atlanta! Cash flow is looking strong. #RealEstate #WealthBuilding',
+    content: 'Just closed a deal on a multi-family property in Atlanta! Cash flow is looking strong. Building generational wealth one property at a time. #RealEstate #WealthBuilding #BIPOCInvesting',
     timestamp: '2h ago',
     likes: 45,
     comments: 12,
@@ -60,7 +60,7 @@ const mockPosts = [
   {
     id: '2',
     user: { id: 'user2', name: 'Aisha Williams', avatar: 'https://via.placeholder.com/40/FF9500/ffffff?text=AW' },
-    content: 'Quick tip: Use tax-loss harvesting before year-end to offset gains. Saved me $8K last year! What\'s your go-to tax strategy? #TaxOptimization',
+    content: 'Quick tip: Use tax-loss harvesting before year-end to offset gains. Saved me $8K last year! What\'s your go-to tax strategy? #TaxOptimization #FinancialLiteracy',
     timestamp: '5h ago',
     likes: 23,
     comments: 8,
@@ -70,12 +70,22 @@ const mockPosts = [
   {
     id: '3',
     user: { id: 'user3', name: 'Dr. Maria Rodriguez', avatar: 'https://via.placeholder.com/40/5856D6/ffffff?text=MR' },
-    content: 'Bitcoin just hit $75K! Time to rebalance crypto allocations? Sharing my DeFi strategy thread below. #Crypto #Investing',
+    content: 'Diversifying into emerging markets has been game-changing for my portfolio. Sharing my strategy for investing in African and Latin American markets. #GlobalInvesting #Diversification',
     timestamp: '1d ago',
     likes: 67,
     comments: 21,
     isLiked: false,
-    media: { uri: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBun.mp4', type: 'video' as const },
+    media: null,
+  },
+  {
+    id: '4',
+    user: { id: 'user4', name: 'James Chen', avatar: 'https://via.placeholder.com/40/34C759/ffffff?text=JC' },
+    content: 'Building a community investment fund with 20 other BIPOC investors. We\'re pooling resources to access deals that were previously out of reach. Power in numbers! 💪 #CommunityWealth #CooperativeInvesting',
+    timestamp: '3d ago',
+    likes: 89,
+    comments: 34,
+    isLiked: false,
+    media: null,
   },
 ];
 
@@ -160,14 +170,19 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
     };
   }, []);
 
-  // Load Posts Function (Hybrid: Real API + Mock Fallback)
+  // Load Posts Function (Hybrid: Real API + Mock Fallback with Timeout)
   const loadPosts = useCallback(async () => {
     setLoading(true);
     try {
       console.log('🔄 Attempting to load real posts from API...');
       
+      // Add timeout to prevent infinite loading
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Request timeout')), 5000)
+      );
+      
       // Try to get real posts from your Django backend
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000"}/api/wealth-circles/${circle.id}/posts/`, {
+      const fetchPromise = fetch(`${process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000"}/api/wealth-circles/${circle.id}/posts/`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -175,40 +190,51 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
         },
       });
 
+      const response = await Promise.race([fetchPromise, timeoutPromise]) as Response;
+
       if (response.ok) {
         const apiPosts = await response.json();
         console.log('✅ Successfully loaded real posts:', apiPosts.length);
         
-        // Transform API data to match our interface
-        const transformed = apiPosts.map((post: any) => ({
-          id: post.id?.toString() || Date.now().toString(),
-          content: post.content || post.text || 'No content',
-          media: post.media ? {
-            uri: post.media.url || post.media,
-            type: post.media.type || 'image'
-          } : undefined,
-          user: {
-            id: post.user?.id?.toString() || post.author_id?.toString() || '1',
-            name: post.user?.name || post.author_name || 'Anonymous User',
-            avatar: post.user?.avatar || post.author_avatar || 'https://via.placeholder.com/40',
-          },
-          timestamp: post.created_at || post.timestamp || 'Just now',
-          likes: post.likes_count || post.likes || 0,
-          comments: post.comments_count || post.comments || 0,
-          isLiked: post.is_liked || false,
-        }));
-        
-        setPosts(transformed);
-        console.log('🎉 Using real API data for posts');
+        // Only use real data if we have posts
+        if (apiPosts && apiPosts.length > 0) {
+          // Transform API data to match our interface
+          const transformed = apiPosts.map((post: any) => ({
+            id: post.id?.toString() || Date.now().toString(),
+            content: post.content || post.text || 'No content',
+            media: post.media ? {
+              uri: post.media.url || post.media,
+              type: post.media.type || 'image'
+            } : undefined,
+            user: {
+              id: post.user?.id?.toString() || post.author_id?.toString() || '1',
+              name: post.user?.name || post.author_name || 'Anonymous User',
+              avatar: post.user?.avatar || post.author_avatar || 'https://via.placeholder.com/40',
+            },
+            timestamp: post.created_at || post.timestamp || 'Just now',
+            likes: post.likes_count || post.likes || 0,
+            comments: post.comments_count || post.comments || 0,
+            isLiked: post.is_liked || false,
+          }));
+          
+          setPosts(transformed);
+          console.log('🎉 Using real API data for posts');
+        } else {
+          // No posts from API, use mock data for demo
+          console.log('📝 No posts from API, using mock data for demo');
+          setPosts(mockPosts);
+        }
       } else {
         console.log('⚠️ API returned error, falling back to mock data');
         setPosts(mockPosts);
       }
     } catch (err) {
       console.error('❌ Error loading posts from API:', err);
-      console.log('🔄 Falling back to mock data...');
+      console.log('🔄 Falling back to mock data for demo...');
+      // Always set mock posts for demo if API fails
       setPosts(mockPosts);
     } finally {
+      // Always set loading to false, even if there was an error
       setLoading(false);
     }
   }, [circle.id]);
@@ -563,12 +589,12 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
                 <ActivityIndicator size="large" color="#007AFF" />
                 <Text style={styles.loadingText}>Loading posts...</Text>
               </View>
-            ) : (
+            ) : posts.length === 0 ? (
               <View style={styles.emptyContainer}>
                 <Text style={styles.emptyText}>No posts yet</Text>
                 <Text style={styles.emptySubtext}>Be the first to share something!</Text>
               </View>
-            )
+            ) : null
           }
           ListFooterComponent={<View style={styles.footerSpacer} />}
         />
@@ -598,6 +624,7 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
       {keyboardVisible && (
         <View style={styles.keyboardForm}>
           <TextInput
+            testID="message-input"
             style={styles.postInput}
             placeholder={`Share your thoughts in ${circle.name}...`}
             value={newPostText}
@@ -629,6 +656,7 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
             </View>
           )}
           <TouchableOpacity 
+            testID="send-message-button"
             style={[styles.submitButton, (!newPostText.trim() && !selectedMedia || submitting) && styles.submitDisabled]} 
             onPress={submitPost}
             disabled={!newPostText.trim() && !selectedMedia || submitting}

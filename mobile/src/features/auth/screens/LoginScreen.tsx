@@ -122,7 +122,7 @@ export default function LoginScreen({ onLogin, onNavigateToSignUp, onNavigateToF
 
   return (
     <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-      <Image source={require('../../../../assets/whitelogo1.png')} style={styles.logo} resizeMode="contain" />
+      <Image source={require('../../../../assets/optimized/whitelogo1.webp')} style={styles.logo} resizeMode="contain" />
       <Text style={styles.tagline}>Think Rich. Reach Further.</Text>
       <View style={styles.form}>
         <TextInput

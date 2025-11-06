@@ -48,7 +48,8 @@ class NewsService {
       return this.transformNewsData(data.articles);
     } catch (error) {
       console.error('Error fetching financial news:', error);
-      return this.getMockNewsData();
+      // Return empty array instead of mock data
+      return [];
     }
   }
 
@@ -72,7 +73,8 @@ class NewsService {
       return this.transformNewsData(data.articles);
     } catch (error) {
       console.error('Error fetching market news:', error);
-      return this.getMockNewsData();
+      // Return empty array instead of mock data
+      return [];
     }
   }
 
@@ -96,7 +98,8 @@ class NewsService {
       return this.transformNewsData(data.articles);
     } catch (error) {
       console.error('Error fetching crypto news:', error);
-      return this.getMockCryptoNewsData();
+      // Return empty array instead of mock data
+      return [];
     }
   }
 
@@ -120,7 +123,8 @@ class NewsService {
       return this.transformNewsData(data.articles);
     } catch (error) {
       console.error('Error fetching earnings news:', error);
-      return this.getMockEarningsNewsData();
+      // Return empty array instead of mock data
+      return [];
     }
   }
 

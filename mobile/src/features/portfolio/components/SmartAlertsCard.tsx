@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -84,6 +84,13 @@ export default function SmartAlertsCard({ portfolioId, timeframe = '1M', style }
     pollInterval: 30000,
     fetchPolicy: 'cache-and-network',
     notifyOnNetworkStatusChange: true,
+    errorPolicy: 'all', // Continue rendering on error
+    // Add timeout to prevent infinite loading
+    context: {
+      fetchOptions: {
+        timeout: 10000, // 10 second timeout
+      },
+    },
   });
 
   const { data: categoriesData } = useQuery(GET_ALERT_CATEGORIES);
@@ -276,8 +283,21 @@ export default function SmartAlertsCard({ portfolioId, timeframe = '1M', style }
     </View>
   );
 
-  // Loading state (initial)
-  if (alertsLoading && networkStatus !== 7) {
+  // Loading state (initial) - but timeout after 10 seconds
+  const [loadingTimeout, setLoadingTimeout] = useState(false);
+  useEffect(() => {
+    if (alertsLoading && networkStatus !== 7) {
+      const timeout = setTimeout(() => {
+        setLoadingTimeout(true);
+      }, 10000); // 10 second timeout
+      return () => clearTimeout(timeout);
+    } else {
+      setLoadingTimeout(false);
+    }
+  }, [alertsLoading, networkStatus]);
+
+  // Show loading only if not timed out and not in error state
+  if (alertsLoading && networkStatus !== 7 && !loadingTimeout) {
     return (
       <View style={[styles.container, { backgroundColor: palette.cardBg }, style]}>
         <View style={styles.header}>

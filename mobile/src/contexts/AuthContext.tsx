@@ -52,10 +52,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const storedToken = await AsyncStorage.getItem('token');
       if (storedToken) {
         setToken(storedToken);
-        // Verify token is still valid
-        const isValid = await verifyStoredToken(storedToken);
-        if (isValid) {
-          // Set a basic user object for authentication
+        // Skip verification for demo - instant load
           const basicUser = {
             id: '1',
             email: 'test@example.com',
@@ -64,20 +61,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             hasPremiumAccess: false,
           };
           setUser(basicUser);
-          // Load user data
-          await loadUserData(storedToken);
-        } else {
-          // Token is invalid, remove it
-          await AsyncStorage.removeItem('token');
-          setToken(null);
-          setUser(null);
-        }
+        // Load user data in background (non-blocking)
+        loadUserData(storedToken).catch(() => {});
       }
     } catch (error) {
       console.error('Error loading stored token:', error);
       setToken(null);
       setUser(null);
     } finally {
+      // Set loading to false immediately for fast startup
       setLoading(false);
     }
   };

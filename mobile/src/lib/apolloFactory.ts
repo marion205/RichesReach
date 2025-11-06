@@ -17,6 +17,11 @@ if (__DEV__ && /elb\.amazonaws\.com/i.test(GRAPHQL_URL)) {
   throw new Error('Dev build is pointing to PROD ALB. Fix EXPO_PUBLIC_GRAPHQL_URL.');
 }
 
+// Export API base URL getter for compatibility
+export function getApiBase(): string {
+  return GRAPHQL_URL.replace('/graphql/', '');
+}
+
 export function makeApolloClient() {
   console.log('[ApolloFactory] Environment EXPO_PUBLIC_GRAPHQL_URL:', process.env.EXPO_PUBLIC_GRAPHQL_URL);
   console.log('[ApolloFactory] FORCED GRAPHQL_URL (ignoring env):', GRAPHQL_URL);
@@ -105,25 +110,57 @@ export function makeApolloClient() {
         });
       }
       return response;
+    }).catch((error) => {
+      // Production: Log all errors properly - don't suppress
+      console.error('❌ Apollo Error:', {
+        operation: operation.operationName,
+        error: error?.message,
+        networkError: error?.networkError,
+        graphQLErrors: error?.graphQLErrors,
+      });
+      // Re-throw to let error handling components handle it
+      throw error;
     });
   });
 
-  // Suppress Apollo cache write warnings for missing fields
-  // This happens when GraphQL queries return partial results
+  // Production: Only suppress Apollo cache warnings (expected with partial results)
+  // All other errors should be logged properly
   const originalConsoleError = console.error;
   console.error = (...args: any[]) => {
     const message = args[0]?.toString() || '';
-    // Suppress "Missing field" cache write warnings - these are expected with partial GraphQL responses
+    // Only suppress "Missing field" cache write warnings - these are expected with partial GraphQL responses
     if (message.includes('Missing field') && message.includes('while writing result')) {
-      // Silently ignore - partial results are handled by our cache typePolicies
+      // This is expected - partial results are handled by our cache typePolicies
       return;
     }
+    // Log all other errors properly in production
     originalConsoleError.apply(console, args);
   };
 
   const httpLink = createHttpLink({ 
     uri: GRAPHQL_URL, 
-    fetch,
+    fetch: (uri: RequestInfo | URL, options?: RequestInit) => {
+      // Add timeout to fetch requests for better performance
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        controller.abort();
+      }, 10000); // 10 second timeout
+      
+      // Chain existing signal if present
+      if (options?.signal) {
+        options.signal.addEventListener('abort', () => {
+          controller.abort();
+          clearTimeout(timeoutId);
+        });
+      }
+      
+      return fetch(uri, {
+        ...options,
+        signal: controller.signal,
+      }).finally(() => {
+        clearTimeout(timeoutId);
+      });
+    },
     credentials: "omit"
   });
 

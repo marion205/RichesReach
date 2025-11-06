@@ -77,13 +77,21 @@ class YodleeService {
    */
   async createFastLinkSession(): Promise<FastLinkSession> {
     try {
+      // Get auth token from AsyncStorage
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      const token = await AsyncStorage.getItem('authToken');
+      
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
       const response = await fetch(`${this.baseUrl}/fastlink/start`, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          // Add authentication header if needed
-          // 'Authorization': `Bearer ${token}`,
-        },
+        headers,
       });
 
       if (!response.ok) {

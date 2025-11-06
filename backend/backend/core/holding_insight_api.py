@@ -54,10 +54,17 @@ async def get_holding_insight(ticker: str = Query(..., description="Stock ticker
             },
         }
         
+        # Always return an insight - never null or empty
         insight = mock_insights.get(ticker, {
-            "headline": "Market sentiment positive",
-            "drivers": ["Recent earnings", "Sector momentum"]
+            "headline": f"{ticker} showing positive market momentum",
+            "drivers": ["Recent earnings", "Sector momentum", "Market trends"]
         })
+        
+        # Ensure we always have valid data
+        if not insight.get("headline"):
+            insight["headline"] = f"{ticker} analysis available"
+        if not insight.get("drivers") or len(insight["drivers"]) == 0:
+            insight["drivers"] = ["Market analysis", "Sector trends", "Performance metrics"]
         
         logger.info(f"Generated insight for {ticker}: {insight['headline']}")
         

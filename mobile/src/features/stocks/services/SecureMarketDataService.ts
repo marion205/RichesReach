@@ -75,11 +75,13 @@ export class SecureMarketDataService {
         return data;
       })
       .catch(err => {
-        // Graceful degradation: return stale data if available
+        // Production: Use stale cache if available, otherwise throw error
         if (hit) {
-          console.log(`⚠️ Using stale data for symbols: ${key}`);
+          console.warn(`⚠️ Network error, using stale cache for symbols: ${key}`, err.message);
           return hit.data;
         }
+        // Production: Throw error instead of mock data
+        console.error(`❌ Network error fetching quotes for symbols: ${key}`, err.message);
         throw err;
       })
       .finally(() => {
@@ -146,10 +148,258 @@ export class SecureMarketDataService {
       console.log(`✅ Successfully fetched ${quotes.length} quotes`);
       return quotes;
 
-    } catch (error) {
-      console.error(`❌ Error fetching quotes: ${error.message}`);
+    } catch (error: any) {
+      // Suppress network errors - will use mock data fallback
+      if (error?.message?.includes('Network request failed') || error?.message?.includes('Failed to fetch')) {
+        console.warn(`⚠️ Network error for quotes, using mock data fallback`);
+        throw error; // Re-throw to trigger mock data fallback in calling code
+      }
+      console.error(`❌ Error fetching quotes: ${error?.message || 'Unknown error'}`);
       throw error;
     }
+  }
+
+  /**
+   * Get mock quotes for demo/offline mode
+   * Prices match the mock portfolio data
+   */
+  private _getMockQuotes(symbols: string[]): Quote[] {
+    const mockQuotes: Record<string, Quote> = {
+      AAPL: {
+        symbol: 'AAPL',
+        price: 180.00,
+        change: 30.00,
+        change_percent: 20.00,
+        volume: 45000000,
+        high: 182.50,
+        low: 178.20,
+        open: 179.00,
+        previous_close: 150.00,
+        updated: Date.now(),
+        provider: 'mock',
+      },
+      MSFT: {
+        symbol: 'MSFT',
+        price: 320.00,
+        change: 90.00,
+        change_percent: 39.13,
+        volume: 28000000,
+        high: 322.50,
+        low: 318.00,
+        open: 319.00,
+        previous_close: 230.00,
+        updated: Date.now(),
+        provider: 'mock',
+      },
+      SPY: {
+        symbol: 'SPY',
+        price: 420.00,
+        change: 40.00,
+        change_percent: 10.53,
+        volume: 75000000,
+        high: 422.00,
+        low: 418.50,
+        open: 419.00,
+        previous_close: 380.00,
+        updated: Date.now(),
+        provider: 'mock',
+      },
+      GOOGL: {
+        symbol: 'GOOGL',
+        price: 128.71,
+        change: 18.71,
+        change_percent: 17.01,
+        volume: 22000000,
+        high: 130.00,
+        low: 127.50,
+        open: 128.00,
+        previous_close: 110.00,
+        updated: Date.now(),
+        provider: 'mock',
+      },
+      AMZN: {
+        symbol: 'AMZN',
+        price: 132.00,
+        change: 32.00,
+        change_percent: 32.00,
+        volume: 35000000,
+        high: 134.00,
+        low: 130.50,
+        open: 131.00,
+        previous_close: 100.00,
+        updated: Date.now(),
+        provider: 'mock',
+      },
+      NVDA: {
+        symbol: 'NVDA',
+        price: 504.00,
+        change: 104.00,
+        change_percent: 26.00,
+        volume: 45000000,
+        high: 508.00,
+        low: 500.00,
+        open: 502.00,
+        previous_close: 400.00,
+        updated: Date.now(),
+        provider: 'mock',
+      },
+      TSLA: {
+        symbol: 'TSLA',
+        price: 196.50,
+        change: 21.50,
+        change_percent: 12.29,
+        volume: 85000000,
+        high: 198.00,
+        low: 195.00,
+        open: 196.00,
+        previous_close: 175.00,
+        updated: Date.now(),
+        provider: 'mock',
+      },
+      // Additional common stocks
+      META: {
+        symbol: 'META',
+        price: 285.00,
+        change: 15.00,
+        change_percent: 5.56,
+        volume: 18000000,
+        high: 287.00,
+        low: 283.00,
+        open: 284.00,
+        previous_close: 270.00,
+        updated: Date.now(),
+        provider: 'mock',
+      },
+      NFLX: {
+        symbol: 'NFLX',
+        price: 425.00,
+        change: 25.00,
+        change_percent: 6.25,
+        volume: 12000000,
+        high: 427.00,
+        low: 423.00,
+        open: 424.00,
+        previous_close: 400.00,
+        updated: Date.now(),
+        provider: 'mock',
+      },
+      AMD: {
+        symbol: 'AMD',
+        price: 145.00,
+        change: 10.00,
+        change_percent: 7.41,
+        volume: 35000000,
+        high: 146.00,
+        low: 144.00,
+        open: 144.50,
+        previous_close: 135.00,
+        updated: Date.now(),
+        provider: 'mock',
+      },
+      ADBE: {
+        symbol: 'ADBE',
+        price: 485.00,
+        change: 15.00,
+        change_percent: 3.19,
+        volume: 8000000,
+        high: 487.00,
+        low: 483.00,
+        open: 484.00,
+        previous_close: 470.00,
+        updated: Date.now(),
+        provider: 'mock',
+      },
+      CRM: {
+        symbol: 'CRM',
+        price: 220.00,
+        change: 10.00,
+        change_percent: 4.76,
+        volume: 15000000,
+        high: 222.00,
+        low: 218.00,
+        open: 219.00,
+        previous_close: 210.00,
+        updated: Date.now(),
+        provider: 'mock',
+      },
+      PYPL: {
+        symbol: 'PYPL',
+        price: 65.00,
+        change: 5.00,
+        change_percent: 8.33,
+        volume: 25000000,
+        high: 66.00,
+        low: 64.00,
+        open: 64.50,
+        previous_close: 60.00,
+        updated: Date.now(),
+        provider: 'mock',
+      },
+      INTC: {
+        symbol: 'INTC',
+        price: 42.00,
+        change: 2.00,
+        change_percent: 5.00,
+        volume: 40000000,
+        high: 42.50,
+        low: 41.50,
+        open: 41.75,
+        previous_close: 40.00,
+        updated: Date.now(),
+        provider: 'mock',
+      },
+      LYFT: {
+        symbol: 'LYFT',
+        price: 12.50,
+        change: 0.50,
+        change_percent: 4.17,
+        volume: 18000000,
+        high: 12.75,
+        low: 12.25,
+        open: 12.30,
+        previous_close: 12.00,
+        updated: Date.now(),
+        provider: 'mock',
+      },
+      UBER: {
+        symbol: 'UBER',
+        price: 38.00,
+        change: 2.00,
+        change_percent: 5.56,
+        volume: 22000000,
+        high: 38.50,
+        low: 37.50,
+        open: 37.75,
+        previous_close: 36.00,
+        updated: Date.now(),
+        provider: 'mock',
+      },
+    };
+
+    // Return quotes for requested symbols, or default quote if symbol not found
+    const quotes = symbols.map(symbol => {
+      const quote = mockQuotes[symbol.toUpperCase()];
+      if (quote) {
+        return quote;
+      }
+      // Default fallback quote
+      return {
+        symbol: symbol.toUpperCase(),
+        price: 100.00,
+        change: 0.00,
+        change_percent: 0.00,
+        volume: 1000000,
+        high: 101.00,
+        low: 99.00,
+        open: 100.00,
+        previous_close: 100.00,
+        updated: Date.now(),
+        provider: 'mock',
+      };
+    });
+
+    console.log(`📊 Using mock quotes for ${symbols.length} symbols`);
+    return quotes;
   }
 
   /**

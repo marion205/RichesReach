@@ -5,6 +5,7 @@ import React, {
     View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView,
     FlatList, TextInput, RefreshControl, DeviceEventEmitter,
   } from 'react-native';
+  import { TID } from '../testIDs';
   import { useNavigation } from '@react-navigation/native';
   import { useApolloClient, useQuery, gql } from '@apollo/client';
   import Icon from 'react-native-vector-icons/Feather';
@@ -39,6 +40,7 @@ import { onHotword, triggerHotword } from '../services/VoiceHotword';
 import { personaCopy, inferPersona } from '../services/IntentPersona';
 import VoiceCaptureSheet from '../features/voice/VoiceCaptureSheet';
 import { parseIntent } from '../features/voice/intent';
+import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
   
   /* ===================== GraphQL ===================== */
   const GET_PORTFOLIO_METRICS = gql`
@@ -258,6 +260,7 @@ import { parseIntent } from '../features/voice/intent';
         {/* Input */}
         <View style={styles.chatInputContainer}>
           <TextInput
+            testID="message-input"
             style={styles.chatInput}
             placeholder="Ask about personal finance..."
             value={chatInput}
@@ -267,6 +270,7 @@ import { parseIntent } from '../features/voice/intent';
             accessibilityLabel="Chat input"
           />
           <TouchableOpacity
+            testID="send-message-button"
             style={[styles.chatSendButton, !chatInput.trim() && styles.chatSendButtonDisabled]}
             onPress={send}
             disabled={!chatInput.trim() || sending}
@@ -559,37 +563,92 @@ import { parseIntent } from '../features/voice/intent';
   
     /* ---------- AI service ---------- */
     const generateAIResponse = useCallback(async (userInput: string): Promise<string> => {
+      // Provide immediate fallback responses based on common questions (fast path)
+      const lowerInput = userInput.toLowerCase();
+      
+      // Quick keyword-based responses for instant feedback
+      if (lowerInput.includes('investment') || lowerInput.includes('invest') || lowerInput.includes('portfolio')) {
+        // Try API first, but with quick timeout
+        try {
+          const userId = userData?.me?.id || userProfile?.id || 'demo-user';
+          const timeoutPromise = new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error('Request timeout')), 5000); // 5 second timeout
+          });
+          const apiPromise = assistantQuery({ user_id: userId, prompt: userInput });
+          const response = await Promise.race([apiPromise, timeoutPromise]);
+          if (response?.answer || response?.response) {
+            return response.answer || response.response;
+          }
+        } catch (error: any) {
+          // Fall through to fast fallback
+        }
+        return 'Diversification across different asset classes (stocks, bonds, ETFs) is a fundamental investment strategy. Consider your risk tolerance and time horizon when making investment decisions. For long-term growth, index funds and ETFs are excellent starting points.';
+      }
+      
+      if (lowerInput.includes('budget') || lowerInput.includes('saving') || lowerInput.includes('spend')) {
+        try {
+          const userId = userData?.me?.id || userProfile?.id || 'demo-user';
+          const timeoutPromise = new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error('Request timeout')), 5000);
+          });
+          const apiPromise = assistantQuery({ user_id: userId, prompt: userInput });
+          const response = await Promise.race([apiPromise, timeoutPromise]);
+          if (response?.answer || response?.response) {
+            return response.answer || response.response;
+          }
+        } catch (error: any) {
+          // Fall through to fast fallback
+        }
+        return 'The 50/30/20 rule allocates 50% to needs (housing, food, utilities), 30% to wants (entertainment, dining), and 20% to savings and debt repayment. This is a great starting point for financial planning. Start by tracking your expenses for a month to see where your money goes.';
+      }
+      
+      if (lowerInput.includes('stock') || lowerInput.includes('market') || lowerInput.includes('trading')) {
+        try {
+          const userId = userData?.me?.id || userProfile?.id || 'demo-user';
+          const timeoutPromise = new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error('Request timeout')), 5000);
+          });
+          const apiPromise = assistantQuery({ user_id: userId, prompt: userInput });
+          const response = await Promise.race([apiPromise, timeoutPromise]);
+          if (response?.answer || response?.response) {
+            return response.answer || response.response;
+          }
+        } catch (error: any) {
+          // Fall through to fast fallback
+        }
+        return 'Stock market investing involves risk, and it\'s important to do your research, diversify your portfolio, and invest for the long term rather than trying to time the market. Consider dollar-cost averaging to reduce the impact of volatility.';
+      }
+      
+      if (lowerInput.includes('retirement') || lowerInput.includes('401k') || lowerInput.includes('ira')) {
+        try {
+          const userId = userData?.me?.id || userProfile?.id || 'demo-user';
+          const timeoutPromise = new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error('Request timeout')), 5000);
+          });
+          const apiPromise = assistantQuery({ user_id: userId, prompt: userInput });
+          const response = await Promise.race([apiPromise, timeoutPromise]);
+          if (response?.answer || response?.response) {
+            return response.answer || response.response;
+          }
+        } catch (error: any) {
+          // Fall through to fast fallback
+        }
+        return 'Start early, take advantage of employer 401(k) matching, and consider both traditional and Roth IRAs. The power of compound interest over time is your greatest ally in retirement planning. Aim to save at least 15% of your income for retirement.';
+      }
+      
+      // For other questions, try API with timeout, then fallback
       try {
-        // Use the AI Assistant service for unified conversational AI
         const userId = userData?.me?.id || userProfile?.id || 'demo-user';
-        const response = await assistantQuery({ 
-          user_id: userId, 
-          prompt: userInput 
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('Request timeout')), 8000); // 8 second timeout
         });
+        const apiPromise = assistantQuery({ user_id: userId, prompt: userInput });
+        const response = await Promise.race([apiPromise, timeoutPromise]);
         return response?.answer || response?.response || 'I hit a snag processing that—mind trying again?';
       } catch (error: any) {
-        console.error('AI error:', error);
-        
-        // Provide helpful fallback responses based on common questions
-        const lowerInput = userInput.toLowerCase();
-        
-        if (lowerInput.includes('investment') || lowerInput.includes('invest')) {
-          return 'I\'m currently setting up my AI capabilities. For now, I can share that diversification across different asset classes (stocks, bonds, ETFs) is a fundamental investment strategy. Consider your risk tolerance and time horizon when making investment decisions.';
-        }
-        
-        if (lowerInput.includes('budget') || lowerInput.includes('saving')) {
-          return 'While I\'m getting my AI features ready, here\'s a solid budgeting tip: The 50/30/20 rule allocates 50% to needs, 30% to wants, and 20% to savings and debt repayment. This is a great starting point for financial planning.';
-        }
-        
-        if (lowerInput.includes('stock') || lowerInput.includes('market')) {
-          return 'I\'m currently initializing my market analysis capabilities. In the meantime, remember that stock market investing involves risk, and it\'s important to do your research, diversify your portfolio, and invest for the long term rather than trying to time the market.';
-        }
-        
-        if (lowerInput.includes('retirement') || lowerInput.includes('401k') || lowerInput.includes('ira')) {
-          return 'While I\'m setting up my retirement planning tools, here\'s key advice: Start early, take advantage of employer 401(k) matching, and consider both traditional and Roth IRAs. The power of compound interest over time is your greatest ally in retirement planning.';
-        }
-        
-        return 'I\'m currently setting up my AI capabilities to provide you with personalized financial advice. Please try again in a moment, or feel free to ask about general investment principles, budgeting strategies, or retirement planning basics.';
+        console.log('AI query timeout or error, using fallback:', error.message);
+        // Provide helpful generic fallback
+        return 'I\'m here to help with investment strategies, portfolio analysis, budgeting, retirement planning, and market insights. Could you rephrase your question or ask about a specific topic like "How do I start investing?" or "What is dollar-cost averaging?"';
       }
     }, [userData?.me?.id, userProfile?.id]);
   
@@ -597,9 +656,22 @@ import { parseIntent } from '../features/voice/intent';
     const go = useCallback((screen: string, params?: any) => {
       console.log('HomeScreen.go() called with:', screen, params);
       
-      // Swing trading screens are in InvestStack, need nested navigation
-      const swingTradingScreens = ['swing-signals', 'swing-risk-coach', 'swing-backtesting', 'swing-leaderboard', 'swing-trading-test'];
-      if (swingTradingScreens.includes(screen)) {
+      // Screens that are in InvestStack need nested navigation
+      const investStackScreens = [
+        'swing-signals', 
+        'swing-risk-coach', 
+        'swing-backtesting', 
+        'swing-leaderboard', 
+        'swing-trading-test',
+        'portfolio-management',
+        'portfolio',
+        'trading',
+        'stock',
+        'StockDetail',
+        'premium-analytics'
+      ];
+      
+      if (investStackScreens.includes(screen)) {
         try {
           globalNavigate('Invest', { screen, params });
           return;
@@ -619,9 +691,9 @@ import { parseIntent } from '../features/voice/intent';
           console.error('HomeScreen.go() globalNavigate error:', error);
         }
       }
-      
+
       if (typeof navigateTo === 'function') {
-        try { 
+        try {
           (navigateTo as any)(screen, params);
         } catch (error) {
           console.error('HomeScreen.go() navigateTo error:', error);
@@ -653,26 +725,32 @@ import { parseIntent } from '../features/voice/intent';
       const liveRet = live?.totalReturn;
       const livePct = live?.totalReturnPercent;
   
+      // Use mock data for demo when no real data available
+      const mockData = getMockHomeScreenPortfolio();
+
       const totalValue =
         realPortfolio?.totalValue ??
         (isFinite(Number(liveVal)) ? Number(liveVal) : undefined) ??
-        g?.totalValue ?? 14303.52;
-  
+        g?.totalValue ??
+        mockData.portfolioMetrics.totalValue;
+
       const totalReturn =
         realPortfolio?.totalReturn ??
         (isFinite(Number(liveRet)) ? Number(liveRet) : undefined) ??
-        g?.totalReturn ?? 2145.53;
-  
+        g?.totalReturn ??
+        mockData.portfolioMetrics.totalReturn;
+
       const totalReturnPercent =
         realPortfolio?.totalReturnPercent ??
         (isFinite(Number(livePct)) ? Number(livePct) : undefined) ??
-        g?.totalReturnPercent ?? 17.65;
-  
+        g?.totalReturnPercent ??
+        mockData.portfolioMetrics.totalReturnPercent;
+
       const rawHoldings =
         realPortfolio?.holdings ??
         live?.holdings ??
         g?.holdings ??
-        [];
+        mockData.portfolioMetrics.holdings;
   
       // Transform holdings to match PortfolioHoldings interface
       const holdings = rawHoldings.map((h: any) => ({
@@ -716,7 +794,7 @@ import { parseIntent } from '../features/voice/intent';
   
     /* ===================== Render ===================== */
     return (
-      <View style={styles.container}>
+      <View testID={TID.screens.home} style={styles.container}>
         <ScrollView
           style={styles.content}
           refreshControl={
@@ -780,14 +858,18 @@ import { parseIntent } from '../features/voice/intent';
                 </AuraHalo>
               </View>
 
-              {resolved.holdings?.length > 0 ? (
-                <PortfolioHoldings
-                  holdings={resolved.holdings}
-                  onStockPress={(symbol) => go('StockDetail', { symbol })}
-                />
-              ) : (
-                <HoldingsSkeleton />
-              )}
+              <PortfolioHoldings
+                holdings={resolved.holdings || []}
+                onStockPress={(symbol) => go('StockDetail', { symbol })}
+                onBuy={(holding) => {
+                  go('trading', { symbol: holding.symbol, action: 'buy' });
+                }}
+                onSell={(holding) => {
+                  go('trading', { symbol: holding.symbol, action: 'sell' });
+                }}
+                loading={portfolioLoading}
+                onAddHoldings={() => go('portfolio-management')}
+              />
             </>
           )}
   

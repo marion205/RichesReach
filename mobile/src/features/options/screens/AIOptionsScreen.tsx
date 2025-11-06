@@ -15,12 +15,16 @@ ActivityIndicator,
 RefreshControl,
 StatusBar,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import AIOptionsService, { OptionsRecommendation, MarketAnalysis } from '../services/AIOptionsService';
 interface AIOptionsScreenProps {
-navigation: any;
+  navigation?: any;
 }
-const AIOptionsScreen: React.FC<AIOptionsScreenProps> = ({ navigation }) => {
+const AIOptionsScreen: React.FC<AIOptionsScreenProps> = ({ navigation: navigationProp }) => {
+  // Use React Navigation hook as primary, fallback to prop
+  const nav = useNavigation<any>();
+  const navigation = navigationProp || nav;
 const [symbol, setSymbol] = useState('AAPL');
 const [riskTolerance, setRiskTolerance] = useState<'low' | 'medium' | 'high'>('medium');
 const [portfolioValue, setPortfolioValue] = useState('10000');
@@ -70,17 +74,23 @@ riskTolerance: response.risk_tolerance,
 });
 setRecommendations(response.recommendations);
 setMarketAnalysis(response.market_analysis);
-} catch (error) {
-console.error(' AI Options Screen: Error loading recommendations:', error);
-console.error('Error details:', {
-name: error.name,
-message: error.message,
-stack: error.stack,
-});
-Alert.alert('Error', `Failed to load AI options recommendations: ${error.message}`);
-} finally {
-setLoading(false);
-}
+    } catch (error: any) {
+      // Suppress network errors - they're handled with mock data fallback
+      if (!error?.message?.includes('Network request failed') && !error?.message?.includes('Failed to fetch')) {
+        console.error(' AI Options Screen: Error loading recommendations:', error);
+        console.error('Error details:', {
+          name: error?.name,
+          message: error?.message,
+          stack: error?.stack,
+        });
+        // Only show alert for non-network errors
+        Alert.alert('Error', `Failed to load AI options recommendations: ${error?.message || 'Unknown error'}`);
+      } else {
+        console.warn('⚠️ Network error, using mock data for demo');
+      }
+    } finally {
+      setLoading(false);
+    }
 };
 const onRefresh = async () => {
 setRefreshing(true);
@@ -287,13 +297,37 @@ onPress={() => navigation.goBack()}
 </TouchableOpacity>
 <Text style={styles.headerTitle}>AI Options</Text>
 <View style={styles.headerActions}>
-<TouchableOpacity
-style={styles.copilotButton}
-onPress={() => navigation.navigate('options-copilot')}
->
+          <TouchableOpacity
+            style={styles.copilotButton}
+            onPress={() => {
+              try {
+                // Try direct navigation first (if in same stack)
+                if (navigation && typeof navigation.navigate === 'function') {
+                  // Try 'options-copilot' first (works in HomeStack)
+                  try {
+                    navigation.navigate('options-copilot');
+                  } catch {
+                    // Fallback to nested navigation for InvestStack
+                    try {
+                      navigation.navigate('Invest', { 
+                        screen: 'OptionsCopilot',
+                        params: {}
+                      });
+                    } catch {
+                      // Last resort: try OptionsCopilot directly
+                      navigation.navigate('OptionsCopilot');
+                    }
+                  }
+                }
+              } catch (error: any) {
+                // Suppress navigation errors for demo
+                console.warn('⚠️ Navigation to Copilot not available:', error?.message);
+              }
+            }}
+          >
                 <Icon name="flash-on" size={20} color="#00cc99" />
-<Text style={styles.copilotButtonText}>Copilot</Text>
-</TouchableOpacity>
+                <Text style={styles.copilotButtonText}>Copilot</Text>
+          </TouchableOpacity>
 <TouchableOpacity
 style={styles.refreshButton}
 onPress={loadRecommendations}
@@ -400,6 +434,19 @@ Loading AI recommendations for {symbol}...
 <Text style={styles.sectionTitle}>
 AI Recommendations ({recommendations.length})
 </Text>
+{/* Educational Disclaimer */}
+<View style={styles.disclaimerBox}>
+  <Icon name="alert-triangle" size={16} color="#F59E0B" />
+  <View style={styles.disclaimerContent}>
+    <Text style={styles.disclaimerTitle}>Educational Purpose Only</Text>
+    <Text style={styles.disclaimerText}>
+      AI and ML recommendations are for educational and informational purposes only. 
+      This is not investment advice. Options trading involves significant risk. Consult 
+      a qualified financial advisor before making investment decisions. Past performance 
+      does not guarantee future results.
+    </Text>
+  </View>
+</View>
 {loading ? (
 <View style={styles.loadingContainer}>
 <ActivityIndicator size="large" color="#007AFF" />
@@ -415,6 +462,31 @@ recommendations.map((rec, index) => renderRecommendationCard(rec, index))
 );
 };
 const styles = StyleSheet.create({
+disclaimerBox: {
+flexDirection: 'row',
+backgroundColor: '#FFF3E0',
+padding: 12,
+borderRadius: 8,
+marginBottom: 16,
+borderLeftWidth: 3,
+borderLeftColor: '#F59E0B',
+alignItems: 'flex-start',
+},
+disclaimerContent: {
+flex: 1,
+marginLeft: 8,
+},
+disclaimerTitle: {
+fontSize: 12,
+fontWeight: '600',
+color: '#92400E',
+marginBottom: 4,
+},
+disclaimerText: {
+fontSize: 11,
+color: '#92400E',
+lineHeight: 16,
+},
 container: {
 flex: 1,
 backgroundColor: '#f5f5f5',

@@ -17,7 +17,7 @@
  */
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000";
-const DEFAULT_TIMEOUT_MS = 30_000;
+const DEFAULT_TIMEOUT_MS = 10_000; // Reduced from 30s to 10s for faster failure handling
 
 export class ApiError extends Error {
   status: number;

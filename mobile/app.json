@@ -58,7 +58,6 @@
       }
     },
     "plugins": [
-      "expo-dev-client",
       "expo-image-picker",
       [
         "expo-av",

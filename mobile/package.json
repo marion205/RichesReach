@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "start": "expo start --dev-client",
+    "start": "expo start",
     "start:dev": "expo start --dev-client",
     "start:go": "expo start --go",
     "android": "expo run:android",
@@ -28,7 +28,12 @@
     "test:e2e:record": "detox test --record-videos all",
     "build:e2e:ios": "detox build --configuration ios.sim.debug",
     "build:e2e:android": "detox build --configuration android.emu.debug",
-    "demo:record": "node scripts/demo-recorder.js"
+    "demo:record": "node scripts/demo-recorder.js",
+    "bundle:android": "bash scripts/measure-bundle-size.sh android",
+    "bundle:ios": "bash scripts/measure-bundle-size.sh ios",
+    "optimize:images": "bash scripts/optimize-images.sh",
+    "benchmark": "bash scripts/benchmark.sh",
+    "benchmark:expo": "bash scripts/benchmark-expo.sh"
   },
   "dependencies": {
     "@apollo/client": "3.7.0",
@@ -42,6 +47,7 @@
     "@react-navigation/native": "^7.1.19",
     "@react-navigation/native-stack": "^7.6.1",
     "@react-navigation/stack": "^7.4.10",
+    "@types/lodash-es": "^4.17.12",
     "@walletconnect/sign-client": "^2.21.9",
     "d3-shape": "^3.2.0",
     "ethers": "^5.8.0",
@@ -61,6 +67,7 @@
     "expo-status-bar": "~3.0.8",
     "expo-web-browser": "^15.0.8",
     "graphql": "^16.11.0",
+    "lodash-es": "^4.17.21",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "^0.81.5",
@@ -83,6 +90,7 @@
     "react-native-vector-icons": "^10.3.0",
     "react-native-wagmi-charts": "^2.7.3",
     "react-native-webrtc": "^124.0.7",
+    "react-native-webview": "^13.16.0",
     "react-native-worklets": "^0.5.1",
     "socket.io-client": "^4.8.1",
     "stream-chat": "^9.25.0",

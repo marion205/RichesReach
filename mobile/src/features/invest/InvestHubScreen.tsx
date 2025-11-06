@@ -11,8 +11,22 @@ type HubItem = {
   to: string;
 };
 
-export default function InvestHubScreen() {
+interface InvestHubScreenProps {
+  navigateTo?: (screen: string, params?: any) => void;
+}
+
+export default function InvestHubScreen({ navigateTo: navigateToProp }: InvestHubScreenProps = {}) {
   const navigation = useNavigation<any>();
+  
+  // Safe navigateTo - use prop if provided, otherwise use React Navigation
+  // This prevents "navigateTo is not a function" errors
+  const safeNavigateTo = navigateToProp || ((screen: string, params?: any) => {
+    try {
+      navigation.navigate(screen as never, params as never);
+    } catch (error) {
+      console.warn('Navigation error:', error);
+    }
+  });
 
   const items: HubItem[] = useMemo(
     () => [

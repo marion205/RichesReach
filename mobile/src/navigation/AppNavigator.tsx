@@ -3,13 +3,14 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import Feather from '@expo/vector-icons/Feather';
-import { View, Platform } from 'react-native';
+import { View, Platform, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ProfileScreen from '../features/user/screens/ProfileScreen';
 import BankAccountScreen from '../features/user/screens/BankAccountScreen';
 import { setNavigator } from './NavigationService';
 import GestureNavigation from '../components/GestureNavigation';
+import { TID } from '../testIDs';
 
 // Existing screens (paths reflect current project structure)
 import HomeScreen from '../navigation/HomeScreen';
@@ -44,6 +45,7 @@ import VoiceAIAssistant from '../components/VoiceAIAssistant';
 import BlockchainIntegration from '../components/BlockchainIntegration';
 import MarketCommentaryScreen from '../features/news/screens/MarketCommentaryScreen';
 import AITradingCoachScreen from '../features/coach/screens/AITradingCoachScreen';
+import TradingCoachScreen from '../features/coach/screens/TradingCoachScreen';
 import DailyVoiceDigestScreen from '../features/learning/screens/DailyVoiceDigestScreen';
 import NotificationCenterScreen from '../features/notifications/screens/NotificationCenterScreen';
 import WealthCirclesScreen from '../features/community/screens/WealthCirclesScreen';
@@ -171,13 +173,18 @@ function HomeStack() {
       {/* Convenience: allow Home to open these without switching tabs */}
       <Stack.Screen name="ai-options" component={AIOptionsScreen} />
       <Stack.Screen name="ai-scans" component={AIScansScreen} />
+      {/* Allow navigation to Options Copilot from HomeStack */}
+      <Stack.Screen name="options-copilot" component={OptionsCopilotScreen} options={{ headerShown: true, title: 'Options Copilot' }} />
     </Stack.Navigator>
   );
 }
 
 function InvestStack() {
   return (
-    <Stack.Navigator screenOptions={{ headerBackTitleVisible: false }}>
+    <Stack.Navigator 
+      screenOptions={{ headerBackTitleVisible: false }}
+      initialRouteName="InvestMain"
+    >
       <Stack.Screen name="InvestMain" component={InvestHubScreen} options={{ headerShown: false }} />
 
       {/* Primary flows */}
@@ -225,7 +232,8 @@ function InvestStack() {
       <Stack.Screen name="stock-screening" component={AIScansScreen} options={{ headerShown: true, title: 'Screeners' }} />
       <Stack.Screen name="trading" component={TradingScreenWrapper} options={{ headerShown: false }} />
       <Stack.Screen name="day-trading" component={DayTradingScreen} options={{ headerShown: false }} />
-      <Stack.Screen name="trading-coach" component={AITradingCoachScreen} options={{ headerShown: true, title: 'Trading Coach' }} />
+      <Stack.Screen name="trading-coach" component={TradingCoachScreen} options={{ headerShown: true, title: 'Trading Coach' }} />
+      <Stack.Screen name="ai-trading-coach" component={AITradingCoachScreen} options={{ headerShown: true, title: 'AI Trading Coach' }} />
       {/* Legacy aliases for header buttons */}
       <Stack.Screen name="ml-system" component={MLSystemScreen} options={{ headerShown: true, title: 'ML System' }} />
       <Stack.Screen name="risk-management" component={RiskManagementScreen} options={{ headerShown: true, title: 'Risk Management' }} />
@@ -357,18 +365,100 @@ export default function AppNavigator() {
           <Tab.Screen 
             name="Home" 
             component={HomeStack}
+            options={{
+              tabBarTestID: TID.tabs.voiceAI, // Voice AI features are in Home tab
+              tabBarAccessibilityLabel: TID.tabs.voiceAI,
+              tabBarButton: (props) => (
+                <TouchableOpacity
+                  {...props}
+                  testID={TID.tabs.voiceAI}
+                  accessibilityLabel={TID.tabs.voiceAI}
+                  accessibilityRole="button"
+                />
+              ),
+            }}
+            listeners={{
+              tabPress: (e) => {
+                console.log('Home tab pressed');
+              },
+            }}
           />
           <Tab.Screen 
             name="Invest" 
             component={InvestStack}
+            options={{
+              tabBarTestID: TID.tabs.memeQuest, // MemeQuest features are in Invest tab
+              tabBarAccessibilityLabel: TID.tabs.memeQuest,
+              tabBarButton: (props) => (
+                <TouchableOpacity
+                  {...props}
+                  testID={TID.tabs.memeQuest}
+                  accessibilityLabel={TID.tabs.memeQuest}
+                  accessibilityRole="button"
+                />
+              ),
+            }}
+            listeners={({ navigation }) => ({
+              tabPress: (e) => {
+                console.log('Invest tab pressed');
+                // Prevent default navigation and ensure we go to InvestMain
+                const state = navigation.getState();
+                const investRoute = state?.routes?.find((r: any) => r.name === 'Invest');
+                if (investRoute?.state) {
+                  const currentRoute = investRoute.state.routes?.[investRoute.state.index || 0];
+                  if (currentRoute?.name !== 'InvestMain') {
+                    e.preventDefault();
+                    // Navigate to InvestMain
+                    navigation.navigate('Invest', { 
+                      screen: 'InvestMain',
+                      params: undefined 
+                    });
+                  }
+                }
+              },
+            })}
           />
           <Tab.Screen 
-            name="Learn" 
+            name="Learn"
             component={LearnStack}
+            options={{
+              tabBarTestID: TID.tabs.learning,
+              tabBarAccessibilityLabel: TID.tabs.learning,
+              tabBarButton: (props) => (
+                <TouchableOpacity
+                  {...props}
+                  testID={TID.tabs.learning}
+                  accessibilityLabel={TID.tabs.learning}
+                  accessibilityRole="button"
+                />
+              ),
+            }}
+            listeners={{
+              tabPress: (e) => {
+                console.log('Learn tab pressed');
+              },
+            }}
           />
           <Tab.Screen 
             name="Community" 
             component={CommunityStack}
+            options={{
+              tabBarTestID: TID.tabs.community,
+              tabBarAccessibilityLabel: TID.tabs.community,
+              tabBarButton: (props) => (
+                <TouchableOpacity
+                  {...props}
+                  testID={TID.tabs.community}
+                  accessibilityLabel={TID.tabs.community}
+                  accessibilityRole="button"
+                />
+              ),
+            }}
+            listeners={{
+              tabPress: (e) => {
+                console.log('Community tab pressed');
+              },
+            }}
           />
         </Tab.Navigator>
       </View>

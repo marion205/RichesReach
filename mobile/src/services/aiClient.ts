@@ -2,7 +2,8 @@
 // Uses fetch; expects EXPO_PUBLIC_API_BASE_URL or falls back to localhost
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000";
-const DEFAULT_TIMEOUT_MS = 25_000;
+const DEFAULT_TIMEOUT_MS = 10_000; // Reduced from 25s to 10s for faster failure handling
+const ASSISTANT_TIMEOUT_MS = 5_000; // Reduced from 8s to 5s for assistant queries (faster UX)
 
 export class ApiError extends Error {
   status: number;
@@ -225,7 +226,8 @@ export function generateDailyDigest(req: {
   market_data?: any; 
   preferred_time?: string 
 }) {
-  return postJSON<VoiceDigestResponse>('/digest/daily', req);
+  // Use shorter timeout for digest generation (8 seconds)
+  return postJSON<VoiceDigestResponse>('/digest/daily', req, { timeoutMs: 8000 });
 }
 
 export function createRegimeAlert(req: { 
@@ -328,7 +330,8 @@ export function tutorMarketCommentary(req: { user_id?: string; horizon?: string;
 
 // ---------- Assistant ----------
 export function assistantQuery(req: { user_id?: string; prompt: string; context?: any; market_context?: any }) {
-  return postJSON<any>('/assistant/query', req);
+  // Use shorter timeout for assistant queries for better UX
+  return postJSON<any>('/assistant/query', req, { timeoutMs: ASSISTANT_TIMEOUT_MS });
 }
 
 // ---------- Coach ----------

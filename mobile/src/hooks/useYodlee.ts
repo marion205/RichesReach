@@ -19,15 +19,17 @@ export interface UseYodleeReturn {
   accounts: BankAccount[];
   transactions: BankTransaction[];
   error: string | null;
+  fastLinkSession: FastLinkSession | null;
   
   // Actions
   checkAvailability: () => Promise<boolean>;
-  linkBankAccount: () => Promise<boolean>;
+  linkBankAccount: () => Promise<FastLinkSession | null>;
   fetchAccounts: () => Promise<void>;
   refreshAccount: (bankLinkId: number) => Promise<void>;
   getTransactions: (accountId: number) => Promise<void>;
   deleteBankLink: (bankLinkId: number) => Promise<void>;
   clearError: () => void;
+  clearSession: () => void;
 }
 
 export const useYodlee = (): UseYodleeReturn => {
@@ -36,6 +38,7 @@ export const useYodlee = (): UseYodleeReturn => {
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
   const [transactions, setTransactions] = useState<BankTransaction[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [fastLinkSession, setFastLinkSession] = useState<FastLinkSession | null>(null);
 
   const clearError = useCallback(() => {
     setError(null);
@@ -64,7 +67,7 @@ export const useYodlee = (): UseYodleeReturn => {
     }
   }, []);
 
-  const linkBankAccount = useCallback(async (): Promise<boolean> => {
+  const linkBankAccount = useCallback(async (): Promise<FastLinkSession | null> => {
     try {
       setIsLoading(true);
       setError(null);
@@ -72,83 +75,28 @@ export const useYodlee = (): UseYodleeReturn => {
       // Check if Yodlee is available
       const available = await checkAvailability();
       if (!available) {
-        return false;
+        setError('Yodlee bank linking is currently unavailable');
+        return null;
       }
 
       // Create FastLink session
       const session = await yodleeService.createFastLinkSession();
+      setFastLinkSession(session);
       
-      // For now, we'll show an alert since we don't have the actual FastLink SDK
-      // In production, you would integrate with the Yodlee FastLink SDK here
-      Alert.alert(
-        'Bank Linking',
-        'Bank linking would open here. In production, this would launch the Yodlee FastLink interface.',
-        [
-          {
-            text: 'Cancel',
-            style: 'cancel',
-          },
-          {
-            text: 'Simulate Success',
-            onPress: async () => {
-              // Simulate a successful bank linking for development
-              const mockResult: FastLinkResult = {
-                providerAccountId: 'mock_provider_123',
-                accounts: [
-                  {
-                    accountId: 'mock_account_1',
-                    accountName: 'Checking Account',
-                    accountType: 'CHECKING',
-                    accountNumber: '****1234',
-                    balance: { amount: 2500.00 },
-                    availableBalance: { amount: 2500.00 },
-                    currency: 'USD',
-                    providerId: 'mock_provider'
-                  },
-                  {
-                    accountId: 'mock_account_2',
-                    accountName: 'Savings Account',
-                    accountType: 'SAVINGS',
-                    accountNumber: '****5678',
-                    balance: { amount: 10000.00 },
-                    availableBalance: { amount: 10000.00 },
-                    currency: 'USD',
-                    providerId: 'mock_provider'
-                  }
-                ],
-                institution: {
-                  id: 'mock_institution',
-                  name: 'Mock Bank'
-                }
-              };
-
-              try {
-                const result = await yodleeService.processFastLinkCallback(mockResult);
-                if (result.success) {
-                  Alert.alert('Success', result.message);
-                  // Refresh accounts list
-                  await fetchAccounts();
-                } else {
-                  setError(result.message);
-                }
-              } catch (err) {
-                const errorMessage = err instanceof Error ? err.message : 'Failed to process bank linking';
-                setError(errorMessage);
-              }
-            },
-          },
-        ]
-      );
-
-      return true;
+      // Return session for WebView to use
+      return session;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to start bank linking';
       setError(errorMessage);
-      return false;
+      return null;
     } finally {
       setIsLoading(false);
     }
   }, [checkAvailability]);
+
+  const clearSession = useCallback(() => {
+    setFastLinkSession(null);
+  }, []);
 
   const fetchAccounts = useCallback(async (): Promise<void> => {
     try {
@@ -237,6 +185,7 @@ export const useYodlee = (): UseYodleeReturn => {
     accounts,
     transactions,
     error,
+    fastLinkSession,
     
     // Actions
     checkAvailability,
@@ -246,6 +195,7 @@ export const useYodlee = (): UseYodleeReturn => {
     getTransactions,
     deleteBankLink,
     clearError,
+    clearSession,
   };
 };
 

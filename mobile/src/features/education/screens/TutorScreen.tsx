@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -459,9 +459,30 @@ const TutorScreen: React.FC<TutorScreenProps> = ({ navigation }) => {
     }
   };
   
-  // GraphQL hooks
-  const { data: progressData, loading: progressLoading, refetch: refetchProgress } = useQuery(GET_TUTOR_PROGRESS);
-  const { data: questData, loading: questLoading } = useQuery(GET_DAILY_QUEST);
+  // GraphQL hooks - with error handling to prevent crashes
+  const { data: progressData, loading: progressLoading, error: progressError, refetch: refetchProgress } = useQuery(GET_TUTOR_PROGRESS, {
+    errorPolicy: 'all', // Continue even if there's an error
+    fetchPolicy: 'cache-and-network', // Try cache first, then network
+    notifyOnNetworkStatusChange: false,
+  });
+  const { data: questData, loading: questLoading, error: questError } = useQuery(GET_DAILY_QUEST, {
+    errorPolicy: 'all', // Continue even if there's an error
+    fetchPolicy: 'cache-and-network', // Try cache first, then network
+    notifyOnNetworkStatusChange: false,
+  });
+  
+  // Timeout handling for progress loading
+  const [progressLoadingTimeout, setProgressLoadingTimeout] = useState(false);
+  useEffect(() => {
+    if (progressLoading && !progressData) {
+      const timer = setTimeout(() => {
+        setProgressLoadingTimeout(true);
+      }, 2000); // 2 second timeout
+      return () => clearTimeout(timer);
+    } else {
+      setProgressLoadingTimeout(false);
+    }
+  }, [progressLoading, progressData]);
   
   // Fallback mock data for when GraphQL queries fail
   const mockProgress = {
@@ -507,7 +528,12 @@ const TutorScreen: React.FC<TutorScreenProps> = ({ navigation }) => {
       __typename: "DailyQuest"
     }
   };
-  const [startLesson] = useMutation(START_LESSON);
+  const [startLesson] = useMutation(START_LESSON, {
+    onError: (error) => {
+      // Don't show error alert - we'll handle it in startNewLesson with mock data
+      console.warn('StartLesson mutation error (will use mock data):', error);
+    },
+  });
   const [submitQuiz] = useMutation(SUBMIT_QUIZ);
   const [startLiveSim] = useMutation(START_LIVE_SIM);
   
@@ -549,20 +575,74 @@ const TutorScreen: React.FC<TutorScreenProps> = ({ navigation }) => {
     }
   });
 
-  const progress = progressData?.tutorProgress || mockProgress.tutorProgress;
-  const dailyQuest = questData?.dailyQuest || mockQuest.dailyQuest;
+  // Use mock data immediately if loading, timeout, or error - optimistic loading
+  // Define mock data first to ensure it's always available
+  const progress = useMemo(() => {
+    if (progressData?.tutorProgress) {
+      return progressData.tutorProgress; // Use real data if available
+    }
+    // Show mock data immediately while loading, on timeout, or on error
+    return {
+      userId: "demo-user-123",
+      xp: 1250,
+      level: 3,
+      streakDays: 7,
+      badges: ["First Steps", "Quiz Master", "Streak Keeper"],
+      abilityEstimate: 0.75,
+      skillMastery: [
+        {
+          skill: "options_trading",
+          masteryLevel: "intermediate",
+          masteryPercentage: 65,
+          status: "learning",
+          __typename: "SkillMastery"
+        }
+      ],
+      hearts: 3,
+      maxHearts: 5,
+      __typename: "TutorProgress"
+    };
+  }, [progressData, progressLoadingTimeout, progressError]);
+  
+  const dailyQuest = useMemo(() => {
+    if (questData?.dailyQuest) {
+      return questData.dailyQuest; // Use real data if available
+    }
+    // Show mock data immediately while loading or on error
+    return {
+      id: "quest_001",
+      title: "Options Spread Mastery",
+      description: "Complete 3 options spread scenarios with 80% accuracy",
+      questType: "simulation",
+      difficulty: 3,
+      xpReward: 150,
+      timeLimitMinutes: 15,
+      requiredSkills: ["options_trading", "risk_management"],
+      regimeContext: "bull_market",
+      voiceNarration: "Welcome to today's quest! You'll practice options spreads in a bull market scenario.",
+      completionCriteria: {
+        scenariosCompleted: 0,
+        successRate: 0.0,
+        __typename: "CompletionCriteria"
+      },
+      __typename: "DailyQuest"
+    };
+  }, [questData, questError]);
+  
+  // Effective loading state - only show loading if we don't have any data yet
+  const effectiveProgressLoading = progressLoadingTimeout ? false : (progressLoading && !progressData?.tutorProgress);
 
   useEffect(() => {
-    if (progress) {
+    if (progress && progress.level !== undefined && progress.streakDays !== undefined) {
       // Animate progress bars
       Animated.timing(progressAnimation, {
-        toValue: progress.level / 10,
+        toValue: (progress.level || 0) / 10,
         duration: 1000,
         useNativeDriver: false,
       }).start();
       
       Animated.timing(streakAnimation, {
-        toValue: progress.streakDays / 30,
+        toValue: (progress.streakDays || 0) / 30,
         duration: 1000,
         useNativeDriver: false,
       }).start();
@@ -720,55 +800,204 @@ const TutorScreen: React.FC<TutorScreenProps> = ({ navigation }) => {
     return steps;
   };
 
+  // Generate mock lesson data for demo purposes
+  const getMockLesson = (topic: string) => {
+    const topicLower = topic.toLowerCase();
+    const lessonTemplates: Record<string, any> = {
+      'stock basics': {
+        id: 'mock-lesson-stock-basics',
+        title: 'Stock Basics',
+        text: `Welcome to Stock Basics! 📈
+
+Stocks represent ownership in a company. When you buy a stock, you're buying a small piece of that company.
+
+**Key Concepts:**
+• **Stock Price**: The current market value of one share
+• **Market Cap**: Total value of all shares (Price × Shares Outstanding)
+• **Dividends**: Periodic payments some companies make to shareholders
+• **Volatility**: How much a stock's price fluctuates
+
+**Why Stocks?**
+Stocks offer the potential for growth over time. Historically, the stock market has provided returns of about 10% annually, though past performance doesn't guarantee future results.
+
+**Risk vs. Reward**
+Higher potential returns usually come with higher risk. Diversification (owning many different stocks) helps manage risk.`,
+        voiceNarration: `Welcome to Stock Basics! Stocks represent ownership in a company. When you buy a stock, you're buying a small piece of that company.`,
+        xpEarned: 40,
+        quiz: [
+          {
+            id: 'q1',
+            question: 'What does buying a stock mean?',
+            options: [
+              'You\'re lending money to the company',
+              'You\'re buying ownership in the company',
+              'You\'re buying the company\'s products',
+              'You\'re paying taxes to the company'
+            ],
+            correct: 1,
+            explanation: 'Correct! Buying a stock means you own a small piece of the company.'
+          },
+          {
+            id: 'q2',
+            question: 'What is market capitalization?',
+            options: [
+              'The price of one share',
+              'The total value of all shares',
+              'The number of shares',
+              'The company\'s profit'
+            ],
+            correct: 1,
+            explanation: 'Market cap = Price × Shares Outstanding. It represents the total market value of the company.'
+          }
+        ],
+        __typename: 'Lesson'
+      },
+      'crypto basics': {
+        id: 'mock-lesson-crypto-basics',
+        title: 'Crypto Basics',
+        text: `Welcome to Crypto Basics! 🪙
+
+Cryptocurrency is digital money that uses cryptography for security.
+
+**Key Concepts:**
+• **Blockchain**: A distributed ledger that records transactions
+• **Bitcoin**: The first and most well-known cryptocurrency
+• **Wallet**: Software or hardware that stores your crypto
+• **Mining**: The process of validating transactions on the blockchain
+
+**How It Works**
+Crypto transactions are verified by a network of computers and recorded on a blockchain. No central authority (like a bank) controls it.
+
+**Risks**
+Crypto is highly volatile and can lose value quickly. Only invest what you can afford to lose.`,
+        voiceNarration: `Welcome to Crypto Basics! Cryptocurrency is digital money that uses cryptography for security.`,
+        xpEarned: 60,
+        quiz: [
+          {
+            id: 'q1',
+            question: 'What is a blockchain?',
+            options: [
+              'A type of cryptocurrency',
+              'A distributed ledger that records transactions',
+              'A digital wallet',
+              'A trading platform'
+            ],
+            correct: 1,
+            explanation: 'A blockchain is a distributed ledger that securely records all transactions across a network.'
+          }
+        ],
+        __typename: 'Lesson'
+      }
+    };
+
+    // Default lesson template
+    const defaultLesson = {
+      id: `mock-lesson-${topicLower.replace(/\s+/g, '-')}`,
+      title: topic,
+      text: `Welcome to ${topic}! 🎓
+
+This lesson will teach you the fundamentals of ${topic}.
+
+**Key Concepts:**
+• Understanding the basics
+• Learning core principles
+• Building your knowledge step by step
+
+Let's dive in and explore ${topic} together!`,
+      voiceNarration: `Welcome to ${topic}! Let's learn together.`,
+      xpEarned: 50,
+      quiz: [
+        {
+          id: 'q1',
+          question: `What is the main topic of this lesson?`,
+          options: [
+            topic,
+            'Something else',
+            'Advanced topics',
+            'Other concepts'
+          ],
+          correct: 0,
+          explanation: `Great! This lesson is about ${topic}.`
+        }
+      ],
+      __typename: 'Lesson'
+    };
+
+    return lessonTemplates[topicLower] || defaultLesson;
+  };
+
   const startNewLesson = async (topic: string) => {
-    try {
-      console.log('Starting lesson with topic:', topic);
-      console.log('API endpoint:', process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8000');
+    console.log('Starting lesson with topic:', topic);
+    
+    // Helper function to start lesson with mock data
+    const startLessonWithData = (lessonData: any) => {
+      setCurrentLesson(lessonData);
+      setCurrentQuiz(lessonData.quiz || []);
+      setCurrentQuestionIndex(0);
+      setSelectedAnswers([]);
+      setShowResults(false);
+      setShowConfetti(true);
       
-      const { data } = await startLesson({
+      // Create interactive learning steps
+      const steps = createLearningSteps(lessonData);
+      setLearningSteps(steps);
+      setCurrentStep(0);
+      setShowStepQuiz(false);
+      setStepQuizAnswer(null);
+      
+      // Playful voice with enthusiasm
+      speakWithToggle(`Yay! Let's dive into ${topic}!`, { 
+        rate: 0.9,
+        voice: lessonData.voiceNarration 
+      });
+      
+      // Multi-haptic burst for excitement
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy), 200);
+      
+      // Animate XP gain
+      Animated.timing(xpAnimation, {
+        toValue: (lessonData.xpEarned || 50) / 100,
+        duration: 1500,
+        useNativeDriver: false,
+      }).start();
+      
+      setTimeout(() => setShowConfetti(false), 3000);
+    };
+
+    // Immediately use mock data - no waiting for API
+    // This ensures instant lesson start even if API fails
+    const mockLesson = getMockLesson(topic);
+    
+    // Try to fetch real data in background, but don't wait for it
+    try {
+      const lessonPromise = startLesson({
         variables: { topic, regime: 'BULL' }
       });
       
-      console.log('Received lesson data:', data?.startLesson?.title);
-      console.log('Lesson text preview:', data?.startLesson?.text?.substring(0, 100));
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Network request timed out')), 3000)
+      );
       
-      if (data?.startLesson) {
-        setCurrentLesson(data.startLesson);
-        setCurrentQuiz(data.startLesson.quiz);
-        setCurrentQuestionIndex(0);
-        setSelectedAnswers([]);
-        setShowResults(false);
-        setShowConfetti(true); // Trigger confetti burst
-        
-        // Create interactive learning steps
-        const steps = createLearningSteps(data.startLesson);
-        setLearningSteps(steps);
-        setCurrentStep(0);
-        setShowStepQuiz(false);
-        setStepQuizAnswer(null);
-        
-        // Playful voice with enthusiasm
-        speakWithToggle(`Yay! Let's dive into ${topic}!`, { 
-          rate: 0.9, // Slightly slower for emphasis
-          voice: data.startLesson.voiceNarration 
+      Promise.race([lessonPromise, timeoutPromise])
+        .then((result: any) => {
+          if (result?.data?.startLesson) {
+            console.log('Received real lesson data, updating:', result.data.startLesson.title);
+            // Update with real data if it arrives
+            startLessonWithData(result.data.startLesson);
+          }
+        })
+        .catch((error) => {
+          // Silently fail - we already started with mock data
+          console.warn('Lesson API failed (already using mock data):', error);
         });
-        
-        // Multi-haptic burst for excitement
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy), 200);
-        
-        // Animate XP gain
-        Animated.timing(xpAnimation, {
-          toValue: data.startLesson.xpEarned / 100,
-          duration: 1500,
-          useNativeDriver: false,
-        }).start();
-        
-        setTimeout(() => setShowConfetti(false), 3000);
-      }
+      
+      // Start immediately with mock data
+      startLessonWithData(mockLesson);
     } catch (error) {
-      console.error('Error starting lesson:', error);
-      Alert.alert('Oops! 😅', 'Lesson start fizzled. Try again for bonus XP!');
+      // Fallback: if anything fails, use mock data
+      console.warn('Error in lesson start (using mock data):', error);
+      startLessonWithData(mockLesson);
     }
   };
 
@@ -1674,15 +1903,8 @@ const TutorScreen: React.FC<TutorScreenProps> = ({ navigation }) => {
     </View>
   );
 
-  if (progressLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#667eea" />
-        <Text style={styles.loadingText}>Loading your learning progress...</Text>
-      </View>
-    );
-  }
-
+  // Always render content - never show blocking loading screen
+  // Mock data ensures progress and dailyQuest are always available
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>

@@ -59,7 +59,7 @@ PODS:
   - DoubleConversion (1.1.5)
   - EXApplication (7.0.7):
     - ExpoModulesCore
-  - EXAV (16.0.7):
+  - EXAV (16.0.8-canary-20251031-b135dff):
     - ExpoModulesCore
     - ReactCommon/turbomodule/core
   - EXConstants (18.0.10):
@@ -67,8 +67,8 @@ PODS:
   - EXImageLoader (6.0.0):
     - ExpoModulesCore
     - React-Core
-  - EXJSONUtils (0.15.0)
-  - EXManifests (1.0.8):
+  - EXJSONUtils (0.15.1-canary-20251031-b135dff)
+  - EXManifests (1.0.9-canary-20251031-b135dff):
     - ExpoModulesCore
   - EXNotifications (0.32.12):
     - ExpoModulesCore
@@ -97,15 +97,15 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
-  - expo-dev-client (6.0.16):
+  - expo-dev-client (6.0.17-canary-20251031-b135dff):
     - EXManifests
     - expo-dev-launcher
     - expo-dev-menu
     - expo-dev-menu-interface
     - EXUpdatesInterface
-  - expo-dev-launcher (6.0.16):
+  - expo-dev-launcher (6.1.0-canary-20251031-b135dff):
     - EXManifests
-    - expo-dev-launcher/Main (= 6.0.16)
+    - expo-dev-launcher/Main (= 6.1.0-canary-20251031-b135dff)
     - expo-dev-menu
     - expo-dev-menu-interface
     - ExpoModulesCore
@@ -134,7 +134,7 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
-  - expo-dev-launcher/Main (6.0.16):
+  - expo-dev-launcher/Main (6.1.0-canary-20251031-b135dff):
     - EXManifests
     - expo-dev-launcher/Unsafe
     - expo-dev-menu
@@ -165,7 +165,7 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
-  - expo-dev-launcher/Unsafe (6.0.16):
+  - expo-dev-launcher/Unsafe (6.1.0-canary-20251031-b135dff):
     - EXManifests
     - expo-dev-menu
     - expo-dev-menu-interface
@@ -195,9 +195,9 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
-  - expo-dev-menu (7.0.15):
-    - expo-dev-menu/Main (= 7.0.15)
-    - expo-dev-menu/ReactNativeCompatibles (= 7.0.15)
+  - expo-dev-menu (7.1.0-canary-20251031-b135dff):
+    - expo-dev-menu/Main (= 7.1.0-canary-20251031-b135dff)
+    - expo-dev-menu/ReactNativeCompatibles (= 7.1.0-canary-20251031-b135dff)
     - hermes-engine
     - RCTRequired
     - RCTTypeSafety
@@ -219,8 +219,8 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
-  - expo-dev-menu-interface (2.0.0)
-  - expo-dev-menu/Main (7.0.15):
+  - expo-dev-menu-interface (2.0.1-canary-20251031-b135dff)
+  - expo-dev-menu/Main (7.1.0-canary-20251031-b135dff):
     - EXManifests
     - expo-dev-menu-interface
     - ExpoModulesCore
@@ -246,7 +246,7 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
-  - expo-dev-menu/ReactNativeCompatibles (7.0.15):
+  - expo-dev-menu/ReactNativeCompatibles (7.1.0-canary-20251031-b135dff):
     - hermes-engine
     - RCTRequired
     - RCTTypeSafety
@@ -270,21 +270,21 @@ PODS:
     - Yoga
   - ExpoAsset (12.0.9):
     - ExpoModulesCore
-  - ExpoClipboard (8.0.7):
+  - ExpoClipboard (8.0.8-canary-20251031-b135dff):
     - ExpoModulesCore
-  - ExpoDevice (8.0.9):
+  - ExpoDevice (8.0.10-canary-20251031-b135dff):
     - ExpoModulesCore
   - ExpoFileSystem (19.0.17):
     - ExpoModulesCore
-  - ExpoFont (14.0.9):
+  - ExpoFont (14.0.10-canary-20251031-b135dff):
     - ExpoModulesCore
-  - ExpoHaptics (15.0.7):
+  - ExpoHaptics (15.0.8-canary-20251031-b135dff):
     - ExpoModulesCore
   - ExpoImagePicker (17.0.8):
     - ExpoModulesCore
   - ExpoKeepAwake (15.0.7):
     - ExpoModulesCore
-  - ExpoLinearGradient (15.0.7):
+  - ExpoLinearGradient (15.0.8-canary-20251031-b135dff):
     - ExpoModulesCore
   - ExpoModulesCore (3.0.23):
     - hermes-engine
@@ -309,11 +309,13 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
-  - ExpoSpeech (14.0.7):
+  - ExpoSecureStore (15.0.8-canary-20251031-b135dff):
     - ExpoModulesCore
-  - ExpoWebBrowser (15.0.8):
+  - ExpoSpeech (14.0.8-canary-20251031-b135dff):
     - ExpoModulesCore
-  - EXUpdatesInterface (2.0.0):
+  - ExpoWebBrowser (15.0.9-canary-20251031-b135dff):
+    - ExpoModulesCore
+  - EXUpdatesInterface (2.0.1-canary-20251031-b135dff):
     - ExpoModulesCore
   - fast_float (8.0.0)
   - FBLazyVector (0.81.5)
@@ -322,13 +324,7 @@ PODS:
   - hermes-engine (0.81.5):
     - hermes-engine/Pre-built (= 0.81.5)
   - hermes-engine/Pre-built (0.81.5)
-  - ios-voice-processor (1.2.0)
   - JitsiWebRTC (124.0.2)
-  - Porcupine-iOS (3.0.4):
-    - ios-voice-processor (~> 1.2.0)
-  - porcupine-react-native (3.0.5):
-    - Porcupine-iOS (~> 3.0.4)
-    - React
   - RCT-Folly (2024.11.18.00):
     - boost
     - DoubleConversion
@@ -2304,7 +2300,7 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
-  - RNSVG (15.14.0):
+  - RNSVG (15.12.1):
     - hermes-engine
     - RCTRequired
     - RCTTypeSafety
@@ -2325,9 +2321,9 @@ PODS:
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
-    - RNSVG/common (= 15.14.0)
+    - RNSVG/common (= 15.12.1)
     - Yoga
-  - RNSVG/common (15.14.0):
+  - RNSVG/common (15.12.1):
     - hermes-engine
     - RCTRequired
     - RCTTypeSafety
@@ -2371,7 +2367,7 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
-  - RNWorklets (0.5.2):
+  - RNWorklets (0.5.1):
     - hermes-engine
     - RCTRequired
     - RCTTypeSafety
@@ -2393,9 +2389,9 @@ PODS:
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
-    - RNWorklets/worklets (= 0.5.2)
+    - RNWorklets/worklets (= 0.5.1)
     - Yoga
-  - RNWorklets/worklets (0.5.2):
+  - RNWorklets/worklets (0.5.1):
     - hermes-engine
     - RCTRequired
     - RCTTypeSafety
@@ -2417,9 +2413,9 @@ PODS:
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
-    - RNWorklets/worklets/apple (= 0.5.2)
+    - RNWorklets/worklets/apple (= 0.5.1)
     - Yoga
-  - RNWorklets/worklets/apple (0.5.2):
+  - RNWorklets/worklets/apple (0.5.1):
     - hermes-engine
     - RCTRequired
     - RCTTypeSafety
@@ -2491,6 +2487,7 @@ DEPENDENCIES:
   - ExpoKeepAwake (from `../node_modules/expo-keep-awake/ios`)
   - ExpoLinearGradient (from `../node_modules/expo-linear-gradient/ios`)
   - ExpoModulesCore (from `../node_modules/expo-modules-core`)
+  - ExpoSecureStore (from `../node_modules/expo-secure-store/ios`)
   - ExpoSpeech (from `../node_modules/expo-speech/ios`)
   - ExpoWebBrowser (from `../node_modules/expo-web-browser/ios`)
   - EXUpdatesInterface (from `../node_modules/expo-updates-interface/ios`)
@@ -2499,7 +2496,6 @@ DEPENDENCIES:
   - fmt (from `/Users/marioncollins/RichesReach/mobile/ios/../node_modules/react-native/third-party-podspecs/fmt.podspec`)
   - glog (from `/Users/marioncollins/RichesReach/mobile/ios/../node_modules/react-native/third-party-podspecs/glog.podspec`)
   - hermes-engine (from `../node_modules/react-native/sdks/hermes-engine/hermes-engine.podspec`)
-  - "porcupine-react-native (from `../node_modules/@picovoice/porcupine-react-native`)"
   - RCT-Folly (from `/Users/marioncollins/RichesReach/mobile/ios/../node_modules/react-native/third-party-podspecs/RCT-Folly.podspec`)
   - RCTDeprecation (from `../node_modules/react-native/ReactApple/Libraries/RCTFoundation/RCTDeprecation`)
   - RCTRequired (from `../node_modules/react-native/Libraries/Required`)
@@ -2590,9 +2586,7 @@ SPEC REPOS:
     - AgoraRtcEngine_iOS
     - boost
     - DoubleConversion
-    - ios-voice-processor
     - JitsiWebRTC
-    - Porcupine-iOS
     - React-Codegen
 
 EXTERNAL SOURCES:
@@ -2640,6 +2634,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/expo-linear-gradient/ios"
   ExpoModulesCore:
     :path: "../node_modules/expo-modules-core"
+  ExpoSecureStore:
+    :path: "../node_modules/expo-secure-store/ios"
   ExpoSpeech:
     :path: "../node_modules/expo-speech/ios"
   ExpoWebBrowser:
@@ -2657,8 +2653,6 @@ EXTERNAL SOURCES:
   hermes-engine:
     :podspec: "../node_modules/react-native/sdks/hermes-engine/hermes-engine.podspec"
     :tag: hermes-2025-07-07-RNv0.81.0-e0fc67142ec0763c6b6153ca2bf96df815539782
-  porcupine-react-native:
-    :path: "../node_modules/@picovoice/porcupine-react-native"
   RCT-Folly:
     :podspec: "/Users/marioncollins/RichesReach/mobile/ios/../node_modules/react-native/third-party-podspecs/RCT-Folly.podspec"
   RCTDeprecation:
@@ -2829,39 +2823,37 @@ SPEC CHECKSUMS:
   boost: 30a15ffb6d9aa4646dd3caffc960753f4cb4ca4e
   DoubleConversion: e22e0762848812a87afd67ffda3998d9ef29170c
   EXApplication: 296622817d459f46b6c5fe8691f4aac44d2b79e7
-  EXAV: e3fefaca88f14624bca01d9a128562a5f8e738f8
+  EXAV: 01aaec274ef8090325cff9ab649bff73b346c044
   EXConstants: fd688cef4e401dcf798a021cfb5d87c890c30ba3
   EXImageLoader: 189e3476581efe3ad4d1d3fb4735b7179eb26f05
-  EXJSONUtils: 1d3e4590438c3ee593684186007028a14b3686cd
-  EXManifests: 224345a575fca389073c416297b6348163f28d1a
+  EXJSONUtils: 07e266118f69657d5e04278a2d88c62245d0a23b
+  EXManifests: 1a33303a038231c94bff77df25f86934d554ebef
   EXNotifications: 7cff475adb5d7a255a9ea46bbd2589cb3b454506
   Expo: 27ae59be9be4feab2b1c1ae06550752c524ca558
-  expo-dev-client: 974463bca58c100a32f099450e9413893bee3de8
-  expo-dev-launcher: adcbbff3464b908458255d0fdf3e8cf79c67d614
-  expo-dev-menu: 78e39c8cca65695b7ccb2c70c618043137f6735c
-  expo-dev-menu-interface: 600df12ea01efecdd822daaf13cc0ac091775533
+  expo-dev-client: b152d73cf38d9d17d4f0355da70ca56164381cf8
+  expo-dev-launcher: a1835127c94f13e100b81ee1a07e9e2b6bac8cdc
+  expo-dev-menu: ef5fc73988034b3fe6857c4345aca07544efd89e
+  expo-dev-menu-interface: 38697c9d47fd0714f3ba13bf161c64e3859e2e73
   ExpoAsset: 9ba6fbd677fb8e241a3899ac00fa735bc911eadf
-  ExpoClipboard: af650d14765f19c60ce2a1eaf9dfe6445eff7365
-  ExpoDevice: 148accb4071873d19fba80a2506c58ffa433d620
+  ExpoClipboard: 80e24c701fca534f9db1cf8acb2d158ab9a1562d
+  ExpoDevice: 912085e981b34a6ebe07b6bd4165d7acf52eefb1
   ExpoFileSystem: b79eadbda7b7f285f378f95f959cc9313a1c9c61
-  ExpoFont: cf9d90ec1d3b97c4f513211905724c8171f82961
-  ExpoHaptics: 807476b0c39e9d82b7270349d6487928ce32df84
+  ExpoFont: 110e5222e5484c2acc70ec6ea245245b9d809bc4
+  ExpoHaptics: 11960682a998de1cc5feb5d86c6806e4613012be
   ExpoImagePicker: d251aab45a1b1857e4156fed88511b278b4eee1c
   ExpoKeepAwake: 1a2e820692e933c94a565ec3fbbe38ac31658ffe
-  ExpoLinearGradient: a464898cb95153125e3b81894fd479bcb1c7dd27
+  ExpoLinearGradient: f0cc5d3fa634260f20327b81750e901b0bbb2031
   ExpoModulesCore: 5f20603cf25698682d7c43c05fbba8c748b189d2
-  ExpoSpeech: 18a7f92a932028e16d3df1891377a8b626ab5cc0
-  ExpoWebBrowser: d04a0d6247a0bea4519fbc2ea816610019ad83e0
-  EXUpdatesInterface: 5adf50cb41e079c861da6d9b4b954c3db9a50734
+  ExpoSecureStore: eaf3afff8d8a5f22a11722caac80efb54b2db58e
+  ExpoSpeech: dd3c0c1289056640040cc69e2427fbaba5609e3e
+  ExpoWebBrowser: 2fc96f289e201ba32e306bce38ae87f61a09be9b
+  EXUpdatesInterface: 84e77ddb672401e5d10ce75280b614844442058d
   fast_float: b32c788ed9c6a8c584d114d0047beda9664e7cc6
   FBLazyVector: e95a291ad2dadb88e42b06e0c5fb8262de53ec12
   fmt: a40bb5bd0294ea969aaaba240a927bd33d878cdd
   glog: 5683914934d5b6e4240e497e0f4a3b42d1854183
   hermes-engine: 9f4dfe93326146a1c99eb535b1cb0b857a3cd172
-  ios-voice-processor: 6b5ca08962f39e434fe39dca0f483d923a3b1b97
   JitsiWebRTC: b47805ab5668be38e7ee60e2258f49badfe8e1d0
-  Porcupine-iOS: da103a8848ce6b36acd4a5e42bb811d4532dd515
-  porcupine-react-native: 1b9871979af1f3f4ad48f27a3851be8de82f8a68
   RCT-Folly: 846fda9475e61ec7bcbf8a3fe81edfcaeb090669
   RCTDeprecation: 943572d4be82d480a48f4884f670135ae30bf990
   RCTRequired: 8f3cfc90cc25cf6e420ddb3e7caaaabc57df6043
@@ -2939,12 +2931,12 @@ SPEC CHECKSUMS:
   RNGestureHandler: 2914750df066d89bf9d8f48a10ad5f0051108ac3
   RNReanimated: 3895a29fdf77bbe2a627e1ed599a5e5d1df76c29
   RNScreens: d8d6f1792f6e7ac12b0190d33d8d390efc0c1845
-  RNSVG: 6c534e37eaaefe882b3f55294d0d607de20562dc
+  RNSVG: 31d6639663c249b7d5abc9728dde2041eb2a3c34
   RNVectorIcons: 4351544f100d4f12cac156a7c13399e60bab3e26
-  RNWorklets: 43cd6af94c18f89cbca10ea83fee281b69d75da5
+  RNWorklets: 76fce72926e28e304afb44f0da23b2d24f2c1fa0
   stream-chat-react-native: 1119d48020ba09c4255f81048780c0eab3bcd883
   Yoga: 5934998fbeaef7845dbf698f698518695ab4cd1a
 
-PODFILE CHECKSUM: 658845d237db9469f513abfa99c28c9f268bed3b
+PODFILE CHECKSUM: 6257bf8ca4eb831630c05e2886e85a2dabd5fd71
 
 COCOAPODS: 1.16.2

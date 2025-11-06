@@ -1,8 +1,18 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { View, Dimensions, Modal, Text, Pressable, TouchableOpacity, InteractionManager, Platform } from 'react-native';
-import { Canvas, Path, Skia, Rect, Circle, Line, vec } from '@shopify/react-native-skia';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSharedValue, useDerivedValue, withSpring, interpolate, withTiming, runOnJS } from 'react-native-reanimated';
+
+// Conditionally import Skia - only available in development builds, not Expo Go
+let SkiaComponents: any = null;
+try {
+  SkiaComponents = require('@shopify/react-native-skia');
+} catch (e) {
+  // Skia not available - component will return null
+  console.warn('Skia chart library not available');
+}
+
+const { Canvas, Path, Skia, Rect, Circle, Line, vec } = SkiaComponents || {};
 
 type PricePoint = { t: number | Date; price: number };
 type EventPoint = { t: number | Date; title: string; summary?: string; color?: string };
@@ -92,6 +102,12 @@ function InnovativeChart({
   height = 200,
   margin = 16,
 }: Props) {
+  // Early return if Skia is not available (e.g., in Expo Go)
+  if (!SkiaComponents || !Canvas || !Path || !Skia) {
+    console.warn('InnovativeChartSkia: Skia library not available, returning null');
+    return null;
+  }
+  
   const P = { ...DEFAULTS, ...palette };
   const screenDimensions = Dimensions.get('window');
   // For now, use full screen width - the parent container should handle padding

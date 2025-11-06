@@ -20,7 +20,7 @@ LogBox.ignoreLogs([
 ]);
 LogBox.ignoreAllLogs(true);
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -52,11 +52,10 @@ import ProfileScreen from './features/user/screens/ProfileScreen';
 import AccountManagementScreen from './features/user/screens/AccountManagementScreen';
 import StockScreen from './features/stocks/screens/StockScreen';
 import PriceChartScreen from './features/stocks/screens/PriceChartScreen';
-import StockDetailScreen from './features/stocks/screens/StockDetailScreen';
+// ✅ Code splitting: Heavy screens lazy-loaded (reduces initial bundle size)
+// StockDetailScreen, AIPortfolioScreen, PortfolioManagementScreen moved to lazy imports below
 import SocialScreen from './features/social/screens/SocialScreen';
-import AIPortfolioScreen from './features/portfolio/screens/AIPortfolioScreen';
 import PortfolioScreen from './features/portfolio/screens/PortfolioScreen';
-import PortfolioManagementScreen from './features/portfolio/screens/PortfolioManagementScreen';
 import PremiumAnalyticsScreen from './navigation/PremiumAnalyticsScreen';
 import SubscriptionScreen from './features/user/screens/SubscriptionScreen';
 import LearningPathsScreen from './features/learning/screens/LearningPathsScreen';
@@ -75,8 +74,7 @@ import RiskManagementScreen from './features/risk/screens/RiskManagementScreen';
 import { SignalsScreen, RiskCoachScreen, SwingTradingDashboard } from './features/swingTrading';
 import LeaderboardScreen from './features/swingTrading/screens/LeaderboardScreen';
 import BacktestingScreen from './features/swingTrading/screens/BacktestingScreen';
-import AIOptionsScreen from './features/options/screens/AIOptionsScreen';
-import OptionsCopilotScreen from './features/options/screens/OptionsCopilotScreen';
+// ✅ Code splitting: AIOptionsScreen and OptionsCopilotScreen moved to lazy imports below
 import AIScansScreen from './features/aiScans/screens/AIScansScreen';
 import ScanPlaybookScreen from './features/aiScans/screens/ScanPlaybookScreen';
 import BankAccountScreen from './features/user/screens/BankAccountScreen';
@@ -94,6 +92,7 @@ import SmartLotsScreen from './screens/SmartLotsScreen';
 import BorrowVsSellScreen from './screens/BorrowVsSellScreen';
 import WashGuardScreen from './screens/WashGuardScreen';
 import TutorScreen from './features/education/screens/TutorScreen';
+import TutorAskExplainScreen from './features/learning/screens/TutorAskExplainScreen';
 import TutorQuizScreen from './features/learning/screens/TutorQuizScreen';
 import TutorModuleScreen from './features/learning/screens/TutorModuleScreen';
 import MarketCommentaryScreen from './features/news/screens/MarketCommentaryScreen';
@@ -125,6 +124,21 @@ import UserProfileService from './features/user/services/UserProfileService';
 // Contexts
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { VoiceProvider } from './contexts/VoiceContext';
+
+// ✅ Lazy load heavy screens for code splitting (reduces initial bundle size)
+const AIPortfolioScreen = lazy(() => import('./features/portfolio/screens/AIPortfolioScreen'));
+const PortfolioManagementScreen = lazy(() => import('./features/portfolio/screens/PortfolioManagementScreen'));
+const StockDetailScreen = lazy(() => import('./features/stocks/screens/StockDetailScreen'));
+const AIOptionsScreen = lazy(() => import('./features/options/screens/AIOptionsScreen'));
+const OptionsCopilotScreen = lazy(() => import('./features/options/screens/OptionsCopilotScreen'));
+
+// Loading fallback component for lazy-loaded screens
+const ScreenLoader = () => (
+  <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
+    <ActivityIndicator size="large" color="#1D4ED8" />
+  </View>
+);
+
 function AppContent() {
 const { user, isAuthenticated, loading, logout: authLogout } = useAuth();
 const [currentScreen, setCurrentScreen] = useState('login');
@@ -170,51 +184,51 @@ useEffect(() => {
 }, [isAuthenticated, currentScreen, user]);
 
 const isLoggedIn = isAuthenticated;
-const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
-const [isLoading, setIsLoading] = useState(true);
-// Initialize services and check onboarding status
+const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState<boolean | null>(null); // null = not checked yet
+const [isLoading, setIsLoading] = useState(false); // Start with false for instant load
+
+// Check onboarding status when user is authenticated
+useEffect(() => {
+  if (isAuthenticated) {
+    const checkOnboarding = async () => {
+      try {
+        const onboardingCompleted = await UserProfileService.getInstance().isOnboardingCompleted();
+        console.log('✅ Onboarding check result:', onboardingCompleted);
+        setHasCompletedOnboarding(onboardingCompleted);
+      } catch (error) {
+        console.error('Error checking onboarding status:', error);
+        setHasCompletedOnboarding(false); // Default to false on error
+      }
+    };
+    checkOnboarding();
+  } else {
+    // Reset onboarding status when logged out
+    setHasCompletedOnboarding(null);
+  }
+}, [isAuthenticated]);
+
+// Initialize services and check onboarding status (non-blocking for demo)
 useEffect(() => {
   const initializeServices = async () => {
+    // Skip blocking initialization for demo
+    setIsLoading(false);
     try {
       // Authentication state is now handled by AuthContext
       // No need to check JWT service here
       
-      // Check if user has completed onboarding
-      const userProfileService = UserProfileService.getInstance();
-      const onboardingCompleted = await userProfileService.isOnboardingCompleted();
-      setHasCompletedOnboarding(onboardingCompleted);
-      
-      // Initialize Version 2 services
+      // Initialize Version 2 services in background
       const offlineService = OfflineInsightsService;
       const status = offlineService.getOfflineStatus();
       setOfflineStatus(status);
-// Initialize push notifications with error handling
+      
+      // Initialize push notifications in background (non-blocking)
 if (pushNotificationService) {
-try {
-const notificationsEnabled = await pushNotificationService.initialize();
-if (notificationsEnabled) {
-// Set up notification listeners
-const { notificationListener, responseListener } = pushNotificationService.setupNotificationListeners();
-// Cleanup listeners on unmount
-return () => {
-pushNotificationService.removeNotificationListeners(notificationListener, responseListener);
-};
-}
-} catch (notificationError) {
-// Push notifications not available (likely Expo Go)
-if (__DEV__) {
-console.warn(' Push notifications not available:', notificationError instanceof Error ? notificationError.message : 'Unknown error');
-}
-}
-}
-// Initialize price alert service
+        pushNotificationService.initialize().catch(() => {});
+      }
+      
+      // Initialize price alert service in background (non-blocking)
 if (priceAlertService) {
-try {
-await priceAlertService.initialize();
-} catch (priceAlertError) {
-console.warn(' Price alert service initialization failed:', priceAlertError instanceof Error ? priceAlertError.message : 'Unknown error');
-}
-} else {
+        priceAlertService.initialize().catch(() => {});
 }
 } catch (error) {
 console.error('Error initializing services:', error);
@@ -244,6 +258,12 @@ const navigateTo = (screen: string, params?: any) => {
     setCurrentScreen('StockDetail');
     // Store params in a way that the screen can access them
     (window as any).__stockDetailParams = params || {};
+  } else if (screen === 'SBLOCBankSelection') {
+    console.log('🔍 Navigating to SBLOCBankSelection with params:', params);
+    // Store params for SBLOCBankSelection screen
+    setCurrentScreen('SBLOCBankSelection');
+    // Store params in a way that the screen can access them
+    (window as any).__sblocParams = params || { amountUsd: 25000 };
   } else if (screen === 'user-profile' && params?.userId) {
     const newScreen = `user-profile-${params.userId}`;
     setCurrentScreen(newScreen);
@@ -260,12 +280,11 @@ const navigateTo = (screen: string, params?: any) => {
 setCurrentScreen(screen);
 }
 };
-const handleLogin = (token?: string) => {
+const handleLogin = async (token?: string) => {
 console.log('🎉 App handleLogin called with token:', token);
-// Navigate to home screen after successful login
-setCurrentScreen('home');
-// Check if user needs onboarding after login
-checkOnboardingStatus();
+// Check onboarding status first before navigating
+await checkOnboardingStatus();
+// Navigation will be handled by the onboarding check or by the auth state effect
 };
 const handleSignUp = () => {
 // New users always need onboarding
@@ -349,7 +368,6 @@ return (
 onComplete={(profile) => {
 console.log('✅ Onboarding completed with profile:', profile);
 setHasCompletedOnboarding(true);
-setIsLoggedIn(true);
 setCurrentScreen('home');
 }}
 onSkip={() => {
@@ -366,20 +384,44 @@ onNavigateToForgotPassword={() => setCurrentScreen('forgot-password')}
 }
 }
 // Show onboarding if user is logged in but hasn't completed onboarding
-if (isLoggedIn && !hasCompletedOnboarding) {
-return (
-<ZeroFrictionOnboarding
-onComplete={(profile) => {
-console.log('✅ Onboarding completed with profile:', profile);
-setHasCompletedOnboarding(true);
-setCurrentScreen('home');
-}}
-onSkip={() => {
-setHasCompletedOnboarding(true);
-setCurrentScreen('home');
-}}
-/>
-);
+// Only show if we've checked and confirmed onboarding is not completed
+if (isLoggedIn && hasCompletedOnboarding === false) {
+  return (
+    <ZeroFrictionOnboarding
+      onComplete={async (profile) => {
+        console.log('✅ Onboarding completed with profile:', profile);
+        try {
+          const userProfileService = UserProfileService.getInstance();
+          await userProfileService.saveProfile(profile);
+          await userProfileService.markOnboardingCompleted();
+        } catch (error) {
+          console.error('Error saving profile:', error);
+        }
+        setHasCompletedOnboarding(true);
+        setCurrentScreen('home');
+      }}
+      onSkip={async () => {
+        try {
+          const userProfileService = UserProfileService.getInstance();
+          await userProfileService.markOnboardingCompleted();
+        } catch (error) {
+          console.error('Error marking onboarding as completed:', error);
+        }
+        setHasCompletedOnboarding(true);
+        setCurrentScreen('home');
+      }}
+    />
+  );
+}
+
+// Show loading while checking onboarding status
+if (isLoggedIn && hasCompletedOnboarding === null) {
+  return (
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <ActivityIndicator size="large" color="#667eea" />
+      <Text style={{ marginTop: 16, color: '#666' }}>Loading...</Text>
+    </View>
+  );
 }
 // If logged in and onboarding complete, use new tab/stack navigator
 if (isLoggedIn && hasCompletedOnboarding) {
@@ -402,15 +444,27 @@ return <AccountManagementScreen navigateTo={navigateTo} />;
           console.log('🔍 Rendering StockDetailScreen');
           const stockDetailParams = (window as any).__stockDetailParams || {};
           console.log('🔍 StockDetail params:', stockDetailParams);
-          return <StockDetailScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('stock'), setParams: (params: any) => {} }} route={{ params: stockDetailParams }} />;
+          return (
+            <Suspense fallback={<ScreenLoader />}>
+              <StockDetailScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('stock'), setParams: (params: any) => {} }} route={{ params: stockDetailParams }} />
+            </Suspense>
+          );
         case 'crypto':
 return <CryptoScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('home') }} />;
 case 'ai-portfolio':
-return <AIPortfolioScreen navigateTo={navigateTo} />;
+return (
+  <Suspense fallback={<ScreenLoader />}>
+    <AIPortfolioScreen navigateTo={navigateTo} />
+  </Suspense>
+);
 case 'portfolio':
 return <PortfolioScreen navigateTo={navigateTo} />;
 case 'portfolio-management':
-return <PortfolioManagementScreen navigateTo={navigateTo} />;
+return (
+  <Suspense fallback={<ScreenLoader />}>
+    <PortfolioManagementScreen navigateTo={navigateTo} />
+  </Suspense>
+);
 case 'premium-analytics':
 return <PremiumAnalyticsScreen navigateTo={navigateTo} />;
 case 'subscription':
@@ -420,9 +474,13 @@ return <PremiumAnalyticsScreen navigateTo={navigateTo} />;
 case 'stock-screening':
 return <StockScreen navigateTo={navigateTo} />;
 case 'ai-recommendations':
-return <AIPortfolioScreen navigateTo={navigateTo} />;
+return (
+  <Suspense fallback={<ScreenLoader />}>
+    <AIPortfolioScreen navigateTo={navigateTo} />
+  </Suspense>
+);
 case 'social':
-return <SocialTrading userId={user?.id || 'me'} onNavigate={navigateTo} initialTab='news' />;
+return <SocialTrading userId={user?.id || 'me'} />;
 case 'learning-paths':
 return <LearningPathsScreen />;
 case 'discover-users':
@@ -454,13 +512,21 @@ return <DiscoverUsersScreen onNavigate={navigateTo} />;
 case 'social-feed':
 return <SocialScreen onNavigate={navigateTo} />;
 case 'ai-options':
-return <AIOptionsScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('home') }} />;
+return (
+  <Suspense fallback={<ScreenLoader />}>
+    <AIOptionsScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('home') }} />
+  </Suspense>
+);
 case 'options-copilot':
-return <OptionsCopilotScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('ai-options') }} />;
+return (
+  <Suspense fallback={<ScreenLoader />}>
+    <OptionsCopilotScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('ai-options') }} />
+  </Suspense>
+);
 case 'tutor':
 return <TutorScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('home') }} />;
 case 'scan-playbook':
-return <ScanPlaybookScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('ai-scans') }} route={{ params: { scan: {} } }} />;
+return <ScanPlaybookScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('ai-scans') }} route={{ params: { scan: { id: '', name: '', description: '', category: '', icon: '', tags: [], isActive: true } } }} />;
 case 'trading':
 return <TradingScreen navigateTo={navigateTo} />;
 case 'day-trading':
@@ -489,8 +555,10 @@ case 'sbloc-learning':
 return <SBLOCLearningScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('home') }} />;
 case 'portfolio-learning':
 return <PortfolioLearningScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('home') }} />;
-case 'SBLOCBankSelection':
-return <SBLOCBankSelectionScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('bank-accounts') }} route={{ params: { amountUsd: 25000 } }} />;
+        case 'SBLOCBankSelection':
+          const sblocParams = (window as any).__sblocParams || { amountUsd: 25000 };
+          console.log('🔍 Rendering SBLOCBankSelectionScreen with params:', sblocParams);
+          return <SBLOCBankSelectionScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('bank-accounts') }} route={{ params: sblocParams }} />;
 case 'SBLOCApplication':
 return <SBLOCApplicationScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('SBLOCBankSelection') }} route={{ params: { sessionUrl: '', referral: { id: '', bank: { id: '', name: '', minLtv: 0, maxLtv: 0, minLineUsd: 0, maxLineUsd: 0, typicalAprMin: 0, typicalAprMax: 0, isActive: true, priority: 0 } } } }} />;
         case 'SblocStatus':

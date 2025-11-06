@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Collapsible from 'react-native-collapsible';
 import { useAuth } from '../contexts/AuthContext';
 import taxOptimizationService from '../services/taxOptimizationService';
+import { API_BASE } from '../config/api';
 // import yieldsService from '../services/yieldsService'; // Your yields service
 
 interface TaxOptimizationData {
@@ -138,13 +139,93 @@ const TaxOptimizationScreen: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('summary');
   const [expandedSections, setExpandedSections] = useState<{ [key: string]: boolean }>({});
-  const [userIncome] = useState(80000); // Mock user income; pull from auth/profile
+  const [userIncome, setUserIncome] = useState<number | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      // Use mock data for now since services might not be available
-      const rawHoldings = mockHoldings;
+      // Fetch real user income from profile
+      if (user?.incomeProfile?.annualIncome) {
+        setUserIncome(user.incomeProfile.annualIncome);
+      } else if (user?.profile?.income) {
+        setUserIncome(user.profile.income);
+      } else {
+        // Default fallback if no income data available
+        setUserIncome(80000);
+      }
+
+      // Fetch real portfolio holdings from tax optimization service
+      let rawHoldings: any[] = [];
+      
+      try {
+        const summaryData = await taxOptimizationService.getOptimizationSummary(token || '');
+        if (summaryData && summaryData.holdings) {
+          rawHoldings = summaryData.holdings;
+        } else {
+          // Try fetching from portfolio metrics GraphQL query
+          const portfolioResponse = await fetch(`${API_BASE}/graphql`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token || ''}`,
+            },
+            body: JSON.stringify({
+              query: `
+                query {
+                  portfolioMetrics {
+                    holdings {
+                      symbol
+                      companyName
+                      shares
+                      currentPrice
+                      totalValue
+                      costBasis
+                      returnAmount
+                      returnPercent
+                      sector
+                    }
+                  }
+                }
+              `
+            })
+          });
+          
+          const portfolioData = await portfolioResponse.json();
+          if (portfolioData?.data?.portfolioMetrics?.holdings) {
+            rawHoldings = portfolioData.data.portfolioMetrics.holdings.map((h: any) => ({
+              symbol: h.symbol,
+              type: 'stock',
+              currentPrice: h.currentPrice,
+              costBasis: h.costBasis / (h.shares || 1),
+              quantity: h.shares || 0,
+              taxImpact: h.returnPercent > 0 ? 0.15 : 0.22,
+              recommendation: h.returnPercent > 0 ? 'Hold for long-term gains' : 'Consider tax-loss harvesting'
+            }));
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching real holdings:', error);
+        // Fallback to empty array - don't use mock data
+        rawHoldings = [];
+      }
+
+      // If no holdings found, show empty state
+      if (rawHoldings.length === 0) {
+        setData({
+          summary: {
+            estimatedAnnualTax: 0,
+            holdings: [],
+            totalPortfolioValue: 0,
+            totalUnrealizedGains: 0,
+          },
+          lossHarvesting: { potentialSavings: 0, holdings: [] },
+          capitalGains: { ltcgTax: 0, stcgTax: 0, holdings: [] },
+          rebalancing: { bracketShiftTax: 0, holdings: [] },
+          bracketAnalysis: { marginalRate: 0 },
+          holdings: [],
+        });
+        return;
+      }
       const integratedHoldings = rawHoldings.map((holding: any) => ({
         ...holding,
         currentValue: holding.currentPrice * holding.quantity,
@@ -153,9 +234,10 @@ const TaxOptimizationScreen: React.FC = () => {
         taxSavingsPotential: holding.unrealizedGain < 0 ? Math.abs(holding.unrealizedGain) * 0.22 : 0,
       }));
 
-      // Create mock data for all sections
+      // Create real data for all sections using actual holdings
+      const effectiveIncome = userIncome || 80000;
       const mockSummary = {
-        estimatedAnnualTax: calculateIncomeTax(userIncome + 5000).tax,
+        estimatedAnnualTax: calculateIncomeTax(effectiveIncome + 5000).tax,
         holdings: integratedHoldings.slice(0, 3),
         totalPortfolioValue: integratedHoldings.reduce((sum, h) => sum + h.currentValue, 0),
         totalUnrealizedGains: integratedHoldings.reduce((sum, h) => sum + h.unrealizedGain, 0),
@@ -167,18 +249,18 @@ const TaxOptimizationScreen: React.FC = () => {
       };
 
       const mockCapitalGains = {
-        ltcgTax: calculateLTCG(10000, userIncome),
-        stcgTax: calculateIncomeTax(userIncome + 10000).tax - calculateIncomeTax(userIncome).tax,
+        ltcgTax: calculateLTCG(10000, effectiveIncome),
+        stcgTax: calculateIncomeTax(effectiveIncome + 10000).tax - calculateIncomeTax(effectiveIncome).tax,
         holdings: integratedHoldings.filter(h => h.unrealizedGain > 0),
       };
 
       const mockRebalancing = {
-        bracketShiftTax: calculateIncomeTax(userIncome + 10000).tax - calculateIncomeTax(userIncome).tax,
+        bracketShiftTax: calculateIncomeTax(effectiveIncome + 10000).tax - calculateIncomeTax(effectiveIncome).tax,
         holdings: integratedHoldings,
       };
 
       const mockBracketAnalysis = {
-        marginalRate: calculateIncomeTax(userIncome).effectiveRate,
+        marginalRate: calculateIncomeTax(effectiveIncome).effectiveRate,
       };
 
       setData({
@@ -195,7 +277,7 @@ const TaxOptimizationScreen: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [userIncome]);
+  }, [user, token]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -498,14 +580,7 @@ const TaxOptimizationScreen: React.FC = () => {
   );
 };
 
-// Mock data for stocks and crypto (expand with real data)
-const mockHoldings = [
-  { symbol: 'AAPL', type: 'stock', currentPrice: 180.50, costBasis: 150.00, quantity: 100, taxImpact: 0.15, recommendation: 'Hold for long-term gains' },
-  { symbol: 'BTC', type: 'crypto', currentPrice: 45000.00, costBasis: 30000.00, quantity: 0.5, taxImpact: 0.20, recommendation: 'Consider tax-loss harvesting' },
-  { symbol: 'TSLA', type: 'stock', currentPrice: 250.00, costBasis: 280.00, quantity: 50, taxImpact: 0.12, recommendation: 'Harvest loss opportunity' },
-  { symbol: 'ETH', type: 'crypto', currentPrice: 3200.00, costBasis: 2500.00, quantity: 2.0, taxImpact: 0.18, recommendation: 'Tax-efficient hold' },
-  { symbol: 'NVDA', type: 'stock', currentPrice: 800.00, costBasis: 600.00, quantity: 25, taxImpact: 0.16, recommendation: 'Hold for long-term gains' },
-];
+// Removed mock holdings - using real data from API
 
 const TAB_HEIGHT_MIN = 30;
 

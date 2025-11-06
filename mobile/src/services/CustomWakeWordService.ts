@@ -177,6 +177,8 @@ class CustomWakeWordService {
 
     } catch (error) {
       console.error('Transcription error:', error);
+      // Return null on network errors - don't spam the console
+      // The calling code should handle null gracefully
       return null;
     }
   }
@@ -267,7 +269,7 @@ class CustomWakeWordService {
    * Stop wake word detection
    */
   async stop(): Promise<void> {
-    if (!this.isListening) {
+    if (!this.isListening && !this.recording) {
       return;
     }
 
@@ -280,13 +282,44 @@ class CustomWakeWordService {
       }
 
       if (this.recording) {
-        await this.recording.stopAndUnloadAsync();
+        try {
+          const status = await this.recording.getStatusAsync();
+          if (status.isRecording) {
+            await this.recording.stopAndUnloadAsync();
+          } else {
+            await this.recording.unloadAsync();
+          }
+        } catch (e) {
+          // Try to unload even if stop failed
+          try {
+            await this.recording.unloadAsync();
+          } catch (e2) {
+            console.warn('Could not unload recording:', e2);
+          }
+        }
         this.recording = null;
+      }
+
+      // Wait for recording to be fully released
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Reset audio mode to ensure clean state
+      try {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          playsInSilentModeIOS: false,
+          staysActiveInBackground: false,
+        });
+      } catch (e) {
+        // Ignore errors
       }
 
       console.log('✅ Wake word detection stopped');
     } catch (error) {
       console.error('Failed to stop wake word detection:', error);
+      // Ensure recording is null even on error
+      this.recording = null;
+      this.isListening = false;
     }
   }
 

@@ -1,13 +1,4 @@
-const { detox, device, element, by, waitFor, expect } = require('detox');
+// Detox automatically initializes via testEnvironment
+// This file can be used for additional setup if needed
 
-beforeAll(async () => {
-  await detox.init();
-});
-
-afterAll(async () => {
-  await detox.cleanup();
-});
-
-beforeEach(async () => {
-  await device.reloadReactNative();
-});
+const { device, element, by, waitFor, expect } = require('detox');

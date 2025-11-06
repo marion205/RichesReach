@@ -2,44 +2,44 @@
 import django.db.models.deletion
 from django.db import migrations, models
 class Migration(migrations.Migration):
-dependencies = [
-('core', '0011_aiportfoliorecommendation_incomeprofile_and_more'),
+    dependencies = [
+        ('core', '0011_aiportfoliorecommendation_incomeprofile_and_more'),
 ]
-operations = [
-migrations.AlterModelOptions(
-name='portfolio',
-options={'ordering': ['-updated_at']},
+    operations = [
+        migrations.AlterModelOptions(
+        name='portfolio',
+        options={'ordering': ['-updated_at']},
 ),
-migrations.RenameField(
+        migrations.RenameField(
 model_name='portfolio',
 old_name='description',
 new_name='notes',
 ),
-migrations.AddField(
+        migrations.AddField(
 model_name='portfolio',
-name='stock',
+        name='stock',
 field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='core.stock'),
 ),
-migrations.AddField(
+        migrations.AddField(
 model_name='portfolio',
-name='average_price',
+        name='average_price',
 field=models.DecimalField(decimal_places=2, default=0, max_digits=10),
 ),
-migrations.AddField(
+        migrations.AddField(
 model_name='portfolio',
-name='shares',
+        name='shares',
 field=models.IntegerField(default=0),
 ),
-migrations.AlterUniqueTogether(
-name='portfolio',
-unique_together={('user', 'stock')},
+        migrations.AlterUniqueTogether(
+        name='portfolio',
+        unique_together={('user', 'stock')},
 ),
-migrations.RemoveField(
+        migrations.RemoveField(
 model_name='portfolio',
-name='is_public',
+        name='is_public',
 ),
-migrations.RemoveField(
+        migrations.RemoveField(
 model_name='portfolio',
-name='name',
+        name='name',
 ),
 ]

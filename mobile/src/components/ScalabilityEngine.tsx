@@ -46,11 +46,14 @@ interface EdgeNode {
 }
 
 interface ScalabilityEngineProps {
-  onMicroservicePress: (service: MicroserviceStatus) => void;
-  onEdgeNodePress: (node: EdgeNode) => void;
+  onNavigate?: (screen: string, params?: any) => void;
+  onMicroservicePress?: (service: MicroserviceStatus) => void;
+  onEdgeNodePress?: (node: EdgeNode) => void;
 }
 
-export default function ScalabilityEngine({ onMicroservicePress, onEdgeNodePress }: ScalabilityEngineProps) {
+export default function ScalabilityEngine({ onNavigate, onMicroservicePress, onEdgeNodePress }: ScalabilityEngineProps) {
+  const handleMicroservicePress = onMicroservicePress || (() => {});
+  const handleEdgeNodePress = onEdgeNodePress || (() => {});
   const theme = useTheme();
   const [activeTab, setActiveTab] = useState<'overview' | 'microservices' | 'edge' | 'sustainability'>('overview');
   const [systemMetrics, setSystemMetrics] = useState<SystemMetrics>({
@@ -399,7 +402,7 @@ export default function ScalabilityEngine({ onMicroservicePress, onEdgeNodePress
               <MicroserviceCard
                 key={service.name}
                 service={service}
-                onPress={() => onMicroservicePress(service)}
+                onPress={() => handleMicroservicePress(service)}
                 getStatusColor={getStatusColor}
                 getStatusIcon={getStatusIcon}
                 getUsageColor={getUsageColor}
@@ -421,7 +424,7 @@ export default function ScalabilityEngine({ onMicroservicePress, onEdgeNodePress
               <EdgeNodeCard
                 key={node.id}
                 node={node}
-                onPress={() => onEdgeNodePress(node)}
+                onPress={() => handleEdgeNodePress(node)}
                 getStatusColor={getStatusColor}
                 getStatusIcon={getStatusIcon}
               />

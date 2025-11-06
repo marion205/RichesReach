@@ -683,6 +683,7 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
 
         {/* Generate Button */}
         <TouchableOpacity
+          testID="bullish-spread-button"
           style={styles.primaryButton}
           onPress={loadStrategy}
           disabled={loading}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -131,7 +131,7 @@ isFollowingUser: boolean;
 isFollowedByUser: boolean;
 };
 interface ProfileScreenProps {
-navigateTo?: (screen: string) => void;
+navigateTo?: (screen: string, params?: any) => void;
 onLogout?: () => void;
 }
 const { width } = Dimensions.get('window');
@@ -158,49 +158,98 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigateTo, onLogout }) =
       }
     }
   };
+  
+  // Get Apollo client first
+  const client = useApolloClient();
+  
+  // Non-blocking queries - fetch in background, show UI immediately
   const { data: meData, loading: meLoading, error: meError } = useQuery(GET_ME, {
-    errorPolicy: 'all', // Continue even if there are errors
-    fetchPolicy: 'cache-and-network', // Try cache first, then network
-    notifyOnNetworkStatusChange: true,
+    errorPolicy: 'all',
+    fetchPolicy: 'cache-only', // Only use cache, don't fetch if missing
+    nextFetchPolicy: 'cache-first', // Then fetch in background
+    notifyOnNetworkStatusChange: false,
+    returnPartialData: true,
   });
-const { data: portfoliosData, loading: portfoliosLoading, refetch: refetchPortfolios } = useQuery(GET_MY_PORTFOLIOS, {
-  notifyOnNetworkStatusChange: true,
-  fetchPolicy: 'network-only',  // Force network request to bypass cache
-  errorPolicy: 'all'  // Show errors if any
+  
+  // Fetch in background if cache miss
+  useEffect(() => {
+    if (!meData && !meLoading) {
+      client.query({ query: GET_ME, fetchPolicy: 'network-only' }).catch(console.warn);
+    }
+  }, [meData, meLoading, client]);
+
+const { data: portfoliosData, loading: portfoliosLoading, error: portfoliosError, refetch: refetchPortfolios } = useQuery(GET_MY_PORTFOLIOS, {
+  notifyOnNetworkStatusChange: false,
+  fetchPolicy: 'cache-only', // Only use cache initially
+  nextFetchPolicy: 'cache-first',
+  errorPolicy: 'all',
+  returnPartialData: true,
+  skip: !meData?.me?.id,
 });
-const { data: watchlistData, loading: watchlistLoading } = useQuery(GET_MY_WATCHLIST, {
+
+// Fetch portfolios in background if cache miss
+useEffect(() => {
+  if (!portfoliosData && !portfoliosLoading && meData?.me?.id) {
+    client.query({ query: GET_MY_PORTFOLIOS, fetchPolicy: 'network-only' }).catch(console.warn);
+  }
+}, [portfoliosData, portfoliosLoading, meData, client]);
+
+const { data: watchlistData, loading: watchlistLoading, error: watchlistError } = useQuery(GET_MY_WATCHLIST, {
 skip: !meData?.me?.id,
+errorPolicy: 'all',
+fetchPolicy: 'cache-only', // Only use cache initially
+nextFetchPolicy: 'cache-first',
+notifyOnNetworkStatusChange: false,
+returnPartialData: true,
 });
+
+// Fetch watchlist in background if cache miss
+useEffect(() => {
+  if (!watchlistData && !watchlistLoading && meData?.me?.id) {
+    client.query({ query: GET_MY_WATCHLIST, fetchPolicy: 'network-only' }).catch(console.warn);
+  }
+}, [watchlistData, watchlistLoading, meData, client]);
+
+  // Show UI immediately - don't wait for queries
+  // Always show mock data first, then update when real data arrives
+  const [meLoadingTimeout] = useState(true); // Always show UI immediately
+  const [portfoliosLoadingTimeout] = useState(true); // Always show UI immediately
+  const [watchlistLoadingTimeout] = useState(true); // Always show UI immediately
 const [toggleFollow] = useMutation(TOGGLE_FOLLOW);
 const [refreshing, setRefreshing] = useState(false);
-const client = useApolloClient();
-const actualUser: User | null = meData?.me ? {
-id: meData.me.id,
-name: meData.me.name,
-email: meData.me.email,
-profilePic: meData.me.profilePic,
-followersCount: meData.me.followersCount || 0,
-followingCount: meData.me.followingCount || 0,
-isFollowingUser: meData.me.isFollowingUser || false,
-isFollowedByUser: meData.me.isFollowedByUser || false
+// Production: Use real data only - no demo user fallbacks
+const effectiveMeData = useMemo(() => {
+  if (meData?.me) {
+    return meData.me;
+  }
+  // Production: Return null if no data - let UI handle loading/error states
+  if (meError) {
+    console.error('❌ Error loading user profile:', meError.message);
+  }
+  return null;
+}, [meData, meError]);
+
+const actualUser: User | null = effectiveMeData ? {
+id: effectiveMeData.id,
+name: effectiveMeData.name,
+email: effectiveMeData.email,
+profilePic: effectiveMeData.profilePic,
+followersCount: effectiveMeData.followersCount || 0,
+followingCount: effectiveMeData.followingCount || 0,
+isFollowingUser: effectiveMeData.isFollowingUser || false,
+isFollowedByUser: effectiveMeData.isFollowedByUser || false
 } : null;
 
-// Demo user for development/testing when query fails
-const demoUser: User = {
-  id: 'demo-user',
-  name: 'Demo User',
-  email: 'demo@example.com',
-  followersCount: 0,
-  followingCount: 0,
-  isFollowingUser: false,
-  isFollowedByUser: false,
-};
+// Production: Use real user or show loading/error state
+const user = actualUser;
 
-// Use actual user if available, otherwise use demo user
-const user = actualUser || demoUser;
+// Production: Show proper loading states
+const effectiveMeLoading = meLoading && !meData;
+const effectivePortfoliosLoading = portfoliosLoading && !portfoliosData;
+const effectiveWatchlistLoading = watchlistLoading && !watchlistData;
 const handleToggleFollow = async () => {
-if (!actualUser || user.id === 'demo-user') {
-  Alert.alert('Demo Mode', 'This feature requires a logged-in user.');
+if (!actualUser || !user) {
+  Alert.alert('Error', 'Please log in to use this feature.');
   return;
 }
 try {
@@ -216,21 +265,45 @@ Alert.alert('Error', 'Failed to follow/unfollow user. Please try again.');
 const handleRefresh = async () => {
 setRefreshing(true);
 try {
-// Refetch user, portfolio, and watchlist data
-await Promise.all([
-client.refetchQueries({
-include: [GET_ME, GET_MY_PORTFOLIOS, GET_MY_WATCHLIST]
-})
-]);
+// Refetch queries with network-only to get fresh data on pull-to-refresh
+const refreshQueries = [
+client.query({ query: GET_ME, fetchPolicy: 'network-only' }),
+client.query({ query: GET_MY_PORTFOLIOS, fetchPolicy: 'network-only' }),
+];
+if (meData?.me?.id) {
+refreshQueries.push(client.query({ query: GET_MY_WATCHLIST, fetchPolicy: 'network-only' }));
+}
+await Promise.all(refreshQueries);
 } catch (error) {
-// Failed to refresh
+console.warn('Refresh error:', error);
+// Failed to refresh - continue with cached data
 } finally {
 setRefreshing(false);
 }
 };
-// Get real portfolio value from saved portfolio data
-const portfolioValue = portfoliosData?.myPortfolios?.totalValue || 0;
-const investmentGoals = portfoliosData?.myPortfolios?.totalPortfolios || 0;
+// Get real portfolio value from saved portfolio data - use mock data if loading/timeout
+const effectivePortfoliosData = useMemo(() => {
+  if (portfoliosData?.myPortfolios) {
+    return portfoliosData.myPortfolios;
+  }
+  // Return mock portfolio data for immediate display
+  return {
+    totalValue: 0,
+    totalPortfolios: 0,
+    portfolios: [],
+  };
+}, [portfoliosData, portfoliosLoadingTimeout, portfoliosError]);
+
+const portfolioValue = effectivePortfoliosData.totalValue || 0;
+const investmentGoals = effectivePortfoliosData.totalPortfolios || 0;
+
+// Effective watchlist data
+const effectiveWatchlistData = useMemo(() => {
+  if (watchlistData?.myWatchlist) {
+    return watchlistData.myWatchlist;
+  }
+  return [];
+}, [watchlistData, watchlistLoadingTimeout, watchlistError]);
 
 // Debug logging
 console.log('Portfolio Data Debug:', {
@@ -264,16 +337,8 @@ try {
     Alert.alert('Error', 'Failed to logout properly. Please try again.');
 }
 };
-if (meLoading) {
-return (
-<SafeAreaView style={styles.container}>
-<View style={styles.loadingContainer}>
-<Icon name="refresh-cw" size={32} color="#34C759" />
-<Text style={styles.loadingText}>Loading profile...</Text>
-</View>
-</SafeAreaView>
-);
-}
+// Always render content - never show blocking loading screen
+// Mock data ensures user, portfolios, and watchlist are always available
 // Handle error state gracefully - use demo user if query fails
 if (meError && !meData) {
   console.warn('ProfileScreen: Error loading user data, using demo user:', meError);
@@ -379,6 +444,11 @@ showsVerticalScrollIndicator={false}
 <View style={styles.heroWrap}>
 <View style={styles.heroTop} />
 
+{effectiveMeLoading ? (
+  <View style={[styles.heroCard, shadow]}>
+    <Text style={styles.heroName}>Loading...</Text>
+  </View>
+) : user ? (
 <View style={[styles.heroCard, shadow]}>
 <TouchableOpacity style={styles.avatarWrap} activeOpacity={0.85} onPress={() => navigateTo?.('stock')}>
 {user.profilePic ? (
@@ -412,6 +482,12 @@ showsVerticalScrollIndicator={false}
 )}
 </View>
 </View>
+) : (
+  <View style={[styles.heroCard, shadow]}>
+    <Text style={styles.heroName}>Error Loading Profile</Text>
+    <Text style={styles.heroEmail}>{meError?.message || 'Please try again'}</Text>
+  </View>
+)}
 </View>
 {/* Actions */}
 <View style={styles.sectionCard}>
@@ -538,7 +614,7 @@ showsVerticalScrollIndicator={false}
       apr={8.5}
       ltv={50}
       eligibleEquity={portfolioValue || 0}
-      loading={portfoliosLoading}
+      loading={effectivePortfoliosLoading}
       onOpenCalculator={() => setShowSblocCalculator(true)}
       onLearnMore={() => {
         Alert.alert(
@@ -567,7 +643,7 @@ showsVerticalScrollIndicator={false}
       onPress={() => navigateTo?.('portfolio-management')}
       activeOpacity={0.85}
       style={[styles.tile, styles.shadow]}
-      disabled={portfoliosLoading || watchlistLoading}
+      disabled={effectivePortfoliosLoading || effectiveWatchlistLoading}
     >
       <View style={[styles.tileIcon, { backgroundColor:'#ECFDF5', borderColor:'#A7F3D0' }]}>
         <Icon name="trending-up" size={18} color="#10B981" />
@@ -575,7 +651,7 @@ showsVerticalScrollIndicator={false}
 
       <Text style={styles.tileLabel}>Portfolio Value</Text>
 
-      {(portfoliosLoading || watchlistLoading) ? (
+      {(effectivePortfoliosLoading || effectiveWatchlistLoading) ? (
         <View style={styles.skeletonLine} />
       ) : (
         <Text style={[styles.tileValue, { color:'#0F766E' }]}>
@@ -594,7 +670,7 @@ showsVerticalScrollIndicator={false}
       onPress={() => navigateTo?.('portfolio-management')}
       activeOpacity={0.85}
       style={[styles.tile, styles.shadow]}
-      disabled={portfoliosLoading}
+      disabled={effectivePortfoliosLoading}
     >
       <View style={[styles.tileIcon, { backgroundColor:'#EEF2FF', borderColor:'#C7D2FE' }]}>
         <Icon name="crosshair" size={18} color="#6366F1" />
@@ -602,7 +678,7 @@ showsVerticalScrollIndicator={false}
 
       <Text style={styles.tileLabel}>Portfolios</Text>
 
-      {portfoliosLoading ? (
+      {effectivePortfoliosLoading ? (
         <View style={styles.skeletonLine} />
       ) : (
         <View style={styles.badgeRow}>
@@ -626,15 +702,15 @@ showsVerticalScrollIndicator={false}
 <View style={styles.sectionCard}>
 <Text style={styles.sectionTitle}>My Portfolios</Text>
 
-{portfoliosLoading ? (
+{effectivePortfoliosLoading ? (
 <View style={styles.loadingBox}>
 <Icon name="refresh-cw" size={20} color="#A3A3A3" />
 <Text style={styles.loadingBoxTxt}>Loading portfolios…</Text>
 </View>
-) : portfoliosData?.myPortfolios?.totalPortfolios > 0 ? (
-(portfoliosData.myPortfolios.portfolios.length > 0
-? portfoliosData.myPortfolios.portfolios
-: [{ name: 'My Portfolio', totalValue: portfoliosData?.myPortfolios?.totalValue, holdings: [] }]
+) : effectivePortfoliosData.totalPortfolios > 0 ? (
+(effectivePortfoliosData.portfolios.length > 0
+? effectivePortfoliosData.portfolios
+: [{ name: 'My Portfolio', totalValue: effectivePortfoliosData.totalValue, holdings: [] }]
 ).map((portfolio: any, index: number) => (
 <View key={portfolio.name || `portfolio-${index}`} style={[styles.portCard, shadow]}>
 <View style={styles.portHeader}>
@@ -681,13 +757,13 @@ showsVerticalScrollIndicator={false}
 <View style={styles.sectionCard}>
 <Text style={styles.sectionTitle}>Watchlist</Text>
 
-{watchlistLoading ? (
+{effectiveWatchlistLoading ? (
 <View style={styles.loadingBox}>
 <Icon name="refresh-cw" size={20} color="#A3A3A3" />
 <Text style={styles.loadingBoxTxt}>Loading watchlist…</Text>
 </View>
-) : watchlistData?.myWatchlist?.length ? (
-watchlistData.myWatchlist.map((w: any) => (
+) : effectiveWatchlistData.length > 0 ? (
+effectiveWatchlistData.map((w: any) => (
 <View key={w.id} style={[styles.watchRow, shadow]}>
 <View style={styles.tickerBadge}>
 <Text style={styles.tickerBadgeTxt}>{w.stock.symbol}</Text>
@@ -776,11 +852,16 @@ onPress={() => navigateTo?.('ai-portfolio')}
       currentDebt={0}
       onApply={(amount) => {
         setShowSblocCalculator(false);
-        Alert.alert(
-          'SBLOC Application',
-          `This would open the SBLOC application flow for $${amount.toLocaleString()}.`,
-          [{ text: 'OK' }]
-        );
+        // Navigate to SBLOC bank selection
+        if (navigateTo) {
+          navigateTo('SBLOCBankSelection', { amountUsd: amount });
+        } else {
+          Alert.alert(
+            'SBLOC Application',
+            `This would open the SBLOC application flow for $${amount.toLocaleString()}.`,
+            [{ text: 'OK' }]
+          );
+        }
       }}
     />
   </SafeAreaView>

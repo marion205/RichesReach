@@ -13,6 +13,23 @@ type Props = {
 const fmt = (n:number) => `$${Math.max(0, Math.round(n)).toLocaleString()}`;
 
 const SblocFundingCard: React.FC<Props> = ({ onPress, maxBorrow, aprPct, portfolioValue }) => {
+  const handlePress = () => {
+    console.log('🔵 SblocFundingCard: Button pressed, calling onPress');
+    console.log('🔵 SblocFundingCard: onPress type:', typeof onPress);
+    console.log('🔵 SblocFundingCard: onPress value:', onPress);
+    if (onPress) {
+      console.log('🔵 SblocFundingCard: Calling onPress now...');
+      try {
+        onPress();
+        console.log('✅ SblocFundingCard: onPress called successfully');
+      } catch (error) {
+        console.error('❌ SblocFundingCard: Error calling onPress:', error);
+      }
+    } else {
+      console.error('❌ SblocFundingCard: onPress is not defined!');
+    }
+  };
+
   return (
     <View style={styles.card}>
       <View style={styles.row}>
@@ -20,7 +37,16 @@ const SblocFundingCard: React.FC<Props> = ({ onPress, maxBorrow, aprPct, portfol
         <Text style={[styles.title, { marginLeft: 8 }]}>Borrow against portfolio</Text>
       </View>
       <Text style={styles.sub}>Up to {fmt(maxBorrow)} available • {(aprPct || 0).toFixed(1)}% APR</Text>
-      <TouchableOpacity style={styles.cta} onPress={onPress}>
+      <TouchableOpacity 
+        style={styles.cta} 
+        onPress={handlePress}
+        onPressIn={() => console.log('🔵 SblocFundingCard: onPressIn triggered')}
+        onPressOut={() => console.log('🔵 SblocFundingCard: onPressOut triggered')}
+        activeOpacity={0.8}
+        accessibilityRole="button"
+        accessibilityLabel="Estimate and draw from portfolio"
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      >
         <Text style={styles.ctaText}>Estimate & Draw</Text>
         <Icon name="chevron-right" size={18} color="#fff" style={{ marginLeft: 6 }} />
       </TouchableOpacity>

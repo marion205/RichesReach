@@ -445,6 +445,7 @@ const MemeQuestScreen: React.FC = () => {
           {templates.map((template) => (
             <TouchableOpacity
               key={template.id}
+              testID={template.name.toLowerCase().includes('frog') ? 'frog-template' : `template-${template.id}`}
               style={[
                 styles.templateCard,
                 selectedTemplate?.id === template.id && styles.selectedTemplate,
@@ -488,7 +489,7 @@ const MemeQuestScreen: React.FC = () => {
       </View>
 
       {/* Launch Button */}
-      <TouchableOpacity style={styles.launchButton} onPress={launchMeme}>
+      <TouchableOpacity testID="animate-button" style={styles.launchButton} onPress={launchMeme}>
         <LinearGradient
           colors={['#4ECDC4', '#44A08D']}
           style={styles.launchGradient}
@@ -672,6 +673,7 @@ const MemeQuestScreen: React.FC = () => {
         }
       ]}>
         <TouchableOpacity
+          testID="voice-launch"
           style={styles.voiceButton}
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);

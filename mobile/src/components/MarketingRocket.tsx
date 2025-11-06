@@ -49,11 +49,14 @@ interface ViralMetric {
 }
 
 interface MarketingRocketProps {
-  onCampaignPress: (campaign: ContentCampaign) => void;
-  onTesterPress: (tester: BetaTester) => void;
+  onNavigate?: (screen: string, params?: any) => void;
+  onCampaignPress?: (campaign: ContentCampaign) => void;
+  onTesterPress?: (tester: BetaTester) => void;
 }
 
-export default function MarketingRocket({ onCampaignPress, onTesterPress }: MarketingRocketProps) {
+export default function MarketingRocket({ onNavigate, onCampaignPress, onTesterPress }: MarketingRocketProps) {
+  const handleCampaignPress = onCampaignPress || (() => {});
+  const handleTesterPress = onTesterPress || (() => {});
   const theme = useTheme();
   const [activeTab, setActiveTab] = useState<'overview' | 'content' | 'beta' | 'viral'>('overview');
   const [contentCampaigns, setContentCampaigns] = useState<ContentCampaign[]>([]);
@@ -422,7 +425,7 @@ export default function MarketingRocket({ onCampaignPress, onTesterPress }: Mark
               <ContentCampaignCard
                 key={campaign.id}
                 campaign={campaign}
-                onPress={() => onCampaignPress(campaign)}
+                onPress={() => handleCampaignPress(campaign)}
                 getStatusColor={getStatusColor}
                 getStatusIcon={getStatusIcon}
                 getPlatformIcon={getPlatformIcon}
@@ -444,7 +447,7 @@ export default function MarketingRocket({ onCampaignPress, onTesterPress }: Mark
               <BetaTesterCard
                 key={tester.id}
                 tester={tester}
-                onPress={() => onTesterPress(tester)}
+                onPress={() => handleTesterPress(tester)}
                 getStatusColor={getStatusColor}
                 getStatusIcon={getStatusIcon}
               />

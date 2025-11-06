@@ -139,7 +139,7 @@ export default function TutorQuizScreen() {
         )}
       </View>
 
-      <TouchableOpacity onPress={loadQuiz} style={styles.button} disabled={loading}>
+      <TouchableOpacity testID="start-options-quiz-button" onPress={loadQuiz} style={styles.button} disabled={loading}>
         {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Load Quiz</Text>}
       </TouchableOpacity>
 
@@ -175,6 +175,7 @@ export default function TutorQuizScreen() {
           {(q.options || []).map((opt) => (
             <TouchableOpacity
               key={opt}
+              testID={opt.toLowerCase().includes('call') ? 'call-option-answer' : opt.toLowerCase().includes('put') ? 'put-option-answer' : `option-${opt.substring(0, 10).replace(/\s/g, '-').toLowerCase()}`}
               style={[styles.opt, answers[q.id]===opt && styles.optActive]}
               onPress={() => !submitted && setAnswers({ ...answers, [q.id]: opt })}
             >
@@ -192,7 +193,7 @@ export default function TutorQuizScreen() {
 
       {quiz?.questions?.length ? (
         <View style={{ marginBottom: 24 }}>
-          <TouchableOpacity onPress={() => setSubmitted(true)} style={[styles.button, { backgroundColor: '#3b82f6' }]}>
+          <TouchableOpacity testID="show-results-button" onPress={() => setSubmitted(true)} style={[styles.button, { backgroundColor: '#3b82f6' }]}>
             <Text style={styles.buttonText}>{submitted ? 'Regrade' : 'Submit Answers'}</Text>
           </TouchableOpacity>
           {submitted ? <Text style={styles.score}>Score: {correctCount}/{quiz.questions.length}</Text> : null}

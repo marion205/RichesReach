@@ -2,246 +2,246 @@
 import django.db.models.deletion
 from django.db import migrations, models
 class Migration(migrations.Migration):
-dependencies = [
-('core', '0014_enhance_user_security'),
+    dependencies = [
+        ('core', '0014_enhance_user_security'),
 ]
-operations = [
-migrations.RemoveField(
+    operations = [
+        migrations.RemoveField(
 model_name='stockrecommendation',
-name='portfolio_recommendation',
+        name='portfolio_recommendation',
 ),
-migrations.RemoveField(
+        migrations.RemoveField(
 model_name='discussioncomment',
-name='discussion',
+        name='discussion',
 ),
-migrations.RemoveField(
+        migrations.RemoveField(
 model_name='discussioncomment',
-name='likes',
+        name='likes',
 ),
-migrations.RemoveField(
+        migrations.RemoveField(
 model_name='discussioncomment',
-name='user',
+        name='user',
 ),
-migrations.AlterUniqueTogether(
-name='portfolio',
-unique_together=None,
+        migrations.AlterUniqueTogether(
+        name='portfolio',
+        unique_together=None,
 ),
-migrations.RemoveField(
+        migrations.RemoveField(
 model_name='portfolio',
-name='stock',
+        name='stock',
 ),
-migrations.RemoveField(
+        migrations.RemoveField(
 model_name='portfolio',
-name='user',
+        name='user',
 ),
-migrations.RemoveField(
+        migrations.RemoveField(
 model_name='portfolioposition',
-name='portfolio',
+        name='portfolio',
 ),
-migrations.AlterUniqueTogether(
-name='portfolioposition',
-unique_together=None,
+        migrations.AlterUniqueTogether(
+        name='portfolioposition',
+        unique_together=None,
 ),
-migrations.RemoveField(
+        migrations.RemoveField(
 model_name='portfolioposition',
-name='stock',
+        name='stock',
 ),
-migrations.RemoveField(
+        migrations.RemoveField(
 model_name='pricealert',
-name='stock',
+        name='stock',
 ),
-migrations.RemoveField(
+        migrations.RemoveField(
 model_name='pricealert',
-name='user',
+        name='user',
 ),
-migrations.AlterUniqueTogether(
-name='socialfeed',
-unique_together=None,
+        migrations.AlterUniqueTogether(
+        name='socialfeed',
+        unique_together=None,
 ),
-migrations.RemoveField(
+        migrations.RemoveField(
 model_name='socialfeed',
-name='user',
+        name='user',
 ),
-migrations.RemoveField(
+        migrations.RemoveField(
 model_name='stockdiscussion',
-name='likes',
+        name='likes',
 ),
-migrations.RemoveField(
+        migrations.RemoveField(
 model_name='stockdiscussion',
-name='stock',
+        name='stock',
 ),
-migrations.RemoveField(
+        migrations.RemoveField(
 model_name='stockdiscussion',
-name='user',
+        name='user',
 ),
-migrations.AlterUniqueTogether(
-name='stockrecommendation',
-unique_together=None,
+        migrations.AlterUniqueTogether(
+        name='stockrecommendation',
+        unique_together=None,
 ),
-migrations.RemoveField(
+        migrations.RemoveField(
 model_name='stockrecommendation',
-name='stock',
+        name='stock',
 ),
-migrations.AlterUniqueTogether(
-name='stocksentiment',
-unique_together=None,
+        migrations.AlterUniqueTogether(
+        name='stocksentiment',
+        unique_together=None,
 ),
-migrations.RemoveField(
+        migrations.RemoveField(
 model_name='stocksentiment',
-name='stock',
+        name='stock',
 ),
-migrations.AlterUniqueTogether(
-name='userachievement',
-unique_together=None,
+        migrations.AlterUniqueTogether(
+        name='userachievement',
+        unique_together=None,
 ),
-migrations.RemoveField(
+        migrations.RemoveField(
 model_name='userachievement',
-name='user',
+        name='user',
 ),
-migrations.AlterUniqueTogether(
-name='watchlistitem',
-unique_together=None,
+        migrations.AlterUniqueTogether(
+        name='watchlistitem',
+        unique_together=None,
 ),
-migrations.RemoveField(
+        migrations.RemoveField(
 model_name='watchlistitem',
-name='stock',
+        name='stock',
 ),
-migrations.RemoveField(
+        migrations.RemoveField(
 model_name='watchlistitem',
-name='watchlist',
+        name='watchlist',
 ),
-migrations.AlterModelOptions(
-name='incomeprofile',
-options={},
+        migrations.AlterModelOptions(
+        name='incomeprofile',
+        options={},
 ),
-migrations.AlterModelOptions(
-name='watchlist',
-options={'ordering': ['-added_at']},
+        migrations.AlterModelOptions(
+        name='watchlist',
+        options={'ordering': ['-added_at']},
 ),
-migrations.RenameField(
+        migrations.RenameField(
 model_name='watchlist',
 old_name='created_at',
 new_name='added_at',
 ),
-migrations.RemoveField(
+        migrations.RemoveField(
 model_name='stock',
-name='current_price',
+        name='current_price',
 ),
-migrations.AlterUniqueTogether(
-name='watchlist',
-unique_together={('user', 'stock')},
+        migrations.AlterUniqueTogether(
+        name='watchlist',
+        unique_together={('user', 'stock')},
 ),
-migrations.AddField(
+        migrations.AddField(
 model_name='watchlist',
-name='notes',
+        name='notes',
 field=models.TextField(blank=True, null=True),
 ),
-migrations.AddField(
+        migrations.AddField(
 model_name='watchlist',
-name='stock',
+        name='stock',
 field=models.ForeignKey(default=1, on_delete=django.db.models.deletion.CASCADE, related_name='watchlisted_by', to='core.stock'),
 ),
-migrations.AlterField(
+        migrations.AlterField(
 model_name='incomeprofile',
-name='investment_horizon',
+        name='investment_horizon',
 field=models.CharField(choices=[('1-3 years', '1-3 years'), ('3-5 years', '3-5 years'), ('5-10 years', '5-10 years'), ('10+ years', '10+ years')], max_length=20),
 ),
-migrations.AlterField(
+        migrations.AlterField(
 model_name='incomeprofile',
-name='risk_tolerance',
+        name='risk_tolerance',
 field=models.CharField(choices=[('Conservative', 'Conservative'), ('Moderate', 'Moderate'), ('Aggressive', 'Aggressive')], max_length=20),
 ),
-migrations.AlterField(
+        migrations.AlterField(
 model_name='user',
-name='created_at',
+        name='created_at',
 field=models.DateTimeField(auto_now_add=True),
 ),
-migrations.AlterField(
+        migrations.AlterField(
 model_name='user',
-name='email_verified',
+        name='email_verified',
 field=models.BooleanField(default=False),
 ),
-migrations.AlterField(
+        migrations.AlterField(
 model_name='user',
-name='failed_login_attempts',
+        name='failed_login_attempts',
 field=models.IntegerField(default=0),
 ),
-migrations.AlterField(
+        migrations.AlterField(
 model_name='user',
-name='last_login_ip',
+        name='last_login_ip',
 field=models.GenericIPAddressField(blank=True, null=True),
 ),
-migrations.AlterField(
+        migrations.AlterField(
 model_name='user',
-name='locked_until',
+        name='locked_until',
 field=models.DateTimeField(blank=True, null=True),
 ),
-migrations.AlterField(
+        migrations.AlterField(
 model_name='user',
-name='two_factor_enabled',
+        name='two_factor_enabled',
 field=models.BooleanField(default=False),
 ),
-migrations.AlterField(
+        migrations.AlterField(
 model_name='user',
-name='two_factor_secret',
+        name='two_factor_secret',
 field=models.CharField(blank=True, max_length=32),
 ),
-migrations.AlterField(
+        migrations.AlterField(
 model_name='user',
-name='updated_at',
+        name='updated_at',
 field=models.DateTimeField(auto_now=True),
 ),
-migrations.DeleteModel(
-name='AIPortfolioRecommendation',
+        migrations.DeleteModel(
+        name='AIPortfolioRecommendation',
 ),
-migrations.DeleteModel(
-name='DiscussionComment',
+        migrations.DeleteModel(
+        name='DiscussionComment',
 ),
-migrations.DeleteModel(
-name='Portfolio',
+        migrations.DeleteModel(
+        name='Portfolio',
 ),
-migrations.DeleteModel(
-name='PortfolioPosition',
+        migrations.DeleteModel(
+        name='PortfolioPosition',
 ),
-migrations.DeleteModel(
-name='PriceAlert',
+        migrations.DeleteModel(
+        name='PriceAlert',
 ),
-migrations.DeleteModel(
-name='SocialFeed',
+        migrations.DeleteModel(
+        name='SocialFeed',
 ),
-migrations.DeleteModel(
-name='StockDiscussion',
+        migrations.DeleteModel(
+        name='StockDiscussion',
 ),
-migrations.DeleteModel(
-name='StockRecommendation',
+        migrations.DeleteModel(
+        name='StockRecommendation',
 ),
-migrations.DeleteModel(
-name='StockSentiment',
+        migrations.DeleteModel(
+        name='StockSentiment',
 ),
-migrations.DeleteModel(
-name='UserAchievement',
+        migrations.DeleteModel(
+        name='UserAchievement',
 ),
-migrations.DeleteModel(
-name='WatchlistItem',
+        migrations.DeleteModel(
+        name='WatchlistItem',
 ),
-migrations.RemoveField(
+        migrations.RemoveField(
 model_name='watchlist',
-name='description',
+        name='description',
 ),
-migrations.RemoveField(
+        migrations.RemoveField(
 model_name='watchlist',
-name='is_public',
+        name='is_public',
 ),
-migrations.RemoveField(
+        migrations.RemoveField(
 model_name='watchlist',
-name='is_shared',
+        name='is_shared',
 ),
-migrations.RemoveField(
+        migrations.RemoveField(
 model_name='watchlist',
-name='name',
+        name='name',
 ),
-migrations.RemoveField(
+        migrations.RemoveField(
 model_name='watchlist',
-name='updated_at',
+        name='updated_at',
 ),
 ]

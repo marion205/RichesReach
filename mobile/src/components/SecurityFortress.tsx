@@ -36,11 +36,14 @@ interface BiometricSettings {
 }
 
 interface SecurityFortressProps {
-  onBiometricSetup: () => void;
-  onSecurityEventPress: (event: SecurityEvent) => void;
+  onNavigate?: (screen: string, params?: any) => void;
+  onBiometricSetup?: () => void;
+  onSecurityEventPress?: (event: SecurityEvent) => void;
 }
 
-export default function SecurityFortress({ onBiometricSetup, onSecurityEventPress }: SecurityFortressProps) {
+export default function SecurityFortress({ onNavigate, onBiometricSetup, onSecurityEventPress }: SecurityFortressProps) {
+  const handleBiometricSetup = onBiometricSetup || (() => {});
+  const handleSecurityEventPress = onSecurityEventPress || (() => {});
   const theme = useTheme();
   const [activeTab, setActiveTab] = useState<'overview' | 'biometrics' | 'events' | 'compliance'>('overview');
   const [securityScore, setSecurityScore] = useState(85);
@@ -316,7 +319,7 @@ export default function SecurityFortress({ onBiometricSetup, onSecurityEventPres
                 <TouchableOpacity
                   key={event.id}
                   style={styles.eventItem}
-                  onPress={() => onSecurityEventPress(event)}
+                  onPress={() => handleSecurityEventPress(event)}
                 >
                   <Text style={styles.eventIcon}>{getThreatLevelIcon(event.threatLevel)}</Text>
                   <View style={styles.eventInfo}>

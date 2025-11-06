@@ -2,6 +2,7 @@
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 import uvicorn
 import os
 import sys
@@ -16,19 +17,86 @@ def _setup_django_once():
     try:
         import django
         if 'DJANGO_SETTINGS_MODULE' not in os.environ:
-            # Add backend/backend to Python path
-            backend_path = os.path.join(os.path.dirname(__file__), 'backend', 'backend')
+            # Try deployment_package/backend first (current structure)
+            backend_path = os.path.join(os.path.dirname(__file__), 'deployment_package', 'backend')
             backend_path_abs = os.path.abspath(backend_path)
+            
+            # Fallback to backend/backend for compatibility
+            if not os.path.exists(backend_path_abs):
+                backend_path = os.path.join(os.path.dirname(__file__), 'backend', 'backend')
+                backend_path_abs = os.path.abspath(backend_path)
             
             if os.path.exists(backend_path_abs):
                 if backend_path_abs not in sys.path:
                     sys.path.insert(0, backend_path_abs)
                 os.chdir(backend_path_abs)
+                print(f"📊 Django backend path: {backend_path_abs}")
             
-            os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'richesreach.settings_local')
+            # Use local PostgreSQL with production schema for demo
+            # Priority: 1) Local settings with local DB, 2) Standard settings with local DB, 3) Production settings
+            settings_module = os.getenv('DJANGO_SETTINGS_MODULE')
+            if not settings_module:
+                # Check for core app settings (since we're in deployment_package/backend/core)
+                settings_local_path = os.path.join(backend_path_abs, 'richesreach', 'settings_local.py')
+                settings_path = os.path.join(backend_path_abs, 'richesreach', 'settings.py')
+                settings_prod_path = os.path.join(backend_path_abs, 'richesreach', 'settings_aws.py')
+                core_settings_path = os.path.join(backend_path_abs, 'core', 'settings.py')
+                
+                # Try core settings first (new structure)
+                if os.path.exists(core_settings_path):
+                    settings_module = 'core.settings'
+                    print(f"📊 Using core settings: {settings_module}")
+                elif os.path.exists(settings_local_path):
+                    settings_module = 'richesreach.settings_local'
+                    print(f"📊 Using local settings with local PostgreSQL: {settings_module}")
+                elif os.path.exists(settings_path):
+                    settings_module = 'richesreach.settings'
+                    print(f"📊 Using Django settings with local PostgreSQL: {settings_module}")
+                elif os.path.exists(settings_prod_path):
+                    settings_module = 'richesreach.settings_aws'
+                    print(f"📊 Using production settings: {settings_module}")
+                else:
+                    # Fallback: try to find any settings file
+                    import glob
+                    settings_files = glob.glob(os.path.join(backend_path_abs, '**', 'settings*.py'), recursive=True)
+                    if settings_files:
+                        # Extract module path
+                        rel_path = os.path.relpath(settings_files[0], backend_path_abs)
+                        settings_module = rel_path.replace('/', '.').replace('.py', '')
+                        print(f"📊 Using found settings: {settings_module}")
+                    else:
+                        # Use core as fallback
+                        settings_module = 'core.settings'
+                        print(f"📊 Using default core settings: {settings_module}")
+            
+            # Override database settings to use local PostgreSQL for demo
+            os.environ.setdefault('DJANGO_SETTINGS_MODULE', settings_module)
+            # Ensure local database is used
+            if not os.getenv('DB_NAME'):
+                os.environ.setdefault('DB_NAME', 'richesreach')
+            if not os.getenv('DB_USER'):
+                os.environ.setdefault('DB_USER', os.getenv('USER', 'postgres'))
+            if not os.getenv('DB_HOST'):
+                os.environ.setdefault('DB_HOST', 'localhost')
+            if not os.getenv('DB_PORT'):
+                os.environ.setdefault('DB_PORT', '5432')
+            print(f"📊 Local PostgreSQL config: DB_NAME={os.getenv('DB_NAME')}, DB_HOST={os.getenv('DB_HOST')}")
         
         django.setup()
         _django_initialized = True
+        
+        # Verify database connection
+        try:
+            from django.db import connection
+            connection.ensure_connection()
+            db_info = connection.get_connection_params()
+            db_name = db_info.get('database', 'unknown')
+            db_host = db_info.get('host', 'unknown')
+            print(f"✅ Django initialized with database: {db_name} on {db_host}")
+        except Exception as db_error:
+            print(f"⚠️ Database connection check failed: {db_error}")
+            print("   GraphQL will use fallback handlers until database is connected")
+        
         print("✅ Django initialized at module load time")
     except Exception as e:
         print(f"⚠️ Django setup failed (will retry per-request): {e}")
@@ -44,7 +112,7 @@ from typing import List, Optional, Dict
 try:
     from dotenv import load_dotenv
     # Try to load from multiple possible locations
-    backend_path = os.path.join(os.path.dirname(__file__), 'backend', 'backend')
+    backend_path = os.path.join(os.path.dirname(__file__), 'deployment_package', 'backend')
     env_paths = [
         os.path.join(backend_path, 'env.secrets'),
         os.path.join(backend_path, '.env'),
@@ -121,6 +189,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Register API routers
+try:
+    import sys
+    import os
+    backend_path = os.path.join(os.path.dirname(__file__), 'backend', 'backend')
+    if backend_path not in sys.path:
+        sys.path.insert(0, backend_path)
+    from core.holding_insight_api import router as holding_insight_router
+    app.include_router(holding_insight_router)
+    print("✅ Holding Insight API router registered")
+except ImportError as e:
+    print(f"⚠️ Holding Insight API router not available: {e}")
+except Exception as e:
+    print(f"⚠️ Error registering Holding Insight API router: {e}")
 
 @app.get("/health")
 async def health():
@@ -275,10 +358,255 @@ async def alpaca_account(request: Request):
         "status": "pending_approval"
     }
 
+@app.post("/digest/daily")
+async def generate_daily_digest(request: Request):
+    """Generate daily voice digest for user."""
+    print(f"📢 Daily Voice Digest endpoint called at {datetime.now().isoformat()}")
+    try:
+        body = await request.json()
+        user_id = body.get("user_id", "demo-user")
+        preferred_time = body.get("preferred_time")
+        
+        print(f"📢 Generating digest for user: {user_id}")
+        
+        # Generate digest with regime context and insights
+        digest_id = f"digest-{user_id}-{int(datetime.now().timestamp())}"
+        
+        # Mock regime detection (in production, use real ML model)
+        current_regime = "bull_market"  # Could be: bull_market, bear_market, sideways, choppy
+        regime_confidence = 0.82
+        
+        # Generate voice script with market insights
+        voice_script = f"""Good morning! Today's market outlook is {current_regime.replace('_', ' ')} with {regime_confidence * 100:.0f}% confidence. 
+        Key highlights: Technology stocks are showing strong momentum, with AI and cloud services leading the way.
+        Your portfolio is positioned well for current conditions. Consider rebalancing if you haven't done so in the last quarter.
+        Remember, stay disciplined and stick to your investment plan. That's your daily digest for today."""
+        
+        response = {
+            "digest_id": digest_id,
+            "user_id": user_id,
+            "regime_context": {
+                "current_regime": current_regime,
+                "regime_confidence": regime_confidence,
+                "regime_description": f"Current market conditions indicate a {current_regime.replace('_', ' ')} environment",
+                "relevant_strategies": [
+                    "Momentum trading",
+                    "Sector rotation",
+                    "Quality stock selection"
+                ],
+                "common_mistakes": [
+                    "Overtrading in volatile conditions",
+                    "Ignoring risk management",
+                    "Chasing short-term trends"
+                ]
+            },
+            "voice_script": voice_script,
+            "key_insights": [
+                "Technology sector showing strong momentum",
+                "AI and cloud services leading growth",
+                "Portfolio well-positioned for current regime"
+            ],
+            "actionable_tips": [
+                "Consider rebalancing if needed",
+                "Review positions monthly",
+                "Stay disciplined with investment plan"
+            ],
+            "pro_teaser": "Upgrade to Pro for advanced regime analysis and personalized strategies",
+            "generated_at": datetime.now().isoformat(),
+            "scheduled_for": preferred_time or (datetime.now() + timedelta(hours=24)).isoformat()
+        }
+        
+        print(f"✅ Successfully generated digest: {digest_id}")
+        return response
+        
+    except json.JSONDecodeError as e:
+        print(f"❌ JSON decode error in daily digest: {e}")
+        raise HTTPException(status_code=400, detail=f"Invalid JSON in request body: {str(e)}")
+    except Exception as e:
+        print(f"❌ Error generating daily digest: {e}")
+        import traceback
+        traceback.print_exc()
+        # Return a valid error response instead of raising
+        raise HTTPException(status_code=500, detail=f"Failed to generate daily digest: {str(e)}")
+
+@app.post("/digest/regime-alert")
+async def create_regime_alert(request: Request):
+    """Create regime change alert."""
+    try:
+        body = await request.json()
+        user_id = body.get("user_id", "demo-user")
+        regime_change = body.get("regime_change", {})
+        urgency = body.get("urgency", "medium")
+        
+        alert_id = f"alert-{user_id}-{int(datetime.now().timestamp())}"
+        
+        return {
+            "notification_id": alert_id,
+            "user_id": user_id,
+            "regime_change": {
+                "old_regime": regime_change.get("old_regime", "bull_market"),
+                "new_regime": regime_change.get("new_regime", "bear_market"),
+                "confidence": regime_change.get("confidence", 0.75),
+                "urgency": urgency,
+                "type": "regime_change"
+            },
+            "scheduled_for": datetime.now().isoformat(),
+            "type": "regime_alert"
+        }
+    except Exception as e:
+        print(f"Error creating regime alert: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create regime alert: {str(e)}")
+
+# Yodlee Banking Integration Endpoints
+@app.get("/api/yodlee/fastlink/start")
+async def yodlee_fastlink_start(request: Request):
+    """Create FastLink session for bank account linking"""
+    try:
+        _setup_django_once()
+        from deployment_package.backend.core.banking_views import StartFastlinkView
+        view = StartFastlinkView()
+        # Convert FastAPI request to Django request
+        from django.http import HttpRequest
+        django_request = HttpRequest()
+        django_request.method = 'GET'
+        django_request.user = request.state.user if hasattr(request.state, 'user') else None
+        django_request.META = dict(request.headers)
+        response = view.get(django_request)
+        return JSONResponse(content=json.loads(response.content), status_code=response.status_code)
+    except Exception as e:
+        print(f"Error in Yodlee FastLink start: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/yodlee/fastlink/callback")
+async def yodlee_callback(request: Request):
+    """Handle FastLink callback"""
+    try:
+        _setup_django_once()
+        from deployment_package.backend.core.banking_views import YodleeCallbackView
+        view = YodleeCallbackView()
+        from django.http import HttpRequest
+        django_request = HttpRequest()
+        django_request.method = 'POST'
+        django_request.user = request.state.user if hasattr(request.state, 'user') else None
+        body = await request.body()
+        django_request._body = body
+        django_request.META = dict(request.headers)
+        response = view.post(django_request)
+        return JSONResponse(content=json.loads(response.content), status_code=response.status_code)
+    except Exception as e:
+        print(f"Error in Yodlee callback: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/yodlee/accounts")
+async def yodlee_accounts(request: Request):
+    """Get user's bank accounts"""
+    try:
+        _setup_django_once()
+        from deployment_package.backend.core.banking_views import AccountsView
+        view = AccountsView()
+        from django.http import HttpRequest
+        django_request = HttpRequest()
+        django_request.method = 'GET'
+        django_request.user = request.state.user if hasattr(request.state, 'user') else None
+        django_request.META = dict(request.headers)
+        response = view.get(django_request)
+        return JSONResponse(content=json.loads(response.content), status_code=response.status_code)
+    except Exception as e:
+        print(f"Error getting Yodlee accounts: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/yodlee/transactions")
+async def yodlee_transactions(request: Request):
+    """Get bank transactions"""
+    try:
+        _setup_django_once()
+        from deployment_package.backend.core.banking_views import TransactionsView
+        view = TransactionsView()
+        from django.http import HttpRequest
+        django_request = HttpRequest()
+        django_request.method = 'GET'
+        django_request.GET = request.query_params
+        django_request.user = request.state.user if hasattr(request.state, 'user') else None
+        django_request.META = dict(request.headers)
+        response = view.get(django_request)
+        return JSONResponse(content=json.loads(response.content), status_code=response.status_code)
+    except Exception as e:
+        print(f"Error getting Yodlee transactions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/yodlee/refresh")
+async def yodlee_refresh(request: Request):
+    """Refresh bank account data"""
+    try:
+        _setup_django_once()
+        from deployment_package.backend.core.banking_views import RefreshAccountView
+        view = RefreshAccountView()
+        from django.http import HttpRequest
+        django_request = HttpRequest()
+        django_request.method = 'POST'
+        django_request.user = request.state.user if hasattr(request.state, 'user') else None
+        body = await request.body()
+        django_request._body = body
+        django_request.META = dict(request.headers)
+        response = view.post(django_request)
+        return JSONResponse(content=json.loads(response.content), status_code=response.status_code)
+    except Exception as e:
+        print(f"Error refreshing Yodlee account: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/yodlee/bank-link/{bank_link_id}")
+async def yodlee_delete_bank_link(request: Request, bank_link_id: int):
+    """Delete bank link"""
+    try:
+        _setup_django_once()
+        from deployment_package.backend.core.banking_views import DeleteBankLinkView
+        view = DeleteBankLinkView()
+        from django.http import HttpRequest
+        django_request = HttpRequest()
+        django_request.method = 'DELETE'
+        django_request.user = request.state.user if hasattr(request.state, 'user') else None
+        django_request.META = dict(request.headers)
+        response = view.delete(django_request, bank_link_id)
+        return JSONResponse(content=json.loads(response.content), status_code=response.status_code)
+    except Exception as e:
+        print(f"Error deleting Yodlee bank link: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/yodlee/webhook")
+async def yodlee_webhook(request: Request):
+    """Handle Yodlee webhook events"""
+    try:
+        _setup_django_once()
+        from deployment_package.backend.core.banking_views import WebhookView
+        view = WebhookView()
+        from django.http import HttpRequest
+        django_request = HttpRequest()
+        django_request.method = 'POST'
+        body = await request.body()
+        django_request._body = body
+        django_request.META = dict(request.headers)
+        response = view.post(django_request)
+        return JSONResponse(content=json.loads(response.content), status_code=response.status_code)
+    except Exception as e:
+        print(f"Error processing Yodlee webhook: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/graphql/")
 async def graphql_endpoint(request: Request):
-    """GraphQL endpoint for Apollo Client."""
+    """GraphQL endpoint for Apollo Client - Uses Django Graphene schema with PostgreSQL."""
     try:
+        # Ensure Django is initialized
+        _setup_django_once()
+        
+        # Import Django GraphQL schema
+        try:
+            from core.schema import schema as graphene_schema
+            print("✅ Using Django Graphene schema with PostgreSQL")
+        except ImportError as e:
+            print(f"⚠️ Could not import Django schema, using fallback: {e}")
+            # Fallback to custom handlers if schema not available
+            graphene_schema = None
+        
         body = await request.json()
         query_str = body.get("query", "")
         variables = body.get("variables", {})
@@ -286,6 +614,49 @@ async def graphql_endpoint(request: Request):
         
         # Enhanced debug logging
         print(f"DEBUG: GraphQL operation={operation_name}, query_preview={query_str[:150]}...")
+        
+        # If Django schema is available, use it (production mode with PostgreSQL)
+        if graphene_schema:
+            try:
+                # Run in thread pool since graphene.execute is synchronous
+                # but we're in an async FastAPI endpoint
+                loop = asyncio.get_event_loop()
+                result = await loop.run_in_executor(
+                    None,
+                    lambda: graphene_schema.execute(
+                        query_str,
+                        variables=variables,
+                        operation_name=operation_name,
+                        context={'request': request}
+                    )
+                )
+                
+                if result.errors:
+                    print(f"⚠️ GraphQL errors: {result.errors}")
+                    error_messages = []
+                    for error in result.errors:
+                        if hasattr(error, 'message'):
+                            error_messages.append({"message": str(error.message)})
+                        else:
+                            error_messages.append({"message": str(error)})
+                    return {
+                        "data": result.data or {},
+                        "errors": error_messages
+                    }
+                
+                print(f"✅ GraphQL query executed successfully via Django schema (PostgreSQL)")
+                return {
+                    "data": result.data or {},
+                    "errors": []
+                }
+            except Exception as schema_error:
+                print(f"⚠️ Django schema execution failed: {schema_error}")
+                import traceback
+                traceback.print_exc()
+                # Fall through to custom handlers as fallback
+        
+        # Fallback to custom handlers if Django schema not available
+        print("⚠️ Using custom GraphQL handlers (fallback mode)")
         
         # More precise matching: check operationName first, then query string
         is_my_watchlist_query = (
@@ -1560,6 +1931,247 @@ async def graphql_endpoint(request: Request):
             print(f"✅ Returning {len(buy_recommendations)} buy recommendations")
             return {"data": {"aiRecommendations": ai_recommendations_response}}
         
+        # Handle portfolioMetrics query
+        is_portfolio_metrics_query = (
+            operation_name == "GetPortfolioMetrics" or
+            "portfolioMetrics" in query_str
+        )
+        
+        if is_portfolio_metrics_query:
+            print(f"📊 PortfolioMetrics query received")
+            # Try to fetch real portfolio data from Django
+            try:
+                _setup_django_once()
+                from core.models import Portfolio, PortfolioPosition, Stock
+                from django.contrib.auth import get_user_model
+                User = get_user_model()
+                
+                # Get default user
+                user, _ = User.objects.get_or_create(
+                    id=1,
+                    defaults={'username': 'mobile_user', 'email': 'mobile@richesreach.com'}
+                )
+                
+                # Get all portfolios for user
+                portfolios = Portfolio.objects.filter(user=user)
+                total_value = 0
+                total_cost = 0
+                holdings_list = []
+                
+                for portfolio in portfolios:
+                    positions = PortfolioPosition.objects.filter(portfolio=portfolio)
+                    for position in positions:
+                        stock = position.stock
+                        current_price = stock.current_price or 150.0
+                        shares = position.shares or 0
+                        cost_basis = position.average_price or current_price
+                        
+                        position_value = current_price * shares
+                        position_cost = cost_basis * shares
+                        return_amount = position_value - position_cost
+                        return_percent = (return_amount / position_cost * 100) if position_cost > 0 else 0
+                        
+                        total_value += position_value
+                        total_cost += position_cost
+                        
+                        holdings_list.append({
+                            "symbol": stock.symbol,
+                            "companyName": stock.company_name or f"{stock.symbol} Inc.",
+                            "shares": shares,
+                            "currentPrice": round(current_price, 2),
+                            "totalValue": round(position_value, 2),
+                            "costBasis": round(position_cost, 2),
+                            "returnAmount": round(return_amount, 2),
+                            "returnPercent": round(return_percent, 2),
+                            "sector": getattr(stock, 'sector', 'Technology')
+                        })
+                
+                total_return = total_value - total_cost
+                total_return_percent = (total_return / total_cost * 100) if total_cost > 0 else 0
+                
+                portfolio_metrics_response = {
+                    "totalValue": round(total_value, 2),
+                    "totalCost": round(total_cost, 2),
+                    "totalReturn": round(total_return, 2),
+                    "totalReturnPercent": round(total_return_percent, 2),
+                    "dayChange": 0.0,  # Would need to calculate from previous day
+                    "dayChangePercent": 0.0,
+                    "volatility": 15.0,  # Would need to calculate
+                    "sharpeRatio": 1.2,  # Would need to calculate
+                    "maxDrawdown": -5.0,  # Would need to calculate
+                    "beta": 1.0,  # Would need to calculate
+                    "alpha": 0.0,  # Would need to calculate
+                    "sectorAllocation": {},  # Would need to calculate
+                    "riskMetrics": {},  # Would need to calculate
+                    "holdings": holdings_list
+                }
+                
+                print(f"✅ Returning portfolio metrics with {len(holdings_list)} holdings")
+                return {"data": {"portfolioMetrics": portfolio_metrics_response}}
+                
+            except Exception as e:
+                print(f"⚠️ Error fetching real portfolio data: {e}")
+                # Fallback to mock data
+                portfolio_metrics_response = {
+                    "totalValue": 14303.52,
+                    "totalCost": 12000.0,
+                    "totalReturn": 2303.52,
+                    "totalReturnPercent": 19.2,
+                    "dayChange": 125.50,
+                    "dayChangePercent": 0.88,
+                    "volatility": 15.8,
+                    "sharpeRatio": 1.4,
+                    "maxDrawdown": -5.2,
+                    "beta": 1.0,
+                    "alpha": 2.5,
+                    "sectorAllocation": {"Technology": 0.6, "Healthcare": 0.3, "Finance": 0.1},
+                    "riskMetrics": {"overallRisk": "Moderate"},
+                    "holdings": [
+                        {
+                            "symbol": "AAPL",
+                            "companyName": "Apple Inc.",
+                            "shares": 10,
+                            "currentPrice": 180.0,
+                            "totalValue": 1800.0,
+                            "costBasis": 1500.0,
+                            "returnAmount": 300.0,
+                            "returnPercent": 20.0,
+                            "sector": "Technology"
+                        },
+                        {
+                            "symbol": "MSFT",
+                            "companyName": "Microsoft Corporation",
+                            "shares": 8,
+                            "currentPrice": 320.0,
+                            "totalValue": 2560.0,
+                            "costBasis": 2400.0,
+                            "returnAmount": 160.0,
+                            "returnPercent": 6.67,
+                            "sector": "Technology"
+                        },
+                        {
+                            "symbol": "SPY",
+                            "companyName": "SPDR S&P 500 ETF",
+                            "shares": 15,
+                            "currentPrice": 420.0,
+                            "totalValue": 6300.0,
+                            "costBasis": 6000.0,
+                            "returnAmount": 300.0,
+                            "returnPercent": 5.0,
+                            "sector": "Finance"
+                        }
+                    ]
+                }
+                return {"data": {"portfolioMetrics": portfolio_metrics_response}}
+        
+        # Handle myPortfolios query
+        is_my_portfolios_query = (
+            operation_name == "GetMyPortfolios" or
+            "myPortfolios" in query_str
+        )
+        
+        if is_my_portfolios_query:
+            print(f"📊 MyPortfolios query received")
+            # Try to fetch real portfolio data from Django
+            try:
+                _setup_django_once()
+                from core.models import Portfolio, PortfolioPosition, Stock
+                from django.contrib.auth import get_user_model
+                User = get_user_model()
+                
+                # Get default user
+                user, _ = User.objects.get_or_create(
+                    id=1,
+                    defaults={'username': 'mobile_user', 'email': 'mobile@richesreach.com'}
+                )
+                
+                # Get all portfolios for user
+                portfolios = Portfolio.objects.filter(user=user)
+                portfolios_list = []
+                total_value = 0
+                
+                for portfolio in portfolios:
+                    positions = PortfolioPosition.objects.filter(portfolio=portfolio)
+                    holdings_list = []
+                    portfolio_value = 0
+                    
+                    for position in positions:
+                        stock = position.stock
+                        current_price = stock.current_price or 150.0
+                        shares = position.shares or 0
+                        position_value = current_price * shares
+                        portfolio_value += position_value
+                        
+                        holdings_list.append({
+                            "id": str(position.id),
+                            "stock": {
+                                "symbol": stock.symbol
+                            },
+                            "shares": shares,
+                            "averagePrice": round(position.average_price or current_price, 2),
+                            "currentPrice": round(current_price, 2),
+                            "totalValue": round(position_value, 2)
+                        })
+                    
+                    total_value += portfolio_value
+                    portfolios_list.append({
+                        "name": portfolio.name,
+                        "totalValue": round(portfolio_value, 2),
+                        "holdingsCount": len(holdings_list),
+                        "holdings": holdings_list
+                    })
+                
+                my_portfolios_response = {
+                    "totalPortfolios": len(portfolios_list),
+                    "totalValue": round(total_value, 2),
+                    "portfolios": portfolios_list
+                }
+                
+                print(f"✅ Returning {len(portfolios_list)} portfolios with total value {total_value}")
+                return {"data": {"myPortfolios": my_portfolios_response}}
+                
+            except Exception as e:
+                print(f"⚠️ Error fetching real portfolio data: {e}")
+                # Fallback to mock data
+                my_portfolios_response = {
+                    "totalPortfolios": 1,
+                    "totalValue": 14303.52,
+                    "portfolios": [
+                        {
+                            "name": "Main Portfolio",
+                            "totalValue": 14303.52,
+                            "holdingsCount": 3,
+                            "holdings": [
+                                {
+                                    "id": "1",
+                                    "stock": {"symbol": "AAPL"},
+                                    "shares": 10,
+                                    "averagePrice": 150.0,
+                                    "currentPrice": 180.0,
+                                    "totalValue": 1800.0
+                                },
+                                {
+                                    "id": "2",
+                                    "stock": {"symbol": "MSFT"},
+                                    "shares": 8,
+                                    "averagePrice": 230.0,
+                                    "currentPrice": 320.0,
+                                    "totalValue": 2560.0
+                                },
+                                {
+                                    "id": "3",
+                                    "stock": {"symbol": "SPY"},
+                                    "shares": 15,
+                                    "averagePrice": 380.0,
+                                    "currentPrice": 420.0,
+                                    "totalValue": 6300.0
+                                }
+                            ]
+                        }
+                    ]
+                }
+                return {"data": {"myPortfolios": my_portfolios_response}}
+        
         # Default response for any other GraphQL query
         return {
             "data": {},
@@ -1568,8 +2180,9 @@ async def graphql_endpoint(request: Request):
         
     except Exception as e:
         print(f"GraphQL Error: {e}")
+        # Return empty data object instead of null to prevent UI errors
         return {
-            "data": None,
+            "data": {},
             "errors": [{"message": str(e)}]
         }
 
@@ -1583,6 +2196,8 @@ if __name__ == "__main__":
     print("   • GET /api/portfolio/recommendations - Portfolio recommendations")
     print("   • POST /api/kyc/workflow - KYC workflow")
     print("   • POST /api/alpaca/account - Alpaca account")
+    print("   • POST /digest/daily - Daily Voice Digest")
+    print("   • POST /digest/regime-alert - Regime Change Alert")
     print("   • POST /graphql/ - GraphQL endpoint")
     print("")
     print("🌐 Server running on http://localhost:8000")

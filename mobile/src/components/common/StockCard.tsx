@@ -53,7 +53,7 @@ function StockCard(props: StockCardProps) {
   return (
     <View style={[styles.card, props.isSelected && styles.selectedCard]}>
       <View style={styles.header}>
-        <View style={styles.row}>
+        <View style={styles.headerRow}>
           <TouchableOpacity 
             style={styles.symbolContainer} 
             onPress={props.onPress || props.onPressAdd} 
@@ -61,7 +61,7 @@ function StockCard(props: StockCardProps) {
           >
             <Text style={styles.symbol}>{props.symbol}</Text>
           </TouchableOpacity>
-          <View style={styles.row}>
+          <View style={styles.badgesRow}>
             <View style={[styles.scoreBadge, { backgroundColor: getScoreColor(props.beginnerFriendlyScore) }]}>
               <Text style={styles.scoreText}>{props.beginnerFriendlyScore}</Text>
             </View>
@@ -162,14 +162,31 @@ const styles = StyleSheet.create({
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 3,
   },
   header: { marginBottom: 16 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  symbolContainer: { paddingVertical: 4, paddingHorizontal: 2 },
-  symbol: { fontSize: 24, fontWeight: 'bold', color: '#333', marginRight: 12 },
+  headerRow: { 
+    flexDirection: 'row', 
+    alignItems: 'flex-start', 
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  badgesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 1,
+    flexWrap: 'wrap',
+  },
+  symbolContainer: { 
+    paddingVertical: 4, 
+    paddingHorizontal: 2,
+    flexShrink: 0,
+  },
+  symbol: { fontSize: 24, fontWeight: 'bold', color: '#333' },
   nameContainer: { paddingVertical: 4, paddingHorizontal: 2 },
-  scoreBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, minWidth: 32, alignItems: 'center' },
+  scoreBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, minWidth: 32, alignItems: 'center', flexShrink: 0 },
   scoreText: { fontSize: 12, fontWeight: 'bold', color: '#fff' },
-  recBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, minWidth: 60, alignItems: 'center' },
-  recText: { fontSize: 10, fontWeight: 'bold', textAlign: 'center' },
+  recBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, borderWidth: 1, minWidth: 50, alignItems: 'center', flexShrink: 0 },
+  recText: { fontSize: 9, fontWeight: 'bold', textAlign: 'center' },
   name: { fontSize: 16, fontWeight: '600', color: '#333', marginBottom: 4 },
   sector: { fontSize: 14, color: '#666' },
   metrics: { flexDirection: 'row', justifyContent: 'space-between' },
@@ -180,26 +197,34 @@ const styles = StyleSheet.create({
   watchlistBtnTop: { 
     backgroundColor: '#F0F8FF', paddingHorizontal: 8, paddingVertical: 6, borderRadius: 8, 
     alignItems: 'center', justifyContent: 'center', 
-    borderWidth: 1, borderColor: '#007AFF', marginLeft: 8
+    borderWidth: 1, borderColor: '#007AFF',
+    flexShrink: 0,
+    width: 32,
+    height: 32,
   },
   budgetBtn: { 
-    backgroundColor: '#FFF5F0', paddingHorizontal: 8, paddingVertical: 6, borderRadius: 8, 
+    backgroundColor: '#FFF5F0', paddingHorizontal: 6, paddingVertical: 6, borderRadius: 8, 
     alignItems: 'center', justifyContent: 'center', 
-    borderWidth: 1, borderColor: '#FF6B35', marginLeft: 8
+    borderWidth: 1, borderColor: '#FF6B35',
+    flexShrink: 0,
+    width: 28,
+    height: 28,
   },
   budgetContainer: {
     alignItems: 'center',
-    marginLeft: 8,
+    flexShrink: 0,
   },
   affordabilityBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 6,
+    paddingHorizontal: 5,
     paddingVertical: 3,
     borderRadius: 6,
     marginTop: 4,
-    minWidth: 60,
+    minWidth: 55,
+    maxWidth: 80,
     justifyContent: 'center',
+    flexShrink: 1,
   },
   affordabilityText: {
     fontSize: 9,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -20,6 +20,9 @@ import SblocFundingCard from '../../../components/forms/SblocFundingCard';
 import SblocCalculatorModal from '../../../components/forms/SblocCalculatorModal';
 import { GET_SBLOC_OFFER } from '../../../sboclGql';
 import { GET_SBLOC_BANKS } from '../../../graphql/sblocQueries';
+import { useYodlee } from '../../../hooks/useYodlee';
+import FastLinkWebView from '../../../components/FastLinkWebView';
+import { globalNavigate } from '../../../navigation/NavigationService';
 
 const { width } = Dimensions.get('window');
 
@@ -67,12 +70,18 @@ const GET_BANK_ACCOUNTS = gql`
   query GetBankAccounts {
     bankAccounts {
       id
-      bankName
+      provider
+      name
+      mask
       accountType
-      lastFour
+      accountSubtype
+      currency
+      balanceCurrent
+      balanceAvailable
       isVerified
       isPrimary
-      linkedAt
+      lastUpdated
+      createdAt
     }
   }
 `;
@@ -121,7 +130,7 @@ const INITIATE_FUNDING = gql`
   }
 `;
 
-const BankAccountScreen = ({ navigateTo, navigation }: { navigateTo?: (screen: string) => void; navigation?: any }) => {
+const BankAccountScreen = ({ navigateTo, navigation }: { navigateTo?: (screen: string, params?: any) => void; navigation?: any }) => {
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [showFundingModal, setShowFundingModal] = useState(false);
   const [showSBLOCModal, setShowSBLOCModal] = useState(false);
@@ -129,23 +138,85 @@ const BankAccountScreen = ({ navigateTo, navigation }: { navigateTo?: (screen: s
   const [selectedBankId, setSelectedBankId] = useState('');
   const [fundingAmount, setFundingAmount] = useState('');
 
-  // Form data for linking bank account
+  // Yodlee integration
+  const { 
+    linkBankAccount: linkBankViaYodlee, 
+    fetchAccounts: fetchYodleeAccounts,
+    isLoading: yodleeLoading,
+    isAvailable: yodleeAvailable,
+    accounts: yodleeAccounts,
+    error: yodleeError,
+    fastLinkSession,
+    clearSession
+  } = useYodlee();
+  
+  const [showFastLinkWebView, setShowFastLinkWebView] = useState(false);
+
+  // Form data for manual linking (fallback)
   const [bankName, setBankName] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
   const [routingNumber, setRoutingNumber] = useState('');
+  const [useManualLink, setUseManualLink] = useState(false);
+
+  // Loading timeouts to prevent infinite loading
+  const [bankLoadingTimeout, setBankLoadingTimeout] = useState(false);
+  const [fundingLoadingTimeout, setFundingLoadingTimeout] = useState(false);
 
   // Queries
   const { data: bankData, loading: bankLoading, refetch: refetchBanks } = useQuery(
     GET_BANK_ACCOUNTS,
-    { errorPolicy: 'all' }
+    { errorPolicy: 'all', fetchPolicy: 'cache-and-network' }
   );
 
   const { data: fundingData, loading: fundingLoading } = useQuery(
     GET_FUNDING_HISTORY,
-    { errorPolicy: 'all' }
+    { errorPolicy: 'all', fetchPolicy: 'cache-and-network' }
   );
 
-  const { data: sblocData } = useQuery(GET_SBLOC_OFFER, { errorPolicy: 'all' });
+  const { data: sblocData } = useQuery(GET_SBLOC_OFFER, { errorPolicy: 'all', fetchPolicy: 'cache-and-network' });
+
+  // Timeout loading states after 3 seconds
+  useEffect(() => {
+    if (bankLoading) {
+      const timer = setTimeout(() => {
+        console.log('⚠️ Bank loading timeout - using empty data');
+        setBankLoadingTimeout(true);
+      }, 3000);
+      return () => clearTimeout(timer);
+    } else {
+      setBankLoadingTimeout(false);
+    }
+  }, [bankLoading]);
+
+  useEffect(() => {
+    if (fundingLoading) {
+      const timer = setTimeout(() => {
+        console.log('⚠️ Funding loading timeout - using empty data');
+        setFundingLoadingTimeout(true);
+      }, 3000);
+      return () => clearTimeout(timer);
+    } else {
+      setFundingLoadingTimeout(false);
+    }
+  }, [fundingLoading]);
+
+  // Mock data for demo when queries timeout
+  const effectiveBankData = useMemo(() => {
+    if (bankLoadingTimeout || (!bankData && !bankLoading)) {
+      return { bankAccounts: [] };
+    }
+    return bankData || { bankAccounts: [] };
+  }, [bankData, bankLoading, bankLoadingTimeout]);
+
+  const effectiveFundingData = useMemo(() => {
+    if (fundingLoadingTimeout || (!fundingData && !fundingLoading)) {
+      return { fundingHistory: [] };
+    }
+    return fundingData || { fundingHistory: [] };
+  }, [fundingData, fundingLoading, fundingLoadingTimeout]);
+
+  const effectiveBankLoading = bankLoading && !bankLoadingTimeout;
+  const effectiveFundingLoading = fundingLoading && !fundingLoadingTimeout;
 
   // Mutations
   const [linkBankAccount, { loading: linkingBank }] = useMutation(LINK_BANK_ACCOUNT, {
@@ -182,18 +253,59 @@ const BankAccountScreen = ({ navigateTo, navigation }: { navigateTo?: (screen: s
     }
   });
 
-  const handleLinkBank = () => {
-    if (!bankName || !accountNumber || !routingNumber) {
-      Alert.alert('Error', 'Please fill in all fields');
-      return;
-    }
-    linkBankAccount({
-      variables: {
-        bankName,
-        accountNumber,
-        routingNumber
+  // Load Yodlee accounts on mount
+  useEffect(() => {
+    fetchYodleeAccounts();
+  }, []);
+
+  const handleLinkBank = async () => {
+    // Try Yodlee first if available, otherwise use manual form
+    if (yodleeAvailable && !useManualLink) {
+      try {
+        const session = await linkBankViaYodlee();
+        if (session) {
+          // Show FastLink WebView
+          setShowFastLinkWebView(true);
+        } else {
+          Alert.alert('Error', 'Failed to start bank linking. Please try again.');
+        }
+      } catch (error: any) {
+        Alert.alert('Error', error.message || 'Failed to link bank account via Yodlee');
       }
-    });
+    } else {
+      // Manual form fallback
+      if (!bankName || !accountNumber || !routingNumber) {
+        Alert.alert('Error', 'Please fill in all fields');
+        return;
+      }
+      linkBankAccount({
+        variables: {
+          bankName,
+          accountNumber,
+          routingNumber
+        }
+      });
+    }
+  };
+
+  const handleFastLinkSuccess = async (result: any) => {
+    console.log('FastLink success:', result);
+    setShowFastLinkWebView(false);
+    setShowLinkModal(false);
+    clearSession();
+    
+    // Refresh accounts after linking
+    await fetchYodleeAccounts();
+    await refetchBanks();
+    
+    Alert.alert('Success', 'Bank account linked successfully!');
+  };
+
+  const handleFastLinkError = (error: string) => {
+    console.error('FastLink error:', error);
+    setShowFastLinkWebView(false);
+    clearSession();
+    Alert.alert('Error', error || 'Failed to link bank account');
   };
 
   const handleInitiateFunding = () => {
@@ -221,11 +333,11 @@ const BankAccountScreen = ({ navigateTo, navigation }: { navigateTo?: (screen: s
         <View style={[styles.leftAccent, { backgroundColor: accent }]} />
         <View style={{ flex:1 }}>
           <View style={styles.bankHeader}>
-            <BankAvatar name={account.bankName} />
+            <BankAvatar name={account.provider || account.bankName || account.name} />
             <View style={styles.bankInfo}>
-              <Text style={styles.bankName}>{account.bankName}</Text>
+              <Text style={styles.bankName}>{account.provider || account.bankName || account.name}</Text>
               <Text style={styles.accountType}>
-                {account.accountType.charAt(0).toUpperCase() + account.accountType.slice(1)} •••• {account.lastFour}
+                {account.accountType?.charAt(0).toUpperCase() + account.accountType?.slice(1) || account.accountSubtype || 'Account'} •••• {account.mask || account.lastFour}
               </Text>
             </View>
 
@@ -237,7 +349,7 @@ const BankAccountScreen = ({ navigateTo, navigation }: { navigateTo?: (screen: s
           </View>
 
           <View style={styles.bankFooter}>
-            <Text style={styles.meta}>Linked {fmtDate(account.linkedAt)}</Text>
+            <Text style={styles.meta}>Linked {fmtDate(account.linkedAt || account.lastUpdated || account.createdAt)}</Text>
             {account.isPrimary ? <Chip label="Primary" tone="info" icon="star" /> : null}
           </View>
         </View>
@@ -300,9 +412,18 @@ const BankAccountScreen = ({ navigateTo, navigation }: { navigateTo?: (screen: s
             title="Linked Accounts"
             right={
               <View style={styles.actionRow}>
-                <TouchableOpacity style={styles.ghostBtn} onPress={() => setShowLinkModal(true)}>
+                <TouchableOpacity 
+                  style={styles.ghostBtn} 
+                  onPress={() => {
+                    setShowLinkModal(true);
+                    setUseManualLink(false);
+                  }}
+                  disabled={yodleeLoading}
+                >
                   <Icon name="credit-card" size={16} color="#2457D6" />
-                  <Text style={styles.ghostBtnText}>Link Bank</Text>
+                  <Text style={styles.ghostBtnText}>
+                    {yodleeLoading ? 'Loading...' : 'Link Bank'}
+                  </Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.ghostBtn} onPress={() => setShowFundingModal(true)}>
                   <Icon name="plus-circle" size={16} color="#2457D6" />
@@ -316,7 +437,7 @@ const BankAccountScreen = ({ navigateTo, navigation }: { navigateTo?: (screen: s
             }
           />
 
-          {bankLoading ? (
+          {effectiveBankLoading ? (
             <View style={styles.skeletonBlock}>
               {[...Array(2)].map((_,i)=>(
                 <View key={i} style={styles.bankCard}>
@@ -329,8 +450,8 @@ const BankAccountScreen = ({ navigateTo, navigation }: { navigateTo?: (screen: s
                 </View>
               ))}
             </View>
-          ) : bankData?.bankAccounts?.length ? (
-            bankData.bankAccounts.map((account: any) => (
+          ) : effectiveBankData?.bankAccounts?.length ? (
+            effectiveBankData.bankAccounts.map((account: any) => (
               <View key={account.id}>
                 {renderBankAccount(account)}
               </View>
@@ -340,9 +461,32 @@ const BankAccountScreen = ({ navigateTo, navigation }: { navigateTo?: (screen: s
               <Icon name="credit-card" size={48} color="#C7C7CC" />
               <Text style={styles.emptyTitle}>No Bank Accounts</Text>
               <Text style={styles.emptySubtitle}>Link a bank to start funding your account.</Text>
-              <TouchableOpacity style={styles.primaryBtn} onPress={() => setShowLinkModal(true)}>
-                <Text style={styles.primaryBtnText}>Link Bank</Text>
+              <TouchableOpacity 
+                style={styles.primaryBtn} 
+                onPress={() => {
+                  setShowLinkModal(true);
+                  setUseManualLink(false);
+                }}
+                disabled={yodleeLoading}
+              >
+                <Text style={styles.primaryBtnText}>
+                  {yodleeLoading ? 'Loading...' : 'Link Bank'}
+                </Text>
               </TouchableOpacity>
+              {yodleeError && (
+                <Text style={styles.errorText}>{yodleeError}</Text>
+              )}
+              {!yodleeAvailable && (
+                <TouchableOpacity 
+                  style={[styles.primaryBtn, { marginTop: 8, backgroundColor: '#6B7280' }]} 
+                  onPress={() => {
+                    setUseManualLink(true);
+                    setShowLinkModal(true);
+                  }}
+                >
+                  <Text style={styles.primaryBtnText}>Use Manual Entry</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
         </View>
@@ -362,21 +506,40 @@ const BankAccountScreen = ({ navigateTo, navigation }: { navigateTo?: (screen: s
                 aprPct={apr * 100}
                 portfolioValue={eligibleEquity}
                 onPress={() => {
-                  // Navigate to SBLOC bank selection
-                  navigation.navigate('SBLOCBankSelection', {
-                    requestedAmount: maxBorrow * 0.5, // Default to 50% of max
-                    consentData: {
-                      consent: true,
-                      dataScope: {
-                        identity: true,
-                        contact: true,
-                        portfolioSummary: true,
-                        positions: true,
-                        recentTransfers: false,
-                        income: false,
-                      },
-                    },
-                  });
+                  console.log('🔵🔵🔵 Estimate & Draw button pressed!');
+                  console.log('🔵🔵🔵 Handler function executing...');
+                  
+                  const amount = Math.floor(maxBorrow * 0.5);
+                  console.log('🔵 Amount:', amount);
+                  console.log('🔵 navigateTo type:', typeof navigateTo);
+                  console.log('🔵 navigateTo exists:', !!navigateTo);
+                  console.log('🔵 navigation available:', !!navigation);
+                  
+                  // Direct navigation - try all methods
+                  if (navigateTo && typeof navigateTo === 'function') {
+                    console.log('🔵 Calling navigateTo with SBLOCBankSelection and amount:', amount);
+                    try {
+                      navigateTo('SBLOCBankSelection', { amountUsd: amount });
+                      console.log('✅ navigateTo called successfully');
+                    } catch (error) {
+                      console.error('❌ Error calling navigateTo:', error);
+                      Alert.alert('Navigation Error', String(error));
+                    }
+                  } else if (navigation?.navigate && typeof navigation.navigate === 'function') {
+                    console.log('🔵 Using navigation.navigate');
+                    try {
+                      navigation.navigate('SBLOCBankSelection', { amountUsd: amount });
+                      console.log('✅ navigation.navigate called successfully');
+                    } catch (error) {
+                      console.error('❌ Error calling navigation.navigate:', error);
+                      Alert.alert('Navigation Error', String(error));
+                    }
+                  } else {
+                    console.error('❌ No navigation method available');
+                    console.error('❌ navigateTo:', navigateTo);
+                    console.error('❌ navigation:', navigation);
+                    Alert.alert('Error', 'Navigation not available. Check console for details.');
+                  }
                 }}
               />
             </View>
@@ -386,7 +549,7 @@ const BankAccountScreen = ({ navigateTo, navigation }: { navigateTo?: (screen: s
         {/* Funding */}
         <View style={styles.section}>
           <SectionHeader title="Recent Funding" />
-          {fundingLoading ? (
+          {effectiveFundingLoading ? (
             <View style={styles.skeletonBlock}>
               {[...Array(3)].map((_,i)=>(
                 <View key={i} style={styles.fundingRow}>
@@ -399,8 +562,8 @@ const BankAccountScreen = ({ navigateTo, navigation }: { navigateTo?: (screen: s
                 </View>
               ))}
             </View>
-          ) : fundingData?.fundingHistory?.length ? (
-            fundingData.fundingHistory.slice(0, 5).map((funding: any) => (
+          ) : effectiveFundingData?.fundingHistory?.length ? (
+            effectiveFundingData.fundingHistory.slice(0, 5).map((funding: any) => (
               <View key={funding.id}>
                 {renderFundingHistory(funding)}
               </View>
@@ -418,53 +581,156 @@ const BankAccountScreen = ({ navigateTo, navigation }: { navigateTo?: (screen: s
       <Modal visible={showLinkModal} animationType="slide" presentationStyle="pageSheet">
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowLinkModal(false)}>
+            <TouchableOpacity onPress={() => {
+              setShowLinkModal(false);
+              setUseManualLink(false);
+            }}>
               <Text style={styles.cancelButton}>Cancel</Text>
             </TouchableOpacity>
             <Text style={styles.modalTitle}>Link Bank Account</Text>
-            <TouchableOpacity onPress={handleLinkBank} disabled={linkingBank}>
-              <Text style={[styles.saveButton, linkingBank && styles.disabledButton]}>
-                {linkingBank ? 'Linking...' : 'Link'}
-              </Text>
-            </TouchableOpacity>
+            {useManualLink ? (
+              <TouchableOpacity onPress={handleLinkBank} disabled={linkingBank || yodleeLoading}>
+                <Text style={[styles.saveButton, (linkingBank || yodleeLoading) && styles.disabledButton]}>
+                  {linkingBank || yodleeLoading ? 'Linking...' : 'Link'}
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={{ width: 60 }} />
+            )}
           </View>
 
           <ScrollView style={styles.modalContent}>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Bank Name</Text>
-              <TextInput
-                style={styles.input}
-                value={bankName}
-                onChangeText={setBankName}
-                placeholder="e.g., Chase Bank"
-                autoCapitalize="words"
-              />
-            </View>
+            {useManualLink ? (
+              // Manual form entry (fallback)
+              <>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Bank Name</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={bankName}
+                    onChangeText={setBankName}
+                    placeholder="e.g., Chase Bank"
+                    autoCapitalize="words"
+                  />
+                </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Account Number</Text>
-              <TextInput
-                style={styles.input}
-                value={accountNumber}
-                onChangeText={setAccountNumber}
-                placeholder="Enter account number"
-                keyboardType="numeric"
-                secureTextEntry
-              />
-            </View>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Account Number</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={accountNumber}
+                    onChangeText={setAccountNumber}
+                    placeholder="Enter account number"
+                    keyboardType="numeric"
+                    secureTextEntry
+                  />
+                </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Routing Number</Text>
-              <TextInput
-                style={styles.input}
-                value={routingNumber}
-                onChangeText={setRoutingNumber}
-                placeholder="Enter routing number"
-                keyboardType="numeric"
-              />
-            </View>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Routing Number</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={routingNumber}
+                    onChangeText={setRoutingNumber}
+                    placeholder="Enter routing number"
+                    keyboardType="numeric"
+                  />
+                </View>
+              </>
+            ) : (
+              // Yodlee FastLink flow
+              <>
+                {yodleeLoading ? (
+                  <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color="#007AFF" />
+                    <Text style={styles.loadingText}>Setting up bank linking...</Text>
+                  </View>
+                ) : yodleeAvailable ? (
+                  <>
+                    <View style={styles.infoBox}>
+                      <Icon name="info" size={20} color="#007AFF" />
+                      <Text style={styles.infoText}>
+                        We'll securely connect to your bank using Yodlee. Click the button below to start.
+                      </Text>
+                    </View>
+                    <TouchableOpacity 
+                      style={styles.primaryBtn} 
+                      onPress={handleLinkBank}
+                      disabled={yodleeLoading}
+                    >
+                      <Text style={styles.primaryBtnText}>
+                        {yodleeLoading ? 'Linking...' : 'Connect Bank Account'}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={styles.linkButton}
+                      onPress={() => setUseManualLink(true)}
+                    >
+                      <Text style={styles.linkButtonText}>Use manual entry instead</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <>
+                    <View style={styles.warningBox}>
+                      <Icon name="alert-triangle" size={20} color="#F59E0B" />
+                      <Text style={styles.warningText}>
+                        Yodlee bank linking is currently unavailable. You can use manual entry instead.
+                      </Text>
+                    </View>
+                    <TouchableOpacity 
+                      style={styles.primaryBtn} 
+                      onPress={() => setUseManualLink(true)}
+                    >
+                      <Text style={styles.primaryBtnText}>Use Manual Entry</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+                {yodleeError && (
+                  <View style={styles.errorBox}>
+                    <Text style={styles.errorText}>{yodleeError}</Text>
+                  </View>
+                )}
+              </>
+            )}
           </ScrollView>
         </View>
+      </Modal>
+
+      {/* FastLink WebView Modal */}
+      <Modal 
+        visible={showFastLinkWebView} 
+        animationType="slide" 
+        presentationStyle="fullScreen"
+        onRequestClose={() => {
+          setShowFastLinkWebView(false);
+          clearSession();
+        }}
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity 
+              onPress={() => {
+                setShowFastLinkWebView(false);
+                clearSession();
+              }}
+            >
+              <Text style={styles.cancelButton}>Close</Text>
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Link Bank Account</Text>
+            <View style={{ width: 60 }} />
+          </View>
+          {fastLinkSession && (
+            <FastLinkWebView
+              session={fastLinkSession}
+              onSuccess={handleFastLinkSuccess}
+              onError={handleFastLinkError}
+              onClose={() => {
+                setShowFastLinkWebView(false);
+                clearSession();
+              }}
+            />
+          )}
+        </SafeAreaView>
       </Modal>
 
       {/* Funding Modal */}
@@ -485,7 +751,7 @@ const BankAccountScreen = ({ navigateTo, navigation }: { navigateTo?: (screen: s
           <ScrollView style={styles.modalContent}>
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Select Bank Account</Text>
-              {bankData?.bankAccounts?.map((account: any) => (
+              {effectiveBankData?.bankAccounts?.map((account: any) => (
                 <TouchableOpacity
                   key={account.id}
                   style={[
@@ -712,6 +978,56 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#8E8E93',
     marginTop: 12,
+  },
+  infoBox: {
+    flexDirection: 'row',
+    backgroundColor: '#E8F2FF',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 20,
+    alignItems: 'flex-start',
+  },
+  infoText: {
+    flex: 1,
+    marginLeft: 12,
+    fontSize: 14,
+    color: '#2457D6',
+    lineHeight: 20,
+  },
+  warningBox: {
+    flexDirection: 'row',
+    backgroundColor: '#FFF5E5',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 20,
+    alignItems: 'flex-start',
+  },
+  warningText: {
+    flex: 1,
+    marginLeft: 12,
+    fontSize: 14,
+    color: '#A45B00',
+    lineHeight: 20,
+  },
+  errorBox: {
+    backgroundColor: '#FDECEC',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 12,
+  },
+  errorText: {
+    fontSize: 13,
+    color: '#C0352B',
+    textAlign: 'center',
+  },
+  linkButton: {
+    marginTop: 16,
+    alignItems: 'center',
+  },
+  linkButtonText: {
+    fontSize: 14,
+    color: '#007AFF',
+    textDecorationLine: 'underline',
   },
   emptyState: {
     alignItems: 'center',
