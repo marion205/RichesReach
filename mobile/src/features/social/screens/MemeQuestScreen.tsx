@@ -13,7 +13,7 @@ import {
   Animated,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as Speech from 'expo-speech';
+import { safeSpeak, stopAllSpeech } from '../../../hooks/useSafeSpeak';
 import * as Haptics from 'expo-haptics';
 import ConfettiCannon from 'react-native-confetti-cannon';
 import SocialFeed from '../components/SocialFeed';
@@ -293,12 +293,12 @@ const MemeQuestScreen: React.FC = () => {
     for (const [key, action] of Object.entries(voiceCommands)) {
       if (normalizedCommand.includes(key)) {
         action();
-        Speech.speak(`Executing ${key} command!`);
+        safeSpeak(`Executing ${key} command!`);
         return;
       }
     }
     
-    Speech.speak('Command not recognized. Say "help" for available commands.');
+    safeSpeak('Command not recognized. Say "help" for available commands.');
   };
 
   const completeChallenge = (challengeId: number) => {
@@ -313,7 +313,7 @@ const MemeQuestScreen: React.FC = () => {
     setTotalXP(prev => prev + reward);
     setShowConfetti(true);
     setTimeout(() => setShowConfetti(false), 2000);
-    Speech.speak(`Challenge completed! +${reward} XP earned!`);
+    safeSpeak(`Challenge completed! +${reward} XP earned!`);
   };
 
   const joinTournament = () => {
@@ -323,7 +323,7 @@ const MemeQuestScreen: React.FC = () => {
       yourPosition: prev.participants + 1
     }));
     setTotalXP(prev => prev + 50);
-    Speech.speak('Joined tournament! +50 XP bonus!');
+    safeSpeak('Joined tournament! +50 XP bonus!');
   };
 
   const launchMeme = async () => {
@@ -358,7 +358,7 @@ const MemeQuestScreen: React.FC = () => {
 
       if (response.ok) {
         const result = await response.json();
-        Speech.speak(`Launching ${memeName}! Hop to the moon! 🚀`);
+        safeSpeak(`Launching ${memeName}! Hop to the moon! 🚀`);
         
         setShowConfetti(true);
         
@@ -453,7 +453,7 @@ const MemeQuestScreen: React.FC = () => {
               onPress={() => {
                 setSelectedTemplate(template);
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                Speech.speak(`Selected ${template.name} template`);
+                safeSpeak(`Selected ${template.name} template`);
               }}
             >
               <Image source={{ uri: template.imageUrl }} style={styles.templateImage} />
@@ -678,7 +678,7 @@ const MemeQuestScreen: React.FC = () => {
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             setShowVoiceModal(true);
-            Speech.speak('Ready to launch? Say your command!');
+            safeSpeak('Ready to launch? Say your command!');
           }}
         >
           <Text style={styles.voiceIcon}>🎤</Text>
@@ -787,9 +787,9 @@ const MemeQuestScreen: React.FC = () => {
               onPress={() => {
                 setIsListening(!isListening);
                 if (!isListening) {
-                  Speech.speak('Listening... Say your command');
+                  safeSpeak('Listening... Say your command');
                 } else {
-                  Speech.speak('Command received!');
+                  safeSpeak('Command received!');
                   handleVoiceCommand('launch meme'); // Simulate command
                   setShowVoiceModal(false);
                 }

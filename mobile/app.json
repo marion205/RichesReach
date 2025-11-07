@@ -4,6 +4,8 @@
     "slug": "richesreach-ai",
     "version": "1.0.2",
     "sdkVersion": "54.0.0",
+    "jsEngine": "hermes",
+    "newArchEnabled": false,
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -29,8 +31,7 @@
       },
       "config": {
         "usesNonExemptEncryption": false
-      },
-      "newArchEnabled": true
+      }
     },
     "android": {
       "package": "com.richesreach.app",

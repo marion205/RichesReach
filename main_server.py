@@ -205,6 +205,88 @@ except ImportError as e:
 except Exception as e:
     print(f"⚠️ Error registering Holding Insight API router: {e}")
 
+# Register Constellation AI API router
+try:
+    import sys
+    import os
+    # Try deployment_package/backend first
+    deployment_backend_path = os.path.join(os.path.dirname(__file__), 'deployment_package', 'backend')
+    if os.path.exists(deployment_backend_path) and deployment_backend_path not in sys.path:
+        sys.path.insert(0, deployment_backend_path)
+    
+    # Fallback to backend/backend
+    backend_path = os.path.join(os.path.dirname(__file__), 'backend', 'backend')
+    if backend_path not in sys.path:
+        sys.path.insert(0, backend_path)
+    
+    from core.constellation_ai_api import router as constellation_ai_router
+    app.include_router(constellation_ai_router)
+    print("✅ Constellation AI API router registered")
+except ImportError as e:
+    print(f"⚠️ Constellation AI API router not available: {e}")
+except Exception as e:
+    print(f"⚠️ Error registering Constellation AI API router: {e}")
+
+# Register Family Sharing API router
+try:
+    import sys
+    import os
+    deployment_backend_path = os.path.join(os.path.dirname(__file__), 'deployment_package', 'backend')
+    if os.path.exists(deployment_backend_path) and deployment_backend_path not in sys.path:
+        sys.path.insert(0, deployment_backend_path)
+    
+    backend_path = os.path.join(os.path.dirname(__file__), 'backend', 'backend')
+    if backend_path not in sys.path:
+        sys.path.insert(0, backend_path)
+    
+    from core.family_sharing_api import router as family_sharing_router
+    app.include_router(family_sharing_router)
+    print("✅ Family Sharing API router registered")
+except ImportError as e:
+    print(f"⚠️ Family Sharing API router not available: {e}")
+except Exception as e:
+    print(f"⚠️ Error registering Family Sharing API router: {e}")
+
+# Register Dawn Ritual API router
+try:
+    import sys
+    import os
+    deployment_backend_path = os.path.join(os.path.dirname(__file__), 'deployment_package', 'backend')
+    if os.path.exists(deployment_backend_path) and deployment_backend_path not in sys.path:
+        sys.path.insert(0, deployment_backend_path)
+    
+    backend_path = os.path.join(os.path.dirname(__file__), 'backend', 'backend')
+    if backend_path not in sys.path:
+        sys.path.insert(0, backend_path)
+    
+    from core.dawn_ritual_api import router as dawn_ritual_router
+    app.include_router(dawn_ritual_router)
+    print("✅ Dawn Ritual API router registered")
+except ImportError as e:
+    print(f"⚠️ Dawn Ritual API router not available: {e}")
+except Exception as e:
+    print(f"⚠️ Error registering Dawn Ritual API router: {e}")
+
+# Register Credit Building API router
+try:
+    import sys
+    import os
+    deployment_backend_path = os.path.join(os.path.dirname(__file__), 'deployment_package', 'backend')
+    if os.path.exists(deployment_backend_path) and deployment_backend_path not in sys.path:
+        sys.path.insert(0, deployment_backend_path)
+    
+    backend_path = os.path.join(os.path.dirname(__file__), 'backend', 'backend')
+    if backend_path not in sys.path:
+        sys.path.insert(0, backend_path)
+    
+    from core.credit_api import router as credit_router
+    app.include_router(credit_router)
+    print("✅ Credit Building API router registered")
+except ImportError as e:
+    print(f"⚠️ Credit Building API router not available: {e}")
+except Exception as e:
+    print(f"⚠️ Error registering Credit Building API router: {e}")
+
 @app.get("/health")
 async def health():
     return {"status": "ok", "schemaVersion": "1.0.0", "timestamp": datetime.now().isoformat()}
@@ -589,6 +671,181 @@ async def yodlee_webhook(request: Request):
         return JSONResponse(content=json.loads(response.content), status_code=response.status_code)
     except Exception as e:
         print(f"Error processing Yodlee webhook: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/money/snapshot")
+async def money_snapshot(request: Request):
+    """
+    Returns unified financial snapshot:
+    - Net worth (bank balances + portfolio)
+    - Cash flow (30-day in/out/delta)
+    - Portfolio positions
+    - Shield alerts
+    """
+    try:
+        _setup_django_once()
+        from django.http import HttpRequest
+        from django.utils import timezone
+        from datetime import timedelta
+        from decimal import Decimal
+        
+        # Get user from request (same pattern as Yodlee endpoints)
+        user = request.state.user if hasattr(request.state, 'user') else None
+        
+        # Dev mode: Return mock data if not authenticated (for testing)
+        # Only require auth in production
+        is_production = os.getenv('ENVIRONMENT') == 'production' or os.getenv('ENV') == 'production'
+        print(f"[DEBUG] money_snapshot: user={user}, is_production={is_production}, has_user={hasattr(request.state, 'user')}")
+        if not user and not is_production:
+            print("[DEBUG] Returning mock data (dev mode)")
+            print("⚠️ [DEV MODE] Returning mock money snapshot (no auth)")
+            return JSONResponse(content={
+                'netWorth': 12500.50,
+                'cashflow': {
+                    'period': '30d',
+                    'in': 3820.40,
+                    'out': 3600.10,
+                    'delta': 220.30,
+                },
+                'positions': [
+                    {'symbol': 'NVDA', 'value': 1200.00, 'shares': 10},
+                    {'symbol': 'TSLA', 'value': 1250.00, 'shares': 5},
+                ],
+                'shield': [
+                    {
+                        'type': 'LOW_BALANCE',
+                        'inDays': None,
+                        'suggestion': 'PAUSE_RISKY_ORDER',
+                        'message': 'Low balance detected ($500.00). Consider pausing high-risk trades.'
+                    }
+                ],
+                'breakdown': {
+                    'bankBalance': 10000.50,
+                    'portfolioValue': 2450.00,
+                    'bankAccountsCount': 2,
+                }
+            })
+        
+        if not user:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        
+        # Import models
+        from deployment_package.backend.core.banking_models import BankAccount, BankTransaction
+        from deployment_package.backend.core.models import Portfolio
+        
+        # Calculate date range (last 30 days)
+        to_date = timezone.now().date()
+        from_date = to_date - timedelta(days=30)
+        
+        # 1. Get bank accounts and calculate total bank balance
+        bank_accounts = BankAccount.objects.filter(
+            user=user,
+            is_verified=True
+        )
+        
+        total_bank_balance = Decimal('0.00')
+        bank_accounts_list = []
+        for account in bank_accounts:
+            balance = account.balance_current or Decimal('0.00')
+            total_bank_balance += balance
+            bank_accounts_list.append({
+                'id': account.id,
+                'name': account.name,
+                'type': account.account_type,
+                'balance': float(balance),
+            })
+        
+        # 2. Get portfolio positions
+        portfolio_holdings = Portfolio.objects.filter(user=user).select_related('stock')
+        
+        total_portfolio_value = Decimal('0.00')
+        positions = []
+        for holding in portfolio_holdings:
+            # Use total_value if available, otherwise calculate
+            value = holding.total_value if holding.total_value else (
+                (holding.current_price or holding.average_price or Decimal('0')) * holding.shares
+            )
+            total_portfolio_value += value
+            
+            positions.append({
+                'symbol': holding.stock.symbol if holding.stock else 'UNKNOWN',
+                'value': float(value),
+                'shares': holding.shares,
+            })
+        
+        # 3. Calculate cash flow from transactions (last 30 days)
+        transactions = BankTransaction.objects.filter(
+            user=user,
+            posted_date__gte=from_date,
+            posted_date__lte=to_date,
+        )
+        
+        inflow = Decimal('0.00')
+        outflow = Decimal('0.00')
+        
+        for txn in transactions:
+            if txn.transaction_type == 'CREDIT':
+                inflow += txn.amount
+            elif txn.transaction_type == 'DEBIT':
+                outflow += abs(txn.amount)  # Outflows are negative, make positive
+        
+        cashflow_delta = inflow - outflow
+        
+        # 4. Calculate net worth
+        net_worth = total_bank_balance + total_portfolio_value
+        
+        # 5. Generate shield alerts (simple logic)
+        shield_alerts = []
+        
+        # Low balance alert
+        if total_bank_balance < Decimal('500.00'):
+            shield_alerts.append({
+                'type': 'LOW_BALANCE',
+                'inDays': None,
+                'suggestion': 'PAUSE_RISKY_ORDER',
+                'message': f'Low balance detected (${total_bank_balance:.2f}). Consider pausing high-risk trades.'
+            })
+        
+        # Check for large outflows (potential bills)
+        large_outflows = transactions.filter(
+            transaction_type='DEBIT',
+            amount__lt=-Decimal('100.00')  # Large negative amounts
+        ).order_by('posted_date')
+        
+        if large_outflows.exists():
+            # Check if any large outflow is due soon (within 3 days)
+            for txn in large_outflows[:3]:  # Check top 3
+                days_until = (txn.posted_date - to_date).days
+                if 0 <= days_until <= 3:
+                    shield_alerts.append({
+                        'type': 'BILL_DUE',
+                        'inDays': days_until,
+                        'suggestion': 'PAUSE_RISKY_ORDER',
+                        'message': f'Large payment due in {days_until} days (${abs(txn.amount):.2f})'
+                    })
+        
+        # 6. Return unified snapshot
+        return JSONResponse(content={
+            'netWorth': float(net_worth),
+            'cashflow': {
+                'period': '30d',
+                'in': float(inflow),
+                'out': float(outflow),
+                'delta': float(cashflow_delta),
+            },
+            'positions': positions,
+            'shield': shield_alerts,
+            'breakdown': {
+                'bankBalance': float(total_bank_balance),
+                'portfolioValue': float(total_portfolio_value),
+                'bankAccountsCount': len(bank_accounts_list),
+            }
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error getting money snapshot: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/graphql/")

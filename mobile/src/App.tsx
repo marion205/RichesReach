@@ -229,7 +229,14 @@ if (pushNotificationService) {
       // Initialize price alert service in background (non-blocking)
 if (priceAlertService) {
         priceAlertService.initialize().catch(() => {});
-}
+      }
+      
+      // Initialize Dawn Ritual scheduler
+      const { dawnRitualScheduler } = await import('./features/rituals/services/DawnRitualScheduler');
+      const preferences = await dawnRitualScheduler.getPreferences();
+      if (preferences.enabled) {
+        await dawnRitualScheduler.scheduleDailyRitual(preferences);
+      }
 } catch (error) {
 console.error('Error initializing services:', error);
 } finally {

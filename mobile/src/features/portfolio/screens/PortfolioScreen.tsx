@@ -19,6 +19,19 @@ import MilestoneUnlockOverlay from '../../../components/MilestoneUnlockOverlay';
 import { useNavigation } from '@react-navigation/native';
 import PortfolioHoldings, { Holding } from '../components/PortfolioHoldings';
 import { getMockMyPortfolios } from '../../../services/mockPortfolioData';
+import ConstellationOrb from '../components/ConstellationOrb';
+import { useMoneySnapshot } from '../hooks/useMoneySnapshot';
+import LifeEventPetalsModal from '../components/LifeEventPetalsModal';
+import MarketCrashShieldView from '../components/MarketCrashShieldView';
+import GrowthProjectionView from '../components/GrowthProjectionView';
+import WhatIfSimulator from '../components/WhatIfSimulator';
+import QuickActionsModal from '../components/QuickActionsModal';
+import DetailedBreakdownModal from '../components/DetailedBreakdownModal';
+import { SharedOrb } from '../../family/components/SharedOrb';
+import { FamilyManagementModal } from '../../family/components/FamilyManagementModal';
+import { familySharingService, FamilyGroup, FamilyMember } from '../../family/services/FamilySharingService';
+import { DawnRitualScreen } from '../../rituals/screens/DawnRitualScreen';
+import { CreditQuestScreen } from '../../credit/screens/CreditQuestScreen';
 interface PortfolioScreenProps {
 navigateTo?: (screen: string) => void;
 }
@@ -32,11 +45,91 @@ const insets = useSafeAreaInsets();
   const [loadingPrices, setLoadingPrices] = useState(false);
   const [celebrateTitle, setCelebrateTitle] = useState<string | null>(null);
   
+  // Modal visibility states for gesture actions
+  const [showLifeEvents, setShowLifeEvents] = useState(false);
+  const [showShield, setShowShield] = useState(false);
+  const [showGrowth, setShowGrowth] = useState(false);
+  const [showWhatIf, setShowWhatIf] = useState(false);
+  const [showQuickActions, setShowQuickActions] = useState(false);
+  const [showBreakdown, setShowBreakdown] = useState(false);
+  
+  // Family sharing state
+  const [familyGroup, setFamilyGroup] = useState<FamilyGroup | null>(null);
+  const [showFamilyManagement, setShowFamilyManagement] = useState(false);
+  const [currentUser, setCurrentUser] = useState<FamilyMember | null>(null);
+  const [loadingFamily, setLoadingFamily] = useState(false);
+  
+  // Dawn Ritual state
+  const [showDawnRitual, setShowDawnRitual] = useState(false);
+  
+  // Credit Quest state
+  const [showCreditQuest, setShowCreditQuest] = useState(false);
+  
   const { data: portfolioData, loading: portfolioLoading, error: portfolioError, refetch } = useQuery(GET_MY_PORTFOLIOS, {
     errorPolicy: 'all', // Continue even if there are errors
     fetchPolicy: 'cache-and-network', // Use cache but also fetch fresh data
     notifyOnNetworkStatusChange: true,
   });
+
+  // Money snapshot hook (for Constellation Orb)
+  const { snapshot, loading: snapshotLoading, hasBankLinked, refetch: refetchSnapshot, error: snapshotError } = useMoneySnapshot();
+  
+  // Load family group on mount
+  useEffect(() => {
+    loadFamilyGroup();
+  }, []);
+  
+  const loadFamilyGroup = async () => {
+    try {
+      setLoadingFamily(true);
+      const group = await familySharingService.getFamilyGroup();
+      setFamilyGroup(group);
+      
+      // Find current user in family group
+      if (group) {
+        // In a real app, get current user ID from auth context
+        // For now, assume first member or owner is current user
+        const user = group.members.find(m => m.role === 'owner') || group.members[0];
+        setCurrentUser(user || null);
+      }
+    } catch (error) {
+      console.error('[PortfolioScreen] Failed to load family group:', error);
+      setFamilyGroup(null);
+    } finally {
+      setLoadingFamily(false);
+    }
+  };
+  
+  // Debug logging
+  useEffect(() => {
+    if (__DEV__) {
+      console.log('[PortfolioScreen] Constellation Orb Debug:', {
+        hasBankLinked,
+        hasSnapshot: !!snapshot,
+        snapshotLoading,
+        snapshotError: snapshotError?.message,
+        bankAccountsCount: snapshot?.breakdown?.bankAccountsCount,
+        willShowOrb: hasBankLinked && !!snapshot,
+        hasFamilyGroup: !!familyGroup,
+        familyMembers: familyGroup?.members.length || 0,
+      });
+    }
+  }, [hasBankLinked, snapshot, snapshotLoading, snapshotError, familyGroup]);
+  
+  // Timeout handling: Stop loading after 3 seconds and use mock data
+  const [portfolioLoadingTimeout, setPortfolioLoadingTimeout] = useState(false);
+  
+  useEffect(() => {
+    if (portfolioLoading) {
+      const timer = setTimeout(() => {
+        console.log('[PortfolioScreen] Portfolio loading timeout - using fallback');
+        setPortfolioLoadingTimeout(true);
+      }, 3000); // 3 second timeout
+      return () => clearTimeout(timer);
+    } else {
+      setPortfolioLoadingTimeout(false);
+    }
+  }, [portfolioLoading]);
   
   const go = (name: string, params?: any) => {
     console.log('PortfolioScreen: Navigating to', name, params);
@@ -110,7 +203,10 @@ const fetchRealTimePrices = async (holdings: any[]) => {
   const onRefresh = async () => {
 setRefreshing(true);
 try {
-await refetch();
+await Promise.all([
+  refetch(),
+  refetchSnapshot(), // Also refresh money snapshot
+]);
 } catch (error) {
 // Error refreshing portfolio data
 } finally {
@@ -195,12 +291,37 @@ setRefreshing(false);
   ];
 
   // NOW SAFE TO DO EARLY RETURNS - ALL HOOKS HAVE BEEN CALLED
-  if (portfolioLoading) {
+  // Only show loading if actively loading and not timed out
+  if (portfolioLoading && !portfolioLoadingTimeout) {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
           <Icon name="bar-chart-2" size={24} color="#34C759" />
           <Text style={styles.headerTitle}>Portfolio</Text>
+          <View style={styles.headerButtons}>
+            <TouchableOpacity
+              onPress={() => setShowCreditQuest(true)}
+              style={styles.creditButton}
+            >
+              <Icon name="activity" size={18} color="#007AFF" />
+              <Text style={styles.creditButtonLabel}>Credit</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setShowFamilyManagement(true)}
+              style={styles.familyButton}
+            >
+              <Icon 
+                name={familyGroup ? "users" : "user-plus"} 
+                size={20} 
+                color={familyGroup ? "#34C759" : "#8E8E93"} 
+              />
+              {familyGroup && (
+                <View style={styles.familyBadge}>
+                  <Text style={styles.familyBadgeText}>{familyGroup.members.length}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
         <View style={styles.loadingContainer}>
           <Icon name="refresh-cw" size={32} color="#34C759" />
@@ -216,6 +337,29 @@ return (
 <View style={styles.header}>
 <Icon name="bar-chart-2" size={24} color="#34C759" />
 <Text style={styles.headerTitle}>Portfolio</Text>
+<View style={styles.headerButtons}>
+  <TouchableOpacity
+    onPress={() => setShowCreditQuest(true)}
+    style={styles.creditButton}
+  >
+    <Icon name="trending-up" size={20} color="#007AFF" />
+  </TouchableOpacity>
+  <TouchableOpacity
+    onPress={() => setShowFamilyManagement(true)}
+    style={styles.familyButton}
+  >
+    <Icon 
+      name={familyGroup ? "users" : "user-plus"} 
+      size={20} 
+      color={familyGroup ? "#34C759" : "#8E8E93"} 
+    />
+    {familyGroup && (
+      <View style={styles.familyBadge}>
+        <Text style={styles.familyBadgeText}>{familyGroup.members.length}</Text>
+      </View>
+    )}
+  </TouchableOpacity>
+</View>
 </View>
 <View style={styles.emptyContainer}>
 <Icon name="bar-chart-2" size={64} color="#9CA3AF" />
@@ -232,14 +376,50 @@ Go to Home to add stocks
 </Text>
 </View>
 </View>
+{/* Family Management Modal - also available in empty state */}
+<FamilyManagementModal
+  visible={showFamilyManagement}
+  onClose={() => {
+    setShowFamilyManagement(false);
+    loadFamilyGroup();
+  }}
+  onFamilyCreated={(group) => {
+    setFamilyGroup(group);
+    const user = group.members.find(m => m.role === 'owner') || group.members[0];
+    setCurrentUser(user || null);
+  }}
+/>
 </View>
 );
-}
+  }
 return (
 <View style={styles.container}>
 <View style={styles.header}>
 <Icon name="bar-chart-2" size={24} color="#34C759" />
 <Text style={styles.headerTitle}>Portfolio</Text>
+<View style={styles.headerButtons}>
+  <TouchableOpacity
+    onPress={() => setShowCreditQuest(true)}
+    style={styles.creditButton}
+  >
+    <Icon name="trending-up" size={20} color="#007AFF" />
+  </TouchableOpacity>
+  <TouchableOpacity
+    onPress={() => setShowFamilyManagement(true)}
+    style={styles.familyButton}
+  >
+    <Icon 
+      name={familyGroup ? "users" : "user-plus"} 
+      size={20} 
+      color={familyGroup ? "#34C759" : "#8E8E93"} 
+    />
+    {familyGroup && (
+      <View style={styles.familyBadge}>
+        <Text style={styles.familyBadgeText}>{familyGroup.members.length}</Text>
+      </View>
+    )}
+  </TouchableOpacity>
+</View>
 </View>
     <ScrollView
       style={styles.content}
@@ -249,38 +429,177 @@ return (
       }
       showsVerticalScrollIndicator={false}
     >
-    {/* Portfolio Overview */}
-<View style={styles.portfolioOverview}>
-<Text style={styles.overviewTitle}>Your Portfolios</Text>
-<Text style={styles.overviewSubtitle}>
-{totalPortfolios} portfolios • ${totalValue.toLocaleString()} total value
-{loadingPrices && ' • Loading prices...'}
-</Text>
-<View style={styles.watchlistGrid}>
-{portfolios.slice(0, 3).map((portfolio: any) => (
-<View key={portfolio.name} style={styles.watchlistItem}>
-<Text style={styles.stockSymbol}>{portfolio.name}</Text>
-<Text style={styles.stockName} numberOfLines={1}>
-{portfolio.holdingsCount} holdings
-</Text>
-<View style={styles.priceContainer}>
-<Text style={styles.stockPrice}>
-${portfolio.totalValue ? portfolio.totalValue.toLocaleString() : '0'}
-</Text>
-</View>
-</View>
-))}
-</View>
-{portfolios.length > 3 && (
-<Text style={styles.moreStocks}>
-+{portfolios.length - 3} more portfolios
-</Text>
+    {/* Portfolio Overview - Constellation Orb or Shared Orb */}
+    {/* Show SharedOrb if user has family group, otherwise ConstellationOrb */}
+{snapshot ? (
+  <View style={styles.constellationContainer}>
+    {familyGroup && currentUser ? (
+      <SharedOrb
+        snapshot={snapshot}
+        familyGroupId={familyGroup.id}
+        currentUser={currentUser}
+        onGesture={(gesture) => {
+          // Map gestures to modals
+          switch (gesture) {
+            case 'tap':
+              setShowLifeEvents(true);
+              break;
+            case 'double_tap':
+              setShowQuickActions(true);
+              break;
+            case 'long_press':
+              setShowBreakdown(true);
+              break;
+            case 'swipe_left':
+              setShowShield(true);
+              break;
+            case 'swipe_right':
+              setShowGrowth(true);
+              break;
+            case 'pinch':
+              setShowWhatIf(true);
+              break;
+          }
+        }}
+      />
+    ) : (
+      <ConstellationOrb
+        snapshot={snapshot}
+        onTap={() => setShowLifeEvents(true)}
+        onDoubleTap={() => setShowQuickActions(true)}
+        onLongPress={() => setShowBreakdown(true)}
+        onSwipeLeft={() => setShowShield(true)}
+        onSwipeRight={() => setShowGrowth(true)}
+        onPinch={() => setShowWhatIf(true)}
+      />
+    )}
+    
+    {/* Gesture Action Modals */}
+    {snapshot && (
+      <>
+        <LifeEventPetalsModal
+          visible={showLifeEvents}
+          onClose={() => setShowLifeEvents(false)}
+          snapshot={snapshot}
+        />
+        <MarketCrashShieldView
+          visible={showShield}
+          onClose={() => setShowShield(false)}
+          snapshot={snapshot}
+        />
+        <GrowthProjectionView
+          visible={showGrowth}
+          onClose={() => setShowGrowth(false)}
+          snapshot={snapshot}
+        />
+        <WhatIfSimulator
+          visible={showWhatIf}
+          onClose={() => setShowWhatIf(false)}
+          snapshot={snapshot}
+        />
+        <QuickActionsModal
+          visible={showQuickActions}
+          onClose={() => setShowQuickActions(false)}
+          snapshot={snapshot}
+          onNavigate={go}
+        />
+        <DetailedBreakdownModal
+          visible={showBreakdown}
+          onClose={() => setShowBreakdown(false)}
+          snapshot={snapshot}
+        />
+      </>
+    )}
+    {/* Always render DetailedBreakdownModal even if snapshot is null (will use fallback) */}
+    {!snapshot && (
+      <DetailedBreakdownModal
+        visible={showBreakdown}
+        onClose={() => setShowBreakdown(false)}
+        snapshot={{
+          netWorth: 0,
+          cashflow: { period: '30d', in: 0, out: 0, delta: 0 },
+          positions: [],
+          shield: [],
+          breakdown: { bankBalance: 0, portfolioValue: 0, bankAccountsCount: 0 },
+        }}
+      />
+    )}
+    {/* Family Management Modal */}
+    <FamilyManagementModal
+      visible={showFamilyManagement}
+      onClose={() => {
+        setShowFamilyManagement(false);
+        loadFamilyGroup(); // Reload family group after closing
+      }}
+      onFamilyCreated={(group) => {
+        setFamilyGroup(group);
+        const user = group.members.find(m => m.role === 'owner') || group.members[0];
+        setCurrentUser(user || null);
+      }}
+    />
+    {/* Dawn Ritual Modal */}
+    <DawnRitualScreen
+      visible={showDawnRitual}
+      onComplete={async (transactionsSynced) => {
+        const { dawnRitualScheduler } = await import('../../rituals/services/DawnRitualScheduler');
+        await dawnRitualScheduler.markPerformed();
+        setShowDawnRitual(false);
+      }}
+      onClose={() => setShowDawnRitual(false)}
+    />
+    {/* Credit Quest Modal */}
+    <CreditQuestScreen
+      visible={showCreditQuest}
+      onClose={() => setShowCreditQuest(false)}
+    />
+    {/* Milestones Timeline below orb */}
+    <MilestonesTimeline milestones={milestones} onCelebrate={(t) => setCelebrateTitle(t)} />
+  </View>
+) : (
+  <View style={styles.portfolioOverview}>
+    {/* Debug info for Constellation Orb */}
+    {__DEV__ && snapshotLoading && (
+      <View style={{ padding: 16, backgroundColor: '#FFF3CD', borderRadius: 8, marginBottom: 16 }}>
+        <Text style={{ color: '#856404', fontSize: 12 }}>
+          Loading Constellation Orb... (snapshotLoading: {String(snapshotLoading)})
+        </Text>
+        {snapshotError && (
+          <Text style={{ color: '#721C24', fontSize: 12, marginTop: 4 }}>
+            Error: {snapshotError.message}
+          </Text>
+        )}
+      </View>
+    )}
+    <Text style={styles.overviewTitle}>Your Portfolios</Text>
+    <Text style={styles.overviewSubtitle}>
+      {totalPortfolios} portfolios • ${totalValue.toLocaleString()} total value
+      {loadingPrices && ' • Loading prices...'}
+    </Text>
+    <View style={styles.watchlistGrid}>
+      {portfolios.slice(0, 3).map((portfolio: any) => (
+        <View key={portfolio.name} style={styles.watchlistItem}>
+          <Text style={styles.stockSymbol}>{portfolio.name}</Text>
+          <Text style={styles.stockName} numberOfLines={1}>
+            {portfolio.holdingsCount} holdings
+          </Text>
+          <View style={styles.priceContainer}>
+            <Text style={styles.stockPrice}>
+              ${portfolio.totalValue ? portfolio.totalValue.toLocaleString() : '0'}
+            </Text>
+          </View>
+        </View>
+      ))}
+    </View>
+    {portfolios.length > 3 && (
+      <Text style={styles.moreStocks}>
+        +{portfolios.length - 3} more portfolios
+      </Text>
+    )}
+
+    {/* Milestones Timeline (placed outside grid for full width) */}
+    <MilestonesTimeline milestones={milestones} onCelebrate={(t) => setCelebrateTitle(t)} />
+  </View>
 )}
-
-{/* Milestones Timeline (placed outside grid for full width) */}
-<MilestonesTimeline milestones={milestones} onCelebrate={(t) => setCelebrateTitle(t)} />
-
-</View>
 
 {/* Portfolio Holdings - NEW from portfolio-holdings-v1 branch (merged from feat/portfolio-holdings-v1) */}
 <View style={{ marginTop: 24, marginBottom: 16, paddingHorizontal: 16 }}>
@@ -298,9 +617,9 @@ ${portfolio.totalValue ? portfolio.totalValue.toLocaleString() : '0'}
   />
 </View>
 
-{/* Portfolio Actions */}
-<View style={styles.actionsSection}>
-<Text style={styles.actionsTitle}>Portfolio Management</Text>
+             {/* Portfolio Actions */}
+             <View style={styles.actionsSection}>
+               <Text style={styles.actionsTitle}>Portfolio Management</Text>
 <TouchableOpacity 
  style={styles.actionButton}
  onPress={() => go('portfolio-management')}
@@ -487,6 +806,7 @@ paddingTop: 0,
 header: {
 flexDirection: 'row',
 alignItems: 'center',
+justifyContent: 'space-between',
 gap: 12,
 paddingHorizontal: 20,
 paddingVertical: 16,
@@ -498,6 +818,56 @@ headerTitle: {
 fontSize: 20,
 fontWeight: '600',
 color: '#1C1C1E',
+flex: 1,
+},
+headerButtons: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  creditButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#F0F8FF',
+    minHeight: 40,
+  },
+  creditButtonLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#007AFF',
+  },
+  familyButton: {
+    position: 'relative',
+    padding: 10,
+    borderRadius: 20,
+    backgroundColor: '#F8F9FA',
+    minWidth: 40,
+    minHeight: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+familyBadge: {
+position: 'absolute',
+top: -4,
+right: -4,
+backgroundColor: '#34C759',
+borderRadius: 10,
+minWidth: 20,
+height: 20,
+justifyContent: 'center',
+alignItems: 'center',
+paddingHorizontal: 4,
+borderWidth: 2,
+borderColor: '#FFFFFF',
+},
+familyBadgeText: {
+color: '#FFFFFF',
+fontSize: 10,
+fontWeight: 'bold',
 },
 content: {
 flex: 1,
@@ -567,6 +937,11 @@ emptyActionText: {
 fontSize: 16,
 color: '#34C759',
 fontWeight: '600',
+},
+constellationContainer: {
+marginTop: 16,
+paddingHorizontal: 16,
+paddingBottom: 16,
 },
 portfolioOverview: {
 backgroundColor: '#FFFFFF',

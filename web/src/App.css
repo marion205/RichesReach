@@ -1,0 +1,136 @@
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #F8F9FA;
+}
+
+.app-loading,
+.app-error {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  gap: 16px;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #E5E5EA;
+  border-top-color: #007AFF;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.app-header {
+  text-align: center;
+  padding: 24px;
+  background: #FFFFFF;
+  border-bottom: 1px solid #E5E5EA;
+}
+
+.app-header h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: #1C1C1E;
+  margin-bottom: 4px;
+}
+
+.app-subtitle {
+  font-size: 16px;
+  color: #8E8E93;
+}
+
+.app-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  gap: 24px;
+}
+
+.orb-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #FFFFFF;
+  border-radius: 24px;
+  padding: 24px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.app-info {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 16px;
+  width: 100%;
+  max-width: 600px;
+}
+
+.info-card {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 16px;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.info-card h3 {
+  font-size: 12px;
+  font-weight: 600;
+  color: #8E8E93;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.info-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1C1C1E;
+}
+
+.app-footer {
+  text-align: center;
+  padding: 24px;
+  background: #FFFFFF;
+  border-top: 1px solid #E5E5EA;
+}
+
+.install-button {
+  background: #007AFF;
+  color: #FFFFFF;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 12px;
+}
+
+.install-button:hover {
+  background: #0051D5;
+}
+
+@media (max-width: 768px) {
+  .app-header h1 {
+    font-size: 24px;
+  }
+  
+  .orb-container {
+    padding: 16px;
+  }
+  
+  .app-info {
+    grid-template-columns: 1fr;
+  }
+}
+

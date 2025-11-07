@@ -6,10 +6,11 @@ class Migration(migrations.Migration):
         ('core', '0014_enhance_user_security'),
 ]
     operations = [
-        migrations.RemoveField(
-model_name='stockrecommendation',
-        name='portfolio_recommendation',
-),
+        # Skip removing portfolio_recommendation if model doesn't exist or field already removed
+        # migrations.RemoveField(
+        #     model_name='stockrecommendation',
+        #     name='portfolio_recommendation',
+        # ),
         migrations.RemoveField(
 model_name='discussioncomment',
         name='discussion',

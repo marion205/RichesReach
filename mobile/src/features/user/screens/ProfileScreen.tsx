@@ -23,6 +23,7 @@ import SblocWidget from '../../../components/forms/SblocWidget';
 import SblocCalculatorModal from '../../../components/forms/SblocCalculatorModal';
 import { FEATURES } from '../../../config/featureFlags';
 import { globalNavigate } from '../../../navigation/NavigationService';
+import { PrivacyDashboard } from '../../privacy/components/PrivacyDashboard';
 
 // --- Design tokens (light theme) ---
 const UI = {
@@ -140,6 +141,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigateTo, onLogout }) =
   const [showSBLOCModal, setShowSBLOCModal] = useState(false);
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const [showSblocCalculator, setShowSblocCalculator] = useState(false);
+  const [showPrivacyDashboard, setShowPrivacyDashboard] = useState(false);
   
   // Helper function to navigate - tries React Navigation first, then fallback
   const navigate = (screen: string, params?: any) => {
@@ -408,6 +410,16 @@ return (
         >
           <Icon name="book-open" size={16} color="#333" />
           <Text style={styles.settingsItemText}>Learning</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={styles.settingsItem}
+          onPress={() => {
+            setShowSettingsMenu(false);
+            setShowPrivacyDashboard(true);
+          }}
+        >
+          <Icon name="shield" size={16} color="#333" />
+          <Text style={styles.settingsItemText}>Privacy & Data</Text>
         </TouchableOpacity>
         <TouchableOpacity 
           style={styles.settingsItem}
@@ -840,6 +852,12 @@ onPress={() => navigateTo?.('ai-portfolio')}
           [{ text: 'OK' }]
         );
       }}
+    />
+
+    {/* Privacy Dashboard Modal */}
+    <PrivacyDashboard
+      visible={showPrivacyDashboard}
+      onClose={() => setShowPrivacyDashboard(false)}
     />
 
     {/* New SBLOC Calculator Modal */}

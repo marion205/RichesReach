@@ -27,9 +27,12 @@ if (!__DEV__ && badHost) {
 }
 
 // iOS Simulator can use localhost, physical devices need LAN IP
-// Only warn for physical devices (not simulator)
-if (Platform.OS !== 'web' && Platform.OS !== 'ios' && /localhost|127\.0\.0\.1/.test(API_BASE)) {
+// Auto-detect if we're on a physical device and using localhost
+const isPhysicalDevice = Platform.OS !== 'web' && !__DEV__ || (Platform.OS === 'ios' && !Constants.isDevice);
+if (isPhysicalDevice && /localhost|127\.0\.0\.1/.test(API_BASE)) {
   console.warn("⚠️ API_BASE points to localhost on a physical device. Use LAN IP instead.");
+  // Try to auto-detect Mac IP from device IP (if device is on same network)
+  // For now, user must set EXPO_PUBLIC_API_BASE_URL
 }
 
 // Fail fast if no API base URL is configured

@@ -14,6 +14,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Audio } from 'expo-av';
 import * as Speech from 'expo-speech';
+import { safeSpeak, stopAllSpeech } from '../hooks/useSafeSpeak';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../theme/PersonalizedThemes';
 import { useVoice } from '../contexts/VoiceContext';
@@ -199,7 +200,7 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
         }
         
         // Stop any ongoing speech
-        Speech.stop();
+        stopAllSpeech();
       };
       cleanup();
     };
@@ -709,7 +710,7 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
       setIsSpeaking(true);
       
       // Stop any existing speech
-      Speech.stop();
+      await stopAllSpeech();
       
       // Use the voice synthesis API with selected voice (with timeout)
       const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000";
@@ -752,7 +753,7 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
             const fallbackTimeout = setTimeout(async () => {
               console.log('Audio playback timeout, falling back to basic speech');
               await sound.unloadAsync();
-              await Speech.speak(text, {
+              await safeSpeak(text, {
                 language: 'en-US',
                 pitch: 1.0,
                 rate: 0.9,
@@ -777,7 +778,7 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
                 clearTimeout(fallbackTimeout);
                 console.log('Audio playback error, falling back to basic speech:', status.error);
                 sound.unloadAsync();
-                Speech.speak(text, {
+                safeSpeak(text, {
                   language: 'en-US',
                   pitch: 1.0,
                   rate: 0.9,
@@ -797,7 +798,7 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
             const selectedVoice = getSelectedVoice();
             const voiceParams = getVoiceParameters(selectedVoice);
             
-            await Speech.speak(text, {
+            await safeSpeak(text, {
               language: 'en-US',
               pitch: voiceParams.pitch,
               rate: voiceParams.rate,

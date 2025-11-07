@@ -16,7 +16,8 @@ export function markPerformance(label: string): void {
  * Measure performance between two marks
  */
 export function measurePerformance(label: string): number | null {
-  if (__DEV__ && typeof performance !== 'undefined' && performance.measure) {
+  // Check for web Performance API (not available in React Native)
+  if (__DEV__ && typeof performance !== 'undefined' && performance.measure && performance.getEntriesByName) {
     try {
       performance.mark(`${label}-end`);
       performance.measure(label, `${label}-start`, `${label}-end`);
@@ -28,7 +29,10 @@ export function measurePerformance(label: string): number | null {
         return duration;
       }
     } catch (e) {
-      console.warn(`[Performance] Could not measure ${label}:`, e);
+      // Silently fail in React Native - performance API not available
+      if (typeof window !== 'undefined') {
+        console.warn(`[Performance] Could not measure ${label}:`, e);
+      }
     }
   }
   return null;
