@@ -62,11 +62,12 @@
 6. Order type education (dynamic)
 7. Legal document links (UI ready, needs navigation handlers)
 
-### Needs Navigation Implementation ⚠️
-1. Terms of Service link handler
-2. Privacy Policy link handler
-3. EULA link handler
-4. BCP link handler
+### Navigation Implementation ✅
+1. ✅ Terms of Service link handler - Implemented
+2. ✅ Privacy Policy link handler - Implemented
+3. ✅ EULA link handler - Implemented
+4. ✅ BCP link handler - Implemented
+5. ✅ `LegalDocumentViewer.tsx` component created
 
 ### Legal Review Needed ⚠️
 1. RIA/custody determination if providing personalized recommendations
@@ -79,9 +80,9 @@ Existing documents found:
 - ✅ `mobile/terms-of-service.html` - Terms of Service HTML file exists
 
 Documents to create/link:
-- ⚠️ Privacy Policy (needs to be created or linked)
-- ⚠️ EULA (needs to be created or linked)
-- ⚠️ BCP (needs to be created or linked)
+- ✅ Privacy Policy - Created (`mobile/privacy-policy.html`)
+- ✅ EULA - Created (`mobile/eula.html`)
+- ✅ BCP - Created (`mobile/bcp.html`)
 
 ## 📝 Recommended Next Steps
 

@@ -6,8 +6,6 @@ import os
 import sys
 import asyncio
 import aiohttp
-import numpy as np
-import pandas as pd
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass
@@ -15,6 +13,16 @@ import logging
 import json
 import time
 from enum import Enum
+
+# Optional imports for data analysis
+try:
+    import numpy as np
+except ImportError:
+    np = None
+try:
+    import pandas as pd
+except ImportError:
+    pd = None
 
 logger = logging.getLogger(__name__)
 
@@ -417,18 +425,30 @@ class AdvancedMarketDataService:
         """Analyze VIX trend based on value"""
         if vix_value < 15:
             return 'bullish' # Low volatility, bullish market
+        elif vix_value < 25:
             return 'neutral' # Normal volatility
+        else:
             return 'bearish' # High volatility, bearish market
+    
+    def _analyze_yield_trend(self, yield_value: float) -> str:
         """Analyze bond yield trend"""
         if yield_value < 2.0:
             return 'bullish' # Low yields, good for stocks
+        elif yield_value < 3.5:
             return 'neutral' # Normal yields
+        else:
             return 'bearish' # High yields, bad for stocks
+    
+    def _analyze_sector_trend(self, change: float) -> str:
         """Analyze sector trend based on price change"""
         if change > 0.5:
             return 'bullish'
+        elif change < -0.5:
             return 'bearish'
+        else:
             return 'neutral'
+    
+    def _analyze_market_regime(self, results: List) -> Dict[str, Any]:
         """Analyze overall market regime based on all indicators"""
         # This would be a sophisticated analysis combining all indicators
         # For now, return a simple analysis
@@ -463,6 +483,10 @@ class AdvancedMarketDataService:
         """Check if cached data is still valid"""
         if key not in self.cache or key not in self.cache_expiry:
             return False
+        # Check if cache has expired
+        if datetime.now() >= self.cache_expiry[key]:
+            return False
+        return True
     def _cache_data(self, key: str, data: Any):
         """Cache data with expiration"""
         self.cache[key] = data

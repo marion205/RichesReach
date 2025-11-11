@@ -14,6 +14,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import LegalDocumentViewer from './LegalDocumentViewer';
 
 interface BrokerConfirmOrderModalProps {
   visible: boolean;
@@ -51,6 +52,15 @@ export default function BrokerConfirmOrderModal({
 }: BrokerConfirmOrderModalProps) {
   const [confirming, setConfirming] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [legalDocumentVisible, setLegalDocumentVisible] = useState(false);
+  const [legalDocumentType, setLegalDocumentType] = useState<'terms' | 'privacy' | 'eula' | 'bcp'>('terms');
+  const [legalDocumentTitle, setLegalDocumentTitle] = useState('');
+
+  const openLegalDocument = (type: 'terms' | 'privacy' | 'eula' | 'bcp', title: string) => {
+    setLegalDocumentType(type);
+    setLegalDocumentTitle(title);
+    setLegalDocumentVisible(true);
+  };
 
   const handleConfirm = async () => {
     if (!agreedToTerms) {
@@ -273,38 +283,28 @@ export default function BrokerConfirmOrderModal({
               <Text style={styles.sectionTitle}>Legal Documents</Text>
               <TouchableOpacity
                 style={styles.linkButton}
-                onPress={() => {
-                  // Navigate to Terms of Service
-                  // You'll need to implement navigation to a WebView or external browser
-                  console.log('Open Terms of Service');
-                }}
+                onPress={() => openLegalDocument('terms', 'Terms of Service')}
               >
                 <Text style={styles.linkText}>Terms of Service</Text>
                 <Ionicons name="chevron-forward" size={16} color="#007AFF" />
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.linkButton}
-                onPress={() => {
-                  console.log('Open Privacy Policy');
-                }}
+                onPress={() => openLegalDocument('privacy', 'Privacy Policy')}
               >
                 <Text style={styles.linkText}>Privacy Policy</Text>
                 <Ionicons name="chevron-forward" size={16} color="#007AFF" />
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.linkButton}
-                onPress={() => {
-                  console.log('Open End User License Agreement (EULA)');
-                }}
+                onPress={() => openLegalDocument('eula', 'End User License Agreement')}
               >
                 <Text style={styles.linkText}>End User License Agreement (EULA)</Text>
                 <Ionicons name="chevron-forward" size={16} color="#007AFF" />
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.linkButton}
-                onPress={() => {
-                  console.log('Open Business Continuity Plan (BCP)');
-                }}
+                onPress={() => openLegalDocument('bcp', 'Business Continuity Plan')}
               >
                 <Text style={styles.linkText}>Business Continuity Plan (BCP)</Text>
                 <Ionicons name="chevron-forward" size={16} color="#007AFF" />
@@ -356,6 +356,14 @@ export default function BrokerConfirmOrderModal({
           </View>
         </View>
       </View>
+
+      {/* Legal Document Viewer Modal */}
+      <LegalDocumentViewer
+        visible={legalDocumentVisible}
+        onClose={() => setLegalDocumentVisible(false)}
+        documentType={legalDocumentType}
+        title={legalDocumentTitle}
+      />
     </Modal>
   );
 }

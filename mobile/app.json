@@ -4,8 +4,12 @@
     "slug": "richesreach-ai",
     "version": "1.0.2",
     "sdkVersion": "54.0.0",
+    "extra": {
+      "sentryDsn": "https://986e30c1cf6c0e86b0c62f2b1d6b7bd8@o4510341346295808.ingest.us.sentry.io/4510341350359040",
+      "environment": "production",
+      "releaseVersion": "1.0.0"
+    },
     "jsEngine": "hermes",
-    "newArchEnabled": false,
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -59,6 +63,7 @@
       }
     },
     "plugins": [
+      "expo-dev-client",
       "expo-image-picker",
       [
         "expo-av",

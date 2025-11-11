@@ -5,11 +5,12 @@
   "build": {
     "development": {
       "developmentClient": true,
+      "distribution": "internal",
       "env": {
         "COCOAPODS_SKIP_XCFRAMEWORK_VALIDATION": "1"
       },
       "ios": {
-        "simulator": true,
+        "simulator": false,
         "image": "macos-sonoma-14.6-xcode-16.1"
       }
     },

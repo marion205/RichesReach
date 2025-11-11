@@ -481,6 +481,9 @@ class RefreshAccountView(View):
             if not bank_link_id:
                 return JsonResponse({'error': 'bankLinkId is required'}, status=400)
             
+            # Import models inside view functions to avoid "Apps aren't loaded" errors
+            from .banking_models import BankProviderAccount
+            
             try:
                 provider_account = BankProviderAccount.objects.get(
                     id=bank_link_id,
@@ -531,6 +534,9 @@ class DeleteBankLinkView(View):
             return JsonResponse({'error': 'Authentication required'}, status=401)
         
         try:
+            # Import models inside view to avoid "Apps aren't loaded" errors
+            from .banking_models import BankProviderAccount
+            
             try:
                 provider_account = BankProviderAccount.objects.get(
                     id=bank_link_id,

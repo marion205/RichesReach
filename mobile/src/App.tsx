@@ -1,4 +1,10 @@
+// Initialize Sentry for error tracking (must be first)
+import './config/sentry';
+
 // Import Reanimated first (required for worklets)
+// NOTE: If app crashes during startup with ReanimatedModule.mm:166 error,
+// this is a known issue with Reanimated 4.1.1 + RN 0.81 + Expo SDK 54
+// Solution: Update to react-native-reanimated ~3.15.0 or wait for fix
 import 'react-native-reanimated';
 
 // Import gesture handler (required for react-native-tab-view)
@@ -7,18 +13,7 @@ import 'react-native-gesture-handler';
 // Import URL polyfill first to fix React Native URL.protocol issues
 import 'react-native-url-polyfill/auto';
 
-// Suppress React Native warnings in development
-import { LogBox } from 'react-native';
-LogBox.ignoreLogs([
-  'SafeAreaView has been deprecated',
-  'NetInfo not available',
-  'Store reset while query was in flight',
-  'Network request failed',
-  'Network request timed out',
-  'Text strings must be rendered within a <Text> component',
-  'Console Error'
-]);
-LogBox.ignoreAllLogs(true);
+// Note: LogBox setup moved to index.js (before App import) to catch early errors
 
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
@@ -35,6 +30,7 @@ import ZeroFrictionOnboarding from './features/onboarding/ZeroFrictionOnboarding
 import ErrorBoundary from './components/ErrorBoundary';
 import WellnessScoreDashboard from './components/WellnessScoreDashboard';
 import ARPortfolioPreview from './components/ARPortfolioPreview';
+import SentryTestButton from './components/SentryTestButton';
 import OfflineInsightsService from './services/OfflineInsightsService';
 // Use only Expo Go compatible services to avoid "Exception in HostFunction" errors
 import expoGoCompatibleNotificationService from './features/notifications/services/ExpoGoCompatibleNotificationService';
@@ -666,6 +662,18 @@ return <OracleInsights
             return <ThemeSettingsScreen onClose={() => navigateTo('home')} />;
             case 'connectivity-test':
             return <ConnectivityTestScreen onClose={() => navigateTo('home')} />;
+            case 'sentry-test':
+            return (
+              <View style={{ flex: 1, padding: 20, backgroundColor: '#fff' }}>
+                <TouchableOpacity 
+                  onPress={() => navigateTo('home')}
+                  style={{ marginBottom: 20, padding: 10, backgroundColor: '#007AFF', borderRadius: 6 }}
+                >
+                  <Text style={{ color: '#fff', textAlign: 'center' }}>← Back</Text>
+                </TouchableOpacity>
+                <SentryTestButton />
+              </View>
+            );
     default:
       // Handle user-profile and user-portfolios with userId pattern
       if (currentScreen.startsWith('user-profile-')) {

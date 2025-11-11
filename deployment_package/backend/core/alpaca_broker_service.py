@@ -353,7 +353,7 @@ class BrokerGuardrails:
             orders_today = BrokerOrder.objects.filter(
                 broker_account=broker_account,
                 created_at__gte=start_of_day,
-                status__in=['FILLED', 'PARTIALLY_FILLED', 'ACCEPTED', 'PENDING_NEW']
+                status__in=['FILLED', 'PARTIALLY_FILLED']  # Only count orders that have been executed
             )
             
             total_notional = sum(

@@ -65,6 +65,15 @@ jest.mock('expo-device', () => ({
 }));
 
 jest.mock('expo-constants', () => ({
+  default: {
+    expoConfig: {
+      extra: {
+        eas: {
+          projectId: 'test-project-id',
+        },
+      },
+    },
+  },
   expoConfig: {
     extra: {
       eas: {
@@ -74,70 +83,25 @@ jest.mock('expo-constants', () => ({
   },
 }));
 
-// Mock react-native-webrtc
-jest.mock('react-native-webrtc', () => ({
-  RTCIceCandidate: jest.fn(),
-  RTCPeerConnection: jest.fn(),
-  RTCSessionDescription: jest.fn(),
-  RTCView: 'RTCView',
-  MediaStream: {
-    getUserMedia: jest.fn(),
-  },
-}));
+// Note: react-native-webrtc and socket.io-client mocks removed
+// Individual test files should mock these locally if needed
+// This avoids module resolution issues in the global setup
 
-// Mock socket.io-client
-jest.mock('socket.io-client', () => ({
-  __esModule: true,
-  default: jest.fn(() => ({
-    emit: jest.fn(),
-    on: jest.fn(),
-    off: jest.fn(),
-    disconnect: jest.fn(),
-    connected: true,
-  })),
-}));
+// Note: Optional mocks for react-native-gifted-chat and services
+// have been removed. Add them back if needed for your specific tests.
 
-// Mock react-native-gifted-chat
-jest.mock('react-native-gifted-chat', () => ({
-  GiftedChat: 'GiftedChat',
-  IMessage: {},
-}));
-
-// Mock services
-jest.mock('../services/WebRTCService', () => ({
-  WebRTCService: jest.fn().mockImplementation(() => ({
-    initialize: jest.fn(),
-    setCallbacks: jest.fn(),
-    startStream: jest.fn(),
-    stopStream: jest.fn(),
-    joinRoom: jest.fn(),
-    leaveRoom: jest.fn(),
-  })),
-}));
-
-jest.mock('../services/SocketChatService', () => ({
-  SocketChatService: jest.fn().mockImplementation(() => ({
-    initialize: jest.fn(),
-    setCallbacks: jest.fn(),
-    sendMessage: jest.fn(),
-    connect: jest.fn(),
-    disconnect: jest.fn(),
-    onMessage: jest.fn(),
-  })),
-}));
-
-// Mock theme
-jest.mock('../theme/PersonalizedThemes', () => ({
-  useTheme: () => ({
-    colors: {
-      background: '#ffffff',
-      surface: '#f5f5f5',
-      text: '#000000',
-      textSecondary: '#666666',
-      primary: '#007AFF',
-    },
-  }),
-}));
+// Mock theme (commented out - individual test files can mock this locally if needed)
+// jest.mock('../theme/PersonalizedThemes', () => ({
+//   useTheme: () => ({
+//     colors: {
+//       background: '#ffffff',
+//       surface: '#f5f5f5',
+//       text: '#000000',
+//       textSecondary: '#666666',
+//       primary: '#007AFF',
+//     },
+//   }),
+// }));
 
 // Mock navigation
 jest.mock('@react-navigation/native', () => ({
@@ -181,4 +145,5 @@ jest.mock('react-native', () => {
 });
 
 // Silence the warning: Animated: `useNativeDriver` is not supported
-jest.mock('react-native/Libraries/Animated/NativeAnimatedHelper');
+// Mock NativeAnimatedHelper (commented out - may cause module resolution issues)
+// jest.mock('react-native/Libraries/Animated/NativeAnimatedHelper');

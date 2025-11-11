@@ -2,9 +2,14 @@ import graphene
 from django.contrib.auth import get_user_model
 from .types import UserType, PostType, ChatSessionType, ChatMessageType, CommentType, StockType, StockDataType, WatchlistType, AIPortfolioRecommendationType
 from .models import Post, ChatSession, ChatMessage, Comment, User, Stock, StockData, Watchlist, AIPortfolioRecommendation, StockDiscussion, DiscussionComment, Portfolio
+from .benchmark_types import BenchmarkSeriesType, BenchmarkDataPointType
 import django.db.models as models
 from django.utils import timezone
 from datetime import timedelta
+import asyncio
+import logging
+
+logger = logging.getLogger(__name__)
 User = get_user_model()
 class Query(graphene.ObjectType):
 all_users = graphene.List(UserType)
@@ -65,6 +70,9 @@ social_feed = graphene.List('core.types.StockDiscussionType')
 # stock_sentiment = graphene.Field(StockSentimentType, stock_symbol=graphene.String())
 top_performers = graphene.List(StockType)
 market_sentiment = graphene.Field(graphene.JSONString)
+# Benchmark queries
+benchmarkSeries = graphene.Field(BenchmarkSeriesType, symbol=graphene.String(required=True), timeframe=graphene.String(required=True))
+availableBenchmarks = graphene.List(graphene.String)
 def resolve_all_users(root, info):
 user = info.context.user
 if user.is_anonymous:
@@ -558,8 +566,159 @@ service = PremiumAnalyticsService()
 # Return some sample screening results
 return service.get_advanced_stock_screening({})
 def resolve_test_options_analysis(self, info, symbol):
-"""Test options analysis (no auth required)"""
-from .options_service import OptionsAnalysisService
-service = OptionsAnalysisService()
-# Return options analysis for the given symbol
-return service.get_comprehensive_analysis(symbol)
+    """Test options analysis (no auth required)"""
+    from .options_service import OptionsAnalysisService
+    service = OptionsAnalysisService()
+    # Return options analysis for the given symbol
+    return service.get_comprehensive_analysis(symbol)
+
+def resolve_benchmarkSeries(self, info, symbol, timeframe):
+    """
+    Get benchmark series data for a given symbol and timeframe
+    Fetches real market data from market data APIs
+    """
+    try:
+        # Map timeframe to period for market data API
+        timeframe_map = {
+            '1M': '1mo',
+            '3M': '3mo',
+            '6M': '6mo',
+            '1Y': '1y',
+        }
+        period = timeframe_map.get(timeframe.upper(), '1y')
+        
+        # Get benchmark name mapping
+        benchmark_names = {
+            'SPY': 'S&P 500',
+            'QQQ': 'NASDAQ-100',
+            'DIA': 'Dow Jones Industrial Average',
+            'VTI': 'Total Stock Market',
+            'IWM': 'Russell 2000',
+            'VEA': 'Developed Markets',
+            'VWO': 'Emerging Markets',
+            'AGG': 'Total Bond Market',
+            'TLT': 'Long-term Treasury',
+            'GLD': 'Gold',
+            'SLV': 'Silver',
+        }
+        
+        benchmark_name = benchmark_names.get(symbol.upper(), symbol.upper())
+        
+        # Import market data service
+        try:
+            from .market_data_api_service import MarketDataAPIService, DataProvider
+        except ImportError:
+            logger.error("MarketDataAPIService not available")
+            return None
+        
+        # Create service instance and fetch historical data
+        # Since GraphQL resolvers are synchronous, we need to run async code
+        async def fetch_benchmark_data():
+            async with MarketDataAPIService() as service:
+                # Fetch historical data
+                hist_data = await service.get_historical_data(symbol.upper(), period=period)
+                
+                if hist_data is None or hist_data.empty:
+                    logger.warning(f"No historical data available for {symbol}")
+                    return None
+                
+                # Convert DataFrame to our format
+                import pandas as pd
+                import numpy as np
+                
+                # Ensure we have a 'Close' column (yfinance uses 'Close', others might use 'close')
+                close_col = 'Close' if 'Close' in hist_data.columns else 'close'
+                if close_col not in hist_data.columns:
+                    logger.error(f"No close price column found in data for {symbol}")
+                    return None
+                
+                # Sort by date (ascending)
+                hist_data = hist_data.sort_index()
+                
+                # Extract values
+                values = hist_data[close_col].values.tolist()
+                timestamps = hist_data.index.tolist()
+                
+                if len(values) == 0:
+                    return None
+                
+                # Calculate metrics
+                start_value = float(values[0])
+                end_value = float(values[-1])
+                total_return = end_value - start_value
+                total_return_percent = (total_return / start_value * 100) if start_value > 0 else 0.0
+                
+                # Calculate volatility (standard deviation of returns)
+                returns = pd.Series(values).pct_change().dropna()
+                volatility = float(returns.std() * np.sqrt(252)) * 100 if len(returns) > 1 else 0.0  # Annualized volatility
+                
+                # Create data points
+                data_points = []
+                prev_value = start_value
+                for i, (ts, val) in enumerate(zip(timestamps, values)):
+                    value = float(val)
+                    change = value - prev_value
+                    change_percent = (change / prev_value * 100) if prev_value > 0 else 0.0
+                    
+                    # Format timestamp
+                    if isinstance(ts, pd.Timestamp):
+                        timestamp_str = ts.strftime('%Y-%m-%dT%H:%M:%S')
+                    else:
+                        timestamp_str = str(ts)
+                    
+                    data_points.append({
+                        'timestamp': timestamp_str,
+                        'value': value,
+                        'change': change,
+                        'changePercent': change_percent,
+                    })
+                    prev_value = value
+                
+                return {
+                    'symbol': symbol.upper(),
+                    'name': benchmark_name,
+                    'timeframe': timeframe.upper(),
+                    'dataPoints': data_points,
+                    'startValue': start_value,
+                    'endValue': end_value,
+                    'totalReturn': total_return,
+                    'totalReturnPercent': total_return_percent,
+                    'volatility': volatility,
+                }
+        
+        # Run async function - use asyncio.run() like other resolvers
+        result = asyncio.run(fetch_benchmark_data())
+        
+        if result is None:
+            return None
+        
+        # Create GraphQL response objects
+        data_points = [
+            BenchmarkDataPointType(
+                timestamp=dp['timestamp'],
+                value=dp['value'],
+                change=dp['change'],
+                changePercent=dp['changePercent']
+            )
+            for dp in result['dataPoints']
+        ]
+        
+        return BenchmarkSeriesType(
+            symbol=result['symbol'],
+            name=result['name'],
+            timeframe=result['timeframe'],
+            dataPoints=data_points,
+            startValue=result['startValue'],
+            endValue=result['endValue'],
+            totalReturn=result['totalReturn'],
+            totalReturnPercent=result['totalReturnPercent'],
+            volatility=result['volatility'],
+        )
+        
+    except Exception as e:
+        logger.error(f"Error fetching benchmark series for {symbol}: {e}", exc_info=True)
+        return None
+
+def resolve_availableBenchmarks(self, info):
+    """Get list of available benchmark symbols"""
+    return ['SPY', 'QQQ', 'DIA', 'VTI', 'IWM', 'VEA', 'VWO', 'AGG', 'TLT', 'GLD', 'SLV']

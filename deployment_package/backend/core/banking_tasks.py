@@ -5,7 +5,7 @@ import os
 import logging
 from celery import shared_task
 from django.utils import timezone
-from datetime import timedelta
+from datetime import timedelta, datetime
 from .banking_models import BankAccount, BankProviderAccount, BankTransaction
 from .yodlee_client import YodleeClient
 
@@ -123,13 +123,11 @@ def sync_transactions_task(self, user_id, bank_account_id, from_date=None, to_da
         if not to_date:
             to_date = timezone.now().date()
         else:
-            from datetime import datetime
             to_date = datetime.strptime(to_date, '%Y-%m-%d').date()
         
         if not from_date:
             from_date = to_date - timedelta(days=30)
         else:
-            from datetime import datetime
             from_date = datetime.strptime(from_date, '%Y-%m-%d').date()
         
         yodlee = YodleeClient()

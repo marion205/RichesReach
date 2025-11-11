@@ -179,6 +179,19 @@ _STOCK_METADATA = {
     "JNJ": {"companyName": "Johnson & Johnson", "sector": "Healthcare", "marketCap": 420000000000, "peRatio": 28.0, "dividendYield": 0.026, "beginnerFriendlyScore": 92},
 }
 
+# Initialize monitoring before creating app
+try:
+    import sys
+    import os
+    backend_path = os.path.join(os.path.dirname(__file__), 'deployment_package', 'backend')
+    if backend_path not in sys.path:
+        sys.path.insert(0, backend_path)
+    from core.monitoring_setup import init_monitoring
+    init_monitoring()
+    print("✅ Monitoring initialized")
+except Exception as e:
+    print(f"⚠️ Monitoring initialization failed: {e}")
+
 app = FastAPI(title="RichesReach Main Server", version="1.0.0")
 
 # Add CORS middleware

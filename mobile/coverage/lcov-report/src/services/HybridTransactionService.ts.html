@@ -1,0 +1,352 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for src/services/HybridTransactionService.ts</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../prettify.css" />
+    <link rel="stylesheet" href="../../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../../index.html">All files</a> / <a href="index.html">src/services</a> HybridTransactionService.ts</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>0/61</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>0/18</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>0/6</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>0/61</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line low'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a>
+<a name='L4'></a><a href='#L4'>4</a>
+<a name='L5'></a><a href='#L5'>5</a>
+<a name='L6'></a><a href='#L6'>6</a>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a>
+<a name='L9'></a><a href='#L9'>9</a>
+<a name='L10'></a><a href='#L10'>10</a>
+<a name='L11'></a><a href='#L11'>11</a>
+<a name='L12'></a><a href='#L12'>12</a>
+<a name='L13'></a><a href='#L13'>13</a>
+<a name='L14'></a><a href='#L14'>14</a>
+<a name='L15'></a><a href='#L15'>15</a>
+<a name='L16'></a><a href='#L16'>16</a>
+<a name='L17'></a><a href='#L17'>17</a>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a>
+<a name='L28'></a><a href='#L28'>28</a>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a>
+<a name='L41'></a><a href='#L41'>41</a>
+<a name='L42'></a><a href='#L42'>42</a>
+<a name='L43'></a><a href='#L43'>43</a>
+<a name='L44'></a><a href='#L44'>44</a>
+<a name='L45'></a><a href='#L45'>45</a>
+<a name='L46'></a><a href='#L46'>46</a>
+<a name='L47'></a><a href='#L47'>47</a>
+<a name='L48'></a><a href='#L48'>48</a>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a>
+<a name='L52'></a><a href='#L52'>52</a>
+<a name='L53'></a><a href='#L53'>53</a>
+<a name='L54'></a><a href='#L54'>54</a>
+<a name='L55'></a><a href='#L55'>55</a>
+<a name='L56'></a><a href='#L56'>56</a>
+<a name='L57'></a><a href='#L57'>57</a>
+<a name='L58'></a><a href='#L58'>58</a>
+<a name='L59'></a><a href='#L59'>59</a>
+<a name='L60'></a><a href='#L60'>60</a>
+<a name='L61'></a><a href='#L61'>61</a>
+<a name='L62'></a><a href='#L62'>62</a>
+<a name='L63'></a><a href='#L63'>63</a>
+<a name='L64'></a><a href='#L64'>64</a>
+<a name='L65'></a><a href='#L65'>65</a>
+<a name='L66'></a><a href='#L66'>66</a>
+<a name='L67'></a><a href='#L67'>67</a>
+<a name='L68'></a><a href='#L68'>68</a>
+<a name='L69'></a><a href='#L69'>69</a>
+<a name='L70'></a><a href='#L70'>70</a>
+<a name='L71'></a><a href='#L71'>71</a>
+<a name='L72'></a><a href='#L72'>72</a>
+<a name='L73'></a><a href='#L73'>73</a>
+<a name='L74'></a><a href='#L74'>74</a>
+<a name='L75'></a><a href='#L75'>75</a>
+<a name='L76'></a><a href='#L76'>76</a>
+<a name='L77'></a><a href='#L77'>77</a>
+<a name='L78'></a><a href='#L78'>78</a>
+<a name='L79'></a><a href='#L79'>79</a>
+<a name='L80'></a><a href='#L80'>80</a>
+<a name='L81'></a><a href='#L81'>81</a>
+<a name='L82'></a><a href='#L82'>82</a>
+<a name='L83'></a><a href='#L83'>83</a>
+<a name='L84'></a><a href='#L84'>84</a>
+<a name='L85'></a><a href='#L85'>85</a>
+<a name='L86'></a><a href='#L86'>86</a>
+<a name='L87'></a><a href='#L87'>87</a>
+<a name='L88'></a><a href='#L88'>88</a>
+<a name='L89'></a><a href='#L89'>89</a>
+<a name='L90'></a><a href='#L90'>90</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/**
+<span class="cstat-no" title="statement not covered" > * Hybrid service: calls backend risk validator, then sends on-</span>chain tx via WalletConnect.
+<span class="cstat-no" title="statement not covered" > * Supports: approve -&gt; deposit, borrow, re</span>pay
+ */
+import { ethers } from 'ethers';
+import { getReadProvider } from '../blockchain/web3Service';
+import { sendTx } from '../blockchain/wallet/walletConnect';
+import { ERC20_AB<span class="cstat-no" title="statement not covered" >I } from '../block</span>chain/abi/erc20';
+import { AAVE_POOL_ABI<span class="cstat-no" title="statement not covered" > } from '../blockchain/abi/aavePool';</span>
+<span class="cstat-no" title="statement not covered" ></span>
+type HybridDeps <span class="cstat-no" title="statement not covered" >= {</span>
+  wcClient: any;<span class="cstat-no" title="statement not covered" ></span>
+  wcSession: any;
+  ch<span class="fstat-no" title="function not covered" >ai</span>nIdWC: string;
+  userAd<span class="cstat-no" title="statement not covered" >dress: string;</span>
+  aavePo<span class="cstat-no" title="statement not covered" >ol: string;</span>
+  assetM<span class="cstat-no" title="statement not covered" >ap: Record&lt;string, { address: string; decimals: number }&gt;;</span>
+  backendBaseUrl: string; // e.g., https://api.yourapp.com
+};<span class="fstat-no" title="function not covered" ></span>
+<span class="cstat-no" title="statement not covered" ></span>
+export class HybridTransactionService {
+  constructor(private deps: HybridDeps) {}
+  private erc20Iface = new ethers.utils.Interface(ERC20_ABI);
+  private poolIface = new ethers.utils.Interface(AAVE_POOL_ABI);
+<span class="cstat-no" title="statement not covered" ></span>
+  private as<span class="cstat-no" title="statement not covered" >ync validate(type: string, data: any) {</span>
+    const res = await<span class="cstat-no" title="statement not covered" > fetch(`${this.de</span>ps.backendBaseUrl}/defi/validate-transaction/`, {
+      me<span class="cstat-no" title="statement not covered" >thod: 'POST',</span>
+      header<span class="cstat-no" title="statement not covered" >s: { 'Content-Type': 'application/json' },</span>
+      bo<span class="cstat-no" title="statement not covered" >dy: JSON.stri</span>ngify({ type, data, wallet_address: this.deps.userAddress })
+    });
+<span class="fstat-no" title="function not covered" >    if</span> (!res.ok) throw new Error(`Validation failed: ${res.status}`);
+    const json = await res.json();<span class="cstat-no" title="statement not covered" ></span>
+    if (!json?.isValid<span class="cstat-no" title="statement not covered" >) throw new Error</span>(json?.reason || 'Transaction not allowed by risk engine');
+    retu<span class="cstat-no" title="statement not covered" >rn json;</span>
+  }<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" ></span>
+  async approveIfNeeded(sy<span class="cstat-no" title="statement not covered" >mbol: string, amountHuman: string) {</span>
+    const { aavePool, u<span class="cstat-no" title="statement not covered" >serAddress, chainIdWC, wcClient, wcSession, assetMap } = this.</span>deps;
+    cons<span class="cstat-no" title="statement not covered" >t asset = assetMap[symbol];</span>
+    if (!ass<span class="cstat-no" title="statement not covered" >et) throw new Error(`Unkno</span>wn asset symbol: ${symbol}`);
+<span class="cstat-no" title="statement not covered" ></span>
+    const erc = new<span class="cstat-no" title="statement not covered" > ethers.Contract(asset.address, ERC20_ABI, getR</span>eadProvider());
+    const allowance =<span class="cstat-no" title="statement not covered" > await erc.allowance(userAddress, aavePool);</span>
+    cons<span class="cstat-no" title="statement not covered" >t amount = ethers.utils.parseUnit</span>s(amountHuman, asset.decimals);
+&nbsp;
+<span class="fstat-no" title="function not covered" >    if</span> (allowance &gt;= amount) return { skipped: true };
+<span class="cstat-no" title="statement not covered" ></span>
+    const data = this.erc20Iface.encodeFunctionData('approve', [aavePool, amount]);<span class="cstat-no" title="statement not covered" ></span>
+    const tx = { from:<span class="cstat-no" title="statement not covered" > userAddress, to:</span> asset.address, data };
+    cons<span class="cstat-no" title="statement not covered" >t hash = await sendTx({ client: wcClient, session: wcSession, chainIdWC, tx });</span>
+    return {<span class="cstat-no" title="statement not covered" > skipped: false, hash };</span>
+  }<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" ></span>
+  async deposit(sym<span class="cstat-no" title="statement not covered" >bol: string, amountHuman: string) {</span>
+    await this.valida<span class="cstat-no" title="statement not covered" >te('deposit', { symbol, amountHuman });</span>
+    cons<span class="cstat-no" title="statement not covered" >t { aavePool, use</span>rAddress, chainIdWC, wcClient, wcSession, assetMap } = this.deps;
+    const asset = assetMap[symbol];
+<span class="fstat-no" title="function not covered" >    if</span> (!asset) throw new Error(`Unknown asset sy<span class="branch-0 cbranch-no" title="branch not covered" >mb</span>ol: ${symbol}`);
+    cons<span class="cstat-no" title="statement not covered" >t amount = ethers.utils.parseUnits(amountHuman, asset.decimals);</span>
+    const data = this.poolIface.encodeFunctionData('deposit', [asset.address, amount<span class="cstat-no" title="statement not covered" >, userAddr</span>ess, 0]);
+    const tx = { from:<span class="cstat-no" title="statement not covered" > userAddress, to:</span> aavePool, data };
+    cons<span class="cstat-no" title="statement not covered" >t hash = await sendTx({ client: wcClient, session: wcSession, chainIdWC, tx });</span>
+    return {<span class="cstat-no" title="statement not covered" > hash };</span>
+  }<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" ></span>
+  async borrow(symb<span class="cstat-no" title="statement not covered" >ol: string, amountHuman: string, rateMode:</span> 1|2 = 2) {
+    await this.valida<span class="cstat-no" title="statement not covered" >te('borrow', { symbol, amountHuman, rateMode });</span>
+    cons<span class="cstat-no" title="statement not covered" >t { aavePool, use</span>rAddress, chainIdWC, wcClient, wcSession, assetMap } = this.deps;
+    const asset = assetMap[symbol];
+<span class="fstat-no" title="function not covered" >    if</span> (!asset) throw new Error(`Unknown asset s<span class="branch-0 cbranch-no" title="branch not covered" >ym</span>bol: ${symbol}`);
+    cons<span class="cstat-no" title="statement not covered" >t amount = ethers.utils.parseUnits(amountHuman, asset.decimals);</span>
+    const data = this.poolIface.encodeFunctionData('borrow', [asset.address, amount,<span class="cstat-no" title="statement not covered" > rateMode,</span> 0, userAddress]);
+    const tx = { from:<span class="cstat-no" title="statement not covered" > userAddress, to:</span> aavePool, data };
+    cons<span class="cstat-no" title="statement not covered" >t hash = await sendTx({ client: wcClient, session: wcSession, chainIdWC, tx });</span>
+    return {<span class="cstat-no" title="statement not covered" > hash };</span>
+  }<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" ></span>
+  async repay(symbo<span class="cstat-no" title="statement not covered" >l: string, amountHuman: string, rateMode: </span>1|2 = 2) {
+    await this.valida<span class="cstat-no" title="statement not covered" >te('repay', { symbol, amountHuman, rateMode });</span>
+    cons<span class="cstat-no" title="statement not covered" >t { aavePool, use</span>rAddress, chainIdWC, wcClient, wcSession, assetMap } = this.deps;
+    const asset = assetMap[symbol];
+    if (!asset) throw new Error(`Unknown asset symbol: ${symbol}`);
+<span class="cstat-no" title="statement not covered" >    const amount = ethers.utils.parseUnits(amountHuman, asset</span>.decimals);
+    const data = this.poolIface.encodeFunctionData('repay', [asset.address, amount, rateMode, userAddress]);
+    const tx = { from: userAddress, to: aavePool, data };
+    const hash = await sendTx({ client: wcClient, session: wcSession, chainIdWC, tx });
+    return { hash };
+  }
+}</pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2025-11-10T15:45:04.568Z
+            </div>
+        <script src="../../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../../sorter.js"></script>
+        <script src="../../block-navigation.js"></script>
+    </body>
+</html>
+    

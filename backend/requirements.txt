@@ -1,0 +1,52 @@
+# RichesReach Backend Requirements
+# Production dependencies
+
+# Core Django
+Django>=4.2.0,<5.0
+django-cors-headers>=4.0.0
+django-environ>=0.11.0
+python-dotenv>=1.0.0
+
+# Database
+psycopg2-binary>=2.9.0
+django-redis>=5.2.0
+
+# GraphQL
+graphene-django>=3.1.0
+graphql-core>=3.2.0
+graphql-jwt>=0.3.0
+
+# Celery
+celery>=5.3.0
+django-celery-results>=2.5.0
+redis>=5.0.0
+
+# API & HTTP
+requests>=2.31.0
+aiohttp>=3.9.0
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+
+# Monitoring & Error Tracking
+sentry-sdk[fastapi,django]>=1.38.0
+
+# Data Processing
+numpy>=1.24.0
+pandas>=2.0.0
+
+# Utilities
+pytz>=2023.3
+python-dateutil>=2.8.0
+
+# Testing
+pytest>=7.4.0
+pytest-django>=4.7.0
+pytest-cov>=4.1.0
+pytest-asyncio>=0.21.0
+
+# Security
+cryptography>=41.0.0
+
+# Channels (WebSocket support)
+channels>=4.0.0
+channels-redis>=4.1.0

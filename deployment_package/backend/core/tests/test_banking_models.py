@@ -25,7 +25,7 @@ class BankProviderAccountTestCase(TestCase):
         self.user = User.objects.create_user(
             email='test@example.com',
             password='testpass123',
-            username='testuser'
+            name='Test User'
         )
     
     def test_create_provider_account(self):
@@ -53,7 +53,8 @@ class BankProviderAccountTestCase(TestCase):
         )
         
         str_repr = str(provider_account)
-        self.assertIn('testuser', str_repr)
+        # Changed from username to email
+        self.assertIn('test@example.com', str_repr)
         self.assertIn('Test Bank', str_repr)
         self.assertIn('123', str_repr)
     
@@ -95,7 +96,7 @@ class BankAccountTestCase(TestCase):
         self.user = User.objects.create_user(
             email='test@example.com',
             password='testpass123',
-            username='testuser'
+            name='Test User'
         )
         self.provider_account = BankProviderAccount.objects.create(
             user=self.user,
@@ -139,8 +140,8 @@ class BankAccountTestCase(TestCase):
         
         self.assertFalse(bank_account.is_verified)
         self.assertFalse(bank_account.is_primary)
-        self.assertEqual(bank_account.balance_current, 0.0)
-        self.assertEqual(bank_account.balance_available, 0.0)
+        self.assertIsNone(bank_account.balance_current)  # Default is None, not 0.0
+        self.assertIsNone(bank_account.balance_available)  # Default is None, not 0.0
     
     def test_bank_account_unique_constraint(self):
         """Test that yodlee_account_id is unique per user"""
@@ -183,7 +184,7 @@ class BankTransactionTestCase(TestCase):
         self.user = User.objects.create_user(
             email='test@example.com',
             password='testpass123',
-            username='testuser'
+            name='Test User'
         )
         self.provider_account = BankProviderAccount.objects.create(
             user=self.user,
@@ -281,7 +282,7 @@ class BankWebhookEventTestCase(TestCase):
         self.user = User.objects.create_user(
             email='test@example.com',
             password='testpass123',
-            username='testuser'
+            name='Test User'
         )
     
     def test_create_webhook_event(self):

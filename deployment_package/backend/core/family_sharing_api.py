@@ -212,6 +212,168 @@ class OrbSyncEventResponse(BaseModel):
 # Helper Functions
 # ============================================================================
 
+# Async-safe database operation wrappers
+@database_sync_to_async
+def get_family_group_by_owner(user_id):
+    """Get family group by owner ID"""
+    if not FamilyGroup:
+        return None
+    return FamilyGroup.objects.filter(owner_id=user_id).first()
+
+@database_sync_to_async
+def get_family_member_by_user(user_id):
+    """Get family member by user ID"""
+    if not FamilyMember:
+        return None
+    return FamilyMember.objects.filter(user_id=user_id).first()
+
+@database_sync_to_async
+def get_family_group_with_relations(group_id):
+    """Get family group with prefetched relations"""
+    if not FamilyGroup:
+        return None
+    return FamilyGroup.objects.select_related('owner').prefetch_related('members__user').get(id=group_id)
+
+@database_sync_to_async
+def create_family_group_sync(user_id, name, group_id):
+    """Create family group synchronously"""
+    if not FamilyGroup or not FamilyMember:
+        return None
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    user_obj = User.objects.get(id=user_id)
+    
+    group = FamilyGroup.objects.create(
+        id=group_id,
+        name=name,
+        owner=user_obj,
+    )
+    
+    FamilyMember.objects.create(
+        id=f"member_{uuid.uuid4().hex[:12]}",
+        family_group=group,
+        user=user_obj,
+        role='owner',
+    )
+    
+    return group.id
+
+@database_sync_to_async
+def create_family_invite_sync(group_id, email, role, invite_code, user_id, expires_at):
+    """Create family invite synchronously"""
+    if not FamilyInvite:
+        return None
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    user_obj = User.objects.get(id=user_id)
+    group = FamilyGroup.objects.get(id=group_id)
+    
+    invite = FamilyInvite.objects.create(
+        id=f"invite_{uuid.uuid4().hex[:12]}",
+        family_group=group,
+        email=email,
+        role=role,
+        invite_code=invite_code,
+        invited_by=user_obj,
+        expires_at=expires_at,
+    )
+    return invite_code
+
+@database_sync_to_async
+def get_family_invite_by_code(invite_code):
+    """Get family invite by code"""
+    if not FamilyInvite:
+        return None
+    return FamilyInvite.objects.filter(
+        invite_code=invite_code,
+        accepted_at__isnull=True
+    ).first()
+
+@database_sync_to_async
+def accept_family_invite_sync(invite_id, user_id, role):
+    """Accept family invite synchronously"""
+    if not FamilyInvite or not FamilyMember:
+        return None
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    user_obj = User.objects.get(id=user_id)
+    invite = FamilyInvite.objects.get(id=invite_id)
+    
+    member = FamilyMember.objects.create(
+        id=f"member_{uuid.uuid4().hex[:12]}",
+        family_group=invite.family_group,
+        user=user_obj,
+        role=role,
+    )
+    
+    invite.accepted_at = datetime.now()
+    invite.accepted_by = user_obj
+    invite.save()
+    
+    return invite.family_group.id
+
+@database_sync_to_async
+def get_family_member_by_id(member_id):
+    """Get family member by ID"""
+    if not FamilyMember:
+        return None
+    return FamilyMember.objects.filter(id=member_id).first()
+
+@database_sync_to_async
+def update_member_permissions_sync(member_id, permissions):
+    """Update member permissions synchronously"""
+    if not FamilyMember:
+        return None
+    member = FamilyMember.objects.get(id=member_id)
+    member.set_permissions(**permissions)
+    member.save()
+    return member
+
+@database_sync_to_async
+def sync_orb_state_sync(group_id, net_worth, user_id, event_type, event_data):
+    """Sync orb state synchronously"""
+    if not OrbSyncEvent:
+        return None
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    user_obj = User.objects.get(id=user_id)
+    group = FamilyGroup.objects.get(id=group_id)
+    
+    group.shared_orb_net_worth = net_worth
+    group.shared_orb_last_synced = datetime.now()
+    group.save()
+    
+    event = OrbSyncEvent.objects.create(
+        id=f"event_{uuid.uuid4().hex[:12]}",
+        family_group=group,
+        user=user_obj,
+        event_type=event_type,
+        data=event_data,
+    )
+    return True
+
+@database_sync_to_async
+def get_orb_events_sync(group_id, since_dt=None, limit=50):
+    """Get orb events synchronously"""
+    if not OrbSyncEvent:
+        return []
+    group = FamilyGroup.objects.get(id=group_id)
+    events_query = OrbSyncEvent.objects.filter(family_group=group)
+    
+    if since_dt:
+        events_query = events_query.filter(timestamp__gte=since_dt)
+    
+    return list(events_query.order_by('-timestamp')[:limit])
+
+@database_sync_to_async
+def delete_family_member(member_id):
+    """Delete family member"""
+    if not FamilyMember:
+        return False
+    member = FamilyMember.objects.get(id=member_id)
+    member.delete()
+    return True
+
 def family_group_to_response(group: FamilyGroup) -> FamilyGroupResponse:
     """Convert FamilyGroup model to response"""
     members = []
@@ -329,8 +491,16 @@ async def create_family_group(
             # Convert to response (all ORM access happens here)
             return family_group_to_response(group)
         
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, create_and_convert_sync)
+        # Use async-safe helper
+        group_id = await create_family_group_sync(
+            user_id=user.id,
+            name=request.name,
+            group_id=f"family_{uuid.uuid4().hex[:12]}"
+        )
+        
+        # Get group with relations for response
+        group = await get_family_group_with_relations(group_id)
+        return family_group_to_response(group)
         
     except HTTPException:
         raise
@@ -403,24 +573,35 @@ async def invite_member(
     
     try:
         # Get user's family group
-        group = FamilyGroup.objects.filter(owner=user).first()
+        group = await get_family_group_by_owner(user.id)
         if not group:
-            member = FamilyMember.objects.filter(user=user).first()
-            if not member or not member.get_permissions().get('canInvite', False):
+            member = await get_family_member_by_user(user.id)
+            if not member:
                 raise HTTPException(status_code=403, detail="No permission to invite")
-            group = member.family_group
+            # Get permissions synchronously in executor
+            import asyncio
+            def get_permissions_sync():
+                connections.close_all()
+                member_obj = FamilyMember.objects.get(id=member.id)
+                return member_obj.get_permissions()
+            loop = asyncio.get_event_loop()
+            permissions = await loop.run_in_executor(None, get_permissions_sync)
+            if not permissions.get('canInvite', False):
+                raise HTTPException(status_code=403, detail="No permission to invite")
+            group_id = member.family_group_id
+        else:
+            group_id = group.id
         
         # Generate invite code
         invite_code = secrets.token_urlsafe(16)
         
         # Create invite (expires in 7 days)
-        invite = FamilyInvite.objects.create(
-            id=f"invite_{uuid.uuid4().hex[:12]}",
-            family_group=group,
+        await create_family_invite_sync(
+            group_id=group_id,
             email=request.email,
             role=request.role,
             invite_code=invite_code,
-            invited_by=user,
+            user_id=user.id,
             expires_at=datetime.now() + timedelta(days=7),
         )
         
@@ -452,40 +633,45 @@ async def accept_invite(
     
     try:
         # Find invite
-        invite = FamilyInvite.objects.filter(
-            invite_code=request.inviteCode,
-            accepted_at__isnull=True
-        ).first()
+        invite = await get_family_invite_by_code(request.inviteCode)
         
         if not invite:
             raise HTTPException(status_code=404, detail="Invalid invite code")
         
-        if invite.is_expired():
+        # Check if expired (sync check in executor)
+        import asyncio
+        def check_expired_sync():
+            connections.close_all()
+            invite_obj = FamilyInvite.objects.get(id=invite.id)
+            return invite_obj.is_expired()
+        loop = asyncio.get_event_loop()
+        is_expired = await loop.run_in_executor(None, check_expired_sync)
+        
+        if is_expired:
             raise HTTPException(status_code=400, detail="Invite has expired")
         
         # Check if user is already a member
-        existing = FamilyMember.objects.filter(
-            family_group=invite.family_group,
-            user=user
-        ).first()
+        def check_existing_sync():
+            connections.close_all()
+            return FamilyMember.objects.filter(
+                family_group_id=invite.family_group_id,
+                user_id=user.id
+            ).first()
+        existing = await loop.run_in_executor(None, check_existing_sync)
         
         if existing:
             raise HTTPException(status_code=400, detail="Already a member of this group")
         
-        # Add user as member
-        member = FamilyMember.objects.create(
-            id=f"member_{uuid.uuid4().hex[:12]}",
-            family_group=invite.family_group,
-            user=user,
-            role=invite.role,
+        # Accept invite and add user as member
+        group_id = await accept_family_invite_sync(
+            invite_id=invite.id,
+            user_id=user.id,
+            role=invite.role
         )
         
-        # Mark invite as accepted
-        invite.accepted_at = datetime.now()
-        invite.accepted_by = user
-        invite.save()
-        
-        return family_group_to_response(invite.family_group)
+        # Get group with relations for response
+        group = await get_family_group_with_relations(group_id)
+        return family_group_to_response(group)
         
     except HTTPException:
         raise
@@ -508,35 +694,49 @@ async def update_member_permissions(
     
     try:
         # Get member
-        member = FamilyMember.objects.filter(id=member_id).first()
+        member = await get_family_member_by_id(member_id)
         if not member:
             raise HTTPException(status_code=404, detail="Member not found")
         
-        # Verify user is owner or has permission
-        is_owner = member.family_group.owner == user
-        user_member = FamilyMember.objects.filter(
-            family_group=member.family_group,
-            user=user
-        ).first()
+        # Verify user is owner or has permission (sync check in executor)
+        import asyncio
+        def check_permission_sync():
+            connections.close_all()
+            member_obj = FamilyMember.objects.get(id=member.id)
+            is_owner = member_obj.family_group.owner_id == user.id
+            user_member = FamilyMember.objects.filter(
+                family_group_id=member_obj.family_group_id,
+                user_id=user.id
+            ).first()
+            user_permissions = user_member.get_permissions() if user_member else {}
+            return is_owner or user_permissions.get('canInvite', False)
+        loop = asyncio.get_event_loop()
+        has_permission = await loop.run_in_executor(None, check_permission_sync)
         
-        if not is_owner and (not user_member or not user_member.get_permissions().get('canInvite', False)):
+        if not has_permission:
             raise HTTPException(status_code=403, detail="No permission to update")
         
         # Update permissions
-        member.set_permissions(**request.permissions)
-        member.save()
+        updated_member = await update_member_permissions_sync(member_id, request.permissions)
         
-        return FamilyMemberResponse(
-            id=member.id,
-            userId=str(member.user.id),
-            name=member.user.name,
-            email=member.user.email,
-            role=member.role,
-            avatar=member.user.profile_pic,
-            permissions=member.get_permissions(),
-            joinedAt=member.joined_at.isoformat(),
-            lastActive=member.last_active.isoformat() if member.last_active else None,
-        )
+        # Get member with relations for response
+        def get_member_response_sync():
+            connections.close_all()
+            member_obj = FamilyMember.objects.select_related('user', 'family_group').get(id=member_id)
+            return {
+                'id': member_obj.id,
+                'userId': str(member_obj.user.id),
+                'name': member_obj.user.name,
+                'email': member_obj.user.email,
+                'role': member_obj.role,
+                'avatar': getattr(member_obj.user, 'profile_pic', None),
+                'permissions': member_obj.get_permissions(),
+                'joinedAt': member_obj.joined_at.isoformat(),
+                'lastActive': member_obj.last_active.isoformat() if member_obj.last_active else None,
+            }
+        response_data = await loop.run_in_executor(None, get_member_response_sync)
+        
+        return FamilyMemberResponse(**response_data)
         
     except HTTPException:
         raise
@@ -558,25 +758,22 @@ async def sync_orb_state(
     
     try:
         # Get user's family group
-        group = FamilyGroup.objects.filter(owner=user).first()
+        group = await get_family_group_by_owner(user.id)
         if not group:
-            member = FamilyMember.objects.filter(user=user).first()
+            member = await get_family_member_by_user(user.id)
             if not member:
                 raise HTTPException(status_code=404, detail="No family group found")
-            group = member.family_group
+            group_id = member.family_group_id
+        else:
+            group_id = group.id
         
-        # Update shared orb state
-        group.shared_orb_net_worth = request.netWorth
-        group.shared_orb_last_synced = datetime.now()
-        group.save()
-        
-        # Create sync event
-        event = OrbSyncEvent.objects.create(
-            id=f"event_{uuid.uuid4().hex[:12]}",
-            family_group=group,
-            user=user,
+        # Sync orb state
+        await sync_orb_state_sync(
+            group_id=group_id,
+            net_worth=request.netWorth,
+            user_id=user.id,
             event_type='gesture' if request.gesture else 'update',
-            data={
+            event_data={
                 "netWorth": request.netWorth,
                 "gesture": request.gesture,
                 "viewMode": request.viewMode,
@@ -610,24 +807,25 @@ async def get_orb_sync_events(
     
     try:
         # Get user's family group
-        group = FamilyGroup.objects.filter(owner=user).first()
+        group = await get_family_group_by_owner(user.id)
         if not group:
-            member = FamilyMember.objects.filter(user=user).first()
+            member = await get_family_member_by_user(user.id)
             if not member:
                 return []
-            group = member.family_group
+            group_id = member.family_group_id
+        else:
+            group_id = group.id
         
-        # Query events
-        events_query = OrbSyncEvent.objects.filter(family_group=group)
-        
+        # Parse since date
+        since_dt = None
         if since:
             try:
                 since_dt = datetime.fromisoformat(since.replace('Z', '+00:00'))
-                events_query = events_query.filter(timestamp__gte=since_dt)
             except ValueError:
                 pass
         
-        events = events_query.order_by('-timestamp')[:50]  # Last 50 events
+        # Get events
+        events = await get_orb_events_sync(group_id, since_dt, limit=50)
         
         return [orb_event_to_response(event) for event in events]
         
@@ -649,20 +847,29 @@ async def remove_member(
     
     try:
         # Get member
-        member = FamilyMember.objects.filter(id=member_id).first()
+        member = await get_family_member_by_id(member_id)
         if not member:
             raise HTTPException(status_code=404, detail="Member not found")
         
-        # Verify user is owner
-        if member.family_group.owner != user:
+        # Verify user is owner and check role (sync check in executor)
+        import asyncio
+        def check_remove_permission_sync():
+            connections.close_all()
+            member_obj = FamilyMember.objects.select_related('family_group').get(id=member_id)
+            is_owner = member_obj.family_group.owner_id == user.id
+            is_owner_role = member_obj.role == 'owner'
+            return is_owner, is_owner_role
+        loop = asyncio.get_event_loop()
+        is_owner, is_owner_role = await loop.run_in_executor(None, check_remove_permission_sync)
+        
+        if not is_owner:
             raise HTTPException(status_code=403, detail="Only owner can remove members")
         
-        # Don't allow removing owner
-        if member.role == 'owner':
+        if is_owner_role:
             raise HTTPException(status_code=400, detail="Cannot remove owner")
         
         # Remove member
-        member.delete()
+        await delete_family_member(member_id)
         
         return {"success": True, "message": "Member removed"}
         
@@ -683,17 +890,21 @@ async def leave_family_group(user: User = Depends(get_current_user)):
     
     try:
         # Get user's membership
-        member = FamilyMember.objects.filter(user=user).first()
+        member = await get_family_member_by_user(user.id)
         if not member:
             raise HTTPException(status_code=404, detail="Not a member of any group")
         
-        # Don't allow owner to leave (must transfer ownership first)
-        if member.role == 'owner':
-            raise HTTPException(status_code=400, detail="Owner cannot leave. Transfer ownership first.")
-        
-        # Remove membership
-        group_id = member.family_group.id
-        member.delete()
+        # Check role and remove (sync check in executor)
+        import asyncio
+        def check_and_remove_sync():
+            connections.close_all()
+            member_obj = FamilyMember.objects.get(id=member.id)
+            if member_obj.role == 'owner':
+                raise HTTPException(status_code=400, detail="Owner cannot leave. Transfer ownership first.")
+            member_obj.delete()
+            return True
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, check_and_remove_sync)
         
         return {"success": True, "message": "Left family group"}
         

@@ -1,6 +1,7 @@
 module.exports = {
   preset: 'react-native',
-  setupFilesAfterEnv: ['<rootDir>/src/setupTests.ts'],
+  setupFilesAfterEnv: ['<rootDir>/src/__tests__/setup.ts'],
+  setupFiles: ['<rootDir>/src/setupTests.ts'],
   testMatch: [
     '**/__tests__/**/*.(ts|tsx|js)',
     '**/*.(test|spec).(ts|tsx|js)',
@@ -27,11 +28,15 @@ module.exports = {
   ],
   coverageReporters: ['text', 'lcov', 'html'],
   coverageDirectory: 'coverage',
-  testEnvironment: 'jsdom',
+  testEnvironment: 'node',
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
   globals: {
     'ts-jest': {
       tsconfig: 'tsconfig.json',
+      isolatedModules: true,
     },
   },
+  clearMocks: true,
+  resetMocks: true,
+  restoreMocks: true,
 };

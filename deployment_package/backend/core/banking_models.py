@@ -40,7 +40,7 @@ class BankProviderAccount(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.user.username} - {self.provider_name} ({self.provider_account_id})"
+        return f"{self.user.email} - {self.provider_name} ({self.provider_account_id})"
 
 
 class BankAccount(models.Model):
@@ -77,7 +77,7 @@ class BankAccount(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.user.username} - {self.name} ({self.mask})"
+        return f"{self.user.email} - {self.name} ({self.mask})"
 
 
 class BankTransaction(models.Model):
