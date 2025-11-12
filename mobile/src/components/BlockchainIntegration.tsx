@@ -57,16 +57,16 @@ interface GovernanceProposal {
 }
 
 interface BlockchainIntegrationProps {
-  onPortfolioTokenize: (portfolio: any) => void;
-  onDeFiPositionCreate: (position: DeFiPosition) => void;
-  onGovernanceVote: (proposalId: string, vote: boolean) => void;
+  onPortfolioTokenize?: (portfolio: any) => void;
+  onDeFiPositionCreate?: (position: DeFiPosition) => void;
+  onGovernanceVote?: (proposalId: string, vote: boolean) => void;
 }
 
 export default function BlockchainIntegration({ 
   onPortfolioTokenize, 
   onDeFiPositionCreate, 
   onGovernanceVote 
-}: BlockchainIntegrationProps) {
+}: BlockchainIntegrationProps = {}) {
   const navigation = useNavigation<any>();
   const theme = useTheme();
   const [activeTab, setActiveTab] = useState<'tokenized' | 'defi' | 'governance' | 'bridge'>('tokenized');
@@ -227,7 +227,9 @@ export default function BlockchainIntegration({
           { 
             text: 'Tokenize', 
             onPress: () => {
-              onPortfolioTokenize(portfolio);
+              if (onPortfolioTokenize) {
+                onPortfolioTokenize(portfolio);
+              }
               Alert.alert('Success', 'Portfolio tokenized successfully!');
             }
           },
@@ -258,7 +260,9 @@ export default function BlockchainIntegration({
                 value: 1000,
                 network: 'Ethereum',
               };
-              onDeFiPositionCreate(position);
+              if (onDeFiPositionCreate) {
+                onDeFiPositionCreate(position);
+              }
               Alert.alert('Success', 'DeFi position created successfully!');
             }
           },
@@ -279,7 +283,9 @@ export default function BlockchainIntegration({
           { 
             text: 'Vote', 
             onPress: () => {
-              onGovernanceVote(proposalId, vote);
+              if (onGovernanceVote) {
+                onGovernanceVote(proposalId, vote);
+              }
               Alert.alert('Success', 'Vote recorded successfully!');
             }
           },

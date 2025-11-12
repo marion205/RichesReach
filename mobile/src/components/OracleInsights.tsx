@@ -36,8 +36,8 @@ interface OracleEvent {
 }
 
 interface OracleInsightsProps {
-  onInsightPress: (insight: OracleEvent) => void;
-  onGenerateInsight: () => void;
+  onInsightPress?: (insight: OracleEvent) => void;
+  onGenerateInsight?: () => void;
 }
 
 // Mock insights function - extracted for reuse
@@ -89,7 +89,7 @@ const getMockInsights = (): OracleEvent[] => [
   },
 ];
 
-export default function OracleInsights({ onInsightPress, onGenerateInsight }: OracleInsightsProps) {
+export default function OracleInsights({ onInsightPress, onGenerateInsight }: OracleInsightsProps = {}) {
   const theme = useTheme();
   // Start with mock data immediately for instant loading
   const [insights, setInsights] = useState<OracleEvent[]>(getMockInsights());
@@ -531,7 +531,11 @@ export default function OracleInsights({ onInsightPress, onGenerateInsight }: Or
             <InsightCard
               key={insight.id}
               insight={insight}
-              onPress={() => onInsightPress(insight)}
+              onPress={() => {
+                if (onInsightPress) {
+                  onInsightPress(insight);
+                }
+              }}
               onAcknowledge={() => acknowledgeInsight(insight.id)}
               getPriorityColor={getPriorityColor}
               getPriorityIcon={getPriorityIcon}

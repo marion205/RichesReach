@@ -892,20 +892,6 @@ export const SocialTrading: React.FC<SocialTradingProps> = ({
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Social Trading</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <TouchableOpacity style={styles.headerButton} onPress={() => {
-            try {
-              // Profile is in HomeStack, use nested navigation
-              globalNavigate('Home', { screen: 'Profile' });
-            } catch {
-              try {
-                globalNavigate('Profile');
-              } catch (error) {
-                console.error('Profile navigation error:', error);
-              }
-            }
-          }}>
-            <Ionicons name="person-circle-outline" size={26} color="#1a1a1a" />
-          </TouchableOpacity>
           <TouchableOpacity style={styles.headerButton}>
             <Ionicons name="search-outline" size={24} color="#1a1a1a" />
           </TouchableOpacity>

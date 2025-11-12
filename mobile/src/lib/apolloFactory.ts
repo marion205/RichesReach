@@ -112,6 +112,25 @@ export function makeApolloClient() {
       return response;
     }).catch((error) => {
       // Production: Log all errors properly - don't suppress
+      console.error('❌ Apollo Error Link caught error:', {
+        operation: operation.operationName,
+        errorName: error?.name,
+        errorMessage: error?.message,
+        errorStack: error?.stack?.substring(0, 500),
+        isAbortError: error?.name === 'AbortError',
+        isNetworkError: error?.message?.includes('network') || error?.message?.includes('fetch'),
+        fullError: JSON.stringify(error, Object.getOwnPropertyNames(error)).substring(0, 1000),
+      });
+      
+      // For GetAIRecommendations, log extra details
+      if (operation.operationName === 'GetAIRecommendations') {
+        console.error('❌ GetAIRecommendations failed:', {
+          uri: GRAPHQL_URL,
+          variables: operation.variables,
+          errorType: error?.constructor?.name,
+        });
+      }
+      
       console.error('❌ Apollo Error:', {
         operation: operation.operationName,
         error: error?.message,
@@ -157,7 +176,33 @@ export function makeApolloClient() {
       return fetch(uri, {
         ...options,
         signal: controller.signal,
-      }).finally(() => {
+      })
+      .then((response) => {
+        // Log response details for debugging
+        if (uri.toString().includes('GetAIRecommendations') || options?.body?.toString().includes('GetAIRecommendations')) {
+          console.log('📡 Fetch response for GetAIRecommendations:', {
+            status: response.status,
+            statusText: response.statusText,
+            ok: response.ok,
+            headers: Object.fromEntries(response.headers.entries()),
+          });
+        }
+        return response;
+      })
+      .catch((error) => {
+        // Log fetch errors
+        if (error?.name === 'AbortError') {
+          console.error('⏱️ Fetch timeout for:', uri.toString().substring(0, 100));
+        } else {
+          console.error('🌐 Fetch error:', {
+            uri: uri.toString().substring(0, 100),
+            error: error?.message,
+            name: error?.name,
+          });
+        }
+        throw error;
+      })
+      .finally(() => {
         clearTimeout(timeoutId);
       });
     },

@@ -1719,8 +1719,319 @@ async def graphql_endpoint(request: Request):
                 }
             }
         
-        # Handle stock queries
-        elif "stocks" in query_str:
+        # Handle aiRecommendations query (comprehensive portfolio analysis)
+        # MUST come before stocks handler since aiRecommendations query contains "stocks" in assetAllocation
+        elif is_ai_recommendations_query:
+            print(f"🤖 AIRecommendations query received - Using REAL ML Implementation")
+            
+            # Get profile from variables or fallback to stored profile
+            profile_var = variables.get("profile", {})
+            using_defaults = variables.get("usingDefaults", False)
+            
+            # Get user profile to personalize recommendations
+            user_id = "1"
+            stored_profile = _mock_user_profile_store.get(user_id, {})
+            
+            # Use variables if provided, otherwise use stored profile, otherwise use defaults
+            risk_tolerance = (
+                profile_var.get("riskTolerance") or 
+                stored_profile.get("riskTolerance") or 
+                "Moderate"
+            )
+            investment_horizon_str = (
+                stored_profile.get("investmentHorizon") or 
+                "5-10 years"
+            )
+            
+            # Map investment horizon years back to string for display (if needed)
+            horizon_years = profile_var.get("investmentHorizonYears") or 5
+            if not stored_profile.get("investmentHorizon"):
+                # Map years to string format
+                if horizon_years >= 12:
+                    investment_horizon_str = "10+ years"
+                elif horizon_years >= 8:
+                    investment_horizon_str = "5-10 years"
+                elif horizon_years >= 4:
+                    investment_horizon_str = "3-5 years"
+                elif horizon_years >= 2:
+                    investment_horizon_str = "1-3 years"
+                else:
+                    investment_horizon_str = "1-3 years"
+            
+            print(f"   Profile from variables: {bool(profile_var)}, usingDefaults: {using_defaults}, risk: {risk_tolerance}, horizon: {investment_horizon_str}")
+            
+            # Use REAL ML implementation instead of mock data
+            try:
+                # Import the real ML services
+                import sys
+                import os
+                sys.path.append(os.path.join(os.path.dirname(__file__), 'backend', 'backend'))
+                
+                # Set up Django environment for ML services
+                os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'richesreach.settings')
+                import django
+                django.setup()
+                
+                from backend.core.ml_stock_recommender import MLStockRecommender
+                from backend.core.models import User, IncomeProfile
+                
+                # Get or create a user for ML recommendations
+                user, created = User.objects.get_or_create(
+                    id=1,
+                    defaults={
+                        'username': 'mobile_user',
+                        'email': 'mobile@richesreach.com',
+                        'first_name': 'Mobile',
+                        'last_name': 'User'
+                    }
+                )
+                
+                # Get or create income profile
+                income_profile, profile_created = IncomeProfile.objects.get_or_create(
+                    user=user,
+                    defaults={
+                        'age': profile_var.get("age", 30),
+                        'income_bracket': profile_var.get("incomeBracket", "Unknown"),
+                        'investment_goals': profile_var.get("investmentGoals", []),
+                        'risk_tolerance': risk_tolerance,
+                        'investment_horizon': investment_horizon_str
+                    }
+                )
+                
+                # Update profile if variables provided
+                if profile_var:
+                    income_profile.age = profile_var.get("age", income_profile.age)
+                    income_profile.income_bracket = profile_var.get("incomeBracket", income_profile.income_bracket)
+                    income_profile.investment_goals = profile_var.get("investmentGoals", income_profile.investment_goals)
+                    income_profile.risk_tolerance = risk_tolerance
+                    income_profile.investment_horizon = investment_horizon_str
+                    income_profile.save()
+                
+                print(f"   Using ML recommender for user: {user.username}, profile: {income_profile.risk_tolerance}")
+                
+                # Generate REAL ML recommendations
+                ml_recommender = MLStockRecommender()
+                ml_recommendations = ml_recommender.generate_ml_recommendations(user, limit=8)
+                
+                # Convert ML recommendations to GraphQL format
+                buy_recommendations = []
+                for rec in ml_recommendations:
+                    buy_recommendations.append({
+                        "symbol": rec.stock.symbol,
+                        "companyName": rec.stock.company_name,
+                        "recommendation": "BUY",
+                        "confidence": rec.confidence,
+                        "reasoning": rec.reasoning,
+                        "targetPrice": round(rec.target_price, 2),
+                        "currentPrice": round(rec.current_price, 2),
+                        "expectedReturn": rec.expected_return,
+                        "allocation": 12.5  # Equal allocation for now
+                    })
+                
+                print(f"   Generated {len(buy_recommendations)} REAL ML recommendations")
+                
+            except Exception as e:
+                print(f"   ⚠️ ML implementation failed: {e}")
+                print(f"   Falling back to enhanced mock data...")
+                
+                # Fallback to enhanced mock data with real prices
+                popular_symbols = ["AAPL", "MSFT", "GOOGL", "JNJ", "V", "MA", "PG", "DIS"]
+                buy_recommendations = []
+            
+            async def fetch_stock_for_recommendation(symbol: str):
+                try:
+                    quote_data = None
+                    if _market_data_service:
+                        # Add timeout to individual stock fetch (1 second max)
+                        try:
+                            quote_data = await asyncio.wait_for(
+                                _market_data_service.get_stock_quote(symbol),
+                                timeout=1.0
+                            )
+                        except asyncio.TimeoutError:
+                            print(f"   ⚠️ Timeout fetching {symbol}, using metadata")
+                            quote_data = None
+                    
+                    metadata = _STOCK_METADATA.get(symbol, {})
+                    current_price = quote_data.get("price", metadata.get("currentPrice", 150.0)) if quote_data else metadata.get("currentPrice", 150.0)
+                    target_price = current_price * 1.15  # 15% upside target
+                    expected_return = 0.15
+                    
+                    # Adjust confidence based on risk tolerance and stock characteristics
+                    base_confidence = 0.75
+                    if risk_tolerance == "Conservative":
+                        # Prefer dividend-paying, stable stocks
+                        if metadata.get("dividendYield", 0) > 0.01:
+                            base_confidence = 0.85
+                    elif risk_tolerance == "Aggressive":
+                        # Favor growth stocks
+                        if metadata.get("peRatio", 0) > 40:
+                            base_confidence = 0.80
+                    
+                    return {
+                        "symbol": symbol,
+                        "companyName": metadata.get("companyName", f"{symbol} Inc."),
+                        "recommendation": "BUY",
+                        "confidence": base_confidence,
+                        "reasoning": f"Strong fundamentals, favorable sector trends, and alignment with {risk_tolerance.lower()} risk profile.",
+                        "targetPrice": round(target_price, 2),
+                        "currentPrice": round(current_price, 2),
+                        "expectedReturn": expected_return,
+                        "allocation": 12.5  # Equal allocation for demo
+                    }
+                except Exception as e:
+                    print(f"⚠️ Error fetching {symbol} for recommendation: {e}")
+                    return None
+            
+            # Fetch stock data concurrently with timeout
+            stock_tasks = [fetch_stock_for_recommendation(s) for s in popular_symbols[:8]]
+            try:
+                # Add timeout to prevent hanging - 3 seconds max per stock
+                stock_results = await asyncio.wait_for(
+                    asyncio.gather(*stock_tasks, return_exceptions=True),
+                    timeout=3.0
+                )
+                buy_recommendations = [r for r in stock_results if r is not None and not isinstance(r, Exception)]
+            except asyncio.TimeoutError:
+                print(f"   ⚠️ Stock data fetch timed out, using fallback data")
+                buy_recommendations = []
+            except Exception as e:
+                print(f"   ⚠️ Error fetching stock data: {e}, using fallback")
+                buy_recommendations = []
+            
+            # If no real data available, use fallback
+            if not buy_recommendations:
+                buy_recommendations = [
+                    {
+                        "symbol": "AAPL",
+                        "companyName": "Apple Inc.",
+                        "recommendation": "BUY",
+                        "confidence": 0.85,
+                        "reasoning": "Strong earnings growth and market leadership in technology",
+                        "targetPrice": 190.0,
+                        "currentPrice": 268.64,
+                        "expectedReturn": 0.15,
+                        "allocation": 15.0
+                    },
+                    {
+                        "symbol": "MSFT",
+                        "companyName": "Microsoft Corporation",
+                        "recommendation": "BUY",
+                        "confidence": 0.82,
+                        "reasoning": "Cloud services growth and AI integration",
+                        "targetPrice": 450.0,
+                        "currentPrice": 538.73,
+                        "expectedReturn": 0.12,
+                        "allocation": 12.0
+                    },
+                    {
+                        "symbol": "JNJ",
+                        "companyName": "Johnson & Johnson",
+                        "recommendation": "BUY",
+                        "confidence": 0.90,
+                        "reasoning": "Stable dividend yield and healthcare diversification",
+                        "targetPrice": 175.0,
+                        "currentPrice": 165.0,
+                        "expectedReturn": 0.08,
+                        "allocation": 10.0
+                    },
+                    {
+                        "symbol": "V",
+                        "companyName": "Visa Inc.",
+                        "recommendation": "BUY",
+                        "confidence": 0.88,
+                        "reasoning": "Payment processing growth and global expansion",
+                        "targetPrice": 320.0,
+                        "currentPrice": 280.0,
+                        "expectedReturn": 0.14,
+                        "allocation": 11.0
+                    },
+                    {
+                        "symbol": "PG",
+                        "companyName": "Procter & Gamble",
+                        "recommendation": "BUY",
+                        "confidence": 0.83,
+                        "reasoning": "Consumer staples stability and dividend growth",
+                        "targetPrice": 170.0,
+                        "currentPrice": 155.0,
+                        "expectedReturn": 0.09,
+                        "allocation": 8.0
+                    }
+                ]
+            
+            # Calculate total portfolio value
+            total_value = sum(rec.get("currentPrice", 0) * 100 * (rec.get("allocation", 0) / 100) for rec in buy_recommendations) * 10
+            
+            ai_recommendations_response = {
+                "portfolioAnalysis": {
+                    "totalValue": total_value,
+                    "numHoldings": len(buy_recommendations),
+                    "sectorBreakdown": {
+                        "Technology": 0.40,
+                        "Healthcare": 0.20,
+                        "Financials": 0.15,
+                        "Consumer Staples": 0.15,
+                        "Other": 0.10
+                    },
+                    "riskScore": 0.65 if risk_tolerance == "Moderate" else (0.45 if risk_tolerance == "Conservative" else 0.80),
+                    "diversificationScore": 0.75,
+                    "expectedImpact": {
+                        "evPct": 12.5,  # Expected value percentage
+                        "evAbs": total_value * 0.125,  # Expected value absolute
+                        "per10k": 1250.0  # Per 10k investment
+                    },
+                    "risk": {
+                        "volatilityEstimate": 15.0 if risk_tolerance == "Moderate" else (10.0 if risk_tolerance == "Conservative" else 20.0),
+                        "maxDrawdownPct": -25.0
+                    },
+                    "assetAllocation": {
+                        "stocks": 0.90,
+                        "bonds": 0.08,
+                        "cash": 0.02
+                    }
+                },
+                "buyRecommendations": buy_recommendations,
+                "sellRecommendations": [
+                    {
+                        "symbol": "TSLA",
+                        "reasoning": "High volatility may not align with current risk profile"
+                    }
+                ],
+                "rebalanceSuggestions": [
+                    {
+                        "action": "REDUCE",
+                        "currentAllocation": 0.25,
+                        "suggestedAllocation": 0.15,
+                        "reasoning": "Reduce single-stock concentration",
+                        "priority": "HIGH"
+                    }
+                ],
+                "riskAssessment": {
+                    "overallRisk": "Moderate" if risk_tolerance == "Moderate" else ("Low" if risk_tolerance == "Conservative" else "High"),
+                    "volatilityEstimate": 15.0,
+                    "recommendations": [
+                        "Maintain diversified portfolio across sectors",
+                        "Rebalance quarterly to maintain target allocation",
+                        "Consider adding bonds for risk reduction if conservative"
+                    ]
+                },
+                "marketOutlook": {
+                    "overallSentiment": "Bullish",
+                    "confidence": 0.72,
+                    "keyFactors": [
+                        "Positive earnings trends in technology sector",
+                        "Strong consumer spending indicators",
+                        "Moderate inflation expectations",
+                        "Stable interest rate environment"
+                    ]
+                }
+            }
+            
+            print(f"✅ Returning {len(buy_recommendations)} buy recommendations")
+            return {"data": {"aiRecommendations": ai_recommendations_response}}
+        
+        # Handle stock queries (must come AFTER aiRecommendations to avoid false matches)
+        elif "stocks" in query_str and not is_ai_recommendations_query:
             # Fetch real stock data for popular stocks
             popular_symbols = ["AAPL", "MSFT", "GOOGL", "TSLA", "NVDA", "AMZN", "META", "JNJ"]
             stocks_data = []
@@ -1909,297 +2220,7 @@ async def graphql_endpoint(request: Request):
                 }
             }
         
-        # Handle aiRecommendations query (comprehensive portfolio analysis)
-        # Must come before other queries but after mutations
-        elif is_ai_recommendations_query:
-            print(f"🤖 AIRecommendations query received - Using REAL ML Implementation")
-            
-            # Get profile from variables or fallback to stored profile
-            profile_var = variables.get("profile", {})
-            using_defaults = variables.get("usingDefaults", False)
-            
-            # Get user profile to personalize recommendations
-            user_id = "1"
-            stored_profile = _mock_user_profile_store.get(user_id, {})
-            
-            # Use variables if provided, otherwise use stored profile, otherwise use defaults
-            risk_tolerance = (
-                profile_var.get("riskTolerance") or 
-                stored_profile.get("riskTolerance") or 
-                "Moderate"
-            )
-            investment_horizon_str = (
-                stored_profile.get("investmentHorizon") or 
-                "5-10 years"
-            )
-            
-            # Map investment horizon years back to string for display (if needed)
-            horizon_years = profile_var.get("investmentHorizonYears") or 5
-            if not stored_profile.get("investmentHorizon"):
-                # Map years to string format
-                if horizon_years >= 12:
-                    investment_horizon_str = "10+ years"
-                elif horizon_years >= 8:
-                    investment_horizon_str = "5-10 years"
-                elif horizon_years >= 4:
-                    investment_horizon_str = "3-5 years"
-                elif horizon_years >= 2:
-                    investment_horizon_str = "1-3 years"
-                else:
-                    investment_horizon_str = "1-3 years"
-            
-            print(f"   Profile from variables: {bool(profile_var)}, usingDefaults: {using_defaults}, risk: {risk_tolerance}, horizon: {investment_horizon_str}")
-            
-            # Use REAL ML implementation instead of mock data
-            try:
-                # Import the real ML services
-                import sys
-                import os
-                sys.path.append(os.path.join(os.path.dirname(__file__), 'backend', 'backend'))
-                
-                # Set up Django environment for ML services
-                os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'richesreach.settings')
-                import django
-                django.setup()
-                
-                from backend.core.ml_stock_recommender import MLStockRecommender
-                from backend.core.models import User, IncomeProfile
-                
-                # Get or create a user for ML recommendations
-                user, created = User.objects.get_or_create(
-                    id=1,
-                    defaults={
-                        'username': 'mobile_user',
-                        'email': 'mobile@richesreach.com',
-                        'first_name': 'Mobile',
-                        'last_name': 'User'
-                    }
-                )
-                
-                # Get or create income profile
-                income_profile, profile_created = IncomeProfile.objects.get_or_create(
-                    user=user,
-                    defaults={
-                        'age': profile_var.get("age", 30),
-                        'income_bracket': profile_var.get("incomeBracket", "Unknown"),
-                        'investment_goals': profile_var.get("investmentGoals", []),
-                        'risk_tolerance': risk_tolerance,
-                        'investment_horizon': investment_horizon_str
-                    }
-                )
-                
-                # Update profile if variables provided
-                if profile_var:
-                    income_profile.age = profile_var.get("age", income_profile.age)
-                    income_profile.income_bracket = profile_var.get("incomeBracket", income_profile.income_bracket)
-                    income_profile.investment_goals = profile_var.get("investmentGoals", income_profile.investment_goals)
-                    income_profile.risk_tolerance = risk_tolerance
-                    income_profile.investment_horizon = investment_horizon_str
-                    income_profile.save()
-                
-                print(f"   Using ML recommender for user: {user.username}, profile: {income_profile.risk_tolerance}")
-                
-                # Generate REAL ML recommendations
-                ml_recommender = MLStockRecommender()
-                ml_recommendations = ml_recommender.generate_ml_recommendations(user, limit=8)
-                
-                # Convert ML recommendations to GraphQL format
-                buy_recommendations = []
-                for rec in ml_recommendations:
-                    buy_recommendations.append({
-                        "symbol": rec.stock.symbol,
-                        "companyName": rec.stock.company_name,
-                        "recommendation": "BUY",
-                        "confidence": rec.confidence,
-                        "reasoning": rec.reasoning,
-                        "targetPrice": round(rec.target_price, 2),
-                        "currentPrice": round(rec.current_price, 2),
-                        "expectedReturn": rec.expected_return,
-                        "allocation": 12.5  # Equal allocation for now
-                    })
-                
-                print(f"   Generated {len(buy_recommendations)} REAL ML recommendations")
-                
-            except Exception as e:
-                print(f"   ⚠️ ML implementation failed: {e}")
-                print(f"   Falling back to enhanced mock data...")
-                
-                # Fallback to enhanced mock data with real prices
-                popular_symbols = ["AAPL", "MSFT", "GOOGL", "JNJ", "V", "MA", "PG", "DIS"]
-                buy_recommendations = []
-            
-            async def fetch_stock_for_recommendation(symbol: str):
-                try:
-                    quote_data = None
-                    if _market_data_service:
-                        quote_data = await _market_data_service.get_stock_quote(symbol)
-                    
-                    metadata = _STOCK_METADATA.get(symbol, {})
-                    current_price = quote_data.get("price", metadata.get("currentPrice", 150.0)) if quote_data else metadata.get("currentPrice", 150.0)
-                    target_price = current_price * 1.15  # 15% upside target
-                    expected_return = 0.15
-                    
-                    # Adjust confidence based on risk tolerance and stock characteristics
-                    base_confidence = 0.75
-                    if risk_tolerance == "Conservative":
-                        # Prefer dividend-paying, stable stocks
-                        if metadata.get("dividendYield", 0) > 0.01:
-                            base_confidence = 0.85
-                    elif risk_tolerance == "Aggressive":
-                        # Favor growth stocks
-                        if metadata.get("peRatio", 0) > 40:
-                            base_confidence = 0.80
-                    
-                    return {
-                        "symbol": symbol,
-                        "companyName": metadata.get("companyName", f"{symbol} Inc."),
-                        "recommendation": "BUY",
-                        "confidence": base_confidence,
-                        "reasoning": f"Strong fundamentals, favorable sector trends, and alignment with {risk_tolerance.lower()} risk profile.",
-                        "targetPrice": round(target_price, 2),
-                        "currentPrice": round(current_price, 2),
-                        "expectedReturn": expected_return,
-                        "allocation": 12.5  # Equal allocation for demo
-                    }
-                except Exception as e:
-                    print(f"⚠️ Error fetching {symbol} for recommendation: {e}")
-                    return None
-            
-            # Fetch stock data concurrently
-            stock_tasks = [fetch_stock_for_recommendation(s) for s in popular_symbols[:8]]
-            stock_results = await asyncio.gather(*stock_tasks)
-            buy_recommendations = [r for r in stock_results if r is not None]
-            
-            # If no real data available, use fallback
-            if not buy_recommendations:
-                buy_recommendations = [
-                    {
-                        "symbol": "AAPL",
-                        "companyName": "Apple Inc.",
-                        "recommendation": "BUY",
-                        "confidence": 0.85,
-                        "reasoning": "Strong earnings growth and market leadership in technology",
-                        "targetPrice": 190.0,
-                        "currentPrice": 268.64,
-                        "expectedReturn": 0.15,
-                        "allocation": 15.0
-                    },
-                    {
-                        "symbol": "MSFT",
-                        "companyName": "Microsoft Corporation",
-                        "recommendation": "BUY",
-                        "confidence": 0.82,
-                        "reasoning": "Cloud services growth and AI integration",
-                        "targetPrice": 450.0,
-                        "currentPrice": 538.73,
-                        "expectedReturn": 0.12,
-                        "allocation": 12.0
-                    },
-                    {
-                        "symbol": "JNJ",
-                        "companyName": "Johnson & Johnson",
-                        "recommendation": "BUY",
-                        "confidence": 0.90,
-                        "reasoning": "Stable dividend yield and healthcare diversification",
-                        "targetPrice": 175.0,
-                        "currentPrice": 165.0,
-                        "expectedReturn": 0.08,
-                        "allocation": 10.0
-                    },
-                    {
-                        "symbol": "V",
-                        "companyName": "Visa Inc.",
-                        "recommendation": "BUY",
-                        "confidence": 0.88,
-                        "reasoning": "Payment processing growth and global expansion",
-                        "targetPrice": 320.0,
-                        "currentPrice": 280.0,
-                        "expectedReturn": 0.14,
-                        "allocation": 11.0
-                    },
-                    {
-                        "symbol": "PG",
-                        "companyName": "Procter & Gamble",
-                        "recommendation": "BUY",
-                        "confidence": 0.83,
-                        "reasoning": "Consumer staples stability and dividend growth",
-                        "targetPrice": 170.0,
-                        "currentPrice": 155.0,
-                        "expectedReturn": 0.09,
-                        "allocation": 8.0
-                    }
-                ]
-            
-            # Calculate total portfolio value
-            total_value = sum(rec.get("currentPrice", 0) * 100 * (rec.get("allocation", 0) / 100) for rec in buy_recommendations) * 10
-            
-            ai_recommendations_response = {
-                "portfolioAnalysis": {
-                    "totalValue": total_value,
-                    "numHoldings": len(buy_recommendations),
-                    "sectorBreakdown": {
-                        "Technology": 0.40,
-                        "Healthcare": 0.20,
-                        "Financials": 0.15,
-                        "Consumer Staples": 0.15,
-                        "Other": 0.10
-                    },
-                    "riskScore": 0.65 if risk_tolerance == "Moderate" else (0.45 if risk_tolerance == "Conservative" else 0.80),
-                    "diversificationScore": 0.75,
-                    "expectedImpact": {
-                        "evPct": 12.5,  # Expected value percentage
-                        "evAbs": total_value * 0.125,  # Expected value absolute
-                        "per10k": 1250.0  # Per 10k investment
-                    },
-                    "risk": {
-                        "volatilityEstimate": 15.0 if risk_tolerance == "Moderate" else (10.0 if risk_tolerance == "Conservative" else 20.0),
-                        "maxDrawdownPct": -25.0
-                    },
-                    "assetAllocation": {
-                        "stocks": 0.90,
-                        "bonds": 0.08,
-                        "cash": 0.02
-                    }
-                },
-                "buyRecommendations": buy_recommendations,
-                "sellRecommendations": [
-                    {
-                        "symbol": "TSLA",
-                        "reasoning": "High volatility may not align with current risk profile"
-                    }
-                ],
-                "rebalanceSuggestions": [
-                    {
-                        "action": "REDUCE",
-                        "currentAllocation": 0.25,
-                        "suggestedAllocation": 0.15,
-                        "reasoning": "Reduce single-stock concentration",
-                        "priority": "HIGH"
-                    }
-                ],
-                "riskAssessment": {
-                    "overallRisk": "Moderate" if risk_tolerance == "Moderate" else ("Low" if risk_tolerance == "Conservative" else "High"),
-                    "volatilityEstimate": 15.0,
-                    "recommendations": [
-                        "Maintain diversified portfolio across sectors",
-                        "Rebalance quarterly to maintain target allocation",
-                        "Consider adding bonds for risk reduction if conservative"
-                    ]
-                },
-                "marketOutlook": {
-                    "overallSentiment": "Bullish",
-                    "confidence": 0.72,
-                    "keyFactors": [
-                        "Positive earnings trends in technology sector",
-                        "Strong consumer spending indicators",
-                        "Moderate inflation expectations",
-                        "Stable interest rate environment"
-                    ]
-                }
-            }
-            
-            print(f"✅ Returning {len(buy_recommendations)} buy recommendations")
-            return {"data": {"aiRecommendations": ai_recommendations_response}}
+        # Duplicate aiRecommendations handler removed - using the one before stocks handler
         
         # Handle portfolioMetrics query
         is_portfolio_metrics_query = (
