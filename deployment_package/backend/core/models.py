@@ -1,4 +1,5 @@
 # core/models.py
+import uuid
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
 
@@ -362,3 +363,49 @@ class DiscussionComment(models.Model):
     @property
     def reply_count(self):
         return self.replies.count()
+
+
+class MomentCategory(models.TextChoices):
+    """Categories for stock moments"""
+    EARNINGS = "EARNINGS", "Earnings"
+    NEWS = "NEWS", "News"
+    INSIDER = "INSIDER", "Insider"
+    MACRO = "MACRO", "Macro"
+    SENTIMENT = "SENTIMENT", "Sentiment"
+    OTHER = "OTHER", "Other"
+
+
+class StockMoment(models.Model):
+    """AI-generated key moments for stock price movements"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    symbol = models.CharField(max_length=16, db_index=True)
+    timestamp = models.DateTimeField(db_index=True)
+    
+    importance_score = models.FloatField(default=0.0)
+    category = models.CharField(
+        max_length=32,
+        choices=MomentCategory.choices,
+        default=MomentCategory.OTHER,
+    )
+    
+    title = models.CharField(max_length=140)
+    quick_summary = models.TextField()
+    deep_summary = models.TextField()
+    
+    # Store source URLs as JSON array
+    source_links = models.JSONField(default=list, blank=True)
+    
+    impact_1d = models.FloatField(null=True, blank=True)  # % move 1 day after
+    impact_7d = models.FloatField(null=True, blank=True)  # % move 7 days after
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=["symbol", "timestamp"]),
+        ]
+        ordering = ["symbol", "-timestamp"]
+    
+    def __str__(self):
+        return f"{self.symbol} @ {self.timestamp} ({self.category})"

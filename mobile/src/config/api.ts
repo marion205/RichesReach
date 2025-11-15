@@ -21,6 +21,12 @@ const localHost = "http://localhost:8000";
 // Use environment variable if available, otherwise use localhost for development
 export const API_BASE = ENV_API_BASE_URL || localHost;
 
+// TTS API base URL (can be same as API_BASE or separate service)
+export const TTS_API_BASE_URL = 
+  process.env.EXPO_PUBLIC_TTS_API_BASE_URL || 
+  Constants.expoConfig?.extra?.TTS_API_BASE_URL ||
+  API_BASE; // Default to main API base
+
 // Runtime guardrails to prevent bad hosts
 console.log("[API_BASE at runtime]", API_BASE);
 

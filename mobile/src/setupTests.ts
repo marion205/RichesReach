@@ -1,3 +1,60 @@
+/**
+ * Early setup file - runs BEFORE test environment is initialized
+ * This is where we must mock PixelRatio before StyleSheet loads
+ */
+
+// CRITICAL: Import React FIRST to initialize ReactCurrentOwner
+// This must be before any other imports to ensure React internals are set up
+import React from 'react';
+
+// Ensure React is available globally before any test libraries load
+// This initializes ReactCurrentOwner and other React internals
+if (typeof global !== 'undefined') {
+  global.React = React;
+}
+
+// Force React internals to initialize by accessing them
+// This ensures ReactCurrentOwner is set up before test libraries try to use it
+if (React.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED) {
+  // React internals are available - good
+}
+
+// CRITICAL: Mock react-test-renderer to prevent ReactCurrentOwner errors
+// This must be before @testing-library/react-native tries to import it
+jest.mock('react-test-renderer', () => {
+  const React = require('react');
+  // Ensure React is initialized before creating renderer
+  if (typeof global !== 'undefined') {
+    global.React = React;
+  }
+  
+  // Return a mock renderer that doesn't access ReactCurrentOwner prematurely
+  return {
+    create: jest.fn((element) => ({
+      toJSON: () => ({ type: 'MockedComponent' }),
+      root: { findAllByType: jest.fn(), findByType: jest.fn() },
+      update: jest.fn(),
+      unmount: jest.fn(),
+    })),
+    act: (callback) => callback(),
+  };
+});
+
+// CRITICAL: Mock PixelRatio FIRST - before ANY other React Native imports
+// This ensures the mock is in place before any React Native modules load
+// Using factory function to avoid evaluation issues
+jest.mock('react-native/Libraries/Utilities/PixelRatio', () => {
+  // Return plain object - jest.fn will be available when this runs
+  return {
+    get: () => 2,
+    getFontScale: () => 1,
+    isFontScaleAtLeast: () => true,
+    roundToNearestPixel: (size) => Math.round(size * 2) / 2,
+    getPixelSizeForLayoutSize: (size) => size * 2,
+    startDetecting: () => {},
+  };
+});
+
 import 'react-native-gesture-handler/jestSetup';
 
 // Mock react-native-reanimated

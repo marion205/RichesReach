@@ -28,6 +28,7 @@ import StockTradingModal from '../../../components/forms/StockTradingModal';
 import { getStockComprehensive, StockData } from '../../../services/stockDataService';
 // ✅ Optimized: Use lodash-es for tree-shaking (only imports debounce, not entire library)
 import { debounce } from 'lodash-es';
+import { StockMomentsIntegration } from './StockMomentsIntegration';
 
 const { width } = Dimensions.get('window');
 
@@ -257,6 +258,32 @@ const ChartRoute = React.memo(({
     return downsampleData(chartData);
   }, [chartData]);
 
+  // Convert chart data to ChartPoint format for moments
+  const priceSeriesForMoments = useMemo(() => {
+    if (!processedData || !Array.isArray(processedData) || processedData.length === 0) {
+      console.log('[ChartRoute] No processedData for moments');
+      return [];
+    }
+    const series = processedData.map((d: any) => ({
+      timestamp: d.timestamp || d.date || new Date().toISOString(),
+      price: d.close || d.price || d.value || 0,
+    }));
+    console.log('[ChartRoute] Generated priceSeriesForMoments:', series.length, 'points');
+    return series;
+  }, [processedData]);
+
+  // Map timeframe to ChartRangeEnum
+  const chartRange = useMemo(() => {
+    const rangeMap: Record<string, "ONE_MONTH" | "THREE_MONTHS" | "SIX_MONTHS" | "YEAR_TO_DATE" | "ONE_YEAR"> = {
+      '1D': 'ONE_MONTH',
+      '5D': 'ONE_MONTH',
+      '1M': 'ONE_MONTH',
+      '3M': 'THREE_MONTHS',
+      '1Y': 'ONE_YEAR',
+    };
+    return rangeMap[timeframe] || 'THREE_MONTHS';
+  }, [timeframe]);
+
   if (loading) {
     return (
       <Animated.View style={[styles.tabContent, animatedStyle]}>
@@ -348,6 +375,21 @@ const ChartRoute = React.memo(({
               </Text>
             </View>
           </View>
+
+          {/* Key Moments Integration */}
+          {priceSeriesForMoments.length > 0 ? (
+            <StockMomentsIntegration
+              symbol={symbol}
+              priceSeries={priceSeriesForMoments}
+              chartRange={chartRange}
+            />
+          ) : (
+            <View style={{ padding: 16, alignItems: 'center' }}>
+              <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>
+                Chart data loading... Key moments will appear here.
+              </Text>
+            </View>
+          )}
         </ScrollView>
       </Animated.View>
     </PanGestureHandler>
@@ -916,7 +958,7 @@ const TrendsRoute = React.memo(({ symbol, insiderData, institutionalData, sentim
       {/* Institutional Ownership */}
       <View style={styles.card}>
         <View style={styles.cardHeader}>
-          <Icon name="building" size={20} color={theme.colors.accent} />
+          <Icon name="briefcase" size={20} color={theme.colors.accent} />
           <Text style={styles.sectionTitle}>Institutional Ownership</Text>
         </View>
         {institutionalData && institutionalData.length > 0 ? (

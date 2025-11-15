@@ -28,7 +28,7 @@ module.exports = {
   ],
   coverageReporters: ['text', 'lcov', 'html'],
   coverageDirectory: 'coverage',
-  testEnvironment: 'node',
+  testEnvironment: 'node', // RN default; don't switch to jsdom
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
   globals: {
     'ts-jest': {

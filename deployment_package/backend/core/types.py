@@ -1,7 +1,7 @@
 # core/types.py
 import graphene
 from graphene_django import DjangoObjectType
-from .models import User, Post, ChatSession, ChatMessage, Source, Like, Comment, Follow, Stock, StockData, Watchlist, IncomeProfile, AIPortfolioRecommendation, Portfolio, StockDiscussion, DiscussionComment
+from .models import User, Post, ChatSession, ChatMessage, Source, Like, Comment, Follow, Stock, StockData, Watchlist, IncomeProfile, AIPortfolioRecommendation, Portfolio, StockDiscussion, DiscussionComment, StockMoment, MomentCategory
 class UserType(DjangoObjectType):
 class Meta:
 model = User
@@ -448,3 +448,70 @@ last_updated = graphene.String()
 source = graphene.String()
 verified = graphene.Boolean()
 api_response = graphene.JSONString()
+
+
+class MomentCategoryEnum(graphene.Enum):
+    """Enum for moment categories"""
+    EARNINGS = "EARNINGS"
+    NEWS = "NEWS"
+    INSIDER = "INSIDER"
+    MACRO = "MACRO"
+    SENTIMENT = "SENTIMENT"
+    OTHER = "OTHER"
+
+
+class ChartRangeEnum(graphene.Enum):
+    """Enum for chart time ranges"""
+    ONE_MONTH = "ONE_MONTH"
+    THREE_MONTHS = "THREE_MONTHS"
+    SIX_MONTHS = "SIX_MONTHS"
+    YEAR_TO_DATE = "YEAR_TO_DATE"
+    ONE_YEAR = "ONE_YEAR"
+
+
+class StockMomentType(DjangoObjectType):
+    """GraphQL type for stock moments"""
+    category = graphene.Field(MomentCategoryEnum)
+    importanceScore = graphene.Float()
+    quickSummary = graphene.String()
+    deepSummary = graphene.String()
+    sourceLinks = graphene.List(graphene.String)
+    impact1D = graphene.Float()
+    impact7D = graphene.Float()
+    
+    class Meta:
+        model = StockMoment
+        fields = (
+            "id",
+            "symbol",
+            "timestamp",
+            "importance_score",
+            "category",
+            "title",
+            "quick_summary",
+            "deep_summary",
+            "source_links",
+            "impact_1d",
+            "impact_7d",
+        )
+    
+    def resolve_category(self, info):
+        return self.category
+    
+    def resolve_importanceScore(self, info):
+        return self.importance_score
+    
+    def resolve_quickSummary(self, info):
+        return self.quick_summary
+    
+    def resolve_deepSummary(self, info):
+        return self.deep_summary
+    
+    def resolve_sourceLinks(self, info):
+        return self.source_links or []
+    
+    def resolve_impact1D(self, info):
+        return self.impact_1d
+    
+    def resolve_impact7D(self, info):
+        return self.impact_7d
