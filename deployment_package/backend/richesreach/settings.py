@@ -9,10 +9,11 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 from pathlib import Path
 import os
 from dotenv import load_dotenv
-# Load environment variables from .env file
-load_dotenv()
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+# Load environment variables from .env file (in backend directory)
+env_path = BASE_DIR / '.env'
+load_dotenv(env_path)
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 # SECURITY WARNING: keep the secret key used in production secret!
@@ -69,8 +70,9 @@ ASGI_APPLICATION = 'richesreach.asgi.application'
 # Use DATABASE_URL if provided, otherwise use individual DB_* variables
 DATABASE_URL = os.getenv('DATABASE_URL', '')
 if DATABASE_URL:
-    # Parse DATABASE_URL (format: postgresql://user:password@host:port/dbname)
+    # Parse DATABASE_URL (format: postgresql://user:password@host:port/dbname or postgresql://user@host:port/dbname)
     import re
+    # Try with password first
     match = re.match(r'postgresql://([^:]+):([^@]+)@([^:]+):(\d+)/(.+)', DATABASE_URL)
     if match:
         DATABASES = {
@@ -84,13 +86,27 @@ if DATABASE_URL:
             }
         }
     else:
-        # Fallback to SQLite if DATABASE_URL format is invalid
-        DATABASES = {
-            'default': {
-                'ENGINE': 'django.db.backends.sqlite3',
-                'NAME': BASE_DIR / 'db.sqlite3',
+        # Try without password (postgresql://user@host:port/dbname)
+        match = re.match(r'postgresql://([^@]+)@([^:]+):(\d+)/(.+)', DATABASE_URL)
+        if match:
+            DATABASES = {
+                'default': {
+                    'ENGINE': 'django.db.backends.postgresql',
+                    'NAME': match.group(4),
+                    'USER': match.group(1),
+                    'PASSWORD': '',
+                    'HOST': match.group(2),
+                    'PORT': match.group(3),
+                }
             }
-        }
+        else:
+            # Fallback to SQLite if DATABASE_URL format is invalid
+            DATABASES = {
+                'default': {
+                    'ENGINE': 'django.db.backends.sqlite3',
+                    'NAME': BASE_DIR / 'db.sqlite3',
+                }
+            }
 else:
     # Use individual DB_* environment variables
     DB_NAME = os.getenv('DB_NAME', '')

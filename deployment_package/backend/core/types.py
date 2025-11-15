@@ -2,8 +2,9 @@
 import graphene
 from graphene_django import DjangoObjectType
 from .models import User, Post, ChatSession, ChatMessage, Source, Like, Comment, Follow, Stock, StockData, Watchlist, IncomeProfile, AIPortfolioRecommendation, Portfolio, StockDiscussion, DiscussionComment, StockMoment, MomentCategory
+
 class UserType(DjangoObjectType):
-class Meta:
+    class Meta:
 model = User
 fields = ("id", "email", "name", "profile_pic")
 # Add camelCase fields for frontend compatibility

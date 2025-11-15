@@ -10,6 +10,7 @@ import {
   Dimensions,
   Animated,
   StatusBar, // For status bar styling
+  ActivityIndicator,
 } from "react-native";
 import * as Speech from "expo-speech";
 import * as Haptics from "expo-haptics";
@@ -96,6 +97,7 @@ const MomentStoryPlayer: React.FC<MomentStoryPlayerProps> = ({
 }) => {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isTTSLoading, setIsTTSLoading] = useState(false);
   const [listenedIds, setListenedIds] = useState<string[]>([]);
   const listRef = useRef<FlatList<ExtendedMoment>>(null);
   const speechTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -165,21 +167,16 @@ const MomentStoryPlayer: React.FC<MomentStoryPlayerProps> = ({
     onAnalyticsEvent?.(event);
   }, [onAnalyticsEvent]);
 
-  // Enhanced slide-up animation
+  // Instant open - no animation delay for better UX
   useEffect(() => {
     if (visible) {
-      slideAnim.setValue(400); // Start further off-screen for smoother entry
-      Animated.spring(slideAnim, {
-        toValue: 0,
-        useNativeDriver: true,
-        mass: 1,
-        damping: 20,
-        stiffness: 100,
-      }).start();
+      // Set to final position immediately - no animation delay
+      slideAnim.setValue(0);
     } else {
+      // Quick close animation (optional)
       Animated.timing(slideAnim, {
         toValue: 400,
-        duration: 250,
+        duration: 150, // Faster close
         useNativeDriver: true,
       }).start();
     }
@@ -244,28 +241,36 @@ const MomentStoryPlayer: React.FC<MomentStoryPlayerProps> = ({
     fireAnalytics,
   ]);
 
-  // Reset state when opening/closing (unchanged)
+  // Reset state when opening/closing - make this instant
   useEffect(() => {
     if (!visible) {
       stopSpeech();
       setIsPlaying(false);
       setListenedIds([]);
       setCurrentIndex(0);
+      setIsTTSLoading(false);
       return () => stopSpeech();
     }
 
+    // Set state immediately - don't wait for anything
     const maxIndex = storyMoments.length - 1;
     const clampedInitialIndex = Math.max(0, Math.min(initialIndex, maxIndex));
     const baseIndex = introMoment ? 0 : clampedInitialIndex;
+    
+    // Set all state synchronously for instant UI
     setCurrentIndex(baseIndex);
     setListenedIds([]);
     setIsPlaying(true);
+    setIsTTSLoading(false); // Start with loading false, will set true when TTS starts
 
-    fireAnalytics({
-      type: "story_open",
-      symbol,
-      totalMoments: total,
-    });
+    // Fire analytics asynchronously (don't block)
+    setTimeout(() => {
+      fireAnalytics({
+        type: "story_open",
+        symbol,
+        totalMoments: total,
+      });
+    }, 0);
 
     return () => stopSpeech();
   }, [visible, initialIndex, symbol, total, introMoment, storyMoments.length, fireAnalytics]);
@@ -306,19 +311,40 @@ const MomentStoryPlayer: React.FC<MomentStoryPlayerProps> = ({
   }, [visible, currentExtended, isPlaying, storyMoments.length]);
 
   const speakText = useCallback(async (text: string, moment: StockMoment) => {
+    // Start TTS immediately without blocking
+    setIsTTSLoading(true);
+    
+    // Set loading to false quickly (max 1.5s) so UI doesn't feel stuck
+    const loadingTimeout = setTimeout(() => {
+      setIsTTSLoading(false);
+    }, 1500);
+    
     try {
       if (speakFn) {
-        await speakFn(text, moment);
+        // Fire and forget - don't wait for TTS at all
+        speakFn(text, moment)
+          .catch((error) => {
+            console.warn('[MomentStoryPlayer] TTS error (non-blocking):', error);
+          })
+          .finally(() => {
+            clearTimeout(loadingTimeout);
+            setIsTTSLoading(false);
+          });
+        // Return immediately - don't wait
         return;
       }
 
+      clearTimeout(loadingTimeout);
+      setIsTTSLoading(false);
       Speech.speak(text, {
         ...WEALTH_ORACLE_VOICE_OPTIONS,
         onDone: handleSpeechComplete,
         onError: handleSpeechComplete,
       });
     } catch (error) {
+      clearTimeout(loadingTimeout);
       console.warn('[MomentStoryPlayer] Speech error:', error);
+      setIsTTSLoading(false);
       handleSpeechComplete();
     }
   }, [speakFn, handleSpeechComplete]);
@@ -345,17 +371,29 @@ const MomentStoryPlayer: React.FC<MomentStoryPlayerProps> = ({
         category: "OTHER" as MomentCategory,
       };
 
-    speakText(text, forMoment).catch(() => {
-      handleSpeechComplete();
-    });
+    // Start TTS immediately without waiting - fire and forget
+    // Use setTimeout(0) to ensure this doesn't block rendering
+    setTimeout(() => {
+      speakText(text, forMoment).catch(() => {
+        // If TTS fails, just continue - don't block
+        console.warn('[MomentStoryPlayer] TTS failed, continuing without voice');
+      });
+    }, 0);
 
+    // Set timeout for speech completion
     speechTimeoutRef.current = setTimeout(() => {
       stopSpeech();
       handleSpeechComplete();
     }, estimatedDurationMs);
 
-    return () => stopSpeech();
-  }, [visible, isPlaying, currentExtended, currentMomentForChart, speakText, stopSpeech]);
+    return () => {
+      stopSpeech();
+      if (speechTimeoutRef.current) {
+        clearTimeout(speechTimeoutRef.current);
+        speechTimeoutRef.current = null;
+      }
+    };
+  }, [visible, isPlaying, currentExtended, currentMomentForChart, speakText, stopSpeech, handleSpeechComplete]);
 
   const handleClose = useCallback(() => {
     stopSpeech();
@@ -499,9 +537,10 @@ const MomentStoryPlayer: React.FC<MomentStoryPlayerProps> = ({
     <Modal
       visible={visible}
       transparent
-      animationType="none" // Custom animation
+      animationType="fade" // Faster than slide
       onRequestClose={handleClose}
       statusBarTranslucent={true}
+      presentationStyle="overFullScreen" // Faster rendering
     >
       <View style={styles.backdrop}>
         <Animated.View
@@ -525,7 +564,15 @@ const MomentStoryPlayer: React.FC<MomentStoryPlayerProps> = ({
             <View style={styles.headerRow}>
               <View style={styles.headerLeft}>
                 <Text style={styles.headerSymbol}>{symbol.toUpperCase()}</Text>
-                <Text style={styles.headerTitle}>Story Mode</Text>
+                <View style={styles.headerTitleRow}>
+                  <Text style={styles.headerTitle}>Story Mode</Text>
+                  {isTTSLoading && (
+                    <View style={styles.loadingIndicator}>
+                      <ActivityIndicator size="small" color="#3B82F6" />
+                      <Text style={styles.loadingText}>Preparing voice...</Text>
+                    </View>
+                  )}
+                </View>
               </View>
               <Pressable 
                 onPress={handleClose}
@@ -688,11 +735,30 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     marginBottom: 2,
   },
+  headerTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   headerTitle: {
     fontSize: 20,
     fontWeight: "900",
     color: "#111827",
     letterSpacing: -0.5,
+  },
+  loadingIndicator: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: "rgba(59, 130, 246, 0.1)",
+    borderRadius: 12,
+  },
+  loadingText: {
+    fontSize: 11,
+    fontWeight: "500",
+    color: "#3B82F6",
   },
   closeButton: {
     padding: 8,

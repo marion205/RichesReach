@@ -22,6 +22,7 @@ django.setup()
 from openai import OpenAI
 from pydantic import BaseModel, Field, validator
 from core.models import StockMoment, MomentCategory
+from core.data_sources.unified_data_service import UnifiedDataService, Event
 
 # Configure logging
 logging.basicConfig(
@@ -37,6 +38,7 @@ MAX_RETRIES = int(os.getenv("OPENAI_MAX_RETRIES", "3"))
 RETRY_DELAY = 2  # seconds, exponential backoff base
 
 client = OpenAI()  # Uses OPENAI_API_KEY from env
+unified_data_service = UnifiedDataService()  # Unified data aggregation service
 
 # Data structures for jobs (using Pydantic for better validation)
 class PriceContext(BaseModel):
@@ -46,8 +48,10 @@ class PriceContext(BaseModel):
     volume_vs_average: str
 
 
+# Event is now imported from unified_data_service
+# Keeping this for backward compatibility, but will use UnifiedDataService.Event
 class Event(BaseModel):
-    type: str  # "EARNINGS", "NEWS", "INSIDER", "MACRO", "SENTIMENT"
+    type: str  # "EARNINGS", "NEWS", "INSIDER", "MACRO", "SENTIMENT", "OPTIONS"
     time: datetime
     headline: str
     summary: str
@@ -239,6 +243,45 @@ def create_stock_moment_from_job(job: RawMomentJob) -> Optional[StockMoment]:
     )
     logger.info(f"Created StockMoment {moment.id} for {moment.symbol} @ {moment.timestamp} (score: {data.importance_score})")
     return moment
+
+
+async def fetch_events_for_moment(
+    symbol: str,
+    timestamp: datetime,
+    window_hours: int = 24,
+) -> List[Event]:
+    """
+    Fetch all events for a symbol around a given timestamp using the unified data service.
+    This replaces manual event fetching with automated aggregation from all sources.
+    """
+    import asyncio
+    
+    start_date = timestamp - timedelta(hours=window_hours)
+    end_date = timestamp + timedelta(hours=window_hours)
+    
+    try:
+        events = await unified_data_service.get_all_events_for_symbol(
+            symbol, start_date, end_date
+        )
+        
+        # Convert unified events to worker Event format
+        worker_events = []
+        for event in events:
+            worker_events.append(
+                Event(
+                    type=event.type,
+                    time=event.time,
+                    headline=event.headline,
+                    summary=event.summary,
+                    url=event.url,
+                )
+            )
+        
+        logger.info(f"Fetched {len(worker_events)} events for {symbol} around {timestamp}")
+        return worker_events
+    except Exception as e:
+        logger.error(f"Error fetching events for {symbol}: {e}")
+        return []
 
 
 # Example "main loop"

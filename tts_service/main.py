@@ -15,6 +15,10 @@ MEDIA_DIR = "media"
 os.makedirs(MEDIA_DIR, exist_ok=True)
 
 
+# Max text length to prevent abuse
+MAX_TEXT_LENGTH = 1500
+
+
 class TTSRequest(BaseModel):
     text: str
     voice: str = "wealth_oracle_v1"
@@ -24,13 +28,21 @@ class TTSRequest(BaseModel):
 
 app = FastAPI(title="Wealth Oracle TTS")
 
-# Allow mobile dev / web to hit this
+# CORS configuration - tighten in production
+ALLOWED_ORIGINS = os.getenv("TTS_ALLOWED_ORIGINS", "*").split(",")
+if ALLOWED_ORIGINS == ["*"]:
+    # Development: allow all
+    allow_origins = ["*"]
+else:
+    # Production: specific domains
+    allow_origins = ALLOWED_ORIGINS
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # tighten in prod
+    allow_origins=allow_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 # Serve generated audio files
@@ -41,23 +53,35 @@ app.mount("/media", StaticFiles(directory=MEDIA_DIR), name="media")
 async def synthesize(req: TTSRequest, request: Request):
     """
     Synthesize speech for the given text and return a URL to the audio file.
-    """
-    # In real prod, you'd:
-    # - Check length limits
-    # - Rate-limit per user
-    # - Use a more robust TTS engine
     
-    filename = f"{req.symbol}_{req.moment_id}_{uuid.uuid4().hex}.mp3"
-    filepath = os.path.join(MEDIA_DIR, filename)
+    Guards:
+    - Text length capped at MAX_TEXT_LENGTH
+    - Basic error handling
+    """
+    from fastapi import HTTPException
+    
+    # Guard: Truncate text if too long
+    text = req.text[:MAX_TEXT_LENGTH] if len(req.text) > MAX_TEXT_LENGTH else req.text
+    
+    if len(req.text) > MAX_TEXT_LENGTH:
+        # Log warning but proceed with truncated text
+        print(f"[TTS] Text truncated from {len(req.text)} to {MAX_TEXT_LENGTH} chars")
+    
+    try:
+        filename = f"{req.symbol}_{req.moment_id}_{uuid.uuid4().hex}.mp3"
+        filepath = os.path.join(MEDIA_DIR, filename)
 
-    # Simple persona tweak: slightly slower, clear pronunciation
-    tts = gTTS(text=req.text, lang="en")
-    tts.save(filepath)
+        # Simple persona tweak: slightly slower, clear pronunciation
+        tts = gTTS(text=text, lang="en", slow=False)
+        tts.save(filepath)
 
-    base_url = str(request.base_url).rstrip("/")
-    audio_url = f"{base_url}/media/{filename}"
+        base_url = str(request.base_url).rstrip("/")
+        audio_url = f"{base_url}/media/{filename}"
 
-    return {"audio_url": audio_url}
+        return {"audio_url": audio_url}
+    except Exception as e:
+        print(f"[TTS] Error generating speech: {e}")
+        raise HTTPException(status_code=500, detail=f"TTS generation failed: {str(e)}")
 
 
 @app.get("/health")

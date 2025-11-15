@@ -22,10 +22,15 @@ const localHost = "http://localhost:8000";
 export const API_BASE = ENV_API_BASE_URL || localHost;
 
 // TTS API base URL (can be same as API_BASE or separate service)
+// TTS service runs on port 8001 by default
+const TTS_PORT = process.env.EXPO_PUBLIC_TTS_PORT || "8001";
+const TTS_HOST = process.env.EXPO_PUBLIC_TTS_HOST || "localhost";
+const defaultTTSUrl = `http://${TTS_HOST}:${TTS_PORT}`;
+
 export const TTS_API_BASE_URL = 
   process.env.EXPO_PUBLIC_TTS_API_BASE_URL || 
   Constants.expoConfig?.extra?.TTS_API_BASE_URL ||
-  API_BASE; // Default to main API base
+  defaultTTSUrl; // Default to port 8001
 
 // Runtime guardrails to prevent bad hosts
 console.log("[API_BASE at runtime]", API_BASE);

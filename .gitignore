@@ -40,6 +40,8 @@ yarn-error.log*
 
 # Images/logs you don't want in git (tune as needed)
 *.log
+server*.log
+*.pid
 node_modules/
 deployment/
 rust_crypto_engine/target/
@@ -47,6 +49,11 @@ backend/hft/rust-executor/target/
 **/target/
 *.pyc
 __pycache__/
+
+# Test result files (generated)
+benchmark_stock_results.json
+e2e_test_results.json
+*_test_results.json
 
 # Environment files
 .env
