@@ -29,9 +29,16 @@ export USE_OPENAI=true
 export USE_YODLEE=true
 export USE_SBLOC_AGGREGATOR=true
 export USE_SBLOC_MOCK=false
+
+# Enable Kafka Streaming
+export KAFKA_ENABLED=true
+export KAFKA_BOOTSTRAP_SERVERS="b-3.richesreachkafka.kbr9fv.c4.kafka.us-east-1.amazonaws.com:9094,b-2.richesreachkafka.kbr9fv.c4.kafka.us-east-1.amazonaws.com:9094,b-1.richesreachkafka.kbr9fv.c4.kafka.us-east-1.amazonaws.com:9094"
+export KAFKA_GROUP_ID="riches-reach-producer"
+export KAFKA_TOPIC_PREFIX="richesreach"
 export ENABLE_STREAMING=true
-export KAFKA_BOOTSTRAP_SERVERS="localhost:9092"
-export STREAMING_MODE=true
+export STREAMING_MODE=production
+
+# Enable Data Lake (S3)
 export DATA_LAKE_BUCKET="riches-reach-ai-datalake-20251005"
 export S3_REGION="us-east-1"
 

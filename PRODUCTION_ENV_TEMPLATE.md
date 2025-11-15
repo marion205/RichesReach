@@ -232,13 +232,44 @@ SEPOLIA_ETH_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/your-key
 
 ---
 
-## 📡 Streaming & Kafka (if using)
+## 📡 Streaming & Kafka Configuration
 
 ```bash
-KAFKA_BOOTSTRAP_SERVERS=your-kafka-endpoint:9092
+# Enable Kafka for real-time data streaming
+KAFKA_ENABLED=true
+KAFKA_BOOTSTRAP_SERVERS=b-3.richesreachkafka.kbr9fv.c4.kafka.us-east-1.amazonaws.com:9094,b-2.richesreachkafka.kbr9fv.c4.kafka.us-east-1.amazonaws.com:9094,b-1.richesreachkafka.kbr9fv.c4.kafka.us-east-1.amazonaws.com:9094
+KAFKA_GROUP_ID=riches-reach-producer
+KAFKA_TOPIC_PREFIX=richesreach
 ENABLE_STREAMING=true
-STREAMING_MODE=true
+STREAMING_MODE=production
 ```
+
+**Kafka Topics:**
+- `market-data` - Real-time stock prices
+- `technical-indicators` - Calculated technical indicators
+- `ml-predictions` - AI model predictions
+- `user-events` - User interactions
+
+---
+
+## 🗄️ Data Lake Configuration (S3)
+
+```bash
+# S3 Data Lake for long-term storage
+DATA_LAKE_BUCKET=riches-reach-ai-datalake-20251005
+AWS_S3_REGION_NAME=us-east-1
+```
+
+**Data Lake Structure:**
+- `raw/` - Original data from sources (Polygon, Finnhub, etc.)
+- `processed/` - Cleaned/transformed data and ML features
+- `curated/` - Analytics-ready data and summaries
+- `metadata/` - Schemas and data lineage
+
+**Lifecycle Policies:**
+- 30 days → Standard-IA (Infrequent Access)
+- 90 days → Glacier (Archive)
+- 365 days → Deep Archive
 
 ---
 

@@ -36,11 +36,27 @@ import BenchmarkSelector from './BenchmarkSelector';
 import { computeYDomain, getPeriodReturnLabel } from '../utils/chartUtils';
 // Conditionally import Skia chart - only available in development builds, not Expo Go
 let InnovativeChart: any = null;
+let isSkiaAvailable = false;
 try {
   InnovativeChart = require('../../../components/charts/InnovativeChartSkia').default;
+  // Check if Skia library is actually available (same check as in InnovativeChartSkia.tsx)
+  try {
+    const SkiaComponents = require('@shopify/react-native-skia');
+    // Check for the actual Skia components (Canvas, Path, Skia) like the component does
+    const { Canvas, Path, Skia } = SkiaComponents || {};
+    isSkiaAvailable = !!(SkiaComponents && Canvas && Path && Skia);
+    if (!isSkiaAvailable) {
+      console.warn('Skia components not fully available - Canvas, Path, or Skia missing');
+    }
+  } catch (e) {
+    // Skia library not available
+    isSkiaAvailable = false;
+    console.warn('@shopify/react-native-skia not installed. Install with: npm install @shopify/react-native-skia');
+  }
 } catch (e) {
   // Skia not available - will use fallback chart
-  console.warn('Skia chart not available, using fallback chart');
+  console.warn('Skia chart component not available, using fallback chart');
+  isSkiaAvailable = false;
 }
 
 const { width } = Dimensions.get('window');
@@ -221,11 +237,16 @@ export default function PortfolioPerformanceCard({
   useEffect(() => {
     setIsLoading(true);
     const pts = pointsForTab(tab);
-    setHistory(genPortfolioSeries(pts));
-    setBench(genBenchmarkSeries(pts));
+    const newHistory = genPortfolioSeries(pts);
+    const newBench = genBenchmarkSeries(pts);
+    setHistory(newHistory);
+    setBench(newBench);
+    console.log('📈 Generated portfolio history:', newHistory.length, 'points');
     const tid = setTimeout(() => setIsLoading(false), 200);
     return () => clearTimeout(tid);
   }, [tab, genPortfolioSeries, genBenchmarkSeries]);
+
+  // Debug AR chart state - moved after innovativeChartSeries definition
 
   // Transform data for InnovativeChartSkia (advanced AR chart)
   const innovativeChartSeries = useMemo(() => {
@@ -237,6 +258,20 @@ export default function PortfolioPerformanceCard({
       price,
     }));
   }, [history]);
+
+  // Debug AR chart state
+  useEffect(() => {
+    if (useAdvancedChart) {
+      console.log('🎯 AR Chart Mode Active');
+      console.log('  - History points:', history.length);
+      console.log('  - InnovativeChartSeries points:', innovativeChartSeries.length);
+      console.log('  - InnovativeChart available:', !!InnovativeChart);
+      console.log('  - Skia available:', isSkiaAvailable);
+      if (innovativeChartSeries.length > 0) {
+        console.log('  - Sample series data:', innovativeChartSeries.slice(0, 3));
+      }
+    }
+  }, [useAdvancedChart, history.length, innovativeChartSeries.length]);
 
   const innovativeChartBenchmark = useMemo(() => {
     if (!showBenchmark || !bench.length) return [];
@@ -514,10 +549,25 @@ export default function PortfolioPerformanceCard({
               <Text style={{ color: palette.text, fontSize: 12, fontWeight: '600' }}>{selectedBenchmarkSymbol}</Text>
             </TouchableOpacity>
             
-            {/* Chart Type Toggle - Switch between Regular and Advanced AR Chart (only if Skia is available) */}
+            {/* Chart Type Toggle - Switch between Regular and Advanced AR Chart */}
             {InnovativeChart && (
               <TouchableOpacity
-                onPress={() => setUseAdvancedChart(v => !v)}
+                onPress={() => {
+                  if (!isSkiaAvailable && !useAdvancedChart) {
+                    Alert.alert(
+                      'AR Chart Requires Rebuild',
+                      'The AR chart requires @shopify/react-native-skia which needs a rebuild to work. Please rebuild your development build using: npm run build:dev:ios or npm run build:dev:android',
+                      [{ text: 'OK' }]
+                    );
+                    return;
+                  }
+                  console.log('🔄 Toggling AR chart, current state:', useAdvancedChart);
+                  console.log('📊 History length:', history.length);
+                  console.log('📊 InnovativeChartSeries length:', innovativeChartSeries.length);
+                  console.log('📊 InnovativeChart available:', !!InnovativeChart);
+                  console.log('📊 Skia available:', isSkiaAvailable);
+                  setUseAdvancedChart(v => !v);
+                }}
                 accessibilityRole="button"
                 accessibilityLabel={useAdvancedChart ? 'Switch to regular chart' : 'Switch to advanced AR chart'}
                 style={[
@@ -526,6 +576,7 @@ export default function PortfolioPerformanceCard({
                     borderColor: palette.border, 
                     backgroundColor: useAdvancedChart ? `${palette.accent}22` : palette.chipBg,
                     marginLeft: 8,
+                    opacity: isSkiaAvailable ? 1 : 0.6,
                   },
                 ]}
               >
@@ -538,6 +589,17 @@ export default function PortfolioPerformanceCard({
                 <Text style={{ color: useAdvancedChart ? palette.accent : palette.text, fontSize: 12, fontWeight: '600' }}>
                   {useAdvancedChart ? 'AR' : 'Chart'}
                 </Text>
+                {!isSkiaAvailable && (
+                  <View style={{ 
+                    position: 'absolute', 
+                    top: -2, 
+                    right: -2, 
+                    width: 6, 
+                    height: 6, 
+                    borderRadius: 3, 
+                    backgroundColor: '#EF4444' 
+                  }} />
+                )}
               </TouchableOpacity>
             )}
           </View>
@@ -592,23 +654,46 @@ export default function PortfolioPerformanceCard({
 
         {/* Chart + Crosshair - Advanced AR Chart or Regular Chart */}
         <View style={styles.chartShell}>
-          {useAdvancedChart && innovativeChartSeries.length > 0 && InnovativeChart ? (
-            <InnovativeChart
-              series={innovativeChartSeries}
-              benchmarkData={innovativeChartBenchmark}
-              costBasis={curValue - curReturn}
-              palette={{
-                bg: palette.bg,
-                grid: palette.grid,
-                price: accent,
-                text: palette.text,
-                card: palette.bg,
-                moneyGreen: palette.green,
-                moneyRed: palette.red,
-              }}
-              height={chartHeight}
-              margin={16}
-            />
+          {useAdvancedChart ? (
+            innovativeChartSeries.length > 0 && InnovativeChart && isSkiaAvailable ? (
+              <InnovativeChart
+                series={innovativeChartSeries}
+                benchmarkData={innovativeChartBenchmark}
+                costBasis={curValue - curReturn}
+                palette={{
+                  bg: palette.bg,
+                  grid: palette.grid,
+                  price: accent,
+                  text: palette.text,
+                  card: palette.bg,
+                  moneyGreen: palette.green,
+                  moneyRed: palette.red,
+                }}
+                height={chartHeight}
+                margin={16}
+              />
+            ) : (
+              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20, minHeight: chartHeight }}>
+                <Text style={{ color: palette.sub, fontSize: 14, textAlign: 'center', marginBottom: 8 }}>
+                  {!isSkiaAvailable ? 'AR Chart requires React Native Skia' : innovativeChartSeries.length === 0 ? 'Loading chart data...' : 'Chart unavailable'}
+                </Text>
+                {!isSkiaAvailable && (
+                  <>
+                    <Text style={{ color: palette.sub, fontSize: 12, textAlign: 'center', marginTop: 8 }}>
+                      The advanced AR chart requires @shopify/react-native-skia library.
+                    </Text>
+                    <Text style={{ color: palette.sub, fontSize: 12, textAlign: 'center', marginTop: 4 }}>
+                      This is not available in Expo Go. Use a development build instead.
+                    </Text>
+                  </>
+                )}
+                {innovativeChartSeries.length === 0 && (
+                  <Text style={{ color: palette.sub, fontSize: 12, textAlign: 'center', marginTop: 8 }}>
+                    History data: {history.length} points
+                  </Text>
+                )}
+              </View>
+            )
           ) : (
             <View {...panResponder.panHandlers}>
               <LineChart

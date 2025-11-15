@@ -7,15 +7,19 @@ import { Platform } from 'react-native';
  */
 
 // Check environment variable first, then fallback to hardcoded values
-const ENV_API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
+// Try multiple sources for the API base URL
+const ENV_API_BASE_URL = 
+  process.env.EXPO_PUBLIC_API_BASE_URL || 
+  Constants.expoConfig?.extra?.API_BASE_URL ||
+  Constants.expoConfig?.extra?.API_BASE;
 
 const prodHost = "http://api.richesreach.com:8000";
 // Default to localhost - works for iOS Simulator
 // For physical devices, set EXPO_PUBLIC_API_BASE_URL to your Mac's LAN IP
-const localHost = process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000";
+const localHost = "http://localhost:8000";
 
 // Use environment variable if available, otherwise use localhost for development
-export const API_BASE = ENV_API_BASE_URL || Constants.expoConfig?.extra?.API_BASE || localHost;
+export const API_BASE = ENV_API_BASE_URL || localHost;
 
 // Runtime guardrails to prevent bad hosts
 console.log("[API_BASE at runtime]", API_BASE);

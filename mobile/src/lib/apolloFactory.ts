@@ -5,7 +5,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Use the same configuration as the main API
 import { API_GRAPHQL } from '../config/api';
-const GRAPHQL_URL = API_GRAPHQL;
+
+// Prefer environment variable directly, fallback to api.ts config
+// This ensures we use the env var if it's set, even if api.ts hasn't loaded it yet
+const GRAPHQL_URL = 
+  process.env.EXPO_PUBLIC_GRAPHQL_URL || 
+  (process.env.EXPO_PUBLIC_API_BASE_URL ? `${process.env.EXPO_PUBLIC_API_BASE_URL}/graphql/` : null) ||
+  API_GRAPHQL;
 
 if (!GRAPHQL_URL) {
   throw new Error(
@@ -24,9 +30,9 @@ export function getApiBase(): string {
 
 export function makeApolloClient() {
   console.log('[ApolloFactory] Environment EXPO_PUBLIC_GRAPHQL_URL:', process.env.EXPO_PUBLIC_GRAPHQL_URL);
-  console.log('[ApolloFactory] FORCED GRAPHQL_URL (ignoring env):', GRAPHQL_URL);
+  console.log('[ApolloFactory] Environment EXPO_PUBLIC_API_BASE_URL:', process.env.EXPO_PUBLIC_API_BASE_URL);
+  console.log('[ApolloFactory] Resolved GRAPHQL_URL:', GRAPHQL_URL);
   console.log('[ApolloFactory] Creating client with GraphQL URL:', GRAPHQL_URL);
-  console.log('[GQL URL]', `${GRAPHQL_URL}`);
 
   // Runtime guardrail to prevent localhost:8001
   if (/localhost:8001|127\.0\.0\.1:8001/i.test(GRAPHQL_URL)) {

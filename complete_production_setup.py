@@ -52,10 +52,14 @@ def main():
         "ENABLE_MONITORING": "true",
         
         # Kafka/Streaming Configuration
-        "KAFKA_BOOTSTRAP_SERVERS": "localhost:9092",
+        "KAFKA_ENABLED": "true",
+        "KAFKA_BOOTSTRAP_SERVERS": "b-3.richesreachkafka.kbr9fv.c4.kafka.us-east-1.amazonaws.com:9094,b-2.richesreachkafka.kbr9fv.c4.kafka.us-east-1.amazonaws.com:9094,b-1.richesreachkafka.kbr9fv.c4.kafka.us-east-1.amazonaws.com:9094",
+        "KAFKA_GROUP_ID": "riches-reach-producer",
         "KAFKA_TOPIC_PREFIX": "richesreach",
         "ENABLE_STREAMING": "true",
         "STREAMING_MODE": "production",
+        # Data Lake Configuration
+        "DATA_LAKE_BUCKET": "riches-reach-ai-datalake-20251005",
         
         # Redis Configuration
         "REDIS_URL": "redis://localhost:6379/0",
@@ -78,6 +82,7 @@ def main():
     print(f"   🏦 Bank Integration: Yodlee + SBLOC")
     print(f"   ☁️ AWS: Configured")
     print(f"   📡 Kafka/Streaming: Enabled")
+    print(f"   🗄️ Data Lake (S3): {os.environ.get('DATA_LAKE_BUCKET', 'Not configured')}")
     print(f"   🌍 Environment: {os.environ.get('ENVIRONMENT')}")
     
     print(f"\n🚀 STARTING PRODUCTION SERVER...")
@@ -85,7 +90,8 @@ def main():
     print("   ✅ GPT-4o (latest AI model)")
     print("   ✅ PostgreSQL production database")
     print("   ✅ Real API keys for all services")
-    print("   ✅ Kafka streaming enabled")
+    print("   ✅ Kafka streaming enabled (MSK cluster)")
+    print("   ✅ Data Lake enabled (S3: riches-reach-ai-datalake-20251005)")
     print("   ✅ Bank integration ready")
     print("   ✅ All production services")
     

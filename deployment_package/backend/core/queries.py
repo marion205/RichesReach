@@ -366,42 +366,131 @@ return []
 from .models import Watchlist
 return Watchlist.objects.filter(user=user).order_by('-added_at')
 def resolve_rust_stock_analysis(self, info, symbol):
-"""Get Rust engine stock analysis (mock implementation)"""
-from .types import RustStockAnalysisType, TechnicalIndicatorsType, FundamentalAnalysisType
-# Mock analysis data - in a real implementation, this would call the Rust engine
-return RustStockAnalysisType(
-symbol=symbol.upper(),
-beginnerFriendlyScore=7.5,
-riskLevel="Medium",
-recommendation="Hold",
-technicalIndicators=TechnicalIndicatorsType(
-rsi=45.2,
-macd=0.15,
-macdSignal=0.12,
-macdHistogram=0.03,
-sma20=150.25,
-sma50=148.75,
-ema12=150.10,
-ema26=149.85,
-bollingerUpper=155.50,
-bollingerLower=145.00,
-bollingerMiddle=150.25
-),
-fundamentalAnalysis=FundamentalAnalysisType(
-valuationScore=6.8,
-growthScore=7.2,
-stabilityScore=8.1,
-dividendScore=5.5,
-debtScore=7.9
-),
-reasoning=[
-f"Based on technical and fundamental analysis, {symbol.upper()} shows moderate growth potential with balanced risk.",
-"The stock is trading near its moving averages with positive momentum indicators.",
-"RSI indicates neutral momentum with room for upward movement.",
-"MACD shows bullish crossover potential in the near term.",
-"Fundamental metrics suggest stable financial health and growth prospects."
-]
-)
+    """Get Rust engine stock analysis - calls the actual Rust service"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    from .types import RustStockAnalysisType, TechnicalIndicatorsType, FundamentalAnalysisType
+    from .rust_stock_service import rust_stock_service
+    
+    symbol_upper = symbol.upper()
+    
+    try:
+        # Call the Rust service
+        logger.info(f"Calling Rust service for stock analysis: {symbol_upper}")
+        rust_response = rust_stock_service.analyze_stock(symbol_upper)
+        logger.info(f"Rust service response received for {symbol_upper}: {rust_response}")
+        
+        # Map Rust service response to GraphQL type
+        # The Rust service returns a dict with analysis data
+        # We need to extract and map the fields
+        
+        # Extract technical indicators if available
+        technical_data = rust_response.get('technicalIndicators', {}) or rust_response.get('technical_indicators', {}) or {}
+        technical_indicators = TechnicalIndicatorsType(
+            rsi=technical_data.get('rsi') or technical_data.get('RSI') or 50.0,
+            macd=technical_data.get('macd') or technical_data.get('MACD') or 0.0,
+            macdSignal=technical_data.get('macdSignal') or technical_data.get('macd_signal') or technical_data.get('MACDSignal') or 0.0,
+            macdHistogram=technical_data.get('macdHistogram') or technical_data.get('macd_histogram') or technical_data.get('MACDHist') or 0.0,
+            sma20=technical_data.get('sma20') or technical_data.get('SMA20') or 0.0,
+            sma50=technical_data.get('sma50') or technical_data.get('SMA50') or 0.0,
+            ema12=technical_data.get('ema12') or technical_data.get('EMA12') or 0.0,
+            ema26=technical_data.get('ema26') or technical_data.get('EMA26') or 0.0,
+            bollingerUpper=technical_data.get('bollingerUpper') or technical_data.get('bollinger_upper') or technical_data.get('BBUpper') or 0.0,
+            bollingerLower=technical_data.get('bollingerLower') or technical_data.get('bollinger_lower') or technical_data.get('BBLower') or 0.0,
+            bollingerMiddle=technical_data.get('bollingerMiddle') or technical_data.get('bollinger_middle') or technical_data.get('BBMiddle') or 0.0
+        )
+        
+        # Extract fundamental analysis if available
+        fundamental_data = rust_response.get('fundamentalAnalysis', {}) or rust_response.get('fundamental_analysis', {}) or {}
+        fundamental_analysis = FundamentalAnalysisType(
+            valuationScore=fundamental_data.get('valuationScore') or fundamental_data.get('valuation_score') or 70.0,
+            growthScore=fundamental_data.get('growthScore') or fundamental_data.get('growth_score') or 65.0,
+            stabilityScore=fundamental_data.get('stabilityScore') or fundamental_data.get('stability_score') or 80.0,
+            dividendScore=fundamental_data.get('dividendScore') or fundamental_data.get('dividend_score') or 60.0,
+            debtScore=fundamental_data.get('debtScore') or fundamental_data.get('debt_score') or 75.0
+        )
+        
+        # Map risk score to risk level
+        risk_score = rust_response.get('risk_score') or rust_response.get('riskScore', 50.0)
+        if isinstance(risk_score, (int, float)):
+            if risk_score < 30:
+                risk_level = "Low"
+            elif risk_score < 70:
+                risk_level = "Medium"
+            else:
+                risk_level = "High"
+        else:
+            risk_level = rust_response.get('riskLevel') or rust_response.get('risk_level', 'Medium')
+        
+        # Map prediction/recommendation
+        prediction_type = rust_response.get('prediction_type') or rust_response.get('predictionType', '')
+        recommendation_map = {
+            'bullish': 'BUY',
+            'bearish': 'SELL',
+            'neutral': 'HOLD',
+            'strong_buy': 'STRONG BUY',
+            'strong_sell': 'STRONG SELL'
+        }
+        recommendation = rust_response.get('recommendation') or rust_response.get('recommendation', '')
+        if not recommendation and prediction_type:
+            recommendation = recommendation_map.get(prediction_type.lower(), 'HOLD')
+        if not recommendation:
+            recommendation = 'HOLD'
+        
+        # Calculate beginner friendly score from risk and confidence
+        confidence_level = rust_response.get('confidence_level') or rust_response.get('confidenceLevel', 'medium')
+        confidence_score = {'high': 90, 'medium': 70, 'low': 50}.get(confidence_level.lower(), 70)
+        beginner_friendly_score = rust_response.get('beginnerFriendlyScore') or rust_response.get('beginner_friendly_score')
+        if not beginner_friendly_score:
+            # Calculate based on risk (lower risk = higher beginner score)
+            beginner_friendly_score = max(50, 100 - (risk_score if isinstance(risk_score, (int, float)) else 50))
+        
+        # Build reasoning from explanation
+        explanation = rust_response.get('explanation') or rust_response.get('reasoning', '')
+        if isinstance(explanation, str):
+            reasoning = [explanation] if explanation else []
+        elif isinstance(explanation, list):
+            reasoning = explanation
+        else:
+            reasoning = [f"Analysis for {symbol_upper} based on Rust engine predictions."]
+        
+        # Add additional context if available
+        if rust_response.get('probability'):
+            prob = rust_response.get('probability', 0) * 100
+            reasoning.append(f"Prediction confidence: {prob:.1f}%")
+        
+        logger.info(f"Successfully mapped Rust response for {symbol_upper}")
+        
+        return RustStockAnalysisType(
+            symbol=symbol_upper,
+            beginnerFriendlyScore=float(beginner_friendly_score) if beginner_friendly_score else 75.0,
+            riskLevel=risk_level,
+            recommendation=recommendation.upper(),
+            technicalIndicators=technical_indicators,
+            fundamentalAnalysis=fundamental_analysis,
+            reasoning=reasoning if reasoning else [f"Analysis for {symbol_upper}"]
+        )
+        
+    except Exception as e:
+        logger.error(f"Error calling Rust service for {symbol_upper}: {str(e)}", exc_info=True)
+        # Fallback to basic analysis if Rust service fails
+        return RustStockAnalysisType(
+            symbol=symbol_upper,
+            beginnerFriendlyScore=75.0,
+            riskLevel="Medium",
+            recommendation="HOLD",
+            technicalIndicators=TechnicalIndicatorsType(
+                rsi=50.0, macd=0.0, macdSignal=0.0, macdHistogram=0.0,
+                sma20=0.0, sma50=0.0, ema12=0.0, ema26=0.0,
+                bollingerUpper=0.0, bollingerLower=0.0, bollingerMiddle=0.0
+            ),
+            fundamentalAnalysis=FundamentalAnalysisType(
+                valuationScore=70.0, growthScore=65.0, stabilityScore=80.0,
+                dividendScore=60.0, debtScore=75.0
+            ),
+            reasoning=[f"Rust service unavailable for {symbol_upper}. Please try again later."]
+        )
 def resolve_stock_discussions(self, info, stock_symbol=None, limit=20):
 """Get stock discussions (Reddit-style) - shows public posts and posts from followed users"""
 user = info.context.user
