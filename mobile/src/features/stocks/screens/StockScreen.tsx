@@ -119,7 +119,8 @@ const safePct = (val: any, dp = 0, fallback = '—') =>
 const safeMoney = (val: any, dp = 2, fallback = '—') =>
   Number.isFinite(val) ? `$${Number(val).toFixed(dp)}` : fallback;
 
-const formatMarketCap = (cap: number) => {
+const formatMarketCap = (cap: number | null | undefined) => {
+  if (cap == null || !Number.isFinite(cap)) return 'N/A';
   if (cap >= 1e12) return `$${(cap / 1e12).toFixed(1)}T`;
   if (cap >= 1e9) return `$${(cap / 1e9).toFixed(1)}B`;
   if (cap >= 1e6) return `$${(cap / 1e6).toFixed(1)}M`;

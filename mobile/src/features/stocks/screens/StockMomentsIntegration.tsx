@@ -23,7 +23,7 @@ import { useIsFocused } from "@react-navigation/native";
 import ChartWithMoments, {
   ChartPoint,
   StockMoment as StockMomentType,
-} from "../../../components/charts/ChartWithMoments";
+} from "../../../components/charts/ChartWithMomentsEnhanced";
 import MomentStoryPlayer, {
   MomentAnalyticsEvent,
 } from "../../../components/charts/MomentStoryPlayer";
@@ -31,6 +31,7 @@ import {
   playWealthOracle,
   stopWealthOracle,
 } from "../../../services/wealthOracleTTS";
+import { trackMomentEvent, trackStorySession } from "../../../services/analyticsService";
 
 // GraphQL query for stock moments
 const GET_STOCK_MOMENTS = gql`
@@ -90,21 +91,29 @@ const useStockMoments = (symbol: string, chartRange: ChartRange) => {
     },
     skip: !symbol || !isFocused,
     errorPolicy: 'all',
-    fetchPolicy: 'cache-and-network',
+    fetchPolicy: 'cache-and-network', // Use cache if available, but also fetch fresh data
     // Refetch on focus for fresh data
     refetchOnMountOrFocus: true,
+    // Add timeout to prevent hanging
+    context: {
+      fetchOptions: {
+        timeout: 3000, // 3 second timeout - should be fast
+      },
+    },
   });
 
   const [showMock, setShowMock] = useState(false);
 
-  // Timeout for loading: show mock after 3s
+  // Timeout for loading: show mock after 1.5s if still loading (backend should respond quickly)
   useEffect(() => {
     if (loading && !showMock) {
       const timer = setTimeout(() => {
+        console.log("[StockMoments] Loading timeout after 1.5s - showing mock data");
         setShowMock(true);
-      }, 3000);
+      }, 1500); // 1.5s timeout - backend should respond quickly even if empty
       return () => clearTimeout(timer);
     } else if (!loading) {
+      // Reset showMock when loading completes (in case real data arrives)
       setShowMock(false);
     }
   }, [loading, showMock]);
@@ -159,14 +168,35 @@ const useStockMoments = (symbol: string, chartRange: ChartRange) => {
     ];
   }, [symbol, chartRange, realMoments.length]);
 
-  const effectiveMoments = (loading && !showMock) ? [] : (realMoments.length > 0 ? realMoments : mockMoments);
+  // Prioritize real data - only show mock if query failed or returned empty
+  // This ensures we use real data when available
+  const effectiveMoments = useMemo(() => {
+    // Always prefer real data if available
+    if (realMoments.length > 0) return realMoments;
+    // Show mock data if:
+    // 1. Query is complete (not loading) and returned empty, OR
+    // 2. Query errored, OR
+    // 3. Loading timeout occurred (showMock is true)
+    if ((!loading || showMock) && mockMoments.length > 0) return mockMoments;
+    // If still loading and no timeout yet, return empty (wait for real data)
+    return [];
+  }, [realMoments, loading, mockMoments, showMock]);
+  
+  // Debug logging
+  useEffect(() => {
+    console.log(`[StockMoments] ${symbol}: loading=${loading}, showMock=${showMock}, real=${realMoments.length}, mock=${mockMoments.length}, effective=${effectiveMoments.length}`);
+  }, [symbol, loading, showMock, realMoments.length, mockMoments.length, effectiveMoments.length]);
 
   const hasError = !!error && !loading;
+  // Show loading only if query is in progress, we have no real data, AND no mock data ready
+  // If showMock is true, we should show mock data instead of loading
+  const isLoading = loading && realMoments.length === 0 && !showMock;
+  // Empty if query completed but no real or mock data
   const isEmpty = effectiveMoments.length === 0 && !loading && !hasError;
 
   return {
     effectiveMoments,
-    loading: loading && !showMock,
+    loading: isLoading,
     error: hasError ? error as ApolloError : undefined,
     isEmpty,
   };
@@ -207,17 +237,26 @@ export const StockMomentsIntegration: React.FC<StockMomentsIntegrationProps> = (
   }, [effectiveMoments]);
 
   const handleAnalytics: (event: MomentAnalyticsEvent) => void = useCallback((event) => {
+    // Forward to parent if provided
     onAnalyticsEvent?.(event);
-    // Example logging for story close
+    
+    // Track in analytics service
+    trackMomentEvent(event, {
+      chartRange,
+      timestamp: new Date().toISOString(),
+    });
+    
+    // Handle story close with metrics
     if (event.type === "story_close") {
-      const { listenedCount = 0, totalMoments } = event;
-      // TODO: Integrate with your analytics (e.g., Amplitude)
-      console.log(`Story completed: ${listenedCount}/${totalMoments} moments for ${event.symbol}`);
+      const { listenedCount = 0, totalMoments, symbol } = event;
+      trackStorySession(symbol, totalMoments, listenedCount);
+      console.log(`[Analytics] Story completed: ${listenedCount}/${totalMoments} moments for ${symbol}`);
     }
-  }, [onAnalyticsEvent]);
+  }, [onAnalyticsEvent, chartRange]);
 
-  // Early return for loading
-  if (loading) {
+  // Early return for loading - but only if we don't have mock data ready to show
+  // If showMock is true, we should show the moments (which will be mock data) instead of loading
+  if (loading && !showMock && effectiveMoments.length === 0) {
     return (
       <View style={styles.loadingContainer} accessible={true} accessibilityRole="progressbar">
         <ActivityIndicator size="small" color="#6B7280" />
@@ -235,28 +274,20 @@ export const StockMomentsIntegration: React.FC<StockMomentsIntegrationProps> = (
     );
   }
 
-  // Subtle message for empty state (no null return)
-  if (isEmpty) {
+  // If we have moments (real or mock), show them
+  if (effectiveMoments.length > 0) {
     return (
-      <View style={styles.emptyContainer} accessible={true} accessibilityRole="status">
-        <Text style={styles.emptyText}>No key moments in this period.</Text>
-      </View>
-    );
-  }
+      <View style={styles.container}>
+        <ChartWithMoments
+          priceSeries={priceSeries}
+          moments={effectiveMoments}
+          activeMomentId={activeMomentId}
+          onMomentChange={(m) => setActiveMomentId(m?.id ?? null)}
+          onMomentLongPress={handlePlayStoryFromDot}
+          accessible={true}
+          accessibilityLabel={`Chart with ${effectiveMoments.length} key moments for ${symbol}`}
+        />
 
-  return (
-    <View style={styles.container}>
-      <ChartWithMoments
-        priceSeries={priceSeries}
-        moments={effectiveMoments}
-        activeMomentId={activeMomentId}
-        onMomentChange={(m) => setActiveMomentId(m?.id ?? null)}
-        onMomentLongPress={handlePlayStoryFromDot}
-        accessible={true}
-        accessibilityLabel={`Chart with ${effectiveMoments.length} key moments for ${symbol}`}
-      />
-
-      {effectiveMoments.length > 0 && (
         <Pressable
           style={styles.playButton}
           onPress={handlePlayStoryFromButton}
@@ -266,21 +297,40 @@ export const StockMomentsIntegration: React.FC<StockMomentsIntegrationProps> = (
         >
           <Text style={styles.playButtonText}>▶ Play Story</Text>
         </Pressable>
-      )}
 
-      <MomentStoryPlayer
-        visible={storyVisible}
-        symbol={symbol}
-        moments={effectiveMoments}
-        initialIndex={storyFromIndex}
-        enableIntro={storyUseIntro}
-        onClose={() => setStoryVisible(false)}
-        onMomentChange={(m) => setActiveMomentId(m?.id ?? null)}
-        onAnalyticsEvent={handleAnalytics}
-        introText={`Here's the story behind ${symbol.toUpperCase()}'s recent moves. Let's walk through the key moments on the chart.`}
-        speakFn={(text, moment) => playWealthOracle(text, symbol, moment)}
-        stopFn={stopWealthOracle}
-      />
+        <MomentStoryPlayer
+          visible={storyVisible}
+          symbol={symbol}
+          moments={effectiveMoments}
+          initialIndex={storyFromIndex}
+          enableIntro={storyUseIntro}
+          onClose={() => setStoryVisible(false)}
+          onMomentChange={(m) => setActiveMomentId(m?.id ?? null)}
+          onAnalyticsEvent={handleAnalytics}
+          introText={`Here's the story behind ${symbol.toUpperCase()}'s recent moves. Let's walk through the key moments on the chart.`}
+          speakFn={(text, moment) => playWealthOracle(text, symbol, moment)}
+          stopFn={stopWealthOracle}
+        />
+      </View>
+    );
+  }
+
+  // Subtle message for empty state (no null return)
+  if (isEmpty) {
+    return (
+      <View style={styles.emptyContainer} accessible={true} accessibilityRole="status">
+        <Text style={styles.emptyText}>No key moments in this period.</Text>
+        <Text style={styles.emptySubtext}>
+          Key moments will appear here as significant events occur.
+        </Text>
+      </View>
+    );
+  }
+
+  // Fallback - should not reach here, but just in case
+  return (
+    <View style={styles.emptyContainer} accessible={true} accessibilityRole="status">
+      <Text style={styles.emptyText}>Loading key moments...</Text>
     </View>
   );
 };
@@ -319,6 +369,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#6B7280",
     textAlign: 'center',
+    fontWeight: "500",
+  },
+  emptySubtext: {
+    fontSize: 12,
+    color: "#9CA3AF",
+    textAlign: "center",
+    marginTop: 4,
   },
   playButton: {
     marginTop: 12,
@@ -332,5 +389,19 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontWeight: "600",
     fontSize: 14,
+  },
+  disabledButton: {
+    marginTop: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    backgroundColor: "#F3F4F6",
+    alignItems: "center",
+    opacity: 0.6,
+  },
+  disabledButtonText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#9CA3AF",
   },
 });
