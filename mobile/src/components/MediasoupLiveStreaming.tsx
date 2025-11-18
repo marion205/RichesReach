@@ -11,6 +11,7 @@ import {
   Dimensions,
   StatusBar,
   Platform,
+  PermissionsAndroid,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { isExpoGo } from '../utils/expoGoCheck';
@@ -143,14 +144,70 @@ const MediasoupLiveStreaming: React.FC<MediasoupLiveStreamingProps> = ({
     }
   }, [isHost, circleId]);
 
+  const requestAndroidPermissions = async (): Promise<boolean> => {
+    if (Platform.OS !== 'android') return true;
+
+    try {
+      const granted = await PermissionsAndroid.requestMultiple([
+        PermissionsAndroid.PERMISSIONS.CAMERA,
+        PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+      ]);
+
+      const cameraGranted = granted[PermissionsAndroid.PERMISSIONS.CAMERA] === PermissionsAndroid.RESULTS.GRANTED;
+      const audioGranted = granted[PermissionsAndroid.PERMISSIONS.RECORD_AUDIO] === PermissionsAndroid.RESULTS.GRANTED;
+
+      if (!cameraGranted || !audioGranted) {
+        Alert.alert(
+          'Permissions Required',
+          'Camera and microphone permissions are required for live streaming. Please enable them in Settings.',
+          [{ text: 'OK' }]
+        );
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.error('Permission request error:', err);
+      return false;
+    }
+  };
+
   const startHostStreaming = async () => {
     try {
-      // Get user media
+      // Check if we're in Expo Go
+      if (isExpoGo()) {
+        Alert.alert(
+          'WebRTC Not Available',
+          'WebRTC is not available in Expo Go. Please use a development build:\n\nnpx expo run:ios\nor\nnpx expo run:android',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      // Check if mediaDevices is available
+      if (!mediaDevices) {
+        Alert.alert(
+          'WebRTC Not Configured',
+          'react-native-webrtc is not properly installed. Please rebuild your app:\n\nnpx expo prebuild --clean\nnpx expo run:ios',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      // Request Android permissions
+      const hasPermissions = await requestAndroidPermissions();
+      if (!hasPermissions) {
+        return;
+      }
+
+      console.log('🎥 Requesting front camera stream...');
+
+      // Get user media with front camera
       const stream = await mediaDevices.getUserMedia({
         video: {
           width: { ideal: 1280 },
           height: { ideal: 720 },
-          frameRate: { ideal: 30 }
+          frameRate: { ideal: 30 },
+          facingMode: 'user' // Use front camera
         },
         audio: {
           echoCancellation: true,
@@ -159,17 +216,31 @@ const MediasoupLiveStreaming: React.FC<MediasoupLiveStreamingProps> = ({
         }
       });
       
+      console.log('✅ Stream acquired:', {
+        hasStream: !!stream,
+        streamURL: stream?.toURL(),
+        tracks: stream?.getTracks().length,
+      });
+
       setLocalStream(stream);
       localStreamRef.current = stream;
       setIsStreaming(true);
 
       // Create send transport
-      socketRef.current.emit('create-transport', { direction: 'send', circleId });
+      if (socketRef.current) {
+        socketRef.current.emit('create-transport', { direction: 'send', circleId });
+      }
 
-      console.log('🎥 Host streaming started');
-    } catch (error) {
-      console.error('Error starting host stream:', error);
-      Alert.alert('Error', 'Failed to start streaming. Check camera and microphone permissions.');
+      console.log('🎥 Host streaming started with front camera');
+    } catch (error: any) {
+      console.error('❌ Error starting host stream:', error);
+      const errorMsg = error?.message || 'Unknown error';
+      
+      Alert.alert(
+        'Camera Error',
+        `Failed to start streaming: ${errorMsg}\n\nMake sure:\n• You're using a development build (not Expo Go)\n• Camera/microphone permissions are granted\n• No other app is using the camera`,
+        [{ text: 'OK' }]
+      );
     }
   };
 

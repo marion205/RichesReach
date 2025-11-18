@@ -3,7 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
+  FlatList,
   TouchableOpacity,
   ActivityIndicator,
 } from 'react-native';
@@ -83,165 +83,212 @@ export const OrdersList: React.FC<OrdersListProps> = React.memo(
 
     const sections = useMemo(() => groupOrders(filtered), [filtered]);
 
-    return (
-      <ScrollView style={styles.scroller} showsVerticalScrollIndicator={false}>
-        <View style={styles.card}>
-          {/* Header + refresh */}
-          <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>Recent Orders</Text>
-            {onRefresh && (
-              <TouchableOpacity onPress={onRefresh} style={styles.iconBtn}>
-                <Icon name="refresh-ccw" size={18} color={C.sub} />
-              </TouchableOpacity>
-            )}
-          </View>
+    // Flatten sections into a single list with section headers
+    const flatListData = useMemo(() => {
+      if (loading || filtered.length === 0) return [];
+      
+      const items: Array<{ type: 'section' | 'order'; label?: string; order?: any }> = [];
+      (['Today', 'This Week', 'Earlier'] as const).forEach((label) => {
+        if (sections[label].length > 0) {
+          items.push({ type: 'section', label });
+          sections[label].forEach((order) => {
+            items.push({ type: 'order', order });
+          });
+        }
+      });
+      return items;
+    }, [sections, loading, filtered.length]);
 
-          {/* Filter bar */}
-          <View style={styles.filterBar}>
-            {(['all', 'open', 'filled', 'cancelled'] as const).map((k) => (
-              <TouchableOpacity
-                key={k}
-                onPress={() => onFilterChange(k)}
-                style={[styles.filterPill, filter === k && styles.filterPillActive]}
+    const renderOrderItem = ({ item }: { item: any }) => {
+      if (item.type === 'section') {
+        return <Text style={styles.sectionDivider}>{item.label}</Text>;
+      }
+
+      const o = item.order;
+      const sideBuy = String(o.side).toLowerCase() === 'buy';
+      const { color: statusColor, icon } = getStatusMeta(o.status);
+      const showCancel = String(o.status).toLowerCase() === 'pending';
+
+      return (
+        <View style={styles.orderCardRow}>
+          {/* Left accent by side */}
+          <View
+            style={[
+              styles.sideAccent,
+              { backgroundColor: sideBuy ? '#16A34A' : '#DC2626' },
+            ]}
+          />
+
+          <View style={{ flex: 1 }}>
+            {/* Top line: Ticker + chips + status */}
+            <View style={styles.rowBetween}>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                  flexShrink: 1,
+                }}
               >
-                <Text style={[styles.filterPillText, filter === k && styles.filterPillTextActive]}>
-                  {k === 'all'
-                    ? 'All'
-                    : k === 'open'
-                    ? 'Open'
-                    : k.charAt(0).toUpperCase() + k.slice(1)}
-                </Text>
-              </TouchableOpacity>
-            ))}
+                <Text style={styles.ticker}>{o.symbol}</Text>
+                <View style={[styles.badge, styles.badgeInfo]}>
+                  <Text style={styles.badgeText}>
+                    {String(o.orderType).toUpperCase()}
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    styles.badge,
+                    sideBuy ? styles.badgeSuccess : styles.badgeDanger,
+                  ]}
+                >
+                  <Text style={styles.badgeText}>{String(o.side).toUpperCase()}</Text>
+                </View>
+              </View>
+
+              <View style={[styles.badge, { backgroundColor: `${statusColor}1A` }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Icon name={icon as any} size={14} color={statusColor} />
+                  <Text style={[styles.badgeText, { color: statusColor }]}>
+                    {String(o.status).toUpperCase()}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Middle: size / price */}
+            <View style={styles.rowWrap}>
+              <Text style={styles.sub}>{o.quantity} shares</Text>
+              {o.price ? <Text style={styles.sub}>@ ${o.price.toFixed(2)}</Text> : null}
+              {o.stopPrice ? (
+                <Text style={styles.sub}>Stop ${o.stopPrice.toFixed(2)}</Text>
+              ) : null}
+            </View>
+
+            {/* Bottom: time + Cancel */}
+            <View style={styles.rowBetween}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Icon name="calendar" size={14} color={C.sub} />
+                <Text style={styles.meta}>{fmtTime(o.createdAt)}</Text>
+              </View>
+              {showCancel && onCancelOrder && (
+                <TouchableOpacity
+                  style={styles.ghostDangerBtn}
+                  onPress={() => onCancelOrder(o.id)}
+                >
+                  <Icon name="x-circle" size={14} color="#EF4444" />
+                  <Text style={styles.ghostDangerText}>Cancel</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {o.notes ? <Text style={styles.note}>"{o.notes}"</Text> : null}
           </View>
+        </View>
+      );
+    };
 
-          {/* Loading */}
-          {loading && (
-            <View style={styles.skeletonBlock}>
-              {[...Array(3)].map((_, i) => (
-                <View key={i} style={styles.skeletonRow}>
-                  <View style={styles.skeletonAccent} />
-                  <View style={{ flex: 1 }}>
-                    <View style={styles.skeletonLineWide} />
-                    <View style={styles.skeletonLine} />
-                    <View style={styles.skeletonLineShort} />
-                  </View>
-                </View>
-              ))}
-            </View>
+    const ListHeaderComponent = () => (
+      <View style={styles.card}>
+        {/* Header + refresh */}
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardTitle}>Recent Orders</Text>
+          {onRefresh && (
+            <TouchableOpacity onPress={onRefresh} style={styles.iconBtn}>
+              <Icon name="refresh-ccw" size={18} color={C.sub} />
+            </TouchableOpacity>
           )}
-
-          {/* Empty */}
-          {!loading && filtered.length === 0 && (
-            <View style={styles.emptyBlock}>
-              <Icon name="clipboard" size={44} color={C.sub} />
-              <Text style={styles.emptyTitle}>No matching orders</Text>
-              <Text style={styles.emptySub}>
-                {filter === 'all'
-                  ? 'Place your first order to get started.'
-                  : 'Try a different filter.'}
-              </Text>
-            </View>
-          )}
-
-          {/* Sections */}
-          {!loading &&
-            filtered.length > 0 &&
-            (['Today', 'This Week', 'Earlier'] as const).map((label) =>
-              sections[label].length ? (
-                <View key={label} style={{ marginTop: 8 }}>
-                  <Text style={styles.sectionDivider}>{label}</Text>
-
-                  {sections[label].map((o: any, i: number) => {
-                    const sideBuy = String(o.side).toLowerCase() === 'buy';
-                    const { color: statusColor, icon } = getStatusMeta(o.status);
-                    const showCancel = String(o.status).toLowerCase() === 'pending';
-
-                    return (
-                      <View key={`${label}-${i}`} style={styles.orderCardRow}>
-                        {/* Left accent by side */}
-                        <View
-                          style={[
-                            styles.sideAccent,
-                            { backgroundColor: sideBuy ? '#16A34A' : '#DC2626' },
-                          ]}
-                        />
-
-                        <View style={{ flex: 1 }}>
-                          {/* Top line: Ticker + chips + status */}
-                          <View style={styles.rowBetween}>
-                            <View
-                              style={{
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                gap: 8,
-                                flexShrink: 1,
-                              }}
-                            >
-                              <Text style={styles.ticker}>{o.symbol}</Text>
-                              <View style={[styles.badge, styles.badgeInfo]}>
-                                <Text style={styles.badgeText}>
-                                  {String(o.orderType).toUpperCase()}
-                                </Text>
-                              </View>
-                              <View
-                                style={[
-                                  styles.badge,
-                                  sideBuy ? styles.badgeSuccess : styles.badgeDanger,
-                                ]}
-                              >
-                                <Text style={styles.badgeText}>{String(o.side).toUpperCase()}</Text>
-                              </View>
-                            </View>
-
-                            <View style={[styles.badge, { backgroundColor: `${statusColor}1A` }]}>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                <Icon name={icon as any} size={14} color={statusColor} />
-                                <Text style={[styles.badgeText, { color: statusColor }]}>
-                                  {String(o.status).toUpperCase()}
-                                </Text>
-                              </View>
-                            </View>
-                          </View>
-
-                          {/* Middle: size / price */}
-                          <View style={styles.rowWrap}>
-                            <Text style={styles.sub}>{o.quantity} shares</Text>
-                            {o.price ? <Text style={styles.sub}>@ ${o.price.toFixed(2)}</Text> : null}
-                            {o.stopPrice ? (
-                              <Text style={styles.sub}>Stop ${o.stopPrice.toFixed(2)}</Text>
-                            ) : null}
-                          </View>
-
-                          {/* Bottom: time + Cancel */}
-                          <View style={styles.rowBetween}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                              <Icon name="calendar" size={14} color={C.sub} />
-                              <Text style={styles.meta}>{fmtTime(o.createdAt)}</Text>
-                            </View>
-                            {showCancel && onCancelOrder && (
-                              <TouchableOpacity
-                                style={styles.ghostDangerBtn}
-                                onPress={() => onCancelOrder(o.id)}
-                              >
-                                <Icon name="x-circle" size={14} color="#EF4444" />
-                                <Text style={styles.ghostDangerText}>Cancel</Text>
-                              </TouchableOpacity>
-                            )}
-                          </View>
-
-                          {o.notes ? <Text style={styles.note}>"{o.notes}"</Text> : null}
-                        </View>
-                      </View>
-                    );
-                  })}
-                </View>
-              ) : null
-            )}
         </View>
 
-        <View style={{ height: 16 }} />
-      </ScrollView>
+        {/* Filter bar */}
+        <View style={styles.filterBar}>
+          {(['all', 'open', 'filled', 'cancelled'] as const).map((k) => (
+            <TouchableOpacity
+              key={k}
+              onPress={() => onFilterChange(k)}
+              style={[styles.filterPill, filter === k && styles.filterPillActive]}
+            >
+              <Text style={[styles.filterPillText, filter === k && styles.filterPillTextActive]}>
+                {k === 'all'
+                  ? 'All'
+                  : k === 'open'
+                  ? 'Open'
+                  : k.charAt(0).toUpperCase() + k.slice(1)}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+    );
+
+    if (loading) {
+      return (
+        <View style={styles.scroller}>
+          <ListHeaderComponent />
+          <View style={styles.skeletonBlock}>
+            {[...Array(3)].map((_, i) => (
+              <View key={i} style={styles.skeletonRow}>
+                <View style={styles.skeletonAccent} />
+                <View style={{ flex: 1 }}>
+                  <View style={styles.skeletonLineWide} />
+                  <View style={styles.skeletonLine} />
+                  <View style={styles.skeletonLineShort} />
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+      );
+    }
+
+    if (filtered.length === 0) {
+      return (
+        <View style={styles.scroller}>
+          <ListHeaderComponent />
+          <View style={styles.emptyBlock}>
+            <Icon name="clipboard" size={44} color={C.sub} />
+            <Text style={styles.emptyTitle}>No matching orders</Text>
+            <Text style={styles.emptySub}>
+              {filter === 'all'
+                ? 'Place your first order to get started.'
+                : 'Try a different filter.'}
+            </Text>
+          </View>
+        </View>
+      );
+    }
+
+    return (
+      <FlatList
+        style={styles.scroller}
+        data={flatListData}
+        keyExtractor={(item, index) => 
+          item.type === 'section' 
+            ? `section-${item.label}-${index}` 
+            : `order-${item.order?.id || index}`
+        }
+        renderItem={renderOrderItem}
+        ListHeaderComponent={ListHeaderComponent}
+        ListFooterComponent={() => <View style={{ height: 16 }} />}
+        showsVerticalScrollIndicator={false}
+        // Performance optimizations
+        removeClippedSubviews={true}
+        initialNumToRender={10}
+        maxToRenderPerBatch={5}
+        windowSize={10}
+        updateCellsBatchingPeriod={50}
+        getItemLayout={(data, index) => {
+          const item = data?.[index];
+          const height = item?.type === 'section' ? 40 : 120; // Section header: 40px, Order: 120px
+          return {
+            length: height,
+            offset: (data || []).slice(0, index).reduce((acc: number, i: any) => {
+              return acc + (i?.type === 'section' ? 40 : 120);
+            }, 0),
+            index,
+          };
+        }}
+      />
     );
   },
   (prevProps, nextProps) => {

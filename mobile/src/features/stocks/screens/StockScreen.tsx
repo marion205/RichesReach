@@ -543,7 +543,8 @@ export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s
   const [removeFromWatchlistMutation] = useMutation(REMOVE_FROM_WATCHLIST);
   const { data: beginnerData, loading: beginnerLoading, refetch: refetchBeginner, error: beginnerError } =
     useQuery(GET_BEGINNER_FRIENDLY_STOCKS_ALT, { 
-      fetchPolicy: 'cache-and-network', 
+      fetchPolicy: 'cache-first', // Use cache first for faster loads
+      nextFetchPolicy: 'cache-first', // Keep using cache for subsequent loads
       errorPolicy: 'all',
       notifyOnNetworkStatusChange: true
     });
@@ -551,7 +552,8 @@ export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s
   // AI-powered recommendations for Browse All tab
   const { data: aiRecommendationsData, loading: aiRecommendationsLoading, error: aiRecommendationsError } =
     useQuery(GET_AI_STOCK_RECOMMENDATIONS, {
-      fetchPolicy: 'cache-and-network',
+      fetchPolicy: 'cache-first', // Use cache first for faster loads
+      nextFetchPolicy: 'cache-first', // Keep using cache for subsequent loads
       errorPolicy: 'all'
     });
 
@@ -559,7 +561,8 @@ export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s
   const { data: mlScreeningData, loading: mlScreeningLoading, error: mlScreeningError } =
     useQuery(GET_ML_STOCK_SCREENING, {
       variables: { limit: 50 },
-      fetchPolicy: 'cache-and-network',
+      fetchPolicy: 'cache-first', // Use cache first for faster loads
+      nextFetchPolicy: 'cache-first', // Keep using cache for subsequent loads
       errorPolicy: 'all'
     });
 
@@ -659,8 +662,8 @@ export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s
       inds: ["SMA20","SMA50","EMA12","EMA26","RSI","MACD","MACDHist","BB"],
     },
     skip: !researchSymbol,
-    fetchPolicy: 'cache-and-network',
-    nextFetchPolicy: 'cache-first',
+    fetchPolicy: 'cache-first', // Use cache first for faster loads
+    nextFetchPolicy: 'cache-first', // Keep using cache for subsequent loads
     errorPolicy: 'all',
   });
 

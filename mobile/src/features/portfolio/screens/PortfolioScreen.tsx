@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
 View,
 Text,
@@ -7,6 +7,7 @@ ScrollView,
 RefreshControl,
 Alert,
 TouchableOpacity,
+DeviceEventEmitter,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from '@apollo/client';
@@ -74,12 +75,8 @@ const insets = useSafeAreaInsets();
   // Money snapshot hook (for Constellation Orb)
   const { snapshot, loading: snapshotLoading, hasBankLinked, refetch: refetchSnapshot, error: snapshotError } = useMoneySnapshot();
   
-  // Load family group on mount
-  useEffect(() => {
-    loadFamilyGroup();
-  }, []);
-  
-  const loadFamilyGroup = async () => {
+  // Load family group on mount - memoized to prevent recreation
+  const loadFamilyGroup = useCallback(async () => {
     try {
       setLoadingFamily(true);
       const group = await familySharingService.getFamilyGroup();
@@ -98,7 +95,19 @@ const insets = useSafeAreaInsets();
     } finally {
       setLoadingFamily(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadFamilyGroup();
+  }, [loadFamilyGroup]);
+
+  // Listen for Dawn Ritual notification
+  useEffect(() => {
+    const subscription = DeviceEventEmitter.addListener('openDawnRitual', () => {
+      setShowDawnRitual(true);
+    });
+    return () => subscription.remove();
+  }, []);
   
   // Debug logging
   useEffect(() => {
@@ -160,21 +169,29 @@ const insets = useSafeAreaInsets();
     console.log('PortfolioScreen: Using navigateTo fallback');
     navigateTo?.(name);
   };
-// Fetch real-time prices when portfolio data changes
-useEffect(() => {
-if (portfolioData?.myPortfolios?.portfolios) {
-const allHoldings = portfolioData.myPortfolios.portfolios.flatMap(p => p.holdings || []);
-if (allHoldings.length > 0) {
-fetchRealTimePrices(allHoldings);
-}
-}
-}, [portfolioData]);
-// Fetch real-time prices for portfolio holdings
-const fetchRealTimePrices = async (holdings: any[]) => {
-  if (holdings.length === 0) return;
+// Ref to track if we're currently fetching prices to prevent concurrent calls
+const fetchingPricesRef = useRef(false);
+
+// Fetch real-time prices for portfolio holdings - memoized to prevent recreation
+const fetchRealTimePrices = useCallback(async (holdings: any[]) => {
+  if (holdings.length === 0) {
+    setLoadingPrices(false);
+    fetchingPricesRef.current = false;
+    return;
+  }
+  // Prevent concurrent calls
+  if (fetchingPricesRef.current) {
+    return;
+  }
+  fetchingPricesRef.current = true;
   setLoadingPrices(true);
   try {
-    const symbols = holdings.map(holding => holding.stock.symbol);
+    const symbols = holdings.map(holding => holding.stock?.symbol || holding.symbol).filter(Boolean);
+    if (symbols.length === 0) {
+      setLoadingPrices(false);
+      fetchingPricesRef.current = false;
+      return;
+    }
     const service = SecureMarketDataService.getInstance();
     const quotes = await service.fetchQuotes(symbols);
     const prices: { [key: string]: number } = {};
@@ -198,8 +215,59 @@ const fetchRealTimePrices = async (holdings: any[]) => {
     setRealTimePrices(mockPrices);
   } finally {
     setLoadingPrices(false);
+    fetchingPricesRef.current = false;
   }
-};
+}, []);
+
+// Extract stable reference to portfolios to prevent infinite loops
+const portfoliosRef = useRef<string>('');
+// Create a stable string representation that only changes when actual data changes
+// The ref comparison in useEffect will prevent unnecessary fetches even if this recalculates
+const portfoliosDataString = useMemo(() => {
+  if (!portfolioData?.myPortfolios?.portfolios) {
+    return '';
+  }
+  try {
+    // Create a stable string representation of the portfolios data
+    // Only include fields that matter for price fetching to minimize recalculation overhead
+    const stableData = portfolioData.myPortfolios.portfolios.map((p: any) => ({
+      name: p.name,
+      holdings: (p.holdings || []).map((h: any) => ({
+        symbol: h.stock?.symbol || h.symbol,
+        shares: h.shares || h.quantity,
+      })),
+    }));
+    return JSON.stringify(stableData);
+  } catch (error) {
+    console.error('[PortfolioScreen] Error creating stable portfolio string:', error);
+    return '';
+  }
+  // Note: We depend on the array reference, but the ref comparison in useEffect
+  // will prevent infinite loops by only fetching when the actual data changes
+}, [portfolioData?.myPortfolios?.portfolios]);
+
+// Fetch real-time prices when portfolio data changes - using stable reference
+useEffect(() => {
+  // Only fetch if the data actually changed
+  if (portfoliosDataString !== portfoliosRef.current) {
+    portfoliosRef.current = portfoliosDataString;
+    
+    if (portfolioData?.myPortfolios?.portfolios) {
+      const allHoldings = portfolioData.myPortfolios.portfolios.flatMap((p: any) => p.holdings || []);
+      if (allHoldings.length > 0) {
+        fetchRealTimePrices(allHoldings);
+      } else {
+        // No holdings, ensure loading is false
+        setLoadingPrices(false);
+      }
+    } else {
+      // No portfolio data yet, but don't block rendering
+      setLoadingPrices(false);
+    }
+  }
+  // Only depend on portfoliosDataString and fetchRealTimePrices - portfolioData is accessed inside but not needed as dependency
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [portfoliosDataString, fetchRealTimePrices]);
   const onRefresh = async () => {
 setRefreshing(true);
 try {
@@ -601,7 +669,7 @@ return (
   </View>
 )}
 
-{/* Portfolio Holdings - NEW from portfolio-holdings-v1 branch (merged from feat/portfolio-holdings-v1) */}
+{/* Portfolio Holdings - Mid Section */}
 <View style={{ marginTop: 24, marginBottom: 16, paddingHorizontal: 16 }}>
   <PortfolioHoldings
     holdings={allHoldings}
@@ -612,7 +680,7 @@ return (
     onSell={(holding) => {
       go('trading', { symbol: holding.symbol, action: 'sell' });
     }}
-    loading={loadingPrices || portfolioLoading}
+    loading={loadingPrices && !portfolioLoadingTimeout && portfolioLoading}
     onAddHoldings={() => go('portfolio-management')}
   />
 </View>
@@ -681,8 +749,8 @@ Place buy/sell orders and manage your trades
 </View>
 </TouchableOpacity>
 <TouchableOpacity 
- style={[styles.actionButton, { backgroundColor: '#FFF8E1' }]}
- onPress={() => go('premium-analytics')}
+  style={[styles.actionButton, { backgroundColor: '#FFF8E1' }]}
+  onPress={() => go('premium-analytics')}
 >
 <View style={styles.actionContent}>
 <Icon name="star" size={24} color="#FFD700" />
@@ -694,6 +762,22 @@ Advanced options strategies and market sentiment
 </View>
 <Icon name="chevron-right" size={20} color="#8E8E93" />
 </View>
+        </TouchableOpacity>
+        {/* Dawn Ritual - Manual Trigger */}
+        <TouchableOpacity 
+          style={[styles.actionButton, { backgroundColor: '#FFF4E6', borderWidth: 1, borderColor: '#FF9500' }]}
+          onPress={() => setShowDawnRitual(true)}
+        >
+          <View style={styles.actionContent}>
+            <Icon name="sunrise" size={24} color="#FF9500" />
+            <View style={styles.actionText}>
+              <Text style={[styles.actionTitle, { color: '#FF9500' }]}>🌅 Dawn Ritual</Text>
+              <Text style={styles.actionDescription}>
+                Start your daily wealth awakening ritual (30s)
+              </Text>
+            </View>
+            <Icon name="chevron-right" size={20} color="#8E8E93" />
+          </View>
         </TouchableOpacity>
       </View>
 

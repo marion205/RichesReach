@@ -912,6 +912,33 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
             />
           )}
 
+          {/* TEMPORARY: Camera Test Button - Commented out after successful WebRTC implementation */}
+          {/* Uncomment below to re-enable camera diagnostic screen */}
+          {/*
+          <View style={styles.section}>
+            <TouchableOpacity 
+              style={[styles.learningCard, { backgroundColor: '#FF3B30', marginBottom: 12 }]} 
+              onPress={() => {
+                try {
+                  navigation.navigate('camera-test' as never);
+                } catch (error) {
+                  console.error('Navigation error:', error);
+                  globalNavigate('camera-test' as any);
+                }
+              }}
+            >
+              <View style={styles.learningCardIcon}>
+                <Icon name="camera" size={24} color="#FFFFFF" />
+              </View>
+              <View style={styles.learningCardContent}>
+                <Text style={[styles.learningCardTitle, { color: '#FFFFFF' }]}>🧪 Test Camera (Debug)</Text>
+                <Text style={[styles.learningCardDescription, { color: '#FFFFFF', opacity: 0.9 }]}>WebRTC Front Camera Diagnostic</Text>
+              </View>
+              <Icon name="chevron-right" size={16} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+          */}
+
           {/* Smart Wealth Suite Section */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>

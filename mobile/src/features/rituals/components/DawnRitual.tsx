@@ -14,9 +14,27 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Haptics } from 'expo-haptics';
+import * as Haptics from 'expo-haptics';
 import Icon from 'react-native-vector-icons/Feather';
 import { dawnRitualService } from '../services/DawnRitualService';
+
+// Safe haptics wrapper
+const triggerHaptic = (type: 'light' | 'medium' | 'success') => {
+  try {
+    if (Haptics && Haptics.impactAsync) {
+      if (type === 'light') {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      } else if (type === 'medium') {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      } else if (type === 'success') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    }
+  } catch (error) {
+    // Haptics not available, silently continue
+    console.log('[DawnRitual] Haptics not available');
+  }
+};
 
 const { width, height } = Dimensions.get('window');
 const RITUAL_DURATION = 30000; // 30 seconds
@@ -59,14 +77,25 @@ export const DawnRitual: React.FC<DawnRitualProps> = ({
       return;
     }
 
-    startRitual();
+    // Start ritual when visible becomes true
+    // Use a small delay to ensure component is fully mounted
+    const timer = setTimeout(() => {
+      startRitual();
+    }, 100);
+
+    return () => clearTimeout(timer);
   }, [visible]);
 
   const startRitual = async () => {
     try {
       // Phase 1: Sunrise Animation (15 seconds)
       setPhase('sunrise');
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      triggerHaptic('light');
+      
+      // Reset sun position to start from bottom
+      sunY.setValue(height + 100);
+      sunOpacity.setValue(0);
+      skyGradient.setValue(0);
       
       // Animate sun rising
       Animated.parallel([
@@ -91,7 +120,10 @@ export const DawnRitual: React.FC<DawnRitualProps> = ({
       await new Promise(resolve => setTimeout(resolve, 15000));
       
       setPhase('syncing');
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      triggerHaptic('medium');
+      
+      // Reset progress bar
+      progressWidth.setValue(0);
       
       // Animate progress bar
       Animated.timing(progressWidth, {
@@ -109,8 +141,9 @@ export const DawnRitual: React.FC<DawnRitualProps> = ({
       await new Promise(resolve => setTimeout(resolve, 10000));
       
       setPhase('haiku');
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      triggerHaptic('success');
       
+      haikuOpacity.setValue(0);
       Animated.timing(haikuOpacity, {
         toValue: 1,
         duration: 1000,
@@ -133,29 +166,23 @@ export const DawnRitual: React.FC<DawnRitualProps> = ({
     }
   };
 
-  const skyColors = skyGradient.interpolate({
-    inputRange: [0, 1],
-    outputRange: [
-      ['#0a0a1a', '#1a1a3a', '#2a2a5a'], // Dark night
-      ['#ff6b6b', '#ffa500', '#ffd700'], // Sunrise colors
-    ],
-  });
+  // Removed unused skyColors interpolation
 
   if (!visible) return null;
 
   return (
     <View style={styles.container}>
-      {/* Sky Gradient Background */}
-      <Animated.View style={[styles.skyContainer, { opacity: skyGradient }]}>
+      {/* Sky Gradient Background - Always visible dark background */}
+      <View style={styles.skyContainer}>
         <LinearGradient
           colors={['#0a0a1a', '#1a1a3a', '#2a2a5a']}
           style={StyleSheet.absoluteFill}
           start={{ x: 0, y: 0 }}
           end={{ x: 0, y: 1 }}
         />
-      </Animated.View>
+      </View>
 
-      {/* Sunrise Gradient Overlay */}
+      {/* Sunrise Gradient Overlay - Animated opacity */}
       <Animated.View
         style={[
           styles.sunriseOverlay,

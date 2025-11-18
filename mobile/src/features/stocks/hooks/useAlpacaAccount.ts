@@ -25,7 +25,8 @@ export const useAlpacaAccount = (userId: number = 1) => {
     variables: { userId },
     errorPolicy: 'all',
     skip: false,
-    fetchPolicy: 'cache-and-network', // Use cache first, then network
+    fetchPolicy: 'cache-first', // Use cache first for faster loads
+    nextFetchPolicy: 'cache-first', // Keep using cache for subsequent loads
     onCompleted: async (data) => {
       // Cache successful response
       if (data?.alpacaAccount) {

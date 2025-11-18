@@ -51,7 +51,7 @@
       <true/>
     </dict>
     <key>NSCameraUsageDescription</key>
-    <string>AR preview requires camera</string>
+    <string>This app needs access to your camera for live streaming and AR portfolio preview.</string>
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>This app uses location to provide location-based financial services and market data.</string>
     <key>NSMicrophoneUsageDescription</key>

@@ -62,6 +62,7 @@ import SecurityFortress from '../components/SecurityFortress';
 import ViralGrowthSystem from '../components/ViralGrowthSystem';
 import OnboardingScreen from '../features/auth/screens/OnboardingScreen';
 import SubscriptionScreen from '../features/user/screens/SubscriptionScreen';
+import CameraTestScreen from '../components/CameraTestScreen';
 
 // New hub screen
 import InvestHubScreen from '../features/invest/InvestHubScreen';
@@ -149,6 +150,7 @@ function HomeStack() {
       <Stack.Screen name="fireside" component={FiresideRoomsScreen} />
       <Stack.Screen name="fireside-room" component={FiresideRoomScreen} />
       <Stack.Screen name="chart-test" component={ChartTestScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="camera-test" component={CameraTestScreen} options={{ headerShown: true, title: 'Camera Test' }} />
       <Stack.Screen name="ar-preview" component={ARNextMovePreview} />
       <Stack.Screen name="peer-progress" component={PeerProgressScreen} />
       <Stack.Screen name="trade-challenges" component={TradeChallengesScreen} />

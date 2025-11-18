@@ -1,156 +1,183 @@
-# Day Trading Performance Improvements
+# Performance Improvements Analysis
 
-## ✅ Enhancements Made to Achieve >55% Win Rate
+## 🔍 Identified Performance Issues
 
-### 1. **Enhanced Scoring Algorithm** ✅
+### 1. **GraphQL Query Optimization** ⚠️ HIGH IMPACT
+**Issues:**
+- Multiple queries using `cache-and-network` which always fetches from network
+- Some queries don't skip when not needed
+- Multiple parallel queries in TradingScreen that could be batched
+- Quote query refetches on every symbol change
 
-**File**: `day_trading_ml_scorer.py`
+**Files:**
+- `TradingScreen.tsx`: 6+ queries running simultaneously
+- `StockScreen.tsx`: 5+ queries for different tabs
+- `useAlpacaAccount.ts`, `useAlpacaPositions.ts`, `useAlpacaOrders.ts`: All use `cache-and-network`
 
-**Improvements**:
-- ✅ **Stronger momentum weighting** (3.0 points for >3% moves)
-- ✅ **Regime filtering** (penalty for chop, bonus for trends)
-- ✅ **Better breakout detection** (up to 3.0 points for strong breakouts)
-- ✅ **Volume emphasis** (high volume = up to 2.5 points)
-- ✅ **RSI sweet spot** (40-60 = 2.0 points, extremes penalized)
-- ✅ **Pattern recognition** (three white soldiers = 2.5 points)
-- ✅ **Quality filters** (penalize low-quality setups)
-
-**Impact**: 
-- Higher scores = better picks
-- Filters out low-quality trades
-- Focuses on high-probability setups
+**Impact:** High - Network requests on every render/mount
 
 ---
 
-### 2. **Increased Quality Thresholds** ✅
+### 2. **List Rendering Optimization** ⚠️ MEDIUM IMPACT
+**Issues:**
+- `PositionsList` FlatList missing `getItemLayout` for better scroll performance
+- `StockScreen` FlatList has optimizations but could add more
+- Some lists render all items at once instead of virtualizing
 
-**File**: `queries.py`
+**Files:**
+- `PositionsList.tsx`: Missing `getItemLayout`, `removeClippedSubviews`
+- `OrdersList.tsx`: Uses ScrollView instead of FlatList (less efficient for large lists)
 
-**Changes**:
-- **SAFE mode**: 1.5 → **2.5** (67% increase)
-- **AGGRESSIVE mode**: 2.0 → **2.0** (maintained)
-
-**Impact**:
-- Only highest-quality picks pass filter
-- Better win rate
-- Fewer but better trades
-
----
-
-### 3. **Enhanced Catalyst Scoring** ✅
-
-**File**: `day_trading_ml_scorer.py`
-
-**Improvements**:
-- ✅ Volume spike detection (up to 3.0 points)
-- ✅ Stronger sentiment weighting
-- ✅ Breakout strength scoring
-- ✅ Pattern recognition bonus
-
-**Impact**:
-- Better identification of high-probability setups
-- Focuses on trades with catalysts
+**Impact:** Medium - Slower scrolling with many items
 
 ---
 
-## 📊 Expected Performance Improvements
+### 3. **Component Lazy Loading** ⚠️ MEDIUM IMPACT
+**Issues:**
+- Large components imported eagerly (StockDetailScreen, OrderModal, etc.)
+- TradingScreen imports many heavy components upfront
+- No code splitting for route-based screens
 
-### Before Enhancements:
-- Win Rate: ~45-50%
-- Avg Return: ~0.3% per trade
-- Sharpe Ratio: ~0.8
+**Files:**
+- `TradingScreen.tsx`: Imports all components eagerly
+- `StockDetailScreen.tsx`: Large component (2000+ lines) loaded immediately
+- `OrderModal.tsx`: Heavy component loaded even when modal not visible
 
-### After Enhancements:
-- **Win Rate: 55-60%** ✅ (target achieved)
-- **Avg Return: 0.5-0.8% per trade** ✅ (target achieved)
-- **Sharpe Ratio: 1.5-2.0** ✅ (target achieved)
-
----
-
-## 🎯 Key Improvements Explained
-
-### 1. Momentum Emphasis
-**Why**: Strong momentum is the #1 predictor of short-term price movement
-- >3% momentum = 3.0 points
-- <0.5% momentum = penalty
-
-### 2. Regime Filtering
-**Why**: Only trade in favorable market conditions
-- Trending markets = +3.0 points
-- High volatility chop = -2.0 points (early exit)
-
-### 3. Volume Confirmation
-**Why**: High volume confirms moves and improves execution
-- 2.5x volume = +2.5 points
-- Low volume = penalty
-
-### 4. Quality Filters
-**Why**: Avoid low-probability setups
-- Multiple weak signals = -2.0 points
-- Only strong setups pass
+**Impact:** Medium - Slower initial bundle load time
 
 ---
 
-## 🔧 Additional Optimization Tips
+### 4. **Expensive Calculations** ⚠️ LOW-MEDIUM IMPACT
+**Issues:**
+- `StockScreen.listData` useMemo processes large arrays on every tab change
+- OrderForm validation runs in useEffect (good) but could be debounced
+- Some calculations not memoized
 
-### If Still Underperforming:
+**Files:**
+- `StockScreen.tsx`: `listData` useMemo processes AI recommendations, ML screening, etc.
+- `OrderForm.tsx`: Validation runs on every input change (could debounce)
 
-1. **Increase Quality Threshold Further**:
-   ```python
-   quality_threshold = 3.0 if mode == "SAFE" else 2.5
+**Impact:** Low-Medium - Slight lag on tab switches
+
+---
+
+### 5. **Unnecessary Re-renders** ⚠️ LOW IMPACT
+**Issues:**
+- Some components not wrapped in React.memo
+- Callbacks not memoized in some places
+- Props changing unnecessarily
+
+**Files:**
+- `OrderModal.tsx`: May re-render unnecessarily
+- `AccountSummaryCard.tsx`: Should check if memoized
+
+**Impact:** Low - Minor performance impact
+
+---
+
+## 🚀 Recommended Improvements
+
+### Priority 1: GraphQL Query Optimization (HIGH IMPACT)
+
+1. **Change fetch policies:**
+   ```typescript
+   // Change from cache-and-network to cache-first for better performance
+   fetchPolicy: 'cache-first', // Use cache, only fetch if stale
+   nextFetchPolicy: 'cache-first', // Keep using cache
    ```
 
-2. **Add Minimum Score Requirements**:
-   - Require minimum momentum: >1%
-   - Require minimum volume: >1.5x average
-   - Require trend regime: is_trend_regime > 0.5
+2. **Add proper skip conditions:**
+   ```typescript
+   skip: !accountId || !isVisible, // Don't fetch when not needed
+   ```
 
-3. **Focus on Best Patterns**:
-   - Only trade when strong patterns present
-   - Three white soldiers, engulfing patterns
+3. **Batch queries where possible:**
+   - Use `useQueries` hook for parallel queries
+   - Combine related queries into single request
 
-4. **Time-of-Day Filtering**:
-   - Only trade opening hour (9:30-10:30)
-   - Avoid midday (12:00-2:00)
+4. **Optimize quote fetching:**
+   - Debounce quote requests when symbol changes
+   - Use cache-first for quotes (they update frequently anyway)
 
-5. **Regime-Only Trading**:
-   - Only trade when is_trend_regime > 0.5
-   - Skip range and chop markets
+### Priority 2: List Rendering (MEDIUM IMPACT)
+
+1. **Add FlatList optimizations:**
+   ```typescript
+   <FlatList
+     getItemLayout={(data, index) => ({
+       length: ITEM_HEIGHT,
+       offset: ITEM_HEIGHT * index,
+       index,
+     })}
+     removeClippedSubviews={true}
+     initialNumToRender={10}
+     maxToRenderPerBatch={5}
+     windowSize={10}
+     updateCellsBatchingPeriod={50}
+   />
+   ```
+
+2. **Convert ScrollView to FlatList:**
+   - `OrdersList.tsx` uses ScrollView - convert to FlatList for better performance
+
+### Priority 3: Code Splitting (MEDIUM IMPACT)
+
+1. **Lazy load heavy components:**
+   ```typescript
+   const OrderModal = React.lazy(() => import('../components/OrderModal'));
+   const StockDetailScreen = React.lazy(() => import('./StockDetailScreen'));
+   ```
+
+2. **Route-based code splitting:**
+   - Split screens by route
+   - Load only when navigated to
+
+### Priority 4: Debounce & Throttle (LOW-MEDIUM IMPACT)
+
+1. **Debounce validation:**
+   ```typescript
+   const debouncedValidation = useMemo(
+     () => debounce(validateForm, 300),
+     []
+   );
+   ```
+
+2. **Throttle quote requests:**
+   - Don't fetch quote on every keystroke
+   - Wait for user to stop typing
+
+### Priority 5: Memoization (LOW IMPACT)
+
+1. **Wrap more components in React.memo**
+2. **Memoize expensive callbacks**
+3. **Use useMemo for derived data**
 
 ---
 
-## 📈 Testing the Improvements
+## 📊 Expected Performance Gains
 
-Run the performance test to see improvements:
-
-```bash
-# Test SAFE mode (higher quality threshold)
-python backtest_day_trading_performance.py SAFE 1
-
-# Compare to previous results
-```
-
-**Expected Results**:
-- ✅ Higher win rate (55-60%)
-- ✅ Better average returns (0.5-0.8%)
-- ✅ Improved Sharpe ratio (1.5-2.0)
-- ✅ Fewer but better trades
+| Improvement | Expected Gain | Effort |
+|------------|---------------|--------|
+| GraphQL cache-first | 40-60% faster loads | Low |
+| FlatList optimizations | 30-50% smoother scrolling | Low |
+| Code splitting | 20-30% faster initial load | Medium |
+| Debounce validation | 10-20% less CPU usage | Low |
+| Component memoization | 5-15% fewer re-renders | Low |
 
 ---
 
-## ✅ Summary
+## 🎯 Quick Wins (Can implement immediately)
 
-**All improvements implemented**:
-- ✅ Enhanced scoring (15 factors vs 10)
-- ✅ Higher quality thresholds
-- ✅ Better catalyst detection
-- ✅ Regime filtering
-- ✅ Quality filters
+1. ✅ Change `cache-and-network` to `cache-first` in hooks
+2. ✅ Add `getItemLayout` to PositionsList FlatList
+3. ✅ Add `removeClippedSubviews` to all FlatLists
+4. ✅ Debounce quote fetching in OrderForm
+5. ✅ Convert OrdersList ScrollView to FlatList
 
-**System is now optimized for**:
-- ✅ >55% win rate
-- ✅ >0.5% avg return
-- ✅ >1.5 Sharpe ratio
+---
 
-**Ready to test!** 🚀
+## 📝 Implementation Order
 
+1. **Phase 1 (Quick Wins):** GraphQL fetch policies, FlatList optimizations
+2. **Phase 2 (Medium):** Code splitting, lazy loading
+3. **Phase 3 (Polish):** Debouncing, additional memoization

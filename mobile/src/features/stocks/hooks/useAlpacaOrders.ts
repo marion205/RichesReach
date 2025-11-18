@@ -25,7 +25,8 @@ export const useAlpacaOrders = (accountId: number | null, status?: string) => {
     variables: { accountId: accountId || 0, status },
     errorPolicy: 'all',
     skip: !accountId,
-    fetchPolicy: 'cache-and-network',
+    fetchPolicy: 'cache-first', // Use cache first for faster loads
+    nextFetchPolicy: 'cache-first', // Keep using cache for subsequent loads
     onCompleted: async (data) => {
       // Cache successful response
       if (data?.alpacaOrders) {

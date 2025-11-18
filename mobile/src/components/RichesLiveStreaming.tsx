@@ -15,11 +15,40 @@ import {
   Animated,
   PanResponder,
   ActivityIndicator,
+  PermissionsAndroid,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Video } from 'expo-av';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
+import { isExpoGo } from '../utils/expoGoCheck';
+
+// Conditionally import WebRTC (not available in Expo Go)
+let RTCView: any = null;
+let mediaDevices: any = null;
+
+// Type declaration for MediaStream (from WebRTC)
+interface MediaStream {
+  getTracks(): MediaStreamTrack[];
+  getAudioTracks(): MediaStreamTrack[];
+  getVideoTracks(): MediaStreamTrack[];
+  toURL(): string;
+}
+
+interface MediaStreamTrack {
+  enabled: boolean;
+  stop(): void;
+}
+
+try {
+  if (!isExpoGo()) {
+    const webrtc = require('react-native-webrtc');
+    RTCView = webrtc.RTCView;
+    mediaDevices = webrtc.mediaDevices;
+  }
+} catch (e) {
+  console.warn('WebRTC not available in Expo Go');
+}
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -77,10 +106,12 @@ export default function RichesLiveStreaming({
   const [error, setError] = useState<string | null>(null);
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const maxRetries = 3;
   
   const videoRef = useRef<Video>(null);
   const chatInputRef = useRef<TextInput>(null);
+  const localStreamRef = useRef<MediaStream | null>(null);
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -172,11 +203,14 @@ export default function RichesLiveStreaming({
       setViewerCount(mockViewers.length);
       setRetryCount(0);
       
-      // Simulate live streaming
+      // Start live streaming
       if (isHost) {
         setIsStreaming(true);
         setStreamStartTime(new Date());
-        startLiveStream();
+        // Call startLiveStream with a small delay to ensure state is set
+        setTimeout(() => {
+          startLiveStream();
+        }, 100);
       } else {
         joinLiveStream();
       }
@@ -203,9 +237,22 @@ export default function RichesLiveStreaming({
       return () => {
         clearTimeout(timer);
         pulseAnim.stopAnimation();
+        // Cleanup stream when component unmounts or modal closes
+        if (localStreamRef.current) {
+          localStreamRef.current.getTracks().forEach(track => track.stop());
+          localStreamRef.current = null;
+        }
+        setLocalStream(null);
       };
+    } else {
+      // Cleanup when modal closes
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach(track => track.stop());
+        localStreamRef.current = null;
+      }
+      setLocalStream(null);
     }
-  }, [visible]);
+  }, [visible, isHost]);
 
   // Stream duration timer
   useEffect(() => {
@@ -266,14 +313,97 @@ export default function RichesLiveStreaming({
     console.log('🔄 Retrying connection...');
   };
 
-  const startLiveStream = () => {
+  const requestAndroidPermissions = async (): Promise<boolean> => {
+    if (Platform.OS !== 'android') return true;
+
     try {
-      console.log('🎥 Starting live stream for circle:', circleName);
-      // Simulate potential error
-      if (Math.random() < 0.1) { // 10% chance of error for demo
-        throw new Error('Camera access denied');
+      const granted = await PermissionsAndroid.requestMultiple([
+        PermissionsAndroid.PERMISSIONS.CAMERA,
+        PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+      ]);
+
+      const cameraGranted = granted[PermissionsAndroid.PERMISSIONS.CAMERA] === PermissionsAndroid.RESULTS.GRANTED;
+      const audioGranted = granted[PermissionsAndroid.PERMISSIONS.RECORD_AUDIO] === PermissionsAndroid.RESULTS.GRANTED;
+
+      if (!cameraGranted || !audioGranted) {
+        Alert.alert(
+          'Permissions Required',
+          'Camera and microphone permissions are required for live streaming. Please enable them in Settings.',
+          [{ text: 'OK' }]
+        );
+        return false;
       }
-    } catch (error) {
+      return true;
+    } catch (err) {
+      console.error('Permission request error:', err);
+      return false;
+    }
+  };
+
+  const startLiveStream = async () => {
+    try {
+      // Check if we're in Expo Go
+      if (isExpoGo()) {
+        const errorMsg = 'WebRTC is not available in Expo Go. Please use a development build.';
+        Alert.alert(
+          'WebRTC Not Available',
+          `${errorMsg}\n\nRun:\nnpx expo run:ios\nor\nnpx expo run:android`,
+          [{ text: 'OK' }]
+        );
+        setError(errorMsg);
+        return;
+      }
+
+      // Check if mediaDevices is available
+      if (!mediaDevices) {
+        const errorMsg = 'react-native-webrtc is not properly installed. Please rebuild your app.';
+        Alert.alert(
+          'WebRTC Not Configured',
+          `${errorMsg}\n\nRun:\nnpx expo prebuild --clean\nnpx expo run:ios`,
+          [{ text: 'OK' }]
+        );
+        setError(errorMsg);
+        return;
+      }
+
+      // Request Android permissions
+      const hasPermissions = await requestAndroidPermissions();
+      if (!hasPermissions) {
+        setError('Camera/microphone permissions denied');
+        return;
+      }
+
+      // Get user media with front camera
+      const stream = await mediaDevices.getUserMedia({
+        video: {
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          frameRate: { ideal: 30 },
+          facingMode: 'user' // Use front camera
+        },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      });
+      
+      // Verify stream has video track
+      const videoTracks = stream.getVideoTracks();
+      if (videoTracks.length === 0) {
+        setError('Stream acquired but no video track found');
+        stream.getTracks().forEach(track => track.stop());
+        return;
+      }
+      
+      setLocalStream(stream);
+      localStreamRef.current = stream;
+      setIsStreaming(true);
+      setError(null);
+    } catch (error: any) {
+      console.error('Error starting live stream:', error);
+      const errorMsg = error?.message || 'Unknown error';
+      setError(`Failed to start camera: ${errorMsg}`);
       handleError(error as Error, 'Start Stream Failed');
     }
   };
@@ -292,10 +422,15 @@ export default function RichesLiveStreaming({
 
   const endLiveStream = () => {
     try {
+      // Stop local stream tracks
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach(track => track.stop());
+        localStreamRef.current = null;
+      }
+      setLocalStream(null);
       setIsStreaming(false);
       setError(null);
       onClose();
-      console.log('🔴 Live stream ended');
     } catch (error) {
       console.error('End stream error:', error);
     }
@@ -354,8 +489,13 @@ export default function RichesLiveStreaming({
 
   const toggleMute = () => {
     try {
+      if (localStreamRef.current) {
+        const audioTracks = localStreamRef.current.getAudioTracks();
+        audioTracks.forEach(track => {
+          track.enabled = isMuted;
+        });
+      }
       setIsMuted(!isMuted);
-      console.log('🔇 Mute toggled:', !isMuted);
     } catch (error) {
       handleError(error as Error, 'Mute Toggle Failed');
     }
@@ -363,8 +503,13 @@ export default function RichesLiveStreaming({
 
   const toggleCamera = () => {
     try {
+      if (localStreamRef.current) {
+        const videoTracks = localStreamRef.current.getVideoTracks();
+        videoTracks.forEach(track => {
+          track.enabled = isCameraOn;
+        });
+      }
       setIsCameraOn(!isCameraOn);
-      console.log('📹 Camera toggled:', !isCameraOn);
     } catch (error) {
       handleError(error as Error, 'Camera Toggle Failed');
     }
@@ -460,20 +605,46 @@ export default function RichesLiveStreaming({
           disabled={!!error}
         >
           {isHost ? (
-            <View style={styles.hostVideoView}>
-              <LinearGradient
-                colors={['rgba(0,0,0,0.3)', 'rgba(26,26,26,0.8)']}
-                style={styles.hostVideoGradient}
-              >
-                <Ionicons name={isCameraOn ? "videocam" : "videocam-off"} size={48} color="#FF3B30" style={styles.hostVideoIcon} />
-                <Text style={styles.hostVideoText}>
-                  {isCameraOn ? '📹 Live Camera Feed' : '📹 Camera Off'}
-                </Text>
-                <Text style={styles.hostVideoSubtext}>
-                  {isMuted ? '🔇 Muted' : '🎤 Live Audio • HD'}
-                </Text>
-              </LinearGradient>
-            </View>
+            localStream && RTCView ? (
+              <RTCView
+                key={localStream.toURL()} // Force re-render when stream changes
+                streamURL={localStream.toURL()}
+                style={styles.hostVideoView}
+                objectFit="cover"
+                mirror={true}
+                zOrder={0}
+              />
+            ) : (
+              <View style={styles.hostVideoView}>
+                <LinearGradient
+                  colors={['rgba(0,0,0,0.3)', 'rgba(26,26,26,0.8)']}
+                  style={styles.hostVideoGradient}
+                >
+                  <Ionicons name={isCameraOn ? "videocam" : "videocam-off"} size={48} color="#FF3B30" style={styles.hostVideoIcon} />
+                  <Text style={styles.hostVideoText}>
+                    {localStream ? '📹 Live Camera Feed (Waiting for video...)' : '📹 Starting Camera...'}
+                  </Text>
+                  <Text style={styles.hostVideoSubtext}>
+                    {isMuted ? '🔇 Muted' : '🎤 Live Audio • HD'}
+                  </Text>
+                  {!mediaDevices && (
+                    <Text style={styles.hostVideoSubtext}>
+                      WebRTC not available in Expo Go
+                    </Text>
+                  )}
+                  {!RTCView && (
+                    <Text style={styles.hostVideoSubtext}>
+                      RTCView component not available
+                    </Text>
+                  )}
+                  {localStream && !RTCView && (
+                    <Text style={styles.hostVideoSubtext}>
+                      Stream acquired but RTCView missing
+                    </Text>
+                  )}
+                </LinearGradient>
+              </View>
+            )
           ) : (
             <View style={styles.viewerVideoView}>
               <LinearGradient

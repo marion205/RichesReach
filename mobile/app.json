@@ -24,7 +24,7 @@
       "buildNumber": "1",
       "infoPlist": {
         "NSUserTrackingUsageDescription": "This app uses tracking to provide personalized financial insights and recommendations.",
-        "NSCameraUsageDescription": "AR preview requires camera",
+        "NSCameraUsageDescription": "This app needs access to your camera for live streaming and AR portfolio preview.",
         "NSPhotoLibraryUsageDescription": "This app accesses your photo library to upload profile pictures and financial documents.",
         "NSLocationWhenInUseUsageDescription": "This app uses location to provide location-based financial services and market data.",
         "NSMicrophoneUsageDescription": "Voice wake-word and ASR",

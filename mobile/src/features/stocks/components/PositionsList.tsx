@@ -78,6 +78,17 @@ export const PositionsList: React.FC<PositionsListProps> = React.memo(
           scrollEnabled={false}
           refreshing={refreshing}
           onRefresh={onRefresh}
+          // Performance optimizations
+          removeClippedSubviews={true}
+          initialNumToRender={5}
+          maxToRenderPerBatch={3}
+          windowSize={5}
+          updateCellsBatchingPeriod={50}
+          getItemLayout={(_, index) => ({
+            length: 91, // Estimated item height (90px) + separator (1px)
+            offset: 91 * index,
+            index,
+          })}
         />
       </View>
     );

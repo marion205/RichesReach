@@ -25,7 +25,8 @@ export const useAlpacaPositions = (accountId: number | null) => {
     variables: { accountId: accountId || 0 },
     errorPolicy: 'all',
     skip: !accountId,
-    fetchPolicy: 'cache-and-network',
+    fetchPolicy: 'cache-first', // Use cache first for faster loads
+    nextFetchPolicy: 'cache-first', // Keep using cache for subsequent loads
     onCompleted: async (data) => {
       // Cache successful response
       if (data?.alpacaPositions) {

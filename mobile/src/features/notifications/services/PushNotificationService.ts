@@ -285,18 +285,22 @@ responseListener: Notifications.Subscription;
 // Listener for notifications received while app is running
 const notificationListener = Notifications.addNotificationReceivedListener(notification => {
 });
-// Listener for user interactions with notifications
-const responseListener = Notifications.addNotificationResponseReceivedListener(response => {
-const data = response.notification.request.content.data;
-// Handle different notification types
-if (data.type === 'price_alert') {
-// Navigate to stock details
-} else if (data.type === 'mention') {
-// Navigate to discussion
-} else if (data.type === 'follow') {
-// Navigate to user profile
-}
-});
+  // Listener for user interactions with notifications
+  const responseListener = Notifications.addNotificationResponseReceivedListener(response => {
+    const data = response.notification.request.content.data;
+    // Handle different notification types
+    if (data.type === 'price_alert') {
+      // Navigate to stock details
+    } else if (data.type === 'mention') {
+      // Navigate to discussion
+    } else if (data.type === 'follow') {
+      // Navigate to user profile
+    } else if (data.type === 'dawn_ritual') {
+      // Trigger Dawn Ritual - emit event that PortfolioScreen can listen to
+      const { DeviceEventEmitter } = require('react-native');
+      DeviceEventEmitter.emit('openDawnRitual');
+    }
+  });
 return {
 notificationListener,
 responseListener,
