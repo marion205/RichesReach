@@ -63,7 +63,7 @@ imageUrl: null
 setNews(mockNews.slice(0, limit));
 } catch (err) {
 setError('Failed to load news');
-console.error('Error loading news:', err);
+logger.error('Error loading news:', err);
 } finally {
 setLoading(false);
 }

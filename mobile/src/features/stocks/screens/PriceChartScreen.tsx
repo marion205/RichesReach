@@ -4,6 +4,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import { useFocusEffect } from '@react-navigation/native';
 import StockChart from '../components/StockChart';
 import StockTradingModal from '../../../components/forms/StockTradingModal';
+import logger from '../../../utils/logger';
 
 type PriceChartParams = {
   symbol: string;
@@ -31,12 +32,12 @@ export default function PriceChartScreen({ navigation, route }: PriceChartScreen
   const openedRef = React.useRef<number | null>(null);
 
   const openTradeModal = useCallback(() => {
-    console.log('🔍 Opening trade modal for:', symbol);
+    logger.log('🔍 Opening trade modal for:', symbol);
     setTradingModalVisible(true);
   }, [symbol]);
 
   const openAnalysisModal = useCallback(() => {
-    console.log('🔍 Opening analysis modal for:', symbol);
+    logger.log('🔍 Opening analysis modal for:', symbol);
     setAnalysisModalVisible(true);
   }, [symbol]);
 
@@ -94,7 +95,7 @@ export default function PriceChartScreen({ navigation, route }: PriceChartScreen
       <StockTradingModal
         visible={tradingModalVisible}
         onClose={() => {
-          console.log('🔍 Closing trading modal');
+          logger.log('🔍 Closing trading modal');
           setTradingModalVisible(false);
         }}
         symbol={symbol}
