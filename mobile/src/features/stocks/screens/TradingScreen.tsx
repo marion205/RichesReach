@@ -123,14 +123,12 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
         const { tradingOfflineCache } = await import('../services/TradingOfflineCache');
         await tradingOfflineCache.cacheQuote(quoteSymbol, data.tradingQuote);
       }
-      if (__DEV__) {
-        console.log('✅ TradingQuote query completed:', JSON.stringify(data, null, 2));
-        console.log('📊 TradingQuote data structure:', {
-          hasTradingQuote: !!data?.tradingQuote,
-          tradingQuote: data?.tradingQuote,
-          keys: data ? Object.keys(data) : [],
-        });
-      }
+      logger.log('✅ TradingQuote query completed:', JSON.stringify(data, null, 2));
+      logger.log('📊 TradingQuote data structure:', {
+        hasTradingQuote: !!data?.tradingQuote,
+        tradingQuote: data?.tradingQuote,
+        keys: data ? Object.keys(data) : [],
+      });
     },
     onError: (error) => {
       if (__DEV__) {
@@ -228,10 +226,14 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
     }
   }, [positionsLoading]);
 
-  // Optional: light polling on orders while Orders tab is visible
+  // Optimized polling: only poll orders when Orders tab is visible, with longer interval
   useEffect(() => {
-    if (activeTab === 'orders') startOrdersPolling?.(30_000);
-    else stopOrdersPolling?.();
+    if (activeTab === 'orders') {
+      // Poll every 30 seconds when orders tab is active (reduced from default)
+      startOrdersPolling?.(30_000);
+    } else {
+      stopOrdersPolling?.();
+    }
     return () => stopOrdersPolling?.();
   }, [activeTab, startOrdersPolling, stopOrdersPolling]);
 

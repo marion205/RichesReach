@@ -84,8 +84,11 @@ export const usePlaceOrder = () => {
         orderVariables.limitPrice = sanitizeFloat(price);
       }
 
-      // Place order through Alpaca
-      const res = await placeStockOrder({ variables: orderVariables });
+      // Place order through Alpaca with retry logic
+      const res = await retryGraphQLOperation(
+        () => placeStockOrder({ variables: orderVariables }),
+        { maxRetries: 2, initialDelay: 1000 }
+      );
       const orderResponse = res?.data?.placeStockOrder as PlaceOrderResponse | undefined;
       const success = orderResponse?.success;
       const message = orderResponse?.message;
