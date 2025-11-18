@@ -14,6 +14,7 @@ import { useLazyQuery, useQuery } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
 import { SEARCH_STOCKS, TOP_STOCKS, RESEARCH_HUB } from '../../../graphql/queries_actual_schema';
 import StockTradingModal from '../../../components/forms/StockTradingModal';
+import logger from '../../../utils/logger';
 
 const RECENTS_KEY = 'research_recent_symbols';
 
@@ -62,7 +63,7 @@ export default function ResearchScreen() {
         const raw = await AsyncStorage.getItem(RECENTS_KEY);
         setRecents(raw ? JSON.parse(raw) : []);
       } catch (error) {
-        console.error('Error loading recent symbols:', error);
+        logger.error('Error loading recent symbols:', error);
       }
     };
     loadRecents();
@@ -74,7 +75,7 @@ export default function ResearchScreen() {
       setRecents(next);
       await AsyncStorage.setItem(RECENTS_KEY, JSON.stringify(next));
     } catch (error) {
-      console.error('Error saving recent symbol:', error);
+        logger.error('Error saving recent symbol:', error);
     }
   };
 

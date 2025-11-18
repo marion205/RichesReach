@@ -12,6 +12,7 @@ import {
   validateLimitPrice,
   validateStopPrice,
 } from '../../../utils/validation';
+import { getMockPrice } from '../constants/mockPrices';
 
 const C = {
   bg: '#F5F6FA',
@@ -70,20 +71,11 @@ export const OrderForm: React.FC<OrderFormProps> = ({
     stopPrice: { isValid: true, touched: false },
   });
 
-  // Mock prices for instant fallback
-  const mockPrices: Record<string, number> = {
-    AAPL: 190.12,
-    MSFT: 375.00,
-    GOOGL: 140.00,
-    AMZN: 150.00,
-    TSLA: 245.00,
-    META: 490.00,
-    NVDA: 125.00,
-  };
+  // Mock prices imported from constants
 
   // Real-time validation
   useEffect(() => {
-    const newValidations: Record<string, { isValid: boolean; error?: string; touched: boolean }> = { ...validations };
+    const newValidations: Record<string, { isValid: boolean; error?: string; touched: boolean }> = {};
 
     // Validate symbol
     if (symbol) {
@@ -144,7 +136,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
     }
 
     setValidations(newValidations);
-  }, [symbol, quantity, price, stopPrice, orderType, orderSide, quoteData]);
+  }, [symbol, quantity, price, stopPrice, orderType, orderSide, quoteData]); // Removed 'validations' from deps to prevent infinite loops
 
   // Immediate mock fallback + background real data update
   useEffect(() => {
@@ -155,7 +147,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
     }
 
     // ALWAYS show mock estimate immediately (no waiting for GraphQL)
-    const mockPrice = mockPrices[symbol.toUpperCase()] || 150.00;
+    const mockPrice = getMockPrice(symbol);
     const estimatedTotal = qty * mockPrice;
     
     // Set mock immediately
@@ -188,7 +180,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   useEffect(() => {
     const qty = parseFloat(quantity) || 0;
     if (symbol && qty > 0 && !localCost) {
-      const mockPrice = mockPrices[symbol.toUpperCase()] || 150.00;
+      const mockPrice = getMockPrice(symbol);
       setLocalCost({
         pricePerShare: mockPrice,
         total: qty * mockPrice,
@@ -236,16 +228,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
     if (hasSymbolAndQty && !quoteData?.tradingQuote && !quoteLoading) {
       // Use a reasonable default estimate based on symbol
       // This is better than showing nothing
-      const defaultPrices: Record<string, number> = {
-        AAPL: 190.00,
-        MSFT: 375.00,
-        GOOGL: 140.00,
-        AMZN: 150.00,
-        TSLA: 245.00,
-        META: 490.00,
-        NVDA: 125.00,
-      };
-      const defaultPrice = defaultPrices[symbol.toUpperCase()] || 150.00;
+      const defaultPrice = getMockPrice(symbol);
       
       if (orderType === 'market' && marketPrice === 0) {
         pricePerShare = defaultPrice;

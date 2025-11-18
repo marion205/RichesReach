@@ -340,7 +340,7 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
     return positions.find((p: AlpacaPosition) => p.symbol === orderForm.symbol.toUpperCase());
   }, [positions, orderForm.symbol]);
 
-  const handlePlaceOrder = async () => {
+  const handlePlaceOrder = useCallback(async () => {
     const err = orderForm.validate();
     if (err) {
       return Alert.alert('Invalid Order', err);
@@ -365,9 +365,9 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
       }
     }
     proceedWithOrder();
-  };
+  }, [orderForm, currentPosition, setShowSBLOCModal]);
 
-  const proceedWithOrder = async () => {
+  const proceedWithOrder = useCallback(async () => {
     await placeOrder({
       symbol: orderForm.symbol,
       quantity: orderForm.quantity,
@@ -388,7 +388,7 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
       },
       refetchQueries: [refetchAlpacaOrders, refetchAlpacaPositions, refetchAlpacaAccount],
     });
-  };
+  }, [placeOrder, orderForm, alpacaAccount, setShowOrderModal, setShowConnectModal, refetchAlpacaOrders, refetchAlpacaPositions, refetchAlpacaAccount]);
 
   const handleCancelOrder = useCallback(async (orderId: string) => {
     try {
