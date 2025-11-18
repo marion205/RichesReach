@@ -502,15 +502,17 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
           setShowConnectModal(false);
           alpacaAnalytics.track('connect_modal_shown', { action: 'closed' });
         }}
-        onConnect={() => {
-          alpacaAnalytics.track('connect_has_account_yes');
-          alpacaAnalytics.track('connect_oauth_started');
-          // TODO: Implement OAuth flow once we receive credentials from Alpaca
-          Alert.alert(
-            'OAuth Flow',
-            'OAuth flow will be implemented once we receive credentials from Alpaca.',
-            [{ text: 'OK', onPress: () => setShowConnectModal(false) }]
-          );
+        onConnect={async () => {
+          try {
+            alpacaAnalytics.track('connect_has_account_yes');
+            // Initiate OAuth flow - opens browser to Alpaca
+            const { initiateAlpacaOAuth } = await import('../../../services/alpacaOAuthService');
+            await initiateAlpacaOAuth();
+            setShowConnectModal(false);
+          } catch (error) {
+            console.error('Failed to initiate OAuth:', error);
+            // Error already handled in service
+          }
         }}
       />
       <OnboardingGuard
