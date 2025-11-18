@@ -33,6 +33,8 @@ import {
   GET_TRADING_QUOTE,
   CANCEL_ORDER,
 } from '../../../graphql/tradingQueries';
+import { AlpacaPosition, NavigationType } from '../types';
+import logger from '../../../utils/logger';
 
 const C = {
   bg: '#F5F6FA',
@@ -46,7 +48,7 @@ const C = {
 /* -------------------------------- Screen -------------------------------- */
 
 const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void }) => {
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<NavigationType>();
   const apolloClient = useApolloClient();
   const [activeTab, setActiveTab] = useState<'overview' | 'orders'>('overview');
   const [refreshing, setRefreshing] = useState(false);
@@ -197,11 +199,9 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
         if (symbol) {
           initPolygonStream(apolloClient, [symbol]);
         }
-      }).catch((error) => {
+        }).catch((error) => {
         // Silently fail if Polygon service not available (e.g., missing API key)
-        if (__DEV__) {
-          console.warn('⚠️ Polygon WebSocket not available:', error);
-        }
+        logger.warn('⚠️ Polygon WebSocket not available:', error);
       });
     }
   }, [showOrderModal, orderForm.symbol, apolloClient]);
@@ -334,6 +334,12 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
   const { placeOrder, isPlacing: isPlacingOrder } = usePlaceOrder();
   const [cancelOrder] = useMutation(CANCEL_ORDER, { errorPolicy: 'all' });
 
+  // Memoize current position lookup to avoid recalculating on every render
+  const currentPosition = useMemo<AlpacaPosition | undefined>(() => {
+    if (!orderForm.symbol) return undefined;
+    return positions.find((p: AlpacaPosition) => p.symbol === orderForm.symbol.toUpperCase());
+  }, [positions, orderForm.symbol]);
+
   const handlePlaceOrder = async () => {
     const err = orderForm.validate();
     if (err) {
@@ -342,7 +348,7 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
 
     // Inline SBLOC nudge for tax-aware flow (only for sells with gains)
     if (orderForm.orderSide === 'sell') {
-      const pos = positions.find((p: any) => p.symbol === orderForm.symbol.toUpperCase());
+      const pos = currentPosition;
       const unrealized = Number(
         pos?.unrealizedPl ?? pos?.unrealizedpl ?? pos?.unrealizedPL ?? 0
       );
@@ -394,8 +400,9 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
       } else {
         Alert.alert('Cancel Failed', res?.data?.cancelOrder?.message || 'Please try again.');
       }
-    } catch (e: any) {
-      Alert.alert('Cancel Failed', e?.message || 'Please try again.');
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : 'Please try again.';
+      Alert.alert('Cancel Failed', errorMessage);
     }
   }, [cancelOrder, refetchOrders, refetchAlpacaOrders]);
 
@@ -510,7 +517,7 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
             await initiateAlpacaOAuth();
             setShowConnectModal(false);
           } catch (error) {
-            console.error('Failed to initiate OAuth:', error);
+            logger.error('Failed to initiate OAuth:', error);
             // Error already handled in service
           }
         }}

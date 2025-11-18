@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useOrderForm, OrderType, OrderSide } from '../hooks/useOrderForm';
 import { useQuery } from '@apollo/client';
 import { GET_TRADING_QUOTE } from '../../../graphql/tradingQueries';
+import { TradingQuote, LocalCostState, OrderTotalCalculation } from '../types';
+import logger from '../../../utils/logger';
 
 const C = {
   bg: '#F5F6FA',
@@ -23,7 +25,7 @@ const C = {
 
 interface OrderFormProps {
   form: ReturnType<typeof useOrderForm>;
-  quoteData?: any;
+  quoteData?: { tradingQuote?: TradingQuote };
   quoteLoading?: boolean;
   onSBLOCPress?: () => void;
 }
@@ -52,12 +54,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   } = form;
 
   // Local state for immediate cost display (bypasses Apollo loading gate)
-  const [localCost, setLocalCost] = useState<{
-    pricePerShare: number;
-    total: number;
-    source: string;
-    isLive: boolean;
-  } | null>(null);
+  const [localCost, setLocalCost] = useState<LocalCostState | null>(null);
 
   // Mock prices for instant fallback
   const mockPrices: Record<string, number> = {
@@ -131,8 +128,8 @@ export const OrderForm: React.FC<OrderFormProps> = ({
     let isEstimated = false;
 
     // Debug logging
-    if (__DEV__ && symbol) {
-      console.log('💰 OrderTotal calculation:', {
+    if (symbol) {
+      logger.log('💰 OrderTotal calculation:', {
         symbol,
         qty,
         hasQuoteData: !!quoteData?.tradingQuote,
@@ -324,6 +321,9 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           placeholder="e.g., AAPL"
           autoCapitalize="characters"
           autoCorrect={false}
+          accessibilityLabel="Stock symbol input"
+          accessibilityHint="Enter the stock symbol you want to trade, for example AAPL for Apple"
+          accessibilityRole="textbox"
         />
       </View>
 
@@ -335,6 +335,9 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           onChangeText={setQuantity}
           placeholder="Number of shares"
           keyboardType="numeric"
+          accessibilityLabel="Quantity input"
+          accessibilityHint="Enter the number of shares you want to buy or sell"
+          accessibilityRole="textbox"
         />
       </View>
 
@@ -347,6 +350,9 @@ export const OrderForm: React.FC<OrderFormProps> = ({
             onChangeText={setPrice}
             placeholder="Price per share"
             keyboardType="numeric"
+            accessibilityLabel="Limit price input"
+            accessibilityHint="Enter the maximum price you're willing to pay per share for a buy order, or minimum price for a sell order"
+            accessibilityRole="textbox"
           />
         </View>
       )}
@@ -360,6 +366,9 @@ export const OrderForm: React.FC<OrderFormProps> = ({
             onChangeText={setStopPrice}
             placeholder="Stop price"
             keyboardType="numeric"
+            accessibilityLabel="Stop price input"
+            accessibilityHint="Enter the stop price that will trigger this order"
+            accessibilityRole="textbox"
           />
         </View>
       )}
@@ -372,6 +381,9 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           onChangeText={setNotes}
           multiline
           placeholder="Add a note about this order"
+          accessibilityLabel="Order notes input"
+          accessibilityHint="Optional: Add a note or reminder about this order"
+          accessibilityRole="textbox"
         />
       </View>
 

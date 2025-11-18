@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react';
 import { useQuery } from '@apollo/client';
 import { GET_ALPACA_ACCOUNT } from '../../../graphql/tradingQueries';
 import { tradingOfflineCache } from '../services/TradingOfflineCache';
+import { AlpacaAccount } from '../types';
 
 export const useAlpacaAccount = (userId: number = 1) => {
-  const [cachedAccount, setCachedAccount] = useState<any>(null);
+  const [cachedAccount, setCachedAccount] = useState<AlpacaAccount | null>(null);
   const [isOffline, setIsOffline] = useState(false);
 
   // Load cached data on mount
