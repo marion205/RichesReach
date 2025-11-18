@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
+import { SkeletonScreen } from './StandardizedSkeletons';
 interface LoadingErrorStateProps {
 loading?: boolean;
 error?: string | null;
@@ -18,12 +19,8 @@ showEmpty = false,
 style,
 }) => {
 if (loading) {
-return (
-<View style={[styles.container, style]}>
-<ActivityIndicator size="large" color="#007AFF" />
-<Text style={styles.loadingText}>Loading...</Text>
-</View>
-);
+// Use skeleton loader instead of spinner for better UX
+return <SkeletonScreen />;
 }
 if (error) {
 return (
