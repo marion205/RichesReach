@@ -38,3 +38,13 @@ class BrokerFundingType(DjangoObjectType):
         model = BrokerFunding
         fields = '__all__'
 
+
+class TradingQuoteType(graphene.ObjectType):
+    """GraphQL type for trading quote (bid/ask)"""
+    symbol = graphene.String()
+    bid = graphene.Float()
+    ask = graphene.Float()
+    bidSize = graphene.Int()
+    askSize = graphene.Int()
+    timestamp = graphene.String()
+
