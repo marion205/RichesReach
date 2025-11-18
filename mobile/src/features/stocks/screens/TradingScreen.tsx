@@ -20,12 +20,14 @@ import { AccountSummaryCard } from '../components/AccountSummaryCard';
 import { PositionsList } from '../components/PositionsList';
 import { PositionRow } from '../components/PositionRow';
 import { OrdersList } from '../components/OrdersList';
-import { OrderModal } from '../components/OrderModal';
+// Lazy load OrderModal to reduce initial bundle size
+const OrderModal = React.lazy(() => import('../components/OrderModal').then(module => ({ default: module.OrderModal })));
 import { useAlpacaAccount } from '../hooks/useAlpacaAccount';
 import { useAlpacaPositions } from '../hooks/useAlpacaPositions';
 import { useAlpacaOrders } from '../hooks/useAlpacaOrders';
 import { usePlaceOrder } from '../hooks/usePlaceOrder';
 import { useOrderForm } from '../hooks/useOrderForm';
+import { useSignupReturnDetection } from '../hooks/useSignupReturnDetection';
 import {
   GET_TRADING_ACCOUNT,
   GET_TRADING_POSITIONS,
@@ -62,6 +64,15 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
   const { alpacaAccount, loading: alpacaAccountLoading, refetch: refetchAlpacaAccount } =
     useAlpacaAccount(1);
 
+  // Detect when user returns from Alpaca signup
+  useSignupReturnDetection({
+    hasAlpacaAccount: !!alpacaAccount,
+    onPromptConnect: () => {
+      setShowConnectModal(true);
+    },
+    enabled: !alpacaAccount, // Only check if no account connected
+  });
+
   const { positions: alpacaPositions, loading: alpacaPositionsLoading, refetch: refetchAlpacaPositions } =
     useAlpacaPositions(alpacaAccount?.id || null);
 
@@ -73,7 +84,8 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
     GET_TRADING_ACCOUNT,
     {
       errorPolicy: 'all',
-      fetchPolicy: 'cache-and-network',
+      fetchPolicy: 'cache-first', // Use cache first for faster loads
+      nextFetchPolicy: 'cache-first', // Keep using cache for subsequent loads
       notifyOnNetworkStatusChange: true,
     }
   );
@@ -82,7 +94,8 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
     GET_TRADING_POSITIONS,
     {
       errorPolicy: 'all',
-      fetchPolicy: 'cache-and-network',
+      fetchPolicy: 'cache-first', // Use cache first for faster loads
+      nextFetchPolicy: 'cache-first', // Keep using cache for subsequent loads
       notifyOnNetworkStatusChange: true,
     }
   );
@@ -590,20 +603,24 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
             {activeTab === 'overview' ? renderOverview() : renderOrders()}
           </View>
 
-          {/* Order Modal */}
-          <OrderModal
-            visible={showOrderModal}
-            onClose={() => {
-              setShowOrderModal(false);
-              orderForm.reset();
-            }}
-            onSubmit={handlePlaceOrder}
-            isSubmitting={isPlacingOrder}
-            quoteData={quoteData}
-            quoteLoading={quoteLoading}
-            onSBLOCPress={() => setShowSBLOCModal(true)}
-            form={orderForm}
-          />
+          {/* Order Modal - Lazy loaded */}
+          {showOrderModal && (
+            <React.Suspense fallback={null}>
+              <OrderModal
+                visible={showOrderModal}
+                onClose={() => {
+                  setShowOrderModal(false);
+                  orderForm.reset();
+                }}
+                onSubmit={handlePlaceOrder}
+                isSubmitting={isPlacingOrder}
+                quoteData={quoteData}
+                quoteLoading={quoteLoading}
+                onSBLOCPress={() => setShowSBLOCModal(true)}
+                form={orderForm}
+              />
+            </React.Suspense>
+          )}
 
           {/* SBLOC Calculator */}
           <SBLOCCalculator
