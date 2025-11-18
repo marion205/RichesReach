@@ -5,7 +5,9 @@
 import { useEffect, useState } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 import { Alert } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { alpacaAnalytics } from '../../../services/alpacaAnalyticsService';
+import logger from '../../../utils/logger';
 
 const SIGNUP_STARTED_KEY = 'alpaca_signup_started';
 const SIGNUP_PROMPTED_KEY = 'alpaca_signup_prompted';
@@ -31,8 +33,6 @@ export const useSignupReturnDetection = ({
 
     const checkSignupReturn = async () => {
       try {
-        const { AsyncStorage } = require('@react-native-async-storage/async-storage');
-        
         // Check if user started signup
         const signupStarted = await AsyncStorage.getItem(SIGNUP_STARTED_KEY);
         if (!signupStarted) {
@@ -108,7 +108,7 @@ export const useSignupReturnDetection = ({
           ]
         );
       } catch (error) {
-        console.error('Error checking signup return:', error);
+        logger.error('Error checking signup return:', error);
         setHasChecked(true);
       }
     };

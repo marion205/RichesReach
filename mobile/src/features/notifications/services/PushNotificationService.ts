@@ -3,6 +3,7 @@ import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import logger from '../../../utils/logger';
 // Configure notification behavior
 Notifications.setNotificationHandler({
 handleNotification: async () => ({
@@ -70,7 +71,7 @@ await this.setupAndroidChannels();
 this.isInitialized = true;
 return true;
 } catch (error) {
-console.error('Error initializing push notifications:', error);
+logger.error('Error initializing push notifications:', error);
 return false;
 }
 }
@@ -108,7 +109,7 @@ vibrationPattern: [0, 250, 250, 250],
 lightColor: '#FF231F7C',
 });
 } catch (error) {
-console.error('Error setting up Android channels:', error);
+logger.error('Error setting up Android channels:', error);
 }
 }
 /**
@@ -134,7 +135,7 @@ trigger: null, // Show immediately
 ...(Platform.OS === 'android' && { channelId }),
 });
 } catch (error) {
-console.error('Error sending local notification:', error);
+logger.error('Error sending local notification:', error);
 }
 }
 /**
@@ -240,7 +241,7 @@ trigger,
 });
 return notificationId;
 } catch (error) {
-console.error('Error scheduling notification:', error);
+logger.error('Error scheduling notification:', error);
 throw error;
 }
 }
@@ -251,7 +252,7 @@ public async cancelNotification(notificationId: string): Promise<void> {
 try {
 await Notifications.cancelScheduledNotificationAsync(notificationId);
 } catch (error) {
-console.error('Error cancelling notification:', error);
+logger.error('Error cancelling notification:', error);
 }
 }
 /**
@@ -261,7 +262,7 @@ public async cancelAllNotifications(): Promise<void> {
 try {
 await Notifications.cancelAllScheduledNotificationsAsync();
 } catch (error) {
-console.error('Error cancelling all notifications:', error);
+logger.error('Error cancelling all notifications:', error);
 }
 }
 /**
@@ -271,7 +272,7 @@ public async getScheduledNotifications(): Promise<Notifications.NotificationRequ
 try {
 return await Notifications.getAllScheduledNotificationsAsync();
 } catch (error) {
-console.error('Error getting scheduled notifications:', error);
+logger.error('Error getting scheduled notifications:', error);
 return [];
 }
 }
@@ -324,7 +325,7 @@ try {
 const { status } = await Notifications.getPermissionsAsync();
 return status === 'granted';
 } catch (error) {
-console.error('Error checking notification permissions:', error);
+logger.error('Error checking notification permissions:', error);
 return false;
 }
 }
@@ -336,7 +337,7 @@ try {
 const { status } = await Notifications.requestPermissionsAsync();
 return status === 'granted';
 } catch (error) {
-console.error('Error requesting notification permissions:', error);
+logger.error('Error requesting notification permissions:', error);
 return false;
 }
 }

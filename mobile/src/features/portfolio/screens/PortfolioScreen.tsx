@@ -28,6 +28,7 @@ import GrowthProjectionView from '../components/GrowthProjectionView';
 import WhatIfSimulator from '../components/WhatIfSimulator';
 import QuickActionsModal from '../components/QuickActionsModal';
 import DetailedBreakdownModal from '../components/DetailedBreakdownModal';
+import logger from '../../../utils/logger';
 import { SharedOrb } from '../../family/components/SharedOrb';
 import { FamilyManagementModal } from '../../family/components/FamilyManagementModal';
 import { familySharingService, FamilyGroup, FamilyMember } from '../../family/services/FamilySharingService';
@@ -90,7 +91,7 @@ const insets = useSafeAreaInsets();
         setCurrentUser(user || null);
       }
     } catch (error) {
-      console.error('[PortfolioScreen] Failed to load family group:', error);
+      logger.error('[PortfolioScreen] Failed to load family group:', error);
       setFamilyGroup(null);
     } finally {
       setLoadingFamily(false);
@@ -112,7 +113,7 @@ const insets = useSafeAreaInsets();
   // Debug logging
   useEffect(() => {
     if (__DEV__) {
-      console.log('[PortfolioScreen] Constellation Orb Debug:', {
+      logger.log('[PortfolioScreen] Constellation Orb Debug:', {
         hasBankLinked,
         hasSnapshot: !!snapshot,
         snapshotLoading,
@@ -131,7 +132,7 @@ const insets = useSafeAreaInsets();
   useEffect(() => {
     if (portfolioLoading) {
       const timer = setTimeout(() => {
-        console.log('[PortfolioScreen] Portfolio loading timeout - using fallback');
+        logger.log('[PortfolioScreen] Portfolio loading timeout - using fallback');
         setPortfolioLoadingTimeout(true);
       }, 3000); // 3 second timeout
       return () => clearTimeout(timer);
@@ -141,16 +142,16 @@ const insets = useSafeAreaInsets();
   }, [portfolioLoading]);
   
   const go = (name: string, params?: any) => {
-    console.log('PortfolioScreen: Navigating to', name, params);
+    logger.log('PortfolioScreen: Navigating to', name, params);
     try {
       if (navigation && (navigation as any).navigate) {
-        console.log('PortfolioScreen: Using navigation.navigate');
+        logger.log('PortfolioScreen: Using navigation.navigate');
         // For screens in the same stack, navigate directly
         (navigation as any).navigate(name as never, params as never);
         return;
       }
     } catch (error) {
-      console.error('PortfolioScreen: Navigation error', error);
+      logger.error('PortfolioScreen: Navigation error', error);
       // Try alternative navigation approach
       try {
         // If direct navigation fails, try nested navigation for InvestStack screens
@@ -163,10 +164,10 @@ const insets = useSafeAreaInsets();
           return;
         }
       } catch (nestedError) {
-        console.error('PortfolioScreen: Nested navigation error', nestedError);
+        logger.error('PortfolioScreen: Nested navigation error', nestedError);
       }
     }
-    console.log('PortfolioScreen: Using navigateTo fallback');
+    logger.log('PortfolioScreen: Using navigateTo fallback');
     navigateTo?.(name);
   };
 // Ref to track if we're currently fetching prices to prevent concurrent calls
@@ -202,7 +203,7 @@ const fetchRealTimePrices = useCallback(async (holdings: any[]) => {
     });
     setRealTimePrices(prices);
   } catch (error) {
-    console.error('Failed to fetch real-time prices for portfolio:', error);
+    logger.error('Failed to fetch real-time prices for portfolio:', error);
     // Use prices from mock portfolio data as fallback
     const mockPrices: { [key: string]: number } = {};
     holdings.forEach((holding: any) => {
@@ -239,7 +240,7 @@ const portfoliosDataString = useMemo(() => {
     }));
     return JSON.stringify(stableData);
   } catch (error) {
-    console.error('[PortfolioScreen] Error creating stable portfolio string:', error);
+    logger.error('[PortfolioScreen] Error creating stable portfolio string:', error);
     return '';
   }
   // Note: We depend on the array reference, but the ref comparison in useEffect
@@ -284,7 +285,7 @@ setRefreshing(false);
 
   // Log error for debugging but don't block rendering
   if (portfolioError) {
-    console.warn('Portfolio query error:', portfolioError);
+    logger.warn('Portfolio query error:', portfolioError);
     // Continue to render with demo data instead of showing error screen
   }
   
@@ -345,9 +346,9 @@ setRefreshing(false);
     });
   });
   
-  console.log('PortfolioScreen: Transformed holdings:', holdings.length, holdings);
-  console.log('PortfolioScreen: Portfolios data:', portfolios);
-  console.log('PortfolioScreen: Real-time prices:', realTimePrices);
+  logger.log('PortfolioScreen: Transformed holdings:', holdings.length, holdings);
+  logger.log('PortfolioScreen: Portfolios data:', portfolios);
+  logger.log('PortfolioScreen: Real-time prices:', realTimePrices);
   return holdings;
   }, [portfolios, realTimePrices]);
 

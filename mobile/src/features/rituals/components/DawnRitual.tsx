@@ -17,6 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import Icon from 'react-native-vector-icons/Feather';
 import { dawnRitualService } from '../services/DawnRitualService';
+import logger from '../../../utils/logger';
 
 // Safe haptics wrapper
 const triggerHaptic = (type: 'light' | 'medium' | 'success') => {
@@ -32,7 +33,7 @@ const triggerHaptic = (type: 'light' | 'medium' | 'success') => {
     }
   } catch (error) {
     // Haptics not available, silently continue
-    console.log('[DawnRitual] Haptics not available');
+    logger.log('[DawnRitual] Haptics not available');
   }
 };
 
@@ -158,7 +159,7 @@ export const DawnRitual: React.FC<DawnRitualProps> = ({
         onComplete(result.transactionsSynced);
       }
     } catch (error) {
-      console.error('[DawnRitual] Error:', error);
+      logger.error('[DawnRitual] Error:', error);
       // Still complete even if sync fails
       if (onComplete) {
         onComplete(0);

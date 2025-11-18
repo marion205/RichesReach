@@ -28,6 +28,7 @@ import { FEATURE_PORTFOLIO_METRICS } from '../config/flags';
 import { isMarketDataHealthy } from '../services/healthService';
 import { mark, PerformanceMarkers } from '../utils/timing';
 import { API_BASE } from '../config/api';
+import logger from '../utils/logger';
 import AuraHalo from '../components/AuraHalo';
 import CalmGoalNudge from '../components/CalmGoalNudge';
 import { recognizeCalmGoalIntent } from '../services/VoiceCoachIntent';
@@ -322,7 +323,7 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
       
       const checkMarketDataHealth = async () => {
         if (!FEATURE_PORTFOLIO_METRICS) {
-          console.log('[HomeScreen] Portfolio metrics feature disabled');
+          logger.log('[HomeScreen] Portfolio metrics feature disabled');
           return;
         }
         
@@ -335,7 +336,7 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
             setMarketDataHealth(health);
             
             if (health.isHealthy) {
-              console.log('[HomeScreen] Market data is healthy, enabling portfolio metrics');
+              logger.log('[HomeScreen] Market data is healthy, enabling portfolio metrics');
               // Small delay to let UI settle after navigation
               setTimeout(() => {
                 if (active) {
@@ -343,14 +344,14 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
                 }
               }, 300);
             } else {
-              console.warn('[HomeScreen] Market data is unhealthy:', health.error);
+              logger.warn('[HomeScreen] Market data is unhealthy:', health.error);
               setCanQueryMetrics(false);
             }
           }
           
           stop();
         } catch (error) {
-          console.error('[HomeScreen] Error checking market data health:', error);
+          logger.error('[HomeScreen] Error checking market data health:', error);
           if (active) {
             setCanQueryMetrics(false);
           }
@@ -400,7 +401,7 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
     useEffect(() => {
       const off = onHotword(() => {
         const copy = personaCopy(inferPersona({ anxiety: anxiousnessScore, opportunity: 0.5 }));
-        console.log('🎤 "Hey Riches" detected → opening voice assistant', copy);
+        logger.log('🎤 "Hey Riches" detected → opening voice assistant', copy);
         setShowNextMove(true);
       });
       return off;
@@ -416,14 +417,14 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
           const { mlWakeWordService } = await import('../services/MLWakeWordService');
           const started = await mlWakeWordService.start();
           if (started) {
-            console.log('✅ "Hey Riches" wake word detection active (ML-based)');
+            logger.log('✅ "Hey Riches" wake word detection active (ML-based)');
             cleanup = async () => {
               await mlWakeWordService.stop();
             };
             return; // Success with ML service
           }
         } catch (error: any) {
-          console.log('ℹ️ ML wake word not available, trying Whisper-based...');
+          logger.log('ℹ️ ML wake word not available, trying Whisper-based...');
         }
 
         // Priority 2: Whisper-based (uses your server, no API keys)
@@ -431,14 +432,14 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
           const { customWakeWordService } = await import('../services/CustomWakeWordService');
           const started = await customWakeWordService.start();
           if (started) {
-            console.log('✅ "Hey Riches" wake word detection active (Whisper-based)');
+            logger.log('✅ "Hey Riches" wake word detection active (Whisper-based)');
             cleanup = async () => {
               await customWakeWordService.stop();
             };
             return; // Success with custom service
           }
         } catch (error: any) {
-          console.log('ℹ️ Whisper wake word not available, trying Porcupine...');
+          logger.log('ℹ️ Whisper wake word not available, trying Porcupine...');
         }
 
         // Priority 3: Porcupine (requires API key)
@@ -446,16 +447,16 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
           const { porcupineWakeWordService } = await import('../services/PorcupineWakeWordService');
           const started = await porcupineWakeWordService.start();
           if (started) {
-            console.log('✅ "Hey Riches" wake word detection active (Porcupine)');
+            logger.log('✅ "Hey Riches" wake word detection active (Porcupine)');
             cleanup = async () => {
               await porcupineWakeWordService.stop();
               await porcupineWakeWordService.release();
             };
           } else {
-            console.log('ℹ️ Wake word detection not available');
+            logger.log('ℹ️ Wake word detection not available');
           }
         } catch (error: any) {
-          console.log('ℹ️ Wake word detection not available:', error.message);
+          logger.log('ℹ️ Wake word detection not available:', error.message);
         }
       };
 
@@ -525,7 +526,7 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
           const profile = await svc.getProfile();
           if (mounted) setUserProfile(profile);
         } catch (e) {
-          console.warn('Profile load error', e);
+          logger.warn('Profile load error', e);
         } finally {
           if (mounted) setProfileLoading(false);
         }
@@ -541,7 +542,7 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
           const snap = await RealTimePortfolioService.getPortfolioData();
           if (mounted && snap) setRealPortfolio(snap);
         } catch (e) {
-          console.warn('Real portfolio snapshot error', e);
+          logger.warn('Real portfolio snapshot error', e);
         }
       })();
       return () => { mounted = false; };
@@ -646,7 +647,7 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
         const response = await Promise.race([apiPromise, timeoutPromise]);
         return response?.answer || response?.response || 'I hit a snag processing that—mind trying again?';
       } catch (error: any) {
-        console.log('AI query timeout or error, using fallback:', error.message);
+        logger.log('AI query timeout or error, using fallback:', error.message);
         // Provide helpful generic fallback
         return 'I\'m here to help with investment strategies, portfolio analysis, budgeting, retirement planning, and market insights. Could you rephrase your question or ask about a specific topic like "How do I start investing?" or "What is dollar-cost averaging?"';
       }
@@ -654,7 +655,7 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
   
     /* ---------- helpers ---------- */
     const go = useCallback((screen: string, params?: any) => {
-      console.log('HomeScreen.go() called with:', screen, params);
+      logger.log('HomeScreen.go() called with:', screen, params);
       
       // Screens that are in InvestStack need nested navigation
       const investStackScreens = [
@@ -676,7 +677,7 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
           globalNavigate('Invest', { screen, params });
           return;
         } catch (error) {
-          console.error('HomeScreen.go() nested navigation error:', error);
+          logger.error('HomeScreen.go() nested navigation error:', error);
         }
       }
       
@@ -688,7 +689,7 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
         try {
           globalNavigate(screen as any, params);
         } catch (error) {
-          console.error('HomeScreen.go() globalNavigate error:', error);
+          logger.error('HomeScreen.go() globalNavigate error:', error);
         }
       }
 
@@ -696,7 +697,7 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
         try {
           (navigateTo as any)(screen, params);
         } catch (error) {
-          console.error('HomeScreen.go() navigateTo error:', error);
+          logger.error('HomeScreen.go() navigateTo error:', error);
         }
       }
     }, [navigateTo, navigation]);
@@ -784,7 +785,7 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
           RealTimePortfolioService.getPortfolioData().then(s => s && setRealPortfolio(s)),
         ]);
       } catch (e) {
-        console.warn('Refresh error', e);
+        logger.warn('Refresh error', e);
       } finally {
         setRefreshing(false);
       }
@@ -922,7 +923,7 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
                 try {
                   navigation.navigate('camera-test' as never);
                 } catch (error) {
-                  console.error('Navigation error:', error);
+                  logger.error('Navigation error:', error);
                   globalNavigate('camera-test' as any);
                 }
               }}
@@ -951,7 +952,7 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
             <View style={styles.learningCards}>
               {/* Breath Check card */}
               <BreathCheck onSuggest={() => {
-                console.log('BreathCheck: Starting breathing exercise');
+                logger.log('BreathCheck: Starting breathing exercise');
                 setShowBreathCheck(true);
               }} />
 
@@ -968,11 +969,11 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
 
               {/* Fireside quick entry */}
               <TouchableOpacity style={styles.learningCard} onPress={() => {
-                console.log('Fireside Exchanges pressed');
+                logger.log('Fireside Exchanges pressed');
                 try {
                   navigation.navigate('fireside' as never);
                 } catch (error) {
-                  console.error('Navigation error:', error);
+                  logger.error('Navigation error:', error);
                   globalNavigate('fireside');
                 }
               }}>
@@ -999,11 +1000,11 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
                 </TouchableOpacity>
               )}
               <TouchableOpacity style={styles.learningCard} onPress={() => {
-                console.log('Why Now pressed');
+                logger.log('Why Now pressed');
                 try {
                   navigation.navigate('oracle-insights' as never);
                 } catch (error) {
-                  console.error('Navigation error:', error);
+                  logger.error('Navigation error:', error);
                   globalNavigate('oracle-insights');
                 }
               }}>
@@ -1019,11 +1020,11 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
               </TouchableOpacity>
               
               <TouchableOpacity style={styles.learningCard} onPress={() => {
-                console.log('Ask pressed');
+                logger.log('Ask pressed');
                 try {
                   navigation.navigate('voice-ai' as never);
                 } catch (error) {
-                  console.error('Navigation error:', error);
+                  logger.error('Navigation error:', error);
                   globalNavigate('voice-ai');
                 }
               }}>
@@ -1039,11 +1040,11 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
               </TouchableOpacity>
               
               <TouchableOpacity style={styles.learningCard} onPress={() => {
-                console.log('Blockchain Integration pressed');
+                logger.log('Blockchain Integration pressed');
                 try {
                   navigation.navigate('blockchain-integration' as never);
                 } catch (error) {
-                  console.error('Navigation error:', error);
+                  logger.error('Navigation error:', error);
                   globalNavigate('blockchain-integration');
                 }
               }}>
@@ -1341,7 +1342,7 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
           onClose={() => setShowCalmSheet(false)}
           onConfirm={(plan) => {
             setShowCalmSheet(false);
-            console.log('Calm goal confirmed', plan);
+            logger.log('Calm goal confirmed', plan);
             setShowLiquidityChip(true);
             // Navigate: Home -> Invest tab -> Portfolio
             try {
@@ -1361,7 +1362,7 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
           onComplete={(suggestion) => {
             setShowBreathCheck(false);
             if (suggestion) {
-              console.log('BreathCheck completed with suggestion:', suggestion);
+              logger.log('BreathCheck completed with suggestion:', suggestion);
               setShowNextMove(true);
             }
           }}

@@ -12,7 +12,9 @@ import {
   Linking,
   Alert,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { alpacaAnalytics } from '../services/alpacaAnalyticsService';
+import logger from '../utils/logger';
 
 interface AlpacaConnectModalProps {
   visible: boolean;
@@ -42,15 +44,10 @@ export const AlpacaConnectModal: React.FC<AlpacaConnectModalProps> = ({
     alpacaAnalytics.track('connect_signup_redirected', { signupSource: 'modal' });
     
     // Store timestamp to detect when user returns
-    try {
-      // Use AsyncStorage to track signup start time
-      const { AsyncStorage } = require('@react-native-async-storage/async-storage');
-      AsyncStorage.setItem('alpaca_signup_started', Date.now().toString()).catch(() => {
-        // Silently fail if AsyncStorage not available
-      });
-    } catch (e) {
-      // AsyncStorage not available, continue anyway
-    }
+    AsyncStorage.setItem('alpaca_signup_started', Date.now().toString()).catch((error) => {
+      logger.error('Failed to store signup timestamp:', error);
+      // Continue anyway - this is not critical
+    });
     
     // Open Alpaca signup page
     Linking.openURL('https://alpaca.markets/signup')
@@ -72,7 +69,7 @@ export const AlpacaConnectModal: React.FC<AlpacaConnectModalProps> = ({
         );
       })
       .catch((err) => {
-        console.error('Failed to open Alpaca signup:', err);
+        logger.error('Failed to open Alpaca signup:', err);
         alpacaAnalytics.track('connect_oauth_error', { error: 'signup_link_failed', errorCode: 'LINKING_ERROR' });
         Alert.alert('Error', 'Could not open Alpaca signup page. Please visit alpaca.markets/signup manually.');
       });

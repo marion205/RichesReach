@@ -11,6 +11,7 @@ import BankAccountScreen from '../features/user/screens/BankAccountScreen';
 import { setNavigator } from './NavigationService';
 import GestureNavigation from '../components/GestureNavigation';
 import { TID } from '../testIDs';
+import logger from '../utils/logger';
 
 // Existing screens (paths reflect current project structure)
 import HomeScreen from '../navigation/HomeScreen';
@@ -86,7 +87,7 @@ function SubscriptionScreenWrapper(props: any) {
         try {
           props.navigation.navigate(screen as never);
         } catch (error) {
-          console.log('Navigation error:', error);
+          logger.error('Navigation error:', error);
         }
       }}
     />
@@ -96,8 +97,8 @@ function SubscriptionScreenWrapper(props: any) {
 function SecurityFortressWrapper(props: any) {
   return (
     <SecurityFortress
-      onBiometricSetup={() => console.log('Biometric setup requested')}
-      onSecurityEventPress={(event) => console.log('Security event:', event)}
+      onBiometricSetup={() => logger.log('Biometric setup requested')}
+      onSecurityEventPress={(event) => logger.log('Security event:', event)}
     />
   );
 }
@@ -105,8 +106,8 @@ function SecurityFortressWrapper(props: any) {
 function ViralGrowthWrapper(props: any) {
   return (
     <ViralGrowthSystem
-      onRewardClaimed={(reward) => console.log('Reward claimed:', reward)}
-      onChallengeJoined={(challenge) => console.log('Challenge joined:', challenge)}
+      onRewardClaimed={(reward) => logger.log('Reward claimed:', reward)}
+      onChallengeJoined={(challenge) => logger.log('Challenge joined:', challenge)}
     />
   );
 }
@@ -115,7 +116,7 @@ function OnboardingScreenWrapper(props: any) {
   return (
     <OnboardingScreen
       onComplete={(profile) => {
-        console.log('Onboarding completed:', profile);
+        logger.log('Onboarding completed:', profile);
         props.navigation.goBack();
       }}
     />
@@ -381,7 +382,7 @@ export default function AppNavigator() {
             }}
             listeners={{
               tabPress: (e) => {
-                console.log('Home tab pressed');
+                logger.log('Home tab pressed');
               },
             }}
           />
@@ -402,7 +403,7 @@ export default function AppNavigator() {
             }}
             listeners={({ navigation }) => ({
               tabPress: (e) => {
-                console.log('Invest tab pressed');
+                logger.log('Invest tab pressed');
                 // Prevent default navigation and ensure we go to InvestMain
                 const state = navigation.getState();
                 const investRoute = state?.routes?.find((r: any) => r.name === 'Invest');
@@ -437,7 +438,7 @@ export default function AppNavigator() {
             }}
             listeners={{
               tabPress: (e) => {
-                console.log('Learn tab pressed');
+                logger.log('Learn tab pressed');
               },
             }}
           />
@@ -458,7 +459,7 @@ export default function AppNavigator() {
             }}
             listeners={{
               tabPress: (e) => {
-                console.log('Community tab pressed');
+                logger.log('Community tab pressed');
               },
             }}
           />

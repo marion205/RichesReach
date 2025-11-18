@@ -34,9 +34,10 @@ try {
     mediaDevices = webrtc.mediaDevices;
   }
 } catch (e) {
-  console.warn('WebRTC not available in Expo Go');
+  // WebRTC not available in Expo Go - this is expected
 }
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import logger from '../utils/logger';
 
 const { width, height } = Dimensions.get('window');
 
@@ -139,7 +140,7 @@ const MediasoupLiveStreaming: React.FC<MediasoupLiveStreamingProps> = ({
         await startHostStreaming();
       }
     } catch (error) {
-      console.error('Error initializing streaming:', error);
+      logger.error('Error initializing streaming:', error);
       Alert.alert('Error', 'Failed to initialize live streaming');
     }
   }, [isHost, circleId]);
@@ -166,7 +167,7 @@ const MediasoupLiveStreaming: React.FC<MediasoupLiveStreamingProps> = ({
       }
       return true;
     } catch (err) {
-      console.error('Permission request error:', err);
+      logger.error('Permission request error:', err);
       return false;
     }
   };
@@ -199,7 +200,7 @@ const MediasoupLiveStreaming: React.FC<MediasoupLiveStreamingProps> = ({
         return;
       }
 
-      console.log('🎥 Requesting front camera stream...');
+      logger.log('🎥 Requesting front camera stream...');
 
       // Get user media with front camera
       const stream = await mediaDevices.getUserMedia({
@@ -216,7 +217,7 @@ const MediasoupLiveStreaming: React.FC<MediasoupLiveStreamingProps> = ({
         }
       });
       
-      console.log('✅ Stream acquired:', {
+      logger.log('✅ Stream acquired:', {
         hasStream: !!stream,
         streamURL: stream?.toURL(),
         tracks: stream?.getTracks().length,
@@ -231,9 +232,9 @@ const MediasoupLiveStreaming: React.FC<MediasoupLiveStreamingProps> = ({
         socketRef.current.emit('create-transport', { direction: 'send', circleId });
       }
 
-      console.log('🎥 Host streaming started with front camera');
+      logger.log('🎥 Host streaming started with front camera');
     } catch (error: any) {
-      console.error('❌ Error starting host stream:', error);
+      logger.error('❌ Error starting host stream:', error);
       const errorMsg = error?.message || 'Unknown error';
       
       Alert.alert(
@@ -252,7 +253,7 @@ const MediasoupLiveStreaming: React.FC<MediasoupLiveStreamingProps> = ({
       try {
         await handleTransportCreated(id, iceParameters, iceCandidates, dtlsParameters, direction);
       } catch (error) {
-        console.error('Error handling transport created:', error);
+        logger.error('Error handling transport created:', error);
       }
     });
 
@@ -261,7 +262,7 @@ const MediasoupLiveStreaming: React.FC<MediasoupLiveStreamingProps> = ({
       try {
         await handleNewProducer(producerId, kind, userId, userName);
       } catch (error) {
-        console.error('Error handling new producer:', error);
+        logger.error('Error handling new producer:', error);
       }
     });
 
@@ -270,20 +271,20 @@ const MediasoupLiveStreaming: React.FC<MediasoupLiveStreamingProps> = ({
       try {
         await handleConsumerCreated(id, producerId, kind, rtpParameters);
       } catch (error) {
-        console.error('Error handling consumer created:', error);
+        logger.error('Error handling consumer created:', error);
       }
     });
 
     // Viewer joined
     socketRef.current.on('viewer-joined', ({ userId, userName, viewerCount }) => {
       setViewerCount(viewerCount);
-      console.log(`👀 ${userName} joined (${viewerCount} viewers)`);
+      logger.log(`👀 ${userName} joined (${viewerCount} viewers)`);
     });
 
     // Viewer left
     socketRef.current.on('viewer-left', ({ userId, userName, viewerCount }) => {
       setViewerCount(viewerCount);
-      console.log(`👋 ${userName} left (${viewerCount} viewers)`);
+      logger.log(`👋 ${userName} left (${viewerCount} viewers)`);
     });
 
     // Viewer count update
@@ -308,24 +309,24 @@ const MediasoupLiveStreaming: React.FC<MediasoupLiveStreamingProps> = ({
 
     // Host joined
     socketRef.current.on('host-joined', ({ hostId, hostName }) => {
-      console.log(`🎥 Host ${hostName} joined`);
+      logger.log(`🎥 Host ${hostName} joined`);
     });
 
     // Producer closed
     socketRef.current.on('producer-closed', ({ producerId }) => {
-      console.log(`📹 Producer ${producerId} closed`);
+      logger.log(`📹 Producer ${producerId} closed`);
       // Handle producer cleanup if needed
     });
 
     // Error handling
     socketRef.current.on('error', ({ message }) => {
-      console.error('Socket error:', message);
+      logger.error('Socket error:', message);
       Alert.alert('Streaming Error', message);
     });
 
     // Disconnect
     socketRef.current.on('disconnect', () => {
-      console.log('🔌 Disconnected from SFU server');
+      logger.log('🔌 Disconnected from SFU server');
     });
   }, []);
 
@@ -368,7 +369,7 @@ const MediasoupLiveStreaming: React.FC<MediasoupLiveStreamingProps> = ({
         await produceStream(id);
       }
 
-      console.log(`🚚 Transport ${id} created and connected`);
+      logger.log(`🚚 Transport ${id} created and connected`);
     } catch (error) {
       console.error('Error handling transport created:', error);
     }
@@ -417,7 +418,7 @@ const MediasoupLiveStreaming: React.FC<MediasoupLiveStreamingProps> = ({
         circleId
       });
 
-      console.log('📹 Stream produced');
+      logger.log('📹 Stream produced');
     } catch (error) {
       console.error('Error producing stream:', error);
     }
@@ -441,7 +442,7 @@ const MediasoupLiveStreaming: React.FC<MediasoupLiveStreamingProps> = ({
         producerId
       });
 
-      console.log(`👀 Consuming producer ${producerId} from ${userName}`);
+      logger.log(`👀 Consuming producer ${producerId} from ${userName}`);
     } catch (error) {
       console.error('Error handling new producer:', error);
     }
@@ -465,7 +466,7 @@ const MediasoupLiveStreaming: React.FC<MediasoupLiveStreamingProps> = ({
       // Resume consumer
       socketRef.current.emit('resume-consumer', { consumerId: id });
 
-      console.log(`👀 Consumer ${id} created`);
+      logger.log(`👀 Consumer ${id} created`);
     } catch (error) {
       console.error('Error handling consumer created:', error);
     }

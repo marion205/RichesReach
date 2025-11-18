@@ -47,8 +47,9 @@ try {
     mediaDevices = webrtc.mediaDevices;
   }
 } catch (e) {
-  console.warn('WebRTC not available in Expo Go');
+  // WebRTC not available in Expo Go - this is expected
 }
+import logger from '../utils/logger';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -273,7 +274,7 @@ export default function RichesLiveStreaming({
 
   // Error handling function
   const handleError = (error: Error, context: string, fallbackAction?: () => void, canRetry = true) => {
-    console.error(`[${context}] Error:`, error);
+    logger.error(`[${context}] Error:`, error);
     const errorMsg = `${context}: ${error.message || 'An unexpected error occurred'}`;
     setError(errorMsg);
     
@@ -300,7 +301,7 @@ export default function RichesLiveStreaming({
         setIsReconnecting(false);
         if (fallbackAction) fallbackAction();
         // Simulate reconnection
-        console.log('🔄 Attempting reconnection...');
+        logger.log('🔄 Attempting reconnection...');
       }, delay);
     }
   };
@@ -310,7 +311,7 @@ export default function RichesLiveStreaming({
     setError(null);
     setRetryCount(prev => prev + 1);
     if (fallbackAction) fallbackAction();
-    console.log('🔄 Retrying connection...');
+    logger.log('🔄 Retrying connection...');
   };
 
   const requestAndroidPermissions = async (): Promise<boolean> => {
@@ -335,7 +336,7 @@ export default function RichesLiveStreaming({
       }
       return true;
     } catch (err) {
-      console.error('Permission request error:', err);
+      logger.error('Permission request error:', err);
       return false;
     }
   };
@@ -401,7 +402,7 @@ export default function RichesLiveStreaming({
       setIsStreaming(true);
       setError(null);
     } catch (error: any) {
-      console.error('Error starting live stream:', error);
+      logger.error('Error starting live stream:', error);
       const errorMsg = error?.message || 'Unknown error';
       setError(`Failed to start camera: ${errorMsg}`);
       handleError(error as Error, 'Start Stream Failed');
@@ -410,7 +411,7 @@ export default function RichesLiveStreaming({
 
   const joinLiveStream = () => {
     try {
-      console.log('📺 Joining live stream for circle:', circleName);
+      logger.log('📺 Joining live stream for circle:', circleName);
       // Simulate potential error
       if (Math.random() < 0.1) { // 10% chance of error for demo
         throw new Error('Stream not found');
@@ -432,7 +433,7 @@ export default function RichesLiveStreaming({
       setError(null);
       onClose();
     } catch (error) {
-      console.error('End stream error:', error);
+      logger.error('End stream error:', error);
     }
   };
 
