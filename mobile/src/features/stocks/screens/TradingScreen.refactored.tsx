@@ -8,7 +8,7 @@ import {
   ScrollView,
   RefreshControl,
 } from 'react-native';
-import { useQuery, useMutation, useApolloClient } from '@apollo/client';
+import { useQuery, useMutation } from '@apollo/client';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import { Alert } from 'react-native';
@@ -47,7 +47,6 @@ const C = {
 
 const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void }) => {
   const navigation = useNavigation<any>();
-  const apolloClient = useApolloClient();
   const [activeTab, setActiveTab] = useState<'overview' | 'orders'>('overview');
   const [refreshing, setRefreshing] = useState(false);
   const [showOrderModal, setShowOrderModal] = useState(false);
@@ -98,108 +97,47 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
 
   // Quote query for order modal
   const orderForm = useOrderForm();
-  const [quoteSymbol, setQuoteSymbol] = useState<string>('');
-  
   const {
     data: quoteData,
     loading: quoteLoading,
     refetch: refetchQuote,
-    error: quoteError,
   } = useQuery(GET_TRADING_QUOTE, {
-    variables: { symbol: quoteSymbol || 'AAPL' },
-    skip: !quoteSymbol, // Only run when we have a symbol
+    variables: { symbol: orderForm.symbol.toUpperCase() || 'AAPL' },
+    skip: !orderForm.symbol,
     errorPolicy: 'all',
-    fetchPolicy: 'cache-first', // Use cache first for faster response
-    notifyOnNetworkStatusChange: true,
-    // Add timeout handling - if query takes too long, show mock data
-    context: {
-      timeout: 5000, // 5 second timeout
-    },
-    onCompleted: (data) => {
-      if (__DEV__) {
-        console.log('✅ TradingQuote query completed:', JSON.stringify(data, null, 2));
-        console.log('📊 TradingQuote data structure:', {
-          hasTradingQuote: !!data?.tradingQuote,
-          tradingQuote: data?.tradingQuote,
-          keys: data ? Object.keys(data) : [],
-        });
-      }
-    },
-    onError: (error) => {
-      if (__DEV__) {
-        console.warn('⚠️ TradingQuote query error:', error);
-        console.warn('⚠️ Error details:', {
-          message: error?.message,
-          graphQLErrors: error?.graphQLErrors,
-          networkError: error?.networkError,
-        });
-      }
-    },
+    fetchPolicy: 'cache-and-network',
   });
 
   const quoteTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isInitialLoadRef = useRef(true);
 
-  // Update quote symbol when form symbol changes (debounced)
   useEffect(() => {
-    if (!showOrderModal) return; // Only fetch when modal is open
-    
-    const symbol = orderForm.symbol.trim().toUpperCase();
-    
-    if (!symbol) {
-      setQuoteSymbol('');
+    if (!orderForm.symbol) return;
+
+    if (isInitialLoadRef.current) {
+      isInitialLoadRef.current = false;
+      refetchQuote?.({ symbol: orderForm.symbol.toUpperCase() });
       return;
     }
 
-    // Clear any existing timer
     if (quoteTimerRef.current) clearTimeout(quoteTimerRef.current);
-    
-    // Immediate fetch if symbol just appeared, otherwise debounce
-    const shouldFetchImmediately = quoteSymbol === '' && symbol.length >= 1;
-    
-    if (shouldFetchImmediately) {
-      setQuoteSymbol(symbol);
-      // Small delay to ensure state update
-      setTimeout(() => {
-        refetchQuote?.({ symbol });
-      }, 50);
-    } else {
-      // Debounce for typing
-      quoteTimerRef.current = setTimeout(() => {
-        setQuoteSymbol(symbol);
-        refetchQuote?.({ symbol });
-      }, 300);
-    }
+    quoteTimerRef.current = setTimeout(() => {
+      refetchQuote?.({ symbol: orderForm.symbol.toUpperCase() });
+    }, 300);
 
     return () => {
       if (quoteTimerRef.current) clearTimeout(quoteTimerRef.current);
     };
-  }, [orderForm.symbol, showOrderModal, refetchQuote, quoteSymbol]);
+  }, [orderForm.symbol, refetchQuote]);
 
-  // Reset when modal closes
   useEffect(() => {
-    if (!showOrderModal) {
-      setQuoteSymbol('');
-      if (quoteTimerRef.current) clearTimeout(quoteTimerRef.current);
+    if (showOrderModal) {
+      isInitialLoadRef.current = true;
+      if (orderForm.symbol) {
+        refetchQuote?.({ symbol: orderForm.symbol.toUpperCase() });
+      }
     }
-  }, [showOrderModal]);
-
-  // Initialize Polygon WebSocket for real-time prices when modal opens
-  useEffect(() => {
-    if (showOrderModal && orderForm.symbol) {
-      // Import dynamically to avoid loading if not needed
-      import('../../../services/polygonRealtimeService').then(({ initPolygonStream }) => {
-        const symbol = orderForm.symbol.trim().toUpperCase();
-        if (symbol) {
-          initPolygonStream(apolloClient, [symbol]);
-        }
-      }).catch((error) => {
-        // Silently fail if Polygon service not available (e.g., missing API key)
-        if (__DEV__) {
-          console.warn('⚠️ Polygon WebSocket not available:', error);
-        }
-      });
-    }
-  }, [showOrderModal, orderForm.symbol, apolloClient]);
+  }, [showOrderModal, orderForm.symbol, refetchQuote]);
 
   // Timeout handling for loading states
   const [accountLoadingTimeout, setAccountLoadingTimeout] = useState(false);
@@ -379,7 +317,7 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
     });
   };
 
-  const handleCancelOrder = useCallback(async (orderId: string) => {
+  const handleCancelOrder = async (orderId: string) => {
     try {
       const res = await cancelOrder({ variables: { orderId } });
       if (res?.data?.cancelOrder?.success) {
@@ -392,12 +330,12 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
     } catch (e: any) {
       Alert.alert('Cancel Failed', e?.message || 'Please try again.');
     }
-  }, [cancelOrder, refetchOrders, refetchAlpacaOrders]);
+  };
 
   /* ------------------------------- TABS -------------------------------- */
 
-  const ListHeaderComponent = useMemo(
-    () => (
+  const renderOverview = () => {
+    const ListHeaderComponent = () => (
       <>
         <AccountSummaryCard
           account={account}
@@ -434,11 +372,8 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
           <Text style={styles.coachMeta}>Intraday • Signals</Text>
         </TouchableOpacity>
       </>
-    ),
-    [account, alpacaAccount, accountLoading, accountLoadingTimeout, navigateTo]
-  );
+    );
 
-  const renderOverview = () => {
     const ListFooterComponent = () => <View style={{ height: 16 }} />;
 
     return (
@@ -447,7 +382,7 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         showsVerticalScrollIndicator={false}
       >
-        {ListHeaderComponent}
+        <ListHeaderComponent />
         <PositionsList
           positions={positions}
           loading={positionsLoading && !positionsLoadingTimeout}
@@ -459,10 +394,11 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
     );
   };
 
-  const renderOrders = useCallback(() => {
+  const renderOrders = () => {
+    const allOrders = orders;
     return (
       <OrdersList
-        orders={orders}
+        orders={allOrders}
         loading={ordersLoading || alpacaOrdersLoading}
         filter={orderFilter}
         onFilterChange={setOrderFilter}
@@ -470,7 +406,7 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
         onCancelOrder={handleCancelOrder}
       />
     );
-  }, [orders, ordersLoading, alpacaOrdersLoading, orderFilter, onRefresh, handleCancelOrder]);
+  };
 
   const handleNavigateToOnboarding = () => {
     try {

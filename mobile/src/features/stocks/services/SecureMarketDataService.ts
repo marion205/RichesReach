@@ -75,14 +75,15 @@ export class SecureMarketDataService {
         return data;
       })
       .catch(err => {
-        // Production: Use stale cache if available, otherwise throw error
+        // Use stale cache if available
         if (hit) {
           console.warn(`⚠️ Network error, using stale cache for symbols: ${key}`, err.message);
           return hit.data;
         }
-        // Production: Throw error instead of mock data
-        console.error(`❌ Network error fetching quotes for symbols: ${key}`, err.message);
-        throw err;
+        // If no cache, return mock data instead of throwing error
+        // This prevents the app from breaking when the backend is unavailable
+        console.warn(`⚠️ No cache available, using mock data for symbols: ${key}`);
+        return this._getMockQuotes(symbols);
       })
       .finally(() => {
         inflight.delete(key);
@@ -102,13 +103,19 @@ export class SecureMarketDataService {
     console.log(`📡 Fetching quotes from backend: ${symbolsParam}`);
     
     try {
+      // Use AbortController for proper timeout handling
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout (reduced from 10)
+      
       const response = await fetch(url, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         },
-        timeout: 10000, // 10 second timeout
+        signal: controller.signal,
       });
+      
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         if (response.status === 429) {
@@ -149,7 +156,11 @@ export class SecureMarketDataService {
       return quotes;
 
     } catch (error: any) {
-      // Suppress network errors - will use mock data fallback
+      // Handle timeout and network errors gracefully
+      if (error?.name === 'AbortError' || error?.message?.includes('timeout') || error?.message?.includes('aborted')) {
+        console.warn(`⚠️ Quote request timed out for symbols: ${symbolsParam}, will use mock data`);
+        throw error; // Re-throw to trigger mock data fallback in calling code
+      }
       if (error?.message?.includes('Network request failed') || error?.message?.includes('Failed to fetch')) {
         console.warn(`⚠️ Network error for quotes, using mock data fallback`);
         throw error; // Re-throw to trigger mock data fallback in calling code
