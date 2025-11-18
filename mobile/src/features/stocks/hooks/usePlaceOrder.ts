@@ -103,12 +103,19 @@ export const usePlaceOrder = () => {
         // Refresh data
         await Promise.all(refetchQueries.map((refetch) => refetch()));
       } else {
-        Alert.alert('Order Failed', message || 'Could not place order. Please try again.');
+        const friendlyMessage = getUserFriendlyError(
+          new Error(message || 'Order placement failed'),
+          { operation: 'placing order', errorType: 'server' }
+        );
+        Alert.alert('Order Failed', friendlyMessage);
       }
     } catch (e: unknown) {
-      const errorMessage = e instanceof Error ? e.message : 'Could not place order. Please try again.';
+      const friendlyMessage = getUserFriendlyError(e, {
+        operation: 'placing order',
+        details: e instanceof Error ? e.message : undefined,
+      });
       logger.error('Order placement failed:', e);
-      Alert.alert('Order Failed', errorMessage);
+      Alert.alert('Order Failed', friendlyMessage);
     } finally {
       setIsPlacing(false);
     }

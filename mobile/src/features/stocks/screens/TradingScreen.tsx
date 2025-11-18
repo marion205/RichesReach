@@ -35,6 +35,7 @@ import {
 } from '../../../graphql/tradingQueries';
 import { AlpacaPosition, NavigationType } from '../types';
 import logger from '../../../utils/logger';
+import { getUserFriendlyError } from '../../../utils/errorMessages';
 
 const C = {
   bg: '#F5F6FA',
@@ -398,11 +399,17 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
         refetchOrders?.();
         refetchAlpacaOrders?.();
       } else {
-        Alert.alert('Cancel Failed', res?.data?.cancelOrder?.message || 'Please try again.');
+        const friendlyMessage = getUserFriendlyError(
+          new Error(res?.data?.cancelOrder?.message || 'Cancel failed'),
+          { operation: 'cancelling order', errorType: 'server' }
+        );
+        Alert.alert('Cancel Failed', friendlyMessage);
       }
     } catch (e: unknown) {
-      const errorMessage = e instanceof Error ? e.message : 'Please try again.';
-      Alert.alert('Cancel Failed', errorMessage);
+      const friendlyMessage = getUserFriendlyError(e, {
+        operation: 'cancelling order',
+      });
+      Alert.alert('Cancel Failed', friendlyMessage);
     }
   }, [cancelOrder, refetchOrders, refetchAlpacaOrders]);
 
