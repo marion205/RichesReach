@@ -131,14 +131,12 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
       });
     },
     onError: (error) => {
-      if (__DEV__) {
-        console.warn('⚠️ TradingQuote query error:', error);
-        console.warn('⚠️ Error details:', {
-          message: error?.message,
-          graphQLErrors: error?.graphQLErrors,
-          networkError: error?.networkError,
-        });
-      }
+      logger.warn('⚠️ TradingQuote query error:', error);
+      logger.warn('⚠️ Error details:', {
+        message: error?.message,
+        graphQLErrors: error?.graphQLErrors,
+        networkError: error?.networkError,
+      });
     },
   });
 
