@@ -115,7 +115,12 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
     context: {
       timeout: 5000, // 5 second timeout
     },
-    onCompleted: (data) => {
+    onCompleted: async (data) => {
+      // Cache quote for offline access
+      if (data?.tradingQuote && quoteSymbol) {
+        const { tradingOfflineCache } = await import('../services/TradingOfflineCache');
+        await tradingOfflineCache.cacheQuote(quoteSymbol, data.tradingQuote);
+      }
       if (__DEV__) {
         console.log('✅ TradingQuote query completed:', JSON.stringify(data, null, 2));
         console.log('📊 TradingQuote data structure:', {
