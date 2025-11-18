@@ -29,6 +29,7 @@ import { getStockComprehensive, StockData } from '../../../services/stockDataSer
 // ✅ Optimized: Use lodash-es for tree-shaking (only imports debounce, not entire library)
 import { debounce } from 'lodash-es';
 import { StockMomentsIntegration } from './StockMomentsIntegration';
+import logger from '../../../utils/logger';
 
 const { width } = Dimensions.get('window');
 

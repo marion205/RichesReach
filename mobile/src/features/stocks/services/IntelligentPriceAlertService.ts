@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 // Use Expo Go compatible notification service to avoid crashes
 import expoGoCompatibleNotificationService from '../../ExpoGoCompatibleNotificationService';
+import logger from '../../../utils/logger';
 export interface StockPrice {
 symbol: string;
 price: number;
@@ -76,7 +77,7 @@ if (alertsString) {
 this.alerts = JSON.parse(alertsString);
 }
 } catch (error) {
-console.error('Error loading intelligent alerts:', error);
+logger.error('Error loading intelligent alerts:', error);
 this.alerts = [];
 }
 }
@@ -90,7 +91,7 @@ if (profileString) {
 this.userProfile = JSON.parse(profileString);
 }
 } catch (error) {
-console.error('Error loading user profile:', error);
+logger.error('Error loading user profile:', error);
 this.userProfile = null;
 }
 }
@@ -101,7 +102,7 @@ private async saveAlerts(): Promise<void> {
 try {
 await AsyncStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.alerts));
 } catch (error) {
-console.error('Error saving intelligent alerts:', error);
+logger.error('Error saving intelligent alerts:', error);
 }
 }
 /**
