@@ -3,7 +3,7 @@ export { default as StockCard } from './common/StockCard';
 export { default as WatchlistCard } from './common/WatchlistCard';
 export { default as BasicRiskMetrics } from './common/BasicRiskMetrics';
 export { default as EducationalTooltip } from './common/EducationalTooltip';
-export { default as ErrorBoundary } from './common/ErrorBoundary';
+export { default as ErrorBoundary } from './ErrorBoundary';
 export { default as LoadingErrorState } from './common/LoadingErrorState';
 export { default as Shimmer } from './common/Shimmer';
 export { default as TopHeader } from './common/TopHeader';

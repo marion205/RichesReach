@@ -1310,6 +1310,10 @@ async def graphql_endpoint(request: Request):
             operation_name == "Chart" or
             "stockChartData" in query_str
         )
+        is_trading_quote_query = (
+            operation_name == "GetTradingQuote" or
+            "tradingQuote" in query_str
+        )
         is_crypto_portfolio_query = (
             operation_name == "GetCryptoPortfolio" or
             "cryptoPortfolio" in query_str
@@ -1339,7 +1343,7 @@ async def graphql_endpoint(request: Request):
             "aiRecommendations" in query_str
         )
         
-        print(f"🔍 Handler detection: myWatchlist={is_my_watchlist_query}, addToWatchlist={is_add_to_watchlist_mutation}, removeFromWatchlist={is_remove_from_watchlist_mutation}, me={is_me_query}, researchHub={is_research_hub_query}, stockChartData={is_stock_chart_data_query}, cryptoPortfolio={is_crypto_portfolio_query}, cryptoAnalytics={is_crypto_analytics_query}, cryptoMlSignal={is_crypto_ml_signal_query}, generateMlPrediction={is_generate_ml_prediction_mutation}, cryptoRecommendations={is_crypto_recommendations_query}, supportedCurrencies={is_supported_currencies_query}, aiRecommendations={is_ai_recommendations_query}")
+        print(f"🔍 Handler detection: myWatchlist={is_my_watchlist_query}, addToWatchlist={is_add_to_watchlist_mutation}, removeFromWatchlist={is_remove_from_watchlist_mutation}, me={is_me_query}, researchHub={is_research_hub_query}, stockChartData={is_stock_chart_data_query}, tradingQuote={is_trading_quote_query}, cryptoPortfolio={is_crypto_portfolio_query}, cryptoAnalytics={is_crypto_analytics_query}, cryptoMlSignal={is_crypto_ml_signal_query}, generateMlPrediction={is_generate_ml_prediction_mutation}, cryptoRecommendations={is_crypto_recommendations_query}, supportedCurrencies={is_supported_currencies_query}, aiRecommendations={is_ai_recommendations_query}")
         
         # Handle common GraphQL queries
         # IMPORTANT: Order matters! More specific handlers should come first
@@ -1826,6 +1830,45 @@ async def graphql_endpoint(request: Request):
                 del _chart_data_cache[oldest_key]
             
             return {"data": {"stockChartData": chart_response}}
+        
+        # Handle tradingQuote query (for order placement estimates)
+        elif is_trading_quote_query:
+            symbol = variables.get("symbol", "AAPL").upper()
+            print(f"💹 tradingQuote query for {symbol}")
+            
+            # Try to get real market data
+            quote_data = None
+            if _market_data_service:
+                try:
+                    quote_data = await _market_data_service.get_stock_quote(symbol)
+                except Exception as e:
+                    print(f"⚠️ Error fetching real quote data for {symbol}: {e}")
+            
+            # Use real data if available, otherwise use mock data
+            if quote_data:
+                bid = quote_data.get("bid", quote_data.get("price", 149.50) * 0.997)
+                ask = quote_data.get("ask", quote_data.get("price", 150.00) * 1.003)
+                bid_size = quote_data.get("bidSize", 100)
+                ask_size = quote_data.get("askSize", 200)
+            else:
+                # Mock data fallback (matches the REST endpoint)
+                bid = 149.50
+                ask = 150.00
+                bid_size = 100
+                ask_size = 200
+            
+            return {
+                "data": {
+                    "tradingQuote": {
+                        "symbol": symbol,
+                        "bid": bid,
+                        "ask": ask,
+                        "bidSize": bid_size,
+                        "askSize": ask_size,
+                        "timestamp": datetime.now().isoformat()
+                    }
+                }
+            }
         
         # Handle crypto portfolio query
         elif is_crypto_portfolio_query:

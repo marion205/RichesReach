@@ -15,5 +15,7 @@ urlpatterns = [
     path('graphql-daytrading-test/', GraphQLView.as_view(schema=daytrading_test_schema, graphiql=True), name='graphql-daytrading-test'),
     # Include core app URLs (banking endpoints)
     path('', include('core.banking_urls')),
+    # Alpaca OAuth endpoints
+    path('api/auth/alpaca/', include('core.alpaca_oauth_urls')),
 ]
 

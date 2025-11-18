@@ -94,10 +94,6 @@ export class WebRTCService {
   private onRemoteStream?: (userId: string, stream: MediaStream) => void;
   private onError?: (error: string) => void;
 
-  constructor(config: WebRTCConfig) {
-    this.config = config;
-  }
-
   // Initialize the service
   async initialize(): Promise<void> {
     if (!this.isAvailable) {

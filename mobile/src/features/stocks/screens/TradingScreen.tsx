@@ -115,7 +115,12 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
     context: {
       timeout: 5000, // 5 second timeout
     },
-    onCompleted: (data) => {
+    onCompleted: async (data) => {
+      // Cache quote for offline access
+      if (data?.tradingQuote && quoteSymbol) {
+        const { tradingOfflineCache } = await import('../services/TradingOfflineCache');
+        await tradingOfflineCache.cacheQuote(quoteSymbol, data.tradingQuote);
+      }
       if (__DEV__) {
         console.log('✅ TradingQuote query completed:', JSON.stringify(data, null, 2));
         console.log('📊 TradingQuote data structure:', {
@@ -497,15 +502,17 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
           setShowConnectModal(false);
           alpacaAnalytics.track('connect_modal_shown', { action: 'closed' });
         }}
-        onConnect={() => {
-          alpacaAnalytics.track('connect_has_account_yes');
-          alpacaAnalytics.track('connect_oauth_started');
-          // TODO: Implement OAuth flow once we receive credentials from Alpaca
-          Alert.alert(
-            'OAuth Flow',
-            'OAuth flow will be implemented once we receive credentials from Alpaca.',
-            [{ text: 'OK', onPress: () => setShowConnectModal(false) }]
-          );
+        onConnect={async () => {
+          try {
+            alpacaAnalytics.track('connect_has_account_yes');
+            // Initiate OAuth flow - opens browser to Alpaca
+            const { initiateAlpacaOAuth } = await import('../../../services/alpacaOAuthService');
+            await initiateAlpacaOAuth();
+            setShowConnectModal(false);
+          } catch (error) {
+            console.error('Failed to initiate OAuth:', error);
+            // Error already handled in service
+          }
         }}
       />
       <OnboardingGuard
