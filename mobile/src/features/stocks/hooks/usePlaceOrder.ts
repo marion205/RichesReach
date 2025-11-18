@@ -71,9 +71,9 @@ export const usePlaceOrder = () => {
       }
 
       // Prepare order variables
-      const orderVariables: any = {
+      const orderVariables: OrderVariables = {
         symbol: sym,
-        side: orderSide.toUpperCase(),
+        side: orderSide.toUpperCase() as 'BUY' | 'SELL',
         quantity: qty,
         orderType:
           orderType === 'market' ? 'MARKET' : orderType === 'limit' ? 'LIMIT' : 'STOP',
@@ -84,11 +84,15 @@ export const usePlaceOrder = () => {
         orderVariables.limitPrice = sanitizeFloat(price);
       }
 
-      // Place order through Alpaca
-      const res = await placeStockOrder({ variables: orderVariables });
-      const success = res?.data?.placeStockOrder?.success;
-      const message = res?.data?.placeStockOrder?.message;
-      const orderId = res?.data?.placeStockOrder?.orderId;
+      // Place order through Alpaca with retry logic
+      const res = await retryGraphQLOperation(
+        () => placeStockOrder({ variables: orderVariables }),
+        { maxRetries: 2, initialDelay: 1000 }
+      );
+      const orderResponse = res?.data?.placeStockOrder as PlaceOrderResponse | undefined;
+      const success = orderResponse?.success;
+      const message = orderResponse?.message;
+      const orderId = orderResponse?.orderId;
 
       if (success) {
         Alert.alert('Order Placed Successfully', `${message}\n\nOrder ID: ${orderId}`, [
@@ -99,10 +103,19 @@ export const usePlaceOrder = () => {
         // Refresh data
         await Promise.all(refetchQueries.map((refetch) => refetch()));
       } else {
-        Alert.alert('Order Failed', message || 'Could not place order. Please try again.');
+        const friendlyMessage = getUserFriendlyError(
+          new Error(message || 'Order placement failed'),
+          { operation: 'placing order', errorType: 'server' }
+        );
+        Alert.alert('Order Failed', friendlyMessage);
       }
-    } catch (e: any) {
-      Alert.alert('Order Failed', e?.message || 'Could not place order. Please try again.');
+    } catch (e: unknown) {
+      const friendlyMessage = getUserFriendlyError(e, {
+        operation: 'placing order',
+        details: e instanceof Error ? e.message : undefined,
+      });
+      logger.error('Order placement failed:', e);
+      Alert.alert('Order Failed', friendlyMessage);
     } finally {
       setIsPlacing(false);
     }

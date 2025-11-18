@@ -29,6 +29,7 @@ import { getStockComprehensive, StockData } from '../../../services/stockDataSer
 // ✅ Optimized: Use lodash-es for tree-shaking (only imports debounce, not entire library)
 import { debounce } from 'lodash-es';
 import { StockMomentsIntegration } from './StockMomentsIntegration';
+import logger from '../../../utils/logger';
 
 const { width } = Dimensions.get('window');
 
@@ -261,14 +262,14 @@ const ChartRoute = React.memo(({
   // Convert chart data to ChartPoint format for moments
   const priceSeriesForMoments = useMemo(() => {
     if (!processedData || !Array.isArray(processedData) || processedData.length === 0) {
-      console.log('[ChartRoute] No processedData for moments');
+      logger.log('[ChartRoute] No processedData for moments');
       return [];
     }
     const series = processedData.map((d: any) => ({
       timestamp: d.timestamp || d.date || new Date().toISOString(),
       price: d.close || d.price || d.value || 0,
     }));
-    console.log('[ChartRoute] Generated priceSeriesForMoments:', series.length, 'points');
+    logger.log('[ChartRoute] Generated priceSeriesForMoments:', series.length, 'points');
     return series;
   }, [processedData]);
 
@@ -1058,7 +1059,7 @@ export default function StockDetailScreen({ navigation, route }: StockDetailScre
       }
     } catch (error) {
       setStockError('Error fetching stock data');
-      console.error('Error fetching stock data:', error);
+      logger.error('Error fetching stock data:', error);
       // Generate fallback data on error
       const fallbackData = generateFallbackChartData(symbol, timeframe);
       setChartData(fallbackData);
@@ -1079,13 +1080,13 @@ export default function StockDetailScreen({ navigation, route }: StockDetailScre
         // Store the full data separately for price display
         setStockData(data);
       } else {
-        console.warn('No chart data received for', symbol);
+        logger.warn('No chart data received for', symbol);
         // Generate fallback chart data
         const fallbackData = generateFallbackChartData(symbol, timeframe);
         setChartData(fallbackData);
       }
     } catch (error) {
-      console.error('Error fetching chart data:', error);
+      logger.error('Error fetching chart data:', error);
       // Generate fallback chart data on error
       const fallbackData = generateFallbackChartData(symbol, timeframe);
       setChartData(fallbackData);

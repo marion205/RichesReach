@@ -1,9 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useOrderForm, OrderType, OrderSide } from '../hooks/useOrderForm';
 import { useQuery } from '@apollo/client';
 import { GET_TRADING_QUOTE } from '../../../graphql/tradingQueries';
+import { TradingQuote, LocalCostState, OrderTotalCalculation } from '../types';
+import logger from '../../../utils/logger';
+import {
+  validateSymbol,
+  validateQuantity,
+  validateLimitPrice,
+  validateStopPrice,
+} from '../../../utils/validation';
+import { getMockPrice } from '../constants/mockPrices';
 
 const C = {
   bg: '#F5F6FA',
@@ -23,7 +32,7 @@ const C = {
 
 interface OrderFormProps {
   form: ReturnType<typeof useOrderForm>;
-  quoteData?: any;
+  quoteData?: { tradingQuote?: TradingQuote };
   quoteLoading?: boolean;
   onSBLOCPress?: () => void;
 }
@@ -52,23 +61,82 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   } = form;
 
   // Local state for immediate cost display (bypasses Apollo loading gate)
-  const [localCost, setLocalCost] = useState<{
-    pricePerShare: number;
-    total: number;
-    source: string;
-    isLive: boolean;
-  } | null>(null);
+  const [localCost, setLocalCost] = useState<LocalCostState | null>(null);
 
-  // Mock prices for instant fallback
-  const mockPrices: Record<string, number> = {
-    AAPL: 190.12,
-    MSFT: 375.00,
-    GOOGL: 140.00,
-    AMZN: 150.00,
-    TSLA: 245.00,
-    META: 490.00,
-    NVDA: 125.00,
-  };
+  // Validation state for real-time feedback
+  const [validations, setValidations] = useState<Record<string, { isValid: boolean; error?: string; touched: boolean }>>({
+    symbol: { isValid: true, touched: false },
+    quantity: { isValid: true, touched: false },
+    price: { isValid: true, touched: false },
+    stopPrice: { isValid: true, touched: false },
+  });
+
+  // Mock prices imported from constants
+
+  // Real-time validation
+  useEffect(() => {
+    const newValidations: Record<string, { isValid: boolean; error?: string; touched: boolean }> = {};
+
+    // Validate symbol
+    if (symbol) {
+      const symbolResult = validateSymbol(symbol);
+      newValidations.symbol = {
+        isValid: symbolResult.isValid,
+        error: symbolResult.error,
+        touched: true,
+      };
+    } else {
+      newValidations.symbol = { isValid: true, touched: false };
+    }
+
+    // Validate quantity
+    if (quantity) {
+      const qtyResult = validateQuantity(quantity);
+      newValidations.quantity = {
+        isValid: qtyResult.isValid,
+        error: qtyResult.error,
+        touched: true,
+      };
+    } else {
+      newValidations.quantity = { isValid: true, touched: false };
+    }
+
+    // Validate price (for limit orders)
+    if (orderType === 'limit' && price) {
+      const currentPrice = quoteData?.tradingQuote
+        ? (orderSide === 'buy' ? quoteData.tradingQuote.ask : quoteData.tradingQuote.bid)
+        : undefined;
+      const priceResult = validateLimitPrice(price, currentPrice, orderSide);
+      newValidations.price = {
+        isValid: priceResult.isValid,
+        error: priceResult.error,
+        touched: true,
+      };
+    } else if (orderType === 'limit') {
+      newValidations.price = { isValid: false, error: 'Price is required for limit orders', touched: true };
+    } else {
+      newValidations.price = { isValid: true, touched: false };
+    }
+
+    // Validate stop price (for stop loss orders)
+    if (orderType === 'stop_loss' && stopPrice) {
+      const currentPrice = quoteData?.tradingQuote
+        ? (orderSide === 'buy' ? quoteData.tradingQuote.ask : quoteData.tradingQuote.bid)
+        : undefined;
+      const stopResult = validateStopPrice(stopPrice, currentPrice, orderSide);
+      newValidations.stopPrice = {
+        isValid: stopResult.isValid,
+        error: stopResult.error,
+        touched: true,
+      };
+    } else if (orderType === 'stop_loss') {
+      newValidations.stopPrice = { isValid: false, error: 'Stop price is required for stop loss orders', touched: true };
+    } else {
+      newValidations.stopPrice = { isValid: true, touched: false };
+    }
+
+    setValidations(newValidations);
+  }, [symbol, quantity, price, stopPrice, orderType, orderSide, quoteData]); // Removed 'validations' from deps to prevent infinite loops
 
   // Immediate mock fallback + background real data update
   useEffect(() => {
@@ -79,7 +147,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
     }
 
     // ALWAYS show mock estimate immediately (no waiting for GraphQL)
-    const mockPrice = mockPrices[symbol.toUpperCase()] || 150.00;
+    const mockPrice = getMockPrice(symbol);
     const estimatedTotal = qty * mockPrice;
     
     // Set mock immediately
@@ -112,7 +180,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   useEffect(() => {
     const qty = parseFloat(quantity) || 0;
     if (symbol && qty > 0 && !localCost) {
-      const mockPrice = mockPrices[symbol.toUpperCase()] || 150.00;
+      const mockPrice = getMockPrice(symbol);
       setLocalCost({
         pricePerShare: mockPrice,
         total: qty * mockPrice,
@@ -131,8 +199,8 @@ export const OrderForm: React.FC<OrderFormProps> = ({
     let isEstimated = false;
 
     // Debug logging
-    if (__DEV__ && symbol) {
-      console.log('💰 OrderTotal calculation:', {
+    if (symbol) {
+      logger.log('💰 OrderTotal calculation:', {
         symbol,
         qty,
         hasQuoteData: !!quoteData?.tradingQuote,
@@ -160,16 +228,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
     if (hasSymbolAndQty && !quoteData?.tradingQuote && !quoteLoading) {
       // Use a reasonable default estimate based on symbol
       // This is better than showing nothing
-      const defaultPrices: Record<string, number> = {
-        AAPL: 190.00,
-        MSFT: 375.00,
-        GOOGL: 140.00,
-        AMZN: 150.00,
-        TSLA: 245.00,
-        META: 490.00,
-        NVDA: 125.00,
-      };
-      const defaultPrice = defaultPrices[symbol.toUpperCase()] || 150.00;
+      const defaultPrice = getMockPrice(symbol);
       
       if (orderType === 'market' && marketPrice === 0) {
         pricePerShare = defaultPrice;
@@ -316,51 +375,133 @@ export const OrderForm: React.FC<OrderFormProps> = ({
 
       {/* Inputs */}
       <View style={{ marginTop: 16 }}>
-        <Text style={styles.inputLabel}>Symbol</Text>
+        <View style={styles.labelRow}>
+          <Text style={styles.inputLabel}>Symbol</Text>
+          {validations.symbol.touched && (
+            validations.symbol.isValid ? (
+              <Icon name="check-circle" size={16} color={C.green} />
+            ) : (
+              <Icon name="alert-circle" size={16} color={C.red} />
+            )
+          )}
+        </View>
         <TextInput
-          style={styles.input}
+          style={[
+            styles.input,
+            validations.symbol.touched && (validations.symbol.isValid ? styles.inputValid : styles.inputError),
+          ]}
           value={symbol}
           onChangeText={setSymbol}
           placeholder="e.g., AAPL"
           autoCapitalize="characters"
           autoCorrect={false}
+          accessibilityLabel="Stock symbol input"
+          accessibilityHint="Enter the stock symbol you want to trade, for example AAPL for Apple"
+          accessibilityRole="textbox"
         />
+        {validations.symbol.touched && !validations.symbol.isValid && (
+          <Text style={styles.errorText}>{validations.symbol.error}</Text>
+        )}
       </View>
 
       <View style={{ marginTop: 12 }}>
-        <Text style={styles.inputLabel}>Quantity</Text>
+        <View style={styles.labelRow}>
+          <Text style={styles.inputLabel}>Quantity</Text>
+          {validations.quantity.touched && (
+            validations.quantity.isValid ? (
+              <Icon name="check-circle" size={16} color={C.green} />
+            ) : (
+              <Icon name="alert-circle" size={16} color={C.red} />
+            )
+          )}
+        </View>
         <TextInput
-          style={styles.input}
+          style={[
+            styles.input,
+            validations.quantity.touched && (validations.quantity.isValid ? styles.inputValid : styles.inputError),
+          ]}
           value={quantity}
           onChangeText={setQuantity}
           placeholder="Number of shares"
           keyboardType="numeric"
+          accessibilityLabel="Quantity input"
+          accessibilityHint="Enter the number of shares you want to buy or sell"
+          accessibilityRole="textbox"
         />
+        {validations.quantity.touched && !validations.quantity.isValid && (
+          <Text style={styles.errorText}>{validations.quantity.error}</Text>
+        )}
       </View>
 
       {orderType === 'limit' && (
         <View style={{ marginTop: 12 }}>
-          <Text style={styles.inputLabel}>Limit Price</Text>
+          <View style={styles.labelRow}>
+            <Text style={styles.inputLabel}>Limit Price</Text>
+            {validations.price.touched && (
+              validations.price.isValid ? (
+                <Icon name="check-circle" size={16} color={C.green} />
+              ) : (
+                <Icon name="alert-circle" size={16} color={C.red} />
+              )
+            )}
+          </View>
           <TextInput
-            style={styles.input}
+            style={[
+              styles.input,
+              validations.price.touched && (validations.price.isValid ? styles.inputValid : styles.inputError),
+            ]}
             value={price}
             onChangeText={setPrice}
             placeholder="Price per share"
             keyboardType="numeric"
+            accessibilityLabel="Limit price input"
+            accessibilityHint="Enter the maximum price you're willing to pay per share for a buy order, or minimum price for a sell order"
+            accessibilityRole="textbox"
           />
+          {validations.price.touched && !validations.price.isValid && (
+            <Text style={styles.errorText}>{validations.price.error}</Text>
+          )}
+          {quoteData?.tradingQuote && (
+            <Text style={styles.hintText}>
+              Current {orderSide === 'buy' ? 'ask' : 'bid'}: ${orderSide === 'buy' ? quoteData.tradingQuote.ask?.toFixed(2) : quoteData.tradingQuote.bid?.toFixed(2)}
+            </Text>
+          )}
         </View>
       )}
 
       {orderType === 'stop_loss' && (
         <View style={{ marginTop: 12 }}>
-          <Text style={styles.inputLabel}>Stop Price</Text>
+          <View style={styles.labelRow}>
+            <Text style={styles.inputLabel}>Stop Price</Text>
+            {validations.stopPrice.touched && (
+              validations.stopPrice.isValid ? (
+                <Icon name="check-circle" size={16} color={C.green} />
+              ) : (
+                <Icon name="alert-circle" size={16} color={C.red} />
+              )
+            )}
+          </View>
           <TextInput
-            style={styles.input}
+            style={[
+              styles.input,
+              validations.stopPrice.touched && (validations.stopPrice.isValid ? styles.inputValid : styles.inputError),
+            ]}
             value={stopPrice}
             onChangeText={setStopPrice}
             placeholder="Stop price"
             keyboardType="numeric"
+            accessibilityLabel="Stop price input"
+            accessibilityHint="Enter the stop price that will trigger this order"
+            accessibilityRole="textbox"
           />
+          {validations.stopPrice.touched && !validations.stopPrice.isValid && (
+            <Text style={styles.errorText}>{validations.stopPrice.error}</Text>
+          )}
+          {quoteData?.tradingQuote && (
+            <Text style={styles.hintText}>
+              Current {orderSide === 'buy' ? 'ask' : 'bid'}: ${orderSide === 'buy' ? quoteData.tradingQuote.ask?.toFixed(2) : quoteData.tradingQuote.bid?.toFixed(2)}
+            </Text>
+          )}
         </View>
       )}
 
@@ -372,6 +513,9 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           onChangeText={setNotes}
           multiline
           placeholder="Add a note about this order"
+          accessibilityLabel="Order notes input"
+          accessibilityHint="Optional: Add a note or reminder about this order"
+          accessibilityRole="textbox"
         />
       </View>
 

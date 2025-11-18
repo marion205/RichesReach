@@ -15,6 +15,7 @@ import OptionChainCard from '../../../components/OptionChainCard';
 import { useStockSearch } from '../../../shared/hooks/useStockSearch';
 import { useWatchlist, GET_MY_WATCHLIST } from '../../../shared/hooks/useWatchlist';
 import { UI } from '../../../shared/constants';
+import logger from '../../../utils/logger';
 
 // Chart data adapter utilities
 const toMs = (t: string | number | Date) =>
@@ -51,10 +52,10 @@ function useChartSeries(data?: { stockChartData?: { data?: GqlBar[]; indicators?
   // ✅ Resilient: Check for wrong data shape and log warning
   if (data && !data.stockChartData && Object.keys(data).length > 0) {
     const dataKeys = Object.keys(data);
-    console.warn('[useChartSeries] ⚠️ Expected stockChartData, got keys:', dataKeys);
+    logger.warn('[useChartSeries] ⚠️ Expected stockChartData, got keys:', dataKeys);
     // If we got 'me' data or other wrong shape, return empty array
     if (dataKeys.includes('me') || dataKeys.some(k => k !== 'stockChartData')) {
-      console.warn('[useChartSeries] ❌ Wrong data shape detected, returning empty chart data');
+      logger.warn('[useChartSeries] ❌ Wrong data shape detected, returning empty chart data');
       return useMemo(() => [], []);
     }
   }
@@ -67,7 +68,7 @@ function useChartSeries(data?: { stockChartData?: { data?: GqlBar[]; indicators?
     const toNum = (v: any) => (v == null || v === '' ? null : Number(v));
     
     if (rows.length === 0) {
-      console.log('[useChartSeries] No rows to map');
+      logger.log('[useChartSeries] No rows to map');
       return [];
     }
     
@@ -87,7 +88,7 @@ function useChartSeries(data?: { stockChartData?: { data?: GqlBar[]; indicators?
     })).filter(p => Number.isFinite(p.t) && Number.isFinite(p.c as number))
       .sort((a, b) => a.t - b.t);
     
-    console.log('[useChartSeries] ✅ Rows:', rows.length, '→ Mapped:', mapped.length);
+    logger.log('[useChartSeries] ✅ Rows:', rows.length, '→ Mapped:', mapped.length);
     return mapped;
   }, [rows, indicators]); // ✅ Stable deps
 }
@@ -476,7 +477,7 @@ export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s
   const [activeTab, setActiveTab] = useState<'browse' | 'beginner' | 'watchlist' | 'research' | 'options'>('browse');
   
   const handleRowPress = useCallback((item: Stock) => {
-    console.log('🔍 ROW PRESS', item.symbol);
+    logger.log('🔍 ROW PRESS', item.symbol);
     // Navigate to stock detail screen
     navigateTo?.('StockDetail', {
       symbol: item.symbol,
@@ -484,7 +485,7 @@ export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s
   }, [navigateTo]);
 
   const openTrade = (item: Stock) => {
-    console.log('🔍 TRADE PRESS', item.symbol);
+    logger.log('🔍 TRADE PRESS', item.symbol);
     // Navigate to stock detail - user can use the Trade tab
     navigateTo?.('StockDetail', {
       symbol: item.symbol,
@@ -492,7 +493,7 @@ export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s
   };
 
   const openAnalysis = useCallback((item: Stock) => {
-    console.log('🔍 ANALYSIS PRESS', item.symbol);
+    logger.log('🔍 ANALYSIS PRESS', item.symbol);
     // Open the rust analysis modal
     handleRustAnalysis(item.symbol);
   }, [handleRustAnalysis]);
@@ -527,14 +528,14 @@ export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s
     errorPolicy: 'none', // Don't return partial data that might be from cache
     // Note: fetchPolicy is set per-call, not in useMutation config
     onError: (error) => {
-      console.error('🔍 Watchlist Mutation onError:', error);
-      console.error('🔍 GraphQL Errors:', error?.graphQLErrors);
-      console.error('🔍 Network Error:', error?.networkError);
-      console.error('🔍 Error message:', error?.message);
-      console.error('🔍 Full error object:', JSON.stringify(error, null, 2));
+      logger.error('🔍 Watchlist Mutation onError:', error);
+      logger.error('🔍 GraphQL Errors:', error?.graphQLErrors);
+      logger.error('🔍 Network Error:', error?.networkError);
+      logger.error('🔍 Error message:', error?.message);
+      logger.error('🔍 Full error object:', JSON.stringify(error, null, 2));
     },
     onCompleted: (data) => {
-      console.log('🔍 Watchlist Mutation onCompleted:', JSON.stringify(data, null, 2));
+      logger.log('🔍 Watchlist Mutation onCompleted:', JSON.stringify(data, null, 2));
     },
     // Don't use refetchQueries here - it's causing Apollo to return wrong data
     // We'll manually refetch after mutation succeeds
@@ -749,12 +750,12 @@ export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s
 
   // Debug query state changes
   React.useEffect(() => {
-    console.log('=== Query State Debug ===');
-    console.log('stocks.loading:', stocks.loading);
-    console.log('stocks.data:', stocks.data);
-    console.log('stocks.error:', stocks.error);
-    console.log('activeTab:', activeTab);
-    console.log('searchQuery:', searchQuery);
+    logger.log('=== Query State Debug ===');
+    logger.log('stocks.loading:', stocks.loading);
+    logger.log('stocks.data:', stocks.data);
+    logger.log('stocks.error:', stocks.error);
+    logger.log('activeTab:', activeTab);
+    logger.log('searchQuery:', searchQuery);
   }, [stocks.loading, stocks.data, stocks.error, activeTab, searchQuery]);
 
   const { list: watchlistQ, addToWatchlist, removeFromWatchlist } = useWatchlist();
@@ -764,12 +765,12 @@ export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s
     if (chartData) {
       const chartKeys = Object.keys(chartData);
       if (!chartKeys.includes('stockChartData') && chartKeys.length > 0) {
-        console.warn('[Sanity] Chart query returned unexpected keys:', chartKeys);
+        logger.warn('[Sanity] Chart query returned unexpected keys:', chartKeys);
       }
     }
     if (userProfileData) {
       const profileKeys = Object.keys(userProfileData);
-      console.log('[Sanity] User profile keys:', profileKeys);
+      logger.log('[Sanity] User profile keys:', profileKeys);
     }
   }, [chartData, userProfileData]);
   
@@ -784,13 +785,13 @@ export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s
   // 🔍 Debug chart data
   React.useEffect(() => {
     if (isResearchTab) {
-      console.log('🔍 CHART DEBUG - researchSymbol:', researchSymbol);
-      console.log('🔍 CHART DEBUG - chartInterval:', chartInterval);
-      console.log('🔍 CHART DEBUG - chartLoading:', chartLoading);
-      console.log('🔍 CHART DEBUG - chartError:', chartError);
-      console.log('🔍 CHART DEBUG - chartData:', chartData);
-      console.log('🔍 CHART DEBUG - chartSeries.length:', chartSeries.length);
-      console.log('🔍 CHART DEBUG - hasChartData:', hasChartData);
+      logger.log('🔍 CHART DEBUG - researchSymbol:', researchSymbol);
+      logger.log('🔍 CHART DEBUG - chartInterval:', chartInterval);
+      logger.log('🔍 CHART DEBUG - chartLoading:', chartLoading);
+      logger.log('🔍 CHART DEBUG - chartError:', chartError);
+      logger.log('🔍 CHART DEBUG - chartData:', chartData);
+      logger.log('🔍 CHART DEBUG - chartSeries.length:', chartSeries.length);
+      logger.log('🔍 CHART DEBUG - hasChartData:', hasChartData);
     }
   }, [isResearchTab, researchSymbol, chartInterval, chartLoading, chartError, chartData, chartSeries.length, hasChartData]);
 
@@ -798,7 +799,7 @@ export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s
   // Data will be refetched when user manually switches tabs via handleTabChange
   
   const handleTabChange = useCallback((tab: 'browse' | 'beginner' | 'watchlist' | 'research' | 'options') => {
-    console.log('Switching to tab:', tab);
+    logger.log('Switching to tab:', tab);
     setActiveTab(tab);
     
     // Clear Apollo cache for the current tab to ensure fresh data
@@ -840,12 +841,12 @@ export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s
       company_name: watchlistModal.stock.companyName || null, // Backend expects snake_case
       notes: notes || ""
     };
-    console.log('🔍 Watchlist Debug - Variables being sent:', variables);
-    console.log('🔍 Watchlist Debug - Stock data:', watchlistModal.stock);
+    logger.log('🔍 Watchlist Debug - Variables being sent:', variables);
+    logger.log('🔍 Watchlist Debug - Stock data:', watchlistModal.stock);
     
     try {
-      console.log('🔍 Watchlist Debug - About to call mutation with variables:', variables);
-      console.log('🔍 Watchlist Debug - Mutation definition:', ADD_TO_WATCHLIST.loc?.source?.body);
+      logger.log('🔍 Watchlist Debug - About to call mutation with variables:', variables);
+      logger.log('🔍 Watchlist Debug - Mutation definition:', ADD_TO_WATCHLIST.loc?.source?.body);
       
       const { data, errors } = await addToWatchlistMutation({
         variables: variables,
@@ -859,37 +860,37 @@ export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s
         },
       });
       
-      console.log('🔍 Watchlist Debug - Mutation response received');
-      console.log('🔍 Watchlist Debug - Data type:', typeof data);
-      console.log('🔍 Watchlist Debug - Data keys:', data ? Object.keys(data) : 'null');
-      console.log('🔍 Watchlist Debug - Full data:', JSON.stringify(data, null, 2));
-      console.log('🔍 Watchlist Debug - Errors:', errors);
+      logger.log('🔍 Watchlist Debug - Mutation response received');
+      logger.log('🔍 Watchlist Debug - Data type:', typeof data);
+      logger.log('🔍 Watchlist Debug - Data keys:', data ? Object.keys(data) : 'null');
+      logger.log('🔍 Watchlist Debug - Full data:', JSON.stringify(data, null, 2));
+      logger.log('🔍 Watchlist Debug - Errors:', errors);
       
       // Handle GraphQL errors that might be returned with data
       if (errors && errors.length > 0) {
-        console.error('🔍 Watchlist Debug - GraphQL errors in response:', errors);
+        logger.error('🔍 Watchlist Debug - GraphQL errors in response:', errors);
         const errorMessage = errors[0]?.message || 'Failed to add to watchlist';
         Alert.alert('Error', errorMessage);
         return;
       }
       
-      console.log('🔍 Watchlist Debug - Full response data:', JSON.stringify(data, null, 2));
+      logger.log('🔍 Watchlist Debug - Full response data:', JSON.stringify(data, null, 2));
       
       // Check if we got a response
       if (!data) {
-        console.error('🔍 Watchlist Debug - No data in response');
+        logger.error('🔍 Watchlist Debug - No data in response');
         Alert.alert('Error', 'No response from server. Please try again.');
         return;
       }
       
       // ✅ Sanity check: Log what we actually received
       const responseKeys = Object.keys(data || {});
-      console.log('[Watchlist] Mutation response keys:', responseKeys);
+      logger.log('[Watchlist] Mutation response keys:', responseKeys);
       
       // Check if addToWatchlist exists in response
       if (!data.addToWatchlist) {
-        console.error('🔍 Watchlist Debug - No addToWatchlist in response. Received keys:', responseKeys);
-        console.error('🔍 Watchlist Debug - Full response:', JSON.stringify(data, null, 2));
+        logger.error('🔍 Watchlist Debug - No addToWatchlist in response. Received keys:', responseKeys);
+        logger.error('🔍 Watchlist Debug - Full response:', JSON.stringify(data, null, 2));
         
         // More helpful error message
         const receivedData = responseKeys.length > 0 ? responseKeys.join(', ') : 'empty response';
@@ -900,8 +901,8 @@ export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s
         return;
       }
       
-      console.log('🔍 Watchlist Debug - Success value:', data.addToWatchlist.success);
-      console.log('🔍 Watchlist Debug - Message:', data.addToWatchlist.message);
+      logger.log('🔍 Watchlist Debug - Success value:', data.addToWatchlist.success);
+      logger.log('🔍 Watchlist Debug - Message:', data.addToWatchlist.message);
       
       if (data.addToWatchlist.success === true) {
         Alert.alert('Success', data.addToWatchlist.message);
@@ -920,13 +921,13 @@ export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s
           });
         }
       } else {
-        console.log('🔍 Watchlist Debug - Success false, message:', data.addToWatchlist.message);
+        logger.log('🔍 Watchlist Debug - Success false, message:', data.addToWatchlist.message);
         Alert.alert('Error', data.addToWatchlist.message || 'Failed to add to watchlist');
       }
     } catch (error) {
-      console.error('🔍 Watchlist Debug - Full error:', error);
-      console.error('🔍 Watchlist Debug - GraphQL errors:', error?.graphQLErrors);
-      console.error('🔍 Watchlist Debug - Network error:', error?.networkError);
+      logger.error('🔍 Watchlist Debug - Full error:', error);
+      logger.error('🔍 Watchlist Debug - GraphQL errors:', error?.graphQLErrors);
+      logger.error('🔍 Watchlist Debug - Network error:', error?.networkError);
       
       // Check if it's an authentication error
       const isAuthError = error?.graphQLErrors?.some(err => 
@@ -970,7 +971,7 @@ export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s
             Alert.alert('Error', data?.removeFromWatchlist?.message || 'Failed to remove from watchlist');
           }
         } catch (error) {
-          console.error('Error removing from watchlist:', error);
+          logger.error('Error removing from watchlist:', error);
           Alert.alert('Error', 'Failed to remove from watchlist. Please try again.');
         }
       }},
@@ -978,7 +979,7 @@ export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s
   }, [removeFromWatchlistMutation, watchlistQ]);
 
   const handleRustAnalysis = useCallback(async (symbol: string) => {
-    console.log('🔍 Starting Advanced Analysis for:', symbol);
+    logger.log('🔍 Starting Advanced Analysis for:', symbol);
     
     // Show modal immediately with realistic placeholder data (like the old mock data)
     // This makes it feel instant while real data loads in the background
@@ -1013,7 +1014,7 @@ export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s
     setRustLoading(true);
     
     try {
-      console.log('📡 Making GraphQL query...');
+      logger.log('📡 Making GraphQL query...');
       // Try the rust analysis first with a timeout, but fallback to chart data if it fails or times out
       try {
         // Add timeout to prevent hanging
@@ -1029,22 +1030,22 @@ export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s
         });
         
         const { data } = await Promise.race([queryPromise, timeoutPromise]) as any;
-        console.log('📊 Received rust data:', data);
+        logger.log('📊 Received rust data:', data);
         
         if (data?.rustStockAnalysis) {
-          console.log('✅ Setting rust data');
+          logger.log('✅ Setting rust data');
           setRust(data.rustStockAnalysis);
           setRustLoading(false);
           return;
         } else {
-          console.log('⚠️ Rust analysis returned no data, using fallback');
+          logger.log('⚠️ Rust analysis returned no data, using fallback');
         }
       } catch (rustError: any) {
-        console.log('⚠️ Rust analysis failed or timed out, trying fallback:', rustError?.message || rustError);
+        logger.log('⚠️ Rust analysis failed or timed out, trying fallback:', rustError?.message || rustError);
       }
       
       // Fallback: Use chart data for basic analysis
-      console.log('📊 Fetching chart data for fallback analysis...');
+      logger.log('📊 Fetching chart data for fallback analysis...');
       try {
         const timeoutPromise = new Promise((_, reject) => 
           setTimeout(() => reject(new Error('Chart query timeout')), 5000)
@@ -1089,11 +1090,11 @@ export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s
             reasoning: `Based on current price of $${chartData.stockChartData.currentPrice || 'N/A'} and ${chartData.stockChartData.changePercent > 0 ? 'positive' : 'negative'} momentum.`
           };
           
-          console.log('✅ Using fallback analysis data with indicators:', analysis.technicalIndicators);
+          logger.log('✅ Using fallback analysis data with indicators:', analysis.technicalIndicators);
           setRust(analysis);
           setRustLoading(false);
         } else {
-          console.log('❌ No chart data received, showing basic analysis');
+          logger.log('❌ No chart data received, showing basic analysis');
           // Show a basic analysis even if we can't get data
           const basicAnalysis = {
             symbol: symbol,
@@ -1126,7 +1127,7 @@ export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s
           setRustLoading(false);
         }
       } catch (chartError: any) {
-        console.log('❌ Chart data fetch failed:', chartError?.message || chartError);
+        logger.log('❌ Chart data fetch failed:', chartError?.message || chartError);
         // Show basic analysis even if everything fails
         const basicAnalysis = {
           symbol: symbol,
@@ -1159,7 +1160,7 @@ export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s
         setRustLoading(false);
       }
     } catch (error: any) {
-      console.log('❌ Error getting analysis:', error?.message || error);
+      logger.log('❌ Error getting analysis:', error?.message || error);
       // Even on error, show a basic modal so the user gets feedback
       const basicAnalysis = {
         symbol: symbol,
@@ -1269,9 +1270,9 @@ export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s
       onPressAnalysis={() => openAnalysis(item)}
       onPressMetric={showMetricTooltip}
       onPressBudgetImpact={() => {
-        console.log('🔍 Budget Impact Debug - Stock data:', item);
-        console.log('🔍 Budget Impact Debug - beginnerScoreBreakdown:', item.beginnerScoreBreakdown);
-        console.log('🔍 Budget Impact Debug - factors:', item.beginnerScoreBreakdown?.factors);
+        logger.log('🔍 Budget Impact Debug - Stock data:', item);
+        logger.log('🔍 Budget Impact Debug - beginnerScoreBreakdown:', item.beginnerScoreBreakdown);
+        logger.log('🔍 Budget Impact Debug - factors:', item.beginnerScoreBreakdown?.factors);
         setBudgetImpactModal({ open: true, stock: item });
       }}
       // onPressTrade removed - Trade button no longer exists
@@ -1320,7 +1321,7 @@ export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s
         Alert.alert('Error', result.data?.placeOptionOrder?.message || 'Failed to place order');
       }
     } catch (error) {
-      console.error('Error placing options order:', error);
+      logger.error('Error placing options order:', error);
       Alert.alert('Error', 'Failed to place options order');
     }
   }, [selectedOption, optionsSymbol, orderQuantity, orderType, limitPrice, timeInForce, orderNotes, placeOptionOrder, refetchOptionsOrders]);
@@ -1338,18 +1339,18 @@ export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s
         Alert.alert('Error', result.data?.cancelOptionOrder?.message || 'Failed to cancel order');
       }
     } catch (error) {
-      console.error('Error cancelling options order:', error);
+      logger.error('Error cancelling options order:', error);
       Alert.alert('Error', 'Failed to cancel options order');
     }
   }, [cancelOptionOrder, refetchOptionsOrders]);
 
   const listData = useMemo(() => {
-    console.log('=== listData useMemo called ===');
-    console.log('activeTab:', activeTab);
-    console.log('stocks.data:', stocks.data);
-    console.log('beginnerData:', beginnerData);
-    console.log('aiRecommendationsData:', aiRecommendationsData);
-    console.log('mlScreeningData:', mlScreeningData);
+    logger.log('=== listData useMemo called ===');
+    logger.log('activeTab:', activeTab);
+    logger.log('stocks.data:', stocks.data);
+    logger.log('beginnerData:', beginnerData);
+    logger.log('aiRecommendationsData:', aiRecommendationsData);
+    logger.log('mlScreeningData:', mlScreeningData);
     
     if (activeTab === 'browse') {
       // Use AI recommendations if available, otherwise fall back to regular stocks
@@ -1544,9 +1545,9 @@ export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s
         data = [...data, ...additionalStocks];
       }
       
-      console.log('Browse All data (AI-powered, min 5 stocks):', data);
-      console.log('Browse All first item:', data[0]);
-      console.log('Browse All data length:', data.length);
+      logger.log('Browse All data (AI-powered, min 5 stocks):', data);
+      logger.log('Browse All first item:', data[0]);
+      logger.log('Browse All data length:', data.length);
       return data;
     }
     if (activeTab === 'beginner') {
@@ -1704,13 +1705,13 @@ export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s
         data = [...data, ...additionalStocks];
       }
       
-      console.log('Beginner Friendly data (ML-powered, min 5 stocks):', data);
-      console.log('Beginner Friendly first item:', data[0]);
-      console.log('Beginner Friendly data length:', data.length);
+      logger.log('Beginner Friendly data (ML-powered, min 5 stocks):', data);
+      logger.log('Beginner Friendly first item:', data[0]);
+      logger.log('Beginner Friendly data length:', data.length);
       return data;
     }
     const data = (watchlistQ.data as any)?.myWatchlist ?? [];
-    console.log('Watchlist data:', data);
+    logger.log('Watchlist data:', data);
     return data;
   }, [activeTab, stocks.data, beginnerData, aiRecommendationsData, mlScreeningData, watchlistQ.data, searchQuery]);
 
@@ -1719,15 +1720,15 @@ export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s
                || (activeTab === 'watchlist' && watchlistQ.loading);
 
   // Log errors for debugging
-  if (stocks.error) console.warn('Stocks error:', stocks.error);
-  if (beginnerError) console.warn('Beginner error:', beginnerError);
-  if (aiRecommendationsError) console.warn('AI Recommendations error:', aiRecommendationsError);
-  if (mlScreeningError) console.warn('ML Screening error:', mlScreeningError);
-  if (watchlistQ.error) console.warn('Watchlist error:', watchlistQ.error);
+  if (stocks.error) logger.warn('Stocks error:', stocks.error);
+  if (beginnerError) logger.warn('Beginner error:', beginnerError);
+  if (aiRecommendationsError) logger.warn('AI Recommendations error:', aiRecommendationsError);
+  if (mlScreeningError) logger.warn('ML Screening error:', mlScreeningError);
+  if (watchlistQ.error) logger.warn('Watchlist error:', watchlistQ.error);
   
   // Debug current tab and data
-  console.log('Current tab:', activeTab);
-  console.log('Stocks loading:', stocks.loading, 'Beginner loading:', beginnerLoading);
+  logger.log('Current tab:', activeTab);
+  logger.log('Stocks loading:', stocks.loading, 'Beginner loading:', beginnerLoading);
 
 return (
 <View style={styles.container}>

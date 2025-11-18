@@ -2,9 +2,10 @@ import { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@apollo/client';
 import { GET_ALPACA_ORDERS } from '../../../graphql/tradingQueries';
 import { tradingOfflineCache } from '../services/TradingOfflineCache';
+import { AlpacaOrder } from '../types';
 
 export const useAlpacaOrders = (accountId: number | null, status?: string) => {
-  const [cachedOrders, setCachedOrders] = useState<any[]>([]);
+  const [cachedOrders, setCachedOrders] = useState<AlpacaOrder[]>([]);
   const [isOffline, setIsOffline] = useState(false);
 
   // Load cached data on mount
@@ -35,8 +36,8 @@ export const useAlpacaOrders = (accountId: number | null, status?: string) => {
   });
 
   // Use cached data if offline or if query failed
-  const orders = useMemo(() => {
-    return data?.alpacaOrders || cachedOrders;
+  const orders = useMemo<AlpacaOrder[]>(() => {
+    return (data?.alpacaOrders as AlpacaOrder[]) || cachedOrders;
   }, [data, cachedOrders]);
   
   const isUsingCache = !data?.alpacaOrders && cachedOrders.length > 0;

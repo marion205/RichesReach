@@ -5,6 +5,7 @@
 
 import { ApolloLink, Observable, Operation, NextLink } from '@apollo/client';
 import { GRAPHQL_TIMEOUT_MS } from '../../config/flags';
+import logger from '../../utils/logger';
 
 export const timeoutLink = (ms: number = GRAPHQL_TIMEOUT_MS) =>
   new ApolloLink((operation: Operation, forward: NextLink) =>
@@ -49,7 +50,7 @@ export const retryLink = new ApolloLink((operation, forward) =>
         error: (error) => {
           if (retryCount < maxRetries && shouldRetry(error)) {
             retryCount++;
-            console.log(`Retrying GraphQL operation (attempt ${retryCount}/${maxRetries})`);
+            logger.log(`Retrying GraphQL operation (attempt ${retryCount}/${maxRetries})`);
             setTimeout(attempt, 1000 * retryCount); // Exponential backoff
           } else {
             observer.error(error);
@@ -86,18 +87,16 @@ export const errorHandlingLink = new ApolloLink((operation, forward) =>
     const subscription = forward(operation).subscribe({
       next: (value) => observer.next(value),
       error: (error) => {
-        // Log errors in development
-        if (__DEV__) {
-          console.error('GraphQL Error:', {
-            operation: operation.operationName,
-            variables: operation.variables,
-            error: error.message,
-          });
-        }
+        // Log errors
+        logger.error('GraphQL Error:', {
+          operation: operation.operationName,
+          variables: operation.variables,
+          error: error.message,
+        });
         
         // Handle specific error types
         if (error.message?.includes('timeout')) {
-          console.warn('GraphQL operation timed out, using cached data if available');
+          logger.warn('GraphQL operation timed out, using cached data if available');
         }
         
         observer.error(error);

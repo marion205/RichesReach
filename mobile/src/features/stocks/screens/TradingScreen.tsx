@@ -33,6 +33,9 @@ import {
   GET_TRADING_QUOTE,
   CANCEL_ORDER,
 } from '../../../graphql/tradingQueries';
+import { AlpacaPosition, NavigationType } from '../types';
+import logger from '../../../utils/logger';
+import { getUserFriendlyError } from '../../../utils/errorMessages';
 
 const C = {
   bg: '#F5F6FA',
@@ -46,7 +49,7 @@ const C = {
 /* -------------------------------- Screen -------------------------------- */
 
 const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void }) => {
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<NavigationType>();
   const apolloClient = useApolloClient();
   const [activeTab, setActiveTab] = useState<'overview' | 'orders'>('overview');
   const [refreshing, setRefreshing] = useState(false);
@@ -121,24 +124,20 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
         const { tradingOfflineCache } = await import('../services/TradingOfflineCache');
         await tradingOfflineCache.cacheQuote(quoteSymbol, data.tradingQuote);
       }
-      if (__DEV__) {
-        console.log('✅ TradingQuote query completed:', JSON.stringify(data, null, 2));
-        console.log('📊 TradingQuote data structure:', {
-          hasTradingQuote: !!data?.tradingQuote,
-          tradingQuote: data?.tradingQuote,
-          keys: data ? Object.keys(data) : [],
-        });
-      }
+      logger.log('✅ TradingQuote query completed:', JSON.stringify(data, null, 2));
+      logger.log('📊 TradingQuote data structure:', {
+        hasTradingQuote: !!data?.tradingQuote,
+        tradingQuote: data?.tradingQuote,
+        keys: data ? Object.keys(data) : [],
+      });
     },
     onError: (error) => {
-      if (__DEV__) {
-        console.warn('⚠️ TradingQuote query error:', error);
-        console.warn('⚠️ Error details:', {
-          message: error?.message,
-          graphQLErrors: error?.graphQLErrors,
-          networkError: error?.networkError,
-        });
-      }
+      logger.warn('⚠️ TradingQuote query error:', error);
+      logger.warn('⚠️ Error details:', {
+        message: error?.message,
+        graphQLErrors: error?.graphQLErrors,
+        networkError: error?.networkError,
+      });
     },
   });
 
@@ -197,11 +196,9 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
         if (symbol) {
           initPolygonStream(apolloClient, [symbol]);
         }
-      }).catch((error) => {
+        }).catch((error) => {
         // Silently fail if Polygon service not available (e.g., missing API key)
-        if (__DEV__) {
-          console.warn('⚠️ Polygon WebSocket not available:', error);
-        }
+        logger.warn('⚠️ Polygon WebSocket not available:', error);
       });
     }
   }, [showOrderModal, orderForm.symbol, apolloClient]);
@@ -228,10 +225,14 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
     }
   }, [positionsLoading]);
 
-  // Optional: light polling on orders while Orders tab is visible
+  // Optimized polling: only poll orders when Orders tab is visible, with longer interval
   useEffect(() => {
-    if (activeTab === 'orders') startOrdersPolling?.(30_000);
-    else stopOrdersPolling?.();
+    if (activeTab === 'orders') {
+      // Poll every 30 seconds when orders tab is active (reduced from default)
+      startOrdersPolling?.(30_000);
+    } else {
+      stopOrdersPolling?.();
+    }
     return () => stopOrdersPolling?.();
   }, [activeTab, startOrdersPolling, stopOrdersPolling]);
 
@@ -334,7 +335,13 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
   const { placeOrder, isPlacing: isPlacingOrder } = usePlaceOrder();
   const [cancelOrder] = useMutation(CANCEL_ORDER, { errorPolicy: 'all' });
 
-  const handlePlaceOrder = async () => {
+  // Memoize current position lookup to avoid recalculating on every render
+  const currentPosition = useMemo<AlpacaPosition | undefined>(() => {
+    if (!orderForm.symbol) return undefined;
+    return positions.find((p: AlpacaPosition) => p.symbol === orderForm.symbol.toUpperCase());
+  }, [positions, orderForm.symbol]);
+
+  const handlePlaceOrder = useCallback(async () => {
     const err = orderForm.validate();
     if (err) {
       return Alert.alert('Invalid Order', err);
@@ -342,7 +349,7 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
 
     // Inline SBLOC nudge for tax-aware flow (only for sells with gains)
     if (orderForm.orderSide === 'sell') {
-      const pos = positions.find((p: any) => p.symbol === orderForm.symbol.toUpperCase());
+      const pos = currentPosition;
       const unrealized = Number(
         pos?.unrealizedPl ?? pos?.unrealizedpl ?? pos?.unrealizedPL ?? 0
       );
@@ -359,9 +366,9 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
       }
     }
     proceedWithOrder();
-  };
+  }, [orderForm, currentPosition, setShowSBLOCModal]);
 
-  const proceedWithOrder = async () => {
+  const proceedWithOrder = useCallback(async () => {
     await placeOrder({
       symbol: orderForm.symbol,
       quantity: orderForm.quantity,
@@ -382,7 +389,7 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
       },
       refetchQueries: [refetchAlpacaOrders, refetchAlpacaPositions, refetchAlpacaAccount],
     });
-  };
+  }, [placeOrder, orderForm, alpacaAccount, setShowOrderModal, setShowConnectModal, refetchAlpacaOrders, refetchAlpacaPositions, refetchAlpacaAccount]);
 
   const handleCancelOrder = useCallback(async (orderId: string) => {
     try {
@@ -392,10 +399,17 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
         refetchOrders?.();
         refetchAlpacaOrders?.();
       } else {
-        Alert.alert('Cancel Failed', res?.data?.cancelOrder?.message || 'Please try again.');
+        const friendlyMessage = getUserFriendlyError(
+          new Error(res?.data?.cancelOrder?.message || 'Cancel failed'),
+          { operation: 'cancelling order', errorType: 'server' }
+        );
+        Alert.alert('Cancel Failed', friendlyMessage);
       }
-    } catch (e: any) {
-      Alert.alert('Cancel Failed', e?.message || 'Please try again.');
+    } catch (e: unknown) {
+      const friendlyMessage = getUserFriendlyError(e, {
+        operation: 'cancelling order',
+      });
+      Alert.alert('Cancel Failed', friendlyMessage);
     }
   }, [cancelOrder, refetchOrders, refetchAlpacaOrders]);
 
@@ -510,7 +524,7 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
             await initiateAlpacaOAuth();
             setShowConnectModal(false);
           } catch (error) {
-            console.error('Failed to initiate OAuth:', error);
+            logger.error('Failed to initiate OAuth:', error);
             // Error already handled in service
           }
         }}

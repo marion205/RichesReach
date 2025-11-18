@@ -13,6 +13,8 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
+import { AlpacaAccount, AlpacaPosition, AlpacaOrder, TradingQuote, CachedData, CacheStats } from '../types';
+import logger from '../../../utils/logger';
 
 const CACHE_KEYS = {
   ACCOUNT: 'trading_cache_account',
@@ -32,19 +34,7 @@ const CACHE_DURATION = {
   MARKET_DATA: 5 * 60 * 1000,  // 5 minutes
 };
 
-interface CachedData<T> {
-  data: T;
-  timestamp: number;
-  expiresAt: number;
-}
-
-interface CacheStats {
-  account: { size: number; age: number; valid: boolean };
-  positions: { size: number; age: number; valid: boolean };
-  orders: { size: number; age: number; valid: boolean };
-  quotes: { size: number; age: number; valid: boolean };
-  lastSync: number;
-}
+// Types are now imported from '../types'
 
 export class TradingOfflineCache {
   private static instance: TradingOfflineCache;
@@ -55,7 +45,7 @@ export class TradingOfflineCache {
     NetInfo.addEventListener(state => {
       this.isOnline = state.isConnected ?? false;
       if (__DEV__) {
-        console.log(`📡 Network status: ${this.isOnline ? 'Online' : 'Offline'}`);
+        logger.log(`📡 Network status: ${this.isOnline ? 'Online' : 'Offline'}`);
       }
     });
   }
@@ -79,9 +69,9 @@ export class TradingOfflineCache {
   /**
    * Cache account data
    */
-  public async cacheAccount(account: any): Promise<void> {
+  public async cacheAccount(account: AlpacaAccount): Promise<void> {
     try {
-      const cached: CachedData<any> = {
+      const cached: CachedData<AlpacaAccount> = {
         data: account,
         timestamp: Date.now(),
         expiresAt: Date.now() + CACHE_DURATION.ACCOUNT,
@@ -89,29 +79,29 @@ export class TradingOfflineCache {
       await AsyncStorage.setItem(CACHE_KEYS.ACCOUNT, JSON.stringify(cached));
       await this.updateLastSync();
       if (__DEV__) {
-        console.log('💾 Cached account data');
+        logger.log('💾 Cached account data');
       }
     } catch (error) {
-      console.error('❌ Failed to cache account:', error);
+      logger.error('❌ Failed to cache account:', error);
     }
   }
 
   /**
    * Get cached account data
    */
-  public async getAccount(): Promise<any | null> {
+  public async getAccount(): Promise<AlpacaAccount | null> {
     try {
       const cachedString = await AsyncStorage.getItem(CACHE_KEYS.ACCOUNT);
       if (!cachedString) return null;
 
-      const cached: CachedData<any> = JSON.parse(cachedString);
+      const cached: CachedData<AlpacaAccount> = JSON.parse(cachedString);
       const now = Date.now();
 
       if (now > cached.expiresAt) {
         // Expired but return stale data if offline
         if (!(await this.isConnected())) {
           if (__DEV__) {
-            console.log('📴 Using expired account cache (offline)');
+            logger.log('📴 Using expired account cache (offline)');
           }
           return cached.data;
         }
@@ -120,7 +110,7 @@ export class TradingOfflineCache {
 
       return cached.data;
     } catch (error) {
-      console.error('❌ Failed to get cached account:', error);
+      logger.error('❌ Failed to get cached account:', error);
       return null;
     }
   }
@@ -128,9 +118,9 @@ export class TradingOfflineCache {
   /**
    * Cache positions
    */
-  public async cachePositions(positions: any[]): Promise<void> {
+  public async cachePositions(positions: AlpacaPosition[]): Promise<void> {
     try {
-      const cached: CachedData<any[]> = {
+      const cached: CachedData<AlpacaPosition[]> = {
         data: positions,
         timestamp: Date.now(),
         expiresAt: Date.now() + CACHE_DURATION.POSITIONS,
@@ -138,28 +128,28 @@ export class TradingOfflineCache {
       await AsyncStorage.setItem(CACHE_KEYS.POSITIONS, JSON.stringify(cached));
       await this.updateLastSync();
       if (__DEV__) {
-        console.log(`💾 Cached ${positions.length} positions`);
+        logger.log(`💾 Cached ${positions.length} positions`);
       }
     } catch (error) {
-      console.error('❌ Failed to cache positions:', error);
+      logger.error('❌ Failed to cache positions:', error);
     }
   }
 
   /**
    * Get cached positions
    */
-  public async getPositions(): Promise<any[] | null> {
+  public async getPositions(): Promise<AlpacaPosition[] | null> {
     try {
       const cachedString = await AsyncStorage.getItem(CACHE_KEYS.POSITIONS);
       if (!cachedString) return null;
 
-      const cached: CachedData<any[]> = JSON.parse(cachedString);
+      const cached: CachedData<AlpacaPosition[]> = JSON.parse(cachedString);
       const now = Date.now();
 
       if (now > cached.expiresAt) {
         if (!(await this.isConnected())) {
           if (__DEV__) {
-            console.log('📴 Using expired positions cache (offline)');
+            logger.log('📴 Using expired positions cache (offline)');
           }
           return cached.data;
         }
@@ -168,7 +158,7 @@ export class TradingOfflineCache {
 
       return cached.data;
     } catch (error) {
-      console.error('❌ Failed to get cached positions:', error);
+      logger.error('❌ Failed to get cached positions:', error);
       return null;
     }
   }
@@ -176,9 +166,9 @@ export class TradingOfflineCache {
   /**
    * Cache orders
    */
-  public async cacheOrders(orders: any[]): Promise<void> {
+  public async cacheOrders(orders: AlpacaOrder[]): Promise<void> {
     try {
-      const cached: CachedData<any[]> = {
+      const cached: CachedData<AlpacaOrder[]> = {
         data: orders,
         timestamp: Date.now(),
         expiresAt: Date.now() + CACHE_DURATION.ORDERS,
@@ -186,28 +176,28 @@ export class TradingOfflineCache {
       await AsyncStorage.setItem(CACHE_KEYS.ORDERS, JSON.stringify(cached));
       await this.updateLastSync();
       if (__DEV__) {
-        console.log(`💾 Cached ${orders.length} orders`);
+        logger.log(`💾 Cached ${orders.length} orders`);
       }
     } catch (error) {
-      console.error('❌ Failed to cache orders:', error);
+      logger.error('❌ Failed to cache orders:', error);
     }
   }
 
   /**
    * Get cached orders
    */
-  public async getOrders(): Promise<any[] | null> {
+  public async getOrders(): Promise<AlpacaOrder[] | null> {
     try {
       const cachedString = await AsyncStorage.getItem(CACHE_KEYS.ORDERS);
       if (!cachedString) return null;
 
-      const cached: CachedData<any[]> = JSON.parse(cachedString);
+      const cached: CachedData<AlpacaOrder[]> = JSON.parse(cachedString);
       const now = Date.now();
 
       if (now > cached.expiresAt) {
         if (!(await this.isConnected())) {
           if (__DEV__) {
-            console.log('📴 Using expired orders cache (offline)');
+            logger.log('📴 Using expired orders cache (offline)');
           }
           return cached.data;
         }
@@ -216,7 +206,7 @@ export class TradingOfflineCache {
 
       return cached.data;
     } catch (error) {
-      console.error('❌ Failed to get cached orders:', error);
+      logger.error('❌ Failed to get cached orders:', error);
       return null;
     }
   }
@@ -224,39 +214,39 @@ export class TradingOfflineCache {
   /**
    * Cache quote for a symbol
    */
-  public async cacheQuote(symbol: string, quote: any): Promise<void> {
+  public async cacheQuote(symbol: string, quote: TradingQuote): Promise<void> {
     try {
       const key = `${CACHE_KEYS.QUOTES}_${symbol.toUpperCase()}`;
-      const cached: CachedData<any> = {
+      const cached: CachedData<TradingQuote> = {
         data: quote,
         timestamp: Date.now(),
         expiresAt: Date.now() + CACHE_DURATION.QUOTES,
       };
       await AsyncStorage.setItem(key, JSON.stringify(cached));
       if (__DEV__) {
-        console.log(`💾 Cached quote for ${symbol}`);
+        logger.log(`💾 Cached quote for ${symbol}`);
       }
     } catch (error) {
-      console.error(`❌ Failed to cache quote for ${symbol}:`, error);
+      logger.error(`❌ Failed to cache quote for ${symbol}:`, error);
     }
   }
 
   /**
    * Get cached quote for a symbol
    */
-  public async getQuote(symbol: string): Promise<any | null> {
+  public async getQuote(symbol: string): Promise<TradingQuote | null> {
     try {
       const key = `${CACHE_KEYS.QUOTES}_${symbol.toUpperCase()}`;
       const cachedString = await AsyncStorage.getItem(key);
       if (!cachedString) return null;
 
-      const cached: CachedData<any> = JSON.parse(cachedString);
+      const cached: CachedData<TradingQuote> = JSON.parse(cachedString);
       const now = Date.now();
 
       if (now > cached.expiresAt) {
         if (!(await this.isConnected())) {
           if (__DEV__) {
-            console.log(`📴 Using expired quote cache for ${symbol} (offline)`);
+            logger.log(`📴 Using expired quote cache for ${symbol} (offline)`);
           }
           return cached.data;
         }
@@ -265,7 +255,7 @@ export class TradingOfflineCache {
 
       return cached.data;
     } catch (error) {
-      console.error(`❌ Failed to get cached quote for ${symbol}:`, error);
+      logger.error(`❌ Failed to get cached quote for ${symbol}:`, error);
       return null;
     }
   }
@@ -277,7 +267,7 @@ export class TradingOfflineCache {
     try {
       await AsyncStorage.setItem(CACHE_KEYS.LAST_SYNC, Date.now().toString());
     } catch (error) {
-      console.error('❌ Failed to update last sync:', error);
+      logger.error('❌ Failed to update last sync:', error);
     }
   }
 
@@ -289,7 +279,7 @@ export class TradingOfflineCache {
       const timestamp = await AsyncStorage.getItem(CACHE_KEYS.LAST_SYNC);
       return timestamp ? parseInt(timestamp, 10) : null;
     } catch (error) {
-      console.error('❌ Failed to get last sync:', error);
+      logger.error('❌ Failed to get last sync:', error);
       return null;
     }
   }
@@ -311,7 +301,7 @@ export class TradingOfflineCache {
       // Account
       const accountString = await AsyncStorage.getItem(CACHE_KEYS.ACCOUNT);
       if (accountString) {
-        const cached: CachedData<any> = JSON.parse(accountString);
+        const cached: CachedData<AlpacaAccount> = JSON.parse(accountString);
         stats.account = {
           size: JSON.stringify(cached.data).length,
           age: now - cached.timestamp,
@@ -322,7 +312,7 @@ export class TradingOfflineCache {
       // Positions
       const positionsString = await AsyncStorage.getItem(CACHE_KEYS.POSITIONS);
       if (positionsString) {
-        const cached: CachedData<any[]> = JSON.parse(positionsString);
+        const cached: CachedData<AlpacaPosition[]> = JSON.parse(positionsString);
         stats.positions = {
           size: JSON.stringify(cached.data).length,
           age: now - cached.timestamp,
@@ -333,7 +323,7 @@ export class TradingOfflineCache {
       // Orders
       const ordersString = await AsyncStorage.getItem(CACHE_KEYS.ORDERS);
       if (ordersString) {
-        const cached: CachedData<any[]> = JSON.parse(ordersString);
+        const cached: CachedData<AlpacaOrder[]> = JSON.parse(ordersString);
         stats.orders = {
           size: JSON.stringify(cached.data).length,
           age: now - cached.timestamp,
@@ -345,7 +335,7 @@ export class TradingOfflineCache {
       const lastSync = await this.getLastSync();
       stats.lastSync = lastSync || 0;
     } catch (error) {
-      console.error('❌ Failed to get cache stats:', error);
+      logger.error('❌ Failed to get cache stats:', error);
     }
 
     return stats;
@@ -369,10 +359,10 @@ export class TradingOfflineCache {
       await Promise.all(quoteKeys.map(key => AsyncStorage.removeItem(key)));
 
       if (__DEV__) {
-        console.log('🧹 Cleared all trading cache');
+        logger.log('🧹 Cleared all trading cache');
       }
     } catch (error) {
-      console.error('❌ Failed to clear cache:', error);
+      logger.error('❌ Failed to clear cache:', error);
     }
   }
 }

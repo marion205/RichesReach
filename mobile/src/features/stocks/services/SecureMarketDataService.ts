@@ -3,6 +3,7 @@
  * Uses backend endpoints with caching and rate limit protection
  */
 import { API_BASE } from '../../../config/api';
+import logger from '../../../utils/logger';
 
 export interface Quote {
   symbol: string;
@@ -57,14 +58,14 @@ export class SecureMarketDataService {
     // Serve from cache if available
     const hit = cache.get(key);
     if (hit && now - hit.at < CACHE_TTL_MS) {
-      console.log(`📊 Cache hit for symbols: ${key}`);
+      logger.log(`📊 Cache hit for symbols: ${key}`);
       return hit.data;
     }
 
     // Dedupe in-flight requests
     const existing = inflight.get(key);
     if (existing) {
-      console.log(`⏳ Deduplicating request for symbols: ${key}`);
+      logger.log(`⏳ Deduplicating request for symbols: ${key}`);
       return existing;
     }
 
@@ -77,12 +78,12 @@ export class SecureMarketDataService {
       .catch(err => {
         // Use stale cache if available
         if (hit) {
-          console.warn(`⚠️ Network error, using stale cache for symbols: ${key}`, err.message);
+          logger.warn(`⚠️ Network error, using stale cache for symbols: ${key}`, err.message);
           return hit.data;
         }
         // If no cache, return mock data instead of throwing error
         // This prevents the app from breaking when the backend is unavailable
-        console.warn(`⚠️ No cache available, using mock data for symbols: ${key}`);
+        logger.warn(`⚠️ No cache available, using mock data for symbols: ${key}`);
         return this._getMockQuotes(symbols);
       })
       .finally(() => {
@@ -100,7 +101,7 @@ export class SecureMarketDataService {
     const symbolsParam = symbols.join(',');
     const url = `${API_BASE}/api/market/quotes?symbols=${encodeURIComponent(symbolsParam)}`;
     
-    console.log(`📡 Fetching quotes from backend: ${symbolsParam}`);
+    logger.log(`📡 Fetching quotes from backend: ${symbolsParam}`);
     
     try {
       // Use AbortController for proper timeout handling
@@ -128,13 +129,13 @@ export class SecureMarketDataService {
 
       // Get raw response text first for debugging
       const text = await response.text();
-      console.log(`📦 Raw response: ${text.substring(0, 200)}...`);
+      logger.log(`📦 Raw response: ${text.substring(0, 200)}...`);
       
       let data;
       try {
         data = JSON.parse(text);
       } catch (parseError) {
-        console.error('❌ JSON parse error:', parseError, 'Raw:', text);
+        logger.error('❌ JSON parse error:', parseError, 'Raw:', text);
         throw new Error(`Invalid JSON response from backend: ${parseError.message}`);
       }
       
@@ -148,24 +149,24 @@ export class SecureMarketDataService {
         // Handle case where quotes might be an object
         quotes = Object.values(data.quotes) as Quote[];
       } else {
-        console.error('❌ Unexpected response format:', JSON.stringify(data, null, 2));
+        logger.error('❌ Unexpected response format:', JSON.stringify(data, null, 2));
         throw new Error(`Invalid response format from backend. Expected array or {quotes: [...]}, got: ${typeof data}`);
       }
 
-      console.log(`✅ Successfully fetched ${quotes.length} quotes`);
+      logger.log(`✅ Successfully fetched ${quotes.length} quotes`);
       return quotes;
 
     } catch (error: any) {
       // Handle timeout and network errors gracefully
       if (error?.name === 'AbortError' || error?.message?.includes('timeout') || error?.message?.includes('aborted')) {
-        console.warn(`⚠️ Quote request timed out for symbols: ${symbolsParam}, will use mock data`);
+        logger.warn(`⚠️ Quote request timed out for symbols: ${symbolsParam}, will use mock data`);
         throw error; // Re-throw to trigger mock data fallback in calling code
       }
       if (error?.message?.includes('Network request failed') || error?.message?.includes('Failed to fetch')) {
-        console.warn(`⚠️ Network error for quotes, using mock data fallback`);
+        logger.warn(`⚠️ Network error for quotes, using mock data fallback`);
         throw error; // Re-throw to trigger mock data fallback in calling code
       }
-      console.error(`❌ Error fetching quotes: ${error?.message || 'Unknown error'}`);
+      logger.error(`❌ Error fetching quotes: ${error?.message || 'Unknown error'}`);
       throw error;
     }
   }
@@ -409,7 +410,7 @@ export class SecureMarketDataService {
       };
     });
 
-    console.log(`📊 Using mock quotes for ${symbols.length} symbols`);
+    logger.log(`📊 Using mock quotes for ${symbols.length} symbols`);
     return quotes;
   }
 
@@ -424,7 +425,7 @@ export class SecureMarketDataService {
       }
       return await response.json();
     } catch (error) {
-      console.error('Error fetching service status:', error);
+      logger.error('Error fetching service status:', error);
       return {
         service: 'market_data',
         status: 'unavailable',
@@ -439,7 +440,7 @@ export class SecureMarketDataService {
   clearCache(): void {
     cache.clear();
     inflight.clear();
-    console.log('🧹 Market data cache cleared');
+    logger.log('🧹 Market data cache cleared');
   }
 
   /**
@@ -452,14 +453,14 @@ export class SecureMarketDataService {
     // Serve from cache if available
     const hit = optionsCache.get(key);
     if (hit && now - hit.at < OPTIONS_CACHE_TTL_MS) {
-      console.log(`📊 Options cache hit for: ${key}`);
+      logger.log(`📊 Options cache hit for: ${key}`);
       return hit.data;
     }
 
     // Dedupe in-flight requests
     const existing = optionsInflight.get(key);
     if (existing) {
-      console.log(`⏳ Deduplicating options request for: ${key}`);
+      logger.log(`⏳ Deduplicating options request for: ${key}`);
       return existing;
     }
 
@@ -472,7 +473,7 @@ export class SecureMarketDataService {
       .catch(err => {
         // Graceful degradation: return stale data if available
         if (hit) {
-          console.log(`⚠️ Using stale options data for: ${key}`);
+          logger.log(`⚠️ Using stale options data for: ${key}`);
           return hit.data;
         }
         throw err;
@@ -496,7 +497,7 @@ export class SecureMarketDataService {
     
     const url = `${API_BASE}/api/market/options?${params.toString()}`;
     
-    console.log(`📡 Fetching options from backend: ${underlying}${expiration ? ` (${expiration})` : ''}`);
+    logger.log(`📡 Fetching options from backend: ${underlying}${expiration ? ` (${expiration})` : ''}`);
     
     try {
       const response = await fetch(url, {
@@ -518,13 +519,13 @@ export class SecureMarketDataService {
 
       // Get raw response text first for debugging
       const text = await response.text();
-      console.log(`📦 Raw options response: ${text.substring(0, 200)}...`);
+      logger.log(`📦 Raw options response: ${text.substring(0, 200)}...`);
       
       let data;
       try {
         data = JSON.parse(text);
       } catch (parseError) {
-        console.error('❌ JSON parse error:', parseError, 'Raw:', text);
+        logger.error('❌ JSON parse error:', parseError, 'Raw:', text);
         throw new Error(`Invalid JSON response from backend: ${parseError.message}`);
       }
       
@@ -538,15 +539,15 @@ export class SecureMarketDataService {
         // Handle case where options might be an object
         options = Object.values(data.options) as Option[];
       } else {
-        console.error('❌ Unexpected options response format:', JSON.stringify(data, null, 2));
+        logger.error('❌ Unexpected options response format:', JSON.stringify(data, null, 2));
         throw new Error(`Invalid response format from backend. Expected array or {options: [...]}, got: ${typeof data}`);
       }
 
-      console.log(`✅ Successfully fetched ${options.length} options contracts`);
+      logger.log(`✅ Successfully fetched ${options.length} options contracts`);
       return options;
 
     } catch (error) {
-      console.error(`❌ Error fetching options: ${error.message}`);
+      logger.error(`❌ Error fetching options: ${error.message}`);
       throw error;
     }
   }
@@ -578,7 +579,7 @@ export class SecureMarketDataService {
     optionsCache.clear();
     inflight.clear();
     optionsInflight.clear();
-    console.log('🧹 All market data caches cleared');
+    logger.log('🧹 All market data caches cleared');
   }
 }
 

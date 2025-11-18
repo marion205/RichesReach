@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import logger from '../../../utils/logger';
 // Market Data Interfaces
 export interface StockQuote {
 symbol: string;
@@ -64,7 +65,7 @@ this.apiKey = apiKey;
 try {
 await AsyncStorage.setItem('alpha_vantage_api_key', apiKey);
 } catch (error) {
-console.error('Failed to save API key:', error);
+      logger.error('Failed to save API key:', error);
 }
 }
   private async makeApiCall(params: Record<string, string>): Promise<any> {
@@ -88,14 +89,14 @@ console.error('Failed to save API key:', error);
       this.cache.set(cacheKey, { data, timestamp: Date.now() });
       return data;
     } catch (error) {
-      console.error('API call failed:', error);
+      logger.error('API call failed:', error);
       throw error;
     }
   }
 // Get real-time stock quote
 public async getStockQuote(symbol: string): Promise<StockQuote> {
 if (this.MARKET_DATA_DISABLED) {
-  console.warn('[MarketData] disabled in client; skipping', symbol);
+  logger.warn('[MarketData] disabled in client; skipping', symbol);
   return this.getMockQuote(symbol);
 }
 
@@ -106,12 +107,12 @@ symbol: symbol.toUpperCase()
 });
 // Check for API errors
 if (data['Error Message']) {
-console.warn(`API Error for ${symbol}:`, data['Error Message']);
+logger.warn(`API Error for ${symbol}:`, data['Error Message']);
 return this.getMockQuote(symbol);
 }
 // Check for rate limit messages
 if (data['Note']) {
-console.warn(`Rate limit for ${symbol}:`, data['Note']);
+logger.warn(`Rate limit for ${symbol}:`, data['Note']);
 // For rate limits, try to use cached data first
 const cached = this.cache.get(JSON.stringify({ function: 'GLOBAL_QUOTE', symbol: symbol.toUpperCase() }));
 if (cached) {
@@ -137,12 +138,12 @@ return this.getMockQuote(symbol);
 }
 // Check for invalid API key
 if (data['Information'] && data['Information'].includes('API key')) {
-console.warn(`API key issue for ${symbol}:`, data['Information']);
+logger.warn(`API key issue for ${symbol}:`, data['Information']);
 return this.getMockQuote(symbol);
 }
 const quote = data['Global Quote'];
 if (!quote || !quote['05. price']) {
-console.warn(`No quote data available for ${symbol}, using mock data`);
+logger.warn(`No quote data available for ${symbol}, using mock data`);
 return this.getMockQuote(symbol);
 }
 return {
@@ -159,7 +160,7 @@ timestamp: quote['07. latest trading day'],
 marketStatus: this.getMarketStatus()
 };
 } catch (error) {
-console.warn(`Failed to get quote for ${symbol}:`, error.message);
+logger.warn(`Failed to get quote for ${symbol}:`, error.message);
 // Return mock data as fallback
 return this.getMockQuote(symbol);
 }
@@ -167,7 +168,7 @@ return this.getMockQuote(symbol);
 // Get multiple stock quotes with rate limiting
 public async getMultipleQuotes(symbols: string[]): Promise<StockQuote[]> {
 if (this.MARKET_DATA_DISABLED) {
-  console.warn('[MarketData] disabled in client; returning mock data for', symbols.length, 'symbols');
+  logger.warn('[MarketData] disabled in client; returning mock data for', symbols.length, 'symbols');
   return symbols.map(symbol => this.getMockQuote(symbol));
 }
 
@@ -183,7 +184,7 @@ if (i < symbols.length - 1) {
 await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay
 }
 } catch (error) {
-console.warn(`Failed to get quote for ${symbol}, using mock data`);
+logger.warn(`Failed to get quote for ${symbol}, using mock data`);
 quotes.push(this.getMockQuote(symbol));
 }
 }
@@ -218,7 +219,7 @@ close: parseFloat(values['4. close']),
 volume: parseInt(values['5. volume'])
 })).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 } catch (error) {
-console.error(`Failed to get historical data for ${symbol}:`, error);
+logger.error(`Failed to get historical data for ${symbol}:`, error);
 return this.getMockHistoricalData(symbol);
 }
 }
@@ -237,7 +238,7 @@ const response = await fetch(url);
 const data = await response.json();
 if (data.status !== 'ok') {
 if (data.code === 'rateLimited') {
-console.warn(' NewsAPI rate limit hit, using cached data if available');
+logger.warn(' NewsAPI rate limit hit, using cached data if available');
 if (cached) {
 return cached.data;
 }
@@ -259,7 +260,7 @@ relatedSymbols: this.extractStockSymbols(article.title + ' ' + (article.descript
 this.cache.set(cacheKey, { data: newsData, timestamp: Date.now() });
 return newsData;
 } catch (error) {
-console.error('Failed to get market news:', error);
+logger.error('Failed to get market news:', error);
 if (cached) {
 return cached.data;
 }
@@ -280,7 +281,7 @@ const response = await fetch(url);
 const data = await response.json();
 if (data.status !== 'ok') {
 if (data.code === 'rateLimited') {
-console.warn(` NewsAPI rate limit hit for ${symbol}, using cached data if available`);
+logger.warn(` NewsAPI rate limit hit for ${symbol}, using cached data if available`);
 if (cached) {
 return cached.data;
 }
@@ -302,7 +303,7 @@ relatedSymbols: [symbol]
 this.cache.set(cacheKey, { data: newsData, timestamp: Date.now() });
 return newsData;
 } catch (error) {
-console.error(`Failed to get news for ${symbol}:`, error);
+logger.error(`Failed to get news for ${symbol}:`, error);
 if (cached) {
 return cached.data;
 }
@@ -407,7 +408,7 @@ currency: match['8. currency'],
 matchScore: match['9. matchScore']
 }));
 } catch (error) {
-console.error('Failed to search stocks:', error);
+logger.error('Failed to search stocks:', error);
 return [];
 }
 }
@@ -577,7 +578,7 @@ if (data['Global Quote'] && data['Global Quote']['05. price']) {
 break; // Stop if we hit rate limit
 }
 } catch (error) {
-console.warn(`Failed to pre-load ${symbol}:`, error);
+logger.warn(`Failed to pre-load ${symbol}:`, error);
 }
 }
 }

@@ -19,6 +19,7 @@ import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { View, Text, Pressable, StyleSheet, ActivityIndicator } from "react-native";
 import { useQuery, gql, ApolloError } from "@apollo/client";
 import { useIsFocused } from "@react-navigation/native";
+import logger from "../../../utils/logger";
 
 import ChartWithMoments, {
   ChartPoint,
@@ -108,7 +109,7 @@ const useStockMoments = (symbol: string, chartRange: ChartRange) => {
   useEffect(() => {
     if (loading && !showMock) {
       const timer = setTimeout(() => {
-        console.log("[StockMoments] Loading timeout after 1.5s - showing mock data");
+        logger.log("[StockMoments] Loading timeout after 1.5s - showing mock data");
         setShowMock(true);
       }, 1500); // 1.5s timeout - backend should respond quickly even if empty
       return () => clearTimeout(timer);
@@ -184,7 +185,7 @@ const useStockMoments = (symbol: string, chartRange: ChartRange) => {
   
   // Debug logging
   useEffect(() => {
-    console.log(`[StockMoments] ${symbol}: loading=${loading}, showMock=${showMock}, real=${realMoments.length}, mock=${mockMoments.length}, effective=${effectiveMoments.length}`);
+    logger.log(`[StockMoments] ${symbol}: loading=${loading}, showMock=${showMock}, real=${realMoments.length}, mock=${mockMoments.length}, effective=${effectiveMoments.length}`);
   }, [symbol, loading, showMock, realMoments.length, mockMoments.length, effectiveMoments.length]);
 
   const hasError = !!error && !loading;

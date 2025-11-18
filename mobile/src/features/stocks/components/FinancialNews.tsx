@@ -13,6 +13,7 @@ ActivityIndicator
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { SecureMarketDataService } from '../services/SecureMarketDataService';
+import logger from '../../../utils/logger';
 interface FinancialNewsProps {
 symbol?: string; // Optional: show news for specific stock
 limit?: number; // Optional: limit number of articles
@@ -63,7 +64,7 @@ imageUrl: null
 setNews(mockNews.slice(0, limit));
 } catch (err) {
 setError('Failed to load news');
-console.error('Error loading news:', err);
+logger.error('Error loading news:', err);
 } finally {
 setLoading(false);
 }

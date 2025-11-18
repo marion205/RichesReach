@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 // Use Expo Go compatible notification service to avoid crashes
 import expoGoCompatibleNotificationService from '../../ExpoGoCompatibleNotificationService';
+import logger from '../../../utils/logger';
 export interface PriceAlert {
 id: string;
 symbol: string;
@@ -40,7 +41,7 @@ if (alertsString) {
 this.alerts = JSON.parse(alertsString);
 }
 } catch (error) {
-console.error('Error loading price alerts:', error);
+logger.error('Error loading price alerts:', error);
 this.alerts = [];
 }
 }
@@ -51,7 +52,7 @@ private async saveAlerts(): Promise<void> {
 try {
 await AsyncStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.alerts));
 } catch (error) {
-console.error('Error saving price alerts:', error);
+logger.error('Error saving price alerts:', error);
 }
 }
 /**
@@ -166,7 +167,7 @@ triggeredAt: Date.now(),
 isActive: false,
 });
 } catch (error) {
-console.error('Error triggering price alert:', error);
+logger.error('Error triggering price alert:', error);
 }
 }
 /**
@@ -234,7 +235,7 @@ throw new Error('Invalid alert format');
 this.alerts = importedAlerts;
 await this.saveAlerts();
 } catch (error) {
-console.error('Error importing price alerts:', error);
+logger.error('Error importing price alerts:', error);
 throw error;
 }
 }

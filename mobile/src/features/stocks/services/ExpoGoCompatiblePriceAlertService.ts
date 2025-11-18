@@ -12,6 +12,8 @@ isActive: boolean;
 createdAt: number;
 triggeredAt?: number;
 }
+import logger from '../../../utils/logger';
+
 export interface StockPrice {
 symbol: string;
 price: number;
@@ -41,7 +43,7 @@ try {
 // In production, this would use AsyncStorage
 this.alerts = [];
 } catch (error) {
-console.error('Error loading price alerts:', error);
+logger.error('Error loading price alerts:', error);
 this.alerts = [];
 }
 }
@@ -52,7 +54,7 @@ private async saveAlerts(): Promise<void> {
 try {
 // In Expo Go, we'll just log the alerts
 } catch (error) {
-console.error('Error saving price alerts:', error);
+logger.error('Error saving price alerts:', error);
 }
 }
 /**
@@ -161,7 +163,7 @@ triggeredAt: Date.now(),
 isActive: false,
 });
 } catch (error) {
-console.error('Error triggering price alert:', error);
+logger.error('Error triggering price alert:', error);
 }
 }
 /**
@@ -229,7 +231,7 @@ throw new Error('Invalid alert format');
 this.alerts = importedAlerts;
 await this.saveAlerts();
 } catch (error) {
-console.error('Error importing price alerts:', error);
+logger.error('Error importing price alerts:', error);
 throw error;
 }
 }
