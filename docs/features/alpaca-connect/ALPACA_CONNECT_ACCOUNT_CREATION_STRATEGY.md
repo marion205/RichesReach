@@ -254,22 +254,36 @@ class AlpacaService:
 
 ## ✅ Recommended Path for RichesReach
 
-### Phase 1: MVP (Week 1-2) - Guided Signup
-1. ✅ Implement pre-connect modal
-2. ✅ Add "Create Account" link to Alpaca signup
-3. ✅ Handle OAuth errors gracefully
-4. ✅ Track analytics (connect success rate)
-5. ✅ Launch with 80% existing users in mind
+### Phase 1: MVP (Week 1-2) - Enhanced Guided Signup
+1. ✅ Implement pre-connect modal (DONE)
+2. ✅ Add "Create Account" link to Alpaca signup (DONE)
+3. ✅ Handle OAuth errors gracefully (DONE)
+4. 🔄 **Improve signup return UX** (NEW - see improvements below)
+5. ✅ Track analytics (connect success rate)
+6. ✅ Launch with 80% existing users in mind
+
+**New Improvements Needed:**
+- Better messaging about manual return after signup
+- App state detection to prompt users when they return
+- Clearer "next steps" after signup redirect
+- Reminder mechanism for users who started signup
 
 ### Phase 2: Monitor & Iterate (Week 3-4)
 1. 📊 Analyze connect success rates
-2. 📊 Track drop-off points
-3. 📊 User feedback
+2. 📊 Track drop-off points (especially signup→connect gap)
+3. 📊 User feedback on signup experience
+4. 📊 Measure: % of users who complete signup and successfully connect
 
 ### Phase 3: Hybrid (If Needed) - Week 4+
-1. If <50% success rate → Add Broker API
-2. Keep OAuth for existing users
-3. Add "Create Account" option for new users
+**Decision Criteria:**
+- If signup→connect success rate <50% → Add Broker API
+- If signup→connect success rate >80% → Stick with guided signup
+- If user feedback indicates frustration → Consider hybrid
+
+**Hybrid Approach:**
+1. Keep OAuth for existing users (seamless)
+2. Add Broker API option for new users (in-app account creation)
+3. Let users choose: "Connect existing" vs "Create new"
 
 ---
 
@@ -294,10 +308,19 @@ class AlpacaService:
 
 ---
 
-## 📧 Updated Email to Hunter
+## 📧 Alpaca Support Response (Nov 18, 2025)
 
-**Add This Question:**
-> "We understand OAuth Connect is for existing accounts. For users who don't have Alpaca accounts yet, we're planning a guided signup flow (link to alpaca.markets/signup). Are there any improvements planned for the signup→callback redirect issue, or should we consider a hybrid approach with Broker API for new account creation?"
+**Question Asked:**
+> "We understand OAuth Connect is for existing accounts. For users without Alpaca accounts, we're implementing a guided signup flow (link to alpaca.markets/signup). Are there any improvements planned for the signup→callback redirect issue, or should we consider a hybrid approach with Broker API for new account creation?"
+
+**Alpaca's Response:**
+> "At this time we do not have any improvements planned for the signup. If we make any changes to this, we will let you know. This is something we'd like to consider for the future."
+
+**Implications:**
+- ❌ No automatic callback/redirect after signup (confirmed limitation)
+- ✅ Guided signup flow is the correct approach for MVP
+- ⚠️ Users must manually return to app after signup
+- 🔄 Consider hybrid approach if signup→connect success rate is low
 
 ---
 

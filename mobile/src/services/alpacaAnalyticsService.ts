@@ -17,7 +17,11 @@ export interface AlpacaConnectEvent {
     | 'connect_signup_redirected'
     | 'connect_signup_completed'
     | 'connect_account_linked'
-    | 'connect_failed';
+    | 'connect_failed'
+    | 'alpaca_signup_return_detected'
+    | 'alpaca_connect_prompt_shown'
+    | 'alpaca_connect_completed'
+    | 'alpaca_signup_abandoned';
   userId?: string;
   timestamp: number;
   metadata?: {
@@ -107,6 +111,10 @@ class AlpacaAnalyticsService {
       oauthSuccess: events.filter(e => e.event === 'connect_oauth_success').length,
       oauthErrors: events.filter(e => e.event === 'connect_oauth_error').length,
       signupRedirects: events.filter(e => e.event === 'connect_signup_redirected').length,
+      signupReturns: events.filter(e => e.event === 'alpaca_signup_return_detected').length,
+      connectPrompts: events.filter(e => e.event === 'alpaca_connect_prompt_shown').length,
+      connectCompleted: events.filter(e => e.event === 'alpaca_connect_completed').length,
+      signupAbandoned: events.filter(e => e.event === 'alpaca_signup_abandoned').length,
       accountLinked: events.filter(e => e.event === 'connect_account_linked').length,
       successRate: this.getSuccessRate(),
       sessionId: this.sessionId,

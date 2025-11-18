@@ -41,12 +41,28 @@ export const AlpacaConnectModal: React.FC<AlpacaConnectModalProps> = ({
     // Track signup redirect
     alpacaAnalytics.track('connect_signup_redirected', { signupSource: 'modal' });
     
+    // Store timestamp to detect when user returns
+    try {
+      // Use AsyncStorage to track signup start time
+      const { AsyncStorage } = require('@react-native-async-storage/async-storage');
+      AsyncStorage.setItem('alpaca_signup_started', Date.now().toString()).catch(() => {
+        // Silently fail if AsyncStorage not available
+      });
+    } catch (e) {
+      // AsyncStorage not available, continue anyway
+    }
+    
     // Open Alpaca signup page
     Linking.openURL('https://alpaca.markets/signup')
       .then(() => {
         Alert.alert(
           'Account Creation Started',
-          'We\'ve opened Alpaca\'s signup page. After you create your account and complete verification, come back here to connect it to RichesReach.',
+          'We\'ve opened Alpaca\'s signup page.\n\n' +
+          '📝 Next Steps:\n' +
+          '1. Complete your Alpaca account signup\n' +
+          '2. Finish identity verification\n' +
+          '3. Return to RichesReach and tap "Connect with Alpaca"\n\n' +
+          '💡 Tip: Keep this app open or bookmark it to easily return after signup.',
           [
             {
               text: 'Got it',
@@ -156,9 +172,12 @@ export const AlpacaConnectModal: React.FC<AlpacaConnectModalProps> = ({
 
             <View style={styles.stepsContainer}>
               <Text style={styles.stepsTitle}>Steps:</Text>
-              <Text style={styles.step}>1. Create your Alpaca account (free)</Text>
+              <Text style={styles.step}>1. Create your Alpaca account (free, ~5 minutes)</Text>
               <Text style={styles.step}>2. Complete identity verification</Text>
-              <Text style={styles.step}>3. Come back and connect to RichesReach</Text>
+              <Text style={styles.step}>3. Return to RichesReach and connect</Text>
+              <Text style={styles.note}>
+                ⚠️ Note: After signup, you'll need to manually return to this app to complete the connection.
+              </Text>
             </View>
 
             <TouchableOpacity
@@ -257,6 +276,13 @@ const styles = StyleSheet.create({
     color: '#666',
     marginBottom: 8,
     lineHeight: 20,
+  },
+  note: {
+    fontSize: 12,
+    color: '#F59E0B',
+    marginTop: 12,
+    fontStyle: 'italic',
+    lineHeight: 18,
   },
   button: {
     paddingVertical: 14,
