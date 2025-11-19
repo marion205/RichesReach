@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, FlatList, ActivityIndicator } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useQuery, gql } from '@apollo/client';
+import logger from '../utils/logger';
 
 interface NextMoveModalProps {
   visible: boolean;
@@ -57,7 +58,7 @@ export default function NextMoveModal({ visible, onClose, portfolioValue = 10000
     errorPolicy: 'all', // Return partial data even if there are errors
     notifyOnNetworkStatusChange: true,
     onCompleted: (data) => {
-      console.log('✅ NextMoveModal: AI Recommendations loaded via Apollo', {
+      logger.log('✅ NextMoveModal: AI Recommendations loaded via Apollo', {
         hasData: !!data?.aiRecommendations,
         buyCount: data?.aiRecommendations?.buyRecommendations?.length ?? 0,
         sellCount: data?.aiRecommendations?.sellRecommendations?.length ?? 0,
@@ -65,14 +66,14 @@ export default function NextMoveModal({ visible, onClose, portfolioValue = 10000
       });
     },
     onError: (error) => {
-      console.error('❌ NextMoveModal: Apollo query failed, falling back to direct fetch', {
+      logger.error('❌ NextMoveModal: Apollo query failed, falling back to direct fetch', {
         message: error?.message,
         graphQLErrors: error?.graphQLErrors,
         networkError: error?.networkError,
       });
       // Fallback to direct fetch if Apollo fails
       if (visible && !useDirectFetch) {
-        console.log('🔄 Falling back to direct fetch...');
+        logger.log('🔄 Falling back to direct fetch...');
         setUseDirectFetch(true);
         performDirectFetch();
       }
@@ -85,7 +86,7 @@ export default function NextMoveModal({ visible, onClose, portfolioValue = 10000
     
     // Stop infinite loop
     if (attempt > maxRetries) {
-      console.error(`❌ NextMoveModal: Max retries (${maxRetries}) reached. Stopping.`);
+      logger.error(`❌ NextMoveModal: Max retries (${maxRetries}) reached. Stopping.`);
       setDirectFetchError(new Error(`Failed after ${maxRetries} attempts`));
       setDirectFetchLoading(false);
       return;
@@ -96,7 +97,7 @@ export default function NextMoveModal({ visible, onClose, portfolioValue = 10000
     setRetryCount(attempt);
     
     try {
-      console.log(`🔄 NextMoveModal: Performing direct fetch (attempt ${attempt}/${maxRetries})...`);
+      logger.log(`🔄 NextMoveModal: Performing direct fetch (attempt ${attempt}/${maxRetries})...`);
       
       const queryBody = {
         query: `
@@ -161,7 +162,7 @@ export default function NextMoveModal({ visible, onClose, portfolioValue = 10000
         variables: { usingDefaults: true },
       };
       
-      console.log('📤 Sending query with variables:', JSON.stringify(queryBody.variables));
+      logger.log('📤 Sending query with variables:', JSON.stringify(queryBody.variables));
       
       const response = await fetch('http://localhost:8000/graphql/', {
         method: 'POST',
@@ -179,33 +180,33 @@ export default function NextMoveModal({ visible, onClose, portfolioValue = 10000
       const json = await response.json();
       
       // Log FULL response (no truncation) for debugging
-      console.log('📥 FULL Response Body:', JSON.stringify(json, null, 2));
+      logger.log('📥 FULL Response Body:', JSON.stringify(json, null, 2));
       
       if (json.errors) {
-        console.error('❌ GraphQL errors in response:', json.errors);
+        logger.error('❌ GraphQL errors in response:', json.errors);
         throw new Error(`GraphQL errors: ${JSON.stringify(json.errors)}`);
       }
 
       // Check response structure
       if (!json.data) {
-        console.error('❌ No "data" key in response. Full response:', json);
+        logger.error('❌ No "data" key in response. Full response:', json);
         throw new Error(`Invalid response: missing "data" key. Response keys: ${Object.keys(json).join(', ')}`);
       }
 
       // Log what keys are in data
-      console.log('📊 Response data keys:', Object.keys(json.data));
+      logger.log('📊 Response data keys:', Object.keys(json.data));
       
       const aiRecs = json.data?.aiRecommendations;
       
       if (!aiRecs) {
-        console.error('❌ No "aiRecommendations" in data. Data structure:', json.data);
+        logger.error('❌ No "aiRecommendations" in data. Data structure:', json.data);
         throw new Error(`Invalid response structure: missing aiRecommendations. Data keys: ${Object.keys(json.data || {}).join(', ')}`);
       }
 
       const buyRecs = aiRecs?.buyRecommendations || [];
       const portfolioAnalysis = aiRecs?.portfolioAnalysis;
       
-      console.log('✅ NextMoveModal: Direct fetch succeeded', {
+      logger.log('✅ NextMoveModal: Direct fetch succeeded', {
         hasData: !!aiRecs,
         hasPortfolioAnalysis: !!portfolioAnalysis,
         portfolioValue: portfolioAnalysis?.totalValue,
@@ -216,14 +217,14 @@ export default function NextMoveModal({ visible, onClose, portfolioValue = 10000
         aiRecommendationsKeys: Object.keys(aiRecs),
       });
       
-      console.log('✅ Setting state with data...');
+      logger.log('✅ Setting state with data...');
       setDirectFetchData(json.data);
       setDirectFetchError(null);
       setRetryCount(0); // Reset on success
       setDirectFetchLoading(false); // IMPORTANT: Set loading to false on success
-      console.log('✅ State updated - loading should be false now');
+      logger.log('✅ State updated - loading should be false now');
     } catch (error: any) {
-      console.error(`❌ NextMoveModal: Direct fetch failed (attempt ${attempt}):`, {
+      logger.error(`❌ NextMoveModal: Direct fetch failed (attempt ${attempt}):`, {
         message: error?.message,
         name: error?.name,
       });
@@ -232,7 +233,7 @@ export default function NextMoveModal({ visible, onClose, portfolioValue = 10000
       // Retry with exponential backoff
       if (attempt < maxRetries) {
         const delay = 1000 * Math.pow(2, attempt - 1); // 1s, 2s, 4s
-        console.log(`⏳ Retrying in ${delay}ms...`);
+        logger.log(`⏳ Retrying in ${delay}ms...`);
         setTimeout(() => {
           performDirectFetch(attempt + 1);
         }, delay);
@@ -246,7 +247,7 @@ export default function NextMoveModal({ visible, onClose, portfolioValue = 10000
   React.useEffect(() => {
     if (visible && loading && !data && !error && !useDirectFetch && !directFetchData) {
       const timeoutId = setTimeout(() => {
-        console.log('⏱️ Apollo query taking too long (>2s), switching to direct fetch');
+        logger.log('⏱️ Apollo query taking too long (>2s), switching to direct fetch');
         setUseDirectFetch(true);
         performDirectFetch();
       }, 2000); // Wait 2 seconds for Apollo, then fallback (faster UX)
@@ -258,7 +259,7 @@ export default function NextMoveModal({ visible, onClose, portfolioValue = 10000
   React.useEffect(() => {
     if (visible && error && !useDirectFetch && retryCount === 0) {
       // Apollo failed, try direct fetch
-      console.log('🔄 Apollo failed, switching to direct fetch');
+      logger.log('🔄 Apollo failed, switching to direct fetch');
       setUseDirectFetch(true);
       performDirectFetch(1);
     } else if (visible && useDirectFetch && !directFetchData && !directFetchLoading && retryCount === 0) {
@@ -269,7 +270,7 @@ export default function NextMoveModal({ visible, onClose, portfolioValue = 10000
 
   // Additional debug logging
   React.useEffect(() => {
-    console.log('🔍 NextMoveModal: Query state', {
+    logger.log('🔍 NextMoveModal: Query state', {
       visible,
       apolloLoading: loading,
       apolloHasData: !!data,
@@ -289,7 +290,7 @@ export default function NextMoveModal({ visible, onClose, portfolioValue = 10000
 
   // Debug: Log when modal visibility changes
   React.useEffect(() => {
-    console.log('👁️ NextMoveModal: Visibility changed', { visible, loading, hasData: !!data });
+    logger.log('👁️ NextMoveModal: Visibility changed', { visible, loading, hasData: !!data });
   }, [visible, loading, data]);
 
   // Direct fetch test to debug network issues
@@ -297,7 +298,7 @@ export default function NextMoveModal({ visible, onClose, portfolioValue = 10000
     if (visible && !data && loading) {
       // Test direct fetch after 2 seconds if still loading
       const timeoutId = setTimeout(async () => {
-        console.log('🧪 NextMoveModal: Testing direct fetch...');
+        logger.log('🧪 NextMoveModal: Testing direct fetch...');
         try {
           const response = await fetch('http://localhost:8000/graphql/', {
             method: 'POST',
@@ -322,24 +323,24 @@ export default function NextMoveModal({ visible, onClose, portfolioValue = 10000
               variables: { usingDefaults: true },
             }),
           });
-          console.log('🧪 Direct fetch response:', {
+          logger.log('🧪 Direct fetch response:', {
             status: response.status,
             ok: response.ok,
             headers: Object.fromEntries(response.headers.entries()),
           });
           const text = await response.text();
-          console.log('🧪 Direct fetch body (first 500 chars):', text.substring(0, 500));
+          logger.log('🧪 Direct fetch body (first 500 chars):', text.substring(0, 500));
           try {
             const json = JSON.parse(text);
-            console.log('🧪 Direct fetch parsed JSON:', {
+            logger.log('🧪 Direct fetch parsed JSON:', {
               hasData: !!json.data,
               hasAiRecommendations: !!json.data?.aiRecommendations,
             });
           } catch (e) {
-            console.error('🧪 Failed to parse JSON:', e);
+            logger.error('🧪 Failed to parse JSON:', e);
           }
         } catch (error) {
-          console.error('🧪 Direct fetch error:', {
+          logger.error('🧪 Direct fetch error:', {
             message: error?.message,
             name: error?.name,
             stack: error?.stack?.substring(0, 300),
@@ -355,9 +356,9 @@ export default function NextMoveModal({ visible, onClose, portfolioValue = 10000
     if (visible) {
       // If we have no data and we're not loading, trigger a refetch
       if (!data && !loading) {
-        console.log('🔄 NextMoveModal: Modal opened, triggering refetch...');
+        logger.log('🔄 NextMoveModal: Modal opened, triggering refetch...');
         refetch().catch((err) => {
-          console.error('❌ NextMoveModal: Refetch failed', err);
+          logger.error('❌ NextMoveModal: Refetch failed', err);
         });
       }
     }
@@ -369,7 +370,7 @@ export default function NextMoveModal({ visible, onClose, portfolioValue = 10000
   const effectiveError = useDirectFetch ? directFetchError : error;
 
   const ideas: Idea[] = React.useMemo(() => {
-    console.log('💡 Ideas useMemo called:', {
+    logger.log('💡 Ideas useMemo called:', {
       effectiveLoading,
       hasEffectiveData: !!effectiveData,
       hasAiRecs: !!effectiveData?.aiRecommendations,
@@ -439,7 +440,7 @@ export default function NextMoveModal({ visible, onClose, portfolioValue = 10000
 
     // Limit to top 5 recommendations
     const finalIdeas = result.slice(0, 5);
-    console.log('💡 Ideas useMemo returning:', {
+    logger.log('💡 Ideas useMemo returning:', {
       count: finalIdeas.length,
       symbols: finalIdeas.map(i => i.symbol),
     });
@@ -474,7 +475,7 @@ export default function NextMoveModal({ visible, onClose, portfolioValue = 10000
               <TouchableOpacity 
                 style={styles.retryButton}
                 onPress={() => {
-                  console.log('🔄 NextMoveModal: Manual retry');
+                  logger.log('🔄 NextMoveModal: Manual retry');
                   if (useDirectFetch) {
                     performDirectFetch(1);
                   } else {

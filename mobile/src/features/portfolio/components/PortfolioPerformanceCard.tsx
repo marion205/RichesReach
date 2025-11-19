@@ -34,6 +34,7 @@ import {
 } from '../../../graphql/benchmarkQueries';
 import BenchmarkSelector from './BenchmarkSelector';
 import { computeYDomain, getPeriodReturnLabel } from '../utils/chartUtils';
+import logger from '../../../utils/logger';
 // Conditionally import Skia chart - only available in development builds, not Expo Go
 let InnovativeChart: any = null;
 let isSkiaAvailable = false;
@@ -46,16 +47,16 @@ try {
     const { Canvas, Path, Skia } = SkiaComponents || {};
     isSkiaAvailable = !!(SkiaComponents && Canvas && Path && Skia);
     if (!isSkiaAvailable) {
-      console.warn('Skia components not fully available - Canvas, Path, or Skia missing');
+      logger.warn('Skia components not fully available - Canvas, Path, or Skia missing');
     }
   } catch (e) {
     // Skia library not available
     isSkiaAvailable = false;
-    console.warn('@shopify/react-native-skia not installed. Install with: npm install @shopify/react-native-skia');
+    logger.warn('@shopify/react-native-skia not installed. Install with: npm install @shopify/react-native-skia');
   }
 } catch (e) {
   // Skia not available - will use fallback chart
-  console.warn('Skia chart component not available, using fallback chart');
+  logger.warn('Skia chart component not available, using fallback chart');
   isSkiaAvailable = false;
 }
 
@@ -128,7 +129,7 @@ export default function PortfolioPerformanceCard({
       fetchPolicy: 'cache-and-network',
       errorPolicy: 'all', // Continue rendering even if query has errors
       onError: (error) => {
-        console.warn('Benchmark series query error:', error);
+        logger.warn('Benchmark series query error:', error);
       },
     }
   );
@@ -137,7 +138,7 @@ export default function PortfolioPerformanceCard({
     skip: !useRealBenchmarkData,
     errorPolicy: 'all', // Continue rendering even if query has errors
     onError: (error) => {
-      console.warn('Available benchmarks query error:', error);
+      logger.warn('Available benchmarks query error:', error);
     },
   });
 
@@ -241,7 +242,7 @@ export default function PortfolioPerformanceCard({
     const newBench = genBenchmarkSeries(pts);
     setHistory(newHistory);
     setBench(newBench);
-    console.log('📈 Generated portfolio history:', newHistory.length, 'points');
+    logger.log('📈 Generated portfolio history:', newHistory.length, 'points');
     const tid = setTimeout(() => setIsLoading(false), 200);
     return () => clearTimeout(tid);
   }, [tab, genPortfolioSeries, genBenchmarkSeries]);
@@ -262,13 +263,13 @@ export default function PortfolioPerformanceCard({
   // Debug AR chart state
   useEffect(() => {
     if (useAdvancedChart) {
-      console.log('🎯 AR Chart Mode Active');
-      console.log('  - History points:', history.length);
-      console.log('  - InnovativeChartSeries points:', innovativeChartSeries.length);
-      console.log('  - InnovativeChart available:', !!InnovativeChart);
-      console.log('  - Skia available:', isSkiaAvailable);
+      logger.log('🎯 AR Chart Mode Active');
+      logger.log('  - History points:', history.length);
+      logger.log('  - InnovativeChartSeries points:', innovativeChartSeries.length);
+      logger.log('  - InnovativeChart available:', !!InnovativeChart);
+      logger.log('  - Skia available:', isSkiaAvailable);
       if (innovativeChartSeries.length > 0) {
-        console.log('  - Sample series data:', innovativeChartSeries.slice(0, 3));
+        logger.log('  - Sample series data:', innovativeChartSeries.slice(0, 3));
       }
     }
   }, [useAdvancedChart, history.length, innovativeChartSeries.length]);
@@ -561,11 +562,11 @@ export default function PortfolioPerformanceCard({
                     );
                     return;
                   }
-                  console.log('🔄 Toggling AR chart, current state:', useAdvancedChart);
-                  console.log('📊 History length:', history.length);
-                  console.log('📊 InnovativeChartSeries length:', innovativeChartSeries.length);
-                  console.log('📊 InnovativeChart available:', !!InnovativeChart);
-                  console.log('📊 Skia available:', isSkiaAvailable);
+                  logger.log('🔄 Toggling AR chart, current state:', useAdvancedChart);
+                  logger.log('📊 History length:', history.length);
+                  logger.log('📊 InnovativeChartSeries length:', innovativeChartSeries.length);
+                  logger.log('📊 InnovativeChart available:', !!InnovativeChart);
+                  logger.log('📊 Skia available:', isSkiaAvailable);
                   setUseAdvancedChart(v => !v);
                 }}
                 accessibilityRole="button"

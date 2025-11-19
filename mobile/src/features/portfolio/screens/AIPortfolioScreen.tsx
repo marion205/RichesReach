@@ -15,9 +15,8 @@ import {
   FlatList,
 } from 'react-native';
 
-// 🔥 FILE LOADED INDICATOR - If you see this, the updated code is being used
-console.log('🔥 FILE LOADED: AIPortfolioScreen.tsx with updated validation logic');
 import Icon from 'react-native-vector-icons/Feather';
+import logger from '../../../utils/logger';
 import { useMutation, useQuery, gql, useApolloClient } from '@apollo/client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import TradingButton from '../../../components/forms/TradingButton';
@@ -179,6 +178,114 @@ interface AIPortfolioScreenProps {
   navigateTo?: (screen: string) => void;
 }
 
+// AI Recommendation Types
+interface BuyRecommendation {
+  symbol: string;
+  companyName?: string;
+  recommendation?: string;
+  confidence?: number | null;
+  reasoning?: string;
+  targetPrice?: number | null;
+  currentPrice?: number | null;
+  expectedReturn?: number | null;
+  allocation?: number | null;
+  marketCap?: number;
+  annVol?: number;
+  id?: string;
+  _personalizedScore?: number;
+  _factors?: Partial<FactorWeights> & { sector?: string };
+  factorContrib?: Record<string, number>;
+  [key: string]: unknown;
+}
+
+interface RiskAssessment {
+  overallRisk?: string;
+  volatilityEstimate?: number;
+  recommendations?: string[];
+  [key: string]: unknown;
+}
+
+interface AIData {
+  portfolioAnalysis?: {
+    totalValue?: number;
+    numHoldings?: number;
+    sectorBreakdown?: Record<string, number>;
+    riskScore?: number;
+    diversificationScore?: number;
+    expectedImpact?: {
+      evPct?: number;
+      evAbs?: number;
+      per10k?: number;
+    };
+    risk?: {
+      volatilityEstimate?: number;
+      maxDrawdownPct?: number;
+    };
+    assetAllocation?: {
+      stocks?: number;
+      bonds?: number;
+      cash?: number;
+    };
+    [key: string]: unknown;
+  };
+  buyRecommendations?: BuyRecommendation[];
+  sellRecommendations?: Array<{
+    symbol?: string;
+    [key: string]: unknown;
+  }>;
+  riskAssessment?: RiskAssessment;
+  [key: string]: unknown;
+}
+
+interface PersonalizedRecommendation extends BuyRecommendation {
+  _personalizedScore: number;
+  _factors?: Partial<FactorWeights> & { sector?: string };
+}
+
+interface FactorContrib {
+  [key: string]: number;
+}
+
+interface OptimizerWeight {
+  symbol: string;
+  weight: number;
+}
+
+interface OptimizerResult {
+  weights: OptimizerWeight[];
+  portfolioVol?: number;
+  [key: string]: unknown;
+}
+
+interface OptimizerResultState {
+  weights?: Record<string, number>;
+  vol?: number;
+  [key: string]: unknown;
+}
+
+interface GraphQLError {
+  message?: string;
+  graphQLErrors?: Array<{ message?: string }>;
+  networkError?: { message?: string };
+  [key: string]: unknown;
+}
+
+interface MutationResult {
+  data?: {
+    createIncomeProfile?: {
+      success?: boolean;
+      message?: string;
+    };
+  };
+  errors?: Array<{ message?: string }>;
+  [key: string]: unknown;
+}
+
+interface RefetchOptions {
+  fetchPolicy?: string;
+  [key: string]: unknown;
+}
+
 /* ------------------------------ UTILITIES --------------------------------- */
 type RT = 'Conservative' | 'Moderate' | 'Aggressive' | '';
 
@@ -219,7 +326,7 @@ const fmtMoney = (v?: number | null) => {
  * Otherwise, we fall back to riskTolerance-based defaults.
  */
 const getVolatility = (
-  ai: any | undefined,
+  ai: AIData | undefined,
   riskTolerance: RT
 ): string => {
   const backendVol = ai?.riskAssessment?.volatilityEstimate;
@@ -242,7 +349,7 @@ const getMaxDrawdown = (riskTolerance: RT): string => {
  * - If portfolio total value is known: EV$ = totalValue * weightedAvgReturn
  * - If not: show EV per $10k invested.
  */
-const computeExpectedImpact = (ai: any, totalValue?: number | null) => {
+const computeExpectedImpact = (ai: AIData, totalValue?: number | null) => {
   const recs: Array<{ expectedReturn?: number | null; confidence?: number | null }> =
     ai?.buyRecommendations || [];
 
@@ -334,7 +441,10 @@ function profileToFactorTilts(p: ProfileLite): FactorWeights {
 
   // normalize
   const sum = Object.values(w).reduce((a, b) => a + b, 0);
-  for (const k in w) (w as any)[k] = (w as any)[k] / sum;
+  for (const k in w) {
+    const key = k as keyof FactorWeights;
+    w[key] = w[key] / sum;
+  }
   return w;
 }
 
@@ -356,10 +466,23 @@ function toFactors(rows: ScreenerRow[]) {
   }));
 
   // z-score by sector to avoid naive sector bets
-  const bySector: Record<string, any[]> = {};
+  interface RawFactor {
+    symbol: string;
+    value: number | null;
+    quality: number | null;
+    momentum: number | null;
+    lowVol: number | null;
+    yield: number | null;
+    sector: string;
+  }
+  const bySector: Record<string, RawFactor[]> = {};
   raw.forEach(x => { (bySector[x.sector] ||= []).push(x); });
 
-  const zmap: Record<string, any> = {};
+  interface ZScore extends FactorWeights {
+    symbol: string;
+    sector: string;
+  }
+  const zmap: Record<string, ZScore> = {};
   for (const s of Object.keys(bySector)) {
     const bucket = bySector[s];
     const keys: (keyof FactorWeights)[] = ['value','quality','momentum','lowVol','yield'];
@@ -371,10 +494,10 @@ function toFactors(rows: ScreenerRow[]) {
       stats[k] = { m, sd };
     }
     for (const b of bucket) {
-      const z: any = { symbol: b.symbol, sector: s };
+      const z: ZScore = { symbol: b.symbol, sector: s, value: 0, quality: 0, momentum: 0, lowVol: 0, yield: 0 };
       for (const k of keys) {
         const {m,sd} = stats[k];
-        const v = (b as any)[k];
+        const v = b[k];
         z[k] = v==null ? 0 : (v - m)/sd; // missing → neutral
       }
       zmap[z.symbol] = z;
@@ -384,7 +507,7 @@ function toFactors(rows: ScreenerRow[]) {
 }
 
 function blendScores(
-  rec: any,
+  rec: BuyRecommendation,
   z: Partial<FactorWeights> | undefined,
   w: FactorWeights,
   horizon: string | undefined
@@ -493,7 +616,7 @@ function derivePolicyFromProfile(profile: {
 /* ------------------------------ OPTIMIZER INTEGRATION ----------------------- */
 
 async function optimizeWeights(
-  personalizedRecs: any[],
+  personalizedRecs: PersonalizedRecommendation[],
   policy: { volTarget?: number; nameCap: number; sectorCap: number; turnoverBudget?: number; sectorOverrides?: Record<string, number> },
   zBySymbol: Record<string, { sector?: string; lowVol?: number }>,
   prevWeights?: Record<string, number>,
@@ -577,7 +700,7 @@ const METHODOLOGY_STEPS: MethodologyStep[] = [
   },
 ];
 
-const AnalysisMethodology = ({ ai }: { ai?: any }) => {
+const AnalysisMethodology = ({ ai }: { ai?: AIData }) => {
   const [open, setOpen] = useState<string | null>(null);
 
   // Optional: if backend provides weights, map them here and override
@@ -683,10 +806,10 @@ const CashSafetyWarning = ({ policy, totalValue, paused }: { policy: Policy; tot
   );
 };
 
-const StockCard = React.memo(({ item, showPersonalized, optResult }: { item: any; showPersonalized: boolean; optResult?: {weights?: Record<string, number>; vol?: number} | null }) => {
+const StockCard = React.memo(({ item, showPersonalized, optResult }: { item: BuyRecommendation; showPersonalized: boolean; optResult?: OptimizerResultState | null }) => {
   // Safety check for undefined item
   if (!item) {
-    console.warn('StockCard: item is undefined');
+    logger.warn('StockCard: item is undefined');
     return null;
   }
   
@@ -740,7 +863,7 @@ const StockCard = React.memo(({ item, showPersonalized, optResult }: { item: any
                   {/* Factor exposures chips (coming from factorContrib) */}
                   {item.factorContrib && (
                     <View style={{flexDirection:'row', flexWrap:'wrap', gap:6, marginTop:6}}>
-                      {Object.entries(item.factorContrib).map(([k,v]: any) => (
+                      {Object.entries(item.factorContrib).map(([k, v]: [string, number]) => (
                         <View key={k} style={[styles.tag, {backgroundColor:'#6366F1'}]}>
                           <Text style={styles.tagText}>{`${k}: ${Number(v).toFixed(1)}σ`}</Text>
                         </View>
@@ -782,7 +905,7 @@ const StockCard = React.memo(({ item, showPersonalized, optResult }: { item: any
         side="buy"
         style={styles.tradingButton}
         onOrderPlaced={(order) => {
-          console.log('Buy order placed:', order);
+          logger.log('Buy order placed:', order);
         }}
       />
       <TradingButton
@@ -791,7 +914,7 @@ const StockCard = React.memo(({ item, showPersonalized, optResult }: { item: any
         side="sell"
         style={styles.tradingButton}
         onOrderPlaced={(order) => {
-          console.log('Sell order placed:', order);
+          logger.log('Sell order placed:', order);
         }}
       />
     </View>
@@ -812,9 +935,9 @@ type ListHeaderProps = {
   setShowProfileForm: (v: boolean) => void;
   Form: React.ComponentType;
   recommendationsLoading: boolean;
-  ai?: any;
-  recommendationsError?: any;
-  refetchRecommendations: (opts?: any) => Promise<any>;
+  ai?: AIData;
+  recommendationsError?: GraphQLError;
+  refetchRecommendations: (opts?: RefetchOptions) => Promise<unknown>;
   Recommendations: React.ComponentType;
   SummaryCards?: React.ComponentType;
   hideStockPicks?: boolean;
@@ -822,12 +945,21 @@ type ListHeaderProps = {
   handleGenerateRecommendations?: () => void;
   optimizing?: boolean;
   paused?: boolean;
-  policy?: any;
-  personalizedRecs?: any[];
-  zBySymbol?: any;
-  optResult?: any;
+  policy?: {
+    volTarget?: number;
+    nameCap: number;
+    sectorCap: number;
+    turnoverBudget?: number;
+    sectorOverrides?: Record<string, number>;
+    minMarketCap?: number;
+    excludeHighVol?: number;
+    [key: string]: unknown;
+  };
+  personalizedRecs?: PersonalizedRecommendation[];
+  zBySymbol?: Record<string, Partial<FactorWeights> & { sector?: string }>;
+  optResult?: OptimizerResultState;
   setOptimizing?: (value: boolean) => void;
-  setOptResult?: (value: any) => void;
+  setOptResult?: (value: OptimizerResultState) => void;
 };
 
 const ListHeader = React.memo((props: ListHeaderProps) => {
@@ -857,7 +989,7 @@ const ListHeader = React.memo((props: ListHeaderProps) => {
   } = props;
 
   // dev-only debug - ALWAYS LOG (removed __DEV__ check)
-  console.log('🔴🔴🔴 CRITICAL: ListHeader render:', {
+  logger.log('🔴🔴🔴 CRITICAL: ListHeader render:', {
     hideStockPicks,
     hasProfile,
     recommendationsLoading,
@@ -871,7 +1003,7 @@ const ListHeader = React.memo((props: ListHeaderProps) => {
     portfolioAnalysisKeys: ai?.portfolioAnalysis ? Object.keys(ai.portfolioAnalysis) : []
   });
 
-  console.log('🔴🔴🔴 CRITICAL: ListHeader return statement executing!', {
+  logger.log('🔴🔴🔴 CRITICAL: ListHeader return statement executing!', {
     hasAi: !!ai,
     hasPortfolioAnalysis: !!ai?.portfolioAnalysis,
     hasSummaryCards: !!SummaryCards,
@@ -912,7 +1044,7 @@ const ListHeader = React.memo((props: ListHeaderProps) => {
       {(() => {
         const hasPortfolioAnalysis = !!ai?.portfolioAnalysis;
         const hasSummaryCards = !!SummaryCards;
-        console.log('🔴🔴🔴 BREAKPOINT: Checking SummaryCards render (FORCE LOG):', {
+        logger.log('🔴🔴🔴 BREAKPOINT: Checking SummaryCards render (FORCE LOG):', {
           hasPortfolioAnalysis,
           hasSummaryCards,
           hasAi: !!ai,
@@ -922,10 +1054,10 @@ const ListHeader = React.memo((props: ListHeaderProps) => {
           SummaryCardsType: typeof SummaryCards
         });
         if (hasPortfolioAnalysis && hasSummaryCards) {
-          console.log('✅ WILL RENDER SummaryCards!');
+          logger.log('✅ WILL RENDER SummaryCards!');
           return <SummaryCards />;
         } else {
-          console.log('❌ WILL NOT RENDER SummaryCards!', {
+          logger.log('❌ WILL NOT RENDER SummaryCards!', {
             reason: !hasPortfolioAnalysis ? 'no portfolioAnalysis' : 'no SummaryCards component'
           });
           return null;
@@ -935,7 +1067,7 @@ const ListHeader = React.memo((props: ListHeaderProps) => {
       {/* Show recommendations if we have data, regardless of profile status */}
       {(() => {
         if (__DEV__) {
-          console.log('🔴🔴🔴 BREAKPOINT: ListHeader recommendations render decision', {
+          logger.log('🔴🔴🔴 BREAKPOINT: ListHeader recommendations render decision', {
             recommendationsLoading,
             hasAi: !!ai,
             hasRecommendationsError: !!recommendationsError,
@@ -982,7 +1114,7 @@ const ListHeader = React.memo((props: ListHeaderProps) => {
                       sectorCap: policy.sectorCap,        // e.g. 0.30
                       turnoverBudget: policy.turnoverBudget, // optional
                     }, zBySymbol);
-                    const wmap = Object.fromEntries(result.weights.map((w:any)=>[w.symbol, w.weight]));
+                    const wmap = Object.fromEntries(result.weights.map((w: OptimizerWeight)=>[w.symbol, w.weight]));
                     setOptResult({weights: wmap, vol: result.portfolioVol});
                   } catch (e) {
                     Alert.alert("Optimization failed", `${e}`);
@@ -1003,7 +1135,7 @@ const ListHeader = React.memo((props: ListHeaderProps) => {
         </View>
       ) : hasProfile && ai ? (
         (() => {
-          if (__DEV__) console.log('🔴 BREAKPOINT: Rendering alternative view (hasProfile && ai path)');
+          if (__DEV__) logger.log('🔴 BREAKPOINT: Rendering alternative view (hasProfile && ai path)');
           return (
           <View style={styles.recommendationsContainer}>
             <View style={styles.recommendationHeader}>
@@ -1090,7 +1222,7 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
   useEffect(() => {
     if (userLoading) {
       const timer = setTimeout(() => {
-        console.log('[AIPortfolio] User loading timeout - using mock data');
+        logger.log('[AIPortfolio] User loading timeout - using mock data');
         setUserLoadingTimeout(true);
       }, 3000); // 3 second timeout
       return () => clearTimeout(timer);
@@ -1136,7 +1268,7 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
     effectiveUserEarly.incomeProfile.investmentGoals?.length > 0;
   
   // Debug logging for profile validation
-  console.log('🔍 Profile Debug:', {
+  logger.log('🔍 Profile Debug:', {
     hasIncomeProfile: !!effectiveUserEarly?.incomeProfile,
     incomeProfileObject: effectiveUserEarly?.incomeProfile,
     age: effectiveUserEarly?.incomeProfile?.age,
@@ -1153,22 +1285,22 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
 
   // Pre-populate form fields when profile form is shown (only once)
   useEffect(() => {
-    console.log('🔍 Form initialization useEffect called, showProfileForm:', showProfileForm);
+    logger.log('🔍 Form initialization useEffect called, showProfileForm:', showProfileForm);
     if (showProfileForm) {
-      console.log('🔍 Initializing form fields with user profile:', user?.incomeProfile);
+      logger.log('🔍 Initializing form fields with user profile:', user?.incomeProfile);
       // Initialize with existing profile data if available, otherwise use empty defaults
       setIncomeBracket(effectiveUserEarly?.incomeProfile?.incomeBracket || '');
       setAge(effectiveUserEarly?.incomeProfile?.age?.toString() || '');
       setSelectedGoals(effectiveUserEarly?.incomeProfile?.investmentGoals || []);
       setRiskTolerance(effectiveUserEarly?.incomeProfile?.riskTolerance || '');
       setInvestmentHorizon(effectiveUserEarly?.incomeProfile?.investmentHorizon || '');
-      console.log('🔍 Form fields initialized - age set to:', effectiveUserEarly?.incomeProfile?.age?.toString() || '');
+      logger.log('🔍 Form fields initialized - age set to:', effectiveUserEarly?.incomeProfile?.age?.toString() || '');
     }
   }, [showProfileForm]); // Only depend on showProfileForm to avoid unnecessary re-runs
 
   // Track age state changes
   useEffect(() => {
-    console.log('🔍 Age state changed to:', age);
+    logger.log('🔍 Age state changed to:', age);
   }, [age]);
   
 
@@ -1191,7 +1323,7 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
     notifyOnNetworkStatusChange: false, // ✅ Don't block UI on network status changes
     onCompleted: (data) => {
       const recs = data?.aiRecommendations?.buyRecommendations?.length ?? 0;
-      console.log('✅ AI Recommendations Query Completed:', {
+      logger.log('✅ AI Recommendations Query Completed:', {
         usingDefaults,
         recs,
         portfolioValue: data?.aiRecommendations?.portfolioAnalysis?.totalValue,
@@ -1200,9 +1332,9 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
       });
     },
     onError: (error) => {
-      console.error('❌ AI Recommendations Query Error:', error?.message);
-      console.error('   GraphQL errors:', error?.graphQLErrors);
-      console.error('   Network error:', error?.networkError);
+      logger.error('❌ AI Recommendations Query Error:', error?.message);
+      logger.error('   GraphQL errors:', error?.graphQLErrors);
+      logger.error('   Network error:', error?.networkError);
     },
   });
 
@@ -1229,7 +1361,7 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
   const ai = useMemo(() => {
     const realData = recommendationsData?.aiRecommendations;
     if (!realData && recommendationsError) {
-      console.error('❌ AI Recommendations Error:', {
+      logger.error('❌ AI Recommendations Error:', {
         error: recommendationsError?.message,
         hasData: !!recommendationsData,
         loading: recommendationsLoading,
@@ -1238,7 +1370,7 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
       return null;
     }
     if (realData) {
-      console.log('✅ Using real AI recommendations:', {
+      logger.log('✅ Using real AI recommendations:', {
         hasPortfolioAnalysis: !!realData?.portfolioAnalysis,
         buyRecsCount: realData?.buyRecommendations?.length || 0,
         keys: Object.keys(realData),
@@ -1253,7 +1385,7 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
   // Debug logging for AI recommendations
   React.useEffect(() => {
     const recs = ai?.buyRecommendations ?? [];
-    console.log('🤖 AI Recommendations Debug:', {
+    logger.log('🤖 AI Recommendations Debug:', {
       hasProfile,
       userLoading,
       querySkipped: userLoading,
@@ -1302,16 +1434,16 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
   const personalizedRecs = useMemo(() => {
     // Apply suitability filters based on income-derived policy
     const universe = (ai?.buyRecommendations || [])
-      .filter((s: any) => !policy.minMarketCap || (s.marketCap ?? 0) >= policy.minMarketCap)
-      .filter((s: any) => !policy.excludeHighVol || (s.annVol ?? 0.0) <= policy.excludeHighVol);
+      .filter((s: BuyRecommendation) => !policy.minMarketCap || (s.marketCap ?? 0) >= policy.minMarketCap)
+      .filter((s: BuyRecommendation) => !policy.excludeHighVol || (s.annVol ?? 0.0) <= policy.excludeHighVol);
     
-    const base = universe.map((r: any) => {
-      const z = zBySymbol[r.symbol];
+    const base = universe.map((r: BuyRecommendation): PersonalizedRecommendation => {
+      const z = zBySymbol?.[r.symbol];
       const score = blendScores(r, z, factorTilts, profileLite.investmentHorizon);
       return { ...r, _personalizedScore: score, _factors: z };
     });
     // stable sort by score desc
-    const result = base.sort((a: any, b: any) => (b._personalizedScore ?? 0) - (a._personalizedScore ?? 0));
+    const result = base.sort((a: PersonalizedRecommendation, b: PersonalizedRecommendation) => (b._personalizedScore ?? 0) - (a._personalizedScore ?? 0));
     
     
     return result;
@@ -1392,12 +1524,13 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
       
       let data, errors;
       try {
-        const result = await Promise.race([mutationPromise, timeoutPromise]) as any;
+        const result = await Promise.race([mutationPromise, timeoutPromise]) as MutationResult;
         data = result.data;
         errors = result.errors;
-      } catch (timeoutError: any) {
+      } catch (timeoutError: unknown) {
         // If timeout, optimistically update UI anyway
-        console.warn('[AIPortfolio] Mutation timeout, using optimistic update:', timeoutError.message);
+        const errorMessage = timeoutError instanceof Error ? timeoutError.message : String(timeoutError);
+        logger.warn('[AIPortfolio] Mutation timeout, using optimistic update:', errorMessage);
         setShowProfileForm(false);
         
         // Update cache optimistically
@@ -1405,23 +1538,23 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
           client.cache.evict({ fieldName: 'me' });
           client.cache.gc();
         } catch (e) {
-          console.warn('Cache eviction warning:', e);
+          logger.warn('Cache eviction warning:', e);
         }
         
         // Refetch and generate in background
         Promise.all([
-          refetchUser({ fetchPolicy: 'network-only' }).catch(console.warn),
+          refetchUser({ fetchPolicy: 'network-only' }).catch((err) => logger.warn('Failed to refetch user:', err)),
           new Promise(resolve => setTimeout(resolve, 100)).then(() => 
-            handleGenerateRecommendations().catch(console.warn)
+            handleGenerateRecommendations().catch((err) => logger.warn('Failed to generate recommendations:', err))
           )
-        ]).catch(console.warn);
+        ]).catch((err) => logger.warn('Failed to handle profile update:', err));
         return; // Exit early - don't wait
       }
 
       if (errors && errors.length > 0) {
-        console.error('GraphQL errors:', errors);
+        logger.error('GraphQL errors:', errors);
         // Don't block on errors - use optimistic update
-        console.warn('[AIPortfolio] GraphQL errors, using optimistic update');
+        logger.warn('[AIPortfolio] GraphQL errors, using optimistic update');
         setShowProfileForm(false);
         
         // Update cache optimistically
@@ -1429,11 +1562,11 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
           client.cache.evict({ fieldName: 'me' });
           client.cache.gc();
         } catch (e) {
-          console.warn('Cache eviction warning:', e);
+          logger.warn('Cache eviction warning:', e);
         }
         
         // Refetch in background
-        refetchUser({ fetchPolicy: 'network-only' }).catch(console.warn);
+        refetchUser({ fetchPolicy: 'network-only' }).catch((err) => logger.warn('Failed to refetch user:', err));
         return;
       }
 
@@ -1446,21 +1579,21 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
           client.cache.evict({ fieldName: 'me' });
           client.cache.gc();
         } catch (e) {
-          console.warn('Cache eviction warning:', e);
+          logger.warn('Cache eviction warning:', e);
         }
         
         // Refetch and generate recommendations in background - don't block UI
         Promise.all([
-          refetchUser({ fetchPolicy: 'network-only' }).catch(console.warn),
+          refetchUser({ fetchPolicy: 'network-only' }).catch((err) => logger.warn('Failed to refetch user:', err)),
           // Generate recommendations in background
           new Promise(resolve => setTimeout(resolve, 100)).then(() => 
-            handleGenerateRecommendations().catch(console.warn)
+            handleGenerateRecommendations().catch((err) => logger.warn('Failed to generate recommendations:', err))
           )
-        ]).catch(console.warn);
+        ]).catch((err) => logger.warn('Failed to handle profile update:', err));
       } else {
         // For demo: don't block on API errors, use optimistic update
         const errorMsg = data?.createIncomeProfile?.message || 'Failed to create profile';
-        console.warn('[AIPortfolio] Profile creation returned error, using optimistic update:', errorMsg);
+        logger.warn('[AIPortfolio] Profile creation returned error, using optimistic update:', errorMsg);
         
         // Optimistically update Apollo cache to reflect saved profile
         try {
@@ -1490,16 +1623,16 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
               },
             },
           });
-          console.log('[AIPortfolio] ✅ Optimistically updated Apollo cache with profile (API error case)');
+          logger.log('[AIPortfolio] ✅ Optimistically updated Apollo cache with profile (API error case)');
           
           // Trigger refetch to update the component with new cache data
           refetchUser({ fetchPolicy: 'cache-first' }).then(() => {
-            console.log('[AIPortfolio] ✅ User profile refetched after optimistic update (API error case)');
+            logger.log('[AIPortfolio] ✅ User profile refetched after optimistic update (API error case)');
           }).catch(e => {
-            console.warn('[AIPortfolio] Could not refetch user after optimistic update:', e);
+            logger.warn('[AIPortfolio] Could not refetch user after optimistic update:', e);
           });
         } catch (cacheError) {
-          console.warn('[AIPortfolio] Could not update cache optimistically:', cacheError);
+          logger.warn('[AIPortfolio] Could not update cache optimistically:', cacheError);
         }
         
         // Close form and update UI
@@ -1508,19 +1641,19 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
         // Try to generate recommendations anyway
         setTimeout(() => {
           handleGenerateRecommendations().catch(e => {
-            console.warn('[AIPortfolio] Could not generate recommendations:', e);
+            logger.warn('[AIPortfolio] Could not generate recommendations:', e);
           });
         }, 500);
         
         // Don't show error alert in demo mode
       }
     } catch (err) {
-      console.error('ERROR: create profile', err);
+      logger.error('ERROR: create profile', err);
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
       
       // For demo: use optimistic update on network errors
       if (errorMessage.includes('Network request failed') || errorMessage.includes('Failed to fetch')) {
-        console.warn('[AIPortfolio] Network error - using optimistic update for demo');
+        logger.warn('[AIPortfolio] Network error - using optimistic update for demo');
         
         // Optimistically update Apollo cache to reflect saved profile
         try {
@@ -1550,26 +1683,26 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
               },
             },
           });
-          console.log('[AIPortfolio] ✅ Optimistically updated Apollo cache with profile');
+          logger.log('[AIPortfolio] ✅ Optimistically updated Apollo cache with profile');
           
           // Trigger refetch to update the component with new cache data
           refetchUser({ fetchPolicy: 'cache-first' }).then(() => {
-            console.log('[AIPortfolio] ✅ User profile refetched after optimistic update');
+            logger.log('[AIPortfolio] ✅ User profile refetched after optimistic update');
           }).catch(e => {
-            console.warn('[AIPortfolio] Could not refetch user after optimistic update:', e);
+            logger.warn('[AIPortfolio] Could not refetch user after optimistic update:', e);
           });
         } catch (cacheError) {
-          console.warn('[AIPortfolio] Could not update cache optimistically:', cacheError);
+          logger.warn('[AIPortfolio] Could not update cache optimistically:', cacheError);
         }
         
         // Close form and update UI
         setShowProfileForm(false);
-        console.log('[AIPortfolio] Profile saved optimistically for demo');
+        logger.log('[AIPortfolio] Profile saved optimistically for demo');
         
         // Try to generate recommendations with the local profile data
         setTimeout(() => {
           handleGenerateRecommendations().catch(e => {
-            console.warn('[AIPortfolio] Could not generate recommendations after optimistic save:', e);
+            logger.warn('[AIPortfolio] Could not generate recommendations after optimistic save:', e);
           });
         }, 500);
         
@@ -1584,32 +1717,32 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
 
 
   const handleGenerateRecommendations = useCallback(async () => {
-    console.log('🔥🔥🔥 NEW CODE RUNNING - Updated validation logic active!');
-    console.log('🔄 REGENERATE BUTTON PRESSED - Starting AI Portfolio Recommendations Generation');
-    console.log('📊 Current user profile (local state):', { age, incomeBracket, investmentHorizon, riskTolerance, selectedGoals });
-    console.log('📊 Current user profile (GraphQL data):', {
+    logger.log('🔥🔥🔥 NEW CODE RUNNING - Updated validation logic active!');
+    logger.log('🔄 REGENERATE BUTTON PRESSED - Starting AI Portfolio Recommendations Generation');
+    logger.log('📊 Current user profile (local state):', { age, incomeBracket, investmentHorizon, riskTolerance, selectedGoals });
+    logger.log('📊 Current user profile (GraphQL data):', {
       age: user?.incomeProfile?.age,
       incomeBracket: user?.incomeProfile?.incomeBracket,
       investmentHorizon: user?.incomeProfile?.investmentHorizon,
       riskTolerance: user?.incomeProfile?.riskTolerance,
       investmentGoals: user?.incomeProfile?.investmentGoals
     });
-    console.log('🔍 hasProfile value:', hasProfile);
+    logger.log('🔍 hasProfile value:', hasProfile);
     
     // Proceed with defaults if profile is incomplete
     if (!hasProfile) {
-      console.log('⚙️ Profile incomplete - proceeding with safe defaults');
+      logger.log('⚙️ Profile incomplete - proceeding with safe defaults');
     } else {
-      console.log('✅ Profile complete - proceeding with generation');
+      logger.log('✅ Profile complete - proceeding with generation');
     }
     
     setIsGeneratingRecommendations(true);
     try {
-      console.log('⚙️ Generating AI recs (defaults ok):', { 
+      logger.log('⚙️ Generating AI recs (defaults ok):', { 
         usingDefaults: !hasProfile,
         profileInput 
       });
-      console.log('🚀 Calling generateAIRecommendations GraphQL mutation...');
+      logger.log('🚀 Calling generateAIRecommendations GraphQL mutation...');
       const res = await generateAIRecommendations({
         variables: {
           profile: profileInput,
@@ -1617,7 +1750,7 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
         }
       });
       
-      console.log('📥 GraphQL Response received:', {
+      logger.log('📥 GraphQL Response received:', {
         success: res.data?.generateAiRecommendations?.success,
         message: res.data?.generateAiRecommendations?.message,
         hasData: !!res.data?.generateAiRecommendations?.recommendations,
@@ -1628,14 +1761,14 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
       
       if (!ok) {
         const message = res.data?.generateAiRecommendations?.message || 'Failed to generate recommendations';
-        console.log('❌ Generation failed:', message);
+        logger.log('❌ Generation failed:', message);
         // Don't show alert in demo - just log the error
-        console.warn('[AIPortfolio] Generation failed, continuing with existing data:', message);
+        logger.warn('[AIPortfolio] Generation failed, continuing with existing data:', message);
         // Still try to refresh to show existing recommendations
         return;
       }
       
-      console.log('✅ Generation successful! Clearing cache and refreshing data...');
+      logger.log('✅ Generation successful! Clearing cache and refreshing data...');
       
       // Clear Apollo Client cache for aiRecommendations
       client.cache.evict({ fieldName: 'aiRecommendations' });
@@ -1647,18 +1780,18 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
         notifyOnNetworkStatusChange: true 
       });
       
-      console.log('🔄 Data refresh completed');
+      logger.log('🔄 Data refresh completed');
     } catch (err) {
-      console.error('💥 ERROR in handleGenerateRecommendations:', err);
-      console.error('💥 Error details:', {
+      logger.error('💥 ERROR in handleGenerateRecommendations:', err);
+      logger.error('💥 Error details:', {
         message: err?.message,
         stack: err?.stack,
         name: err?.name
       });
       // Don't show alert in demo - just log the error
-      console.warn('[AIPortfolio] Generation error (demo mode - suppressing alert):', err?.message);
+      logger.warn('[AIPortfolio] Generation error (demo mode - suppressing alert):', err?.message);
     } finally {
-      console.log('🏁 Generation process completed, setting loading to false');
+      logger.log('🏁 Generation process completed, setting loading to false');
       setIsGeneratingRecommendations(false);
     }
   }, [generateAIRecommendations, refetchRecommendations, client, hasProfile, setShowProfileForm]);
@@ -1681,17 +1814,18 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
     // Prevent double-fire in StrictMode and during fast refresh
     if (autoGenTriggeredRef.current || GEN_ONCE_SENTINEL.fired) return;
 
-    console.log('Auto-gen guard:', { hasProfile, recsLength, usingDefaults: !hasProfile });
+    logger.log('Auto-gen guard:', { hasProfile, recsLength, usingDefaults: !hasProfile });
     autoGenTriggeredRef.current = true;
     GEN_ONCE_SENTINEL.fired = true;
 
     handleGenerateRecommendations()
       .then(async () => {
         await refetchRecommendations({ fetchPolicy: 'network-only' });
-        console.log('✅ Auto-generation complete; list refetched.');
+        logger.log('✅ Auto-generation complete; list refetched.');
       })
-      .catch((e: any) => {
-        console.log('❌ Auto-generation failed:', e?.message || String(e));
+      .catch((e: unknown) => {
+        const errorMessage = e instanceof Error ? e.message : String(e);
+        logger.log('❌ Auto-generation failed:', errorMessage);
         // Release only local guard to allow manual retry
         autoGenTriggeredRef.current = false;
       });
@@ -1751,20 +1885,20 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
         <TextInput
           value={age}
           onChangeText={(text) => {
-            console.log('🔍 Age onChangeText called with:', text);
+            logger.log('🔍 Age onChangeText called with:', text);
             // Only allow digits and limit to 3 characters
             const cleaned = text.replace(/\D+/g, '').slice(0, 3);
             setAge(cleaned);
           }}
           onBlur={() => {
-            console.log('🔍 Age onBlur called, current age:', age);
+            logger.log('🔍 Age onBlur called, current age:', age);
             // Validate when user blurs
             const numAge = parseInt(age, 10);
             if (!age || isNaN(numAge) || numAge < 18) {
-              console.log('🔍 Age validation failed, setting to 18');
+              logger.log('🔍 Age validation failed, setting to 18');
               setAge('18');
             } else {
-              console.log('🔍 Age validation passed, keeping:', age);
+              logger.log('🔍 Age validation passed, keeping:', age);
             }
           }}
           style={styles.input}
@@ -1872,7 +2006,7 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
 
   const SummaryCards = () => {
     // ALWAYS LOG - no __DEV__ check
-    console.log('🟢🟢🟢🟢🟢 CRITICAL: SummaryCards FUNCTION CALLED!', {
+    logger.log('🟢🟢🟢🟢🟢 CRITICAL: SummaryCards FUNCTION CALLED!', {
       hasAi: !!ai,
       hasPortfolioAnalysis: !!ai?.portfolioAnalysis,
       totalValue,
@@ -2049,7 +2183,7 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
                 try {
                   sectorData = JSON.parse(ai.portfolioAnalysis.sectorBreakdown);
                 } catch (e) {
-                  console.warn('Failed to parse sectorBreakdown:', e);
+                  logger.warn('Failed to parse sectorBreakdown:', e);
                 }
               } else {
                 sectorData = ai.portfolioAnalysis.sectorBreakdown as Record<string, number>;
@@ -2083,7 +2217,7 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
 
   const Recommendations = () => {
     if (__DEV__) {
-      console.log('🔵🔵🔵 BREAKPOINT: Recommendations component rendered', {
+      logger.log('🔵🔵🔵 BREAKPOINT: Recommendations component rendered', {
         hasAi: !!ai,
         buyRecommendationsCount: ai?.buyRecommendations?.length || 0
       });
@@ -2135,7 +2269,7 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
                       sectorCap: policy.sectorCap,        // e.g. 0.30
                       turnoverBudget: policy.turnoverBudget, // optional
                     }, zBySymbol);
-                    const wmap = Object.fromEntries(result.weights.map((w:any)=>[w.symbol, w.weight]));
+                    const wmap = Object.fromEntries(result.weights.map((w: OptimizerWeight)=>[w.symbol, w.weight]));
                     setOptResult({weights: wmap, vol: result.portfolioVol});
                   } catch (e) {
                     Alert.alert("Optimization failed", `${e}`);
@@ -2206,7 +2340,7 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
 
           <FlatList
             data={(showPersonalized ? personalizedRecs : ai?.buyRecommendations) || []}
-            keyExtractor={(it: any, idx: number) => {
+            keyExtractor={(it: BuyRecommendation, idx: number) => {
               // Use id if available, otherwise symbol, otherwise index
               return it?.id ?? it?.symbol ?? `rec-${idx}`;
             }}
@@ -2335,7 +2469,7 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
   // Don't block on userError - use defaults for demo
   // Just log the error and continue with default profile
   if (userError) {
-    console.warn('[AIPortfolio] User profile error, using defaults:', userError);
+    logger.warn('[AIPortfolio] User profile error, using defaults:', userError);
   }
   
   // Use finalUser (which includes timeout fallback) - this is the canonical effectiveUser
@@ -2376,7 +2510,7 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
         {(() => {
           const useScrollView = showProfileForm || (!hasProfile && !ai?.buyRecommendations?.length);
           if (__DEV__) {
-            console.log('🔵 Render path check:', {
+            logger.log('🔵 Render path check:', {
               showProfileForm,
               hasProfile,
               buyRecsLength: ai?.buyRecommendations?.length || 0,
@@ -2414,7 +2548,7 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
           // Use FlatList only when we have actual stock recommendations to display
           (() => {
             if (__DEV__) {
-              console.log('🔵🔵🔵 BREAKPOINT: Rendering FlatList path', {
+              logger.log('🔵🔵🔵 BREAKPOINT: Rendering FlatList path', {
                 hasAi: !!ai,
                 buyRecommendationsCount: ai?.buyRecommendations?.length || 0,
                 hasSummaryCards: !!SummaryCards,
@@ -2426,21 +2560,21 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
             key={`flatlist-${usingDefaults ? 'defaults' : 'personalized'}-${ai?.buyRecommendations?.length || 0}`}
             style={{ flex: 1 }}
             data={(showPersonalized ? personalizedRecs : ai?.buyRecommendations) || []}
-            keyExtractor={(it: any, idx: number) => {
+            keyExtractor={(it: BuyRecommendation, idx: number) => {
               // Use id if available, otherwise symbol, otherwise index
               return it?.id ?? it?.symbol ?? `rec-${idx}`;
             }}
             removeClippedSubviews={false} // ✅ Disable virtualization for debugging
-            renderItem={({ item, index }: { item: any; index: number }) => {
+            renderItem={({ item, index }: { item: BuyRecommendation; index: number }) => {
               if (__DEV__) {
-                console.log('🔵 FlatList renderItem called:', { symbol: item?.symbol, index });
+                logger.log('🔵 FlatList renderItem called:', { symbol: item?.symbol, index });
               }
               return <StockCard item={item} showPersonalized={showPersonalized} optResult={optResult} />;
             }}
             ListHeaderComponent={
               (() => {
                 if (__DEV__) {
-                  console.log('🔵🔵🔵 BREAKPOINT: FlatList ListHeaderComponent rendering', {
+                  logger.log('🔵🔵🔵 BREAKPOINT: FlatList ListHeaderComponent rendering', {
                     hasSummaryCards: !!SummaryCards,
                     hasAi: !!ai,
                     hasPortfolioAnalysis: !!ai?.portfolioAnalysis

@@ -310,7 +310,7 @@ export const LifeEventPetalsModal: React.FC<LifeEventPetalsModalProps> = ({
           <TouchableOpacity
             style={styles.actionButton}
             onPress={() => {
-              // TODO: Navigate to planning screen
+              // Future enhancement: Navigate to financial planning screen with life event context
               onClose();
             }}
           >

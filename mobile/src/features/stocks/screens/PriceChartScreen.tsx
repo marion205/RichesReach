@@ -2,9 +2,21 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, Dimensions } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useFocusEffect } from '@react-navigation/native';
+import { useQuery, gql } from '@apollo/client';
 import StockChart from '../components/StockChart';
 import StockTradingModal from '../../../components/forms/StockTradingModal';
 import logger from '../../../utils/logger';
+
+const GET_STOCK_QUOTE = gql`
+  query GetStockQuote($symbol: String!) {
+    stockQuote(symbol: $symbol) {
+      symbol
+      currentPrice
+      change
+      changePercent
+    }
+  }
+`;
 
 type PriceChartParams = {
   symbol: string;
@@ -13,8 +25,18 @@ type PriceChartParams = {
   _ts?: number;
 };
 
+interface NavigationParams {
+  tradeModal?: boolean | undefined;
+  analysisModal?: boolean | undefined;
+  _ts?: number | undefined;
+  [key: string]: unknown;
+}
+
 interface PriceChartScreenProps {
-  navigation: any;
+  navigation: {
+    goBack: () => void;
+    setParams: (params: NavigationParams) => void;
+  };
   route: {
     params?: PriceChartParams;
   };
@@ -25,7 +47,16 @@ const { width: screenWidth } = Dimensions.get('window');
 export default function PriceChartScreen({ navigation, route }: PriceChartScreenProps) {
   const { symbol, tradeModal, analysisModal, _ts } = (route.params || {}) as PriceChartParams;
   
-  console.log('🔍 PriceChartScreen mounted with params:', { symbol, tradeModal, analysisModal, _ts });
+  logger.log('🔍 PriceChartScreen mounted with params:', { symbol, tradeModal, analysisModal, _ts });
+  
+  // Fetch current stock price
+  const { data: quoteData } = useQuery(GET_STOCK_QUOTE, {
+    variables: { symbol },
+    errorPolicy: 'ignore',
+    fetchPolicy: 'cache-first',
+  });
+  
+  const currentPrice = quoteData?.stockQuote?.currentPrice || 0;
   
   const [tradingModalVisible, setTradingModalVisible] = useState(false);
   const [analysisModalVisible, setAnalysisModalVisible] = useState(false);
@@ -50,7 +81,7 @@ export default function PriceChartScreen({ navigation, route }: PriceChartScreen
 
         // Clear the param so back/refresh won't auto-open again
         requestAnimationFrame(() => {
-          navigation.setParams({ tradeModal: undefined, _ts: undefined } as any);
+          navigation.setParams({ tradeModal: undefined, _ts: undefined });
         });
       }
 
@@ -61,7 +92,7 @@ export default function PriceChartScreen({ navigation, route }: PriceChartScreen
 
         // Clear the param so back/refresh won't auto-open again
         requestAnimationFrame(() => {
-          navigation.setParams({ analysisModal: undefined, _ts: undefined } as any);
+          navigation.setParams({ analysisModal: undefined, _ts: undefined });
         });
       }
     }, [tradeModal, analysisModal, _ts, navigation, openTradeModal, openAnalysisModal])
@@ -99,11 +130,11 @@ export default function PriceChartScreen({ navigation, route }: PriceChartScreen
           setTradingModalVisible(false);
         }}
         symbol={symbol}
-        currentPrice={150.00} // TODO: Get actual current price
+        currentPrice={currentPrice}
         companyName={symbol}
       />
 
-      {/* Analysis Modal - TODO: Implement analysis modal */}
+      {/* Analysis Modal - Future enhancement: Add stock analysis features */}
       <Modal
         visible={analysisModalVisible}
         animationType="slide"

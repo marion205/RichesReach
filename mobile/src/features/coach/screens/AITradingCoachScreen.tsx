@@ -77,6 +77,7 @@ import { LineChart } from 'react-native-svg-charts';
 // import { Speech } from 'expo-speech';
 import { PanGestureHandler, State as GestureState } from 'react-native-gesture-handler';
 import { FlatList } from 'react-native';
+import logger from '../../../utils/logger';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -213,7 +214,14 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
   };
 
   // Simple scroll handler (no parallax for now)
-  const scrollHandler = (event: any) => {
+  interface ScrollEvent {
+    nativeEvent: {
+      contentOffset: { x: number; y: number };
+      [key: string]: unknown;
+    };
+    [key: string]: unknown;
+  }
+  const scrollHandler = (event: ScrollEvent) => {
     // Basic scroll handling - can be extended later
   };
 
@@ -241,8 +249,9 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
         setAchievements(prev => [...prev, 'High-Confidence Strategy!']);
         setTimeout(() => setShowConfetti(false), 3000);
       }
-    } catch (e: any) {
-      console.log('Strategy generation error:', e);
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      logger.log('Strategy generation error:', errorMessage);
       // Create a personalized demo strategy based on user inputs
       const demoStrategy = {
         ...FALLBACK_STRATEGY,
@@ -283,7 +292,15 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
     }
   };
 
-  const handleRiskDrag = (event: any) => {
+  interface GestureEvent {
+    nativeEvent: {
+      translationX: number;
+      state?: number;
+      [key: string]: unknown;
+    };
+    [key: string]: unknown;
+  }
+  const handleRiskDrag = (event: GestureEvent) => {
     const { translationX } = event.nativeEvent;
     riskTranslateX.value = translationX;
     const newPos = Math.max(0, Math.min(1, 0.5 + translationX / 200));
@@ -293,7 +310,7 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
     if (Math.abs(translationX) > 10) Vibration.vibrate(10);
   };
 
-  const handleRiskEnd = (event: any) => {
+  const handleRiskEnd = (event: GestureEvent) => {
     if (event.nativeEvent.state === GestureState.END) {
       riskTranslateX.value = withSpring(0);
       Vibration.vibrate(50);
@@ -331,8 +348,9 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
       });
       setSessionId(result.session_id);
       await getNextGuidance(result.session_id);
-    } catch (e: any) {
-      console.log('Session start error:', e);
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      logger.log('Session start error:', errorMessage);
       // Use fallback session for demo purposes
       const fallbackSessionId = `demo-session-${Date.now()}`;
       setSessionId(fallbackSessionId);
@@ -361,8 +379,9 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
         market_update: { price: marketTicker, volume: 1000000 },
       });
       setGuidance(result);
-    } catch (e: any) {
-      console.log('Guidance error:', e);
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      logger.log('Guidance error:', errorMessage);
       // Provide demo guidance steps
       const currentStep = (guidance?.current_step || 0) + 1;
       const demoSteps = [
@@ -426,8 +445,9 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
       setSessionId(null);
       setGuidance(null);
       Alert.alert('Session Ended', 'Trading session completed successfully!');
-    } catch (e: any) {
-      console.log('End session error:', e);
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      logger.log('End session error:', errorMessage);
       // Demo session end
       setSessionId(null);
       setGuidance(null);
@@ -453,8 +473,9 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
         },
       });
       setAnalysis(result);
-    } catch (e: any) {
-      console.log('Analysis error:', e);
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      logger.log('Analysis error:', errorMessage);
       // Create personalized demo analysis
       const demoAnalysis = {
         ...FALLBACK_ANALYSIS,
@@ -513,8 +534,9 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
         },
       });
       setConfidence(result);
-    } catch (e: any) {
-      console.log('Confidence building error:', e);
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      logger.log('Confidence building error:', errorMessage);
       // Create personalized demo confidence explanation
       const demoConfidence = {
         ...FALLBACK_CONFIDENCE,
@@ -566,7 +588,7 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
       >
         <Animated.View style={animatedStyle}>
           <Ionicons 
-            name={icon as any} 
+            name={String(icon) as keyof typeof Ionicons.glyphMap} 
             size={20} 
             color={isActive ? '#3b82f6' : '#9ca3af'} 
           />

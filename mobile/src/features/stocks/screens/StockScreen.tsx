@@ -64,15 +64,12 @@ function useChartSeries(data?: { stockChartData?: { data?: GqlBar[]; indicators?
   const indicators = data?.stockChartData?.indicators;
   
   return useMemo(() => {
-    const toMs = (t: any) => typeof t === 'number' ? (t > 1e12 ? t : t * 1000) : new Date(t).getTime();
-    const toNum = (v: any) => (v == null || v === '' ? null : Number(v));
-    
     if (rows.length === 0) {
       logger.log('[useChartSeries] No rows to map');
       return [];
     }
     
-    const mapped = rows.map((r: any) => ({
+    const mapped = rows.map((r: GqlBar) => ({
       t: toMs(r.timestamp),
       o: toNum(r.open),
       h: toNum(r.high),
@@ -111,13 +108,13 @@ const ResponsiveChart: React.FC<{
 };
 
 // Helper functions
-const safeFixed = (val: any, dp = 2, fallback = '—') =>
+const safeFixed = (val: unknown, dp = 2, fallback = '—') =>
   Number.isFinite(val) ? Number(val).toFixed(dp) : fallback;
 
-const safePct = (val: any, dp = 0, fallback = '—') =>
+const safePct = (val: unknown, dp = 0, fallback = '—') =>
   Number.isFinite(val) ? `${Number(val * 100).toFixed(dp)}%` : fallback;
 
-const safeMoney = (val: any, dp = 2, fallback = '—') =>
+const safeMoney = (val: unknown, dp = 2, fallback = '—') =>
   Number.isFinite(val) ? `$${Number(val).toFixed(dp)}` : fallback;
 
 const formatMarketCap = (cap: number | null | undefined) => {
@@ -473,7 +470,12 @@ const getDividendYieldForSymbol = (symbol: string): number => {
   return dividendYields[symbol] || 0.0; // Default 0%
 };
 
-export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s: string, d?: any) => void }) {
+interface NavigateParams {
+  symbol?: string;
+  [key: string]: unknown;
+}
+
+export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s: string, d?: NavigateParams) => void }) {
   const [activeTab, setActiveTab] = useState<'browse' | 'beginner' | 'watchlist' | 'research' | 'options'>('browse');
   
   const handleRowPress = useCallback((item: Stock) => {
@@ -502,7 +504,16 @@ export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s
   const [tooltip, setTooltip] = useState<{ title: string; description: string } | null>(null);
   const [watchlistModal, setWatchlistModal] = useState<{ open: boolean; stock: Stock | null }>({ open: false, stock: null });
   const [notes, setNotes] = useState('');
-  const [rust, setRust] = useState<any | null>(null);
+interface RustAnalysis {
+  symbol: string;
+  beginnerFriendlyScore: number;
+  riskLevel: string;
+  recommendation: string;
+  technicalIndicators?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+  const [rust, setRust] = useState<RustAnalysis | null>(null);
   const [rustOpen, setRustOpen] = useState(false);
   const [rustLoading, setRustLoading] = useState(false);
   const [budgetImpactModal, setBudgetImpactModal] = useState<{ open: boolean; stock: Stock | null }>({ open: false, stock: null });
@@ -513,7 +524,22 @@ export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s
   
   // Options trading state
   const [optionsSymbol, setOptionsSymbol] = useState('AAPL');
-  const [selectedOption, setSelectedOption] = useState<any>(null);
+interface OptionOrder {
+  id: string;
+  symbol: string;
+  optionType: string;
+  strike: number;
+  expiration: string;
+  side: string;
+  quantity: number;
+  orderType: string;
+  limitPrice?: number;
+  status: string;
+  createdAt: string;
+  [key: string]: unknown;
+}
+
+  const [selectedOption, setSelectedOption] = useState<OptionOrder | null>(null);
   const [orderQuantity, setOrderQuantity] = useState('1');
   const [orderType, setOrderType] = useState('MARKET');
   const [limitPrice, setLimitPrice] = useState('');
@@ -1032,7 +1058,7 @@ export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s
           errorPolicy: 'all' // Continue even if there are GraphQL errors
         });
         
-        const { data } = await Promise.race([queryPromise, timeoutPromise]) as any;
+        const { data } = await Promise.race([queryPromise, timeoutPromise]) as { data?: { rustStockAnalysis?: RustAnalysis } };
         logger.log('📊 Received rust data:', data);
         
         if (data?.rustStockAnalysis) {
@@ -1043,8 +1069,9 @@ export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s
         } else {
           logger.log('⚠️ Rust analysis returned no data, using fallback');
         }
-      } catch (rustError: any) {
-        logger.log('⚠️ Rust analysis failed or timed out, trying fallback:', rustError?.message || rustError);
+      } catch (rustError: unknown) {
+        const errorMessage = rustError instanceof Error ? rustError.message : String(rustError);
+        logger.log('⚠️ Rust analysis failed or timed out, trying fallback:', errorMessage);
       }
       
       // Fallback: Use chart data for basic analysis
@@ -1061,7 +1088,16 @@ export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s
           errorPolicy: 'all'
         });
         
-        const { data: chartData } = await Promise.race([queryPromise, timeoutPromise]) as any;
+        interface ChartDataResponse {
+          stockChartData?: {
+            symbol?: string;
+            changePercent?: number;
+            currentPrice?: number;
+            indicators?: Record<string, unknown>;
+            [key: string]: unknown;
+          };
+        }
+        const { data: chartData } = await Promise.race([queryPromise, timeoutPromise]) as { data?: ChartDataResponse };
         
         if (chartData?.stockChartData) {
           const indicators = chartData.stockChartData.indicators || {};
@@ -1129,8 +1165,9 @@ export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s
           setRust(basicAnalysis);
           setRustLoading(false);
         }
-      } catch (chartError: any) {
-        logger.log('❌ Chart data fetch failed:', chartError?.message || chartError);
+      } catch (chartError: unknown) {
+        const errorMessage = chartError instanceof Error ? chartError.message : String(chartError);
+        logger.log('❌ Chart data fetch failed:', errorMessage);
         // Show basic analysis even if everything fails
         const basicAnalysis = {
           symbol: symbol,
@@ -1162,8 +1199,9 @@ export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s
         setRust(basicAnalysis);
         setRustLoading(false);
       }
-    } catch (error: any) {
-      logger.log('❌ Error getting analysis:', error?.message || error);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.log('❌ Error getting analysis:', errorMessage);
       // Even on error, show a basic modal so the user gets feedback
       const basicAnalysis = {
         symbol: symbol,
@@ -1362,7 +1400,22 @@ export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s
       const realTimeData = stocks.realTimeStocks ?? [];
       
       // Transform AI recommendations to match Stock interface
-      const transformedAiData = aiData.map((rec: any) => ({
+      interface AIRecommendation {
+        symbol: string;
+        companyName?: string;
+        sector?: string;
+        marketCap?: number;
+        peRatio?: number;
+        dividendYield?: number;
+        confidence: number;
+        currentPrice?: number;
+        recommendation?: string;
+        reasoning?: string;
+        targetPrice?: number;
+        expectedReturn?: number;
+        [key: string]: unknown;
+      }
+      const transformedAiData = aiData.map((rec: AIRecommendation) => ({
         id: rec.symbol,
         symbol: rec.symbol,
         companyName: rec.companyName,
@@ -1561,12 +1614,24 @@ export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s
       // Get real-time prices from stocks.data to override cached prices
       const realTimeStocks = stocks.data?.stocks ?? [];
       const realTimePrices = new Map();
-      realTimeStocks.forEach((stock: any) => {
+      realTimeStocks.forEach((stock: Stock) => {
         realTimePrices.set(stock.symbol, stock.currentPrice);
       });
       
       // Transform ML screening data to match Stock interface with real-time prices
-      const transformedMlData = mlData.map((stock: any) => ({
+      interface MLScreeningStock {
+        symbol: string;
+        companyName?: string;
+        sector?: string;
+        marketCap?: number;
+        peRatio?: number;
+        dividendYield?: number;
+        beginnerFriendlyScore?: number;
+        currentPrice?: number;
+        mlScore?: number;
+        [key: string]: unknown;
+      }
+      const transformedMlData = mlData.map((stock: MLScreeningStock) => ({
         id: stock.symbol,
         symbol: stock.symbol,
         companyName: stock.companyName,
@@ -1713,7 +1778,10 @@ export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s
       logger.log('Beginner Friendly data length:', data.length);
       return data;
     }
-    const data = (watchlistQ.data as any)?.myWatchlist ?? [];
+    interface WatchlistData {
+      myWatchlist?: Stock[];
+    }
+    const data = (watchlistQ.data as WatchlistData)?.myWatchlist ?? [];
     logger.log('Watchlist data:', data);
     return data;
   }, [activeTab, stocks.data, beginnerData, aiRecommendationsData, mlScreeningData, watchlistQ.data, searchQuery]);
@@ -2187,7 +2255,7 @@ placeholderTextColor="#999"
                   {optionsOrdersLoading ? (
                     <Text style={styles.loadingText}>Loading orders...</Text>
                   ) : optionsOrdersData?.optionOrders?.length > 0 ? (
-                    optionsOrdersData.optionOrders.map((order: any) => (
+                    optionsOrdersData.optionOrders.map((order: OptionOrder) => (
                       <View key={order.id} style={styles.orderRow}>
                         <View style={styles.orderInfo}>
                           <Text style={styles.orderSymbol}>
@@ -2231,11 +2299,8 @@ placeholderTextColor="#999"
       {activeTab !== 'research' && activeTab !== 'options' && (
       <FlatList
         data={Array.isArray(listData) ? listData : []}
-        keyExtractor={activeTab === 'watchlist'
-          ? ((i: any) => String(i.id))
-          : ((i: any) => String(i.id))
-        }
-        renderItem={activeTab === 'watchlist' ? (renderWatch as any) : (renderStock as any)}
+        keyExtractor={(i: Stock | WatchlistItem) => String(i.id)}
+        renderItem={activeTab === 'watchlist' ? renderWatch : renderStock}
         refreshing={!!loading}
         onRefresh={() => {
           // Only refetch if user explicitly pulls to refresh

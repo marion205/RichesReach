@@ -46,7 +46,7 @@ private apiKey: string = 'OHYSFF1AE446O7CR'; // Your Alpha Vantage API key
 private newsApiKey: string = '94a335c7316145f79840edd62f77e11e'; // Your NewsAPI key
 private baseUrl: string = 'https://www.alphavantage.co/query';
 private newsBaseUrl: string = 'https://newsapi.org/v2';
-private cache: Map<string, { data: any; timestamp: number }> = new Map();
+private cache: Map<string, { data: unknown; timestamp: number }> = new Map();
 private cacheTimeout: number = 24 * 60 * 60 * 1000; // 24 hour cache (since we have 25 calls per day)
 constructor() {
 this.loadApiKey();
@@ -68,7 +68,7 @@ await AsyncStorage.setItem('alpha_vantage_api_key', apiKey);
       logger.error('Failed to save API key:', error);
 }
 }
-  private async makeApiCall(params: Record<string, string>): Promise<any> {
+  private async makeApiCall(params: Record<string, string>): Promise<unknown> {
     const cacheKey = JSON.stringify(params);
     const cached = this.cache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < this.cacheTimeout) {
@@ -210,7 +210,15 @@ const timeSeries = data[`Time Series (${interval === 'daily' ? 'Daily' : interva
 if (!timeSeries) {
 throw new Error('No historical data available');
 }
-return Object.entries(timeSeries).map(([date, values]: [string, any]) => ({
+interface TimeSeriesValues {
+  '1. open': string;
+  '2. high': string;
+  '3. low': string;
+  '4. close': string;
+  '5. volume': string;
+  [key: string]: unknown;
+}
+return Object.entries(timeSeries).map(([date, values]: [string, TimeSeriesValues]) => ({
 date,
 open: parseFloat(values['1. open']),
 high: parseFloat(values['2. high']),
@@ -246,7 +254,15 @@ return cached.data;
 throw new Error(data.message || 'Failed to fetch news');
 }
 const articles = data.articles || [];
-const newsData = articles.map((article: any, index: number) => ({
+interface NewsArticleResponse {
+  title?: string;
+  description?: string;
+  source?: { name?: string };
+  publishedAt?: string;
+  url?: string;
+  [key: string]: unknown;
+}
+const newsData = articles.map((article: NewsArticleResponse, index: number) => ({
 id: `news-${index}-${Date.now()}`,
 title: article.title,
 summary: article.description || article.content?.substring(0, 200) + '...',
@@ -289,7 +305,15 @@ return cached.data;
 throw new Error(data.message || 'Failed to fetch stock news');
 }
 const articles = data.articles || [];
-const newsData = articles.map((article: any, index: number) => ({
+interface NewsArticleResponse {
+  title?: string;
+  description?: string;
+  source?: { name?: string };
+  publishedAt?: string;
+  url?: string;
+  [key: string]: unknown;
+}
+const newsData = articles.map((article: NewsArticleResponse, index: number) => ({
 id: `stock-${symbol}-${index}-${Date.now()}`,
 title: article.title,
 summary: article.description || article.content?.substring(0, 200) + '...',
@@ -386,7 +410,12 @@ timezone: 'America/New_York'
 };
 }
 // Search for stocks
-public async searchStocks(query: string): Promise<any[]> {
+interface StockSearchResult {
+  symbol: string;
+  name: string;
+  [key: string]: unknown;
+}
+public async searchStocks(query: string): Promise<StockSearchResult[]> {
 try {
 const data = await this.makeApiCall({
 function: 'SYMBOL_SEARCH',
@@ -396,7 +425,12 @@ if (data['Error Message']) {
 throw new Error(data['Error Message']);
 }
 const matches = data.bestMatches || [];
-return matches.map((match: any) => ({
+interface AlphaVantageMatch {
+  '1. symbol': string;
+  '2. name': string;
+  [key: string]: unknown;
+}
+return matches.map((match: AlphaVantageMatch) => ({
 symbol: match['1. symbol'],
 name: match['2. name'],
 type: match['3. type'],

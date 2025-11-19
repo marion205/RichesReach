@@ -15,6 +15,7 @@ import {
 import Icon from 'react-native-vector-icons/Feather';
 import UserProfileService from '../features/user/services/UserProfileService';
 import { useAuth } from '../contexts/AuthContext';
+import logger from '../utils/logger';
 
 interface OnboardingGuardProps {
   children: React.ReactNode;
@@ -38,11 +39,11 @@ export default function OnboardingGuard({
 
   useEffect(() => {
     const checkOnboardingStatus = async () => {
-      console.log('[OnboardingGuard] Checking status:', { isAuthenticated, hasUser: !!user, requireKYC });
+      logger.log('[OnboardingGuard] Checking status:', { isAuthenticated, hasUser: !!user, requireKYC });
       
       // If user is not authenticated, show prompt to complete account setup
       if (!isAuthenticated || !user) {
-        console.log('[OnboardingGuard] User not authenticated, showing prompt');
+        logger.log('[OnboardingGuard] User not authenticated, showing prompt');
         setHasCompletedOnboarding(false);
         setHasCompletedKYC(false);
         setIsChecking(false);
@@ -53,23 +54,23 @@ export default function OnboardingGuard({
       try {
         const userProfileService = UserProfileService.getInstance();
         const onboardingComplete = await userProfileService.isOnboardingCompleted();
-        console.log('[OnboardingGuard] Onboarding complete:', onboardingComplete);
+        logger.log('[OnboardingGuard] Onboarding complete:', onboardingComplete);
         
         setHasCompletedOnboarding(onboardingComplete);
         
-        // TODO: Add KYC check when KYC service is available
+        // Future enhancement: Add KYC (Know Your Customer) verification check when KYC service is available
         // For now, assume KYC is not required if onboarding is complete
         setHasCompletedKYC(onboardingComplete);
         
         // Show prompt if onboarding not completed, or if KYC required but not completed
         if (!onboardingComplete || (requireKYC && !onboardingComplete)) {
-          console.log('[OnboardingGuard] Showing prompt - onboarding:', !onboardingComplete, 'KYC required:', requireKYC);
+          logger.log('[OnboardingGuard] Showing prompt - onboarding:', !onboardingComplete, 'KYC required:', requireKYC);
           setShowPrompt(true);
         } else {
-          console.log('[OnboardingGuard] All checks passed, allowing access');
+          logger.log('[OnboardingGuard] All checks passed, allowing access');
         }
       } catch (error) {
-        console.error('[OnboardingGuard] Error checking onboarding status:', error);
+        logger.error('[OnboardingGuard] Error checking onboarding status:', error);
         // On error, allow access (graceful degradation for demo)
         setHasCompletedOnboarding(true);
         setHasCompletedKYC(true);
@@ -88,13 +89,13 @@ export default function OnboardingGuard({
     } else {
       // If no navigation handler provided, try to navigate to login/onboarding
       // This is a fallback - ideally the parent component should provide navigation
-      console.warn('OnboardingGuard: No navigation handler provided');
+      logger.warn('OnboardingGuard: No navigation handler provided');
     }
   };
 
   const handleSkip = () => {
     // Allow access for demo purposes, but mark that user was prompted
-    console.log('[OnboardingGuard] User clicked "Maybe Later"');
+    logger.log('[OnboardingGuard] User clicked "Maybe Later"');
     setShowPrompt(false);
     // Also hide the demo modal if in force mode
     if (forceShowForDemo) {
@@ -106,7 +107,7 @@ export default function OnboardingGuard({
   // For demo mode: show button to trigger modal, or show modal if not dismissed
   if (forceShowForDemo) {
     const shouldShowModal = !demoModalDismissed;
-    console.log('[OnboardingGuard] Demo mode - modal should show:', shouldShowModal);
+    logger.log('[OnboardingGuard] Demo mode - modal should show:', shouldShowModal);
     
     return (
       <>
@@ -132,7 +133,7 @@ export default function OnboardingGuard({
               zIndex: 1000,
             }}
             onPress={() => {
-              console.log('[OnboardingGuard] Demo button pressed - showing modal');
+              logger.log('[OnboardingGuard] Demo button pressed - showing modal');
               setDemoModalDismissed(false);
             }}
             accessibilityLabel="Complete Account Setup"
@@ -145,7 +146,7 @@ export default function OnboardingGuard({
           transparent={true}
           animationType="fade"
           onRequestClose={() => {
-            console.log('[OnboardingGuard] Modal close requested');
+            logger.log('[OnboardingGuard] Modal close requested');
             setDemoModalDismissed(true);
           }}
         >
@@ -175,7 +176,7 @@ export default function OnboardingGuard({
                 <TouchableOpacity
                   style={styles.skipButton}
                   onPress={() => {
-                    console.log('[OnboardingGuard] Maybe Later clicked (demo mode)');
+                    logger.log('[OnboardingGuard] Maybe Later clicked (demo mode)');
                     setDemoModalDismissed(true);
                     handleSkip();
                   }}
@@ -214,7 +215,7 @@ export default function OnboardingGuard({
 
   // If user hasn't completed onboarding, show prompt modal
   const shouldShowPrompt = showPrompt && (!hasCompletedOnboarding || (requireKYC && !hasCompletedKYC));
-  console.log('[OnboardingGuard] Render decision:', { 
+  logger.log('[OnboardingGuard] Render decision:', { 
     showPrompt, 
     hasCompletedOnboarding, 
     hasCompletedKYC, 
@@ -226,7 +227,7 @@ export default function OnboardingGuard({
   });
   
   if (shouldShowPrompt) {
-    console.log('[OnboardingGuard] Rendering modal');
+    logger.log('[OnboardingGuard] Rendering modal');
     return (
       <>
         {children}

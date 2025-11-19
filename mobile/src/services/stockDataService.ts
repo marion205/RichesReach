@@ -1,5 +1,6 @@
 // Free-tier stock data service using multiple APIs
 // This provides comprehensive stock data with minimal API costs
+import logger from '../utils/logger';
 
 interface StockData {
   symbol: string;
@@ -310,12 +311,12 @@ async function fetchAnalystRatings(symbol: string, currentPrice: number): Promis
   if (cached) return cached;
 
   if (!USE_REAL_APIS) {
-    console.log(`Using mock data for analyst ratings (APIs disabled)`);
+    logger.log(`Using mock data for analyst ratings (APIs disabled)`);
     return generateMockAnalystRatings(symbol, currentPrice);
   }
 
   try {
-    console.log(`Fetching analyst ratings for ${symbol}...`);
+    logger.log(`Fetching analyst ratings for ${symbol}...`);
     const response = await fetch(
       `${API_CONFIGS.finnhub.baseUrl}/stock/recommendation?symbol=${symbol}&token=${API_CONFIGS.finnhub.apiKey}`,
       {
@@ -327,12 +328,12 @@ async function fetchAnalystRatings(symbol: string, currentPrice: number): Promis
     );
     
     if (!response.ok) {
-      console.warn(`Finnhub API error: ${response.status} ${response.statusText}`);
+      logger.warn(`Finnhub API error: ${response.status} ${response.statusText}`);
       return generateMockAnalystRatings(symbol, currentPrice);
     }
     
     const data = await response.json();
-    console.log('Analyst ratings API response:', data);
+    logger.log('Analyst ratings API response:', data);
     
     if (data && data.length > 0) {
       const recentRatings: AnalystRating[] = data.slice(0, 5).map((rating: any, index: number) => ({
@@ -359,15 +360,15 @@ async function fetchAnalystRatings(symbol: string, currentPrice: number): Promis
       };
       
       setCachedData(cacheKey, analystRatings);
-      console.log(`✅ Fetched analyst ratings for ${symbol}: ${consensusRating}`);
+      logger.log(`✅ Fetched analyst ratings for ${symbol}: ${consensusRating}`);
       return analystRatings;
     } else {
-      console.log(`No analyst ratings found for ${symbol}, using mock data`);
+      logger.log(`No analyst ratings found for ${symbol}, using mock data`);
       return generateMockAnalystRatings(symbol, currentPrice);
     }
   } catch (error) {
-    console.error(`Error fetching analyst ratings for ${symbol}:`, error);
-    console.log('Using mock data as fallback');
+    logger.error(`Error fetching analyst ratings for ${symbol}:`, error);
+    logger.log('Using mock data as fallback');
     return generateMockAnalystRatings(symbol, currentPrice);
   }
 }
@@ -432,12 +433,12 @@ async function fetchInsiderTrades(symbol: string): Promise<InsiderTrade[]> {
   if (cached) return cached;
 
   if (!USE_REAL_APIS) {
-    console.log(`Using mock data for insider trades (APIs disabled)`);
+    logger.log(`Using mock data for insider trades (APIs disabled)`);
     return generateMockInsiderTrades(symbol);
   }
 
   try {
-    console.log(`Fetching insider trades for ${symbol}...`);
+    logger.log(`Fetching insider trades for ${symbol}...`);
     const response = await fetch(
       `${API_CONFIGS.finnhub.baseUrl}/stock/insider-transactions?symbol=${symbol}&token=${API_CONFIGS.finnhub.apiKey}`,
       {
@@ -449,12 +450,12 @@ async function fetchInsiderTrades(symbol: string): Promise<InsiderTrade[]> {
     );
     
     if (!response.ok) {
-      console.warn(`Finnhub API error: ${response.status} ${response.statusText}`);
+      logger.warn(`Finnhub API error: ${response.status} ${response.statusText}`);
       return generateMockInsiderTrades(symbol);
     }
     
     const data = await response.json();
-    console.log('Insider trades API response:', data);
+    logger.log('Insider trades API response:', data);
     
     if (data && data.data && data.data.length > 0) {
       const trades: InsiderTrade[] = data.data.slice(0, 5).map((trade: any) => ({
@@ -467,15 +468,15 @@ async function fetchInsiderTrades(symbol: string): Promise<InsiderTrade[]> {
       }));
       
       setCachedData(cacheKey, trades);
-      console.log(`✅ Fetched ${trades.length} insider trades for ${symbol}`);
+      logger.log(`✅ Fetched ${trades.length} insider trades for ${symbol}`);
       return trades;
     } else {
-      console.log(`No insider trades found for ${symbol}, using mock data`);
+      logger.log(`No insider trades found for ${symbol}, using mock data`);
       return generateMockInsiderTrades(symbol);
     }
   } catch (error) {
-    console.error(`Error fetching insider trades for ${symbol}:`, error);
-    console.log('Using mock data as fallback');
+    logger.error(`Error fetching insider trades for ${symbol}:`, error);
+    logger.log('Using mock data as fallback');
     return generateMockInsiderTrades(symbol);
   }
 }
@@ -510,12 +511,12 @@ async function fetchInstitutionalOwnership(symbol: string): Promise<Institutiona
   if (cached) return cached;
 
   if (!USE_REAL_APIS) {
-    console.log(`Using mock data for institutional ownership (APIs disabled)`);
+    logger.log(`Using mock data for institutional ownership (APIs disabled)`);
     return generateMockInstitutionalOwnership(symbol);
   }
 
   try {
-    console.log(`Fetching institutional ownership for ${symbol}...`);
+    logger.log(`Fetching institutional ownership for ${symbol}...`);
     const response = await fetch(
       `${API_CONFIGS.finnhub.baseUrl}/stock/institutional-ownership?symbol=${symbol}&token=${API_CONFIGS.finnhub.apiKey}`,
       {
@@ -528,12 +529,12 @@ async function fetchInstitutionalOwnership(symbol: string): Promise<Institutiona
     );
     
     if (!response.ok) {
-      console.warn(`Finnhub API error: ${response.status} ${response.statusText}`);
+      logger.warn(`Finnhub API error: ${response.status} ${response.statusText}`);
       return generateMockInstitutionalOwnership(symbol);
     }
     
     const data = await response.json();
-    console.log('Institutional ownership API response:', data);
+    logger.log('Institutional ownership API response:', data);
     
     if (data && data.data && data.data.length > 0) {
       const holdings: InstitutionalHolding[] = data.data.slice(0, 5).map((holding: any) => ({
@@ -545,15 +546,15 @@ async function fetchInstitutionalOwnership(symbol: string): Promise<Institutiona
       }));
       
       setCachedData(cacheKey, holdings);
-      console.log(`✅ Fetched ${holdings.length} institutional holdings for ${symbol}`);
+      logger.log(`✅ Fetched ${holdings.length} institutional holdings for ${symbol}`);
       return holdings;
     } else {
-      console.log(`No institutional data found for ${symbol}, using mock data`);
+      logger.log(`No institutional data found for ${symbol}, using mock data`);
       return generateMockInstitutionalOwnership(symbol);
     }
   } catch (error) {
-    console.error(`Error fetching institutional ownership for ${symbol}:`, error);
-    console.log('Using mock data as fallback');
+    logger.error(`Error fetching institutional ownership for ${symbol}:`, error);
+    logger.log('Using mock data as fallback');
     return generateMockInstitutionalOwnership(symbol);
   }
 }
@@ -591,12 +592,12 @@ async function fetchMarketSentiment(symbol: string): Promise<MarketSentiment> {
   if (cached) return cached;
 
   if (!USE_REAL_APIS) {
-    console.log(`Using mock data for market sentiment (APIs disabled)`);
+    logger.log(`Using mock data for market sentiment (APIs disabled)`);
     return generateMockSentiment(symbol);
   }
 
   try {
-    console.log(`Fetching market sentiment for ${symbol}...`);
+    logger.log(`Fetching market sentiment for ${symbol}...`);
     // Fetch from News API for sentiment analysis
     const newsResponse = await fetch(
       `${API_CONFIGS.newsApi.baseUrl}/everything?q=${symbol}&apiKey=${API_CONFIGS.newsApi.apiKey}&pageSize=10&sortBy=publishedAt`,
@@ -609,12 +610,12 @@ async function fetchMarketSentiment(symbol: string): Promise<MarketSentiment> {
     );
     
     if (!newsResponse.ok) {
-      console.warn(`News API error: ${newsResponse.status} ${newsResponse.statusText}`);
+      logger.warn(`News API error: ${newsResponse.status} ${newsResponse.statusText}`);
       return generateMockSentiment(symbol);
     }
     
     const newsData = await newsResponse.json();
-    console.log('News API response:', newsData);
+    logger.log('News API response:', newsData);
     
     let positiveMentions = 0;
     let negativeMentions = 0;
@@ -665,12 +666,12 @@ async function fetchMarketSentiment(symbol: string): Promise<MarketSentiment> {
     };
     
     setCachedData(cacheKey, sentiment);
-    console.log(`✅ Fetched market sentiment for ${symbol}: ${sentiment.overallScore.toFixed(2)}`);
+    logger.log(`✅ Fetched market sentiment for ${symbol}: ${sentiment.overallScore.toFixed(2)}`);
     return sentiment;
     
   } catch (error) {
-    console.error(`Error fetching market sentiment for ${symbol}:`, error);
-    console.log('Using mock data as fallback');
+    logger.error(`Error fetching market sentiment for ${symbol}:`, error);
+    logger.log('Using mock data as fallback');
   }
   
   // Fallback to realistic mock data
@@ -764,7 +765,7 @@ export async function getStockComprehensive(symbol: string, timeframe?: string):
   try {
     // Fetch real stock data from Finnhub API
     if (!USE_REAL_APIS) {
-      console.warn('Real APIs disabled - stock data unavailable');
+      logger.warn('Real APIs disabled - stock data unavailable');
       return null;
     }
 
@@ -788,11 +789,11 @@ export async function getStockComprehensive(symbol: string, timeframe?: string):
           currentPrice = quoteData.c;
           change = quoteData.d || 0;
           changePercent = quoteData.dp || 0;
-          console.log(`✅ Fetched real quote for ${symbol}: $${currentPrice}`);
+          logger.log(`✅ Fetched real quote for ${symbol}: $${currentPrice}`);
         }
       }
     } catch (quoteError) {
-      console.error(`Error fetching quote for ${symbol}:`, quoteError);
+      logger.error(`Error fetching quote for ${symbol}:`, quoteError);
     }
 
     // If we couldn't get real price, try company profile
@@ -810,17 +811,17 @@ export async function getStockComprehensive(symbol: string, timeframe?: string):
           const profileData = await profileResponse.json();
           if (profileData && profileData.name) {
             // Use profile data for company info
-            console.log(`✅ Fetched profile for ${symbol}`);
+            logger.log(`✅ Fetched profile for ${symbol}`);
           }
         }
       } catch (profileError) {
-        console.error(`Error fetching profile for ${symbol}:`, profileError);
+        logger.error(`Error fetching profile for ${symbol}:`, profileError);
       }
     }
 
     // If still no price, return null instead of generating mock data
     if (!currentPrice || currentPrice <= 0) {
-      console.warn(`No real price data available for ${symbol}`);
+      logger.warn(`No real price data available for ${symbol}`);
       return null;
     }
 
@@ -852,11 +853,11 @@ export async function getStockComprehensive(symbol: string, timeframe?: string):
           website = profileData.weburl || website;
           employees = profileData.employees || employees;
           founded = profileData.founded || founded;
-          console.log(`✅ Fetched company profile for ${symbol}`);
+          logger.log(`✅ Fetched company profile for ${symbol}`);
         }
       }
     } catch (profileError) {
-      console.error(`Error fetching profile for ${symbol}:`, profileError);
+      logger.error(`Error fetching profile for ${symbol}:`, profileError);
     }
 
     // Calculate day high/low from price and change
@@ -908,7 +909,7 @@ export async function getStockComprehensive(symbol: string, timeframe?: string):
     return stockData;
     
   } catch (error) {
-    console.error('Error fetching stock data:', error);
+    logger.error('Error fetching stock data:', error);
     return null;
   }
 }

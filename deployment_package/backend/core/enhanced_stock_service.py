@@ -75,9 +75,7 @@ class EnhancedStockService:
                     }
                     self._cache_price(symbol, formatted_data)
                     logger.info(
-                        f"API service price for {symbol}: ${
-                            formatted_data['price']} from {
-                            formatted_data['source']}")
+                        f"API service price for {symbol}: ${formatted_data['price']} from {formatted_data['source']}")
                     return formatted_data
             except Exception as e:
                 logger.warning(f"Market data API service failed for {symbol}: {e}")

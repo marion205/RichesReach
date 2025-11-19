@@ -37,9 +37,49 @@ import { CreditQuestScreen } from '../../credit/screens/CreditQuestScreen';
 interface PortfolioScreenProps {
 navigateTo?: (screen: string) => void;
 }
+interface NavigationParams {
+  screen?: string;
+  params?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+interface PortfolioHolding {
+  symbol?: string;
+  stock?: {
+    symbol?: string;
+    companyName?: string;
+    name?: string;
+    currentPrice?: number;
+    averagePrice?: number;
+  };
+  shares?: number;
+  quantity?: number;
+  currentPrice?: number;
+  totalValue?: number;
+  averagePrice?: number;
+  name?: string;
+  [key: string]: unknown;
+}
+
+interface Portfolio {
+  name: string;
+  totalValue?: number;
+  holdingsCount?: number;
+  holdings?: PortfolioHolding[];
+  [key: string]: unknown;
+}
+
+interface StablePortfolioData {
+  name: string;
+  holdings: Array<{
+    symbol?: string;
+    shares?: number;
+  }>;
+}
+
 const PortfolioScreen: React.FC<PortfolioScreenProps> = ({ navigateTo }) => {
 const insets = useSafeAreaInsets();
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation();
   
   // ALL HOOKS MUST BE AT THE TOP - before any conditional returns
   const [refreshing, setRefreshing] = useState(false);
@@ -141,13 +181,13 @@ const insets = useSafeAreaInsets();
     }
   }, [portfolioLoading]);
   
-  const go = (name: string, params?: any) => {
+  const go = (name: string, params?: NavigationParams) => {
     logger.log('PortfolioScreen: Navigating to', name, params);
     try {
-      if (navigation && (navigation as any).navigate) {
+      if (navigation && 'navigate' in navigation && typeof navigation.navigate === 'function') {
         logger.log('PortfolioScreen: Using navigation.navigate');
         // For screens in the same stack, navigate directly
-        (navigation as any).navigate(name as never, params as never);
+        navigation.navigate(name as never, params as never);
         return;
       }
     } catch (error) {
@@ -156,8 +196,8 @@ const insets = useSafeAreaInsets();
       try {
         // If direct navigation fails, try nested navigation for InvestStack screens
         const investStackScreens = ['premium-analytics', 'portfolio-management', 'trading', 'stock', 'StockDetail'];
-        if (investStackScreens.includes(name)) {
-          (navigation as any).navigate('Invest' as never, {
+        if (investStackScreens.includes(name) && 'navigate' in navigation && typeof navigation.navigate === 'function') {
+          navigation.navigate('Invest' as never, {
             screen: name,
             params: params
           } as never);
@@ -174,7 +214,12 @@ const insets = useSafeAreaInsets();
 const fetchingPricesRef = useRef(false);
 
 // Fetch real-time prices for portfolio holdings - memoized to prevent recreation
-const fetchRealTimePrices = useCallback(async (holdings: any[]) => {
+interface HoldingForPrice {
+  symbol?: string;
+  stock?: { symbol?: string };
+  [key: string]: unknown;
+}
+const fetchRealTimePrices = useCallback(async (holdings: HoldingForPrice[]) => {
   if (holdings.length === 0) {
     setLoadingPrices(false);
     fetchingPricesRef.current = false;
@@ -206,7 +251,12 @@ const fetchRealTimePrices = useCallback(async (holdings: any[]) => {
     logger.error('Failed to fetch real-time prices for portfolio:', error);
     // Use prices from mock portfolio data as fallback
     const mockPrices: { [key: string]: number } = {};
-    holdings.forEach((holding: any) => {
+    interface HoldingWithPrice {
+      symbol?: string;
+      stock?: { symbol?: string };
+      [key: string]: unknown;
+    }
+    holdings.forEach((holding: HoldingWithPrice) => {
       const symbol = holding.stock?.symbol || holding.symbol;
       const price = holding.currentPrice || holding.stock?.currentPrice || 0;
       if (symbol && price > 0) {
@@ -231,9 +281,9 @@ const portfoliosDataString = useMemo(() => {
   try {
     // Create a stable string representation of the portfolios data
     // Only include fields that matter for price fetching to minimize recalculation overhead
-    const stableData = portfolioData.myPortfolios.portfolios.map((p: any) => ({
+    const stableData = portfolioData.myPortfolios.portfolios.map((p: Portfolio): StablePortfolioData => ({
       name: p.name,
-      holdings: (p.holdings || []).map((h: any) => ({
+      holdings: (p.holdings || []).map((h: PortfolioHolding) => ({
         symbol: h.stock?.symbol || h.symbol,
         shares: h.shares || h.quantity,
       })),
@@ -254,7 +304,7 @@ useEffect(() => {
     portfoliosRef.current = portfoliosDataString;
     
     if (portfolioData?.myPortfolios?.portfolios) {
-      const allHoldings = portfolioData.myPortfolios.portfolios.flatMap((p: any) => p.holdings || []);
+      const allHoldings = portfolioData.myPortfolios.portfolios.flatMap((p: Portfolio) => p.holdings || []);
       if (allHoldings.length > 0) {
         fetchRealTimePrices(allHoldings);
       } else {
@@ -315,7 +365,7 @@ setRefreshing(false);
   const portfolios = (rawPortfolios.length > 0 && !portfolioError) ? rawPortfolios : demoPortfolios;
   const totalValue = (portfolioData?.myPortfolios?.totalValue != null)
     ? portfolioData.myPortfolios.totalValue
-    : portfolios.reduce((sum: number, p: any) => sum + (p.totalValue || 0), 0);
+    : portfolios.reduce((sum: number, p: Portfolio) => sum + (p.totalValue || 0), 0);
   const totalPortfolios = (portfolioData?.myPortfolios?.totalPortfolios != null)
     ? portfolioData.myPortfolios.totalPortfolios
     : portfolios.length;
@@ -323,9 +373,9 @@ setRefreshing(false);
   // Transform portfolio holdings into format expected by PortfolioHoldings component
   // MUST BE BEFORE ANY EARLY RETURNS
   const allHoldings: Holding[] = useMemo(() => {
-  const holdings = portfolios.flatMap((portfolio: any) => {
+  const holdings = portfolios.flatMap((portfolio: Portfolio) => {
     if (!portfolio.holdings || portfolio.holdings.length === 0) return [];
-    return portfolio.holdings.map((holding: any) => {
+    return portfolio.holdings.map((holding: PortfolioHolding) => {
       const symbol = holding.stock?.symbol || holding.symbol || '';
       const quantity = holding.shares || holding.quantity || 0;
       const currentPrice = realTimePrices[symbol] || holding.currentPrice || holding.stock?.currentPrice || 0;
@@ -645,7 +695,7 @@ return (
       {loadingPrices && ' • Loading prices...'}
     </Text>
     <View style={styles.watchlistGrid}>
-      {portfolios.slice(0, 3).map((portfolio: any) => (
+      {portfolios.slice(0, 3).map((portfolio: Portfolio) => (
         <View key={portfolio.name} style={styles.watchlistItem}>
           <Text style={styles.stockSymbol}>{portfolio.name}</Text>
           <Text style={styles.stockName} numberOfLines={1}>

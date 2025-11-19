@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
+import { AlpacaOrder } from '../types';
 
 const C = {
   card: '#FFFFFF',
@@ -21,7 +22,7 @@ const C = {
 };
 
 interface OrdersListProps {
-  orders: any[];
+  orders: AlpacaOrder[];
   loading?: boolean;
   filter: 'all' | 'open' | 'filled' | 'cancelled';
   onFilterChange: (filter: 'all' | 'open' | 'filled' | 'cancelled') => void;
@@ -41,7 +42,7 @@ const getStatusMeta = (status: string) => {
 
 const isOpen = (s: string) => ['pending', 'accepted', 'new', 'open'].includes(String(s).toLowerCase());
 
-const groupOrders = (orders: any[]) => {
+const groupOrders = (orders: AlpacaOrder[]) => {
   const today = new Date();
   const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
   const startOfWeek = (() => {
@@ -50,7 +51,7 @@ const groupOrders = (orders: any[]) => {
     return new Date(today.getFullYear(), today.getMonth(), diffDate).getTime();
   })();
 
-  const buckets: Record<string, any[]> = { Today: [], 'This Week': [], Earlier: [] };
+  const buckets: Record<string, AlpacaOrder[]> = { Today: [], 'This Week': [], Earlier: [] };
   for (const o of orders) {
     const t = new Date(o.createdAt).getTime();
     if (t >= startOfDay) buckets['Today'].push(o);
@@ -74,7 +75,7 @@ const fmtTime = (iso: string) => {
 export const OrdersList: React.FC<OrdersListProps> = React.memo(
   ({ orders, loading = false, filter, onFilterChange, onRefresh, onCancelOrder }) => {
     const filtered = useMemo(() => {
-      return orders.filter((o: any) => {
+      return orders.filter((o: AlpacaOrder) => {
         if (filter === 'all') return true;
         if (filter === 'open') return isOpen(o.status);
         return String(o.status).toLowerCase() === filter;
@@ -87,7 +88,12 @@ export const OrdersList: React.FC<OrdersListProps> = React.memo(
     const flatListData = useMemo(() => {
       if (loading || filtered.length === 0) return [];
       
-      const items: Array<{ type: 'section' | 'order'; label?: string; order?: any }> = [];
+      interface FlatListItem {
+        type: 'section' | 'order';
+        label?: string;
+        order?: AlpacaOrder;
+      }
+      const items: FlatListItem[] = [];
       (['Today', 'This Week', 'Earlier'] as const).forEach((label) => {
         if (sections[label].length > 0) {
           items.push({ type: 'section', label });
@@ -99,7 +105,7 @@ export const OrdersList: React.FC<OrdersListProps> = React.memo(
       return items;
     }, [sections, loading, filtered.length]);
 
-    const renderOrderItem = ({ item }: { item: any }) => {
+    const renderOrderItem = ({ item }: { item: FlatListItem }) => {
       if (item.type === 'section') {
         return <Text style={styles.sectionDivider}>{item.label}</Text>;
       }
@@ -148,7 +154,7 @@ export const OrdersList: React.FC<OrdersListProps> = React.memo(
 
               <View style={[styles.badge, { backgroundColor: `${statusColor}1A` }]}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Icon name={icon as any} size={14} color={statusColor} />
+                  <Icon name={icon as keyof typeof Icon} size={14} color={statusColor} />
                   <Text style={[styles.badgeText, { color: statusColor }]}>
                     {String(o.status).toUpperCase()}
                   </Text>
@@ -282,7 +288,7 @@ export const OrdersList: React.FC<OrdersListProps> = React.memo(
           const height = item?.type === 'section' ? 40 : 120; // Section header: 40px, Order: 120px
           return {
             length: height,
-            offset: (data || []).slice(0, index).reduce((acc: number, i: any) => {
+            offset: (data || []).slice(0, index).reduce((acc: number, i: FlatListItem | undefined) => {
               return acc + (i?.type === 'section' ? 40 : 120);
             }, 0),
             index,

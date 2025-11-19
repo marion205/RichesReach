@@ -74,7 +74,7 @@ export const QuickActionsModal: React.FC<QuickActionsModalProps> = ({
       icon: 'target',
       color: '#AF52DE',
       onPress: () => {
-        // TODO: Navigate to goals screen
+        // Future enhancement: Navigate to investment goals screen
         onClose();
       },
     },
@@ -94,7 +94,7 @@ export const QuickActionsModal: React.FC<QuickActionsModalProps> = ({
       icon: 'download',
       color: '#8E8E93',
       onPress: () => {
-        // TODO: Export portfolio data
+        // Future enhancement: Export portfolio data as PDF/CSV
         onClose();
       },
     },

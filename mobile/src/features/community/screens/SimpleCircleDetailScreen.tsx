@@ -30,19 +30,30 @@ import VoiceAIIntegration from '../../../components/VoiceAIIntegration';
 
 const { height: screenHeight } = Dimensions.get('window');
 
+interface Circle {
+  id: string;
+  name: string;
+  description: string;
+  memberCount?: number;
+  member_count?: number;
+  category?: string;
+  cultural_focus?: string;
+  [key: string]: unknown;
+}
+
+interface NavigationProp {
+  navigate: (screen: string, params?: Record<string, unknown>) => void;
+  goBack: () => void;
+  [key: string]: unknown;
+}
+
 interface SimpleCircleDetailProps {
   route: {
     params: {
-      circle: {
-        id: string;
-        name: string;
-        description: string;
-        memberCount: number;
-        category: string;
-      };
+      circle: Circle;
     };
   };
-  navigation: any;
+  navigation: NavigationProp;
 }
 
 // Mock posts data for demo - BIPOC Investment Strategies focused
@@ -174,7 +185,7 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
   const loadPosts = useCallback(async () => {
     setLoading(true);
     try {
-      console.log('🔄 Attempting to load real posts from API...');
+      logger.log('🔄 Attempting to load real posts from API...');
       
       // Add timeout to prevent infinite loading
       const timeoutPromise = new Promise((_, reject) =>
@@ -194,12 +205,30 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
 
       if (response.ok) {
         const apiPosts = await response.json();
-        console.log('✅ Successfully loaded real posts:', apiPosts.length);
+        logger.log('✅ Successfully loaded real posts:', apiPosts.length);
         
         // Only use real data if we have posts
         if (apiPosts && apiPosts.length > 0) {
           // Transform API data to match our interface
-          const transformed = apiPosts.map((post: any) => ({
+          interface ApiPost {
+            id?: string | number;
+            content?: string;
+            text?: string;
+            media?: { url?: string; type?: string } | string | null;
+            user?: { id?: string | number; name?: string; avatar?: string } | null;
+            author_id?: string | number;
+            author_name?: string;
+            author_avatar?: string;
+            created_at?: string;
+            timestamp?: string;
+            likes_count?: number;
+            likes?: number;
+            comments_count?: number;
+            comments?: number;
+            is_liked?: boolean;
+            [key: string]: unknown;
+          }
+          const transformed = (apiPosts as ApiPost[]).map((post) => ({
             id: post.id?.toString() || Date.now().toString(),
             content: post.content || post.text || 'No content',
             media: post.media ? {
@@ -218,19 +247,19 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
           }));
           
           setPosts(transformed);
-          console.log('🎉 Using real API data for posts');
+          logger.log('🎉 Using real API data for posts');
         } else {
           // No posts from API, use mock data for demo
-          console.log('📝 No posts from API, using mock data for demo');
+          logger.log('📝 No posts from API, using mock data for demo');
           setPosts(mockPosts);
         }
       } else {
-        console.log('⚠️ API returned error, falling back to mock data');
+        logger.log('⚠️ API returned error, falling back to mock data');
         setPosts(mockPosts);
       }
     } catch (err) {
-      console.error('❌ Error loading posts from API:', err);
-      console.log('🔄 Falling back to mock data for demo...');
+      logger.error('❌ Error loading posts from API:', err);
+      logger.log('🔄 Falling back to mock data for demo...');
       // Always set mock posts for demo if API fails
       setPosts(mockPosts);
     } finally {
@@ -248,9 +277,9 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
   useEffect(() => {
     try {
       if (posts && posts.length) {
-        console.log('🔍 Posts Data Dump:', JSON.stringify(posts.slice(0, 2), null, 2));
-        console.log('🚨 First Post Keys:', Object.keys(posts[0] || {}));
-        console.log('🚨 User Shape:', posts[0]?.user);
+        logger.log('🔍 Posts Data Dump:', JSON.stringify(posts.slice(0, 2), null, 2));
+        logger.log('🚨 First Post Keys:', Object.keys(posts[0] || {}));
+        logger.log('🚨 User Shape:', posts[0]?.user);
       }
     } catch {}
   }, [posts]);
@@ -375,21 +404,30 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
   }));
 
   const renderPost = ({ item }: { item: Post }) => {
-    const safeUser = typeof (item as any).user === 'object'
-      ? (item as any).user?.name || 'Anonymous'
-      : String((item as any).user ?? 'Unknown');
-    const safeContent = typeof (item as any).content === 'object'
-      ? JSON.stringify((item as any).content).slice(0, 200)
-      : String((item as any).content ?? '');
-    const safeTimestamp = (item as any).timestamp instanceof Date
-      ? (item as any).timestamp.toLocaleString()
-      : new Date((item as any).timestamp || Date.now()).toLocaleString();
-    const safeLikes = typeof (item as any).likes === 'number'
-      ? String((item as any).likes)
-      : String(((item as any).likes?.count) ?? 0);
-    const safeComments = typeof (item as any).comments === 'number'
-      ? String((item as any).comments)
-      : String(((item as any).comments?.count) ?? 0);
+    interface PostWithFlexibleFields extends Post {
+      user?: { name?: string } | string;
+      content?: string | object;
+      timestamp?: string | Date;
+      likes?: number | { count?: number };
+      comments?: number | { count?: number };
+      [key: string]: unknown;
+    }
+    const flexibleItem = item as PostWithFlexibleFields;
+    const safeUser = typeof flexibleItem.user === 'object'
+      ? flexibleItem.user?.name || 'Anonymous'
+      : String(flexibleItem.user ?? 'Unknown');
+    const safeContent = typeof flexibleItem.content === 'object'
+      ? JSON.stringify(flexibleItem.content).slice(0, 200)
+      : String(flexibleItem.content ?? '');
+    const safeTimestamp = flexibleItem.timestamp instanceof Date
+      ? flexibleItem.timestamp.toLocaleString()
+      : new Date(String(flexibleItem.timestamp || Date.now())).toLocaleString();
+    const safeLikes = typeof flexibleItem.likes === 'number'
+      ? String(flexibleItem.likes)
+      : String((flexibleItem.likes && typeof flexibleItem.likes === 'object' ? flexibleItem.likes.count : undefined) ?? 0);
+    const safeComments = typeof flexibleItem.comments === 'number'
+      ? String(flexibleItem.comments)
+      : String((flexibleItem.comments && typeof flexibleItem.comments === 'object' ? flexibleItem.comments.count : undefined) ?? 0);
 
     return (
     <TouchableOpacity style={styles.postContainer} onPress={() => onPostPress(item.id)} activeOpacity={0.7}>
@@ -446,9 +484,9 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
           <Text style={styles.voiceAILabel}>AI Financial Advisor</Text>
           <VoiceAI
             text={generateAIResponse(safeContent)}
-            voice={voiceAISettings.voice as any}
+            voice={String(voiceAISettings.voice)}
             speed={voiceAISettings.speed}
-            emotion={voiceAISettings.emotion as any}
+            emotion={String(voiceAISettings.emotion)}
             autoPlay={voiceAISettings.autoPlay}
             style={styles.voiceAIComponent}
           />
@@ -463,19 +501,19 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
   const startLiveStream = () => {
     setIsLiveHost(true);
     setLiveStreamModalVisible(true);
-    console.log('🎥 Starting RichesReach live stream for circle:', circle.name);
+    logger.log('🎥 Starting RichesReach live stream for circle:', circle.name);
   };
 
   const joinLiveStream = () => {
     setIsLiveHost(false);
     setLiveStreamModalVisible(true);
-    console.log('📺 Joining RichesReach live stream for circle:', circle.name);
+    logger.log('📺 Joining RichesReach live stream for circle:', circle.name);
   };
 
   const endLiveStream = () => {
     setLiveStreamModalVisible(false);
     setIsLiveHost(false);
-    console.log('🔴 Live stream ended');
+    logger.log('🔴 Live stream ended');
   };
 
   const closeLiveStreamModal = () => {
@@ -492,8 +530,22 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
     setVoiceAIModalVisible(false);
   };
 
-  const handleVoiceSettingsChange = (settings: any) => {
-    setVoiceAISettings(settings);
+  interface VoiceSettings {
+    enabled?: boolean;
+    voice?: string;
+    speed?: number;
+    emotion?: string;
+    autoPlay?: boolean;
+    [key: string]: unknown;
+  }
+  const handleVoiceSettingsChange = (settings: VoiceSettings) => {
+    setVoiceAISettings({
+      enabled: settings.enabled ?? voiceAISettings.enabled,
+      voice: settings.voice ?? voiceAISettings.voice,
+      speed: settings.speed ?? voiceAISettings.speed,
+      emotion: settings.emotion ?? voiceAISettings.emotion,
+      autoPlay: settings.autoPlay ?? voiceAISettings.autoPlay,
+    });
   };
 
   const generateAIResponse = (postContent: string): string => {
@@ -518,7 +570,7 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
           </TouchableOpacity>
           <View style={styles.headerContent}>
             <Text style={styles.headerTitle}>{String(circle.name)}</Text>
-            <Text style={styles.memberCount}>{String((circle as any).memberCount || (circle as any).member_count || 0)} members • {String((circle as any).category || (circle as any).cultural_focus || '')}</Text>
+            <Text style={styles.memberCount}>{String(circle.memberCount || circle.member_count || 0)} members • {String(circle.category || circle.cultural_focus || '')}</Text>
           </View>
           <TouchableOpacity style={styles.headerAction}>
             <Text style={styles.headerActionText}>...</Text>

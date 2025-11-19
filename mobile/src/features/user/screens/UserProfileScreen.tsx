@@ -29,7 +29,7 @@ const loadUserProfile = () => {
 setLoading(true);
 setError(null);
 try {
-// TODO: Replace with real API call
+// Future enhancement: Replace with real API call to fetchUserProfile service
 // const userProfile = await fetchUserProfile(userId);
 // For now, return null to avoid errors
 const userProfile = null;

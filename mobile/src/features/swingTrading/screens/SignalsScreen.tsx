@@ -422,7 +422,7 @@ const SignalsScreen: React.FC<SignalsScreenProps> = ({ navigateTo: navigateToPro
         <TouchableOpacity
           style={styles.filterButton}
           onPress={() => {
-            // TODO: Implement filter modal
+            // Future enhancement: Implement filter modal for signal filtering (timeframe, sector, etc.)
             Alert.alert('Filters', 'Filter functionality coming soon');
           }}
         >

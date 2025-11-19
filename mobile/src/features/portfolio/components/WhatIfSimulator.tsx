@@ -280,7 +280,7 @@ export const WhatIfSimulator: React.FC<WhatIfSimulatorProps> = ({
           <TouchableOpacity
             style={styles.actionButton}
             onPress={() => {
-              // TODO: Save scenario or create plan
+              // Future enhancement: Save scenario to user's saved scenarios or create investment plan
               onClose();
             }}
           >

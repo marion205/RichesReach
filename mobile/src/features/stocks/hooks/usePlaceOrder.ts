@@ -4,6 +4,15 @@ import { Alert } from 'react-native';
 import { PLACE_STOCK_ORDER } from '../../../graphql/tradingQueries';
 import { alpacaAnalytics } from '../../../services/alpacaAnalyticsService';
 import { OrderType, OrderSide } from './useOrderForm';
+import { 
+  AlpacaAccount, 
+  OrderVariables, 
+  PlaceOrderResponse,
+  RefetchQueryFunction 
+} from '../types';
+import { retryGraphQLOperation } from '../../../utils/retry';
+import { getUserFriendlyError } from '../../../utils/errorMessages';
+import logger from '../../../utils/logger';
 
 const sanitizeInt = (s: string) => {
   const n = parseInt(String(s).replace(/[^\d]/g, ''), 10);
@@ -24,10 +33,10 @@ interface PlaceOrderParams {
   orderSide: OrderSide;
   price?: string;
   stopPrice?: string;
-  alpacaAccount?: any;
+  alpacaAccount?: AlpacaAccount | null;
   onConnectRequired?: () => void;
   onSuccess?: () => void;
-  refetchQueries?: Array<() => Promise<any>>;
+  refetchQueries?: RefetchQueryFunction[];
 }
 
 export const usePlaceOrder = () => {

@@ -273,7 +273,7 @@ export const MarketCrashShieldView: React.FC<MarketCrashShieldViewProps> = ({
                     <TouchableOpacity
                       style={[styles.applyButton, { backgroundColor: riskColor }]}
                       onPress={() => {
-                        // TODO: Implement strategy application
+                        // Future enhancement: Apply selected strategy to portfolio automatically
                         onClose();
                       }}
                     >
@@ -296,7 +296,7 @@ export const MarketCrashShieldView: React.FC<MarketCrashShieldViewProps> = ({
             <TouchableOpacity
               style={styles.emergencyButton}
               onPress={() => {
-                // TODO: Show emergency liquidation flow
+                // Future enhancement: Show emergency liquidation confirmation and execution flow
                 onClose();
               }}
             >

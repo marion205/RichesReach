@@ -7,6 +7,7 @@ import intelligentPriceAlertService from '../features/stocks/services/Intelligen
 import { SecureMarketDataService } from '../features/stocks/services/SecureMarketDataService';
 // Import endpoint configuration to avoid URL mutation issues
 import { WS_STOCK_PRICES, WS_DISCUSSIONS, WS_PORTFOLIO } from '../api/endpoints';
+import logger from '../utils/logger';
 export interface StockPrice {
 symbol: string;
 price: number;
@@ -124,7 +125,7 @@ this.handleAppBackground();
 } catch (error) {
 // AppState not available, skip app state monitoring
 if (__DEV__) {
-console.warn('AppState not available, skipping app state monitoring');
+logger.warn('AppState not available, skipping app state monitoring');
 }
 }
 }
@@ -147,7 +148,7 @@ this.handleNetworkDisconnection();
 } catch (error) {
 // NetInfo not available, skip network monitoring
 if (__DEV__) {
-console.warn('NetInfo not available, skipping network monitoring');
+logger.warn('NetInfo not available, skipping network monitoring');
 }
 }
 }
@@ -202,7 +203,7 @@ this.disconnect();
 this.onConnectionStatusChange?.(false);
 }
 } catch (error) {
-console.error('Token validation error:', error);
+logger.error('Token validation error:', error);
 }
 }
 public setToken(token: string) {
@@ -229,7 +230,7 @@ tradingFrequency: 'weekly'
 };
 await intelligentPriceAlertService.setUserProfile(profile);
 } catch (error) {
-console.error('Error setting up intelligent alerts:', error);
+logger.error('Error setting up intelligent alerts:', error);
 }
 }
 public setCallbacks(callbacks: {
@@ -265,9 +266,9 @@ public connect() {
     // this.connectDiscussions(WS_DISCUSSIONS);
     // Connect to portfolio WebSocket (disabled for now - using mock data)
     // this.connectPortfolio(WS_PORTFOLIO);
-    console.log('WebSocket connections disabled - using polling only');
+    logger.log('WebSocket connections disabled - using polling only');
   } catch (error) {
-    console.log('WebSocket server not available, using polling only');
+    logger.log('WebSocket server not available, using polling only');
     // Continue with polling-only mode
   }
 }
@@ -298,7 +299,7 @@ try {
 const data = JSON.parse(event.data);
 this.handleStockPriceMessage(data);
 } catch (error) {
-console.error('Error parsing stock price message:', error);
+logger.error('Error parsing stock price message:', error);
 }
 };
 this.stockPriceSocket.onclose = (event) => {
@@ -311,12 +312,12 @@ this.stockPriceSocket.onclose = (event) => {
   this.handleReconnect('stock-prices');
 };
 this.stockPriceSocket.onerror = (error) => {
-console.error('Stock prices WebSocket error:', error);
+logger.error('Stock prices WebSocket error:', error);
 // If WebSocket fails, fall back to real market data polling
 this.startRealMarketDataPolling();
 };
 } catch (error) {
-console.error('Error creating stock prices WebSocket:', error);
+logger.error('Error creating stock prices WebSocket:', error);
 }
 }
 private connectDiscussions(wsUrl: string) {
@@ -336,17 +337,17 @@ try {
 const data = JSON.parse(event.data);
 this.handleDiscussionMessage(data);
 } catch (error) {
-console.error('Error parsing discussion message:', error);
+logger.error('Error parsing discussion message:', error);
 }
 };
 this.discussionSocket.onclose = (event) => {
 this.handleReconnect('discussions');
 };
 this.discussionSocket.onerror = (error) => {
-console.error('Discussions WebSocket error:', error);
+logger.error('Discussions WebSocket error:', error);
 };
 } catch (error) {
-console.error('Error creating discussions WebSocket:', error);
+logger.error('Error creating discussions WebSocket:', error);
 }
 }
 private connectPortfolio(wsUrl: string) {
@@ -366,17 +367,17 @@ try {
 const data = JSON.parse(event.data);
 this.handlePortfolioMessage(data);
 } catch (error) {
-console.error('Error parsing portfolio WebSocket message:', error);
+logger.error('Error parsing portfolio WebSocket message:', error);
 }
 };
 this.portfolioSocket.onclose = () => {
 this.handleReconnect('portfolio');
 };
 this.portfolioSocket.onerror = (error) => {
-console.error('Portfolio WebSocket error:', error);
+logger.error('Portfolio WebSocket error:', error);
 };
 } catch (error) {
-console.error('Error creating portfolio WebSocket:', error);
+logger.error('Error creating portfolio WebSocket:', error);
 }
 }
 private handleStockPriceMessage(data: any) {
@@ -580,7 +581,7 @@ this.showIntelligentAlert(alert);
 }
 }
 } catch (error) {
-console.error('Error in big day movement analysis:', error);
+logger.error('Error in big day movement analysis:', error);
 }
 }
 /**
@@ -600,7 +601,7 @@ this.marketDataInterval = setInterval(async () => {
 try {
 await this.fetchAndUpdateRealMarketData();
 } catch (error) {
-console.error('Error fetching real market data:', error);
+logger.error('Error fetching real market data:', error);
 }
 }, 30000); // 30 seconds
 // Initial fetch
@@ -627,7 +628,7 @@ expoGoCompatiblePriceAlertService.checkAlerts([stockPrice]);
 this.checkForBigDayMovement(stockPrice);
 });
 } catch (error) {
-console.error('Failed to fetch real market data:', error);
+logger.error('Failed to fetch real market data:', error);
 // Fall back to mock data if real data fails
 this.generateMockStockPrices();
 }

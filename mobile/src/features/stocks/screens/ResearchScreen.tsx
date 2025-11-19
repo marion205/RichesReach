@@ -18,6 +18,57 @@ import logger from '../../../utils/logger';
 
 const RECENTS_KEY = 'research_recent_symbols';
 
+// TypeScript interfaces
+interface StockItem {
+  symbol: string;
+  companyName?: string;
+  currentPrice?: number;
+  changePercent?: number;
+  [key: string]: unknown;
+}
+
+interface ResearchData {
+  quote?: {
+    price?: number;
+    chg?: number;
+    chgPct?: number;
+    high?: number;
+    low?: number;
+    volume?: number;
+    [key: string]: unknown;
+  };
+  technical?: {
+    rsi?: number;
+    macd?: number;
+    movingAverage50?: number;
+    movingAverage200?: number;
+    supportLevel?: number;
+    resistanceLevel?: number;
+    [key: string]: unknown;
+  };
+  sentiment?: {
+    label?: string;
+    score?: number;
+    articleCount?: number;
+    confidence?: number;
+    [key: string]: unknown;
+  };
+  macro?: {
+    vix?: number;
+    marketSentiment?: string;
+    riskAppetite?: number;
+    [key: string]: unknown;
+  };
+  marketRegime?: {
+    market_regime?: string;
+    confidence?: number;
+    recommended_strategy?: string;
+    [key: string]: unknown;
+  };
+  peers?: string[];
+  [key: string]: unknown;
+}
+
 // Map regime types to simple labels
 function getRegimeLabel(regime: string): string {
   const normalized = regime?.toLowerCase() || '';
@@ -54,7 +105,7 @@ export default function ResearchScreen() {
   const debouncedQuery = useDebounce(searchQuery, 250);
   const [recents, setRecents] = useState<string[]>([]);
   const [tradingModalVisible, setTradingModalVisible] = useState(false);
-  const [selectedStock, setSelectedStock] = useState<any>(null);
+  const [selectedStock, setSelectedStock] = useState<StockItem | null>(null);
 
   // Load/save recent symbols
   useEffect(() => {
@@ -189,7 +240,7 @@ export default function ResearchScreen() {
   };
 
   // Open trading modal
-  const openTradingModal = (stock: any) => {
+  const openTradingModal = (stock: StockItem) => {
     setSelectedStock(stock);
     setTradingModalVisible(true);
   };
@@ -198,7 +249,7 @@ export default function ResearchScreen() {
   const topStocks = topStocksData?.topStocks ?? [];
   const displayStocks = searchQuery ? searchResults : topStocks;
 
-  const renderStockItem = ({ item }: { item: any }) => (
+  const renderStockItem = ({ item }: { item: StockItem }) => (
     <View style={styles.stockItem}>
       <TouchableOpacity 
         style={styles.stockItemContent} 
@@ -347,7 +398,7 @@ export default function ResearchScreen() {
   );
 }
 
-function ResearchBody({ data }: { data: any }) {
+function ResearchBody({ data }: { data: ResearchData }) {
   const quote = data.quote;
   const technical = data.technical;
   const sentiment = data.sentiment;

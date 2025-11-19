@@ -18,6 +18,7 @@ export class WebRTCServiceStub {
 
 import io, { Socket } from 'socket.io-client';
 import { isExpoGo } from '../utils/expoGoCheck';
+import logger from '../utils/logger';
 
 // Conditionally import WebRTC (not available in Expo Go)
 let RTCPeerConnection: any = null;
@@ -34,7 +35,7 @@ try {
     mediaDevices = webrtc.mediaDevices;
   }
 } catch (e) {
-  console.warn('react-native-webrtc not available (Expo Go mode)');
+  logger.warn('react-native-webrtc not available (Expo Go mode)');
 }
 
 export interface WebRTCConfig {
@@ -97,7 +98,7 @@ export class WebRTCService {
   // Initialize the service
   async initialize(): Promise<void> {
     if (!this.isAvailable) {
-      console.warn('⚠️ WebRTC not available in Expo Go. Service will use fallback mode.');
+      logger.warn('⚠️ WebRTC not available in Expo Go. Service will use fallback mode.');
       return;
     }
 
@@ -109,9 +110,9 @@ export class WebRTCService {
       });
 
       this.setupSocketListeners();
-      console.log('✅ WebRTC Service initialized');
+      logger.log('✅ WebRTC Service initialized');
     } catch (error) {
-      console.error('❌ Failed to initialize WebRTC Service:', error);
+      logger.error('❌ Failed to initialize WebRTC Service:', error);
       throw error;
     }
   }
@@ -140,50 +141,50 @@ export class WebRTCService {
     if (!this.socket) return;
 
     this.socket.on('connect', () => {
-      console.log('🔌 Connected to streaming server');
+      logger.log('🔌 Connected to streaming server');
     });
 
     this.socket.on('disconnect', () => {
-      console.log('🔌 Disconnected from streaming server');
+      logger.log('🔌 Disconnected from streaming server');
     });
 
     this.socket.on('room-joined', (data: RoomInfo) => {
-      console.log('📺 Joined room:', data);
+      logger.log('📺 Joined room:', data);
       this.onRoomJoined?.(data);
     });
 
     this.socket.on('user-joined', (data: { userId: string; userName: string; viewerCount: number }) => {
-      console.log('👤 User joined:', data);
+      logger.log('👤 User joined:', data);
       this.onUserJoined?.({ userId: data.userId, userName: data.userName }, data.viewerCount);
     });
 
     this.socket.on('user-left', (data: { userId: string; viewerCount: number }) => {
-      console.log('👋 User left:', data);
+      logger.log('👋 User left:', data);
       this.onUserLeft?.(data.userId, data.viewerCount);
     });
 
     this.socket.on('new-message', (message: Message) => {
-      console.log('💬 New message:', message);
+      logger.log('💬 New message:', message);
       this.onNewMessage?.(message);
     });
 
     this.socket.on('chat-history', (messages: Message[]) => {
-      console.log('📜 Chat history loaded:', messages.length, 'messages');
+      logger.log('📜 Chat history loaded:', messages.length, 'messages');
       this.onChatHistory?.(messages);
     });
 
     this.socket.on('transport-created', async (data: any) => {
-      console.log('🚚 Transport created:', data);
+      logger.log('🚚 Transport created:', data);
       await this.handleTransportCreated(data);
     });
 
     this.socket.on('new-producer', async (data: { producerId: string; userId: string }) => {
-      console.log('📹 New producer:', data);
+      logger.log('📹 New producer:', data);
       await this.handleNewProducer(data);
     });
 
     this.socket.on('error', (error: { message: string }) => {
-      console.error('❌ Socket error:', error.message);
+      logger.error('❌ Socket error:', error.message);
       this.onError?.(error.message);
     });
   }
@@ -218,7 +219,7 @@ export class WebRTCService {
   // Initialize peer connection
   private async initializePeerConnection(): Promise<void> {
     if (!RTCPeerConnection) {
-      console.warn('⚠️ RTCPeerConnection not available (Expo Go)');
+      logger.warn('⚠️ RTCPeerConnection not available (Expo Go)');
       return;
     }
 
@@ -234,7 +235,7 @@ export class WebRTCService {
 
     // Handle remote streams
     this.peerConnection.ontrack = (event) => {
-      console.log('📺 Remote stream received');
+      logger.log('📺 Remote stream received');
       const [remoteStream] = event.streams;
       if (remoteStream && this.userId) {
         this.remoteStreams.set(this.userId, remoteStream);
@@ -256,7 +257,7 @@ export class WebRTCService {
   // Start local media stream
   private async startLocalStream(): Promise<void> {
     if (!mediaDevices) {
-      console.warn('⚠️ mediaDevices not available (Expo Go)');
+      logger.warn('⚠️ mediaDevices not available (Expo Go)');
       return;
     }
 
@@ -281,9 +282,9 @@ export class WebRTCService {
         this.peerConnection?.addTrack(track, stream);
       });
 
-      console.log('📹 Local stream started');
+      logger.log('📹 Local stream started');
     } catch (error) {
-      console.error('❌ Failed to start local stream:', error);
+      logger.error('❌ Failed to start local stream:', error);
       throw error;
     }
   }
@@ -345,7 +346,7 @@ export class WebRTCService {
     this.socket.emit('send-message', {
       roomId: this.currentRoom,
       userId: this.userId,
-      userName: 'User', // TODO: Get from user context
+      userName: 'User', // Future enhancement: Get from user context/auth service
       content,
       type
     });
@@ -379,7 +380,7 @@ export class WebRTCService {
     this.isHost = false;
     this.remoteStreams.clear();
 
-    console.log('👋 Left room');
+    logger.log('👋 Left room');
   }
 
   // Get local stream
@@ -429,6 +430,6 @@ export class WebRTCService {
     this.userId = null;
     this.isHost = false;
 
-    console.log('🔌 WebRTC Service disconnected');
+    logger.log('🔌 WebRTC Service disconnected');
   }
 }

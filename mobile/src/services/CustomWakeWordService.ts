@@ -7,6 +7,7 @@
 import { Audio } from 'expo-av';
 import { triggerHotword } from './VoiceHotword';
 import { Platform } from 'react-native';
+import logger from '../utils/logger';
 
 const WHISPER_API_URL = process.env.EXPO_PUBLIC_WHISPER_API_URL || 'http://localhost:3001';
 const WAKE_WORD = 'hey riches';
@@ -28,12 +29,12 @@ class CustomWakeWordService {
       this.hasPermission = status === 'granted';
       
       if (!this.hasPermission) {
-        console.warn('⚠️ Microphone permission not granted for wake word detection');
+        logger.warn('⚠️ Microphone permission not granted for wake word detection');
       }
       
       return this.hasPermission;
     } catch (error) {
-      console.error('Permission request error:', error);
+      logger.error('Permission request error:', error);
       return false;
     }
   }
@@ -43,7 +44,7 @@ class CustomWakeWordService {
    */
   async start(): Promise<boolean> {
     if (this.isListening) {
-      console.log('✅ Wake word detection already active');
+      logger.log('✅ Wake word detection already active');
       return true;
     }
 
@@ -55,7 +56,7 @@ class CustomWakeWordService {
     }
 
     try {
-      console.log('🎤 Starting custom wake word detection...');
+      logger.log('🎤 Starting custom wake word detection...');
       
       // Configure audio recording for wake word detection
       await Audio.setAudioModeAsync({
@@ -100,11 +101,11 @@ class CustomWakeWordService {
       // Start periodic checking
       this.startPeriodicCheck();
 
-      console.log('✅ Custom wake word detection started');
+      logger.log('✅ Custom wake word detection started');
       return true;
 
     } catch (error) {
-      console.error('❌ Failed to start wake word detection:', error);
+      logger.error('❌ Failed to start wake word detection:', error);
       this.isListening = false;
       return false;
     }
@@ -134,7 +135,7 @@ class CustomWakeWordService {
           const detected = this.detectWakeWord(transcript);
           
           if (detected) {
-            console.log('🎤 "Hey Riches" detected in transcript:', transcript);
+            logger.log('🎤 "Hey Riches" detected in transcript:', transcript);
             triggerHotword();
             
             // Restart recording for next check
@@ -142,7 +143,7 @@ class CustomWakeWordService {
           }
         }
       } catch (error) {
-        console.error('Error checking for wake word:', error);
+        logger.error('Error checking for wake word:', error);
       }
     }, CHECK_INTERVAL);
   }
@@ -176,7 +177,7 @@ class CustomWakeWordService {
       return data.transcript?.toLowerCase() || null;
 
     } catch (error) {
-      console.error('Transcription error:', error);
+      logger.error('Transcription error:', error);
       // Return null on network errors - don't spam the console
       // The calling code should handle null gracefully
       return null;
@@ -261,7 +262,7 @@ class CustomWakeWordService {
       this.recording = recording;
 
     } catch (error) {
-      console.error('Failed to restart recording:', error);
+      logger.error('Failed to restart recording:', error);
     }
   }
 
@@ -294,7 +295,7 @@ class CustomWakeWordService {
           try {
             await this.recording.unloadAsync();
           } catch (e2) {
-            console.warn('Could not unload recording:', e2);
+            logger.warn('Could not unload recording:', e2);
           }
         }
         this.recording = null;
@@ -314,9 +315,9 @@ class CustomWakeWordService {
         // Ignore errors
       }
 
-      console.log('✅ Wake word detection stopped');
+      logger.log('✅ Wake word detection stopped');
     } catch (error) {
-      console.error('Failed to stop wake word detection:', error);
+      logger.error('Failed to stop wake word detection:', error);
       // Ensure recording is null even on error
       this.recording = null;
       this.isListening = false;

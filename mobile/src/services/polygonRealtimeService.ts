@@ -13,6 +13,7 @@
 
 import { useEffect } from 'react';
 import { GET_TRADING_QUOTE } from '../graphql/tradingQueries';
+import logger from '../utils/logger';
 
 // Use React Native's built-in WebSocket (works on both iOS and Android)
 // Fallback to w3cwebsocket for web if needed
@@ -26,7 +27,7 @@ try {
     const { w3cwebsocket } = require('websocket');
     WebSocketClass = w3cwebsocket;
   } catch {
-    console.warn('⚠️ WebSocket not available - real-time updates disabled');
+    logger.warn('⚠️ WebSocket not available - real-time updates disabled');
   }
 }
 
@@ -45,7 +46,7 @@ const RECONNECT_DELAY = 1000;
  */
 export const initPolygonStream = (client: any, symbols: string[] = []) => {
   if (!POLYGON_KEY) {
-    console.warn('⚠️ Polygon API key not found - using mock data only');
+    logger.warn('⚠️ Polygon API key not found - using mock data only');
     return;
   }
 
@@ -58,7 +59,7 @@ export const initPolygonStream = (client: any, symbols: string[] = []) => {
   apolloClient = client;
 
   if (!WebSocketClass) {
-    console.warn('⚠️ WebSocket not available - skipping Polygon connection');
+    logger.warn('⚠️ WebSocket not available - skipping Polygon connection');
     return;
   }
 
@@ -66,7 +67,7 @@ export const initPolygonStream = (client: any, symbols: string[] = []) => {
     ws = new WebSocketClass(WS_URL);
 
     ws.onopen = () => {
-      console.log('✅ Polygon WebSocket connected');
+      logger.log('✅ Polygon WebSocket connected');
       reconnectAttempts = 0;
 
       // Authenticate
@@ -85,13 +86,13 @@ export const initPolygonStream = (client: any, symbols: string[] = []) => {
         // Handle status messages
         if (data.ev === 'status') {
           if (data.status === 'connected') {
-            console.log('🔗 Polygon WebSocket connected');
+            logger.log('🔗 Polygon WebSocket connected');
           } else if (data.status === 'auth_success') {
-            console.log('🔑 Polygon authenticated successfully');
+            logger.log('🔑 Polygon authenticated successfully');
             // Subscribe to symbols after auth
             updateSubscriptions(symbols);
           } else if (data.status === 'auth_failed') {
-            console.error('❌ Polygon auth failed - check API key');
+            logger.error('❌ Polygon auth failed - check API key');
           }
           return;
         }
@@ -103,7 +104,7 @@ export const initPolygonStream = (client: any, symbols: string[] = []) => {
 
           if (price && symbol) {
             if (__DEV__) {
-              console.log(`📈 Polygon trade event: ${symbol} @ $${price} (${new Date(timestamp).toLocaleTimeString()})`);
+              logger.log(`📈 Polygon trade event: ${symbol} @ $${price} (${new Date(timestamp).toLocaleTimeString()})`);
             }
             // Update Apollo cache instantly → UI re-renders automatically
             updateApolloCache(symbol, price, timestamp);
@@ -117,33 +118,33 @@ export const initPolygonStream = (client: any, symbols: string[] = []) => {
 
           if (bidPrice && askPrice && symbol) {
             if (__DEV__) {
-              console.log(`📊 Polygon quote event: ${symbol} Bid: $${bidPrice} Ask: $${askPrice}`);
+              logger.log(`📊 Polygon quote event: ${symbol} Bid: $${bidPrice} Ask: $${askPrice}`);
             }
             updateApolloCacheWithQuote(symbol, bidPrice, askPrice, timestamp);
           }
         }
       } catch (error) {
-        console.error('⚠️ Error parsing Polygon message:', error);
+        logger.error('⚠️ Error parsing Polygon message:', error);
       }
     };
 
     ws.onerror = (error: any) => {
-      console.error('⚠️ Polygon WebSocket error:', error);
+      logger.error('⚠️ Polygon WebSocket error:', error);
     };
 
     ws.onclose = () => {
-      console.log('🔌 Polygon disconnected - reconnecting...');
+      logger.log('🔌 Polygon disconnected - reconnecting...');
       if (reconnectAttempts < MAX_RECONNECTS) {
         setTimeout(() => {
           reconnectAttempts++;
           initPolygonStream(client, Array.from(subscribedSymbols));
         }, RECONNECT_DELAY * reconnectAttempts);
       } else {
-        console.warn('⚠️ Max reconnection attempts reached - using REST fallback');
+        logger.warn('⚠️ Max reconnection attempts reached - using REST fallback');
       }
     };
   } catch (error) {
-    console.error('❌ Failed to initialize Polygon WebSocket:', error);
+    logger.error('❌ Failed to initialize Polygon WebSocket:', error);
   }
 };
 
@@ -178,7 +179,7 @@ const updateSubscriptions = (symbols: string[]) => {
         params: `${tradeSubs},${quoteSubs}`,
       })
     );
-    console.log(`📡 Subscribed to Polygon updates: ${toSubscribe.join(', ')}`);
+    logger.log(`📡 Subscribed to Polygon updates: ${toSubscribe.join(', ')}`);
   }
 
   subscribedSymbols = newSymbols;
@@ -212,10 +213,10 @@ const updateApolloCache = (symbol: string, price: number, timestamp: number) => 
     });
 
     if (__DEV__) {
-      console.log(`📈 Live update: ${symbol} @ $${price.toFixed(2)}`);
+      logger.log(`📈 Live update: ${symbol} @ $${price.toFixed(2)}`);
     }
   } catch (error) {
-    console.error(`⚠️ Failed to update Apollo cache for ${symbol}:`, error);
+    logger.error(`⚠️ Failed to update Apollo cache for ${symbol}:`, error);
   }
 };
 
@@ -248,10 +249,10 @@ const updateApolloCacheWithQuote = (
     });
 
     if (__DEV__) {
-      console.log(`📊 Live quote: ${symbol} Bid: $${bidPrice.toFixed(2)} Ask: $${askPrice.toFixed(2)}`);
+      logger.log(`📊 Live quote: ${symbol} Bid: $${bidPrice.toFixed(2)} Ask: $${askPrice.toFixed(2)}`);
     }
   } catch (error) {
-    console.error(`⚠️ Failed to update Apollo cache quote for ${symbol}:`, error);
+    logger.error(`⚠️ Failed to update Apollo cache quote for ${symbol}:`, error);
   }
 };
 
@@ -264,7 +265,7 @@ export const closePolygonStream = () => {
     ws = null;
     subscribedSymbols.clear();
     apolloClient = null;
-    console.log('🔌 Polygon WebSocket closed');
+    logger.log('🔌 Polygon WebSocket closed');
   }
 };
 

@@ -7,6 +7,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useMutation } from '@apollo/client';
 import { TOKEN_AUTH, VERIFY_TOKEN } from '../graphql/queries_corrected';
+import logger from '../utils/logger';
 
 interface User {
   id: string;
@@ -65,7 +66,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         loadUserData(storedToken).catch(() => {});
       }
     } catch (error) {
-      console.error('Error loading stored token:', error);
+      logger.error('Error loading stored token:', error);
       setToken(null);
       setUser(null);
     } finally {
@@ -76,7 +77,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const verifyStoredToken = async (tokenToVerify: string): Promise<boolean> => {
     // DEVELOPMENT BYPASS: Always return true for testing
-    console.log('🔧 DEVELOPMENT MODE: Token verification bypassed');
+    logger.log('🔧 DEVELOPMENT MODE: Token verification bypassed');
     return true;
   };
 
@@ -84,10 +85,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       // This would typically be a GraphQL query to get user data
       // For now, we'll extract user info from the token or make a separate query
-      console.log('Loading user data for token:', authToken.substring(0, 20) + '...');
-      // TODO: Implement user data loading
+      logger.log('Loading user data for token:', authToken.substring(0, 20) + '...');
+      // Future enhancement: Implement user data loading from GraphQL query or user service
     } catch (error) {
-      console.error('Error loading user data:', error);
+      logger.error('Error loading user data:', error);
     }
   };
 
@@ -95,12 +96,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setLoading(true);
     try {
       // DEVELOPMENT BYPASS: Always succeed for testing MemeQuest UI
-      console.log('🔧 DEVELOPMENT MODE: Bypassing authentication for testing');
+      logger.log('🔧 DEVELOPMENT MODE: Bypassing authentication for testing');
       
       const devToken = 'dev-token-' + Date.now();
       setToken(devToken);
       await AsyncStorage.setItem('token', devToken);
-      console.log('🔐 Dev token stored in AsyncStorage successfully');
+      logger.log('🔐 Dev token stored in AsyncStorage successfully');
       
       // Set a basic user object for authentication
       const basicUser = {
@@ -111,12 +112,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         hasPremiumAccess: false,
       };
       setUser(basicUser);
-      console.log('🔐 User state set:', basicUser);
+      logger.log('🔐 User state set:', basicUser);
       
-      console.log('🔐 Development login successful, returning true');
+      logger.log('🔐 Development login successful, returning true');
       return true;
     } catch (error) {
-      console.error('Login error:', error);
+      logger.error('Login error:', error);
       return false;
     } finally {
       setLoading(false);
@@ -128,12 +129,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const baseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000";
     const identifier = emailOrUsername.trim();
     
-    console.log('🔍 AuthContext: Using baseUrl:', baseUrl);
-    console.log('🔍 AuthContext: Environment variable:', process.env.EXPO_PUBLIC_API_BASE_URL);
+    logger.log('🔍 AuthContext: Using baseUrl:', baseUrl);
+    logger.log('🔍 AuthContext: Environment variable:', process.env.EXPO_PUBLIC_API_BASE_URL);
     
     const attempt = async (payload: any) => {
-      console.log('🔄 AuthContext: Attempting login to:', `${baseUrl}/api/auth/login/`);
-      console.log('🔄 AuthContext: Payload:', payload);
+      logger.log('🔄 AuthContext: Attempting login to:', `${baseUrl}/api/auth/login/`);
+      logger.log('🔄 AuthContext: Payload:', payload);
       
       try {
         const response = await fetch(`${baseUrl}/api/auth/login/`, {
@@ -142,11 +143,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           body: JSON.stringify(payload),
         });
         
-        console.log('📡 AuthContext: Response status:', response.status);
-        console.log('📡 AuthContext: Response ok:', response.ok);
+        logger.log('📡 AuthContext: Response status:', response.status);
+        logger.log('📡 AuthContext: Response ok:', response.ok);
         
         const json = await response.json().catch(() => ({}));
-        console.log('📡 AuthContext: Response json:', json);
+        logger.log('📡 AuthContext: Response json:', json);
         
         if (!response.ok) {
           throw new Error(json?.error || `Login failed with status ${response.status}`);
@@ -164,23 +165,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         
         return json.access_token;
       } catch (fetchError) {
-        console.error('❌ AuthContext: Fetch error:', fetchError);
+        logger.error('❌ AuthContext: Fetch error:', fetchError);
         throw fetchError;
       }
     };
 
     try {
       // 1) Try as email first
-      console.log('🔄 Trying REST login with email:', identifier);
+      logger.log('🔄 Trying REST login with email:', identifier);
       return await attempt({ email: identifier, password });
     } catch (emailError) {
-      console.log('❌ Email login failed, trying username:', emailError.message);
+      logger.log('❌ Email login failed, trying username:', emailError.message);
       try {
         // 2) Try as username
-        console.log('🔄 Trying REST login with username:', identifier);
+        logger.log('🔄 Trying REST login with username:', identifier);
         return await attempt({ username: identifier, password });
       } catch (usernameError) {
-        console.error('❌ Both email and username login failed:', usernameError.message);
+        logger.error('❌ Both email and username login failed:', usernameError.message);
         return null;
       }
     }
@@ -192,15 +193,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = async (): Promise<void> => {
     try {
-      console.log('🔄 AuthContext: Starting logout...');
+      logger.log('🔄 AuthContext: Starting logout...');
       setUser(null);
-      console.log('✅ AuthContext: User set to null');
+      logger.log('✅ AuthContext: User set to null');
       setToken(null);
-      console.log('✅ AuthContext: Token set to null');
+      logger.log('✅ AuthContext: Token set to null');
       await AsyncStorage.removeItem('token');
-      console.log('✅ AuthContext: Token removed from AsyncStorage');
+      logger.log('✅ AuthContext: Token removed from AsyncStorage');
     } catch (error) {
-      console.error('❌ AuthContext logout error:', error);
+      logger.error('❌ AuthContext logout error:', error);
     }
   };
 
@@ -214,7 +215,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
       return isValid;
     } catch (error) {
-      console.error('Token verification error:', error);
+      logger.error('Token verification error:', error);
       return false;
     }
   };

@@ -263,13 +263,17 @@ export default function VoiceAI({
     return availableVoices[selectedVoice]?.description || 'Natural voice synthesis';
   };
 
-  function arrayBufferToBase64(buffer: ArrayBuffer) {
+  function arrayBufferToBase64(buffer: ArrayBuffer): string {
     let binary = '';
     const bytes = new Uint8Array(buffer);
     const len = bytes.byteLength;
     for (let i = 0; i < len; i++) binary += String.fromCharCode(bytes[i]);
-    // @ts-ignore
-    return typeof btoa === 'function' ? btoa(binary) : Buffer.from(binary, 'binary').toString('base64');
+    // @ts-expect-error: btoa may not be available in all environments, but Buffer.from is a valid fallback
+    if (typeof btoa === 'function') {
+      return btoa(binary);
+    }
+    // Buffer is available in React Native via polyfills
+    return Buffer.from(binary, 'binary').toString('base64');
   }
 
   return (

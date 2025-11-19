@@ -285,13 +285,25 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
   });
   
   /* ===================== Home Screen ===================== */
-  const HomeScreen = ({ navigateTo }: { navigateTo?: (screen: string, data?: any) => void }) => {
+  interface NavigateParams {
+    symbol?: string;
+    bankId?: string;
+    [key: string]: unknown;
+  }
+  
+  interface MarketDataHealth {
+    isHealthy: boolean;
+    error?: string;
+    [key: string]: unknown;
+  }
+  
+  const HomeScreen = ({ navigateTo }: { navigateTo?: (screen: string, data?: NavigateParams) => void }) => {
     const client = useApolloClient();
-    const navigation = useNavigation<any>();
+    const navigation = useNavigation();
     
     // Smart portfolio metrics state
     const [canQueryMetrics, setCanQueryMetrics] = useState(false);
-    const [marketDataHealth, setMarketDataHealth] = useState<any>(null);
+    const [marketDataHealth, setMarketDataHealth] = useState<MarketDataHealth | null>(null);
   
     // GraphQL
     const {
@@ -423,7 +435,7 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
             };
             return; // Success with ML service
           }
-        } catch (error: any) {
+        } catch (error: unknown) {
           logger.log('ℹ️ ML wake word not available, trying Whisper-based...');
         }
 
@@ -438,7 +450,7 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
             };
             return; // Success with custom service
           }
-        } catch (error: any) {
+        } catch (error: unknown) {
           logger.log('ℹ️ Whisper wake word not available, trying Porcupine...');
         }
 
@@ -455,8 +467,9 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
           } else {
             logger.log('ℹ️ Wake word detection not available');
           }
-        } catch (error: any) {
-          logger.log('ℹ️ Wake word detection not available:', error.message);
+        } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          logger.log('ℹ️ Wake word detection not available:', errorMessage);
         }
       };
 
@@ -580,7 +593,7 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
           if (response?.answer || response?.response) {
             return response.answer || response.response;
           }
-        } catch (error: any) {
+        } catch (error: unknown) {
           // Fall through to fast fallback
         }
         return 'Diversification across different asset classes (stocks, bonds, ETFs) is a fundamental investment strategy. Consider your risk tolerance and time horizon when making investment decisions. For long-term growth, index funds and ETFs are excellent starting points.';
@@ -597,7 +610,7 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
           if (response?.answer || response?.response) {
             return response.answer || response.response;
           }
-        } catch (error: any) {
+        } catch (error: unknown) {
           // Fall through to fast fallback
         }
         return 'The 50/30/20 rule allocates 50% to needs (housing, food, utilities), 30% to wants (entertainment, dining), and 20% to savings and debt repayment. This is a great starting point for financial planning. Start by tracking your expenses for a month to see where your money goes.';
@@ -614,7 +627,7 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
           if (response?.answer || response?.response) {
             return response.answer || response.response;
           }
-        } catch (error: any) {
+        } catch (error: unknown) {
           // Fall through to fast fallback
         }
         return 'Stock market investing involves risk, and it\'s important to do your research, diversify your portfolio, and invest for the long term rather than trying to time the market. Consider dollar-cost averaging to reduce the impact of volatility.';
@@ -631,7 +644,7 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
           if (response?.answer || response?.response) {
             return response.answer || response.response;
           }
-        } catch (error: any) {
+        } catch (error: unknown) {
           // Fall through to fast fallback
         }
         return 'Start early, take advantage of employer 401(k) matching, and consider both traditional and Roth IRAs. The power of compound interest over time is your greatest ally in retirement planning. Aim to save at least 15% of your income for retirement.';
@@ -646,15 +659,16 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
         const apiPromise = assistantQuery({ user_id: userId, prompt: userInput });
         const response = await Promise.race([apiPromise, timeoutPromise]);
         return response?.answer || response?.response || 'I hit a snag processing that—mind trying again?';
-      } catch (error: any) {
-        logger.log('AI query timeout or error, using fallback:', error.message);
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        logger.log('AI query timeout or error, using fallback:', errorMessage);
         // Provide helpful generic fallback
         return 'I\'m here to help with investment strategies, portfolio analysis, budgeting, retirement planning, and market insights. Could you rephrase your question or ask about a specific topic like "How do I start investing?" or "What is dollar-cost averaging?"';
       }
     }, [userData?.me?.id, userProfile?.id]);
   
     /* ---------- helpers ---------- */
-    const go = useCallback((screen: string, params?: any) => {
+    const go = useCallback((screen: string, params?: NavigateParams) => {
       logger.log('HomeScreen.go() called with:', screen, params);
       
       // Screens that are in InvestStack need nested navigation
@@ -687,7 +701,7 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
       } catch (directError) {
         // Fallback to globalNavigate
         try {
-          globalNavigate(screen as any, params);
+          globalNavigate(screen, params);
         } catch (error) {
           logger.error('HomeScreen.go() globalNavigate error:', error);
         }
@@ -695,7 +709,7 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
 
       if (typeof navigateTo === 'function') {
         try {
-          (navigateTo as any)(screen, params);
+          navigateTo?.(screen, params);
         } catch (error) {
           logger.error('HomeScreen.go() navigateTo error:', error);
         }
@@ -754,7 +768,22 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
         mockData.portfolioMetrics.holdings;
   
       // Transform holdings to match PortfolioHoldings interface
-      const holdings = rawHoldings.map((h: any) => ({
+      interface RawHolding {
+        symbol?: string;
+        stock?: { symbol?: string; companyName?: string };
+        shares?: number;
+        quantity?: number;
+        currentPrice?: number;
+        totalValue?: number;
+        returnAmount?: number;
+        change?: number;
+        returnPercent?: number;
+        changePercent?: number;
+        companyName?: string;
+        name?: string;
+        [key: string]: unknown;
+      }
+      const holdings = rawHoldings.map((h: RawHolding) => ({
         symbol: h.symbol || h.stock?.symbol || '',
         quantity: h.shares || h.quantity || 0,
         currentPrice: h.currentPrice || 0,
@@ -924,7 +953,7 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
                   navigation.navigate('camera-test' as never);
                 } catch (error) {
                   logger.error('Navigation error:', error);
-                  globalNavigate('camera-test' as any);
+                  globalNavigate('camera-test');
                 }
               }}
             >

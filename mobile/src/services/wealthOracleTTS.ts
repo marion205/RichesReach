@@ -3,6 +3,7 @@ import { Audio } from "expo-av";
 import * as Speech from "expo-speech";
 import { TTS_API_BASE_URL } from "../config/api";
 import type { StockMoment } from "../components/charts/ChartWithMoments";
+import logger from "../utils/logger";
 
 let currentSound: Audio.Sound | null = null;
 let currentSpeechId: string | null = null;
@@ -72,7 +73,7 @@ export async function playWealthOracle(
     : text;
   
   if (text.length > MAX_TTS_LENGTH) {
-    console.warn(`[WealthOracleTTS] Text truncated from ${text.length} to ${MAX_TTS_LENGTH} chars`);
+    logger.warn(`[WealthOracleTTS] Text truncated from ${text.length} to ${MAX_TTS_LENGTH} chars`);
   }
 
   // Skip health check on first call - just try TTS directly with fast timeout
@@ -84,13 +85,13 @@ export async function playWealthOracle(
   
   if (useCachedHealth && !ttsServiceAvailable) {
     // We know service is down from cache, skip immediately
-    console.log(`[WealthOracleTTS] TTS service known to be unavailable, using expo-speech immediately`);
+    logger.log(`[WealthOracleTTS] TTS service known to be unavailable, using expo-speech immediately`);
     return fallbackToExpoSpeech(truncatedText);
   }
 
   // Try TTS directly with very fast timeout - no health check delay
   try {
-    console.log(`[WealthOracleTTS] Attempting TTS service: ${TTS_API_BASE_URL}/tts`);
+    logger.log(`[WealthOracleTTS] Attempting TTS service: ${TTS_API_BASE_URL}/tts`);
     
     // Create abort controller with fast timeout
     const controller = new AbortController();
@@ -114,7 +115,7 @@ export async function playWealthOracle(
       // Cache that service is down
       ttsServiceAvailable = false;
       ttsHealthCheckTime = Date.now();
-      console.warn(`[WealthOracleTTS] TTS request failed (${res.status}), falling back to expo-speech`);
+      logger.warn(`[WealthOracleTTS] TTS request failed (${res.status}), falling back to expo-speech`);
       return fallbackToExpoSpeech(truncatedText);
     }
     
@@ -125,7 +126,7 @@ export async function playWealthOracle(
     const data = await res.json();
     const audioUrl: string | undefined = data.audio_url;
     if (!audioUrl) {
-      console.warn("[WealthOracleTTS] TTS response missing audio_url, falling back to expo-speech");
+      logger.warn("[WealthOracleTTS] TTS response missing audio_url, falling back to expo-speech");
       ttsServiceAvailable = false;
       ttsHealthCheckTime = Date.now();
       return fallbackToExpoSpeech(truncatedText);
@@ -145,7 +146,7 @@ export async function playWealthOracle(
       }
     });
     
-    console.log("[WealthOracleTTS] Playing audio from TTS service");
+    logger.log("[WealthOracleTTS] Playing audio from TTS service");
   } catch (error) {
     // Cache that service is down
     ttsServiceAvailable = false;
@@ -153,9 +154,9 @@ export async function playWealthOracle(
     
     // Handle timeout specifically
     if (error instanceof Error && error.name === 'AbortError') {
-      console.warn("[WealthOracleTTS] TTS request timed out (2s), falling back to expo-speech immediately");
+      logger.warn("[WealthOracleTTS] TTS request timed out (2s), falling back to expo-speech immediately");
     } else {
-      console.warn("[WealthOracleTTS] TTS error, falling back to expo-speech:", error instanceof Error ? error.message : error);
+      logger.warn("[WealthOracleTTS] TTS error, falling back to expo-speech:", error instanceof Error ? error.message : error);
     }
     // Fallback to expo-speech immediately
     return fallbackToExpoSpeech(truncatedText);
@@ -167,22 +168,22 @@ export async function playWealthOracle(
  */
 function fallbackToExpoSpeech(text: string): void {
   try {
-    console.log("[WealthOracleTTS] Using expo-speech fallback");
+    logger.log("[WealthOracleTTS] Using expo-speech fallback");
     Speech.speak(text, {
       ...wealthOracleVoiceOptions,
       onDone: () => {
-        console.log("[WealthOracleTTS] Speech completed");
+        logger.log("[WealthOracleTTS] Speech completed");
         currentSpeechId = null;
       },
       onError: (error) => {
-        console.error("[WealthOracleTTS] Speech error:", error);
+        logger.error("[WealthOracleTTS] Speech error:", error);
         currentSpeechId = null;
       },
     });
     // Note: expo-speech doesn't return an ID, but we track it for stopping
     currentSpeechId = "speech_active";
   } catch (error) {
-    console.error("[WealthOracleTTS] Failed to use expo-speech fallback:", error);
+    logger.error("[WealthOracleTTS] Failed to use expo-speech fallback:", error);
   }
 }
 
@@ -192,9 +193,9 @@ export async function stopWealthOracle(): Promise<void> {
     try {
       await currentSound.stopAsync();
       await currentSound.unloadAsync();
-      console.log("[WealthOracleTTS] Stopped audio playback");
+      logger.log("[WealthOracleTTS] Stopped audio playback");
     } catch (error) {
-      console.warn("[WealthOracleTTS] Error stopping audio:", error);
+      logger.warn("[WealthOracleTTS] Error stopping audio:", error);
     }
     currentSound = null;
   }
@@ -204,7 +205,7 @@ export async function stopWealthOracle(): Promise<void> {
     const isSpeaking = await Speech.isSpeakingAsync();
     if (isSpeaking) {
       Speech.stop();
-      console.log("[WealthOracleTTS] Stopped expo-speech");
+      logger.log("[WealthOracleTTS] Stopped expo-speech");
     }
   } catch (error) {
     // Ignore errors - speech might not be active

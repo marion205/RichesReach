@@ -18,11 +18,12 @@ import { isExpoGo } from '../utils/expoGoCheck';
 import io from 'socket.io-client';
 
 // Conditionally import WebRTC (not available in Expo Go)
-let RTCView: any = null;
-let RTCPeerConnection: any = null;
-let RTCIceCandidate: any = null;
-let RTCSessionDescription: any = null;
-let mediaDevices: any = null;
+// Using unknown for conditional imports that may not be available
+let RTCView: React.ComponentType<unknown> | null = null;
+let RTCPeerConnection: unknown = null;
+let RTCIceCandidate: unknown = null;
+let RTCSessionDescription: unknown = null;
+let mediaDevices: unknown = null;
 
 try {
   if (!isExpoGo()) {
@@ -67,19 +68,19 @@ interface Reaction {
 interface Transport {
   id: string;
   direction: 'send' | 'recv';
-  transport: any;
+  transport: unknown; // Mediasoup transport object
 }
 
 interface Producer {
   id: string;
   kind: string;
-  producer: any;
+  producer: unknown; // Mediasoup producer object
 }
 
 interface Consumer {
   id: string;
   kind: string;
-  consumer: any;
+  consumer: unknown; // Mediasoup consumer object
 }
 
 const MediasoupLiveStreaming: React.FC<MediasoupLiveStreamingProps> = ({
@@ -100,7 +101,14 @@ const MediasoupLiveStreaming: React.FC<MediasoupLiveStreamingProps> = ({
   const [showChat, setShowChat] = useState(true);
   const [streamTitle, setStreamTitle] = useState('Live Stream');
 
-  const socketRef = useRef<any>(null);
+  interface Socket {
+    emit: (event: string, data?: unknown) => void;
+    on: (event: string, callback: (data: unknown) => void) => void;
+    off: (event: string, callback?: (data: unknown) => void) => void;
+    disconnect: () => void;
+    [key: string]: unknown;
+  }
+  const socketRef = useRef<Socket | null>(null);
   const transportsRef = useRef<Map<string, Transport>>(new Map());
   const producersRef = useRef<Map<string, Producer>>(new Map());
   const consumersRef = useRef<Map<string, Consumer>>(new Map());
@@ -233,9 +241,9 @@ const MediasoupLiveStreaming: React.FC<MediasoupLiveStreamingProps> = ({
       }
 
       logger.log('🎥 Host streaming started with front camera');
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('❌ Error starting host stream:', error);
-      const errorMsg = error?.message || 'Unknown error';
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       
       Alert.alert(
         'Camera Error',
@@ -330,7 +338,26 @@ const MediasoupLiveStreaming: React.FC<MediasoupLiveStreamingProps> = ({
     });
   }, []);
 
-  const handleTransportCreated = async (id: string, iceParameters: any, iceCandidates: any[], dtlsParameters: any, direction: string) => {
+  interface IceParameters {
+    usernameFragment: string;
+    password: string;
+    [key: string]: unknown;
+  }
+  interface IceCandidate {
+    foundation: string;
+    priority: number;
+    ip: string;
+    port: number;
+    type: string;
+    protocol: string;
+    [key: string]: unknown;
+  }
+  interface DtlsParameters {
+    role?: 'auto' | 'client' | 'server';
+    fingerprints: Array<{ algorithm: string; value: string }>;
+    [key: string]: unknown;
+  }
+  const handleTransportCreated = async (id: string, iceParameters: IceParameters, iceCandidates: IceCandidate[], dtlsParameters: DtlsParameters, direction: string) => {
     try {
       // Create RTCPeerConnection for transport
       const pc = new RTCPeerConnection({
@@ -371,7 +398,7 @@ const MediasoupLiveStreaming: React.FC<MediasoupLiveStreamingProps> = ({
 
       logger.log(`🚚 Transport ${id} created and connected`);
     } catch (error) {
-      console.error('Error handling transport created:', error);
+      logger.error('Error handling transport created:', error);
     }
   };
 
@@ -420,7 +447,7 @@ const MediasoupLiveStreaming: React.FC<MediasoupLiveStreamingProps> = ({
 
       logger.log('📹 Stream produced');
     } catch (error) {
-      console.error('Error producing stream:', error);
+      logger.error('Error producing stream:', error);
     }
   };
 
@@ -444,11 +471,16 @@ const MediasoupLiveStreaming: React.FC<MediasoupLiveStreamingProps> = ({
 
       logger.log(`👀 Consuming producer ${producerId} from ${userName}`);
     } catch (error) {
-      console.error('Error handling new producer:', error);
+      logger.error('Error handling new producer:', error);
     }
   };
 
-  const handleConsumerCreated = async (id: string, producerId: string, kind: string, rtpParameters: any) => {
+  interface RtpParameters {
+    codecs: Array<{ mimeType: string; [key: string]: unknown }>;
+    headerExtensions: Array<{ uri: string; [key: string]: unknown }>;
+    [key: string]: unknown;
+  }
+  const handleConsumerCreated = async (id: string, producerId: string, kind: string, rtpParameters: RtpParameters) => {
     try {
       const recvTransport = Array.from(transportsRef.current.values())
         .find(t => t.direction === 'recv');
@@ -468,7 +500,7 @@ const MediasoupLiveStreaming: React.FC<MediasoupLiveStreamingProps> = ({
 
       logger.log(`👀 Consumer ${id} created`);
     } catch (error) {
-      console.error('Error handling consumer created:', error);
+      logger.error('Error handling consumer created:', error);
     }
   };
 
@@ -495,7 +527,7 @@ const MediasoupLiveStreaming: React.FC<MediasoupLiveStreamingProps> = ({
     };
   };
 
-  const createSDPFromIceParameters = (iceParameters: any, iceCandidates: any[]) => {
+  const createSDPFromIceParameters = (iceParameters: IceParameters, iceCandidates: IceCandidate[]) => {
     // Simplified SDP creation - in real implementation, you'd create proper SDP
     return `v=0\r\no=- 0 0 IN IP4 ${process.env.EXPO_PUBLIC_API_BASE_URL?.replace('http://', '') || '192.168.1.236'}\r\ns=-\r\nt=0 0\r\na=ice-ufrag:${iceParameters.usernameFragment}\r\na=ice-pwd:${iceParameters.password}\r\n`;
   };

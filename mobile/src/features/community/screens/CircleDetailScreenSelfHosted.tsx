@@ -22,12 +22,13 @@ import { isExpoGo } from '../../../utils/expoGoCheck';
 import * as Device from 'expo-device';
 
 // Conditionally import WebRTC (not available in Expo Go)
-let RTCIceCandidate: any = null;
-let RTCPeerConnection: any = null;
-let RTCSessionDescription: any = null;
-let RTCView: any = null;
-let MediaStream: any = null;
-let MediaStreamTrack: any = null;
+// Using unknown for conditional imports that may not be available
+let RTCIceCandidate: unknown = null;
+let RTCPeerConnection: unknown = null;
+let RTCSessionDescription: unknown = null;
+let RTCView: React.ComponentType<unknown> | null = null;
+let MediaStreamClass: unknown = null;
+let MediaStreamTrack: unknown = null;
 
 try {
   if (!isExpoGo()) {
@@ -36,11 +37,11 @@ try {
     RTCPeerConnection = webrtc.RTCPeerConnection;
     RTCSessionDescription = webrtc.RTCSessionDescription;
     RTCView = webrtc.RTCView;
-    MediaStream = webrtc.MediaStream;
+    MediaStreamClass = webrtc.MediaStream;
     MediaStreamTrack = webrtc.MediaStreamTrack;
   }
 } catch (e) {
-  console.warn('WebRTC not available in Expo Go');
+  // WebRTC not available in Expo Go - this is expected
 }
 import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -50,6 +51,7 @@ import { WebRTCService } from '../../../services/WebRTCService';
 import { SocketChatService } from '../../../services/SocketChatService';
 import { GiftedChat, IMessage } from 'react-native-gifted-chat';
 import MediasoupLiveStreaming from '../../../components/MediasoupLiveStreaming';
+import logger from '../../../utils/logger';
 
 // Configuration
 const STREAMING_SERVER_URL = process.env.EXPO_PUBLIC_SFU_SERVER_URL || 'http://localhost:8000';
@@ -86,13 +88,19 @@ interface Comment {
   likes: number;
 }
 
+interface NavigationProp {
+  navigate: (screen: string, params?: Record<string, unknown>) => void;
+  goBack: () => void;
+  [key: string]: unknown;
+}
+
 interface CircleDetailProps {
   route: {
     params: {
       circle: WealthCircle;
     };
   };
-  navigation: any;
+  navigation: NavigationProp;
 }
 
 export default function CircleDetailScreenSelfHosted({ route, navigation }: CircleDetailProps) {
@@ -131,8 +139,13 @@ export default function CircleDetailScreenSelfHosted({ route, navigation }: Circ
   const [activeStream, setActiveStream] = useState<{ host: string; channelId: string } | null>(null);
   
   // Mediasoup live streaming states
+  interface StreamInfo {
+    id: string;
+    active: boolean;
+    [key: string]: unknown;
+  }
   const [liveStreamModalVisible, setLiveStreamModalVisible] = useState(false);
-  const [currentStream, setCurrentStream] = useState<any>(null);
+  const [currentStream, setCurrentStream] = useState<StreamInfo | null>(null);
   
   // Chat states
   const [chatMessages, setChatMessages] = useState<IMessage[]>([]);
@@ -185,23 +198,23 @@ export default function CircleDetailScreenSelfHosted({ route, navigation }: Circ
 
       webRTCService.current.setCallbacks({
         onRoomJoined: (roomInfo) => {
-          console.log('📺 Joined room:', roomInfo);
+          logger.log('📺 Joined room:', roomInfo);
           setViewerCount(roomInfo.viewerCount);
           setIsHost(roomInfo.isHost);
         },
         onUserJoined: (userInfo, viewerCount) => {
-          console.log('👤 User joined:', userInfo);
+          logger.log('👤 User joined:', userInfo);
           setViewerCount(viewerCount);
         },
         onUserLeft: (userId, viewerCount) => {
-          console.log('👋 User left:', userId);
+          logger.log('👋 User left:', userId);
           setViewerCount(viewerCount);
         },
         onRemoteStream: (userId, stream) => {
-          console.log('📺 Remote stream received from:', userId);
+          logger.log('📺 Remote stream received from:', userId);
         },
         onError: (error) => {
-          console.error('❌ WebRTC error:', error);
+          logger.error('❌ WebRTC error:', error);
           Alert.alert('Streaming Error', error);
         }
       });
@@ -215,7 +228,7 @@ export default function CircleDetailScreenSelfHosted({ route, navigation }: Circ
 
       chatService.current.setCallbacks({
         onConnected: () => {
-          console.log('💬 Chat connected');
+          logger.log('💬 Chat connected');
         },
         onNewMessage: (message) => {
           const giftedMessage = SocketChatService.convertToGiftedChatMessage(message);
@@ -226,10 +239,10 @@ export default function CircleDetailScreenSelfHosted({ route, navigation }: Circ
           setChatMessages(giftedMessages);
         },
         onUserJoined: (user) => {
-          console.log('👤 User joined chat:', user);
+          logger.log('👤 User joined chat:', user);
         },
         onUserLeft: (userId) => {
-          console.log('👋 User left chat:', userId);
+          logger.log('👋 User left chat:', userId);
         },
         onTypingStart: (user) => {
           setIsTyping(true);
@@ -238,7 +251,7 @@ export default function CircleDetailScreenSelfHosted({ route, navigation }: Circ
           setIsTyping(false);
         },
         onError: (error) => {
-          console.error('❌ Chat error:', error);
+          logger.error('❌ Chat error:', error);
         }
       });
 
@@ -247,9 +260,9 @@ export default function CircleDetailScreenSelfHosted({ route, navigation }: Circ
       // Initialize WebRTC video chat
       initializeVideoChat();
 
-      console.log('✅ Services initialized successfully');
+      logger.log('✅ Services initialized successfully');
     } catch (error) {
-      console.error('❌ Failed to initialize services:', error);
+      logger.error('❌ Failed to initialize services:', error);
       Alert.alert('Initialization Error', 'Failed to initialize streaming and chat services');
     }
   }, []);
@@ -274,12 +287,12 @@ export default function CircleDetailScreenSelfHosted({ route, navigation }: Circ
       };
 
       pc.current.ontrack = (event) => {
-        console.log('📺 Remote stream received');
+        logger.log('📺 Remote stream received');
         setRemoteStream(event.streams[0]);
       };
 
       pc.current.onconnectionstatechange = () => {
-        console.log('🔗 Connection state:', pc.current?.connectionState);
+        logger.log('🔗 Connection state:', pc.current?.connectionState);
         if (pc.current?.connectionState === 'disconnected' || 
             pc.current?.connectionState === 'failed') {
           endVideoCall();
@@ -290,7 +303,7 @@ export default function CircleDetailScreenSelfHosted({ route, navigation }: Circ
       setupVideoSocketHandlers();
       
     } catch (error) {
-      console.error('Error initializing video chat:', error);
+      logger.error('Error initializing video chat:', error);
     }
   }, [callPartner]);
 
@@ -315,7 +328,7 @@ export default function CircleDetailScreenSelfHosted({ route, navigation }: Circ
         setPosts(MOCK_POSTS);
       }
     } catch (error) {
-      console.error('Error loading posts:', error);
+      logger.error('Error loading posts:', error);
       setPosts(MOCK_POSTS);
     } finally {
       setLoading(false);
@@ -336,12 +349,12 @@ export default function CircleDetailScreenSelfHosted({ route, navigation }: Circ
       }
 
       if (finalStatus !== 'granted') {
-        console.log('Failed to get push token for push notification!');
+        logger.log('Failed to get push token for push notification!');
         return;
       }
 
       const token = (await Notifications.getExpoPushTokenAsync()).data;
-      console.log('Push token:', token);
+      logger.log('Push token:', token);
 
       // Register token with backend
       const userId = await AsyncStorage.getItem('userId') || 'demo-user';
@@ -355,7 +368,7 @@ export default function CircleDetailScreenSelfHosted({ route, navigation }: Circ
         })
       });
     } catch (error) {
-      console.error('Error registering push token:', error);
+      logger.error('Error registering push token:', error);
     }
   }, [circle.id]);
 
@@ -387,9 +400,9 @@ export default function CircleDetailScreenSelfHosted({ route, navigation }: Circ
         });
       }
 
-      console.log('🎥 Live stream started');
+      logger.log('🎥 Live stream started');
     } catch (error) {
-      console.error('Stream start error:', error);
+      logger.error('Stream start error:', error);
       Alert.alert('Streaming Error', 'Failed to start live stream');
     }
   }, [circle.id]);
@@ -420,9 +433,9 @@ export default function CircleDetailScreenSelfHosted({ route, navigation }: Circ
         });
       }
 
-      console.log('👁️ Joined as viewer');
+      logger.log('👁️ Joined as viewer');
     } catch (error) {
-      console.error('Viewer join error:', error);
+      logger.error('Viewer join error:', error);
       Alert.alert('Streaming Error', 'Failed to join live stream');
     }
   }, [activeStream]);
@@ -445,9 +458,9 @@ export default function CircleDetailScreenSelfHosted({ route, navigation }: Circ
       setLiveModalVisible(false);
       setActiveStream(null);
 
-      console.log('🔚 Live stream ended');
+      logger.log('🔚 Live stream ended');
     } catch (error) {
-      console.error('End stream error:', error);
+      logger.error('End stream error:', error);
     }
   }, []);
 
@@ -475,7 +488,7 @@ export default function CircleDetailScreenSelfHosted({ route, navigation }: Circ
         });
       }
     } catch (error) {
-      console.error('Error picking media:', error);
+      logger.error('Error picking media:', error);
     }
   }, []);
 
@@ -487,7 +500,7 @@ export default function CircleDetailScreenSelfHosted({ route, navigation }: Circ
       // For now, return the original URI
       return uri;
     } catch (error) {
-      console.error('Video compression error:', error);
+      logger.error('Video compression error:', error);
       return uri;
     } finally {
       setCompressing(false);
@@ -508,9 +521,9 @@ export default function CircleDetailScreenSelfHosted({ route, navigation }: Circ
       
       setLiveStreamModalVisible(true);
       
-      console.log('🎥 Starting Mediasoup live stream in circle:', circle.name);
+      logger.log('🎥 Starting Mediasoup live stream in circle:', circle.name);
     } catch (error) {
-      console.error('Error starting live stream:', error);
+      logger.error('Error starting live stream:', error);
       Alert.alert('Error', 'Failed to start live stream');
     }
   }, [circle.id, circle.name]);
@@ -528,12 +541,18 @@ export default function CircleDetailScreenSelfHosted({ route, navigation }: Circ
         finalUri = await compressVideo(media.uri);
       }
 
+      interface FormDataMedia {
+        uri: string;
+        type: string;
+        name: string;
+      }
       const formData = new FormData();
-      formData.append('media', {
+      const mediaData: FormDataMedia = {
         uri: finalUri,
         type: media.type === 'video' ? 'video/mp4' : 'image/jpeg',
         name: `media.${media.type === 'video' ? 'mp4' : 'jpg'}`,
-      } as any);
+      };
+      formData.append('media', mediaData as unknown as Blob);
 
       const token = await AsyncStorage.getItem('authToken');
       const response = await fetch(`${API_BASE_URL}/api/upload-media/`, {
@@ -550,7 +569,7 @@ export default function CircleDetailScreenSelfHosted({ route, navigation }: Circ
       }
       throw new Error('Upload failed');
     } catch (error) {
-      console.error('Media upload error:', error);
+      logger.error('Media upload error:', error);
       throw error;
     }
   }, [compressVideo]);
@@ -587,7 +606,7 @@ export default function CircleDetailScreenSelfHosted({ route, navigation }: Circ
         setSelectedMedia(null);
       }
     } catch (error) {
-      console.error('Error submitting post:', error);
+      logger.error('Error submitting post:', error);
       Alert.alert('Error', 'Failed to submit post');
     } finally {
       setLoading(false);
@@ -620,7 +639,7 @@ export default function CircleDetailScreenSelfHosted({ route, navigation }: Circ
         setNewComment(prev => ({ ...prev, [postId]: '' }));
       }
     } catch (error) {
-      console.error('Error submitting comment:', error);
+      logger.error('Error submitting comment:', error);
     }
   }, [newComment]);
 
@@ -677,7 +696,7 @@ export default function CircleDetailScreenSelfHosted({ route, navigation }: Circ
         from: userId 
       });
     } catch (err) {
-      console.error('Call start error:', err);
+      logger.error('Call start error:', err);
       Alert.alert('Error', 'Failed to start call. Check camera and microphone permissions.');
     }
   }, []);
@@ -698,7 +717,7 @@ export default function CircleDetailScreenSelfHosted({ route, navigation }: Circ
       
       videoSocket.current?.emit('call-answer', { answer, to: from });
     } catch (err) {
-      console.error('Answer error:', err);
+      logger.error('Answer error:', err);
       Alert.alert('Error', 'Failed to answer call.');
     }
   }, []);
@@ -793,9 +812,9 @@ export default function CircleDetailScreenSelfHosted({ route, navigation }: Circ
       setRecording(newRecording);
       setIsRecording(true);
       
-      console.log('🎤 Recording started');
+      logger.log('🎤 Recording started');
     } catch (err) {
-      console.error('Recording start error:', err);
+      logger.error('Recording start error:', err);
       Alert.alert('Recording Error', 'Failed to start recording. Please try again.');
     }
   }, []);
@@ -814,15 +833,21 @@ export default function CircleDetailScreenSelfHosted({ route, navigation }: Circ
         throw new Error('No recording URI available');
       }
 
-      console.log('🎤 Recording stopped, starting transcription...');
+      logger.log('🎤 Recording stopped, starting transcription...');
 
       // Upload to backend for transcription
+      interface FormDataAudio {
+        uri: string;
+        type: string;
+        name: string;
+      }
       const formData = new FormData();
-      formData.append('audio', { 
-        uri, 
-        type: 'audio/m4a', 
-        name: 'voice.m4a' 
-      } as any);
+      const audioData: FormDataAudio = {
+        uri,
+        type: 'audio/m4a',
+        name: 'voice.m4a',
+      };
+      formData.append('audio', audioData as unknown as Blob);
 
       const token = await AsyncStorage.getItem('authToken');
       const response = await fetch(`${WHISPER_API_URL}/api/transcribe-audio/`, {
@@ -836,7 +861,7 @@ export default function CircleDetailScreenSelfHosted({ route, navigation }: Circ
 
       if (response.ok) {
         const { transcription, audioUrl } = await response.json();
-        console.log('✅ Transcription completed:', transcription);
+        logger.log('✅ Transcription completed:', transcription);
         
         // Set as post text + audio media
         setNewPostText(transcription);
@@ -850,7 +875,7 @@ export default function CircleDetailScreenSelfHosted({ route, navigation }: Circ
         throw new Error(errorData.error || 'Transcription failed');
       }
     } catch (err) {
-      console.error('Transcription error:', err);
+      logger.error('Transcription error:', err);
       Alert.alert('Transcription Error', 'Failed to process voice. Please try again.');
     } finally {
       setIsTranscribing(false);

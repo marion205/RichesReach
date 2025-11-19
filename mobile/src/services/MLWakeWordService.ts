@@ -8,6 +8,7 @@ import { triggerHotword } from './VoiceHotword';
 import { extractMFCC } from '../utils/audioFeatures';
 import { Platform } from 'react-native';
 import { Asset } from 'expo-asset';
+import logger from '../utils/logger';
 
 // Model configuration
 const MODEL_PATH = '../assets/models/wake_word_model'; // Path to TensorFlow.js model
@@ -45,15 +46,15 @@ class MLWakeWordService {
 
         if (modelUrl) {
           this.model = await tf.loadLayersModel(modelUrl);
-          console.log('✅ ML wake word model loaded');
+          logger.log('✅ ML wake word model loaded');
         } else {
           // Fallback: try loading from URL
           const modelUrl2 = 'http://localhost:8000/media/models/wake_word_model/model.json';
           try {
             this.model = await tf.loadLayersModel(modelUrl2);
-            console.log('✅ ML wake word model loaded from server');
+            logger.log('✅ ML wake word model loaded from server');
           } catch (e) {
-            console.warn('⚠️ ML model not found, will use fallback detection');
+            logger.warn('⚠️ ML model not found, will use fallback detection');
             return false;
           }
         }
@@ -63,11 +64,11 @@ class MLWakeWordService {
 
         return true;
       } catch (error) {
-        console.warn('ML model not available:', error);
+        logger.warn('ML model not available:', error);
         return false;
       }
     } catch (error) {
-      console.warn('TensorFlow.js not available:', error);
+      logger.warn('TensorFlow.js not available:', error);
       return false;
     }
   }
@@ -84,7 +85,7 @@ class MLWakeWordService {
         this.normalizationParams = await response.json();
       }
     } catch (error) {
-      console.warn('Could not load normalization params:', error);
+      logger.warn('Could not load normalization params:', error);
     }
   }
 
@@ -97,7 +98,7 @@ class MLWakeWordService {
       this.hasPermission = status === 'granted';
       return this.hasPermission;
     } catch (error) {
-      console.error('Permission request error:', error);
+      logger.error('Permission request error:', error);
       return false;
     }
   }
@@ -120,7 +121,7 @@ class MLWakeWordService {
     // Try to load model
     const modelLoaded = await this.loadModel();
     if (!modelLoaded) {
-      console.log('⚠️ ML model not available, using pattern matching fallback');
+      logger.log('⚠️ ML model not available, using pattern matching fallback');
     }
 
     try {
@@ -165,11 +166,11 @@ class MLWakeWordService {
       // Start periodic checking
       this.startPeriodicCheck();
 
-      console.log('✅ ML wake word detection started');
+      logger.log('✅ ML wake word detection started');
       return true;
 
     } catch (error: any) {
-      console.error('❌ Failed to start ML wake word detection:', error);
+      logger.error('❌ Failed to start ML wake word detection:', error);
       this.isListening = false;
       return false;
     }
@@ -188,14 +189,14 @@ class MLWakeWordService {
         const detected = await this.checkAudioChunk();
         
         if (detected) {
-          console.log('🎤 "Hey Riches" detected via ML model!');
+          logger.log('🎤 "Hey Riches" detected via ML model!');
           triggerHotword();
           
           // Small pause before continuing
           await new Promise(resolve => setTimeout(resolve, 1000));
         }
       } catch (error) {
-        console.error('Error checking for wake word:', error);
+        logger.error('Error checking for wake word:', error);
       }
     }, CHECK_INTERVAL);
   }
@@ -233,7 +234,7 @@ class MLWakeWordService {
       }
 
     } catch (error) {
-      console.error('Error checking audio chunk:', error);
+      logger.error('Error checking audio chunk:', error);
       return false;
     }
   }
@@ -254,7 +255,7 @@ class MLWakeWordService {
       
       return null; // Placeholder
     } catch (error) {
-      console.error('Error extracting audio data:', error);
+      logger.error('Error extracting audio data:', error);
       return null;
     }
   }
@@ -294,7 +295,7 @@ class MLWakeWordService {
       return confidence[0] > DETECTION_THRESHOLD;
 
     } catch (error) {
-      console.error('ML detection error:', error);
+      logger.error('ML detection error:', error);
       return false;
     }
   }
@@ -343,7 +344,7 @@ class MLWakeWordService {
           try {
             await this.recording.unloadAsync();
           } catch (e2) {
-            console.warn('Could not unload recording:', e2);
+            logger.warn('Could not unload recording:', e2);
           }
         }
         this.recording = null;
@@ -363,9 +364,9 @@ class MLWakeWordService {
         // Ignore errors
       }
 
-      console.log('✅ ML wake word detection stopped');
+      logger.log('✅ ML wake word detection stopped');
     } catch (error) {
-      console.error('Failed to stop ML wake word detection:', error);
+      logger.error('Failed to stop ML wake word detection:', error);
       // Ensure recording is null even on error
       this.recording = null;
       this.isListening = false;

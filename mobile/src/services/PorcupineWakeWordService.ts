@@ -1,5 +1,6 @@
 import { isExpoGo } from '../utils/expoGoCheck';
 import { triggerHotword } from './VoiceHotword';
+import logger from '../utils/logger';
 
 /**
  * Porcupine Wake Word Service
@@ -17,12 +18,12 @@ class PorcupineWakeWordService {
    */
   async initialize(): Promise<boolean> {
     if (isExpoGo()) {
-      console.warn('⚠️ Porcupine wake word requires a development build, not Expo Go');
+      logger.warn('⚠️ Porcupine wake word requires a development build, not Expo Go');
       return false;
     }
 
     if (this.isInitialized) {
-      console.log('✅ Porcupine already initialized');
+      logger.log('✅ Porcupine already initialized');
       return true;
     }
 
@@ -30,15 +31,15 @@ class PorcupineWakeWordService {
       // Dynamically import Porcupine (only works in dev builds)
       const { PorcupineManager } = require('@picovoice/porcupine-react-native');
       
-      console.log('🎤 Initializing Porcupine wake word detection...');
+      logger.log('🎤 Initializing Porcupine wake word detection...');
       
       // Get Picovoice access key from environment or config
       // You need to sign up at https://console.picovoice.ai/ to get an access key
       const PICOVOICE_ACCESS_KEY = process.env.PICOVOICE_ACCESS_KEY || 'YOUR_ACCESS_KEY_HERE';
       
       if (PICOVOICE_ACCESS_KEY === 'YOUR_ACCESS_KEY_HERE') {
-        console.warn('⚠️ PICOVOICE_ACCESS_KEY not set. Wake word detection will not work.');
-        console.warn('📝 Sign up at https://console.picovoice.ai/ to get a free access key');
+        logger.warn('⚠️ PICOVOICE_ACCESS_KEY not set. Wake word detection will not work.');
+        logger.warn('📝 Sign up at https://console.picovoice.ai/ to get a free access key');
         return false;
       }
 
@@ -52,21 +53,21 @@ class PorcupineWakeWordService {
 
       // Set up keyword detection callback
       this.porcupineManager.on('keyword', () => {
-        console.log('🎤 Wake word "Hey Riches" detected!');
+        logger.log('🎤 Wake word "Hey Riches" detected!');
         triggerHotword();
       });
 
       this.isInitialized = true;
-      console.log('✅ Porcupine initialized successfully');
+      logger.log('✅ Porcupine initialized successfully');
       return true;
 
     } catch (error) {
-      console.error('❌ Failed to initialize Porcupine:', error);
-      console.error('💡 Make sure:');
-      console.error('   1. You have a development build (not Expo Go)');
-      console.error('   2. @picovoice/porcupine-react-native is installed');
-      console.error('   3. You have a valid PICOVOICE_ACCESS_KEY');
-      console.error('   4. Microphone permissions are granted');
+      logger.error('❌ Failed to initialize Porcupine:', error);
+      logger.error('💡 Make sure:');
+      logger.error('   1. You have a development build (not Expo Go)');
+      logger.error('   2. @picovoice/porcupine-react-native is installed');
+      logger.error('   3. You have a valid PICOVOICE_ACCESS_KEY');
+      logger.error('   4. Microphone permissions are granted');
       return false;
     }
   }
@@ -83,17 +84,17 @@ class PorcupineWakeWordService {
     }
 
     if (this.isStarted) {
-      console.log('✅ Porcupine already started');
+      logger.log('✅ Porcupine already started');
       return true;
     }
 
     try {
       await this.porcupineManager.start();
       this.isStarted = true;
-      console.log('✅ Porcupine wake word detection started');
+      logger.log('✅ Porcupine wake word detection started');
       return true;
     } catch (error) {
-      console.error('❌ Failed to start Porcupine:', error);
+      logger.error('❌ Failed to start Porcupine:', error);
       return false;
     }
   }
@@ -109,9 +110,9 @@ class PorcupineWakeWordService {
     try {
       await this.porcupineManager.stop();
       this.isStarted = false;
-      console.log('✅ Porcupine wake word detection stopped');
+      logger.log('✅ Porcupine wake word detection stopped');
     } catch (error) {
-      console.error('❌ Failed to stop Porcupine:', error);
+      logger.error('❌ Failed to stop Porcupine:', error);
     }
   }
 
@@ -128,9 +129,9 @@ class PorcupineWakeWordService {
         this.porcupineManager.delete();
         this.porcupineManager = null;
         this.isInitialized = false;
-        console.log('✅ Porcupine released');
+        logger.log('✅ Porcupine released');
       } catch (error) {
-        console.error('❌ Failed to release Porcupine:', error);
+        logger.error('❌ Failed to release Porcupine:', error);
       }
     }
   }

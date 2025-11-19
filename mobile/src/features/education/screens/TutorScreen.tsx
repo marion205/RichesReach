@@ -18,12 +18,13 @@ import * as Haptics from 'expo-haptics';
 import { useVoice } from '../../../contexts/VoiceContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import MemeQuestScreen from '../../social/screens/MemeQuestScreen';
+import logger from '../../../utils/logger';
 // import ConfettiCannon from 'react-native-confetti-cannon';
 
 const { width, height } = Dimensions.get('window');
 
 // Safe text rendering wrapper - prevents text rendering errors
-const SafeText: React.FC<React.PropsWithChildren<{ style?: any }>> = ({ children, style }) => {
+const SafeText: React.FC<React.PropsWithChildren<{ style?: Record<string, unknown> }>> = ({ children, style }) => {
   if (typeof children === 'string' || typeof children === 'number') {
     return <Text style={style}>{children}</Text>;
   }
@@ -100,7 +101,7 @@ const SimpleConfetti: React.FC<{ visible: boolean }> = ({ visible }) => {
 
 // Enhanced Lesson Card - Super playful with bouncy icons and sparkles
 const LessonCard: React.FC<{
-  lesson: any;
+  lesson: Lesson;
   index: number;
   onPress: () => void;
 }> = ({ lesson, index, onPress }) => {
@@ -415,31 +416,91 @@ const START_LIVE_SIM = gql`
   }
 `;
 
+interface NavigationProp {
+  navigate: (screen: string, params?: Record<string, unknown>) => void;
+  goBack: () => void;
+  [key: string]: unknown;
+}
+
+interface Lesson {
+  id: string;
+  title: string;
+  text: string;
+  voiceNarration?: string;
+  xpEarned?: number;
+  quiz?: Quiz[];
+  __typename?: string;
+  [key: string]: unknown;
+}
+
+interface Quiz {
+  id: string;
+  question: string;
+  options: string[];
+  correct: number;
+  explanation?: string;
+  [key: string]: unknown;
+}
+
+interface LearningStep {
+  type: 'explanation' | 'concept' | 'example' | 'quiz';
+  title: string;
+  content: string;
+  icon: string;
+  color: string;
+  correct?: number;
+  [key: string]: unknown;
+}
+
+interface QuizResult {
+  score: number;
+  total: number;
+  correctAnswers: number[];
+  [key: string]: unknown;
+}
+
+interface Quest {
+  id: string;
+  title: string;
+  description: string;
+  scenarios?: Scenario[];
+  [key: string]: unknown;
+}
+
+interface Scenario {
+  id: string;
+  question: string;
+  options: string[];
+  correct: number;
+  explanation?: string;
+  [key: string]: unknown;
+}
+
 interface TutorScreenProps {
-  navigation: any;
+  navigation: NavigationProp;
 }
 
 const TutorScreen: React.FC<TutorScreenProps> = ({ navigation }) => {
   // State management
-  const [currentLesson, setCurrentLesson] = useState<any>(null);
-  const [currentQuiz, setCurrentQuiz] = useState<any[]>([]);
+  const [currentLesson, setCurrentLesson] = useState<Lesson | null>(null);
+  const [currentQuiz, setCurrentQuiz] = useState<Quiz[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<number[]>([]);
   const [isListening, setIsListening] = useState(false);
   const [showResults, setShowResults] = useState(false);
-  const [quizResults, setQuizResults] = useState<any>(null);
+  const [quizResults, setQuizResults] = useState<QuizResult | null>(null);
   const [activeTab, setActiveTab] = useState<'learn' | 'quest' | 'sim' | 'progress' | 'memequest'>('learn');
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [showConfetti, setShowConfetti] = useState(false);
   
   // Enhanced learning state
   const [currentStep, setCurrentStep] = useState(0);
-  const [learningSteps, setLearningSteps] = useState<any[]>([]);
+  const [learningSteps, setLearningSteps] = useState<LearningStep[]>([]);
   const [showStepQuiz, setShowStepQuiz] = useState(false);
   const [stepQuizAnswer, setStepQuizAnswer] = useState<number | null>(null);
   
   // Quest state
-  const [currentQuest, setCurrentQuest] = useState<any>(null);
+  const [currentQuest, setCurrentQuest] = useState<Quest | null>(null);
   const [questProgress, setQuestProgress] = useState(0);
   const [questCompleted, setQuestCompleted] = useState(false);
   
@@ -453,7 +514,12 @@ const TutorScreen: React.FC<TutorScreenProps> = ({ navigation }) => {
   const { speak, parseCommand, isVoiceEnabled } = useVoice();
   
   // Voice helper function
-  const speakWithToggle = (text: string, options?: any) => {
+  interface SpeechOptions {
+    rate?: number;
+    voice?: string;
+    [key: string]: unknown;
+  }
+  const speakWithToggle = (text: string, options?: SpeechOptions) => {
     if (voiceEnabled) {
       Speech.speak(text, options);
     }
@@ -531,7 +597,7 @@ const TutorScreen: React.FC<TutorScreenProps> = ({ navigation }) => {
   const [startLesson] = useMutation(START_LESSON, {
     onError: (error) => {
       // Don't show error alert - we'll handle it in startNewLesson with mock data
-      console.warn('StartLesson mutation error (will use mock data):', error);
+      logger.warn('StartLesson mutation error (will use mock data):', error);
     },
   });
   const [submitQuiz] = useMutation(SUBMIT_QUIZ);
@@ -540,7 +606,7 @@ const TutorScreen: React.FC<TutorScreenProps> = ({ navigation }) => {
   // Quest mutations
   const [startQuest] = useMutation(START_QUEST, {
     onCompleted: (data) => {
-      console.log('StartQuest mutation completed:', data);
+      logger.log('StartQuest mutation completed:', data);
       if (data?.startQuest) {
         setCurrentQuest(data.startQuest);
         setQuestProgress(0);
@@ -557,7 +623,7 @@ const TutorScreen: React.FC<TutorScreenProps> = ({ navigation }) => {
       }
     },
     onError: (error) => {
-      console.error('Quest start failed:', error);
+      logger.error('Quest start failed:', error);
       Alert.alert('Quest Error', 'Failed to start quest. Please try again.');
     }
   });
@@ -691,18 +757,18 @@ const TutorScreen: React.FC<TutorScreenProps> = ({ navigation }) => {
     }
   };
 
-  const createLearningSteps = (lesson: any) => {
+  const createLearningSteps = (lesson: Lesson) => {
     const steps = [];
     const text = lesson?.text || '';
     
-    console.log('Creating learning steps for lesson:', lesson?.title);
-    console.log('Lesson text length:', text?.length);
-    console.log('Lesson text preview:', text?.substring(0, 200));
-    console.log('Full lesson text:', text);
+    logger.log('Creating learning steps for lesson:', lesson?.title);
+    logger.log('Lesson text length:', text?.length);
+    logger.log('Lesson text preview:', text?.substring(0, 200));
+    logger.log('Full lesson text:', text);
     
     // Ensure text is a string
     if (typeof text !== 'string') {
-      console.log('WARNING: Lesson text is not a string:', typeof text);
+      logger.log('WARNING: Lesson text is not a string:', typeof text);
       return [{
         type: 'explanation',
         title: 'Lesson Content',
@@ -714,8 +780,8 @@ const TutorScreen: React.FC<TutorScreenProps> = ({ navigation }) => {
     
     // Check if we're getting the right content
     if (!text || text.includes('Welcome to crypto basics! This comprehensive lesson covers all essential concepts')) {
-      console.log('WARNING: Received generic welcome message instead of actual lesson content!');
-      console.log('Full lesson object:', JSON.stringify(lesson, null, 2));
+      logger.log('WARNING: Received generic welcome message instead of actual lesson content!');
+      logger.log('Full lesson object:', JSON.stringify(lesson, null, 2));
     }
     
     // Split text into paragraphs - try multiple methods
@@ -735,7 +801,7 @@ const TutorScreen: React.FC<TutorScreenProps> = ({ navigation }) => {
       paragraphs = sentences.map(s => s.trim() + '.');
     }
     
-    console.log('Parsed paragraphs:', paragraphs);
+    logger.log('Parsed paragraphs:', paragraphs);
     
     // If no paragraphs found, create a single step with the full text
     if (paragraphs.length === 0) {
@@ -782,7 +848,7 @@ const TutorScreen: React.FC<TutorScreenProps> = ({ navigation }) => {
     
     // Add interactive quiz steps
     if (lesson.quiz && Array.isArray(lesson.quiz) && lesson.quiz.length > 0) {
-      lesson.quiz.forEach((quiz: any, index: number) => {
+      lesson.quiz.forEach((quiz: Quiz, index: number) => {
         steps.push({
           type: 'quiz',
           title: `Quick Check ${index + 1}`,
@@ -796,14 +862,14 @@ const TutorScreen: React.FC<TutorScreenProps> = ({ navigation }) => {
       });
     }
     
-    console.log('Created steps:', steps);
+    logger.log('Created steps:', steps);
     return steps;
   };
 
   // Generate mock lesson data for demo purposes
   const getMockLesson = (topic: string) => {
     const topicLower = topic.toLowerCase();
-    const lessonTemplates: Record<string, any> = {
+    const lessonTemplates: Record<string, Lesson> = {
       'stock basics': {
         id: 'mock-lesson-stock-basics',
         title: 'Stock Basics',
@@ -927,10 +993,10 @@ Let's dive in and explore ${topic} together!`,
   };
 
   const startNewLesson = async (topic: string) => {
-    console.log('Starting lesson with topic:', topic);
+    logger.log('Starting lesson with topic:', topic);
     
     // Helper function to start lesson with mock data
-    const startLessonWithData = (lessonData: any) => {
+    const startLessonWithData = (lessonData: Lesson) => {
       setCurrentLesson(lessonData);
       setCurrentQuiz(lessonData.quiz || []);
       setCurrentQuestionIndex(0);
@@ -980,23 +1046,23 @@ Let's dive in and explore ${topic} together!`,
       );
       
       Promise.race([lessonPromise, timeoutPromise])
-        .then((result: any) => {
+        .then((result: { data?: { startLesson?: Lesson } }) => {
           if (result?.data?.startLesson) {
-            console.log('Received real lesson data, updating:', result.data.startLesson.title);
+            logger.log('Received real lesson data, updating:', result.data.startLesson.title);
             // Update with real data if it arrives
             startLessonWithData(result.data.startLesson);
           }
         })
         .catch((error) => {
           // Silently fail - we already started with mock data
-          console.warn('Lesson API failed (already using mock data):', error);
+          logger.warn('Lesson API failed (already using mock data):', error);
         });
       
       // Start immediately with mock data
       startLessonWithData(mockLesson);
     } catch (error) {
       // Fallback: if anything fails, use mock data
-      console.warn('Error in lesson start (using mock data):', error);
+      logger.warn('Error in lesson start (using mock data):', error);
       startLessonWithData(mockLesson);
     }
   };
@@ -1039,11 +1105,11 @@ Let's dive in and explore ${topic} together!`,
   };
 
   const renderLearningStep = () => {
-    console.log('Rendering learning step:', currentStep, 'of', learningSteps?.length || 0);
-    console.log('Learning steps:', learningSteps);
+    logger.log('Rendering learning step:', currentStep, 'of', learningSteps?.length || 0);
+    logger.log('Learning steps:', learningSteps);
     
     if (!learningSteps?.[currentStep]) {
-      console.log('No step found at index:', currentStep);
+      logger.log('No step found at index:', currentStep);
       return (
         <View style={styles.learningStepContainer}>
           <Text style={styles.stepContentText}>
@@ -1054,11 +1120,11 @@ Let's dive in and explore ${topic} together!`,
     }
     
     const step = learningSteps?.[currentStep];
-    console.log('Current step:', step);
+    logger.log('Current step:', step);
     
     // Safety check - ensure step has required properties
     if (!step || !step.icon || !step.title || !step.color) {
-      console.log('Step missing required properties');
+      logger.log('Step missing required properties');
       return (
         <View style={styles.learningStepContainer}>
           <Text style={styles.stepContentText}>
@@ -1279,7 +1345,7 @@ Let's dive in and explore ${topic} together!`,
     }
   };
 
-  const handleScenarioAnswer = (answerIndex: number, scenario: any, scenarioNumber: number) => {
+  const handleScenarioAnswer = (answerIndex: number, scenario: Scenario, scenarioNumber: number) => {
     const isCorrect = answerIndex === scenario.correct;
     const newProgress = Math.min(questProgress + 0.25, 1.0);
     
@@ -1362,22 +1428,22 @@ Let's dive in and explore ${topic} together!`,
         refetchProgress();
       }
     } catch (error) {
-      console.error('Error submitting quiz:', error);
+      logger.error('Error submitting quiz:', error);
       Alert.alert('Error', 'Failed to submit quiz. Please try again.');
     }
   };
 
   const startSimulation = async (symbol: string) => {
-    console.log('Starting live simulation for symbol:', symbol);
+    logger.log('Starting live simulation for symbol:', symbol);
     try {
       const { data } = await startLiveSim({
         variables: { symbol, mode: 'paper' }
       });
       
-      console.log('Live simulation data received:', data);
+      logger.log('Live simulation data received:', data);
       
       if (data?.startLiveSim) {
-        console.log('Navigating to trading screen with simulation data');
+        logger.log('Navigating to trading screen with simulation data');
         // Navigate to trading screen with simulation data
         navigation.navigate('trading', { 
           simulationMode: true,
@@ -1385,7 +1451,7 @@ Let's dive in and explore ${topic} together!`,
         });
       }
     } catch (error) {
-      console.error('Error starting simulation:', error);
+      logger.error('Error starting simulation:', error);
       Alert.alert('Error', 'Failed to start simulation. Please try again.');
     }
   };
@@ -1572,7 +1638,7 @@ Let's dive in and explore ${topic} together!`,
                   lesson={lesson}
                   index={index}
                   onPress={() => {
-                    console.log('🚀 Starting playful lesson:', lesson.topic);
+                    logger.log('🚀 Starting playful lesson:', lesson.topic);
                     startNewLesson(lesson.topic.toLowerCase());
                   }}
                 />
@@ -1817,7 +1883,7 @@ Let's dive in and explore ${topic} together!`,
           
           <View style={styles.questScenarios}>
             <Text style={styles.questScenariosTitle}>Trading Scenarios:</Text>
-            {currentQuest.scenarios?.map((scenario: any, index: number) => (
+            {currentQuest.scenarios?.map((scenario: Scenario, index: number) => (
               <View key={index} style={styles.scenarioItem}>
                 <Text style={styles.scenarioTitle}>
                   {index + 1}. {scenario.title}
@@ -1861,11 +1927,11 @@ Let's dive in and explore ${topic} together!`,
           <TouchableOpacity
             style={styles.startNewQuestButton}
             onPress={() => {
-              console.log('Start Quest button pressed!');
+              logger.log('Start Quest button pressed!');
               // Determine difficulty based on user level
               const difficulty = progress.level >= 5 ? 'HARD' : progress.level >= 3 ? 'MEDIUM' : 'EASY';
-              console.log('Starting quest with difficulty:', difficulty);
-              console.log('Progress level:', progress.level);
+              logger.log('Starting quest with difficulty:', difficulty);
+              logger.log('Progress level:', progress.level);
               startQuest({ variables: { difficulty } });
             }}
           >
@@ -1886,7 +1952,7 @@ Let's dive in and explore ${topic} together!`,
             key={index}
             style={styles.simCard}
             onPress={() => {
-              console.log('Live simulation button pressed for:', symbol);
+              logger.log('Live simulation button pressed for:', symbol);
               startSimulation(symbol);
             }}
           >
@@ -1935,7 +2001,7 @@ Let's dive in and explore ${topic} together!`,
           <TouchableOpacity
             key={tab.key}
             style={[styles.tab, activeTab === tab.key && styles.activeTab]}
-            onPress={() => setActiveTab(tab.key as any)}
+            onPress={() => setActiveTab(tab.key as 'learn' | 'quest' | 'sim' | 'progress' | 'memequest')}
           >
             <Text style={styles.tabIcon}>{tab.icon}</Text>
             <Text style={[styles.tabLabel, activeTab === tab.key && styles.activeTabLabel]}>

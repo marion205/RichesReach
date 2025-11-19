@@ -19,12 +19,20 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../theme/PersonalizedThemes';
 import { useVoice } from '../contexts/VoiceContext';
 import { useNavigation } from '@react-navigation/native';
+import logger from '../utils/logger';
 
 const { width, height } = Dimensions.get('window');
 
+interface Insight {
+  title: string;
+  description?: string;
+  type?: string;
+  [key: string]: unknown;
+}
+
 interface VoiceAIAssistantProps {
   onClose?: () => void;
-  onInsightGenerated?: (insight: any) => void;
+  onInsightGenerated?: (insight: Insight) => void;
 }
 
 export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceAIAssistantProps) {
@@ -68,10 +76,14 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
     }
     
     // Call onClose if provided, otherwise use navigation
+    interface NavigationProp {
+      goBack: () => void;
+      [key: string]: unknown;
+    }
     if (onClose && typeof onClose === 'function') {
       onClose();
-    } else if (navigation && (navigation as any).goBack) {
-      (navigation as any).goBack();
+    } else if (navigation && typeof (navigation as NavigationProp).goBack === 'function') {
+      (navigation as NavigationProp).goBack();
     }
   };
   const theme = useTheme();
@@ -79,7 +91,15 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [conversation, setConversation] = useState<any[]>([]);
+  interface ConversationMessage {
+    id: string;
+    type: 'user' | 'assistant';
+    text: string;
+    timestamp: Date;
+    insights?: Insight[];
+    [key: string]: unknown;
+  }
+  const [conversation, setConversation] = useState<ConversationMessage[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState('');
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
@@ -99,7 +119,7 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
         const { customWakeWordService } = await import('../services/CustomWakeWordService');
         const status = customWakeWordService.getStatus();
         if (status.listening) {
-          console.log('🎤 Stopping CustomWakeWordService on mount...');
+          logger.log('🎤 Stopping CustomWakeWordService on mount...');
           await customWakeWordService.stop().catch(() => {});
         }
       } catch (e) {
@@ -110,7 +130,7 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
         const { mlWakeWordService } = await import('../services/MLWakeWordService');
         const status = mlWakeWordService.getStatus();
         if (status.listening) {
-          console.log('🎤 Stopping MLWakeWordService on mount...');
+          logger.log('🎤 Stopping MLWakeWordService on mount...');
           await mlWakeWordService.stop().catch(() => {});
         }
       } catch (e) {
@@ -121,7 +141,7 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
         const { porcupineWakeWordService } = await import('../services/PorcupineWakeWordService');
         const status = porcupineWakeWordService.getStatus();
         if (status.started) {
-          console.log('🎤 Stopping PorcupineWakeWordService on mount...');
+          logger.log('🎤 Stopping PorcupineWakeWordService on mount...');
           await porcupineWakeWordService.stop().catch(() => {});
         }
       } catch (e) {
@@ -208,9 +228,9 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
 
   const requestPermissions = async () => {
     try {
-      console.log('🎤 Requesting microphone permissions...');
+      logger.log('🎤 Requesting microphone permissions...');
       const { status } = await Audio.requestPermissionsAsync();
-      console.log('🎤 Permission status:', status);
+      logger.log('🎤 Permission status:', status);
       setHasPermission(status === 'granted');
       if (status !== 'granted') {
         Alert.alert(
@@ -219,10 +239,10 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
           [{ text: 'OK' }]
         );
       } else {
-        console.log('🎤 Microphone permission granted!');
+        logger.log('🎤 Microphone permission granted!');
       }
     } catch (error) {
-      console.error('Permission request error:', error);
+      logger.error('Permission request error:', error);
       setHasPermission(false);
     }
   };
@@ -246,7 +266,7 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
     try {
       await Promise.race([speakText(welcomeMessage), timeoutPromise]);
     } catch (error) {
-      console.log('Welcome message skipped due to timeout');
+      logger.log('Welcome message skipped due to timeout');
       setIsSpeaking(false);
     }
   };
@@ -305,7 +325,7 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
             await recording.unloadAsync();
           } catch (e2) {
             // Final attempt - just set to null
-            console.warn('Could not unload recording, forcing cleanup');
+            logger.warn('Could not unload recording, forcing cleanup');
           }
         }
         setRecording(null);
@@ -314,20 +334,20 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
       // Wait longer to ensure cleanup completes (expo-av needs time)
       await new Promise(resolve => setTimeout(resolve, 1000));
     } catch (error) {
-      console.warn('Cleanup warning:', error);
+      logger.warn('Cleanup warning:', error);
     }
   };
 
   const startListening = async () => {
     // Prevent concurrent start attempts
     if (isStartingRef.current) {
-      console.log('⚠️ Already starting recording, ignoring duplicate request');
+      logger.log('⚠️ Already starting recording, ignoring duplicate request');
       return;
     }
     
     // Prevent infinite retry loop (max 1 retry)
     if (retryCountRef.current > 1) {
-      console.error('❌ Max retry attempts reached, stopping');
+      logger.error('❌ Max retry attempts reached, stopping');
       setIsListening(false);
       Alert.alert('Recording Error', 'Failed to start recording. Please close and reopen the voice assistant.');
       retryCountRef.current = 0;
@@ -338,16 +358,16 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
     isStartingRef.current = true;
     
     try {
-      console.log('🎤 Starting voice recording...');
+      logger.log('🎤 Starting voice recording...');
       if (!hasPermission) {
-        console.log('🎤 No microphone permission');
+        logger.log('🎤 No microphone permission');
         Alert.alert('Permission Required', 'Microphone access is required for voice interaction');
         isStartingRef.current = false;
         return;
       }
 
       // CRITICAL: Stop any wake word services FIRST - they hold Recording objects
-      console.log('🎤 Stopping ALL wake word services...');
+      logger.log('🎤 Stopping ALL wake word services...');
       
       // Stop all services in parallel, then wait for all to complete
       const stopPromises: Promise<void>[] = [];
@@ -356,50 +376,50 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
         const { customWakeWordService } = await import('../services/CustomWakeWordService');
         const status = customWakeWordService.getStatus();
         if (status.listening) {
-          console.log('🎤 Stopping CustomWakeWordService...');
+          logger.log('🎤 Stopping CustomWakeWordService...');
           stopPromises.push(
             customWakeWordService.stop().catch(e => {
-              console.warn('⚠️ Error stopping CustomWakeWordService:', e);
+              logger.warn('⚠️ Error stopping CustomWakeWordService:', e);
             })
           );
         }
       } catch (e) {
-        console.log('⚠️ CustomWakeWordService not available:', e);
+        logger.log('⚠️ CustomWakeWordService not available:', e);
       }
       
       try {
         const { mlWakeWordService } = await import('../services/MLWakeWordService');
         const status = mlWakeWordService.getStatus();
         if (status.listening) {
-          console.log('🎤 Stopping MLWakeWordService...');
+          logger.log('🎤 Stopping MLWakeWordService...');
           stopPromises.push(
             mlWakeWordService.stop().catch(e => {
-              console.warn('⚠️ Error stopping MLWakeWordService:', e);
+              logger.warn('⚠️ Error stopping MLWakeWordService:', e);
             })
           );
         }
       } catch (e) {
-        console.log('⚠️ MLWakeWordService not available:', e);
+        logger.log('⚠️ MLWakeWordService not available:', e);
       }
       
       try {
         const { porcupineWakeWordService } = await import('../services/PorcupineWakeWordService');
         const status = porcupineWakeWordService.getStatus();
         if (status.started) {
-          console.log('🎤 Stopping PorcupineWakeWordService...');
+          logger.log('🎤 Stopping PorcupineWakeWordService...');
           stopPromises.push(
             porcupineWakeWordService.stop().catch(e => {
-              console.warn('⚠️ Error stopping PorcupineWakeWordService:', e);
+              logger.warn('⚠️ Error stopping PorcupineWakeWordService:', e);
             })
           );
         }
       } catch (e) {
-        console.log('⚠️ PorcupineWakeWordService not available:', e);
+        logger.log('⚠️ PorcupineWakeWordService not available:', e);
       }
 
       // Wait for all services to stop
       await Promise.all(stopPromises);
-      console.log('🎤 All wake word services stopped, waiting for cleanup...');
+      logger.log('🎤 All wake word services stopped, waiting for cleanup...');
       
       // CRITICAL: Wait longer for expo-av to fully release all recordings
       // This is essential - expo-av needs time to release internal recording state
@@ -416,7 +436,7 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
         // Wait for audio mode to reset
         await new Promise(resolve => setTimeout(resolve, 500));
       } catch (e) {
-        console.warn('⚠️ Audio mode reset warning:', e);
+        logger.warn('⚠️ Audio mode reset warning:', e);
       }
 
       // Clean up any existing recording first
@@ -425,7 +445,7 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
       // Final wait to ensure everything is released
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      console.log('🎤 Configuring audio mode...');
+      logger.log('🎤 Configuring audio mode...');
       // Configure audio mode
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
@@ -461,24 +481,25 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
         },
       };
 
-      console.log('🎤 Creating new recording...');
+      logger.log('🎤 Creating new recording...');
       const newRecording = new Audio.Recording();
-      console.log('🎤 Preparing to record...');
+      logger.log('🎤 Preparing to record...');
       await newRecording.prepareToRecordAsync(recordingOptions);
-      console.log('🎤 Starting recording...');
+      logger.log('🎤 Starting recording...');
       await newRecording.startAsync();
       setRecording(newRecording);
       setIsListening(true);
       retryCountRef.current = 0; // Reset retry count on success
-      console.log('✅ Recording started successfully!');
+      logger.log('✅ Recording started successfully!');
       
-    } catch (error: any) {
-      console.error('Failed to start recording:', error);
+    } catch (error: unknown) {
+      logger.error('Failed to start recording:', error);
       
       // Handle specific error about multiple recordings
-      if (error.message?.includes('Only one Recording object')) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('Only one Recording object')) {
         retryCountRef.current += 1;
-        console.log(`🔄 Attempting to clean up and retry (attempt ${retryCountRef.current})...`);
+        logger.log(`🔄 Attempting to clean up and retry (attempt ${retryCountRef.current})...`);
         
         // Aggressively stop ALL services again
         const stopAllServices = async () => {
@@ -488,10 +509,14 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
             { name: 'PorcupineWakeWordService', import: () => import('../services/PorcupineWakeWordService') },
           ];
           
+          interface WakeWordServiceModule {
+            stop: () => Promise<void>;
+            [key: string]: unknown;
+          }
           for (const service of services) {
             try {
               const module = await service.import();
-              const svc = Object.values(module)[0] as any;
+              const svc = Object.values(module)[0] as WakeWordServiceModule | undefined;
               if (svc && typeof svc.stop === 'function') {
                 await svc.stop().catch(() => {});
               }
@@ -522,19 +547,19 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
         
         // CRITICAL: Wait much longer before retry - expo-av needs time to release internal state
         // The "Only one Recording object" error means expo-av hasn't released its internal lock yet
-        console.log('🎤 Waiting for expo-av to fully release recording state...');
+        logger.log('🎤 Waiting for expo-av to fully release recording state...');
         await new Promise(resolve => setTimeout(resolve, 2500));
         
         // Only retry once
         if (retryCountRef.current <= 1) {
-          console.log('🎤 Retrying recording start...');
+          logger.log('🎤 Retrying recording start...');
           isStartingRef.current = false;
           // Small delay before retry to ensure state is clean
           await new Promise(resolve => setTimeout(resolve, 300));
           return startListening();
         } else {
           // Max retries reached - show helpful error message
-          console.error('❌ Max retry attempts reached - recording conflict persists');
+          logger.error('❌ Max retry attempts reached - recording conflict persists');
           setIsListening(false);
           Alert.alert(
             'Recording Error', 
@@ -575,7 +600,7 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
         await processAudio(uri);
       }
     } catch (error) {
-      console.error('Failed to stop recording:', error);
+      logger.error('Failed to stop recording:', error);
       // Clean up even if stop fails
       try {
         await recording.unloadAsync();
@@ -588,21 +613,27 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
   };
 
   const processAudio = async (audioUri: string) => {
-    console.log('🎤 Processing audio:', audioUri);
+    logger.log('🎤 Processing audio:', audioUri);
     setIsProcessing(true);
     
     try {
       // Create FormData for file upload
+      interface FormDataAudio {
+        uri: string;
+        type: string;
+        name: string;
+      }
       const formData = new FormData();
-      formData.append('audio', {
+      const audioData: FormDataAudio = {
         uri: audioUri,
         type: 'audio/wav',
         name: 'voice.wav',
-      } as any);
+      };
+      formData.append('audio', audioData as unknown as Blob);
 
       // Send to backend for Whisper transcription and AI processing
       const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000";
-      console.log('🎤 Sending to API:', `${API_BASE_URL}/api/voice/process/`);
+      logger.log('🎤 Sending to API:', `${API_BASE_URL}/api/voice/process/`);
       
       let response: Response;
       try {
@@ -615,10 +646,10 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
           // Note: AbortSignal.timeout may not be available in all environments
           // Using a timeout wrapper instead
         });
-      } catch (networkError: any) {
-        console.error('Transcription error:', networkError);
+      } catch (networkError: unknown) {
+        logger.error('Transcription error:', networkError);
         // Network error - use fallback mock response
-        console.warn('⚠️ Network error, using mock transcription');
+        logger.warn('⚠️ Network error, using mock transcription');
         const mockResponse = {
           success: true,
           response: {
@@ -698,7 +729,7 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
         throw new Error(data.error || 'Failed to process voice input');
       }
     } catch (error) {
-      console.error('Error processing audio:', error);
+      logger.error('Error processing audio:', error);
       await speakText("I'm sorry, I didn't catch that. Could you please try again?");
     } finally {
       setIsProcessing(false);
@@ -733,8 +764,9 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
           }),
         });
         response = await Promise.race([fetchPromise, timeoutPromise]);
-      } catch (error: any) {
-        console.log('Speech synthesis API timeout, using fallback:', error.message);
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        logger.log('Speech synthesis API timeout, using fallback:', errorMessage);
         // Fall through to basic speech
         response = null;
       }
@@ -751,7 +783,7 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
             
             // Set up a timeout to fallback if audio doesn't start playing
             const fallbackTimeout = setTimeout(async () => {
-              console.log('Audio playback timeout, falling back to basic speech');
+              logger.log('Audio playback timeout, falling back to basic speech');
               await sound.unloadAsync();
               await safeSpeak(text, {
                 language: 'en-US',
@@ -761,7 +793,7 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
                   setIsSpeaking(false);
                 },
                 onError: (error) => {
-                  console.error('TTS error:', error);
+                  logger.error('TTS error:', error);
                   setIsSpeaking(false);
                 },
               });
@@ -776,7 +808,7 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
                 }
               } else if (status.error) {
                 clearTimeout(fallbackTimeout);
-                console.log('Audio playback error, falling back to basic speech:', status.error);
+                logger.log('Audio playback error, falling back to basic speech:', status.error);
                 sound.unloadAsync();
                 safeSpeak(text, {
                   language: 'en-US',
@@ -786,14 +818,14 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
                     setIsSpeaking(false);
                   },
                   onError: (error) => {
-                    console.error('TTS error:', error);
+                    logger.error('TTS error:', error);
                     setIsSpeaking(false);
                   },
                 });
               }
             });
           } catch (audioError) {
-            console.log('Audio playback failed, falling back to basic speech:', audioError);
+            logger.log('Audio playback failed, falling back to basic speech:', audioError);
             // Fallback to basic speech if audio playback fails
             const selectedVoice = getSelectedVoice();
             const voiceParams = getVoiceParameters(selectedVoice);
@@ -806,7 +838,7 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
                 setIsSpeaking(false);
               },
               onError: (error) => {
-                console.error('TTS error:', error);
+                logger.error('TTS error:', error);
                 setIsSpeaking(false);
               },
             });
@@ -824,7 +856,7 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
               setIsSpeaking(false);
             },
             onError: (error) => {
-              console.error('TTS error:', error);
+              logger.error('TTS error:', error);
               setIsSpeaking(false);
             },
           });
@@ -842,13 +874,13 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
             setIsSpeaking(false);
           },
           onError: (error) => {
-            console.error('TTS error:', error);
+            logger.error('TTS error:', error);
             setIsSpeaking(false);
           },
         });
       }
     } catch (error) {
-      console.error('Error speaking text:', error);
+      logger.error('Error speaking text:', error);
       // Final fallback with voice parameters
       try {
         const selectedVoice = getSelectedVoice();
@@ -862,12 +894,12 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
             setIsSpeaking(false);
           },
           onError: (error) => {
-            console.error('Final TTS error:', error);
+            logger.error('Final TTS error:', error);
             setIsSpeaking(false);
           },
         });
       } catch (finalError) {
-        console.error('Final speech error:', finalError);
+        logger.error('Final speech error:', finalError);
         setIsSpeaking(false);
       }
     }
@@ -1004,7 +1036,10 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
 }
 
 // Message Bubble Component
-function MessageBubble({ message }: { message: any }) {
+interface MessageBubbleProps {
+  message: ConversationMessage;
+}
+function MessageBubble({ message }: MessageBubbleProps) {
   const isUser = message.type === 'user';
   
   return (
@@ -1014,7 +1049,7 @@ function MessageBubble({ message }: { message: any }) {
       </Text>
       {message.insights && message.insights.length > 0 && (
         <View style={styles.insightsContainer}>
-          {message.insights.map((insight: any, index: number) => (
+          {message.insights.map((insight: Insight, index: number) => (
             <View key={index} style={styles.insightItem}>
               <Text style={styles.insightTitle}>{insight.title}</Text>
               <Text style={styles.insightValue}>{insight.value}</Text>

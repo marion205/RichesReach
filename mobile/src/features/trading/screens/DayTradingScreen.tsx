@@ -21,6 +21,7 @@ import { API_HTTP } from '../../../config/api';
 import { useVoice } from '../../../contexts/VoiceContext';
 import { useNavigation } from '@react-navigation/native';
 import OnboardingGuard from '../../../components/OnboardingGuard';
+import logger from '../../../utils/logger';
 
 type TradingMode = 'SAFE' | 'AGGRESSIVE';
 type Side = 'LONG' | 'SHORT';
@@ -88,11 +89,30 @@ const GET_STOCK_CHART_DATA = gql`
   }
 `;
 
+interface TradingQuote {
+  symbol: string;
+  currentPrice?: number;
+  change?: number;
+  changePercent?: number;
+  bid?: number;
+  ask?: number;
+  [key: string]: unknown;
+}
+
+interface GestureEvent {
+  nativeEvent: {
+    translationX: number;
+    translationY: number;
+    state: number;
+    [key: string]: unknown;
+  };
+}
+
 export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen: string) => void }) {
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation();
   const [mode, setMode] = useState<TradingMode>('SAFE');
   const [refreshing, setRefreshing] = useState(false);
-  const [quotes, setQuotes] = useState<{ [key: string]: any }>({});
+  const [quotes, setQuotes] = useState<{ [key: string]: TradingQuote }>({});
   const [charts, setCharts] = useState<{ [key: string]: number[] }>({});
   const [visibleSymbols, setVisibleSymbols] = useState<Set<string>>(new Set());
   const [isGestureActive, setIsGestureActive] = useState(false);
@@ -110,7 +130,7 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
       // For now, try to navigate to onboarding first
       navigation.navigate('onboarding' as never);
     } catch (error) {
-      console.error('Navigation error:', error);
+      logger.error('Navigation error:', error);
       // Fallback: try alternative navigation
       try {
         // Try nested navigation for onboarding
@@ -118,7 +138,7 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
           screen: 'onboarding',
         } as never);
       } catch (nestedError) {
-        console.error('Nested navigation error:', nestedError);
+        logger.error('Nested navigation error:', nestedError);
         // Final fallback
         if (navigateTo) {
           navigateTo('onboarding');
@@ -180,7 +200,7 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
         });
       }
     } catch (error) {
-      console.error('Gesture trade failed:', error);
+      logger.error('Gesture trade failed:', error);
       
       // Error haptic
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -207,7 +227,7 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
       // Voice confirmation
       speakText(`${newMode} mode activated`);
     } catch (error) {
-      console.error('Mode switch failed:', error);
+      logger.error('Mode switch failed:', error);
       
       // Error haptic
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -217,7 +237,7 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
     }
   }, [speakText]);
 
-  const handleGesture = useCallback((event: any) => {
+  const handleGesture = useCallback((event: GestureEvent) => {
     const { translationX, translationY, state } = event.nativeEvent;
     
     if (state === State.BEGAN) {
@@ -372,16 +392,16 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
 
     try {
       const results = await Promise.all(quotePromises);
-      const newQuotes = results.reduce((acc, res, i) => {
+      const newQuotes = results.reduce((acc: Record<string, TradingQuote>, res, i) => {
         if (res.data?.tradingQuote) {
-          acc[symbols[i]] = res.data.tradingQuote;
+          acc[symbols[i]] = res.data.tradingQuote as TradingQuote;
         }
         return acc;
-      }, {} as any);
+      }, {});
 
       setQuotes((prev) => ({ ...prev, ...newQuotes }));
     } catch (e) {
-      console.error('Failed to fetch quotes', e);
+      logger.error('Failed to fetch quotes', e);
     }
   }, [client]);
 
@@ -402,15 +422,16 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
         });
         acc[symbol] = mockData;
         return acc;
-      }, {} as any);
+      }, {} as Record<string, number[]>);
 
       setCharts((prev) => ({ ...prev, ...newCharts }));
-      console.log('📊 Using mock chart data for symbols:', missingCharts);
+      logger.log('📊 Using mock chart data for symbols:', missingCharts);
     } catch (e) {
-      console.error('Failed to generate mock charts', e);
+      logger.error('Failed to generate mock charts', e);
     }
 
-    // TODO: Re-enable real chart fetching once 400 errors are resolved
+    // Future enhancement: Re-enable real chart fetching once backend 400 errors are resolved
+    // Tracked in: Backend API error handling improvements
     // const chartPromises = missingCharts.map((s) =>
     //   client.query({
     //     query: GET_STOCK_CHART_DATA,
@@ -422,15 +443,19 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
     //   const results = await Promise.all(chartPromises);
     //   const newCharts = results.reduce((acc, res, i) => {
     //     if (res.data?.stockChartData?.data) {
-    //       const closes = res.data.stockChartData.data.map((d: any) => d.close);
+    //       interface ChartDataPoint {
+    //         close: number;
+    //         [key: string]: unknown;
+    //       }
+    //       const closes = res.data.stockChartData.data.map((d: ChartDataPoint) => d.close);
     //       acc[missingCharts[i]] = closes;
     //     }
     //     return acc;
-    //   }, {} as any);
+    //   }, {} as Record<string, number[]>);
 
     //   setCharts((prev) => ({ ...prev, ...newCharts }));
     // } catch (e) {
-    //   console.error('Failed to fetch charts', e);
+    //   logger.error('Failed to fetch charts', e);
     // }
   }, [charts, quotes]);
 
@@ -460,7 +485,13 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
   );
 
   // Handle visible items change
-  const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: any[] }) => {
+  interface ViewableItem {
+    item: DayTradingPick;
+    index: number;
+    isViewable: boolean;
+    [key: string]: unknown;
+  }
+  const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: ViewableItem[] }) => {
     const newVisible = new Set(viewableItems.map((item) => item.item.symbol));
     setVisibleSymbols(newVisible);
     fetchCharts(Array.from(newVisible));
@@ -584,7 +615,7 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
                 });
               } catch (e) {
                 // Non-blocking: trade might still be placed; this is just telemetry
-                console.warn('Outcome log failed', e);
+                logger.warn('Outcome log failed', e);
               }
               Alert.alert('Trade Submitted', `${pick.side} ${pick.symbol} sent`);
             },

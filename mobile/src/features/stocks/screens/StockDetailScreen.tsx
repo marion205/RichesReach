@@ -30,8 +30,145 @@ import { getStockComprehensive, StockData } from '../../../services/stockDataSer
 import { debounce } from 'lodash-es';
 import { StockMomentsIntegration } from './StockMomentsIntegration';
 import logger from '../../../utils/logger';
+import { GestureEventPayload } from 'react-native-gesture-handler';
 
 const { width } = Dimensions.get('window');
+
+// TypeScript interfaces for type safety
+interface ChartDataPoint {
+  timestamp: string | number;
+  date?: string;
+  open?: number;
+  high?: number;
+  low?: number;
+  close?: number;
+  price?: number;
+  value?: number;
+  volume?: number;
+}
+
+interface ChartData {
+  data: ChartDataPoint[];
+  currentPrice?: number;
+  changePercent?: number;
+}
+
+interface StockOverviewData {
+  companyName?: string;
+  sector?: string;
+  description?: string;
+  earningsNextDate?: string;
+  news?: NewsArticle[];
+  [key: string]: unknown;
+}
+
+interface NewsArticle {
+  title: string;
+  publishedAt: string;
+  [key: string]: unknown;
+}
+
+interface StockDataExtended extends StockData {
+  pegRatio?: number;
+  priceToBook?: number;
+  roe?: number;
+  roa?: number;
+  grossMargin?: number;
+  netMargin?: number;
+  revenueGrowth?: number;
+  epsGrowth?: number;
+  payoutRatio?: number;
+  currentPrice?: number;
+  [key: string]: unknown;
+}
+
+interface EarningsData {
+  earningsForecasts?: {
+    nextQuarter?: {
+      date: string;
+      estimatedEps?: number;
+      estimatedRevenue?: number;
+    };
+    historical?: EarningsQuarter[];
+  };
+  [key: string]: unknown;
+}
+
+interface EarningsQuarter {
+  quarter: string;
+  date: string;
+  surprisePercent?: number;
+  eps?: number;
+  revenue?: number;
+  [key: string]: unknown;
+}
+
+interface InsiderTrade {
+  type: 'BUY' | 'SELL';
+  shares?: number;
+  transactionDate?: string;
+  [key: string]: unknown;
+}
+
+interface InstitutionalHolding {
+  institutionName?: string;
+  percentOfShares?: number;
+  sharesHeld?: number;
+  valueHeld?: number;
+  change?: number;
+  [key: string]: unknown;
+}
+
+interface SentimentData {
+  overallScore?: number;
+  positiveMentions?: number;
+  negativeMentions?: number;
+  neutralMentions?: number;
+  recentPosts?: SentimentPost[];
+  [key: string]: unknown;
+}
+
+interface SentimentPost {
+  content: string;
+  source?: string;
+  sentiment?: 'positive' | 'negative' | 'neutral';
+  [key: string]: unknown;
+}
+
+interface AnalystData {
+  consensusRating?: string;
+  averageTargetPrice?: number;
+  ratingsBreakdown?: Record<string, RatingBreakdown>;
+  recentRatings?: AnalystRating[];
+  [key: string]: unknown;
+}
+
+interface RatingBreakdown {
+  percentage: number;
+  count: number;
+  [key: string]: unknown;
+}
+
+interface AnalystRating {
+  analyst?: string;
+  firm?: string;
+  rating?: string;
+  targetPrice?: number;
+  date?: string;
+  [key: string]: unknown;
+}
+
+interface Position {
+  symbol?: string;
+  quantity?: number;
+  averagePrice?: number;
+  [key: string]: unknown;
+}
+
+interface NavigationParams {
+  symbol?: string;
+  [key: string]: unknown;
+}
 
 // Theme for consistency - Light theme
 const theme = {
@@ -71,14 +208,14 @@ const tabIcons = {
 };
 
 // Downsample data function to optimize rendering for large datasets
-const downsampleData = (data: any[], maxPoints: number = 500): any[] => {
+const downsampleData = (data: ChartDataPoint[], maxPoints: number = 500): ChartDataPoint[] => {
   if (data.length <= maxPoints) return data;
   const step = Math.floor(data.length / maxPoints);
   return data.filter((_, index) => index % step === 0);
 };
 
 // Fallback chart data generator
-const generateFallbackChartData = (symbol: string, timeframe: string = '1D'): any => {
+const generateFallbackChartData = (symbol: string, timeframe: string = '1D'): ChartData => {
   const now = new Date();
   const days = timeframe === '1D' ? 1 : timeframe === '5D' ? 5 : timeframe === '1M' ? 30 : timeframe === '3M' ? 90 : 365;
   const points = Math.min(days * 24, 500); // Max 500 points
@@ -113,7 +250,7 @@ const generateFallbackChartData = (symbol: string, timeframe: string = '1D'): an
 };
 
 // Volume Bars Component
-const VolumeBars = React.memo(({ data, width, height }: { data: any[]; width: number; height: number }) => {
+const VolumeBars = React.memo(({ data, width, height }: { data: ChartDataPoint[]; width: number; height: number }) => {
   if (!data || data.length === 0) return null;
 
   const maxVolume = Math.max(...data.map(d => d.volume || 0));
@@ -147,7 +284,7 @@ const VolumeBars = React.memo(({ data, width, height }: { data: any[]; width: nu
 VolumeBars.displayName = 'VolumeBars';
 
 // Enhanced Tab Scenes with animations and better styling
-const OverviewRoute = React.memo(({ data }: { data: any }) => {
+const OverviewRoute = React.memo(({ data }: { data: StockOverviewData }) => {
   const scale = useSharedValue(0);
   useEffect(() => {
     scale.value = withSpring(1);
@@ -186,7 +323,7 @@ const OverviewRoute = React.memo(({ data }: { data: any }) => {
 
         {/* News Cards */}
         <Text style={styles.sectionTitle}>Recent News</Text>
-        {data?.news?.map((article: any, idx: number) => (
+        {data?.news?.map((article: NewsArticle, idx: number) => (
           <TouchableOpacity key={idx} style={styles.newsCard} activeOpacity={0.8}>
             <Text style={styles.newsTitle}>{article.title}</Text>
             <View style={styles.newsFooter}>
@@ -210,8 +347,8 @@ const ChartRoute = React.memo(({
   loading 
 }: { 
   symbol: string; 
-  chartData: any; 
-  stockData: any;
+  chartData: ChartData | ChartDataPoint[] | null; 
+  stockData: StockDataExtended | null;
   changePercent: number;
   timeframe: string;
   onTimeframeChange: (newTimeframe: string) => void;
@@ -225,7 +362,7 @@ const ChartRoute = React.memo(({
     [onTimeframeChange]
   );
 
-  const onGestureEvent = (event: any) => {
+  const onGestureEvent = (event: GestureEventPayload) => {
     if (event.nativeEvent.state === State.END) {
       const { translationX } = event.nativeEvent;
       if (Math.abs(translationX) > 50) {
@@ -251,21 +388,28 @@ const ChartRoute = React.memo(({
 
   // Memoize downsampled data to avoid recomputation
   const processedData = useMemo(() => {
-    // chartData is now an array directly
-    if (!chartData || !Array.isArray(chartData) || chartData.length === 0) {
+    // chartData can be ChartData object or array directly
+    let dataArray: ChartDataPoint[] = [];
+    if (Array.isArray(chartData)) {
+      dataArray = chartData;
+    } else if (chartData && 'data' in chartData && Array.isArray(chartData.data)) {
+      dataArray = chartData.data;
+    }
+    
+    if (dataArray.length === 0) {
       return [];
     }
     
-    return downsampleData(chartData);
+    return downsampleData(dataArray);
   }, [chartData]);
 
   // Convert chart data to ChartPoint format for moments
   const priceSeriesForMoments = useMemo(() => {
-    if (!processedData || !Array.isArray(processedData) || processedData.length === 0) {
+    if (!processedData || processedData.length === 0) {
       logger.log('[ChartRoute] No processedData for moments');
       return [];
     }
-    const series = processedData.map((d: any) => ({
+    const series = processedData.map((d: ChartDataPoint) => ({
       timestamp: d.timestamp || d.date || new Date().toISOString(),
       price: d.close || d.price || d.value || 0,
     }));
@@ -403,8 +547,8 @@ const FinancialsRoute = React.memo(({ marketCap, peRatio, dividendYield, earning
   marketCap?: number; 
   peRatio?: number; 
   dividendYield?: number;
-  earningsData?: any;
-  stockData?: any;
+  earningsData?: EarningsData;
+  stockData?: StockDataExtended;
 }) => {
   const [selectedMetric, setSelectedMetric] = useState('valuation');
   const scale = useSharedValue(0);
@@ -587,7 +731,7 @@ const FinancialsRoute = React.memo(({ marketCap, peRatio, dividendYield, earning
             {/* Earnings History with Enhanced Design */}
             <View style={styles.earningsHistorySection}>
               <Text style={styles.subsectionTitle}>Recent Performance</Text>
-              {earningsData.earningsForecasts.historical?.slice(0, 4).map((quarter: any, idx: number) => (
+              {earningsData.earningsForecasts.historical?.slice(0, 4).map((quarter: EarningsQuarter, idx: number) => (
                 <View key={idx} style={styles.enhancedEarningsItem}>
                   <View style={styles.earningsItemHeader}>
                     <Text style={styles.quarterLabel}>{quarter.quarter}</Text>
@@ -664,8 +808,8 @@ const FinancialsRoute = React.memo(({ marketCap, peRatio, dividendYield, earning
   );
 });
 
-const TradeRoute = React.memo(({ position, symbol, onOpenTrade, currentPrice }: { 
-  position?: any; 
+const TradeRoute = React.memo(({ position, symbol, onOpenTrade, currentPrice }: {
+  position?: Position | null; 
   symbol: string; 
   onOpenTrade: () => void;
   currentPrice?: number;
@@ -705,10 +849,10 @@ const TradeRoute = React.memo(({ position, symbol, onOpenTrade, currentPrice }: 
 
 const TrendsRoute = React.memo(({ symbol, insiderData, institutionalData, sentimentData, analystData }: { 
   symbol: string; 
-  insiderData: any; 
-  institutionalData: any; 
-  sentimentData: any; 
-  analystData: any 
+  insiderData: InsiderTrade[] | null | undefined; 
+  institutionalData: InstitutionalHolding[] | null | undefined; 
+  sentimentData: SentimentData | null | undefined; 
+  analystData: AnalystData | null | undefined;
 }) => {
   const [aiInsight, setAiInsight] = useState('Generating AI insights...');
   const opacity = useSharedValue(0);
@@ -729,12 +873,12 @@ const TrendsRoute = React.memo(({ symbol, insiderData, institutionalData, sentim
       }
 
       // Simple AI-like logic incorporating all data
-      const buyTrades = recentTrades.filter((trade: any) => trade.type === 'BUY');
-      const sellTrades = recentTrades.filter((trade: any) => trade.type === 'SELL');
-      const netBuys = buyTrades.reduce((sum: number, trade: any) => sum + (trade.shares || 0), 0);
-      const netSells = sellTrades.reduce((sum: number, trade: any) => sum + (trade.shares || 0), 0);
+      const buyTrades = recentTrades.filter((trade: InsiderTrade) => trade.type === 'BUY');
+      const sellTrades = recentTrades.filter((trade: InsiderTrade) => trade.type === 'SELL');
+      const netBuys = buyTrades.reduce((sum: number, trade: InsiderTrade) => sum + (trade.shares || 0), 0);
+      const netSells = sellTrades.reduce((sum: number, trade: InsiderTrade) => sum + (trade.shares || 0), 0);
 
-      const totalInstitutionalPercent = institutions.reduce((sum: number, inst: any) => sum + (inst.percentOfShares || 0), 0);
+      const totalInstitutionalPercent = institutions.reduce((sum: number, inst: InstitutionalHolding) => sum + (inst.percentOfShares || 0), 0);
       const topHolder = institutions[0];
 
       const sentimentScore = sentiment?.overallScore || 0;
@@ -843,7 +987,7 @@ const TrendsRoute = React.memo(({ symbol, insiderData, institutionalData, sentim
             {sentimentData.recentPosts && sentimentData.recentPosts.length > 0 && (
               <View style={styles.recentMentions}>
                 <Text style={styles.subsectionTitle}>Recent Mentions</Text>
-                {sentimentData.recentPosts.slice(0, 3).map((post: any, idx: number) => (
+                {sentimentData.recentPosts.slice(0, 3).map((post: SentimentPost, idx: number) => (
                   <TouchableOpacity key={idx} style={styles.mentionCard} activeOpacity={0.8}>
                     <Text style={styles.mentionContent}>{post.content}</Text>
                     <View style={styles.mentionFooter}>
@@ -878,7 +1022,7 @@ const TrendsRoute = React.memo(({ symbol, insiderData, institutionalData, sentim
             {analystData.ratingsBreakdown && (
               <View style={styles.ratingsBreakdown}>
                 <Text style={styles.subsectionTitle}>Rating Distribution</Text>
-                {Object.entries(analystData.ratingsBreakdown).map(([rating, data]: [string, any]) => (
+                {Object.entries(analystData.ratingsBreakdown).map(([rating, data]: [string, RatingBreakdown]) => (
                   <View key={rating} style={styles.ratingItem}>
                     <Text style={styles.ratingLabel}>{rating}</Text>
                     <View style={styles.ratingBar}>
@@ -899,7 +1043,7 @@ const TrendsRoute = React.memo(({ symbol, insiderData, institutionalData, sentim
             {analystData.recentRatings && analystData.recentRatings.length > 0 && (
               <View style={styles.recentRatings}>
                 <Text style={styles.subsectionTitle}>Recent Ratings</Text>
-                {analystData.recentRatings.slice(0, 5).map((rating: any, idx: number) => (
+                {analystData.recentRatings.slice(0, 5).map((rating: AnalystRating, idx: number) => (
                   <View key={idx} style={styles.ratingCard}>
                     <View style={styles.ratingCardHeader}>
                       <Text style={styles.analystName}>{rating.analyst} - {rating.firm}</Text>
@@ -934,7 +1078,7 @@ const TrendsRoute = React.memo(({ symbol, insiderData, institutionalData, sentim
             <View style={styles.insiderSummary}>
               <Text style={styles.insiderCount}>{insiderData.length} recent transactions</Text>
             </View>
-            {insiderData.slice(0, 5).map((trade: any, idx: number) => (
+            {insiderData.slice(0, 5).map((trade: InsiderTrade, idx: number) => (
               <View key={idx} style={styles.insiderCard}>
                 <View style={styles.insiderCardHeader}>
                   <Text style={styles.insiderName}>{trade.insiderName}</Text>
@@ -967,7 +1111,7 @@ const TrendsRoute = React.memo(({ symbol, insiderData, institutionalData, sentim
             <View style={styles.institutionalSummary}>
               <Text style={styles.institutionalCount}>{institutionalData.length} institutions</Text>
             </View>
-            {institutionalData.slice(0, 5).map((institution: any, idx: number) => (
+            {institutionalData.slice(0, 5).map((institution: InstitutionalHolding, idx: number) => (
               <View key={idx} style={styles.institutionalCard}>
                 <View style={styles.institutionalCardHeader}>
                   <Text style={styles.institutionalName}>{institution.institutionName}</Text>
@@ -995,9 +1139,9 @@ const TrendsRoute = React.memo(({ symbol, insiderData, institutionalData, sentim
 // Main Component
 interface StockDetailScreenProps {
   navigation: {
-    navigate: (screen: string, params?: any) => void;
+    navigate: (screen: string, params?: NavigationParams) => void;
     goBack: () => void;
-    setParams: (params: any) => void;
+    setParams: (params: NavigationParams) => void;
   };
   route: {
     params: {
@@ -1021,7 +1165,7 @@ export default function StockDetailScreen({ navigation, route }: StockDetailScre
   ]);
 
   const [stockData, setStockData] = useState<StockData | null>(null);
-  const [chartData, setChartData] = useState<any>(null);
+  const [chartData, setChartData] = useState<ChartData | ChartDataPoint[] | null>(null);
   const [stockLoading, setStockLoading] = useState(true);
   const [chartLoading, setChartLoading] = useState(false);
   const [stockError, setStockError] = useState<string | null>(null);

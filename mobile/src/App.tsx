@@ -32,6 +32,7 @@ import WellnessScoreDashboard from './components/WellnessScoreDashboard';
 import ARPortfolioPreview from './components/ARPortfolioPreview';
 import SentryTestButton from './components/SentryTestButton';
 import OfflineInsightsService from './services/OfflineInsightsService';
+import logger from './utils/logger';
 // Use only Expo Go compatible services to avoid "Exception in HostFunction" errors
 import expoGoCompatibleNotificationService from './features/notifications/services/ExpoGoCompatibleNotificationService';
 import expoGoCompatiblePriceAlertService from './features/stocks/services/ExpoGoCompatiblePriceAlertService';
@@ -169,12 +170,12 @@ if (!__DEV__) {
 
 // Handle authentication state changes
 useEffect(() => {
-  console.log('🔐 Auth state changed:', { isAuthenticated, currentScreen, user });
+  logger.log('🔐 Auth state changed:', { isAuthenticated, currentScreen, user });
   if (isAuthenticated && currentScreen === 'login') {
-    console.log('🔐 User is authenticated, navigating to home');
+    logger.log('🔐 User is authenticated, navigating to home');
     setCurrentScreen('home');
   } else if (!isAuthenticated && currentScreen !== 'login' && currentScreen !== 'forgot-password' && currentScreen !== 'signup') {
-    console.log('🔐 User is not authenticated, navigating to login');
+    logger.log('🔐 User is not authenticated, navigating to login');
     setCurrentScreen('login');
   }
 }, [isAuthenticated, currentScreen, user]);
@@ -189,10 +190,10 @@ useEffect(() => {
     const checkOnboarding = async () => {
       try {
         const onboardingCompleted = await UserProfileService.getInstance().isOnboardingCompleted();
-        console.log('✅ Onboarding check result:', onboardingCompleted);
+        logger.log('✅ Onboarding check result:', onboardingCompleted);
         setHasCompletedOnboarding(onboardingCompleted);
       } catch (error) {
-        console.error('Error checking onboarding status:', error);
+        logger.error('Error checking onboarding status:', error);
         setHasCompletedOnboarding(false); // Default to false on error
       }
     };
@@ -234,7 +235,7 @@ if (priceAlertService) {
         await dawnRitualScheduler.scheduleDailyRitual(preferences);
       }
 } catch (error) {
-console.error('Error initializing services:', error);
+logger.error('Error initializing services:', error);
 } finally {
 setIsLoading(false);
 }
@@ -242,7 +243,7 @@ setIsLoading(false);
 initializeServices();
 }, []);
 const navigateTo = (screen: string, params?: any) => {
-  console.log('🔍 navigateTo called:', { screen, params });
+  logger.log('🔍 navigateTo called:', { screen, params });
   
   // Handle Version 2 special screens
   if (screen === 'ar-preview') {
@@ -256,13 +257,13 @@ const navigateTo = (screen: string, params?: any) => {
   }
   
   if (screen === 'StockDetail') {
-    console.log('🔍 Navigating to StockDetail with params:', params);
+    logger.log('🔍 Navigating to StockDetail with params:', params);
     // Store params for StockDetail screen
     setCurrentScreen('StockDetail');
     // Store params in a way that the screen can access them
     (window as any).__stockDetailParams = params || {};
   } else if (screen === 'SBLOCBankSelection') {
-    console.log('🔍 Navigating to SBLOCBankSelection with params:', params);
+    logger.log('🔍 Navigating to SBLOCBankSelection with params:', params);
     // Store params for SBLOCBankSelection screen
     setCurrentScreen('SBLOCBankSelection');
     // Store params in a way that the screen can access them
@@ -284,7 +285,7 @@ setCurrentScreen(screen);
 }
 };
 const handleLogin = async (token?: string) => {
-console.log('🎉 App handleLogin called with token:', token);
+logger.log('🎉 App handleLogin called with token:', token);
 // Check onboarding status first before navigating
 await checkOnboardingStatus();
 // Navigation will be handled by the onboarding check or by the auth state effect
@@ -303,7 +304,7 @@ if (!onboardingCompleted) {
 setCurrentScreen('onboarding');
 }
 } catch (error) {
-console.error('Error checking onboarding status:', error);
+logger.error('Error checking onboarding status:', error);
 setCurrentScreen('onboarding');
 }
 };
@@ -315,34 +316,34 @@ await userProfileService.markOnboardingCompleted();
 setHasCompletedOnboarding(true);
 setCurrentScreen('home');
 } catch (error) {
-console.error('Error saving user profile:', error);
+logger.error('Error saving user profile:', error);
 }
 };
 const handleLogout = async () => {
 try {
-    console.log('🔄 Starting logout process...');
+    logger.log('🔄 Starting logout process...');
     
     // Clear JWT service
     const jwtService = JWTAuthService.getInstance();
     await jwtService.logout();
-    console.log('✅ JWT service cleared');
+    logger.log('✅ JWT service cleared');
     
     // Clear AuthContext state
     await authLogout();
-    console.log('✅ AuthContext cleared');
+    logger.log('✅ AuthContext cleared');
     
     // Clear local state
     setCurrentScreen('login');
     setHasCompletedOnboarding(false);
-    console.log('✅ Local state cleared, navigating to login');
+    logger.log('✅ Local state cleared, navigating to login');
 } catch (error) {
-    console.error('❌ Logout error:', error);
+    logger.error('❌ Logout error:', error);
     // Still navigate to login even if there's an error
     setCurrentScreen('login');
 }
 };
 const renderScreen = () => {
-console.log('🔍 renderScreen called:', { currentScreen, isLoggedIn, isLoading });
+logger.log('🔍 renderScreen called:', { currentScreen, isLoggedIn, isLoading });
 // Show loading screen while initializing
 if (isLoading) {
 return (
@@ -352,7 +353,7 @@ return (
 );
 }
 if (!isLoggedIn) {
-console.log('🔍 User not logged in, showing login screen');
+logger.log('🔍 User not logged in, showing login screen');
 switch (currentScreen) {
 case 'login':
 return <LoginScreen 
@@ -369,7 +370,7 @@ case 'signup':
 return (
 <ZeroFrictionOnboarding
 onComplete={(profile) => {
-console.log('✅ Onboarding completed with profile:', profile);
+logger.log('✅ Onboarding completed with profile:', profile);
 setHasCompletedOnboarding(true);
 setCurrentScreen('home');
 }}
@@ -392,13 +393,13 @@ if (isLoggedIn && hasCompletedOnboarding === false) {
   return (
     <ZeroFrictionOnboarding
       onComplete={async (profile) => {
-        console.log('✅ Onboarding completed with profile:', profile);
+        logger.log('✅ Onboarding completed with profile:', profile);
         try {
           const userProfileService = UserProfileService.getInstance();
           await userProfileService.saveProfile(profile);
           await userProfileService.markOnboardingCompleted();
         } catch (error) {
-          console.error('Error saving profile:', error);
+          logger.error('Error saving profile:', error);
         }
         setHasCompletedOnboarding(true);
         setCurrentScreen('home');
@@ -408,7 +409,7 @@ if (isLoggedIn && hasCompletedOnboarding === false) {
           const userProfileService = UserProfileService.getInstance();
           await userProfileService.markOnboardingCompleted();
         } catch (error) {
-          console.error('Error marking onboarding as completed:', error);
+          logger.error('Error marking onboarding as completed:', error);
         }
         setHasCompletedOnboarding(true);
         setCurrentScreen('home');
@@ -430,10 +431,10 @@ if (isLoggedIn && hasCompletedOnboarding === null) {
 if (isLoggedIn && hasCompletedOnboarding) {
   return <AppNavigator />;
 }
-console.log('🔍 Main switch statement, currentScreen:', currentScreen);
+logger.log('🔍 Main switch statement, currentScreen:', currentScreen);
 switch (currentScreen) {
 case 'home':
-console.log('🔍 Rendering HomeScreen');
+logger.log('🔍 Rendering HomeScreen');
 return <HomeScreen navigateTo={navigateTo} />;
 case 'onboarding':
 return <OnboardingScreen onComplete={handleOnboardingComplete} />;
@@ -444,9 +445,9 @@ return <AccountManagementScreen navigateTo={navigateTo} />;
         case 'stock':
           return <StockScreen navigateTo={navigateTo} />;
         case 'StockDetail':
-          console.log('🔍 Rendering StockDetailScreen');
+          logger.log('🔍 Rendering StockDetailScreen');
           const stockDetailParams = (window as any).__stockDetailParams || {};
-          console.log('🔍 StockDetail params:', stockDetailParams);
+          logger.log('🔍 StockDetail params:', stockDetailParams);
           return (
             <Suspense fallback={<ScreenLoader />}>
               <StockDetailScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('stock'), setParams: (params: any) => {} }} route={{ params: stockDetailParams }} />
@@ -560,7 +561,7 @@ case 'portfolio-learning':
 return <PortfolioLearningScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('home') }} />;
         case 'SBLOCBankSelection':
           const sblocParams = (window as any).__sblocParams || { amountUsd: 25000 };
-          console.log('🔍 Rendering SBLOCBankSelectionScreen with params:', sblocParams);
+          logger.log('🔍 Rendering SBLOCBankSelectionScreen with params:', sblocParams);
           return <SBLOCBankSelectionScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('bank-accounts') }} route={{ params: sblocParams }} />;
 case 'SBLOCApplication':
 return <SBLOCApplicationScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('SBLOCBankSelection') }} route={{ params: { sessionUrl: '', referral: { id: '', bank: { id: '', name: '', minLtv: 0, maxLtv: 0, minLineUsd: 0, maxLineUsd: 0, typicalAprMin: 0, typicalAprMax: 0, isActive: true, priority: 0 } } } }} />;
@@ -591,8 +592,8 @@ return <NotificationCenterScreen />;
         case 'wealth-circles':
           return <WealthCircles2 
             onCirclePress={(circle) => setCurrentScreen('circle-detail')}
-            onCreateCircle={() => console.log('Create circle')}
-            onJoinCircle={(circleId) => console.log('Join circle:', circleId)}
+            onCreateCircle={() => logger.log('Create circle')}
+            onJoinCircle={(circleId) => logger.log('Join circle:', circleId)}
           />;
         case 'circle-detail':
           return <SimpleCircleDetailScreen 
@@ -627,11 +628,11 @@ return <MarketingRocket onNavigate={navigateTo} />;
 case 'oracle-insights':
 return <OracleInsights 
   onInsightPress={(insight) => {
-    console.log('Oracle insight pressed:', insight);
+    logger.log('Oracle insight pressed:', insight);
     // Navigate to insight detail or handle the insight
   }}
   onGenerateInsight={() => {
-    console.log('Generate insight requested');
+    logger.log('Generate insight requested');
     // Handle insight generation
   }}
 />;
@@ -639,22 +640,22 @@ return <OracleInsights
             return <VoiceAIAssistant 
               onClose={() => navigateTo('home')} 
               onInsightGenerated={(insight) => {
-                console.log('Insight generated:', insight);
+                logger.log('Insight generated:', insight);
                 // You can add logic here to handle insights
               }} 
             />;
             case 'blockchain-integration':
             return <BlockchainIntegration 
               onPortfolioTokenize={(portfolio) => {
-                console.log('Portfolio tokenized:', portfolio);
+                logger.log('Portfolio tokenized:', portfolio);
                 // You can add logic here to handle tokenization
               }}
               onDeFiPositionCreate={(position) => {
-                console.log('DeFi position created:', position);
+                logger.log('DeFi position created:', position);
                 // You can add logic here to handle DeFi positions
               }}
               onGovernanceVote={(proposalId, vote) => {
-                console.log('Governance vote:', proposalId, vote);
+                logger.log('Governance vote:', proposalId, vote);
                 // You can add logic here to handle governance votes
               }}
             />;
@@ -715,7 +716,7 @@ return (
     portfolio={portfolioData}
     onClose={() => setShowARPreview(false)}
     onTrade={(action) => {
-      console.log('AR Trade Action:', action);
+      logger.log('AR Trade Action:', action);
       setShowARPreview(false);
     }}
   />
@@ -725,7 +726,7 @@ return (
   <WellnessScoreDashboard
     portfolio={portfolioData}
     onActionPress={(action) => {
-      console.log('Wellness Action:', action);
+      logger.log('Wellness Action:', action);
       setShowWellnessDashboard(false);
     }}
     onClose={() => setShowWellnessDashboard(false)}

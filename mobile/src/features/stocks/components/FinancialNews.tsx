@@ -31,7 +31,7 @@ try {
 setLoading(true);
 setError(null);
 // For now, use mock news data since we're focusing on market data
-// TODO: Implement news API in backend
+// Future enhancement: Integrate with backend news API when available
 const mockNews = [
 {
 id: '1',

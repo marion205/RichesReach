@@ -1,5 +1,6 @@
 import io, { Socket } from 'socket.io-client';
 import { GiftedChat, IMessage } from 'react-native-gifted-chat';
+import logger from '../utils/logger';
 
 export interface ChatConfig {
   serverUrl: string;
@@ -61,9 +62,9 @@ export class SocketChatService {
       });
 
       this.setupSocketListeners();
-      console.log('✅ Socket Chat Service initialized');
+      logger.log('✅ Socket Chat Service initialized');
     } catch (error) {
-      console.error('❌ Failed to initialize Socket Chat Service:', error);
+      logger.error('❌ Failed to initialize Socket Chat Service:', error);
       throw error;
     }
   }
@@ -96,54 +97,54 @@ export class SocketChatService {
     if (!this.socket) return;
 
     this.socket.on('connect', () => {
-      console.log('🔌 Connected to chat server');
+      logger.log('🔌 Connected to chat server');
       this.isConnected = true;
       this.onConnected?.();
     });
 
     this.socket.on('disconnect', () => {
-      console.log('🔌 Disconnected from chat server');
+      logger.log('🔌 Disconnected from chat server');
       this.isConnected = false;
       this.onDisconnected?.();
     });
 
     this.socket.on('connect_error', (error) => {
-      console.error('❌ Connection error:', error);
+      logger.error('❌ Connection error:', error);
       this.onError?.(error.message);
     });
 
     this.socket.on('new-message', (message: ChatMessage) => {
-      console.log('💬 New message received:', message);
+      logger.log('💬 New message received:', message);
       this.onNewMessage?.(message);
     });
 
     this.socket.on('chat-history', (messages: ChatMessage[]) => {
-      console.log('📜 Chat history loaded:', messages.length, 'messages');
+      logger.log('📜 Chat history loaded:', messages.length, 'messages');
       this.onMessageHistory?.(messages);
     });
 
     this.socket.on('user-joined', (user: UserInfo) => {
-      console.log('👤 User joined chat:', user);
+      logger.log('👤 User joined chat:', user);
       this.onUserJoined?.(user);
     });
 
     this.socket.on('user-left', (userId: string) => {
-      console.log('👋 User left chat:', userId);
+      logger.log('👋 User left chat:', userId);
       this.onUserLeft?.(userId);
     });
 
     this.socket.on('typing-start', (user: UserInfo) => {
-      console.log('⌨️ User started typing:', user);
+      logger.log('⌨️ User started typing:', user);
       this.onTypingStart?.(user);
     });
 
     this.socket.on('typing-stop', (userId: string) => {
-      console.log('⌨️ User stopped typing:', userId);
+      logger.log('⌨️ User stopped typing:', userId);
       this.onTypingStop?.(userId);
     });
 
     this.socket.on('error', (error: { message: string }) => {
-      console.error('❌ Socket error:', error.message);
+      logger.error('❌ Socket error:', error.message);
       this.onError?.(error.message);
     });
   }
@@ -163,7 +164,7 @@ export class SocketChatService {
       userName: user.userName
     });
 
-    console.log(`💬 Joined chat room: ${roomId}`);
+    logger.log(`💬 Joined chat room: ${roomId}`);
   }
 
   // Send a text message
@@ -198,7 +199,7 @@ export class SocketChatService {
       type: 'text'
     });
 
-    console.log('📤 Message sent:', content);
+    logger.log('📤 Message sent:', content);
   }
 
   // Send a system message
@@ -215,7 +216,7 @@ export class SocketChatService {
       type: 'system'
     });
 
-    console.log('📤 System message sent:', content);
+    logger.log('📤 System message sent:', content);
   }
 
   // Start typing indicator
@@ -286,7 +287,7 @@ export class SocketChatService {
     this.currentRoom = null;
     this.currentUser = null;
 
-    console.log('👋 Left chat room');
+    logger.log('👋 Left chat room');
   }
 
   // Check if connected
@@ -320,6 +321,6 @@ export class SocketChatService {
     this.currentRoom = null;
     this.currentUser = null;
 
-    console.log('🔌 Socket Chat Service disconnected');
+    logger.log('🔌 Socket Chat Service disconnected');
   }
 }

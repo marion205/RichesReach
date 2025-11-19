@@ -273,7 +273,7 @@ const CryptoScreen: React.FC<CryptoScreenProps> = ({ navigation }) => {
           <ProAaveCard
             brand="RichesReach"
             networkName="Sepolia"
-            walletAddress={null} // TODO: Connect to wallet address when available
+            walletAddress={null} // Future enhancement: Connect to user's wallet address from wallet service
             backendBaseUrl={process.env.EXPO_PUBLIC_API_URL || "http://localhost:8000"}
             explorerTxUrl={(hash) => `https://sepolia.etherscan.io/tx/${hash}`}
             getBalance={async (symbol) => {

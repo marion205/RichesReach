@@ -251,7 +251,7 @@ export const StockMomentsIntegration: React.FC<StockMomentsIntegrationProps> = (
     if (event.type === "story_close") {
       const { listenedCount = 0, totalMoments, symbol } = event;
       trackStorySession(symbol, totalMoments, listenedCount);
-      console.log(`[Analytics] Story completed: ${listenedCount}/${totalMoments} moments for ${symbol}`);
+      logger.log(`[Analytics] Story completed: ${listenedCount}/${totalMoments} moments for ${symbol}`);
     }
   }, [onAnalyticsEvent, chartRange]);
 

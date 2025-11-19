@@ -171,7 +171,7 @@ color={userVote === 'downvote' ? '#7193FF' : '#8E8E93'}
                     <TouchableOpacity 
                         style={styles.avatarContainer}
                         onPress={() => {
-                            // TODO: Navigate to user profile or show profile modal
+                            // Future enhancement: Navigate to user profile screen or show profile modal
                             Alert.alert(
                                 'User Profile',
                                 `${discussion.user.name}`,

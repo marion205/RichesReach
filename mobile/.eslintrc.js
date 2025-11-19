@@ -12,7 +12,16 @@ module.exports = {
     
     // Additional helpful rules
     'no-unused-vars': 'warn',
-    'no-console': 'off', // Allow console.log for debugging
+    
+    // ✅ Prevent console.log/warn/debug in production code
+    // Use logger utility instead (logger.log, logger.warn, logger.error)
+    // console.error is allowed for critical errors that should always be logged
+    'no-console': ['error', { 
+      allow: ['error'] // Only allow console.error for critical errors
+    }],
+    
+    // TypeScript-specific rules
+    '@typescript-eslint/no-explicit-any': 'warn', // Warn on explicit any usage
   },
   parserOptions: {
     ecmaVersion: 2020,

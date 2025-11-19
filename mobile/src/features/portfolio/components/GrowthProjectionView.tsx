@@ -358,7 +358,7 @@ export const GrowthProjectionView: React.FC<GrowthProjectionViewProps> = ({
                     <TouchableOpacity
                       style={[styles.actionButton, { backgroundColor: scenario.color }]}
                       onPress={() => {
-                        // TODO: Navigate to allocation screen
+                        // Future enhancement: Navigate to portfolio allocation screen with scenario applied
                         onClose();
                       }}
                     >

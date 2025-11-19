@@ -42,17 +42,22 @@ export interface AlpacaOrder {
   id: string;
   symbol: string;
   qty: number;
+  quantity?: number; // Alternative field name
   filledQty?: number;
   side: 'buy' | 'sell';
   orderType: 'market' | 'limit' | 'stop' | 'stop_limit';
   timeInForce: 'day' | 'gtc' | 'opg' | 'cls' | 'ioc' | 'fok';
   limitPrice?: number;
+  price?: number; // Alternative field name for limitPrice
   stopPrice?: number;
   status: 'new' | 'partially_filled' | 'filled' | 'done_for_day' | 'canceled' | 'expired' | 'replaced' | 'pending_cancel' | 'pending_replace' | 'accepted' | 'pending_new' | 'accepted_for_bidding' | 'stopped' | 'rejected' | 'suspended' | 'calculated';
   submittedAt: string;
+  createdAt?: string; // Alternative field name
   filledAt?: string;
   canceledAt?: string;
   clientOrderId?: string;
+  notes?: string;
+  [key: string]: unknown;
 }
 
 // Trading Quote Types
@@ -98,7 +103,7 @@ export type RefetchQueryFunction = () => Promise<any>;
 
 // Navigation Types
 export interface NavigationType {
-  navigate: (screen: string, params?: any) => void;
+  navigate: (screen: string, params?: Record<string, unknown>) => void;
 }
 
 // Order Form Types
