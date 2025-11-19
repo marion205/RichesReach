@@ -232,19 +232,33 @@ class PremiumAnalyticsService:
     # 2) Advanced stock screening                                        #
     # ------------------------------------------------------------------ #
 
-    def get_advanced_stock_screening(self, filters: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def get_advanced_stock_screening(self, filters: Dict[str, Any], user_id: Optional[int] = None) -> List[Dict[str, Any]]:
         """
-        Returns a list of StockScreeningResultType-compatible dicts.
+        Returns a list of StockScreeningResultType-compatible dicts, personalized with spending habits.
 
         Expected keys for each stock:
         - symbol, company_name, sector, market_cap, pe_ratio
         - beginner_friendly_score, current_price, ml_score
         - risk_level, growth_potential
         """
-        cache_key = f"premium:stock_screen:{hash(str(sorted(filters.items())))}"
+        # Include user_id in cache key for personalization
+        cache_key = f"premium:stock_screen:{user_id or 'anon'}:{hash(str(sorted(filters.items())))}"
         cached = cache.get(cache_key)
         if cached is not None:
             return cached
+
+        # Get spending habits analysis for personalization
+        spending_analysis = None
+        sector_weights = {}
+        if user_id:
+            try:
+                from .spending_habits_service import SpendingHabitsService
+                spending_service = SpendingHabitsService()
+                spending_analysis = spending_service.analyze_spending_habits(user_id, months=3)
+                sector_weights = spending_service.get_spending_based_stock_preferences(spending_analysis)
+                logger.info(f"Using spending analysis for user {user_id}: {len(sector_weights)} sector preferences")
+            except Exception as e:
+                logger.warning(f"Could not get spending analysis for stock screening: {e}")
 
         try:
             qs = Stock.objects.all()
@@ -301,6 +315,11 @@ class PremiumAnalyticsService:
                     volatility=volatility,
                     beginner_score=beginner_score,
                 )
+                
+                # Boost ML score based on spending preferences
+                if sector_weights and sector_val in sector_weights:
+                    spending_boost = sector_weights[sector_val] * 15  # Boost up to 15 points
+                    ml_score = min(100, ml_score + spending_boost)
 
                 risk_level = self._classify_risk(volatility, beginner_score)
                 growth_potential = self._classify_growth(market_cap, pe_ratio)
@@ -325,7 +344,7 @@ class PremiumAnalyticsService:
                 results = results[:limit]
 
             cache.set(cache_key, results, self.CACHE_TTL)
-            logger.info(f"Advanced stock screening returned {len(results)} results")
+            logger.info(f"Advanced stock screening returned {len(results)} results (personalized: {bool(sector_weights)})")
             return results
 
         except Exception as e:
@@ -401,7 +420,7 @@ class PremiumAnalyticsService:
 
     def get_ai_recommendations(self, user_id: int, risk_tolerance: str = "medium") -> Dict[str, Any]:
         """
-        Returns data for AIRecommendationsType:
+        Returns data for AIRecommendationsType with spending habits analysis:
 
         {
           portfolio_analysis: { ... },
@@ -409,7 +428,9 @@ class PremiumAnalyticsService:
           sell_recommendations: [ ... ],
           rebalance_suggestions: [ ... ],
           risk_assessment: { ... },
-          market_outlook: { ... }
+          market_outlook: { ... },
+          spending_insights: { ... },
+          suggested_budget: float
         }
         """
         cache_key = f"premium:ai_recommendations:{user_id}:{risk_tolerance}"
@@ -418,20 +439,33 @@ class PremiumAnalyticsService:
             return cached
 
         try:
+            # Get spending habits analysis
+            from .spending_habits_service import SpendingHabitsService
+            spending_service = SpendingHabitsService()
+            spending_analysis = spending_service.analyze_spending_habits(user_id, months=3)
+            
             # Reuse portfolio metrics for analysis
             metrics = self.get_portfolio_performance_metrics(user_id, None)
             holdings = metrics.get("holdings", [])
             sector_alloc = metrics.get("sector_allocation", {})
 
             # Choose a few candidate stocks from DB for buy/sell lists
+            # Apply spending-based preferences to stock selection
             candidates = list(Stock.objects.all().order_by("-market_cap")[:20])
-            buy_recs = self._build_buy_recommendations(candidates, risk_tolerance)
+            buy_recs = self._build_buy_recommendations(
+                candidates, risk_tolerance, spending_analysis
+            )
             sell_recs = self._build_sell_recommendations(holdings)
 
             rebalance_suggestions = self._build_rebalance_suggestions(sector_alloc, risk_tolerance)
             risk_assessment = self._build_risk_assessment(metrics, risk_tolerance)
             market_outlook = self._build_market_outlook()
 
+            # Get spending-based sector preferences
+            sector_weights = spending_service.get_spending_based_stock_preferences(
+                spending_analysis
+            )
+            
             result = {
                 "portfolio_analysis": {
                     "total_value": metrics["total_value"],
@@ -445,6 +479,13 @@ class PremiumAnalyticsService:
                 "rebalance_suggestions": rebalance_suggestions,
                 "risk_assessment": risk_assessment,
                 "market_outlook": market_outlook,
+                "spending_insights": {
+                    "discretionary_income": spending_analysis.get("discretionary_income", 0),
+                    "suggested_budget": spending_analysis.get("suggested_budget", 0),
+                    "spending_health": spending_analysis.get("spending_patterns", {}).get("spending_health", "unknown"),
+                    "top_categories": spending_analysis.get("top_categories", []),
+                    "sector_preferences": sector_weights,
+                },
             }
 
             cache.set(cache_key, result, self.CACHE_TTL)
@@ -483,8 +524,18 @@ class PremiumAnalyticsService:
         self,
         stocks: List[Stock],
         risk_tolerance: str,
+        spending_analysis: Optional[Dict[str, Any]] = None,
     ) -> List[Dict[str, Any]]:
         recs: List[Dict[str, Any]] = []
+        
+        # Get spending-based sector preferences if available
+        sector_weights = {}
+        if spending_analysis:
+            from .spending_habits_service import SpendingHabitsService
+            spending_service = SpendingHabitsService()
+            sector_weights = spending_service.get_spending_based_stock_preferences(
+                spending_analysis
+            )
 
         for stock in stocks[:8]:
             symbol = getattr(stock, "symbol", "UNKNOWN")
@@ -500,6 +551,11 @@ class PremiumAnalyticsService:
                 volatility=float(getattr(stock, "volatility", 20.0) or 20.0),
                 beginner_score=beginner_score,
             )
+            
+            # Boost score based on spending preferences
+            if sector_weights and sector in sector_weights:
+                spending_boost = sector_weights[sector] * 10  # Boost up to 10 points
+                ml_score = min(100, ml_score + spending_boost)
 
             if risk_tolerance == "low" and ml_score < 60:
                 continue
@@ -509,6 +565,72 @@ class PremiumAnalyticsService:
 
             target_price = price * 1.15 if price > 0 else 0.0
             expected_return = (target_price - price) / price * 100.0 if price > 0 else 0.0
+            
+            # Enhanced reasoning with spending insights
+            reasoning = "Attractive fundamentals and risk profile for your settings."
+            if spending_analysis and sector in sector_weights and sector_weights[sector] > 0.1:
+                reasoning += f" Aligned with your spending patterns in {sector} sector."
+            
+            # Week 4: Calculate Consumer Strength Score (0-100)
+            consumer_strength_score = 50.0  # Default
+            spending_growth = 0.0
+            options_flow_score = 0.0
+            earnings_score = 0.0
+            insider_score = 0.0
+            shap_explanation = None
+            prediction = None
+            
+            try:
+                # Get hybrid model predictions if available
+                from .hybrid_ml_predictor import hybrid_predictor
+                from .ml_service import MLService
+                
+                ml_service = MLService()
+                
+                # Get spending features
+                spending_features = ml_service._get_spending_features_for_ticker(symbol, spending_analysis)
+                
+                # Get prediction
+                import asyncio
+                try:
+                    loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                
+                prediction = loop.run_until_complete(
+                    hybrid_predictor.predict(symbol, spending_features)
+                )
+                
+                # Extract scores
+                contributions = prediction.get('feature_contributions', {})
+                spending_score = contributions.get('spending', 0.0)
+                options_score = contributions.get('options', 0.0)
+                earnings_score_val = contributions.get('earnings', 0.0)
+                insider_score_val = contributions.get('insider', 0.0)
+                
+                # Calculate Consumer Strength Score (weighted combination)
+                consumer_strength_score = (
+                    40 * max(0, min(100, (spending_score + 0.2) / 0.4 * 100)) +  # Spending: 40%
+                    30 * max(0, min(100, (options_score + 0.2) / 0.4 * 100)) +  # Options: 30%
+                    20 * max(0, min(100, (earnings_score_val + 0.2) / 0.4 * 100)) +  # Earnings: 20%
+                    10 * max(0, min(100, (insider_score_val + 0.2) / 0.4 * 100))  # Insider: 10%
+                )
+                
+                # Get spending growth
+                spending_growth = spending_features.get('spending_change_4w', 0.0) * 100
+                options_flow_score = options_score * 100
+                earnings_score = earnings_score_val * 100
+                insider_score = insider_score_val * 100
+                
+                # Get SHAP explanation if available
+                if prediction:
+                    shap_data = prediction.get('shap_explanation', {})
+                    if shap_data:
+                        shap_explanation = shap_data.get('explanation', None)
+                
+            except Exception as e:
+                logger.debug(f"Could not calculate Consumer Strength for {symbol}: {e}")
 
             recs.append(
                 {
@@ -516,7 +638,7 @@ class PremiumAnalyticsService:
                     "company_name": name,
                     "recommendation": "BUY",
                     "confidence": round(min(0.95, 0.5 + ml_score / 200.0), 2),
-                    "reasoning": "Attractive fundamentals and risk profile for your settings.",
+                    "reasoning": reasoning,
                     "target_price": round(target_price, 2),
                     "current_price": round(price, 2),
                     "expected_return": round(expected_return, 1),
@@ -528,8 +650,18 @@ class PremiumAnalyticsService:
                         beginner_score,
                     ),
                     "ml_score": ml_score,
+                    "spending_aligned": sector in sector_weights and sector_weights.get(sector, 0) > 0.1,
+                    "consumer_strength_score": consumer_strength_score,  # Week 4
+                    "spending_growth": spending_growth,  # Week 4
+                    "options_flow_score": options_flow_score,  # Week 4
+                    "earnings_score": earnings_score,  # Week 4
+                    "insider_score": insider_score,  # Week 4
+                    "shap_explanation": shap_explanation,  # Week 3
                 }
             )
+        
+        # Sort by ML score (spending-boosted)
+        recs.sort(key=lambda x: x['ml_score'], reverse=True)
 
         return recs
 

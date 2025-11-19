@@ -225,27 +225,40 @@ return scored_stocks
 except Exception as e:
 logger.error(f"Error in production R² scoring: {e}")
 return self.score_stocks_ml(stocks, market_conditions, user_profile)
-def score_stocks_ml(
-self,
-stocks: List[Dict[str, Any]],
-market_conditions: Dict[str, Any],
-user_profile: Dict[str, Any]
-) -> List[Dict[str, Any]]:
-"""
-Score stocks using the best available ML model
-Defaults to production R² model (R² = 0.023) if available
-Args:
-stocks: List of stocks to score
-market_conditions: Current market conditions
-user_profile: User's financial profile
-Returns:
-List of scored stocks with ML scores
-"""
-# Use production R² model if available (best performance)
-if self.production_r2_available and self.production_r2_model:
-return self.score_stocks_production_r2(stocks, market_conditions, user_profile)
-if not self.ml_available:
-return self._fallback_stock_scoring(stocks, market_conditions, user_profile)
+    def score_stocks_ml(
+        self,
+        stocks: List[Dict[str, Any]],
+        market_conditions: Dict[str, Any],
+        user_profile: Dict[str, Any],
+        spending_analysis: Optional[Dict[str, Any]] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Score stocks using the best available ML model with spending habits
+        NOW INCLUDES SPENDING-BASED PREDICTIVE MODEL (Your Competitive Moat!)
+        Args:
+            stocks: List of stocks to score
+            market_conditions: Current market conditions
+            user_profile: User's financial profile
+            spending_analysis: Optional spending habits analysis from transactions
+        Returns:
+            List of scored stocks with ML scores
+        """
+        # PRIORITY: Use spending-based predictor if available (YOUR COMPETITIVE ADVANTAGE)
+        try:
+            from .spending_trend_predictor import spending_predictor
+            if spending_predictor.model is not None:
+                logger.info("Using spending-based predictive model for stock scoring")
+                return self._score_with_spending_predictor(
+                    stocks, market_conditions, user_profile, spending_analysis
+                )
+        except Exception as e:
+            logger.warning(f"Spending predictor not available: {e}")
+        
+        # Use production R² model if available (best performance)
+        if self.production_r2_available and self.production_r2_model:
+            return self.score_stocks_production_r2(stocks, market_conditions, user_profile)
+        if not self.ml_available:
+            return self._fallback_stock_scoring(stocks, market_conditions, user_profile)
 try:
 # Try to use improved ML service first
 from .improved_ml_service import ImprovedMLService
@@ -257,8 +270,10 @@ if scored_stocks:
 logger.info("Used improved ML service for stock scoring")
 return scored_stocks
 # Fallback to original method
-# Create feature matrix for stocks
-stock_features = self._create_stock_features(stocks, market_conditions, user_profile)
+# Create feature matrix for stocks (enhanced with spending preferences if available)
+stock_features = self._create_stock_features(
+stocks, market_conditions, user_profile, spending_analysis
+)
 # Train stock scorer if needed
 if self.stock_scorer is None:
 self._train_stock_scorer()
@@ -273,12 +288,256 @@ scored_stocks.append({
 'ml_confidence': self._calculate_stock_confidence(stock_features[i]),
 'ml_reasoning': self._generate_ml_reasoning(stock_features[i], scores[i])
 })
-# Sort by ML score
-scored_stocks.sort(key=lambda x: x['ml_score'], reverse=True)
-return scored_stocks
-except Exception as e:
-logger.error(f"Error in ML stock scoring: {e}")
-return self._fallback_stock_scoring(stocks, market_conditions, user_profile)
+        # Sort by ML score
+        scored_stocks.sort(key=lambda x: x['ml_score'], reverse=True)
+        return scored_stocks
+    
+    def _score_with_spending_predictor(
+        self,
+        stocks: List[Dict[str, Any]],
+        market_conditions: Dict[str, Any],
+        user_profile: Dict[str, Any],
+        spending_analysis: Optional[Dict[str, Any]] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Score stocks using spending-based predictive model
+        NOW WITH WEEK 2: Hybrid ensemble (spending + options + earnings + insider)
+        This is your competitive moat - real consumer spending data + Smart Money signals!
+        """
+        import asyncio
+        
+        # Try hybrid model first (Week 2)
+        try:
+            from .hybrid_ml_predictor import hybrid_predictor
+            if hybrid_predictor.meta_learner is not None:
+                logger.info("Using hybrid ensemble model (Week 2) for stock scoring")
+                return self._score_with_hybrid_model(stocks, market_conditions, user_profile, spending_analysis)
+        except Exception as e:
+            logger.debug(f"Hybrid model not available, using spending-only: {e}")
+        
+        # Fallback to spending-only model (Week 1)
+        from .spending_trend_predictor import spending_predictor
+        from .spending_habits_service import SpendingHabitsService
+        
+        scored_stocks = []
+        spending_service = SpendingHabitsService()
+        
+        # Get aggregate spending trends for all users (for prediction)
+        # In production, this would be pre-computed and cached
+        for stock in stocks:
+            symbol = stock.get('symbol', '').upper()
+            
+            # Get spending features for this ticker
+            spending_features = self._get_spending_features_for_ticker(symbol, spending_analysis)
+            
+            # Predict using spending model
+            prediction = spending_predictor.predict_stock_return(spending_features)
+            
+            # Combine with existing scores
+            base_score = stock.get('beginner_friendly_score', 5.0) / 10.0
+            spending_score = prediction['predicted_return']
+            
+            # Normalize spending score to 0-1 range
+            spending_score_normalized = (spending_score + 0.2) / 0.4  # Assume returns in [-0.2, 0.2]
+            spending_score_normalized = max(0.0, min(1.0, spending_score_normalized))
+            
+            # Weighted combination: 60% spending predictor, 40% base score
+            final_score = 0.6 * spending_score_normalized + 0.4 * base_score
+            
+            scored_stocks.append({
+                **stock,
+                'ml_score': float(final_score),
+                'spending_score': float(spending_score_normalized),
+                'predicted_excess_return_4w': prediction['predicted_return'],
+                'ml_confidence': prediction['confidence'],
+                'ml_reasoning': f"Spending-based prediction: {prediction['reasoning']}",
+                'spending_insights': prediction.get('top_features', {})
+            })
+        
+        # Sort by ML score
+        scored_stocks.sort(key=lambda x: x['ml_score'], reverse=True)
+        return scored_stocks
+    
+    def _score_with_hybrid_model(
+        self,
+        stocks: List[Dict[str, Any]],
+        market_conditions: Dict[str, Any],
+        user_profile: Dict[str, Any],
+        spending_analysis: Optional[Dict[str, Any]] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Score stocks using Week 2 hybrid ensemble model
+        Combines: Spending + Options Flow + Earnings + Insider signals
+        """
+        import asyncio
+        from .hybrid_ml_predictor import hybrid_predictor
+        
+        scored_stocks = []
+        
+        # Process stocks (can be async in future)
+        for stock in stocks:
+            symbol = stock.get('symbol', '').upper()
+            
+            # Get spending features
+            spending_features = self._get_spending_features_for_ticker(symbol, spending_analysis)
+            
+            # Predict using hybrid model (async)
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            
+            prediction = loop.run_until_complete(
+                hybrid_predictor.predict(symbol, spending_features)
+            )
+            
+            # Combine with existing scores
+            base_score = stock.get('beginner_friendly_score', 5.0) / 10.0
+            hybrid_score = prediction['predicted_return']
+            
+            # Normalize hybrid score to 0-1 range
+            hybrid_score_normalized = (hybrid_score + 0.2) / 0.4
+            hybrid_score_normalized = max(0.0, min(1.0, hybrid_score_normalized))
+            
+            # Weighted combination: 70% hybrid predictor, 30% base score
+            final_score = 0.7 * hybrid_score_normalized + 0.3 * base_score
+            
+            # Extract feature contributions
+            contributions = prediction.get('feature_contributions', {})
+            
+            scored_stocks.append({
+                **stock,
+                'ml_score': float(final_score),
+                'hybrid_score': float(hybrid_score_normalized),
+                'spending_score': float(contributions.get('spending', 0.0)),
+                'options_score': float(contributions.get('options', 0.0)),
+                'earnings_score': float(contributions.get('earnings', 0.0)),
+                'insider_score': float(contributions.get('insider', 0.0)),
+                'predicted_excess_return_4w': prediction['predicted_return'],
+                'ml_confidence': prediction['confidence'],
+                'ml_reasoning': f"Hybrid ensemble: {prediction['reasoning']}",
+                'feature_contributions': contributions,
+                'stage1_predictions': prediction.get('stage1_predictions', {})
+            })
+        
+        # Sort by ML score
+        scored_stocks.sort(key=lambda x: x['ml_score'], reverse=True)
+        return scored_stocks
+    
+    def _get_spending_features_for_ticker(
+        self,
+        symbol: str,
+        spending_analysis: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, float]:
+        """
+        Get spending features for a specific ticker
+        Uses aggregate spending data from all users
+        """
+        from .spending_trend_predictor import SPENDING_TO_STOCKS
+        from django.utils import timezone
+        from datetime import timedelta
+        from .banking_models import BankTransaction
+        
+        # Find which spending categories map to this ticker
+        relevant_categories = []
+        for category, tickers in SPENDING_TO_STOCKS.items():
+            if symbol in tickers:
+                relevant_categories.append(category)
+        
+        if not relevant_categories:
+            # Return default features
+            return {
+                'spending_change_1w': 0.0,
+                'spending_change_4w': 0.0,
+                'spending_change_12w': 0.0,
+                'spending_momentum': 0.0,
+                'spending_volatility': 0.0,
+                'total_spending': 0.0,
+                'user_count': 0.0,
+                'user_change_1w': 0.0,
+                'user_change_4w': 0.0
+            }
+        
+        # Get recent spending for these categories
+        end_date = timezone.now().date()
+        start_date = end_date - timedelta(weeks=12)
+        
+        # Get current period spending
+        current_transactions = BankTransaction.objects.filter(
+            transaction_type='DEBIT',
+            transaction_date__gte=end_date - timedelta(weeks=1),
+            transaction_date__lte=end_date
+        )
+        
+        current_spending = 0
+        current_users = set()
+        for txn in current_transactions:
+            merchant = (txn.merchant_name or '').upper()
+            category = (txn.category or '').upper()
+            for cat in relevant_categories:
+                if cat in merchant or cat in category:
+                    current_spending += abs(float(txn.amount))
+                    current_users.add(txn.user_id)
+                    break
+        
+        # Get 1 week ago spending
+        week_ago_start = end_date - timedelta(weeks=2)
+        week_ago_end = end_date - timedelta(weeks=1)
+        week_ago_transactions = BankTransaction.objects.filter(
+            transaction_type='DEBIT',
+            transaction_date__gte=week_ago_start,
+            transaction_date__lte=week_ago_end
+        )
+        
+        week_ago_spending = 0
+        week_ago_users = set()
+        for txn in week_ago_transactions:
+            merchant = (txn.merchant_name or '').upper()
+            category = (txn.category or '').upper()
+            for cat in relevant_categories:
+                if cat in merchant or cat in category:
+                    week_ago_spending += abs(float(txn.amount))
+                    week_ago_users.add(txn.user_id)
+                    break
+        
+        # Get 4 weeks ago spending
+        month_ago_start = end_date - timedelta(weeks=5)
+        month_ago_end = end_date - timedelta(weeks=4)
+        month_ago_transactions = BankTransaction.objects.filter(
+            transaction_type='DEBIT',
+            transaction_date__gte=month_ago_start,
+            transaction_date__lte=month_ago_end
+        )
+        
+        month_ago_spending = 0
+        month_ago_users = set()
+        for txn in month_ago_transactions:
+            merchant = (txn.merchant_name or '').upper()
+            category = (txn.category or '').upper()
+            for cat in relevant_categories:
+                if cat in merchant or cat in category:
+                    month_ago_spending += abs(float(txn.amount))
+                    month_ago_users.add(txn.user_id)
+                    break
+        
+        # Calculate features
+        spending_change_1w = (current_spending - week_ago_spending) / week_ago_spending if week_ago_spending > 0 else 0
+        spending_change_4w = (current_spending - month_ago_spending) / month_ago_spending if month_ago_spending > 0 else 0
+        user_change_1w = len(current_users) - len(week_ago_users)
+        user_change_4w = len(current_users) - len(month_ago_users)
+        
+        return {
+            'spending_change_1w': float(spending_change_1w),
+            'spending_change_4w': float(spending_change_4w),
+            'spending_change_12w': 0.0,  # Would need 12-week data
+            'spending_momentum': float(spending_change_1w),  # Simplified
+            'spending_volatility': abs(float(spending_change_1w)),  # Simplified
+            'total_spending': float(current_spending),
+            'user_count': float(len(current_users)),
+            'user_change_1w': float(user_change_1w),
+            'user_change_4w': float(user_change_4w)
+        }
 def _extract_market_features(self, market_data: Dict[str, Any]) -> List[float]:
 """Extract enhanced numerical features from market data for ML models"""
 features = []
@@ -349,9 +608,10 @@ def _create_portfolio_features(
 self, 
 user_profile: Dict[str, Any], 
 market_conditions: Dict[str, Any],
-available_stocks: List[Dict[str, Any]]
+available_stocks: List[Dict[str, Any]],
+spending_analysis: Optional[Dict[str, Any]] = None
 ) -> np.ndarray:
-"""Create feature matrix for portfolio optimization"""
+"""Create feature matrix for portfolio optimization with spending habits"""
 features = []
 # Enhanced user profile features
 age = user_profile.get('age', 30)
@@ -408,7 +668,37 @@ goal_weights = {
 'Travel Fund': 0.1
 }
 goal_score = sum(goal_weights.get(goal, 0.1) for goal in specific_goals) / len(specific_goals) if specific_goals else 0.2
-# Create enhanced feature vector
+
+# Add spending habits features if available
+spending_features = []
+if spending_analysis:
+    discretionary_income = spending_analysis.get('discretionary_income', 0)
+    monthly_income = spending_analysis.get('monthly_income', 0)
+    suggested_budget = spending_analysis.get('suggested_budget', 0)
+    spending_health = spending_analysis.get('spending_patterns', {}).get('spending_health', 'unknown')
+    
+    # Normalize spending features
+    if monthly_income > 0:
+        discretionary_ratio = discretionary_income / monthly_income
+        budget_ratio = suggested_budget / monthly_income if monthly_income > 0 else 0
+    else:
+        discretionary_ratio = 0.3  # Default assumption
+        budget_ratio = 0.09  # 30% of 30% discretionary
+    
+    # Spending health encoding
+    health_encoding = {'excellent': 1.0, 'good': 0.75, 'fair': 0.5, 'poor': 0.25, 'unknown': 0.5}
+    health_score = health_encoding.get(spending_health, 0.5)
+    
+    spending_features = [
+        discretionary_ratio,  # Discretionary income ratio
+        budget_ratio,  # Suggested budget ratio
+        health_score,  # Spending health score
+    ]
+else:
+    # Default spending features when no analysis available
+    spending_features = [0.3, 0.09, 0.5]  # Default assumptions
+
+# Create enhanced feature vector with spending habits
 user_features = [
 age / 100.0, # Normalize age
 income_encoding.get(income_bracket, 0.5),
@@ -417,7 +707,7 @@ horizon_encoding.get(investment_horizon, 0.7),
 experience_encoding.get(investment_experience, 0.2),
 tax_encoding.get(tax_bracket, 0.4),
 goal_score
-]
+] + spending_features  # Add spending habits features
 # Market condition features
 market_features = self._extract_market_features(market_conditions)
 # Stock market features (aggregate)
@@ -431,15 +721,16 @@ else:
 stock_features = [5.0, 1.0, 0]
 # Combine all features
 all_features = user_features + market_features + stock_features
-# Ensure we always return exactly 25 features for enhanced portfolio optimization
-while len(all_features) < 25:
+# Ensure we always return exactly 28 features (added 3 spending features)
+while len(all_features) < 28:
 all_features.append(0.0) # Pad with zeros if needed
-return np.array(all_features[:25]).reshape(1, -1)
+return np.array(all_features[:28]).reshape(1, -1)
 def _create_stock_features(
 self, 
 stocks: List[Dict[str, Any]], 
 market_conditions: Dict[str, Any],
-user_profile: Dict[str, Any]
+user_profile: Dict[str, Any],
+spending_analysis: Optional[Dict[str, Any]] = None
 ) -> np.ndarray:
 """Create enhanced feature matrix for stock scoring with ESG, momentum, and value factors"""
 features = []
@@ -470,10 +761,24 @@ risk_tolerance = user_profile.get('risk_tolerance', 'Moderate')
 risk_encoding = {'Conservative': 0.3, 'Moderate': 0.6, 'Aggressive': 0.9}
 risk_score = risk_encoding.get(risk_tolerance, 0.6)
 stock_features.extend([age, risk_score])
-# Ensure each stock has exactly 20 features (increased from 15)
-while len(stock_features) < 20:
+
+# Add spending-based preferences if available
+if spending_analysis:
+    from .spending_habits_service import SpendingHabitsService
+    spending_service = SpendingHabitsService()
+    sector_weights = spending_service.get_spending_based_stock_preferences(spending_analysis)
+    
+    # Get stock sector and apply weight
+    stock_sector = stock.get('sector', 'Unknown')
+    sector_preference = sector_weights.get(stock_sector, 0.0)
+    stock_features.append(sector_preference)  # Add spending-based sector preference
+else:
+    stock_features.append(0.0)  # No spending preference
+
+# Ensure each stock has exactly 21 features (added 1 spending feature)
+while len(stock_features) < 21:
 stock_features.append(0.0) # Pad with zeros if needed
-features.append(stock_features[:20]) # Truncate if more than 20
+features.append(stock_features[:21]) # Truncate if more than 21
 return np.array(features)
 def _train_market_regime_model(self):
 """Train the enhanced market regime prediction model with 20 features"""

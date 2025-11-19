@@ -331,10 +331,10 @@ def resolve_chat_messages(self, info, session_id):
 
 
 def resolve_user(self, info, id):
-    try:
-        return User.objects.get(id=id)
-    except User.DoesNotExist:
-        return None
+    """Get a user by ID (using DataLoader to prevent N+1)"""
+    from .dataloaders import get_user_loader
+    user_loader = get_user_loader()
+    return user_loader.load(id)
 
 
 def resolve_user_posts(self, info, user_id):
@@ -386,12 +386,10 @@ def resolve_stocks(self, info, search=None):
 
 
 def resolve_stock(self, info, symbol):
-    """Get a specific stock by symbol"""
-
-    try:
-        return Stock.objects.get(symbol=symbol.upper())
-    except Stock.DoesNotExist:
-        return None
+    """Get a specific stock by symbol (using DataLoader to prevent N+1)"""
+    from .dataloaders import get_stock_loader
+    stock_loader = get_stock_loader()
+    return stock_loader.load(symbol.upper())
 
 
 def resolve_my_watchlist(self, info):
@@ -415,15 +413,50 @@ def resolve_my_watchlist(self, info):
 
 
 def resolve_beginner_friendly_stocks(self, info):
-    """Get stocks suitable for beginner investors (under $30k/year)"""
-
-    return Stock.objects.filter(
-
-    beginner_friendly_score__gte=65,  # Moderate beginner-friendly score
-
-    market_cap__gte=10000000000,  # Mid to large cap companies (>$10B)
-
-    ).order_by('-beginner_friendly_score')[:20]
+    """Get stocks suitable for beginner investors, personalized with spending habits"""
+    user = info.context.user
+    user_id = user.id if user and not user.is_anonymous else 1
+    
+    # Get spending habits analysis for personalization (using sync version for GraphQL)
+    spending_analysis = None
+    sector_weights = {}
+    try:
+        from .spending_habits_service import SpendingHabitsService
+        spending_service = SpendingHabitsService()
+        # Use sync version for GraphQL resolvers (async version available for async contexts)
+        spending_analysis = spending_service.analyze_spending_habits(user_id, months=3)
+        sector_weights = spending_service.get_spending_based_stock_preferences(spending_analysis)
+    except Exception as e:
+        logger.warning(f"Could not get spending analysis for beginner stocks: {e}")
+    
+    # OPTIMIZATION: Use DataLoader for stock queries to prevent N+1
+    from .dataloaders import get_stock_loader
+    stock_loader = get_stock_loader()
+    
+    # Base query: beginner-friendly stocks
+    stocks = Stock.objects.filter(
+        beginner_friendly_score__gte=65,  # Moderate beginner-friendly score
+        market_cap__gte=10000000000,  # Mid to large cap companies (>$10B)
+    )
+    
+    # Convert to list to apply spending-based sorting
+    stocks_list = list(stocks[:50])  # Get more candidates for sorting
+    
+    # Sort by spending-aligned score if we have spending data
+    if sector_weights:
+        def get_personalized_score(stock):
+            base_score = getattr(stock, 'beginner_friendly_score', 65)
+            sector = getattr(stock, 'sector', 'Unknown')
+            
+            # Boost score for sectors matching spending patterns
+            if sector in sector_weights:
+                spending_boost = sector_weights[sector] * 20  # Boost up to 20 points
+                return base_score + spending_boost
+            return base_score
+        
+        stocks_list.sort(key=get_personalized_score, reverse=True)
+    
+    return stocks_list[:20]
 
 
 def resolve_rust_recommendations(self, info):

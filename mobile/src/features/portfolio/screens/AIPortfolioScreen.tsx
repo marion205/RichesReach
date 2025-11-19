@@ -21,6 +21,7 @@ import { useMutation, useQuery, gql, useApolloClient } from '@apollo/client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import TradingButton from '../../../components/forms/TradingButton';
 import { StableNumberInput } from '../../../components/StableNumberInput';
+import SignalContributionChart from '../../../components/charts/SignalContributionChart';
 
 // Module-level sentinel to avoid React 18 StrictMode double-fire of auto-generation in dev
 const GEN_ONCE_SENTINEL = { fired: false };
@@ -94,6 +95,12 @@ const GET_AI_RECOMMENDATIONS = gql`
         currentPrice
         expectedReturn    # decimal like 0.05 = 5%
         allocation        # percentage allocation like 25.3
+        consumerStrengthScore
+        spendingGrowth
+        optionsFlowScore
+        earningsScore
+        insiderScore
+        shapExplanation
       }
       sellRecommendations {
         symbol
@@ -115,6 +122,16 @@ const GET_AI_RECOMMENDATIONS = gql`
         overallSentiment
         confidence
         keyFactors
+      }
+      spendingInsights {
+        discretionaryIncome
+        suggestedBudget
+        spendingHealth
+        topCategories {
+          category
+          amount
+        }
+        sectorPreferences
       }
     }
   }
@@ -234,6 +251,16 @@ interface AIData {
     [key: string]: unknown;
   }>;
   riskAssessment?: RiskAssessment;
+  spendingInsights?: {
+    discretionaryIncome?: number;
+    suggestedBudget?: number;
+    spendingHealth?: string;
+    topCategories?: Array<{
+      category?: string;
+      amount?: number;
+    }>;
+    sectorPreferences?: Record<string, number>;
+  };
   [key: string]: unknown;
 }
 
@@ -886,6 +913,33 @@ const StockCard = React.memo(({ item, showPersonalized, optResult }: { item: Buy
       )}
     
     {!!item.reasoning && <Text style={styles.reasoning}>{item.reasoning}</Text>}
+    
+    {/* Week 3: Signal Contribution Chart */}
+    {(item.consumerStrengthScore != null || item.spendingGrowth != null || item.optionsFlowScore != null) && (
+      <View style={{ marginTop: 12, marginBottom: 8 }}>
+        <SignalContributionChart
+          symbol={item.symbol}
+          contributions={[
+            { name: 'Spending', contribution: item.spendingGrowth || 0, color: '#22c55e', description: 'Consumer spending growth' },
+            { name: 'Options Flow', contribution: item.optionsFlowScore || 0, color: '#3b82f6', description: 'Smart money signals' },
+            { name: 'Earnings', contribution: item.earningsScore || 0, color: '#f59e0b', description: 'Earnings surprise history' },
+            { name: 'Insider', contribution: item.insiderScore || 0, color: '#8b5cf6', description: 'Insider trading activity' },
+          ].filter(c => c.contribution > 0)}
+          totalScore={item.consumerStrengthScore ? item.consumerStrengthScore / 100 : undefined}
+          reasoning={item.shapExplanation || item.reasoning}
+        />
+      </View>
+    )}
+    
+    {/* Consumer Strength Score Badge */}
+    {item.consumerStrengthScore != null && (
+      <View style={[styles.tag, { backgroundColor: item.consumerStrengthScore > 70 ? COLORS.success : item.consumerStrengthScore > 50 ? '#f59e0b' : COLORS.danger, marginTop: 8 }]}>
+        <Text style={styles.tagText}>
+          Consumer Strength: {Math.round(item.consumerStrengthScore)}/100
+        </Text>
+      </View>
+    )}
+    
     <View style={styles.stockTags}>
       {!!item.recommendation && (
         <View style={[styles.tag, { backgroundColor: COLORS.success }]}>
@@ -2171,6 +2225,57 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
         </View>
       </View>
 
+      {/* Spending Insights */}
+      {ai?.spendingInsights && (
+        <View style={styles.spendingInsightsCard}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <Icon name="dollar-sign" size={18} color={COLORS.primary} />
+            <Text style={styles.sectionTitle}>Spending-Based Budget</Text>
+          </View>
+          {ai.spendingInsights.suggestedBudget != null && ai.spendingInsights.suggestedBudget > 0 && (
+            <View style={styles.spendingItem}>
+              <Text style={styles.spendingLabel}>Suggested Monthly Investment</Text>
+              <Text style={[styles.spendingValue, { color: COLORS.primary, fontWeight: '700' }]}>
+                ${ai.spendingInsights.suggestedBudget.toFixed(2)}
+              </Text>
+            </View>
+          )}
+          {ai.spendingInsights.discretionaryIncome != null && (
+            <View style={styles.spendingItem}>
+              <Text style={styles.spendingLabel}>Discretionary Income</Text>
+              <Text style={styles.spendingValue}>
+                ${ai.spendingInsights.discretionaryIncome.toFixed(2)}/month
+              </Text>
+            </View>
+          )}
+          {ai.spendingInsights.spendingHealth && (
+            <View style={styles.spendingItem}>
+              <Text style={styles.spendingLabel}>Spending Health</Text>
+              <Text style={[styles.spendingValue, {
+                color: ai.spendingInsights.spendingHealth === 'excellent' ? COLORS.success :
+                       ai.spendingInsights.spendingHealth === 'good' ? '#10B981' :
+                       ai.spendingInsights.spendingHealth === 'fair' ? COLORS.warning : COLORS.danger
+              }]}>
+                {ai.spendingInsights.spendingHealth.charAt(0).toUpperCase() + ai.spendingInsights.spendingHealth.slice(1)}
+              </Text>
+            </View>
+          )}
+          {ai.spendingInsights.topCategories && ai.spendingInsights.topCategories.length > 0 && (
+            <View style={{ marginTop: 8 }}>
+              <Text style={[styles.spendingLabel, { marginBottom: 4 }]}>Top Spending Categories</Text>
+              {ai.spendingInsights.topCategories.slice(0, 3).map((cat, idx) => (
+                <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
+                  <Text style={{ fontSize: 12, color: COLORS.subtext }}>{cat.category}</Text>
+                  <Text style={{ fontSize: 12, color: COLORS.text, fontWeight: '600' }}>
+                    ${cat.amount?.toFixed(2)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+      )}
+
       {/* Sector breakdown */}
       <View style={styles.sectorSection}>
         <Text style={styles.sectionTitle}>Portfolio Allocation</Text>
@@ -2984,5 +3089,31 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     marginLeft: 6,
+  },
+  
+  // Spending insights styles
+  spendingInsightsCard: {
+    backgroundColor: COLORS.pill,
+    borderRadius: 8,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  spendingItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  spendingLabel: {
+    fontSize: 13,
+    color: COLORS.subtext,
+    flex: 1,
+  },
+  spendingValue: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.text,
   },
 });

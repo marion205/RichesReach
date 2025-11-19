@@ -128,6 +128,9 @@ class BankTransaction(models.Model):
             models.Index(fields=['user', 'posted_date']),
             models.Index(fields=['bank_account', 'posted_date']),
             models.Index(fields=['user', '-posted_date']),  # Descending for recent first
+            # OPTIMIZATION: Composite index for spending analysis queries
+            models.Index(fields=['user', 'transaction_date', 'transaction_type']),
+            models.Index(fields=['user', 'transaction_type', 'transaction_date']),  # Alternative order for different query patterns
         ]
 
     def __str__(self):

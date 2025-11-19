@@ -248,8 +248,9 @@ class PremiumQueries(graphene.ObjectType):
             raise Exception("Premium subscription required")
 
         filters = {k: v for k, v in kwargs.items() if v is not None}
+        user_id = user.id if user and not user.is_anonymous else None
         analytics_service = PremiumAnalyticsService()
-        return analytics_service.get_advanced_stock_screening(filters)
+        return analytics_service.get_advanced_stock_screening(filters, user_id=user_id)
 
     def resolve_ai_recommendations(self, info, risk_tolerance="medium"):
         user = getattr(info.context, "user", None)

@@ -23,6 +23,11 @@ DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '127.0.0.1,localhost,10.0.0.64,192.168.1.151,0.0.0.0').split(',')
 # Frontend URL for email links
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+# Feature Flags - Week 4 Beta Launch
+ENABLE_HYBRID_ML_MODEL = os.getenv('ENABLE_HYBRID_ML_MODEL', 'true').lower() == 'true'
+ENABLE_CONSUMER_STRENGTH_SCORE = os.getenv('ENABLE_CONSUMER_STRENGTH_SCORE', 'true').lower() == 'true'
+ENABLE_SHAP_EXPLAINABILITY = os.getenv('ENABLE_SHAP_EXPLAINABILITY', 'true').lower() == 'true'
+
 # Application definition
 INSTALLED_APPS = [
 'django.contrib.admin',
@@ -84,6 +89,11 @@ if DATABASE_URL:
                 'PASSWORD': match.group(2),
                 'HOST': match.group(3),
                 'PORT': match.group(4),
+                # OPTIMIZATION: Connection pooling
+                'CONN_MAX_AGE': 600,
+                'OPTIONS': {
+                    'connect_timeout': 10,
+                },
             }
         }
     else:
@@ -98,6 +108,11 @@ if DATABASE_URL:
                     'PASSWORD': '',
                     'HOST': match.group(2),
                     'PORT': match.group(3),
+                    # OPTIMIZATION: Connection pooling
+                    'CONN_MAX_AGE': 600,
+                    'OPTIONS': {
+                        'connect_timeout': 10,
+                    },
                 }
             }
         else:
@@ -125,6 +140,12 @@ else:
                 'PASSWORD': DB_PASSWORD,
                 'HOST': DB_HOST,
                 'PORT': DB_PORT,
+                # OPTIMIZATION: Connection pooling - reuse connections for 600 seconds (10 minutes)
+                # This reduces connection overhead and improves performance under load
+                'CONN_MAX_AGE': 600,
+                'OPTIONS': {
+                    'connect_timeout': 10,
+                },
             }
         }
     else:

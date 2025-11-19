@@ -35,13 +35,15 @@ model_name='portfolio',
 model_name='portfolio',
         name='user',
 ),
-        migrations.RemoveField(
-model_name='portfolioposition',
-        name='portfolio',
-),
+        # Fix: Alter unique_together BEFORE removing the field
+        # This prevents the error when trying to access the 'portfolio' field
         migrations.AlterUniqueTogether(
         name='portfolioposition',
         unique_together=None,
+),
+        migrations.RemoveField(
+model_name='portfolioposition',
+        name='portfolio',
 ),
         migrations.RemoveField(
 model_name='portfolioposition',
@@ -128,19 +130,20 @@ new_name='added_at',
 model_name='stock',
         name='current_price',
 ),
-        migrations.AlterUniqueTogether(
-        name='watchlist',
-        unique_together={('user', 'stock')},
+        # Fix: Add 'stock' field BEFORE altering unique_together
+        migrations.AddField(
+model_name='watchlist',
+        name='stock',
+field=models.ForeignKey(default=1, on_delete=django.db.models.deletion.CASCADE, related_name='watchlisted_by', to='core.stock'),
 ),
         migrations.AddField(
 model_name='watchlist',
         name='notes',
 field=models.TextField(blank=True, null=True),
 ),
-        migrations.AddField(
-model_name='watchlist',
-        name='stock',
-field=models.ForeignKey(default=1, on_delete=django.db.models.deletion.CASCADE, related_name='watchlisted_by', to='core.stock'),
+        migrations.AlterUniqueTogether(
+        name='watchlist',
+        unique_together={('user', 'stock')},
 ),
         migrations.AlterField(
 model_name='incomeprofile',

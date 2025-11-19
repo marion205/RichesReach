@@ -100,13 +100,15 @@ return self._get_fallback_market_regime()
 def optimize_portfolio_ml(
 self, 
 user_profile: Dict, 
-available_stocks: Optional[List[Dict]] = None
+available_stocks: Optional[List[Dict]] = None,
+spending_analysis: Optional[Dict] = None
 ) -> Dict:
 """
-Optimize portfolio using ML models
+Optimize portfolio using ML models with spending habits analysis
 Args:
 user_profile: User's financial profile
 available_stocks: Optional list of available stocks
+spending_analysis: Optional spending habits analysis from transactions
 Returns:
 Optimized portfolio allocation
 """
@@ -115,9 +117,9 @@ return self._get_fallback_portfolio_optimization(user_profile)
 try:
 # Get market conditions
 market_conditions = self.market_data_service.get_market_regime_indicators()
-# Use ML service to optimize portfolio
+# Use ML service to optimize portfolio (with spending analysis if available)
 optimization = self.ml_service.optimize_portfolio_allocation(
-user_profile, market_conditions, available_stocks or []
+user_profile, market_conditions, available_stocks or [], spending_analysis
 )
 return {
 **optimization,
@@ -131,13 +133,15 @@ return self._get_fallback_portfolio_optimization(user_profile)
 def score_stocks_ml(
 self, 
 stocks: List[Dict], 
-user_profile: Dict
+user_profile: Dict,
+spending_analysis: Optional[Dict] = None
 ) -> List[Dict]:
 """
-Score stocks using ML models
+Score stocks using ML models with spending habits analysis
 Args:
 stocks: List of stocks to score
 user_profile: User's financial profile
+spending_analysis: Optional spending habits analysis from transactions
 Returns:
 List of scored stocks with ML scores
 """
@@ -146,8 +150,10 @@ return self._get_fallback_stock_scoring(stocks, user_profile)
 try:
 # Get market conditions
 market_conditions = self.market_data_service.get_market_regime_indicators()
-# Use ML service to score stocks
-scored_stocks = self.ml_service.score_stocks_ml(stocks, market_conditions, user_profile)
+# Use ML service to score stocks (with spending analysis if available)
+scored_stocks = self.ml_service.score_stocks_ml(
+stocks, market_conditions, user_profile, spending_analysis
+)
 return scored_stocks
 except Exception as e:
 logger.error(f"Error in ML stock scoring: {e}")

@@ -149,6 +149,7 @@ type Stock = {
   };
 };
 
+// Beginner Friendly stocks (now personalized with spending habits)
 const GET_BEGINNER_FRIENDLY_STOCKS = gql`
   query GetBeginnerFriendlyStocks {
     beginnerFriendlyStocks {
@@ -161,6 +162,7 @@ const GET_BEGINNER_FRIENDLY_STOCKS = gql`
       dividendYield
       beginnerFriendlyScore
       currentPrice
+      spendingAligned
       beginnerScoreBreakdown {
         score
         factors {
@@ -194,10 +196,10 @@ const GET_BEGINNER_FRIENDLY_STOCKS_ALT = gql`
   }
 `;
 
-// AI-powered stock recommendations
+// AI-powered stock recommendations (with profile for personalization)
 const GET_AI_STOCK_RECOMMENDATIONS = gql`
-  query GetAIStockRecommendations {
-    aiRecommendations {
+  query GetAIStockRecommendations($profile: ProfileInput, $usingDefaults: Boolean) {
+    aiRecommendations(profile: $profile, usingDefaults: $usingDefaults) {
       buyRecommendations {
         symbol
         companyName
@@ -208,12 +210,23 @@ const GET_AI_STOCK_RECOMMENDATIONS = gql`
         currentPrice
         expectedReturn
         allocation
+        spendingAligned
+      }
+      spendingInsights {
+        discretionaryIncome
+        suggestedBudget
+        spendingHealth
+        topCategories {
+          category
+          amount
+        }
+        sectorPreferences
       }
     }
   }
 `;
 
-// ML-powered stock screening
+// ML-powered stock screening (now personalized with spending habits)
 const GET_ML_STOCK_SCREENING = gql`
   query GetMLStockScreening($limit: Int) {
     advancedStockScreening(limit: $limit, sortBy: "ml_score") {
@@ -226,6 +239,7 @@ const GET_ML_STOCK_SCREENING = gql`
       beginnerFriendlyScore
       currentPrice
       mlScore
+      spendingAligned
     }
   }
 `;
@@ -583,6 +597,51 @@ interface OptionOrder {
       errorPolicy: 'all'
     });
 
+  // User profile for income-based recommendations (load first)
+  const { data: userProfileData, loading: userProfileLoading } = useQuery(GET_USER_PROFILE, {
+    fetchPolicy: 'cache-first',
+    errorPolicy: 'all'
+  });
+
+  // Get user profile for personalized recommendations
+  const userProfile = userProfileData?.me?.incomeProfile;
+  
+  // Build profile input for AI recommendations (same logic as AIPortfolioScreen)
+  const mapHorizonToYears = useCallback((s?: string): number => {
+    if (!s) return 5;
+    if (s.includes('10+')) return 12;
+    if (s.includes('5-10')) return 8;
+    if (s.includes('3-5')) return 4;
+    if (s.includes('1-3')) return 2;
+    return 5;
+  }, []);
+  
+  const profileInput = useMemo(() => {
+    const p = userProfile || {};
+    return {
+      riskTolerance: p?.riskTolerance ?? 'Moderate',
+      investmentHorizonYears: mapHorizonToYears(p?.investmentHorizon),
+      age: typeof p?.age === 'number' ? p.age : 30,
+      incomeBracket: p?.incomeBracket ?? 'Unknown',
+      investmentGoals: Array.isArray(p?.investmentGoals) ? p.investmentGoals : [],
+    };
+  }, [userProfile, mapHorizonToYears]);
+  
+  const usingDefaults = !userProfile || !userProfile.riskTolerance || !userProfile.investmentHorizon;
+
+  // AI-powered recommendations for Browse All tab (with profile personalization)
+  const { data: aiRecommendationsData, loading: aiRecommendationsLoading, error: aiRecommendationsError } =
+    useQuery(GET_AI_STOCK_RECOMMENDATIONS, {
+      variables: {
+        profile: profileInput,
+        usingDefaults: usingDefaults
+      },
+      skip: userProfileLoading, // Wait for profile to load
+      fetchPolicy: 'cache-first', // Use cache first for faster loads
+      nextFetchPolicy: 'cache-first', // Keep using cache for subsequent loads
+      errorPolicy: 'all'
+    });
+
   // ML-powered screening for Beginner Friendly tab
   const { data: mlScreeningData, loading: mlScreeningLoading, error: mlScreeningError } =
     useQuery(GET_ML_STOCK_SCREENING, {
@@ -591,12 +650,6 @@ interface OptionOrder {
       nextFetchPolicy: 'cache-first', // Keep using cache for subsequent loads
       errorPolicy: 'all'
     });
-
-  // User profile for income-based recommendations
-  const { data: userProfileData, loading: userProfileLoading } = useQuery(GET_USER_PROFILE, {
-    fetchPolicy: 'cache-first',
-    errorPolicy: 'all'
-  });
 
   // Research queries
   const { data: researchData, loading: researchLoading, error: researchError, refetch: refetchResearch } = useQuery(RESEARCH_QUERY, {

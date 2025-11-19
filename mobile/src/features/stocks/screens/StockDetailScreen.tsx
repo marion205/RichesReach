@@ -31,6 +31,9 @@ import { debounce } from 'lodash-es';
 import { StockMomentsIntegration } from './StockMomentsIntegration';
 import logger from '../../../utils/logger';
 import { GestureEventPayload } from 'react-native-gesture-handler';
+import ConsumerSpendingSurgeChart from '../../../components/charts/ConsumerSpendingSurgeChart';
+import SmartMoneyFlowChart from '../../../components/charts/SmartMoneyFlowChart';
+import { useQuery, gql } from '@apollo/client';
 
 const { width } = Dimensions.get('window');
 
@@ -1161,6 +1164,7 @@ export default function StockDetailScreen({ navigation, route }: StockDetailScre
     { key: 'chart', title: 'Chart', icon: tabIcons.chart },
     { key: 'financials', title: 'Financials', icon: tabIcons.financials },
     { key: 'trends', title: 'Trends', icon: tabIcons.trends },
+    { key: 'insights', title: 'AI Insights', icon: tabIcons.trends },  // Week 3: AI Insights tab
     { key: 'trade', title: 'Trade', icon: tabIcons.trade },
   ]);
 
@@ -1170,6 +1174,47 @@ export default function StockDetailScreen({ navigation, route }: StockDetailScre
   const [chartLoading, setChartLoading] = useState(false);
   const [stockError, setStockError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Week 3: Fetch stock analysis data for charts
+  const GET_STOCK_ANALYSIS = gql`
+    query GetStockAnalysis($symbol: String!) {
+      stockAnalysis(symbol: $symbol) {
+        symbol
+        spendingData {
+          date
+          spending
+          spendingChange
+          price
+          priceChange
+        }
+        optionsFlowData {
+          date
+          price
+          unusualVolumePercent
+          sweepCount
+          putCallRatio
+        }
+        signalContributions {
+          name
+          contribution
+          color
+          description
+        }
+        shapValues {
+          feature
+          value
+          importance
+        }
+        shapExplanation
+      }
+    }
+  `;
+
+  const { data: analysisData, loading: analysisLoading } = useQuery(GET_STOCK_ANALYSIS, {
+    variables: { symbol },
+    skip: !symbol,
+    fetchPolicy: 'cache-first',
+  });
 
   useEffect(() => {
     fetchStockData();
@@ -1279,6 +1324,38 @@ export default function StockDetailScreen({ navigation, route }: StockDetailScre
         analystData={stockData?.analystRatings}
       />
     ),
+    insights: () => {
+      const analysis = analysisData?.stockAnalysis;
+      const spendingData = analysis?.spendingData || [];
+      const optionsFlowData = analysis?.optionsFlowData || [];
+      
+      // Extract price data from options flow data
+      const priceData = optionsFlowData.map((opt: any) => ({
+        date: opt.date,
+        price: opt.price
+      }));
+      
+      return (
+        <View style={{ padding: 16 }}>
+          <ConsumerSpendingSurgeChart
+            symbol={symbol}
+            spendingData={spendingData}
+            category={stockData?.sector}
+          />
+          <SmartMoneyFlowChart
+            symbol={symbol}
+            priceData={priceData.length > 0 ? priceData : spendingData.map((s: any) => ({ date: s.date, price: s.price }))}
+            optionsFlowData={optionsFlowData}
+          />
+          {analysisLoading && (
+            <View style={{ padding: 20, alignItems: 'center' }}>
+              <ActivityIndicator size="small" color="#00cc99" />
+              <Text style={{ marginTop: 8, color: '#666' }}>Loading AI insights...</Text>
+            </View>
+          )}
+        </View>
+      );
+    },
     trade: () => (
       <TradeRoute
         symbol={symbol}

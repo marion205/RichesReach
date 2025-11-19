@@ -64,19 +64,25 @@ user_profile = {
 'risk_tolerance': income_profile.risk_tolerance,
 'investment_horizon': income_profile.investment_horizon
 }
+# Get spending habits analysis
+from .spending_habits_service import SpendingHabitsService
+spending_service = SpendingHabitsService()
+spending_analysis = spending_service.analyze_spending_habits(user.id, months=3)
+logger.info(f"Spending analysis for user {user.id}: discretionary=${spending_analysis.get('discretionary_income', 0):.2f}, suggested_budget=${spending_analysis.get('suggested_budget', 0):.2f}")
+
 # Get available stocks for analysis
 available_stocks = list(Stock.objects.filter(
 beginner_friendly_score__isnull=False
 ).values('id', 'symbol', 'name', 'beginner_friendly_score', 'current_price'))
 # Generate ML-enhanced portfolio recommendation
 if use_advanced_ml and ai_service.ml_service:
-# Use advanced ML optimization
+# Use advanced ML optimization (with spending analysis)
 portfolio_optimization = ai_service.optimize_portfolio_ml(
-user_profile, available_stocks
+user_profile, available_stocks, spending_analysis
 )
-# Get ML-enhanced stock scoring
+# Get ML-enhanced stock scoring (with spending analysis)
 scored_stocks = ai_service.score_stocks_ml(
-available_stocks, user_profile
+available_stocks, user_profile, spending_analysis
 )
 # Get market analysis
 market_analysis = {}
