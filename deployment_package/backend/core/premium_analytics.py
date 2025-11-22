@@ -452,6 +452,30 @@ class PremiumAnalyticsService:
             # Choose a few candidate stocks from DB for buy/sell lists
             # Apply spending-based preferences to stock selection
             candidates = list(Stock.objects.all().order_by("-market_cap")[:20])
+            
+            # Update prices with real-time data
+            try:
+                from .enhanced_stock_service import enhanced_stock_service
+                import asyncio
+                
+                symbols = [stock.symbol for stock in candidates]
+                if symbols:
+                    try:
+                        prices_data = asyncio.run(
+                            enhanced_stock_service.get_multiple_prices(symbols)
+                        )
+                        # Update stock objects with real-time prices
+                        for stock in candidates:
+                            price_data = prices_data.get(stock.symbol)
+                            if price_data and price_data.get('price', 0) > 0:
+                                stock.current_price = price_data['price']
+                                # Update database
+                                enhanced_stock_service.update_stock_price_in_database(stock.symbol, price_data)
+                    except Exception as e:
+                        logger.warning(f"Could not fetch real-time prices for AI recommendations: {e}")
+            except Exception as e:
+                logger.warning(f"Error updating prices for AI recommendations: {e}")
+            
             buy_recs = self._build_buy_recommendations(
                 candidates, risk_tolerance, spending_analysis
             )
@@ -583,9 +607,11 @@ class PremiumAnalyticsService:
             try:
                 # Get hybrid model predictions if available
                 from .hybrid_ml_predictor import hybrid_predictor
-                from .ml_service import MLService
-                
-                ml_service = MLService()
+                try:
+                    from .ml_service import MLService
+                    ml_service = MLService()
+                except ImportError:
+                    ml_service = None
                 
                 # Get spending features
                 spending_features = ml_service._get_spending_features_for_ticker(symbol, spending_analysis)
@@ -628,6 +654,25 @@ class PremiumAnalyticsService:
                     shap_data = prediction.get('shap_explanation', {})
                     if shap_data:
                         shap_explanation = shap_data.get('explanation', None)
+                        # Enhanced SHAP data for detailed breakdown
+                        shap_enhanced = {
+                            'explanation': shap_data.get('explanation', ''),
+                            'shapValues': shap_data.get('shap_values', {}),
+                            'featureImportance': [
+                                {'name': name, 'value': val, 'absValue': abs(val)}
+                                for name, val in shap_data.get('feature_importance', [])[:10]
+                            ],
+                            'topFeatures': [
+                                {'name': name, 'value': val, 'absValue': abs(val)}
+                                for name, val in shap_data.get('top_features', shap_data.get('feature_importance', []))[:10]
+                            ],
+                            'categoryBreakdown': shap_data.get('category_breakdown', {}),
+                            'totalPositiveImpact': shap_data.get('total_positive_impact', 0.0),
+                            'totalNegativeImpact': shap_data.get('total_negative_impact', 0.0),
+                            'prediction': shap_data.get('prediction', 0.0),
+                        }
+                    else:
+                        shap_enhanced = None
                 
             except Exception as e:
                 logger.debug(f"Could not calculate Consumer Strength for {symbol}: {e}")
@@ -656,7 +701,8 @@ class PremiumAnalyticsService:
                     "options_flow_score": options_flow_score,  # Week 4
                     "earnings_score": earnings_score,  # Week 4
                     "insider_score": insider_score,  # Week 4
-                    "shap_explanation": shap_explanation,  # Week 3
+                    "shap_explanation": shap_explanation,  # Week 3 (legacy)
+                    "shap_enhanced": shap_enhanced,  # Enhanced SHAP with detailed breakdown
                 }
             )
         

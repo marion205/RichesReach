@@ -25,18 +25,18 @@ class UserType(DjangoObjectType):
         return self.profile_pic
 
     # Add computed fields that the frontend expects
-        followers_count = graphene.Int()
-        following_count = graphene.Int()
-        is_following_user = graphene.Boolean()
-        is_followed_by_user = graphene.Boolean()
+    followers_count = graphene.Int()
+    following_count = graphene.Int()
+    is_following_user = graphene.Boolean()
+    is_followed_by_user = graphene.Boolean()
     # Add camelCase aliases for frontend compatibility
-        followersCount = graphene.Int()
-        followingCount = graphene.Int()
-        isFollowingUser = graphene.Boolean()
-        isFollowedByUser = graphene.Boolean()
+    followersCount = graphene.Int()
+    followingCount = graphene.Int()
+    isFollowingUser = graphene.Boolean()
+    isFollowedByUser = graphene.Boolean()
     # Add subscription status fields
-        hasPremiumAccess = graphene.Boolean()
-        subscriptionTier = graphene.String()
+    hasPremiumAccess = graphene.Boolean()
+    subscriptionTier = graphene.String()
 
     def resolve_followers_count(self, info):
         return self.followers.count()
@@ -221,6 +221,39 @@ class FundamentalAnalysisType(graphene.ObjectType):
     stabilityScore = graphene.Float()
     dividendScore = graphene.Float()
     debtScore = graphene.Float()
+class SpendingDataPointType(graphene.ObjectType):
+    """Spending data point for consumer spending surge chart"""
+    date = graphene.String()
+    spending = graphene.Float()
+    spendingChange = graphene.Float()
+    price = graphene.Float()
+    priceChange = graphene.Float()
+
+
+class OptionsFlowDataPointType(graphene.ObjectType):
+    """Options flow data point for smart money flow chart"""
+    date = graphene.String()
+    price = graphene.Float()
+    unusualVolumePercent = graphene.Float()
+    sweepCount = graphene.Int()
+    putCallRatio = graphene.Float()
+
+
+class SignalContributionType(graphene.ObjectType):
+    """Signal contribution for feature importance"""
+    name = graphene.String()
+    contribution = graphene.Float()
+    color = graphene.String()
+    description = graphene.String()
+
+
+class SHAPValueType(graphene.ObjectType):
+    """SHAP value for explainability"""
+    feature = graphene.String()
+    value = graphene.Float()
+    importance = graphene.Float()
+
+
 class RustStockAnalysisType(graphene.ObjectType):
 
 
@@ -232,6 +265,12 @@ class RustStockAnalysisType(graphene.ObjectType):
     technicalIndicators = graphene.Field(TechnicalIndicatorsType)
     fundamentalAnalysis = graphene.Field(FundamentalAnalysisType)
     reasoning = graphene.List(graphene.String)
+    # Week 3: Chart data fields
+    spendingData = graphene.List(SpendingDataPointType)
+    optionsFlowData = graphene.List(OptionsFlowDataPointType)
+    signalContributions = graphene.List(SignalContributionType)
+    shapValues = graphene.List(SHAPValueType)
+    shapExplanation = graphene.String()
 
 
 class PostType(DjangoObjectType):
@@ -301,6 +340,9 @@ class StockType(DjangoObjectType):
         return self.company_name
     
     def resolve_currentPrice(self, info):
+        """Return current price from database (updated by resolvers that fetch real-time data)"""
+        # Note: Real-time price fetching is handled in the resolvers (beginnerFriendlyStocks, aiRecommendations)
+        # to avoid async issues in GraphQL resolvers. The database price is updated there.
         if self.current_price:
             return float(self.current_price)
         return None
