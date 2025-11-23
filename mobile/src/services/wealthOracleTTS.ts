@@ -7,6 +7,7 @@ import logger from "../utils/logger";
 
 let currentSound: Audio.Sound | null = null;
 let currentSpeechId: string | null = null;
+let isPlaying = false; // Track if we're currently playing to prevent double playback
 
 // Wealth Oracle persona options for expo-speech fallback
 const wealthOracleVoiceOptions: Speech.SpeechOptions = {
@@ -16,10 +17,12 @@ const wealthOracleVoiceOptions: Speech.SpeechOptions = {
 };
 
 // Max text length for TTS (prevent accidentally passing novels)
-const MAX_TTS_LENGTH = 1500;
+// Increased to allow full paragraphs to be read
+const MAX_TTS_LENGTH = 5000; // ~800 words, enough for most story moments
 
-// Request timeout in milliseconds (very fast for immediate fallback)
-const TTS_TIMEOUT_MS = 2000; // 2 seconds max
+// Request timeout in milliseconds
+// Increased for longer text (5000 chars can take 5-10 seconds to generate)
+const TTS_TIMEOUT_MS = 15000; // 15 seconds - enough for 5000 char audio generation
 
 // Cache TTS service availability to avoid repeated failed requests
 let ttsServiceAvailable: boolean | null = null;
@@ -63,9 +66,14 @@ export async function playWealthOracle(
   text: string,
   symbol: string,
   moment: StockMoment,
+  onComplete?: () => void,
 ): Promise<void> {
-  // Stop anything currently playing
+  // CRITICAL: Stop anything currently playing FIRST
+  // This prevents double playback
   await stopWealthOracle();
+  
+  // Set playing flag to prevent race conditions
+  isPlaying = true;
 
   // Guard: Truncate text if too long
   const truncatedText = text.length > MAX_TTS_LENGTH 
@@ -86,12 +94,13 @@ export async function playWealthOracle(
   if (useCachedHealth && !ttsServiceAvailable) {
     // We know service is down from cache, skip immediately
     logger.log(`[WealthOracleTTS] TTS service known to be unavailable, using expo-speech immediately`);
-    return fallbackToExpoSpeech(truncatedText);
+    return fallbackToExpoSpeech(truncatedText, onComplete);
   }
 
   // Try TTS directly with very fast timeout - no health check delay
   try {
     logger.log(`[WealthOracleTTS] Attempting TTS service: ${TTS_API_BASE_URL}/tts`);
+    logger.log(`[WealthOracleTTS] Text length: ${text.length} chars, truncated: ${truncatedText.length} chars`);
     
     // Create abort controller with fast timeout
     const controller = new AbortController();
@@ -116,7 +125,9 @@ export async function playWealthOracle(
       ttsServiceAvailable = false;
       ttsHealthCheckTime = Date.now();
       logger.warn(`[WealthOracleTTS] TTS request failed (${res.status}), falling back to expo-speech`);
-      return fallbackToExpoSpeech(truncatedText);
+      // IMPORTANT: Stop any audio that might be playing before fallback
+      await stopWealthOracle();
+      return fallbackToExpoSpeech(truncatedText, onComplete);
     }
     
     // Cache that service is up
@@ -129,9 +140,23 @@ export async function playWealthOracle(
       logger.warn("[WealthOracleTTS] TTS response missing audio_url, falling back to expo-speech");
       ttsServiceAvailable = false;
       ttsHealthCheckTime = Date.now();
-      return fallbackToExpoSpeech(truncatedText);
+      // IMPORTANT: Stop any audio that might be playing before fallback
+      await stopWealthOracle();
+      return fallbackToExpoSpeech(truncatedText, onComplete);
     }
 
+    // IMPORTANT: Stop expo-speech before playing TTS service audio
+    // This prevents both voices from playing simultaneously
+    try {
+      const isSpeaking = await Speech.isSpeakingAsync();
+      if (isSpeaking) {
+        Speech.stop();
+        logger.log("[WealthOracleTTS] Stopped expo-speech before playing TTS service audio");
+      }
+    } catch (error) {
+      // Ignore errors
+    }
+    
     // Load and play audio
     const { sound } = await Audio.Sound.createAsync(
       { uri: audioUrl },
@@ -143,10 +168,17 @@ export async function playWealthOracle(
     sound.setOnPlaybackStatusUpdate((status) => {
       if (status.isLoaded && status.didJustFinish) {
         currentSound = null;
+        isPlaying = false;
+        // Notify completion callback
+        if (onComplete) {
+          logger.log("[WealthOracleTTS] Audio playback completed, calling onComplete");
+          onComplete();
+        }
       }
     });
     
     logger.log("[WealthOracleTTS] Playing audio from TTS service");
+    // Don't reset isPlaying here - let it reset when audio finishes or stops
   } catch (error) {
     // Cache that service is down
     ttsServiceAvailable = false;
@@ -158,36 +190,69 @@ export async function playWealthOracle(
     } else {
       logger.warn("[WealthOracleTTS] TTS error, falling back to expo-speech:", error instanceof Error ? error.message : error);
     }
+    // IMPORTANT: Stop any audio that might be playing before fallback
+    await stopWealthOracle();
     // Fallback to expo-speech immediately
-    return fallbackToExpoSpeech(truncatedText);
+    return fallbackToExpoSpeech(truncatedText, onComplete);
   }
 }
 
 /**
  * Fallback to expo-speech when TTS service is unavailable
  */
-function fallbackToExpoSpeech(text: string): void {
+function fallbackToExpoSpeech(text: string, onComplete?: () => void): void {
   try {
+    // IMPORTANT: Stop any TTS service audio before using expo-speech
+    // This prevents both voices from playing simultaneously
+    if (currentSound) {
+      currentSound.stopAsync().catch(() => {});
+      currentSound.unloadAsync().catch(() => {});
+      currentSound = null;
+      logger.log("[WealthOracleTTS] Stopped TTS service audio before using expo-speech fallback");
+    }
+    
+    // Only proceed if we're still supposed to be playing
+    if (!isPlaying) {
+      logger.log("[WealthOracleTTS] Not playing anymore, skipping expo-speech fallback");
+      return;
+    }
+    
     logger.log("[WealthOracleTTS] Using expo-speech fallback");
+    logger.log(`[WealthOracleTTS] Fallback text length: ${text.length} chars`);
     Speech.speak(text, {
       ...wealthOracleVoiceOptions,
       onDone: () => {
         logger.log("[WealthOracleTTS] Speech completed");
         currentSpeechId = null;
+        isPlaying = false;
+        // Notify completion callback
+        if (onComplete) {
+          logger.log("[WealthOracleTTS] Expo-speech completed, calling onComplete");
+          onComplete();
+        }
       },
       onError: (error) => {
         logger.error("[WealthOracleTTS] Speech error:", error);
         currentSpeechId = null;
+        isPlaying = false;
+        // Still call onComplete on error so story can advance
+        if (onComplete) {
+          onComplete();
+        }
       },
     });
     // Note: expo-speech doesn't return an ID, but we track it for stopping
     currentSpeechId = "speech_active";
   } catch (error) {
     logger.error("[WealthOracleTTS] Failed to use expo-speech fallback:", error);
+    isPlaying = false;
   }
 }
 
 export async function stopWealthOracle(): Promise<void> {
+  // Set flag first to prevent new playback
+  isPlaying = false;
+  
   // Stop audio playback
   if (currentSound) {
     try {

@@ -12,24 +12,53 @@ User = get_user_model()
 class AuthenticatedGraphQLView(GraphQLView):
     def parse_body(self, request):
         """Parse the request body and extract the JWT token"""
+        # Always call super first to parse the body
+        result = super().parse_body(request)
+        
+        # Then try to extract and validate the token
         if request.content_type == 'application/json':
             try:
-                body = json.loads(request.body.decode('utf-8'))
-                # Extract token from Authorization header or variables
                 auth_header = request.META.get('HTTP_AUTHORIZATION', '')
                 if auth_header.startswith('Bearer '):
                     token = auth_header[7:]  # Remove 'Bearer ' prefix
-                    user = get_user_from_token(token)
-                    if user:
-                        request.user = user
+                    try:
+                        user = get_user_from_token(token)
+                        if user:
+                            request.user = user
+                    except Exception as e:
+                        import logging
+                        logger = logging.getLogger(__name__)
+                        logger.warning(f"Token validation failed: {e}")
+                        # If token validation fails, continue without user
+                        pass
                 elif auth_header.startswith('JWT '):
                     token = auth_header[4:]  # Remove 'JWT ' prefix
-                    user = get_user_from_token(token)
-                    if user:
-                        request.user = user
-            except (json.JSONDecodeError, Exception):
+                    try:
+                        user = get_user_from_token(token)
+                        if user:
+                            request.user = user
+                    except Exception as e:
+                        import logging
+                        logger = logging.getLogger(__name__)
+                        logger.warning(f"Token validation failed: {e}")
+                        # If token validation fails, continue without user
+                        pass
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Error in parse_body: {e}")
+                # If anything fails, continue without authentication
                 pass
-        return super().parse_body(request)
+        
+        return result
+    
+    def get_context(self, request):
+        """Override to ensure user is in GraphQL context"""
+        context = super().get_context(request)
+        # Ensure user is set in context from request
+        if hasattr(request, 'user') and request.user and not request.user.is_anonymous:
+            context.user = request.user
+        return context
 
 
 # Create the view instance with the core schema

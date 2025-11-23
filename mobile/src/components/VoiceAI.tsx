@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useVoice } from '../contexts/VoiceContext';
+import { API_BASE_URL } from '../config/api';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -58,8 +59,6 @@ export default function VoiceAI({
   const [pulseAnim] = useState(new Animated.Value(1));
   const [waveAnim] = useState(new Animated.Value(0));
 
-  const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000";
-
   useEffect(() => {
     loadAvailableVoices();
     return () => {
@@ -76,15 +75,70 @@ export default function VoiceAI({
   }, [autoPlay, text]);
 
   const loadAvailableVoices = async () => {
+    // Voices endpoint is optional - if it doesn't exist, use default voices
+    // This prevents spam errors when the backend doesn't have this endpoint
     try {
-      const voicesPath = (process.env.EXPO_PUBLIC_TTS_VOICES_PATH || '/api/voices/').replace(/^\/?/, '/');
-      const response = await fetch(`${API_BASE_URL}${voicesPath}`);
-      if (response.ok) {
-        const data = await response.json();
-        setAvailableVoices(data.voices || {});
+      // Verify API_BASE_URL is set correctly
+      console.log('🎤 [DEBUG] API_BASE_URL from config:', API_BASE_URL);
+      console.log('🎤 [DEBUG] EXPO_PUBLIC_API_BASE_URL env:', process.env.EXPO_PUBLIC_API_BASE_URL);
+      
+      // Ensure we're not using localhost
+      if (API_BASE_URL.includes('localhost') || API_BASE_URL.includes('127.0.0.1')) {
+        console.warn('⚠️ [DEBUG] API_BASE_URL contains localhost! This will fail on physical devices.');
+        console.warn('⚠️ [DEBUG] Current API_BASE_URL:', API_BASE_URL);
+        // Don't proceed if using localhost
+        setAvailableVoices({});
+        return;
       }
-    } catch (error) {
-      console.error('Failed to load voices:', error);
+      
+      const voicesPath = (process.env.EXPO_PUBLIC_TTS_VOICES_PATH || '/api/voices/').replace(/^\/?/, '/');
+      const voicesUrl = `${API_BASE_URL}${voicesPath}`;
+      
+      console.log('🎤 [DEBUG] Attempting to load voices from:', voicesUrl);
+      console.log('🎤 [DEBUG] Full URL breakdown:', {
+        base: API_BASE_URL,
+        path: voicesPath,
+        full: voicesUrl,
+      });
+      
+      // Create timeout manually (AbortSignal.timeout not available in all React Native versions)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      
+      try {
+        const response = await fetch(voicesUrl, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          signal: controller.signal,
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log('✅ [DEBUG] Voices loaded successfully');
+          setAvailableVoices(data.voices || {});
+        } else {
+          // Endpoint doesn't exist or returned error - use default voices silently
+          console.log('ℹ️ [DEBUG] Voices endpoint not available (status:', response.status, '), using default voices');
+          setAvailableVoices({}); // Use empty object, will fall back to defaults
+        }
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    } catch (error: any) {
+      // Network error or endpoint doesn't exist - this is OK, use default voices
+      if (error?.name === 'AbortError' || error?.name === 'TimeoutError') {
+        console.log('ℹ️ [DEBUG] Voices endpoint timeout, using default voices');
+      } else if (error?.message?.includes('Network request failed')) {
+        console.log('ℹ️ [DEBUG] Voices endpoint not reachable, using default voices');
+      } else {
+        console.log('ℹ️ [DEBUG] Voices endpoint unavailable, using default voices:', error?.message?.substring(0, 100));
+      }
+      // Silently use default voices - don't spam errors
+      setAvailableVoices({});
     }
   };
 

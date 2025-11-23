@@ -193,13 +193,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = async (): Promise<void> => {
     try {
-      logger.log('🔄 AuthContext: Starting logout...');
+      logger.log('🔴 [AuthContext] logout called - before state');
       setUser(null);
-      logger.log('✅ AuthContext: User set to null');
       setToken(null);
-      logger.log('✅ AuthContext: Token set to null');
       await AsyncStorage.removeItem('token');
       logger.log('✅ AuthContext: Token removed from AsyncStorage');
+      logger.log('🔴 [AuthContext] logout - state updated: isAuthenticated will be false');
     } catch (error) {
       logger.error('❌ AuthContext logout error:', error);
     }

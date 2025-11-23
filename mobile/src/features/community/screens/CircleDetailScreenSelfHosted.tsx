@@ -49,14 +49,86 @@ import { useTheme } from '../../../theme/PersonalizedThemes';
 import { WealthCircle } from '../../../components/WealthCircles2';
 import { WebRTCService } from '../../../services/WebRTCService';
 import { SocketChatService } from '../../../services/SocketChatService';
+import { API_BASE } from '../../../config/api';
 import { GiftedChat, IMessage } from 'react-native-gifted-chat';
 import MediasoupLiveStreaming from '../../../components/MediasoupLiveStreaming';
-import logger from '../../../utils/logger';
+import LiveStreamCamera from '../../../components/LiveStreamCamera';
+import loggerModule from '../../../utils/logger';
+// Ensure logger is always available with safe wrapper functions
+const loggerBase = loggerModule || {
+  log: (...args: any[]) => console.log(...args),
+  warn: (...args: any[]) => console.warn(...args),
+  error: (...args: any[]) => console.error(...args),
+  info: (...args: any[]) => console.info(...args),
+  debug: (...args: any[]) => console.debug(...args),
+};
+
+// Safe logger wrapper that never throws
+const logger = {
+  log: (...args: any[]) => {
+    try {
+      if (loggerBase && loggerBase.log) {
+        loggerBase.log(...args);
+      } else {
+        console.log(...args);
+      }
+    } catch (e) {
+      console.log(...args);
+    }
+  },
+  warn: (...args: any[]) => {
+    try {
+      if (loggerBase && loggerBase.warn) {
+        loggerBase.warn(...args);
+      } else {
+        console.warn(...args);
+      }
+    } catch (e) {
+      console.warn(...args);
+    }
+  },
+  error: (...args: any[]) => {
+    try {
+      if (loggerBase && loggerBase.error) {
+        loggerBase.error(...args);
+      } else {
+        console.error(...args);
+      }
+    } catch (e) {
+      console.error(...args);
+    }
+  },
+  info: (...args: any[]) => {
+    try {
+      if (loggerBase && loggerBase.info) {
+        loggerBase.info(...args);
+      } else {
+        console.info(...args);
+      }
+    } catch (e) {
+      console.info(...args);
+    }
+  },
+  debug: (...args: any[]) => {
+    try {
+      if (loggerBase && loggerBase.debug) {
+        loggerBase.debug(...args);
+      } else {
+        console.debug(...args);
+      }
+    } catch (e) {
+      console.debug(...args);
+    }
+  },
+};
 
 // Configuration
-const STREAMING_SERVER_URL = process.env.EXPO_PUBLIC_SFU_SERVER_URL || 'http://localhost:8000';
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000";
-const WHISPER_API_URL = process.env.EXPO_PUBLIC_WHISPER_API_URL || 'http://localhost:3001';
+// Use API_BASE from config instead of hardcoded IP
+import { API_BASE } from '../../../config/api';
+
+const STREAMING_SERVER_URL = process.env.EXPO_PUBLIC_SFU_SERVER_URL || API_BASE;
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || API_BASE;
+const WHISPER_API_URL = process.env.EXPO_PUBLIC_WHISPER_API_URL || API_BASE.replace(':8000', ':3001');
 
 // Interfaces
 interface CirclePost {
@@ -146,6 +218,7 @@ export default function CircleDetailScreenSelfHosted({ route, navigation }: Circ
   }
   const [liveStreamModalVisible, setLiveStreamModalVisible] = useState(false);
   const [currentStream, setCurrentStream] = useState<StreamInfo | null>(null);
+  const [liveStreamCameraVisible, setLiveStreamCameraVisible] = useState(false);
   
   // Chat states
   const [chatMessages, setChatMessages] = useState<IMessage[]>([]);
@@ -374,22 +447,71 @@ export default function CircleDetailScreenSelfHosted({ route, navigation }: Circ
 
   // Start live stream as host
   const startLiveStream = useCallback(async () => {
+    logger.log('🎥 [DEBUG] ========== startLiveStream() called ==========');
+    logger.log('🎥 [DEBUG] webRTCService.current available:', !!webRTCService.current);
+    logger.log('🎥 [DEBUG] Circle ID:', circle.id);
+    
     if (!webRTCService.current) {
+      logger.error('❌ [DEBUG] webRTCService.current is null/undefined');
       Alert.alert('Error', 'Streaming service not initialized');
       return;
     }
 
     try {
+      logger.log('🎥 [DEBUG] Requesting camera permissions...');
+      // Request camera and microphone permissions
+      const { status: cameraStatus } = await ImagePicker.requestCameraPermissionsAsync();
+      logger.log('🎥 [DEBUG] Camera permission status:', cameraStatus);
+      
+      logger.log('🎥 [DEBUG] Requesting audio permissions...');
+      const { status: audioStatus } = await Audio.requestPermissionsAsync();
+      logger.log('🎥 [DEBUG] Audio permission status:', audioStatus);
+      
+      if (cameraStatus !== 'granted') {
+        logger.warn('⚠️ [DEBUG] Camera permission denied:', cameraStatus);
+        Alert.alert(
+          'Camera Permission Required',
+          'Please grant camera permission to start live streaming.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+      
+      if (audioStatus !== 'granted') {
+        logger.warn('⚠️ [DEBUG] Audio permission denied:', audioStatus);
+        Alert.alert(
+          'Microphone Permission Required',
+          'Please grant microphone permission to start live streaming.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      logger.log('✅ [DEBUG] All permissions granted');
+      logger.log('🎥 [DEBUG] Getting user info from AsyncStorage...');
+      
       const userId = await AsyncStorage.getItem('userId') || 'demo-user';
       const userName = await AsyncStorage.getItem('userName') || 'User';
+      logger.log('🎥 [DEBUG] User ID:', userId);
+      logger.log('🎥 [DEBUG] User Name:', userName);
+      
+      logger.log('🎥 [DEBUG] Calling webRTCService.joinRoom()...');
+      logger.log('🎥 [DEBUG] Room ID:', circle.id);
+      logger.log('🎥 [DEBUG] Is Host: true');
       
       await webRTCService.current.joinRoom(circle.id, userId, userName, true);
+      
+      logger.log('✅ [DEBUG] joinRoom() completed successfully');
+      logger.log('🎥 [DEBUG] Setting UI state...');
       
       setIsStreaming(true);
       setIsHost(true);
       setViewerCount(1);
       setLiveModalVisible(true);
       setActiveStream({ host: userId, channelId: circle.id });
+
+      logger.log('✅ [DEBUG] UI state updated');
+      logger.log('🎥 [DEBUG] Joining chat room...');
 
       // Join chat room
       if (chatService.current) {
@@ -398,10 +520,19 @@ export default function CircleDetailScreenSelfHosted({ route, navigation }: Circ
           userName,
           avatar: 'https://via.placeholder.com/40'
         });
+        logger.log('✅ [DEBUG] Chat room joined');
+      } else {
+        logger.warn('⚠️ [DEBUG] chatService.current is null, skipping chat join');
       }
 
+      logger.log('✅ [DEBUG] Live stream started successfully!');
       logger.log('🎥 Live stream started');
-    } catch (error) {
+    } catch (error: any) {
+      logger.error('❌ [DEBUG] Stream start error occurred');
+      logger.error('❌ [DEBUG] Error name:', error?.name);
+      logger.error('❌ [DEBUG] Error message:', error?.message);
+      logger.error('❌ [DEBUG] Error stack:', error?.stack?.substring(0, 500));
+      logger.error('❌ [DEBUG] Full error:', JSON.stringify(error, Object.getOwnPropertyNames(error)).substring(0, 1000));
       logger.error('Stream start error:', error);
       Alert.alert('Streaming Error', 'Failed to start live stream');
     }
@@ -519,9 +650,10 @@ export default function CircleDetailScreenSelfHosted({ route, navigation }: Circ
         isHost: true
       });
       
-      setLiveStreamModalVisible(true);
+      // Open LiveStreamCamera modal (expo-camera with front camera)
+      setLiveStreamCameraVisible(true);
       
-      logger.log('🎥 Starting Mediasoup live stream in circle:', circle.name);
+      logger.log('🎥 Starting live stream in circle:', circle.name);
     } catch (error) {
       logger.error('Error starting live stream:', error);
       Alert.alert('Error', 'Failed to start live stream');
@@ -530,8 +662,25 @@ export default function CircleDetailScreenSelfHosted({ route, navigation }: Circ
 
   const closeLiveStreamModal = useCallback(() => {
     setLiveStreamModalVisible(false);
+    setLiveStreamCameraVisible(false);
     setCurrentStream(null);
   }, []);
+
+  // Handler for LiveStreamCamera start
+  const handleLiveStreamCameraStart = useCallback(async ({ circleId, camera }: { circleId: string; camera: any }) => {
+    logger.log('🎥 [DEBUG] LiveStreamCamera start requested for circle:', circleId);
+    // Call the existing startLiveStream function which handles WebRTC
+    // The expo-camera is just for preview, WebRTC handles the actual streaming
+    await startLiveStream();
+  }, [startLiveStream]);
+
+  // Handler for LiveStreamCamera stop
+  const handleLiveStreamCameraStop = useCallback(async ({ circleId, camera }: { circleId: string; camera: any }) => {
+    logger.log('🛑 [DEBUG] LiveStreamCamera stop requested for circle:', circleId);
+    // Call the existing endLiveStream function
+    await endLiveStream();
+    setLiveStreamCameraVisible(false);
+  }, [endLiveStream]);
 
   // Upload media
   const uploadMedia = useCallback(async (media: { uri: string; type: 'image' | 'video' }) => {
@@ -1258,6 +1407,25 @@ export default function CircleDetailScreenSelfHosted({ route, navigation }: Circ
         circleId={circle.id}
         isHost={currentStream?.isHost || false}
       />
+
+      {/* LiveStreamCamera Modal - Expo Camera with Front Camera */}
+      {liveStreamCameraVisible && (
+        <Modal
+          visible={liveStreamCameraVisible}
+          animationType="slide"
+          presentationStyle="fullScreen"
+          onRequestClose={closeLiveStreamModal}
+        >
+          <LiveStreamCamera
+            circleId={circle.id}
+            circleName={circle.name}
+            visible={liveStreamCameraVisible}
+            onStartLiveStream={handleLiveStreamCameraStart}
+            onStopLiveStream={handleLiveStreamCameraStop}
+            onClose={closeLiveStreamModal}
+          />
+        </Modal>
+      )}
     </KeyboardAvoidingView>
   );
 }

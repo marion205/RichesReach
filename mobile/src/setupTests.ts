@@ -64,6 +64,61 @@ jest.mock('react-native-reanimated', () => {
   return Reanimated;
 });
 
+// Mock VirtualizedList internals comprehensively to prevent native module errors
+jest.mock('react-native/node_modules/@react-native/virtualized-lists/Lists/VirtualizedListCellRenderer', () => {
+  const React = require('react');
+  return {
+    default: {
+      create: jest.fn(() => ({
+        render: jest.fn(() => React.createElement('View')),
+      })),
+    },
+  };
+});
+
+jest.mock('react-native/node_modules/@react-native/virtualized-lists/Lists/VirtualizedList', () => {
+  const React = require('react');
+  return {
+    default: React.forwardRef((props: any, ref: any) => {
+      const { data = [], renderItem } = props;
+      return React.createElement(
+        'View',
+        { testID: props.testID || 'virtualized-list', ref, ...props },
+        data.map((item: any, index: number) => {
+          const element = renderItem?.({ item, index, separators: {} });
+          return React.createElement('View', { key: item?.id || index }, element);
+        })
+      );
+    }),
+  };
+});
+
+// Mock FlatList/VirtualizedList early to prevent native module errors
+jest.mock('react-native/Libraries/Lists/FlatList', () => {
+  const React = require('react');
+  return React.forwardRef((props: any, ref: any) => {
+    const { data = [], renderItem } = props;
+    return React.createElement(
+      'View',
+      { testID: props.testID || 'flatlist', ref, ...props },
+      data.map((item: any, index: number) => {
+        const element = renderItem?.({ item, index, separators: {} });
+        return React.createElement('View', { key: item?.id || index }, element);
+      })
+    );
+  });
+});
+
+// Mock Modal early to prevent native module errors
+// Use a simple mock that doesn't require React Native components to avoid circular deps
+jest.mock('react-native/Libraries/Modal/Modal', () => {
+  const React = require('react');
+  // Return a simple component that doesn't require View
+  return React.forwardRef((props: any, ref: any) => {
+    return React.createElement('div', { ...props, ref, 'data-testid': 'modal' });
+  });
+});
+
 // Mock react-native-screens
 jest.mock('react-native-screens', () => ({
   enableScreens: jest.fn(),

@@ -50,7 +50,7 @@ interface MomentStoryPlayerProps {
    * Use a custom TTS service (e.g. Wealth Oracle microservice).
    * If provided, expo-speech is not used.
    */
-  speakFn?: (text: string, moment: StockMoment) => Promise<void>;
+  speakFn?: (text: string, moment: StockMoment, onComplete?: () => void) => Promise<void>;
   stopFn?: () => void;
   /**
    * Cinematic intro slide before first moment.
@@ -321,16 +321,18 @@ const MomentStoryPlayer: React.FC<MomentStoryPlayerProps> = ({
     
     try {
       if (speakFn) {
-        // Fire and forget - don't wait for TTS at all
-        speakFn(text, moment)
+        // Pass completion callback so story advances when audio finishes
+        speakFn(text, moment, handleSpeechComplete)
           .catch((error) => {
             console.warn('[MomentStoryPlayer] TTS error (non-blocking):', error);
+            // On error, still advance story after a delay
+            setTimeout(handleSpeechComplete, 2000);
           })
           .finally(() => {
             clearTimeout(loadingTimeout);
             setIsTTSLoading(false);
           });
-        // Return immediately - don't wait
+        // Return immediately - don't wait, but completion will be handled by callback
         return;
       }
 
@@ -380,11 +382,14 @@ const MomentStoryPlayer: React.FC<MomentStoryPlayerProps> = ({
       });
     }, 0);
 
-    // Set timeout for speech completion
-    speechTimeoutRef.current = setTimeout(() => {
-      stopSpeech();
-      handleSpeechComplete();
-    }, estimatedDurationMs);
+    // Set timeout as fallback ONLY if using expo-speech (not TTS service)
+    // TTS service will call handleSpeechComplete via callback
+    if (!speakFn) {
+      speechTimeoutRef.current = setTimeout(() => {
+        stopSpeech();
+        handleSpeechComplete();
+      }, estimatedDurationMs);
+    }
 
     return () => {
       stopSpeech();

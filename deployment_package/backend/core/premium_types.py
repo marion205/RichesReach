@@ -15,6 +15,7 @@ from .models import Portfolio, Stock, User
 from .options_service import OptionsAnalysisService
 from .portfolio_service import PortfolioService
 from .premium_analytics import PremiumAnalyticsService
+from .mutations import GenerateAIRecommendations
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,15 @@ logger = logging.getLogger(__name__)
 # ============
 # Premium Types
 # ============
+
+# Input types
+class ProfileInput(graphene.InputObjectType):
+    """Profile input for AI recommendations"""
+    riskTolerance = graphene.String(description="Risk tolerance: Conservative, Moderate, Aggressive")
+    investmentHorizonYears = graphene.Int(description="Investment horizon in years")
+    age = graphene.Int(description="User age")
+    incomeBracket = graphene.String(description="Income bracket")
+    investmentGoals = graphene.List(graphene.String, description="Investment goals")
 
 
 class PortfolioMetricsType(graphene.ObjectType):
@@ -75,27 +85,180 @@ class AIRecommendationType(graphene.ObjectType):
 
     symbol = graphene.String()
     company_name = graphene.String()
+    companyName = graphene.String()  # camelCase alias
     recommendation = graphene.String()  # Buy, Sell, Hold
     confidence = graphene.Float()
     reasoning = graphene.String()
     target_price = graphene.Float()
+    targetPrice = graphene.Float()  # camelCase alias
     current_price = graphene.Float()
+    currentPrice = graphene.Float()  # camelCase alias
     expected_return = graphene.Float()
+    expectedReturn = graphene.Float()  # camelCase alias
     suggested_exit_price = graphene.Float()  # For sell recommendations
     current_return = graphene.Float()  # For sell recommendations
     sector = graphene.String()
     risk_level = graphene.String()
+    riskLevel = graphene.String()  # camelCase alias
     ml_score = graphene.Float()
+    mlScore = graphene.Float()  # camelCase alias
+    # Additional fields from backend
+    consumer_strength_score = graphene.Float()
+    consumerStrengthScore = graphene.Float()  # camelCase alias
+    spending_growth = graphene.Float()
+    spendingGrowth = graphene.Float()  # camelCase alias
+    options_flow_score = graphene.Float()
+    optionsFlowScore = graphene.Float()  # camelCase alias
+    earnings_score = graphene.Float()
+    earningsScore = graphene.Float()  # camelCase alias
+    insider_score = graphene.Float()
+    insiderScore = graphene.Float()  # camelCase alias
+    
+    def resolve_companyName(self, info):
+        # Check both camelCase and snake_case
+        if isinstance(self, dict):
+            return self.get('companyName') or self.get('company_name') or None
+        return getattr(self, 'companyName', None) or getattr(self, 'company_name', None) or None
+    
+    def resolve_targetPrice(self, info):
+        # Check both camelCase and snake_case
+        if isinstance(self, dict):
+            return self.get('targetPrice') or self.get('target_price') or None
+        return getattr(self, 'targetPrice', None) or getattr(self, 'target_price', None) or None
+    
+    def resolve_currentPrice(self, info):
+        # Check both camelCase and snake_case
+        if isinstance(self, dict):
+            return self.get('currentPrice') or self.get('current_price') or None
+        return getattr(self, 'currentPrice', None) or getattr(self, 'current_price', None) or None
+    
+    def resolve_expectedReturn(self, info):
+        # Check both snake_case and camelCase field names
+        if isinstance(self, dict):
+            return self.get('expectedReturn') or self.get('expected_return') or None
+        return getattr(self, 'expectedReturn', None) or getattr(self, 'expected_return', None) or None
+    
+    def resolve_riskLevel(self, info):
+        # Check both camelCase and snake_case
+        if isinstance(self, dict):
+            return self.get('riskLevel') or self.get('risk_level') or None
+        return getattr(self, 'riskLevel', None) or getattr(self, 'risk_level', None) or None
+    
+    def resolve_mlScore(self, info):
+        # Check both camelCase and snake_case
+        if isinstance(self, dict):
+            return self.get('mlScore') or self.get('ml_score') or None
+        return getattr(self, 'mlScore', None) or getattr(self, 'ml_score', None) or None
+    
+    def resolve_consumerStrengthScore(self, info):
+        # Check both camelCase and snake_case
+        if isinstance(self, dict):
+            return self.get('consumerStrengthScore') or self.get('consumer_strength_score') or None
+        return getattr(self, 'consumerStrengthScore', None) or getattr(self, 'consumer_strength_score', None) or None
+    
+    def resolve_spendingGrowth(self, info):
+        # Check both camelCase and snake_case
+        if isinstance(self, dict):
+            return self.get('spendingGrowth') or self.get('spending_growth') or None
+        return getattr(self, 'spendingGrowth', None) or getattr(self, 'spending_growth', None) or None
+    
+    def resolve_optionsFlowScore(self, info):
+        # Check both camelCase and snake_case
+        if isinstance(self, dict):
+            return self.get('optionsFlowScore') or self.get('options_flow_score') or None
+        return getattr(self, 'optionsFlowScore', None) or getattr(self, 'options_flow_score', None) or None
+    
+    def resolve_earningsScore(self, info):
+        # Check both camelCase and snake_case
+        if isinstance(self, dict):
+            return self.get('earningsScore') or self.get('earnings_score') or None
+        return getattr(self, 'earningsScore', None) or getattr(self, 'earnings_score', None) or None
+    
+    def resolve_insiderScore(self, info):
+        # Check both camelCase and snake_case
+        if isinstance(self, dict):
+            return self.get('insiderScore') or self.get('insider_score') or None
+        return getattr(self, 'insiderScore', None) or getattr(self, 'insider_score', None) or None
+
+
+class SHAPFeatureType(graphene.ObjectType):
+    """SHAP feature importance"""
+    name = graphene.String()
+    value = graphene.Float()
+    absValue = graphene.Float()
+
+
+class SHAPExplanationType(graphene.ObjectType):
+    """Enhanced SHAP explanation"""
+    explanation = graphene.String()
+    shapValues = graphene.JSONString()
+    featureImportance = graphene.List(SHAPFeatureType)
+    topFeatures = graphene.List(SHAPFeatureType)
+    categoryBreakdown = graphene.JSONString()
+    totalPositiveImpact = graphene.Float()
+    totalNegativeImpact = graphene.Float()
+    prediction = graphene.Float()
+
+
+class ConsumerStrengthComponentType(graphene.ObjectType):
+    """Consumer Strength Score component"""
+    score = graphene.Float()
+    weight = graphene.Float()
+    growth = graphene.Float(required=False)
+
+
+class ConsumerStrengthType(graphene.ObjectType):
+    """Enhanced Consumer Strength Score with historical tracking"""
+    overallScore = graphene.Float()
+    spendingScore = graphene.Float()
+    optionsScore = graphene.Float()
+    earningsScore = graphene.Float()
+    insiderScore = graphene.Float()
+    spendingGrowth = graphene.Float()
+    sectorScore = graphene.Float()
+    historicalTrend = graphene.String()
+    components = graphene.JSONString()
+    timestamp = graphene.String()
+
+
+class SectorComparisonType(graphene.ObjectType):
+    """Sector comparison for Consumer Strength Score"""
+    stockScore = graphene.Float()
+    sectorAverage = graphene.Float()
+    sectorRank = graphene.Int()
+    percentile = graphene.Float()
+    sectorName = graphene.String()
+    totalInSector = graphene.Int()
 
 
 class PortfolioAnalysisType(graphene.ObjectType):
     """Portfolio analysis results"""
 
     total_value = graphene.Float()
+    totalValue = graphene.Float()  # camelCase alias
     num_holdings = graphene.Int()
+    numHoldings = graphene.Int()  # camelCase alias
     sector_breakdown = graphene.JSONString()
+    sectorBreakdown = graphene.JSONString()  # camelCase alias
     risk_score = graphene.Float()
+    riskScore = graphene.Float()  # camelCase alias
     diversification_score = graphene.Float()
+    diversificationScore = graphene.Float()  # camelCase alias
+    
+    def resolve_totalValue(self, info):
+        return getattr(self, 'total_value', None) or (self.get('total_value') if isinstance(self, dict) else None)
+    
+    def resolve_numHoldings(self, info):
+        return getattr(self, 'num_holdings', None) or (self.get('num_holdings') if isinstance(self, dict) else None)
+    
+    def resolve_sectorBreakdown(self, info):
+        return getattr(self, 'sector_breakdown', None) or (self.get('sector_breakdown') if isinstance(self, dict) else None)
+    
+    def resolve_riskScore(self, info):
+        return getattr(self, 'risk_score', None) or (self.get('risk_score') if isinstance(self, dict) else None)
+    
+    def resolve_diversificationScore(self, info):
+        return getattr(self, 'diversification_score', None) or (self.get('diversification_score') if isinstance(self, dict) else None)
 
 
 class RiskAssessmentType(graphene.ObjectType):
@@ -136,15 +299,74 @@ class RebalanceSuggestionType(graphene.ObjectType):
     priority = graphene.String()
 
 
+class SpendingInsightsType(graphene.ObjectType):
+    """Spending insights for personalized recommendations"""
+    
+    discretionary_income = graphene.Float()
+    discretionaryIncome = graphene.Float()  # camelCase alias
+    suggested_budget = graphene.Float()
+    suggestedBudget = graphene.Float()  # camelCase alias
+    spending_health = graphene.String()
+    spendingHealth = graphene.String()  # camelCase alias
+    top_categories = graphene.JSONString()
+    topCategories = graphene.JSONString()  # camelCase alias
+    sector_preferences = graphene.JSONString()
+    sectorPreferences = graphene.JSONString()  # camelCase alias
+    
+    def resolve_discretionaryIncome(self, info):
+        return getattr(self, 'discretionary_income', None) or (self.get('discretionary_income') if isinstance(self, dict) else None)
+    
+    def resolve_suggestedBudget(self, info):
+        return getattr(self, 'suggested_budget', None) or (self.get('suggested_budget') if isinstance(self, dict) else None)
+    
+    def resolve_spendingHealth(self, info):
+        return getattr(self, 'spending_health', None) or (self.get('spending_health') if isinstance(self, dict) else None)
+    
+    def resolve_topCategories(self, info):
+        return getattr(self, 'top_categories', None) or (self.get('top_categories') if isinstance(self, dict) else None)
+    
+    def resolve_sectorPreferences(self, info):
+        return getattr(self, 'sector_preferences', None) or (self.get('sector_preferences') if isinstance(self, dict) else None)
+
+
 class AIRecommendationsType(graphene.ObjectType):
     """Complete AI recommendations package"""
 
     portfolio_analysis = graphene.Field(PortfolioAnalysisType)
+    portfolioAnalysis = graphene.Field(PortfolioAnalysisType)  # camelCase alias
     buy_recommendations = graphene.List(AIRecommendationType)
+    buyRecommendations = graphene.List(AIRecommendationType)  # camelCase alias
     sell_recommendations = graphene.List(AIRecommendationType)
+    sellRecommendations = graphene.List(AIRecommendationType)  # camelCase alias
     rebalance_suggestions = graphene.List(RebalanceSuggestionType)
+    rebalanceSuggestions = graphene.List(RebalanceSuggestionType)  # camelCase alias
     risk_assessment = graphene.Field(RiskAssessmentType)
+    riskAssessment = graphene.Field(RiskAssessmentType)  # camelCase alias
     market_outlook = graphene.Field(MarketOutlookType)
+    marketOutlook = graphene.Field(MarketOutlookType)  # camelCase alias
+    spending_insights = graphene.Field(SpendingInsightsType)
+    spendingInsights = graphene.Field(SpendingInsightsType)  # camelCase alias
+    
+    def resolve_portfolioAnalysis(self, info):
+        return getattr(self, 'portfolio_analysis', None) or (self.get('portfolio_analysis') if isinstance(self, dict) else None)
+    
+    def resolve_buyRecommendations(self, info):
+        return getattr(self, 'buy_recommendations', None) or (self.get('buy_recommendations') if isinstance(self, dict) else None)
+    
+    def resolve_sellRecommendations(self, info):
+        return getattr(self, 'sell_recommendations', None) or (self.get('sell_recommendations') if isinstance(self, dict) else None)
+    
+    def resolve_rebalanceSuggestions(self, info):
+        return getattr(self, 'rebalance_suggestions', None) or (self.get('rebalance_suggestions') if isinstance(self, dict) else None)
+    
+    def resolve_riskAssessment(self, info):
+        return getattr(self, 'risk_assessment', None) or (self.get('risk_assessment') if isinstance(self, dict) else None)
+    
+    def resolve_marketOutlook(self, info):
+        return getattr(self, 'market_outlook', None) or (self.get('market_outlook') if isinstance(self, dict) else None)
+    
+    def resolve_spendingInsights(self, info):
+        return getattr(self, 'spending_insights', None) or (self.get('spending_insights') if isinstance(self, dict) else None)
 
 
 class StockTradeType(graphene.ObjectType):
@@ -179,6 +401,26 @@ class RebalanceResultType(graphene.ObjectType):
 class PremiumQueries(graphene.ObjectType):
     """Premium feature queries"""
 
+    # Enhanced Consumer Strength Score queries
+    consumerStrength = graphene.Field(
+        ConsumerStrengthType,
+        symbol=graphene.String(required=True),
+        description="Get enhanced Consumer Strength Score with historical tracking"
+    )
+    
+    consumerStrengthHistory = graphene.List(
+        ConsumerStrengthType,
+        symbol=graphene.String(required=True),
+        days=graphene.Int(default_value=30),
+        description="Get historical Consumer Strength Scores"
+    )
+    
+    sectorComparison = graphene.Field(
+        SectorComparisonType,
+        symbol=graphene.String(required=True),
+        description="Compare stock's Consumer Strength to sector average"
+    )
+
     premium_portfolio_metrics = graphene.Field(
         PortfolioMetricsType,
         portfolio_name=graphene.String(
@@ -200,8 +442,17 @@ class PremiumQueries(graphene.ObjectType):
     )
     ai_recommendations = graphene.Field(
         AIRecommendationsType,
-        risk_tolerance=graphene.String(
-            description="Risk tolerance: low, medium, high"
+        profile=graphene.Argument(
+            ProfileInput,
+            required=False,
+            description="User profile input for personalized recommendations"
+        ),
+        using_defaults=graphene.Argument(
+            graphene.Boolean,
+            required=False,
+            default_value=True,
+            name="usingDefaults",
+            description="Whether to use default values if profile is incomplete"
         ),
     )
     options_analysis = graphene.Field(
@@ -215,8 +466,96 @@ class PremiumQueries(graphene.ObjectType):
         StockScreeningResultType,
         filters=graphene.String(description="JSON string of screening filters"),
     )
+    research_report = graphene.JSONString(
+        symbol=graphene.String(required=True),
+        report_type=graphene.String(default_value='comprehensive'),
+        description="Generate automated research report for a stock"
+    )
 
     # ------- Resolvers -------
+
+    def resolve_consumer_strength(self, info, symbol: str):
+        """Resolve Consumer Strength Score"""
+        user = getattr(info.context, 'user', None)
+        user_id = user.id if user and not user.is_anonymous else None
+        
+        from .consumer_strength_service import ConsumerStrengthService
+        service = ConsumerStrengthService()
+        
+        # Get spending analysis if user is authenticated
+        spending_analysis = None
+        if user_id:
+            from .spending_habits_service import SpendingHabitsService
+            spending_service = SpendingHabitsService()
+            spending_analysis = spending_service.analyze_spending_habits(user_id, months=3)
+        
+        result = service.calculate_consumer_strength(symbol, spending_analysis, user_id)
+        
+        return ConsumerStrengthType(
+            overallScore=result['overall_score'],
+            spendingScore=result['spending_score'],
+            optionsScore=result['options_score'],
+            earningsScore=result['earnings_score'],
+            insiderScore=result['insider_score'],
+            spendingGrowth=result['spending_growth'],
+            sectorScore=result['sector_score'],
+            historicalTrend=result['historical_trend'],
+            components=result['components'],
+            timestamp=result['timestamp']
+        )
+    
+    def resolve_consumer_strength_history(self, info, symbol: str, days: int = 30):
+        """Resolve historical Consumer Strength Scores"""
+        user = getattr(info.context, 'user', None)
+        user_id = user.id if user and not user.is_anonymous else None
+        
+        from .consumer_strength_service import ConsumerStrengthService
+        service = ConsumerStrengthService()
+        
+        history = service.get_historical_scores(symbol, user_id, days)
+        
+        return [
+            ConsumerStrengthType(
+                overallScore=h['score'],
+                spendingScore=h['spending_score'],
+                optionsScore=h['options_score'],
+                earningsScore=h['earnings_score'],
+                insiderScore=h['insider_score'],
+                spendingGrowth=0.0,  # Historical data may not have this
+                sectorScore=h.get('sector_score', 50.0),
+                historicalTrend='stable',
+                components={},
+                timestamp=h['date']
+            )
+            for h in history
+        ]
+    
+    def resolve_sector_comparison(self, info, symbol: str):
+        """Resolve sector comparison"""
+        user = getattr(info.context, 'user', None)
+        user_id = user.id if user and not user.is_anonymous else None
+        
+        from .consumer_strength_service import ConsumerStrengthService
+        from .spending_habits_service import SpendingHabitsService
+        
+        service = ConsumerStrengthService()
+        
+        # Get spending analysis if user is authenticated
+        spending_analysis = None
+        if user_id:
+            spending_service = SpendingHabitsService()
+            spending_analysis = spending_service.analyze_spending_habits(user_id, months=3)
+        
+        result = service.get_sector_comparison(symbol, spending_analysis)
+        
+        return SectorComparisonType(
+            stockScore=result['stock_score'],
+            sectorAverage=result['sector_average'],
+            sectorRank=result['sector_rank'],
+            percentile=result['percentile'],
+            sectorName=result['sector_name'],
+            totalInSector=result['total_in_sector']
+        )
 
     def resolve_premium_portfolio_metrics(self, info, portfolio_name=None):
         user = getattr(info.context, "user", None)
@@ -252,29 +591,140 @@ class PremiumQueries(graphene.ObjectType):
         analytics_service = PremiumAnalyticsService()
         return analytics_service.get_advanced_stock_screening(filters, user_id=user_id)
 
-    def resolve_ai_recommendations(self, info, risk_tolerance="medium"):
+    def resolve_ai_recommendations(self, info, profile=None, using_defaults=True, **kwargs):
         user = getattr(info.context, "user", None)
         logger.info(
-            "AI recommendations request - User: %s, Anonymous: %s",
+            "AI recommendations request - User: %s, Anonymous: %s, Profile: %s, UsingDefaults: %s",
             user,
             user.is_anonymous if user else "No user",
+            profile,
+            using_defaults,
         )
-
-        user_id = user.id if user and not user.is_anonymous else 1
+        
+        # Debug: Check if user is actually authenticated
+        if not user or user.is_anonymous:
+            logger.warning("User is anonymous or None in ai_recommendations resolver")
+            # Try to get user from request if available
+            request = getattr(info.context, "request", None)
+            if request and hasattr(request, "user"):
+                user = request.user
+                logger.info(f"Got user from request: {user.email if user and not user.is_anonymous else 'anonymous'}")
+        
+        # Use the actual user ID if available, otherwise fallback to 1
+        if user and not user.is_anonymous:
+            user_id = user.id
+        else:
+            # Fallback: try to get demo@example.com user
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            try:
+                demo_user = User.objects.get(email='demo@example.com')
+                user_id = demo_user.id
+                logger.info(f"Using fallback user_id: {user_id} (demo@example.com)")
+            except User.DoesNotExist:
+                user_id = 1
+                logger.warning(f"Fallback to user_id=1 (demo@example.com not found)")
 
         if user and not user.is_anonymous and not _has_premium_access(user):
             logger.warning("User %s does not have premium access", user.id)
             raise Exception("Premium subscription required")
 
+        # Extract risk tolerance from profile input or use default
+        risk_tolerance = "medium"
+        if profile:
+            # Profile is a ProfileInput object, access attributes directly
+            rt_value = getattr(profile, "riskTolerance", None) or getattr(profile, "risk_tolerance", None)
+            if rt_value:
+                risk_tolerance = rt_value
+                # Normalize risk tolerance values
+                rt_lower = str(risk_tolerance).lower()
+                if rt_lower in ["conservative", "low"]:
+                    risk_tolerance = "Conservative"
+                elif rt_lower in ["moderate", "medium"]:
+                    risk_tolerance = "Moderate"
+                elif rt_lower in ["aggressive", "high"]:
+                    risk_tolerance = "Aggressive"
+                else:
+                    risk_tolerance = "Moderate"
+            logger.info(f"Using risk tolerance from profile: {risk_tolerance}")
+        else:
+            # Try to get from user's income profile if available
+            try:
+                if user and not user.is_anonymous:
+                    income_profile = user.incomeProfile
+                    if income_profile and income_profile.risk_tolerance:
+                        risk_tolerance = income_profile.risk_tolerance
+                        logger.info(f"Using risk tolerance from user profile: {risk_tolerance}")
+            except Exception as e:
+                logger.debug(f"Could not get risk tolerance from user profile: {e}")
+
+        # Build profile dict from GraphQL ProfileInput or saved profile
+        profile_dict = None
+        if profile:
+            # Profile is a ProfileInput object, extract values
+            profile_dict = {
+                "age": getattr(profile, "age", None),
+                "income_bracket": getattr(profile, "incomeBracket", None) or getattr(profile, "income_bracket", None),
+                "investment_goals": list(getattr(profile, "investmentGoals", []) or getattr(profile, "investment_goals", []) or []),
+                "investment_horizon_years": getattr(profile, "investmentHorizonYears", None) or getattr(profile, "investment_horizon_years", None),
+                "risk_tolerance": risk_tolerance,  # Already extracted above
+            }
+        elif not using_defaults and user and not user.is_anonymous:
+            # Try to get from saved profile
+            try:
+                income_profile = user.incomeProfile
+                if income_profile:
+                    profile_dict = {
+                        "age": income_profile.age,
+                        "income_bracket": income_profile.income_bracket,
+                        "investment_goals": list(income_profile.investment_goals or []),
+                        "investment_horizon_years": income_profile.investment_horizon,
+                        "risk_tolerance": income_profile.risk_tolerance,
+                    }
+            except Exception as e:
+                logger.debug(f"Could not get profile from user: {e}")
+        
         analytics_service = PremiumAnalyticsService()
         result = analytics_service.get_ai_recommendations(
-            user_id, risk_tolerance
+            user_id, risk_tolerance, profile=profile_dict
         )
-        logger.info(
-            "AI recommendations result for user %s: %s", user_id, type(result)
-        )
+        # Log the actual result structure with detailed info
+        if isinstance(result, dict):
+            buy_recs = result.get('buy_recommendations', [])
+            portfolio_analysis = result.get('portfolio_analysis', {})
+            logger.info(
+                "[AI RECS] ✅ Result for user %s: keys=%s, buyRecs=%s, portfolioAnalysis=%s",
+                user_id,
+                list(result.keys()),
+                len(buy_recs),
+                'present' if portfolio_analysis else 'missing'
+            )
+            # Log top 3 recommendations for verification
+            if buy_recs:
+                top_3 = buy_recs[:3]
+                logger.info(
+                    "[AI RECS] 📊 Top 3 recommendations: %s",
+                    [(r.get('symbol'), r.get('mlScore'), r.get('confidence')) for r in top_3]
+                )
+        else:
+            logger.warning(
+                "[AI RECS] ⚠️ Unexpected result type for user %s: type=%s, value=%s",
+                user_id, type(result), result
+            )
         return result
 
+    def resolve_research_report(self, info, symbol: str, report_type: str = 'comprehensive'):
+        """Generate research report for a stock"""
+        user = getattr(info.context, "user", None)
+        user_id = user.id if user and not user.is_anonymous else None
+        
+        from .research_report_service import ResearchReportService
+        service = ResearchReportService()
+        
+        report = service.generate_stock_report(symbol, user_id, report_type)
+        # Return dict directly - graphene.JSONString handles serialization
+        return report if report else {'error': 'Report generation failed'}
+    
     def resolve_options_analysis(self, info, symbol):
         """Get comprehensive options analysis for a symbol"""
         try:
@@ -538,6 +988,68 @@ class CancelPremiumSubscription(graphene.Mutation):
             )
 
 
+class GenerateResearchReport(graphene.Mutation):
+    """Generate and optionally email a research report"""
+
+    class Arguments:
+        symbol = graphene.String(required=True, description="Stock symbol")
+        report_type = graphene.String(
+            default_value='comprehensive',
+            description="Report type: quick, comprehensive, deep_dive"
+        )
+        send_email = graphene.Boolean(
+            default_value=False,
+            description="Whether to send report via email"
+        )
+
+    success = graphene.Boolean()
+    message = graphene.String()
+    report = graphene.JSONString()
+
+    def mutate(self, info, symbol: str, report_type: str = 'comprehensive', send_email: bool = False):
+        """Generate research report for a stock"""
+        user = getattr(info.context, "user", None)
+        user_id = user.id if user and not user.is_anonymous else None
+        
+        try:
+            from .research_report_service import ResearchReportService
+            service = ResearchReportService()
+            
+            # Generate the report
+            report = service.generate_stock_report(symbol, user_id, report_type)
+            
+            if not report or 'error' in report:
+                return GenerateResearchReport(
+                    success=False,
+                    message=f"Failed to generate report: {report.get('error', 'Unknown error')}",
+                    report=None
+                )
+            
+            # Send email if requested
+            if send_email and user_id and user and not user.is_anonymous:
+                user_email = user.email
+                email_sent = service.send_report_email(symbol, user_email, user_id, report_type)
+                if email_sent:
+                    message = f"Research report generated and sent to {user_email}"
+                else:
+                    message = "Research report generated, but email delivery failed"
+            else:
+                message = "Research report generated successfully"
+            
+            return GenerateResearchReport(
+                success=True,
+                message=message,
+                report=report  # graphene.JSONString handles serialization automatically
+            )
+        except Exception as e:
+            logger.error(f"Error generating research report: {e}", exc_info=True)
+            return GenerateResearchReport(
+                success=False,
+                message=f"Error generating report: {str(e)}",
+                report=None
+            )
+
+
 # ======================
 # Options Analysis Types
 # ======================
@@ -681,6 +1193,8 @@ class PremiumMutations(graphene.ObjectType):
 
     subscribe_to_premium = SubscribeToPremium.Field()
     cancel_premium_subscription = CancelPremiumSubscription.Field()
+    generate_research_report = GenerateResearchReport.Field()
+    generate_ai_recommendations = GenerateAIRecommendations.Field()  # Automatically converted to generateAiRecommendations by Graphene
     ai_rebalance_portfolio = graphene.Field(
         RebalanceResultType,
         portfolio_name=graphene.String(

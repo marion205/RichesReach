@@ -25,28 +25,28 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/188</span>
+                <span class='fraction'>0/191</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/83</span>
+                <span class='fraction'>0/90</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/27</span>
+                <span class='fraction'>0/28</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/172</span>
+                <span class='fraction'>0/175</span>
             </div>
         
             
@@ -449,7 +449,8 @@
 <a name='L384'></a><a href='#L384'>384</a>
 <a name='L385'></a><a href='#L385'>385</a>
 <a name='L386'></a><a href='#L386'>386</a>
-<a name='L387'></a><a href='#L387'>387</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L387'></a><a href='#L387'>387</a>
+<a name='L388'></a><a href='#L388'>388</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -489,10 +490,14 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -826,14 +831,11 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/**
  * ML-Based Wake Word Service
@@ -845,168 +847,169 @@ impo<span class="cstat-no" title="statement not covered" >rt { triggerHotword } 
 import { extrac<span class="cstat-no" title="statement not covered" >tMFCC } from '../utils/audioFeatures';</span>
 impo<span class="cstat-no" title="statement not covered" >rt { Platform } from 'react-native';</span>
 import<span class="cstat-no" title="statement not covered" > { Asset } from 'expo-asset';<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span></span>
+import logger from '../utils/logger';
+<span class="cstat-no" title="statement not covered" ></span>
+// Mod<span class="fstat-no" title="function not covered" >el</span> configuration
+cons<span class="cstat-no" title="statement not covered" >t MODEL_PATH = '../ass<span class="cstat-no" title="statement not covered" >ets/mode</span></span>ls/wake_word_model'; // Path to TensorFlow.js model
+cons<span class="cstat-no" title="statement not covered" >t DETECTION_TH</span>RESHOLD = 0.7; // Confidence threshold
+const CHECK_INTERVAL = 500; // Check every 500ms (faster than Whisper)
+const AUDIO_CHUNK_DURATIO<span class="cstat-no" title="statement not covered" >N = 1.0; // 1 second chunks<span class="fstat-no" title="function not covered" ></span></span>
+cons<span class="cstat-no" title="statement not covered" >t SAMPLE_RATE = 16000;</span>
+<span class="fstat-no" title="function not covered" ></span>
+clas<span class="cstat-no" title="statement not covered" >s MLWakeWordServic</span>e {
+  private recording: Audio.Recording | null = null;
+  private isListeni<span class="cstat-no" title="statement not covered" >ng = false;<span class="fstat-no" title="function not covered" ></span></span>
+  private checkInt<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >er</span>val: NodeJS.Timeout | null = null;</span>
+  privat<span class="cstat-no" title="statement not covered" >e hasPermission = false;<span class="fstat-no" title="function not covered" ></span></span>
+  private model: any <span class="cstat-no" title="statement not covered" >= n</span>ull;
+  private no<span class="cstat-no" title="statement not covered" >rmalizationParams<span class="cstat-no" title="statement not covered" >: { mean: number[]; std: number[] } | null = nul<span class="cstat-no" title="statement not covered" >l;</span></span></span>
+  private au<span class="cstat-no" title="statement not covered" >dioContext:</span> AudioContext | null = null;
 &nbsp;
-// M<span class="cstat-no" title="statement not covered" >odel configuration</span>
-const <span class="fstat-no" title="function not covered" >MO</span>DEL_PATH = '../assets/models/wake_word_model'; // Path to TensorFlow.js model
-cons<span class="cstat-no" title="statement not covered" >t DETECTION_THRESHOLD <span class="cstat-no" title="statement not covered" >= 0.7; /</span></span>/ Confidence threshold
-cons<span class="cstat-no" title="statement not covered" >t CHECK_INTERV</span>AL = 500; // Check every 500ms (faster than Whisper)
-const AUDIO_CHUNK_DURATION = 1.0; // 1 second chunks
-const SAMPLE_RATE = 16000<span class="cstat-no" title="statement not covered" >;<span class="fstat-no" title="function not covered" ></span></span>
-<span class="cstat-no" title="statement not covered" ></span>
-class<span class="fstat-no" title="function not covered" > M</span>LWakeWordService {
-  pr<span class="cstat-no" title="statement not covered" >ivate recording: A</span>udio.Recording | null = null;
-  private isListening = false;
-  private checkInte<span class="cstat-no" title="statement not covered" >rval: NodeJS.Timeout | null = nu<span class="fstat-no" title="function not covered" >ll</span>;</span>
-  private hasPermi<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >ss</span>ion = false;</span>
-  privat<span class="cstat-no" title="statement not covered" >e model: any = null;<span class="fstat-no" title="function not covered" ></span></span>
-  private normalizati<span class="cstat-no" title="statement not covered" >onP</span>arams: { mean: number[]; std: number[] } | null = null;
-  private au<span class="cstat-no" title="statement not covered" >dioContext: Audio<span class="cstat-no" title="statement not covered" >Context | null = null;<span class="cstat-no" title="statement not covered" ></span></span></span>
-<span class="cstat-no" title="statement not covered" ></span>
-  /**
-   * Loa<span class="cstat-no" title="statement not covered" >d TensorFlow.js mod</span>el
-   */
-  as<span class="cstat-no" title="statement not covered" >ync loa<span class="fstat-no" title="function not covered" >dM</span>odel(): Promise&lt;boolean&gt; {</span>
-    try <span class="cstat-no" title="statement not covered" >{<span class="cstat-no" title="statement not covered" ></span></span>
-      // Dynamic impo<span class="cstat-no" title="statement not covered" >rt </span>to avoid loading if not needed
-      co<span class="cstat-no" title="statement not covered" >nst tf = await im<span class="cstat-no" title="statement not covered" >port('@tensor<span class="cstat-no" title="statement not covered" >flow/tfjs');<span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ></span></span></span></span></span></span>
+  /**<span class="cstat-no" title="statement not covered" ></span>
+   * Load TensorFlow.js model
+   *<span class="cstat-no" title="statement not covered" >/<span class="fstat-no" title="function not covered" ></span></span>
+  async <span class="cstat-no" title="statement not covered" >loadModel(): Promise&lt;boolea<span class="cstat-no" title="statement not covered" >n&gt; {</span></span>
+    try {<span class="cstat-no" title="statement not covered" ></span>
+      //<span class="cstat-no" title="statement not covered" > Dynamic import t<span class="cstat-no" title="statement not covered" >o avoid loadi<span class="cstat-no" title="statement not covered" >ng if not nee</span>ded<span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ></span></span></span></span></span>
+      co<span class="cstat-no" title="statement not covered" >nst tf = await import('@tensorflo</span>w/tfjs');
       aw<span class="cstat-no" title="statement not covered" >ait tf.ready();</span>
-<span class="cstat-no" title="statement not covered" ></span>
-      // Try to load model (if available)
-      try {
-<span class="cstat-no" title="statement not covered" >        // Model would be bundled with app or loaded from serve</span>r
-<span class="cstat-no" title="statement not covered" >        const modelUrl = Platform.se</span>lect({
-          ios: req<span class="cstat-no" title="statement not covered" >uire('../../assets/</span>models/wake_word_model/model.json'),
-          android: requ<span class="cstat-no" title="statement not covered" >ire('../../assets/models/w</span>ake_word_model/model.json'),
-          default: null,<span class="cstat-no" title="statement not covered" ></span>
-        });<span class="cstat-no" title="statement not covered" ></span>
 &nbsp;
-        if (modelUr<span class="cstat-no" title="statement not covered" >l) {</span>
-          this.model = await<span class="cstat-no" title="statement not covered" > tf.</span>loadLayersModel(modelUrl);
-          console.log('<span class="cstat-no" title="statement not covered" >✅ ML</span> wake word model loaded');
+      // Try to load model (if available)
+      try {<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span>
+<span class="cstat-no" title="statement not covered" >        // Model would be bundled with app or loaded from serve</span>r
+        const modelUrl = Platform.select({
+<span class="cstat-no" title="statement not covered" >          ios: require('../../assets/models/wake_word_model/mod</span>el.json'),
+<span class="cstat-no" title="statement not covered" >          android: require('../../as</span>sets/models/wake_word_model/model.json'),
+          default:<span class="cstat-no" title="statement not covered" > null,</span>
+        });<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" ></span>
+        if (modelUrl) {<span class="cstat-no" title="statement not covered" ></span>
+          this.mo<span class="cstat-no" title="statement not covered" >del = await tf.loadLayersModel(modelUrl);</span>
+          logger.log('✅ ML wake word model loaded');
         } else {<span class="cstat-no" title="statement not covered" ></span>
-          // Fallbac<span class="cstat-no" title="statement not covered" >k: try</span> loading from URL
-          const modelUrl2 = 'http://localhost:8000/media/models/wake_word_model/model.json';
-<span class="fstat-no" title="function not covered" ></span>          try {
-<span class="cstat-no" title="statement not covered" >            this.model = await </span>tf.loadLayersModel(modelUrl2);
-<span class="cstat-no" title="statement not covered" >            console.log('✅ ML wake</span> word model loaded from server');
-<span class="cstat-no" title="statement not covered" >          } catch (e) {</span>
-<span class="cstat-no" title="statement not covered" >            console.warn('⚠️ ML mode</span>l not found, will use fallback detection');
+          // Fallback: try l<span class="cstat-no" title="statement not covered" >oadi</span>ng from URL
+          const modelUr<span class="cstat-no" title="statement not covered" >l2 =</span> 'http://localhost:8000/media/models/wake_word_model/model.json';
+          try {<span class="cstat-no" title="statement not covered" ></span>
+            this.mod<span class="cstat-no" title="statement not covered" >el = a</span>wait tf.loadLayersModel(modelUrl2);
+            logger.log('✅ ML wake word model loaded from server');
+<span class="fstat-no" title="function not covered" ></span>          } catch (e) {
+<span class="cstat-no" title="statement not covered" >            logger.warn('⚠️ ML </span>model not found, will use fallback detection');
 <span class="cstat-no" title="statement not covered" >            return false;</span>
 <span class="cstat-no" title="statement not covered" >          }</span>
 <span class="cstat-no" title="statement not covered" >        }</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >        // Load normalization parameters</span>
+<span class="cstat-no" title="statement not covered" >        await this.loadNormalizati</span>onParams();
 &nbsp;
-        // Load normalization parameters
-        await this.loadNormalizationParams();
-&nbsp;
-<span class="fstat-no" title="function not covered" ></span>        return true;
-      } <span class="cstat-no" title="statement not covered" >catch (error) {</span>
-        console.warn('ML model not available:', error);
-        return false;<span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span></span>
+        return true;
+      } catch (error) {
+        logger.warn('ML model not available:', error);
+<span class="fstat-no" title="function not covered" ></span>        return false;
       }<span class="cstat-no" title="statement not covered" ></span>
     } catch (error) {
-      consol<span class="cstat-no" title="statement not covered" >e.warn('TensorFlow.js not available:', error);</span>
-      return false;
+      logger.warn('Tens<span class="cstat-no" title="statement not covered" >orFlow.js not available:', er<span class="fstat-no" title="function not covered" >ro</span>r);<span class="cstat-no" title="statement not covered" ></span></span>
+      return<span class="cstat-no" title="statement not covered" > false;</span>
+    }
+  }<span class="cstat-no" title="statement not covered" ></span>
+&nbsp;
+  /**<span class="cstat-no" title="statement not covered" ></span>
+   * Load normalization parameters
+   */
+  async loadNormalizationParams(): Promise&lt;void&gt; {
+    try {
+      const API_<span class="cstat-no" title="statement not covered" >BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8000';</span>
+      const response<span class="cstat-no" title="statement not covered" > = await fetch(`${API_BASE_URL}/api/wake-word/nor</span>malization/`);
+      <span class="cstat-no" title="statement not covered" ></span>
+      if (response.ok) {
+        this.normalizationParams = await response.json();
+      }
+    } catch (error) {<span class="cstat-no" title="statement not covered" ></span>
+      logger.warn('C<span class="cstat-no" title="statement not covered" >ould not load normalization params:', error);</span>
+    }<span class="cstat-no" title="statement not covered" ></span>
+  }<span class="cstat-no" title="statement not covered" ></span>
+&nbsp;
+  /**
+   * Request microphone <span class="cstat-no" title="statement not covered" >permissions</span>
+   */<span class="cstat-no" title="statement not covered" ></span>
+  async requestPermissions(): Promise&lt;boolean&gt; {
+    try {
+      const { status } = await Audio.requestPermissionsAsync();
+      this.hasPe<span class="cstat-no" title="statement not covered" >rmission = status === 'granted';</span>
+      return thi<span class="cstat-no" title="statement not covered" >s.hasPermissi</span>on;
+    } catch (error) {
+      logger.error('Permission request error:', error);
+      return fal<span class="cstat-no" title="statement not covered" >se;</span>
     }<span class="cstat-no" title="statement not covered" ></span>
   }
 &nbsp;
   /**
-   * Load normalization parameters
+   * Start w<span class="cstat-no" title="statement not covered" >ake word detection</span>
    */<span class="cstat-no" title="statement not covered" ></span>
-  async loadNormaliz<span class="cstat-no" title="statement not covered" >ationParams(): Promise&lt;void&gt; {</span>
-    try {<span class="cstat-no" title="statement not covered" ></span>
-      const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8000';
-      const response = await fetch(`${API_BASE_URL}/api/wake-word/normalization/`);
-      
-      if (response.ok) {<span class="cstat-no" title="statement not covered" ></span>
-        this.normali<span class="cstat-no" title="statement not covered" >zationParams = await response.json();</span>
-      }<span class="cstat-no" title="statement not covered" ></span>
-    } catch (error) {<span class="cstat-no" title="statement not covered" ></span>
-      console.warn('Could not load normalization params:', error);
-    }
-  }<span class="cstat-no" title="statement not covered" ></span>
-<span class="cstat-no" title="statement not covered" ></span>
-  /**
-   * Request microphone permissions
-   */
-  async requestP<span class="cstat-no" title="statement not covered" >ermissions(): Promise&lt;boolean&gt; {</span>
-    try {<span class="cstat-no" title="statement not covered" ></span>
-      const { status } = await Audio.requestPermissionsAsync();
-      this.hasPermission = status === 'granted';
-      return thi<span class="cstat-no" title="statement not covered" >s.hasPermission;</span>
-    } catch (err<span class="cstat-no" title="statement not covered" >or) {</span>
-      console.error('Permission request error:', error);
-      return false;
-    }
-  }<span class="cstat-no" title="statement not covered" ></span>
-<span class="cstat-no" title="statement not covered" ></span>
-  /**
-   * Start wake word detection
-   */
   async start(): Promise&lt;boolean&gt; {
     if (this.isListening) {
-<span class="fstat-no" title="function not covered" ></span>      return true;
-    }<span class="cstat-no" title="statement not covered" ></span>
-<span class="cstat-no" title="statement not covered" ></span>
-    if (!this.hasPermission) <span class="cstat-no" title="statement not covered" >{</span>
-      const <span class="cstat-no" title="statement not covered" >granted = await this.requestPermissions();</span>
-      if (!grant<span class="cstat-no" title="statement not covered" >ed) {</span>
-        return false;
-      }
+      return true;
     }
-<span class="cstat-no" title="statement not covered" ></span>
+&nbsp;
+<span class="fstat-no" title="function not covered" >    if</span> (!this.hasPermission) {
+      co<span class="cstat-no" title="statement not covered" >nst granted = await this.requestPermissions();</span>
+      if (!granted) {<span class="cstat-no" title="statement not covered" ></span>
+        return false;<span class="cstat-no" title="statement not covered" ></span>
+      }<span class="cstat-no" title="statement not covered" ></span>
+    }<span class="cstat-no" title="statement not covered" ></span>
+&nbsp;
     // Try to load model
     const modelLoaded = await this.loadModel();
-    if (!modelLoaded) {
-      console.log('⚠️ ML model not available, using pattern matching fallback');
+    if (!mod<span class="cstat-no" title="statement not covered" >elLoaded) {</span>
+      logger.log('⚠️ ML model not available, using pattern matching fallback');
     }
-<span class="fstat-no" title="function not covered" ></span>
-    try <span class="cstat-no" title="statement not covered" >{</span>
-      await Audio.setAudioModeA<span class="cstat-no" title="statement not covered" >sync({</span>
-        allo<span class="cstat-no" title="statement not covered" >wsRecordingIOS: true,</span>
-        play<span class="cstat-no" title="statement not covered" >sInSilentModeIOS: true,</span>
-        staysActiveInBackground: false,
-      });
+&nbsp;
+    try {
+      await Audio.setAudioModeAsync({
+<span class="fstat-no" title="function not covered" ></span>        allowsRecordingIOS: true,
+<span class="cstat-no" title="statement not covered" >        playsInSilentModeIOS: true,</span>
+        staysActiveInBackground<span class="cstat-no" title="statement not covered" >: false,</span>
+      });<span class="cstat-no" title="statement not covered" ></span>
 <span class="cstat-no" title="statement not covered" ></span>
-      const <span class="cstat-no" title="statement not covered" >recording = ne</span>w Audio.Recording();
+      const recording = new Audio.Recording();
       
-      await recording.prepareToRecordAsync({
-        android: {
+      await <span class="cstat-no" title="statement not covered" >recording.prepareToRecordAsync({</span>
+        andr<span class="cstat-no" title="statement not covered" >oid: {</span>
           extension: '.m4a',
           outputFormat: Audio.RECORDING_OPTION_ANDROID_OUTPUT_FORMAT_MPEG_4,
-<span class="fstat-no" title="function not covered" ></span>          audioEncoder: Audio.RECORDING_OPTION_ANDROID_AUDIO_ENCODER_AAC,
-<span class="cstat-no" title="statement not covered" >          sampleRate: SAMPLE_RATE,</span>
-          nu<span class="cstat-no" title="statement not covered" >mberOfChannel</span>s: 1,
-          bitRate: 128000,
-<span class="cstat-no" title="statement not covered" >        },</span>
-        ios: {<span class="cstat-no" title="statement not covered" ></span>
-          ex<span class="cstat-no" title="statement not covered" >tension: '.m4a',</span>
-          output<span class="cstat-no" title="statement not covered" >Format: Audio.</span>RECORDING_OPTION_IOS_OUTPUT_FORMAT_MPEG4AAC,
-          audioQuality: Audio.RECORDING_OPTION_IOS_AUDIO_QUALITY_MEDIUM,
+          audioEncoder: Audio.RECORDING_OPTION_ANDROID_AUDIO_ENCODER_AAC,
           sampleRate: SAMPLE_RATE,
           numberOfChannels: 1,
-          bitRate: 128000,<span class="cstat-no" title="statement not covered" ></span>
-<span class="cstat-no" title="statement not covered" >          linearPCMBitDepth: 16,</span>
-          li<span class="cstat-no" title="statement not covered" >nearPCMIsBigEndian: false,</span>
-          linearPCMIsFloat: false,
+<span class="fstat-no" title="function not covered" ></span>          bitRate: 128000,
+<span class="cstat-no" title="statement not covered" >        },</span>
+        ios:<span class="cstat-no" title="statement not covered" > {</span>
+          extension: '.m4a',
+<span class="cstat-no" title="statement not covered" >          outputFormat: Audio.RECORDING_OPTION_IOS_OUTPUT_FORMAT_MPEG4AAC,</span>
+          audioQuality: Audi<span class="cstat-no" title="statement not covered" >o.RECORDING_OPTION_IOS_AUDIO_QUA</span>LITY_MEDIUM,
+          sa<span class="cstat-no" title="statement not covered" >mpleRate: SAMPLE_RATE,</span>
+          number<span class="cstat-no" title="statement not covered" >OfChannels: 1,</span>
+          bitRate: 128000,
+          linearPCMBitDepth: 16,
+          linearPCMIsBigEndian: false,
+          linearPCMIsFloat: <span class="cstat-no" title="statement not covered" >false,</span>
 <span class="cstat-no" title="statement not covered" >        },</span>
         web:<span class="cstat-no" title="statement not covered" > {</span>
           mimeType: 'audio/webm',
-          bitsPerSecond: 128000,
-        },
+<span class="cstat-no" title="statement not covered" >          bitsPerSecond: 128000,</span>
+        },<span class="cstat-no" title="statement not covered" ></span>
       });
-<span class="cstat-no" title="statement not covered" ></span>
-      await <span class="cstat-no" title="statement not covered" >recording.startAsync();</span>
-      this.recording = recording;
-      this.isListening = true;
 &nbsp;
+      await recording.startAsync();
+      this.recording = recording;
+      this.isListening = true;<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" ></span>
       // Start periodic checking
       this.startPeriodicCheck();
 &nbsp;
-      console.log('✅ ML wake word detection started');
+      logger.log('✅ ML wake word detection started');
       return true;
 &nbsp;
     } catch (error: any) {
-      console.error('❌ Failed to start ML wake word detection:', error);
+      logger.error('❌ Failed to start ML wake word detection:', error);
       this.isListening = false;
       return false;
     }
@@ -1020,206 +1023,206 @@ class<span class="fstat-no" title="function not covered" > M</span>LWakeWordServ
       if (!this.isListening || !this.recording) {
         return;
       }
-<span class="cstat-no" title="statement not covered" ></span>
-      try {<span class="cstat-no" title="statement not covered" ></span>
-        cons<span class="cstat-no" title="statement not covered" >t detected = await this.c</span>heckAudioChunk();
-        
+&nbsp;
+      try {
+        const detected = await this.checkAudioChunk();
+        <span class="cstat-no" title="statement not covered" ></span>
         if (<span class="cstat-no" title="statement not covered" >detected) {</span>
-          co<span class="cstat-no" title="statement not covered" >nsole.log('🎤 "Hey Riches" detected via ML model!</span>');
-          tr<span class="cstat-no" title="statement not covered" >iggerHotword(</span>);
-          
-          // Small pause before continuing
-          aw<span class="cstat-no" title="statement not covered" >ait new Promise(resolve =&gt; setTimeout(resolve, 1000));</span>
-        }<span class="cstat-no" title="statement not covered" ></span>
-      } catc<span class="cstat-no" title="statement not covered" >h (error) {</span>
-        console.error('Error checking for wake word:', error);
-      }
-    }, CHECK_INTERVAL);
+          lo<span class="cstat-no" title="statement not covered" >gger.log('🎤 "Hey Riches"</span> detected via ML model!');
+          triggerHotword();
+          <span class="cstat-no" title="statement not covered" ></span>
+          //<span class="cstat-no" title="statement not covered" > Small pause before continuing</span>
+          aw<span class="cstat-no" title="statement not covered" >ait new Promi</span>se(resolve =&gt; setTimeout(resolve, 1000));
+        }
+      } catch (error) {
+        logg<span class="cstat-no" title="statement not covered" >er.error('Error checking for wake word:', error);</span>
+      }<span class="cstat-no" title="statement not covered" ></span>
+    }, CHECK<span class="cstat-no" title="statement not covered" >_INTERVAL);</span>
   }
 &nbsp;
-  /*<span class="fstat-no" title="function not covered" >*</span>
-   * Che<span class="cstat-no" title="statement not covered" >ck audio chunk for wake word<span class="fstat-no" title="function not covered" ></span></span>
-   */<span class="cstat-no" title="statement not covered" ></span>
-  private async <span class="cstat-no" title="statement not covered" >checkAud</span>ioChunk(): Promise&lt;boolean&gt; {
-    try {
+  /**
+   * Check audio chunk for wake word
+   */
+  pr<span class="fstat-no" title="function not covered" >iv</span>ate async checkAudioChunk(): Promise&lt;boolean&gt; {
+    try <span class="cstat-no" title="statement not covered" >{<span class="fstat-no" title="function not covered" ></span></span>
       if (!t<span class="cstat-no" title="statement not covered" >his.recording) {</span>
-        return false;<span class="cstat-no" title="statement not covered" ></span>
-      }<span class="cstat-no" title="statement not covered" ></span>
-<span class="cstat-no" title="statement not covered" ></span>
-      // Get current<span class="cstat-no" title="statement not covered" > recording status</span>
-      const status = await this.recording.getStatusAsync();
-      <span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span></span>
-      if (!status.isRecording || !status.metering) {
-        return false;
+        return f<span class="cstat-no" title="statement not covered" >alse;</span>
       }
 <span class="cstat-no" title="statement not covered" ></span>
+      // Get current recording st<span class="cstat-no" title="statement not covered" >atus</span>
+      const stat<span class="cstat-no" title="statement not covered" >us = await this.recording.getStatusAsync();</span>
+      <span class="cstat-no" title="statement not covered" ></span>
+      if (!status.is<span class="cstat-no" title="statement not covered" >Recording || !status.metering) {</span>
+        return false;
+      }<span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span></span>
+&nbsp;
       // Extract features from audio buffer
       // Note: This is simplified - in production, you'd extract actual audio data
-      const audioData = await this.extractAudioData();
+      const audi<span class="cstat-no" title="statement not covered" >oData = await this.extractAudioData();</span>
       
       if (!audioData) {
         return false;
-<span class="fstat-no" title="function not covered" ></span>      }
+      }
+&nbsp;
+      // If ML model is available, use it
+<span class="fstat-no" title="function not covered" ></span>      if (this.model) {
+<span class="cstat-no" title="statement not covered" >        return await this.detectWithModel(audioData);</span>
+      } else<span class="cstat-no" title="statement not covered" > {</span>
+        // Fallb<span class="cstat-no" title="statement not covered" >ack: pattern m</span>atching (simplified)
+        return this.detectWithPatternMatching(audioData);
+      }
 <span class="cstat-no" title="statement not covered" ></span>
-      // If <span class="cstat-no" title="statement not covered" >ML model is available, use it</span>
-      if (this.m<span class="cstat-no" title="statement not covered" >odel) {</span>
-        return await this.detectWithModel(audioData);
-      } else {
-        // Fallback: patter<span class="cstat-no" title="statement not covered" >n matching (simplified)</span>
-        retu<span class="cstat-no" title="statement not covered" >rn this.detectWithPatternMatching(audioData);</span>
-      }<span class="cstat-no" title="statement not covered" ></span>
-&nbsp;
-    } catch (error) {
-      console.error('Error checking audio chunk:', error);
-      return false;<span class="cstat-no" title="statement not covered" ></span>
-    }<span class="cstat-no" title="statement not covered" ></span>
-  }<span class="cstat-no" title="statement not covered" ></span>
-&nbsp;
-  /**
-   * Extract<span class="cstat-no" title="statement not covered" > audio data from recording</span>
-   */<span class="cstat-no" title="statement not covered" ></span>
+    } catch <span class="cstat-no" title="statement not covered" >(error) {</span>
+      logger.err<span class="cstat-no" title="statement not covered" >or('Error chec</span>king audio chunk:', error);
+      return false;
+    }
+  }
+<span class="cstat-no" title="statement not covered" ></span>
+  /**<span class="cstat-no" title="statement not covered" ></span>
+   * Extract aud<span class="cstat-no" title="statement not covered" >io data from r</span>ecording
+   */
   private async extractAudioData(): Promise&lt;Float32Array | null&gt; {
-    try {
-      // This is a placeholder - actual implementation would:
-      // 1. Get <span class="cstat-no" title="statement not covered" >audio buffer from recording</span>
+    try {<span class="cstat-no" title="statement not covered" ></span>
+      // This is<span class="cstat-no" title="statement not covered" > a placeholder - actual implementation would:</span>
+      // 1. Get audio buffer from recording
       // 2. Convert to Float32Array
       // 3. Downsample to 16kHz if needed
-      
-      // For<span class="cstat-no" title="statement not covered" > now, we'll need to use a different approach</span>
-      // Sin<span class="cstat-no" title="statement not covered" >ce expo-av doe</span>sn't expose raw audio buffers directly,
+      <span class="cstat-no" title="statement not covered" ></span>
+      // For now, we'll need to use a different approach
+      // Since expo-av doesn't expose raw audio buffers directly,
       // we might need to record to file and process it
-      
-      return null; // Placeholder
+      <span class="cstat-no" title="statement not covered" ></span>
+      return<span class="cstat-no" title="statement not covered" > null; // Plac</span>eholder
     } catch (error) {
-      console.error('Error extracting audio data:', error);
-<span class="fstat-no" title="function not covered" ></span>      return null;
-    }<span class="cstat-no" title="statement not covered" ></span>
+      logger.error('Error extracting audio data:', error);
+      return null;
+    }
   }
-&nbsp;
-  /**
+<span class="fstat-no" title="function not covered" ></span>
+  /**<span class="cstat-no" title="statement not covered" ></span>
    * Detect wake word using ML model
    */
   private async detectWithModel(audioData: Float32Array): Promise&lt;boolean&gt; {
     try {
-      const <span class="cstat-no" title="statement not covered" >tf = await im</span>port('@tensorflow/tfjs');
+      const tf = await import('@tensorflow/tfjs');
       
       // Extract MFCC features
-      const <span class="cstat-no" title="statement not covered" >mfccFeatures = extractMFCC(audioData, SAMPLE_RATE);</span>
-      <span class="cstat-no" title="statement not covered" ></span>
+      const <span class="cstat-no" title="statement not covered" >mfccFeatures </span>= extractMFCC(audioData, SAMPLE_RATE);
+      
       // Normalize features
-      let normalizedFeatures = mfccFeatures;
-      if (this.normalizationParams) {
+      let no<span class="cstat-no" title="statement not covered" >rmalizedFeatures = mfccFeatures;</span>
+      if (th<span class="cstat-no" title="statement not covered" >is.normalizat</span>ionParams) {
         normalizedFeatures = mfccFeatures.map((val, idx) =&gt; {
           const mean = this.normalizationParams!.mean[idx] || 0;
-<span class="fstat-no" title="function not covered" ></span>          const std = this.normalizationParams!.std[idx] || 1;
-<span class="cstat-no" title="statement not covered" >          return (val - mean) / (std + 1e-8);</span>
-        });<span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span></span>
-      }
+          const std = this.normalizationParams!.std[idx] || 1;
+          return (val - mean) / (std + 1e-8);
+        });
+<span class="fstat-no" title="function not covered" ></span>      }
 <span class="cstat-no" title="statement not covered" ></span>
-      // Convert to tensor
-      const inputTensor = tf.tensor2d<span class="cstat-no" title="statement not covered" >([normalizedF</span>eatures]);
+      // Convert to ten<span class="cstat-no" title="statement not covered" >sor<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span></span>
+      const inputTensor = tf.tensor2d([normalizedFeatures]);
 <span class="cstat-no" title="statement not covered" ></span>
-      // Predict<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span>
-      const prediction = this.mod<span class="cstat-no" title="statement not covered" >el.predict(inputTensor) as any;</span>
-      const confidence = await p<span class="cstat-no" title="statement not covered" >rediction.data();</span>
-      <span class="cstat-no" title="statement not covered" ></span>
-      // Cleanup
-      inputTensor.dispose();
-      prediction.dispose();
-<span class="cstat-no" title="statement not covered" ></span>
+      // Predict
+      const prediction = this.model.p<span class="cstat-no" title="statement not covered" >redict(inputT</span>ensor) as any;
+      const <span class="cstat-no" title="statement not covered" >confidence = await prediction.data();</span>
+      <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span>
+      // Cleanup<span class="cstat-no" title="statement not covered" ></span>
+      inputTensor.dispose();<span class="cstat-no" title="statement not covered" ></span>
+      prediction.dis<span class="cstat-no" title="statement not covered" >pose();</span>
+&nbsp;
       // Check threshold
-      return confidence[0] &gt; DE<span class="cstat-no" title="statement not covered" >TECTION_THRESHOLD;</span>
+      return confidence[0] &gt; DETECTION_THRESHOLD;
 <span class="cstat-no" title="statement not covered" ></span>
     } catch (error) {
-      consol<span class="cstat-no" title="statement not covered" >e.error('ML detection e</span>rror:', error);
-      return<span class="cstat-no" title="statement not covered" > false;</span>
+      logger.error('ML detectio<span class="cstat-no" title="statement not covered" >n error:', error);</span>
+      return false;<span class="cstat-no" title="statement not covered" ></span>
     }
   }<span class="cstat-no" title="statement not covered" ></span>
-&nbsp;
+<span class="cstat-no" title="statement not covered" ></span>
   /**
    * Fallbac<span class="cstat-no" title="statement not covered" >k pattern matching detection</span>
-   */<span class="cstat-no" title="statement not covered" ></span>
+   */
   private detectWithPatternMatching(audioData: Float32Array): boolean {
-    // Simple energy-based detection
-    let energy = 0;
+    // Simpl<span class="cstat-no" title="statement not covered" >e energy-based detection</span>
+    let ener<span class="cstat-no" title="statement not covered" >gy = 0;</span>
     for (let i = 0; i &lt; audioData.length; i++) {
       energy += Math.abs(audioData[i]);
-<span class="fstat-no" title="function not covered" >    }</span>
+    }
     energy = energy / audioData.length;
-<span class="cstat-no" title="statement not covered" ></span>
-    // B<span class="cstat-no" title="statement not covered" >asic threshol<span class="cstat-no" title="statement not covered" >d </span>(this is very simplified)</span>
-    return e<span class="cstat-no" title="statement not covered" >nergy &gt; 0.1;</span>
-  }
-<span class="cstat-no" title="statement not covered" ></span>
-  /**
-   * Sto<span class="cstat-no" title="statement not covered" >p wake word detection</span>
-   */
-  async stop(): Promise&lt;void&gt; {
-    if (!this.isListening &amp;&amp; !this.recording) {
-      return;
-<span class="fstat-no" title="function not covered" >    }</span>
-<span class="cstat-no" title="statement not covered" ></span>
-    try {<span class="cstat-no" title="statement not covered" ></span>
-      this.isListening = false;
-<span class="cstat-no" title="statement not covered" ></span>
-      if (th<span class="cstat-no" title="statement not covered" >is.checkInterval) {</span>
-        clea<span class="cstat-no" title="statement not covered" >rInterval(this.checkInterval);</span>
-        this.che<span class="cstat-no" title="statement not covered" >ckInterval = null;</span>
-      }<span class="cstat-no" title="statement not covered" ></span>
 &nbsp;
-      if (th<span class="cstat-no" title="statement not covered" >is.recording) {</span>
+<span class="fstat-no" title="function not covered" >    //</span> Basic threshold (this is very simplified)
+    return energy &gt; 0.1;
+  }<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ></span></span>
+  /**<span class="cstat-no" title="statement not covered" ></span>
+   * Stop wake word detection
+   */<span class="cstat-no" title="statement not covered" ></span>
+  async stop(): Promise&lt;void&gt; {
+    if (<span class="cstat-no" title="statement not covered" >!this.isListening &amp;&amp; </span>!this.recording) {
+      return;
+    }
+&nbsp;
+    try {
+<span class="fstat-no" title="function not covered" ></span>      this.isListening = false;
+<span class="cstat-no" title="statement not covered" ></span>
+      if (th<span class="cstat-no" title="statement not covered" >is.check</span>Interval) {
+        clearInterval(this.checkInterval);
+<span class="cstat-no" title="statement not covered" >        this.checkInterval = null;</span>
+      }<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" ></span>
+      if (this.r<span class="cstat-no" title="statement not covered" >ecording) {</span>
         try {<span class="cstat-no" title="statement not covered" ></span>
-          const status = await this<span class="cstat-no" title="statement not covered" >.recording.getStatusAsync();</span>
-          if (status<span class="cstat-no" title="statement not covered" >.isRecording) {</span>
-            await this.r<span class="cstat-no" title="statement not covered" >ecording.stopAndUnloadAsync();</span>
-          } else {
-            await this.recording.unloadAsync();
+          const status = await this.recording.getStatusAsync();
+          if<span class="cstat-no" title="statement not covered" > (status.isRecording) {</span>
+            awai<span class="cstat-no" title="statement not covered" >t this.recording.stopAndUnloadAsync();</span>
+          } else {<span class="cstat-no" title="statement not covered" ></span>
+            await th<span class="cstat-no" title="statement not covered" >is.recording.unloadAsync();</span>
           }<span class="cstat-no" title="statement not covered" ></span>
         } catch (e) {
           // Try to unload even if stop failed
-          try {
+          try {<span class="cstat-no" title="statement not covered" ></span>
             await this.recording.unloadAsync();
-          } catch (e<span class="cstat-no" title="statement not covered" >2) {</span>
-            console.warn<span class="cstat-no" title="statement not covered" >('Could not unload recording:', e2);</span>
+          } catch (e2) {
+            logger.warn('Could not unload recording:', e2);
           }
-        }
+        }<span class="cstat-no" title="statement not covered" ></span>
         this.recording =<span class="cstat-no" title="statement not covered" > null;</span>
       }
 &nbsp;
-      // Wait fo<span class="cstat-no" title="statement not covered" >r recording to be fully</span> released
+      // Wait for record<span class="cstat-no" title="statement not covered" >ing to be fully released</span>
       await new Promise(resolve =&gt; setTimeout(resolve, 500));
 &nbsp;
-      // Res<span class="cstat-no" title="statement not covered" >et audio mode to e<span class="fstat-no" title="function not covered" >ns</span>ure clean<span class="cstat-no" title="statement not covered" > state</span></span>
+      // Reset a<span class="cstat-no" title="statement not covered" >udio mode to ensure cle</span>an state
       try {
-        awai<span class="cstat-no" title="statement not covered" >t Audio.setAudioModeAsync({</span>
-          allows<span class="cstat-no" title="statement not covered" >RecordingIOS: false,</span>
+        await Audio.setAudioModeAsync({
+          al<span class="cstat-no" title="statement not covered" >lowsRecordingIOS: <span class="fstat-no" title="function not covered" >fa</span>lse,<span class="cstat-no" title="statement not covered" ></span></span>
           playsInSilentModeIOS: false,
-          staysActiveInBackground: false,
-        });
+          st<span class="cstat-no" title="statement not covered" >aysActiveInBackground: false,</span>
+        });<span class="cstat-no" title="statement not covered" ></span>
       } catch (e) {
         // Ignore errors
       }
 &nbsp;
-      console.log('✅ ML wake word detection stopped');
-    } catch <span class="cstat-no" title="statement not covered" >(error) {</span>
-      console.error('Failed to stop ML wake word detection:', error);
+      logger.log('✅ ML wake word detection stopped');
+    } catch (error) {
+      logger.error('Failed to stop ML wake word detection:', error);
       // Ensure recording is null even on error
       this.r<span class="cstat-no" title="statement not covered" >ecording = null;</span>
       this.isListening = false;
-    }<span class="cstat-no" title="statement not covered" ></span>
+    }
   }<span class="cstat-no" title="statement not covered" ></span>
 &nbsp;
-  getStatus(): { listening: boolean; hasPermission: boolean; modelLoaded: boolean } {
-<span class="fstat-no" title="function not covered" >    re</span>turn {
-      li<span class="cstat-no" title="statement not covered" >stening: this.isListening,</span>
+  getStatus(<span class="cstat-no" title="statement not covered" >): { listening: boolean</span>; hasPermission: boolean; modelLoaded: boolean } {
+    return {<span class="cstat-no" title="statement not covered" ></span>
+      listening: this.isListening,
       hasPermission: this.hasPermission,
-      modelLoaded: this.model !== null,
-    };
+<span class="fstat-no" title="function not covered" ></span>      modelLoaded: this.model !== null,
+    };<span class="cstat-no" title="statement not covered" ></span>
   }
 }
 &nbsp;
 // Singleton instance
-<span class="cstat-no" title="statement not covered" >export const mlWakeWordService = new MLWakeWordServic</span>e();
+export const mlWakeWordService = new MLWakeWordService();
 &nbsp;
 &nbsp;</pre></td></tr></table></pre>
 
@@ -1228,7 +1231,7 @@ class<span class="fstat-no" title="function not covered" > M</span>LWakeWordServ
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-11-10T15:45:05.335Z
+                at 2025-11-20T00:57:54.136Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

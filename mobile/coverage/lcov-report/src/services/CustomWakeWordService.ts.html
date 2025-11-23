@@ -25,28 +25,28 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/114</span>
+                <span class='fraction'>0/117</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/42</span>
+                <span class='fraction'>0/49</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/12</span>
+                <span class='fraction'>0/13</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/112</span>
+                <span class='fraction'>0/115</span>
             </div>
         
             
@@ -402,7 +402,8 @@
 <a name='L337'></a><a href='#L337'>337</a>
 <a name='L338'></a><a href='#L338'>338</a>
 <a name='L339'></a><a href='#L339'>339</a>
-<a name='L340'></a><a href='#L340'>340</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L340'></a><a href='#L340'>340</a>
+<a name='L341'></a><a href='#L341'>341</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -410,12 +411,16 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -707,9 +712,6 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -747,66 +749,67 @@
  * No external API required - uses your existing Whisper server
  */
 &nbsp;
-<span class="cstat-no" title="statement not covered" >import { Audio } from 'expo-av';</span>
-<span class="cstat-no" title="statement not covered" >import { triggerHotword } from './VoiceH</span>otword';
-import { Platform <span class="cstat-no" title="statement not covered" >} from 'react-nativ</span>e';
+import { Audio } from <span class="cstat-no" title="statement not covered" >'expo-av';<span class="fstat-no" title="function not covered" ></span></span>
+impo<span class="cstat-no" title="statement not covered" >rt { triggerHotword } from './VoiceHotword';</span>
+import { Platform } from 'react-native';
+<span class="cstat-no" title="statement not covered" >import logger from '../utils/logger';</span>
 <span class="cstat-no" title="statement not covered" ></span>
-const WHISPER_API_URL = <span class="cstat-no" title="statement not covered" >process.env.EXPO_PUBLIC_WHISPER_API_URL || 'http://localhost:3001';</span>
-const WAKE_WORD = <span class="cstat-no" title="statement not covered" >'hey riches';</span>
-const CHECK_INTERVAL = <span class="cstat-no" title="statement not covered" >3000;</span> // Check every 3 seconds
-const MIN_CONFIDENCE = <span class="cstat-no" title="statement not covered" >0.7;</span> // Minimum confidence threshold
-&nbsp;
-clas<span class="fstat-no" title="function not covered" >s </span>CustomWakeWordService {
-  privat<span class="cstat-no" title="statement not covered" >e recording: Audio.Reco</span>rding | null = null;
-  privat<span class="cstat-no" title="statement not covered" >e isListening = false;</span>
-  privat<span class="cstat-no" title="statement not covered" >e checkInterval: NodeJS.Tim</span>eout | null = null;
-  privat<span class="cstat-no" title="statement not covered" >e hasPermission = false;</span>
-&nbsp;
-  /**
-   * Request microphone permissions
+const WHISPER_API_<span class="cstat-no" title="statement not covered" >URL = process.env.E</span>XPO_PUBLIC_WHISPER_API_URL || 'http://localhost:3001';
+const WAKE_WORD = 'hey <span class="cstat-no" title="statement not covered" >riches';</span>
+const CHECK_INTER<span class="cstat-no" title="statement not covered" >VAL = 3000; // Check every 3 seconds</span>
+const MIN_CONFIDENCE = 0<span class="cstat-no" title="statement not covered" >.7; // Minimum confidence threshold</span>
+<span class="cstat-no" title="statement not covered" ></span>
+class CustomWakeWordSer<span class="cstat-no" title="statement not covered" >vice </span>{
+  private recording: Au<span class="cstat-no" title="statement not covered" >dio.</span>Recording | null = null;
+  private isListening = false;
+  pr<span class="fstat-no" title="function not covered" >iv</span>ate checkInterval: NodeJS.Timeout | null = null;
+  privat<span class="cstat-no" title="statement not covered" >e hasPermission = false</span>;
+<span class="cstat-no" title="statement not covered" ></span>
+  /**<span class="cstat-no" title="statement not covered" ></span>
+   * Req<span class="cstat-no" title="statement not covered" >uest microphone permissions</span>
    */
-  as<span class="fstat-no" title="function not covered" >yn</span>c requestPermissions(): Promise&lt;boolean&gt; {
-    try <span class="cstat-no" title="statement not covered" >{</span>
-      const { status } = await <span class="cstat-no" title="statement not covered" >Audio.requestPermissionsAsync();</span>
-      this.h<span class="cstat-no" title="statement not covered" >asPermission = status === 'granted';</span>
+  async requestPermissions(): Promise&lt;boolean&gt; {
+    try {
+      const { status } = await Audio.requestPermissionsAsync();
+<span class="fstat-no" title="function not covered" ></span>      this.hasPermission = status === 'granted';
       <span class="cstat-no" title="statement not covered" ></span>
-      if (!this.<span class="cstat-no" title="statement not covered" >hasPermission) {</span>
-        console.warn('⚠️ Microphone permission not granted for wake word detection');
+      if (!this.hasPermission) <span class="cstat-no" title="statement not covered" >{</span>
+        logg<span class="cstat-no" title="statement not covered" >er.warn('⚠️ Microphone permission not grant</span>ed for wake word detection');
       }<span class="cstat-no" title="statement not covered" ></span>
-      
+      <span class="cstat-no" title="statement not covered" ></span>
       return this.hasPermission;
     } catch <span class="cstat-no" title="statement not covered" >(error) {</span>
-      consol<span class="cstat-no" title="statement not covered" >e.error('Permi</span>ssion request error:', error);
+      logger.error('Permission request error:', error);
       return false;
-    }
-  }
+    }<span class="cstat-no" title="statement not covered" ></span>
+  }<span class="cstat-no" title="statement not covered" ></span>
 &nbsp;
   /**
-   *<span class="fstat-no" title="function not covered" > S</span>tart continuous recording and checking for wake word
-   */<span class="cstat-no" title="statement not covered" ></span>
-  async star<span class="cstat-no" title="statement not covered" >t(): Promise&lt;boolean&gt; {</span>
-    if (this<span class="cstat-no" title="statement not covered" >.isListening)</span> {
-      console.log('✅ Wake word detection already active');
-      re<span class="cstat-no" title="statement not covered" >turn true;</span>
+   * Start continuous recording and checking for wake word
+   */
+  async start(): Promise&lt;boolean&gt; {
+<span class="fstat-no" title="function not covered" >    if</span> (this.isListening) {
+      lo<span class="cstat-no" title="statement not covered" >gger.log('✅ Wake word detection already active');</span>
+      return<span class="cstat-no" title="statement not covered" > true;</span>
     }<span class="cstat-no" title="statement not covered" ></span>
-<span class="cstat-no" title="statement not covered" ></span>
-    if (!this.ha<span class="cstat-no" title="statement not covered" >sPermission) {</span>
-      const granted = await this.requestPermissions();
-      if (!granted) {
-<span class="cstat-no" title="statement not covered" >        return false;</span>
-      }<span class="cstat-no" title="statement not covered" ></span>
+&nbsp;
+    if (<span class="cstat-no" title="statement not covered" >!this.hasPermission) {</span>
+      const granted = await <span class="cstat-no" title="statement not covered" >this.requestPermissions();</span>
+      if (!g<span class="cstat-no" title="statement not covered" >ranted) {</span>
+        return f<span class="cstat-no" title="statement not covered" >alse;</span>
+      }
     }
 <span class="cstat-no" title="statement not covered" ></span>
-    try {
-      console.log('🎤 Starting custom wake word detection...');
-      
+    try {<span class="cstat-no" title="statement not covered" ></span>
+      logger.log('🎤 Starting custom wake word detection...');
+      <span class="cstat-no" title="statement not covered" ></span>
       // Configure audio recording for wake word detection
       await Audio.setAudioModeAsync({
-        allowsRecordingIOS: tr<span class="cstat-no" title="statement not covered" >ue,</span>
-        play<span class="cstat-no" title="statement not covered" >sInSilentModeIOS: true,</span>
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
         staysActiveInBackground: false,
-      });
-&nbsp;
+      });<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" ></span>
       // Start continuous recording
       const recording = new Audio.Recording();
       
@@ -828,128 +831,128 @@ clas<span class="fstat-no" title="function not covered" >s </span>CustomWakeWord
           bitRate: 128000,
           linearPCMBitDepth: 16,
           linearPCMIsBigEndian: false,
-          li<span class="cstat-no" title="statement not covered" >nearPCMIsFloat: false,</span>
-        },<span class="cstat-no" title="statement not covered" ></span>
-        web:<span class="cstat-no" title="statement not covered" > {</span>
-          mimeType: 'audio/webm',
+          linearPCMIsFloat: false,
+        },
+        web: {
+          mi<span class="cstat-no" title="statement not covered" >meType: 'audio/webm',</span>
           bi<span class="cstat-no" title="statement not covered" >tsPerSecond: 128000,</span>
         },<span class="cstat-no" title="statement not covered" ></span>
-      });<span class="cstat-no" title="statement not covered" ></span>
-&nbsp;
-      await recording.startAsync();
-      this.r<span class="cstat-no" title="statement not covered" >ecording = recording;</span>
-      this.i<span class="cstat-no" title="statement not covered" >sListening = true;</span>
+      });
 <span class="cstat-no" title="statement not covered" ></span>
-      // Start periodic checking
-      this.startPeriodicCheck();
+      await <span class="cstat-no" title="statement not covered" >recording.startAsync();</span>
+      this.r<span class="cstat-no" title="statement not covered" >ecording = re</span>cording;
+      this.isListening = true;
 &nbsp;
-      console.log('✅ Custom wake word detection started');
+      // Sta<span class="cstat-no" title="statement not covered" >rt periodic checking</span>
+      this.s<span class="cstat-no" title="statement not covered" >tartPeriodicCheck();</span>
+<span class="cstat-no" title="statement not covered" ></span>
+      logger.log('✅ Custom wake word detection started');
       return true;
-<span class="fstat-no" title="function not covered" ></span>
-    } ca<span class="cstat-no" title="statement not covered" >tch (error) {<span class="fstat-no" title="function not covered" ></span></span>
-      consol<span class="cstat-no" title="statement not covered" >e.error('❌ Failed to start wake word detection:', error);</span>
-      this.isLis<span class="cstat-no" title="statement not covered" >tening =</span> false;
-      return false;
+&nbsp;
+    } catch (error) {
+      logger.error('❌ Failed to start wake word detection:', error);
+<span class="fstat-no" title="function not covered" ></span>      this.isListening = false;
+      re<span class="cstat-no" title="statement not covered" >turn false;<span class="fstat-no" title="function not covered" ></span></span>
     }<span class="cstat-no" title="statement not covered" ></span>
-  }
-<span class="cstat-no" title="statement not covered" ></span>
+  }<span class="cstat-no" title="statement not covered" ></span>
+&nbsp;
   /**<span class="cstat-no" title="statement not covered" ></span>
-   * Periodically ch<span class="cstat-no" title="statement not covered" >eck audi</span>o chunks for wake word
-   */
-  private startPeriodicCheck(): void {
-    this.checkInterval = setInterva<span class="cstat-no" title="statement not covered" >l(async () =&gt; {</span>
-      if (!this.<span class="cstat-no" title="statement not covered" >isListening || !this.recording) {</span>
+   * Periodically check audio chunks for wake word
+   */<span class="cstat-no" title="statement not covered" ></span>
+  private startP<span class="cstat-no" title="statement not covered" >eriodicCheck(): void {</span>
+    this.checkInterv<span class="cstat-no" title="statement not covered" >al = set</span>Interval(async () =&gt; {
+      if (!this.isListening || !this.recording) {
         return;
       }<span class="cstat-no" title="statement not covered" ></span>
 <span class="cstat-no" title="statement not covered" ></span>
-      try {<span class="cstat-no" title="statement not covered" ></span>
-        // Get current r<span class="cstat-no" title="statement not covered" >ecording URI</span>
-        const uri = this.recording.getURI();
+      try {
+        // Get current recording URI<span class="cstat-no" title="statement not covered" ></span>
+        const uri = <span class="cstat-no" title="statement not covered" >this.recording.getURI();</span>
         if (!uri) {<span class="cstat-no" title="statement not covered" ></span>
-          return;
+          return;<span class="cstat-no" title="statement not covered" ></span>
         }
-&nbsp;
+<span class="cstat-no" title="statement not covered" ></span>
         // Send to Whisper for transcription
-        const tr<span class="cstat-no" title="statement not covered" >anscript = await this.transcribeAudio(uri);</span>
+        const transcript = await this.transcribeAudio(uri);
         
         if (transcript) {
-          // Check if wake word is in transcript
+          // Che<span class="cstat-no" title="statement not covered" >ck if wake word is in transcript</span>
           const detected = this.detectWakeWord(transcript);
           
           if (detected) {
-<span class="fstat-no" title="function not covered" ></span>            console.log('🎤 "Hey Riches" detected in transcript:', transcript);
-<span class="cstat-no" title="statement not covered" >            triggerHotword();</span>
+            logger.log('🎤 "Hey Riches" detected in transcript:', transcript);
+            triggerHotword();
             
-            // Restart record<span class="cstat-no" title="statement not covered" >ing for next ch</span>eck
+<span class="fstat-no" title="function not covered" ></span>            // Restart recording for next check
 <span class="cstat-no" title="statement not covered" >            await this.restartRecording();</span>
           }
-        }
-      } catch (error) {
-        console.error('Error checking for wake word:', error);
-      }<span class="cstat-no" title="statement not covered" ></span>
+        }<span class="cstat-no" title="statement not covered" ></span>
+      } catc<span class="cstat-no" title="statement not covered" >h (error) {</span>
+        logger.error('Error checking for wake word:', error);
+      }
     }, CHECK_INTERVAL);
   }
-&nbsp;
+<span class="cstat-no" title="statement not covered" ></span>
   /**
    * Transcribe audio using Whisper server
    */
-  private as<span class="cstat-no" title="statement not covered" >ync transcribeAudio(uri: string): Promise&lt;string | null&gt; {</span>
-    try {<span class="cstat-no" title="statement not covered" ></span>
+  private async transcribeAudio(uri: string): Promise&lt;string | null&gt; {
+    try {
       // Create FormData
-      const formData = ne<span class="cstat-no" title="statement not covered" >w FormData();</span>
-      formDa<span class="cstat-no" title="statement not covered" >ta.append('audio', {</span>
+      const <span class="cstat-no" title="statement not covered" >formData = new FormData();</span>
+      formData.a<span class="cstat-no" title="statement not covered" >ppend('audio'</span>, {
         uri: uri,
-        type: 'audio/m4a',
+        type: 'audio/m4a'<span class="cstat-no" title="statement not covered" >,</span>
         name<span class="cstat-no" title="statement not covered" >: 'wake_word_check.m4a',</span>
       } as any);
 &nbsp;
-      const <span class="cstat-no" title="statement not covered" >response = aw</span>ait fetch(`${WHISPER_API_URL}/api/transcribe-audio/`, {
+      const <span class="cstat-no" title="statement not covered" >response = await fetch(`${WHISPER_API_URL}/api/transcri</span>be-audio/`, {
         method: 'POST',
         body: formData,
-        headers: {
+        head<span class="cstat-no" title="statement not covered" >ers: {</span>
           'Content-Type': 'multipart/form-data',
         },
-<span class="fstat-no" title="function not covered" ></span>      });
-<span class="cstat-no" title="statement not covered" ></span>
-      if (!r<span class="cstat-no" title="statement not covered" >esponse.ok) {</span>
-        return null;
+      });
+&nbsp;
+      if (!response.ok) {
+<span class="fstat-no" title="function not covered" ></span>        return null;
       }<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" ></span>
+      const data = await response.json();
+      return data.transcrip<span class="cstat-no" title="statement not covered" >t?.toLowerCase() || null;</span>
 &nbsp;
-      co<span class="cstat-no" title="statement not covered" >nst data = await response.json();</span>
-      return<span class="cstat-no" title="statement not covered" > data.transcr</span>ipt?.toLowerCase() || null;
-&nbsp;
-    } catch (error) {
-      console.error('Transc<span class="cstat-no" title="statement not covered" >ription error:', error);</span>
+    } ca<span class="cstat-no" title="statement not covered" >tch (error) {</span>
+      logger<span class="cstat-no" title="statement not covered" >.error('Trans</span>cription error:', error);
       // Return null on network errors - don't spam the console
       // The calling code should handle null gracefully
-      return null;
+      return null;<span class="cstat-no" title="statement not covered" ></span>
     }
   }
 &nbsp;
-  /**<span class="cstat-no" title="statement not covered" ></span>
-   * Detect <span class="cstat-no" title="statement not covered" >wake word in transcript</span>
-   */<span class="cstat-no" title="statement not covered" ></span>
-  private detectWakeWord(transcript: string): boolean {
-    if (!transcript) {
-      re<span class="cstat-no" title="statement not covered" >turn false;</span>
+  /**
+   * Detect wake word in transcript
+   */
+  privat<span class="cstat-no" title="statement not covered" >e detectWakeWord(transcript: string): boolean {</span>
+    if (!tra<span class="cstat-no" title="statement not covered" >nscript) {</span>
+      return fal<span class="cstat-no" title="statement not covered" >se;</span>
     }
 &nbsp;
-    const normalized = transcript.toLowerCase().trim();
+    cons<span class="cstat-no" title="statement not covered" >t normalized =</span> transcript.toLowerCase().trim();
     
-<span class="fstat-no" title="function not covered" >    //</span> Simple keyword matching
-    if (<span class="cstat-no" title="statement not covered" >normalized.includes(WAKE_WORD)) {</span>
-      return<span class="cstat-no" title="statement not covered" > true;</span>
-    }<span class="cstat-no" title="statement not covered" ></span>
+    // Simple keyword matching
+    if (normalized.includes(WAKE_WORD)) {
+      return true;
+<span class="fstat-no" title="function not covered" >    }</span>
 <span class="cstat-no" title="statement not covered" ></span>
-    // Fuzzy matching for variations
-    const variations = [
-      'hey r<span class="cstat-no" title="statement not covered" >ich',<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span></span>
+    // Fuzzy<span class="cstat-no" title="statement not covered" > matching for variations</span>
+    const variat<span class="cstat-no" title="statement not covered" >ions = [</span>
+      'hey rich'<span class="cstat-no" title="statement not covered" >,</span>
       'hey riches',
-      'hey reach',<span class="cstat-no" title="statement not covered" ></span>
-      'hey r<span class="cstat-no" title="statement not covered" >ich is',</span>
+      'hey reach',
+      'hey r<span class="cstat-no" title="statement not covered" >ich is',<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span></span>
       'hey riches is',
-    ];
-&nbsp;
+    ];<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" ></span>
     for (const variation of variations) {
       if (normalized.includes(variation)) {
         return true;
@@ -971,84 +974,84 @@ clas<span class="fstat-no" title="function not covered" >s </span>CustomWakeWord
 &nbsp;
       // Small delay before restarting
       await new Promise(resolve =&gt; setTimeout(resolve, 500));
-<span class="cstat-no" title="statement not covered" ></span>
-      // Sta<span class="cstat-no" title="statement not covered" >rt new recording</span>
+&nbsp;
+      // Start new recording
       const recording = new Audio.Recording();
-      await recording.prepareToRecordAsync({
+      await <span class="cstat-no" title="statement not covered" >recording.prepareToRecordAsync</span>({
         andr<span class="cstat-no" title="statement not covered" >oid: {</span>
           extension: '.m4a',
           outputFormat: Audio.RECORDING_OPTION_ANDROID_OUTPUT_FORMAT_MPEG_4,
-          audioEncoder: Audio.RECORDING_OPTION_ANDROID_AUDIO_ENCODER_AAC,
+          au<span class="cstat-no" title="statement not covered" >dioEncoder: Audio.RECORDING_OPTION_ANDROID_AUDIO_ENCODER_AAC,</span>
           sampleRate: 16000,
           numberOfChannels: 1,
-<span class="fstat-no" title="function not covered" ></span>          bitRate: 128000,
-<span class="cstat-no" title="statement not covered" >        },</span>
-        ios:<span class="cstat-no" title="statement not covered" > {</span>
-          extension: '.m4a',
-<span class="cstat-no" title="statement not covered" >          outputFormat: Audio.RECORDING_OPTION_IOS_OUTPUT_FORMAT_MPEG4AAC,</span>
-          au<span class="cstat-no" title="statement not covered" >dioQuality: Audio.RECORDIN</span>G_OPTION_IOS_AUDIO_QUALITY_MEDIUM,
-          sa<span class="cstat-no" title="statement not covered" >mpleRate: 16000,</span>
-          number<span class="cstat-no" title="statement not covered" >OfChannels: 1,</span>
-          bitRat<span class="cstat-no" title="statement not covered" >e: 128000,</span>
-          linearPCMBitDepth: 16,
-          li<span class="cstat-no" title="statement not covered" >nearPCMIsBigEndian: false,</span>
-          linear<span class="cstat-no" title="statement not covered" >PCMIsFloat: false,</span>
-        },<span class="cstat-no" title="statement not covered" ></span>
-        web: {<span class="cstat-no" title="statement not covered" ></span>
-          mimeType: 'aud<span class="cstat-no" title="statement not covered" >io/webm',</span>
-          bitsPerSecond: 128000,
+          bitRate: 128000,
         },
+        ios: {
+<span class="fstat-no" title="function not covered" ></span>          extension: '.m4a',
+<span class="cstat-no" title="statement not covered" >          outputFormat: Audio.RECORDING_OPTION_IOS_OUTPUT_FORMAT_MPEG4AAC,</span>
+          au<span class="cstat-no" title="statement not covered" >dioQuali</span>ty: Audio.RECORDING_OPTION_IOS_AUDIO_QUALITY_MEDIUM,
+          sampleRate: 16000,
+<span class="cstat-no" title="statement not covered" >          numberOfChannels: 1,</span>
+          bi<span class="cstat-no" title="statement not covered" >tRate: 128000,</span>
+          li<span class="cstat-no" title="statement not covered" >nearPCMBitDepth: 16,</span>
+          linear<span class="cstat-no" title="statement not covered" >PCMIsBigEndian: false,</span>
+          linear<span class="cstat-no" title="statement not covered" >PCMIsFloat: false,</span>
+        },
+        web:<span class="cstat-no" title="statement not covered" > {</span>
+          mimeTy<span class="cstat-no" title="statement not covered" >pe: 'audio/webm',</span>
+          bitsPerSecond: 128000,<span class="cstat-no" title="statement not covered" ></span>
+        },<span class="cstat-no" title="statement not covered" ></span>
       });<span class="cstat-no" title="statement not covered" ></span>
 &nbsp;
       await recording.startAsync();
-      this.recording = recording;
+      this.recording = r<span class="cstat-no" title="statement not covered" >ecording;</span>
 &nbsp;
-    } catch (error) <span class="cstat-no" title="statement not covered" >{</span>
-      console.error('Fai<span class="cstat-no" title="statement not covered" >led to restart recording:', error);</span>
+    } catch (error) {
+      logger.error('Failed to restart recording:', error);
     }
-  }
+  }<span class="cstat-no" title="statement not covered" ></span>
 <span class="cstat-no" title="statement not covered" ></span>
   /**
    * Stop wake word detection
    */<span class="cstat-no" title="statement not covered" ></span>
   async stop(): Promise&lt;void&gt; {
     if (!this.isListening &amp;&amp; !this.recording) {
-      return<span class="cstat-no" title="statement not covered" >;<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span></span>
+      return;<span class="cstat-no" title="statement not covered" ></span>
     }
-<span class="cstat-no" title="statement not covered" ></span>
-    try {<span class="cstat-no" title="statement not covered" ></span>
-      this.isListening = false;
 &nbsp;
-      if (this.checkInterval) {
+    try {<span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span></span>
+      this.isListening = false;
+<span class="cstat-no" title="statement not covered" ></span>
+      if (this.c<span class="cstat-no" title="statement not covered" >heckInterval) {</span>
         clearInterval(this.checkInterval);
         this.checkInterval = null;
       }
 &nbsp;
       if (this.recording) {
-        try <span class="cstat-no" title="statement not covered" >{</span>
+        try {
           const status = await this.recording.getStatusAsync();
           if (status.isRecording) {
 <span class="cstat-no" title="statement not covered" >            await this.recording.stopAndUnloadAsync();</span>
           } else {
-<span class="cstat-no" title="statement not covered" >            await this.recording.un</span>loadAsync();
+            await this.recording.unloadAsync();
           }<span class="cstat-no" title="statement not covered" ></span>
         } catch (e) {
-          // Try to unload even if stop failed
-          try {
+          //<span class="cstat-no" title="statement not covered" > Try to unload even if </span>stop failed
+          tr<span class="cstat-no" title="statement not covered" >y {</span>
             await this.recording.unloadAsync();
           } catch (e2) {
-<span class="fstat-no" title="function not covered" ></span>            console.warn('Could not unload recording:', e2);
-<span class="cstat-no" title="statement not covered" >          }</span>
+            logger.warn('Could not unload recording:', e2);
+          }
         }
-        this.recording = null;
-      }
+<span class="fstat-no" title="function not covered" ></span>        this.recording = null;
+      }<span class="cstat-no" title="statement not covered" ></span>
 &nbsp;
       // Wait for recording to be fully released
       await new Promise(resolve =&gt; setTimeout(resolve, 500));
-<span class="cstat-no" title="statement not covered" ></span>
+&nbsp;
       // Reset audio mode to ensure clean state
       try {
-        await Audio.setAudioModeAsync({
+<span class="cstat-no" title="statement not covered" >        await Audio.setAudioModeAsync({</span>
           allowsRecordingIOS: false,
           playsInSilentModeIOS: false,
           staysActiveInBackground: false,
@@ -1057,9 +1060,9 @@ clas<span class="fstat-no" title="function not covered" >s </span>CustomWakeWord
         // Ignore errors
       }
 &nbsp;
-      console.log('✅ Wake word detection stopped');
+      logger.log('✅ Wake word detection stopped');
     } catch (error) {
-      console.error('Failed to stop wake word detection:', error);
+      logger.error('Failed to stop wake word detection:', error);
       // Ensure recording is null even on error
       this.recording = null;
       this.isListening = false;
@@ -1087,7 +1090,7 @@ export const customWakeWordService = new CustomWakeWordService();
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-11-10T15:45:04.568Z
+                at 2025-11-20T00:57:52.315Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

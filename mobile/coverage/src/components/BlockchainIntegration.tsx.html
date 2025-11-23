@@ -25,14 +25,14 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/150</span>
+                <span class='fraction'>0/153</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/81</span>
+                <span class='fraction'>0/88</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/131</span>
+                <span class='fraction'>0/134</span>
             </div>
         
             
@@ -1181,7 +1181,13 @@
 <a name='L1116'></a><a href='#L1116'>1116</a>
 <a name='L1117'></a><a href='#L1117'>1117</a>
 <a name='L1118'></a><a href='#L1118'>1118</a>
-<a name='L1119'></a><a href='#L1119'>1119</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L1119'></a><a href='#L1119'>1119</a>
+<a name='L1120'></a><a href='#L1120'>1120</a>
+<a name='L1121'></a><a href='#L1121'>1121</a>
+<a name='L1122'></a><a href='#L1122'>1122</a>
+<a name='L1123'></a><a href='#L1123'>1123</a>
+<a name='L1124'></a><a href='#L1124'>1124</a>
+<a name='L1125'></a><a href='#L1125'>1125</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -1380,10 +1386,12 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -1404,7 +1412,9 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -1422,6 +1432,8 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -2344,7 +2356,7 @@ interface To<span class="cstat-no" title="statement not covered" >kenizedPortfol
   network: string;
 }<span class="cstat-no" title="statement not covered" ></span>
 <span class="cstat-no" title="statement not covered" ></span>
-interface<span class="fstat-no" title="function not covered" > GovernanceProposal {</span>
+interface<span class="fstat-no" title="function not covered" > GovernanceProposal {<span class="branch-0 cbranch-no" title="branch not covered" ></span></span>
   id: string;<span class="cstat-no" title="statement not covered" ></span>
   title: string;<span class="cstat-no" title="statement not covered" ></span>
   description: string;<span class="cstat-no" title="statement not covered" ></span>
@@ -2358,16 +2370,16 @@ interface<span class="fstat-no" title="function not covered" > GovernanceProposa
 }<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span>
 <span class="cstat-no" title="statement not covered" ></span>
 interfac<span class="cstat-no" title="statement not covered" >e BlockchainIntegrationPro</span>ps {
-  onPortfolioTokenize: (portfolio: any) =&gt; void;
-  onDeFiPositionCreate: (position: <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >De</span>FiPosition) =&gt; void;</span>
-  onGove<span class="cstat-no" title="statement not covered" >rnanceVote: (proposalId: string, vote: boolean) =&gt; void;</span>
+  onPortfolioTokenize?: (portfolio: any) =&gt; void;
+  onDeFiPositionCreate?: (position:<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" > D</span>eFiPosition) =&gt; void;</span>
+  onGove<span class="cstat-no" title="statement not covered" >rnanceVote?: (proposalId: string, vote: boolean) =&gt; void;</span>
 }
 &nbsp;
 export default function BlockchainIntegration({ 
   onPortfolioTokenize, 
   onDeFiPositionCreate, 
   onGovernanceVote 
-}: BlockchainIntegrationProps) {
+}: BlockchainIntegrationProps = {}) {
   const navigation = useNavigation&lt;any&gt;();
   const theme = useTheme();
   const [activeTab, setActiveTab] = useState&lt;'tokenized' | 'defi' | 'governance' | 'bridge'&gt;('tokenized');
@@ -2496,25 +2508,25 @@ export default function BlockchainIntegration({
         {
           id: '2',<span class="fstat-no" title="function not covered" ></span>
           title: 'Increa<span class="cstat-no" title="statement not covered" >se Referral Rewards',</span>
-          description: '<span class="cstat-no" title="statement not covered" >Proposal to increase referral rewards from $25 to $50',</span>
+          description: 'Prop<span class="cstat-no" title="statement not covered" >osal to increase referral reward</span>s from $25 to $50',
           type: 'parameter',
-          votesFor: 890000,
+          votesFor: 8900<span class="cstat-no" title="statement not covered" >00,</span>
           votesAgainst: 210000,
           totalVotes: 1100000,
           timeRemaining: '1 day left',
-          st<span class="cstat-no" title="statement not covered" >atus: 'active',</span>
+          status: 'active',
           hasVoted: true,
-        },
-      ];<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span>
-      <span class="cstat-no" title="statement not covered" ></span>
-      setTok<span class="cstat-no" title="statement not covered" >enizedPortfolios(mockTokenizedPortfolios);</span>
-      setDefiPositions(mockDeFiPositions);
-      setGovernanceProposals(mockGovernanceProposals);
+        },<span class="cstat-no" title="statement not covered" ></span>
+      ];
+      
+      setTokenizedPortfolios(mo<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >ck</span>TokenizedPortfolios);</span>
+      se<span class="cstat-no" title="statement not covered" >tDefiPositions(mockDeFiPositions);</span>
+      setGov<span class="cstat-no" title="statement not covered" >ernanceProposals(mockGovernanceProposals);</span>
     } catch (error) {
-      console.error('Error lo<span class="fstat-no" title="function not covered" >ad</span>ing blockchain data:', error);
-      Alert.alert('Error', 'Failed to loa<span class="cstat-no" title="statement not covered" >d blockchain integration data');</span>
-    } finally {
-      setLoading(false);
+      console.error('Error loading blockchain data:', error);
+      Alert.alert('Error', 'Failed to load blockchain integration data');
+    } finally {<span class="fstat-no" title="function not covered" ></span>
+      setLoading(false);<span class="cstat-no" title="statement not covered" ></span>
     }
   };
 &nbsp;
@@ -2522,65 +2534,71 @@ export default function BlockchainIntegration({
     try {
       Alert.alert(
         'Tokenize Portfolio',
-        `Convert your po<span class="cstat-no" title="statement not covered" >rtfolio into tradeable tokens? T</span>his will create ${portfolio.name} tokens.`,
+        `Convert your portfolio into tradeable tokens? This will create ${portfolio.name} tokens.`,
+        [
+          { text: 'Cance<span class="cstat-no" title="statement not covered" >l', style: 'cancel' },</span>
+          { <span class="cstat-no" title="statement not covered" ></span>
+            text: 'Tokenize', 
+            onPress: () <span class="cstat-no" title="statement not covered" >=&gt; {</span>
+              if (onPortfolioTokenize) {
+                onPortfolioTokenize(portfolio);
+              }
+              Alert.alert('Success', 'Portfolio tokenized successfully!');
+            }
+          },<span class="cstat-no" title="statement not covered" ></span>
+        ]
+      );
+    } catch (error) {<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span>
+      co<span class="cstat-no" title="statement not covered" >nsole.error('Error tokenizing portfolio:', error);</span>
+    }<span class="cstat-no" title="statement not covered" ></span>
+  };
+&nbsp;
+  const createDeFiPosition = async (protocol: string, type: string, asset: string) =&gt; {
+    try {<span class="fstat-no" title="function not covered" ></span>
+      Alert.alert(<span class="cstat-no" title="statement not covered" ></span>
+        'Create DeFi Positio<span class="cstat-no" title="statement not covered" >n',</span>
+        `Create a ${type} position for ${asset} on ${protocol}?`,
         [<span class="cstat-no" title="statement not covered" ></span>
           { text: 'Cancel', style: 'cancel' },
           { 
-            text: 'Tokenize', 
-            onPress: () =&gt; {
-              onPortfolioTokenize(portfolio);
-<span class="cstat-no" title="statement not covered" >              Alert.alert('Success', 'Portfolio tokenized successfu</span>lly!');
-            }
-          },
-        ]<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span>
-      );<span class="cstat-no" title="statement not covered" ></span>
-    } catch <span class="cstat-no" title="statement not covered" >(error) {</span>
-      console.error('Error tokenizing portfolio:', error);
-    }
-  };
-<span class="fstat-no" title="function not covered" ></span>
-  const createDeFiPositi<span class="cstat-no" title="statement not covered" >on = async (protocol: string, type: </span>string, asset: string) =&gt; {
-    try {<span class="cstat-no" title="statement not covered" ></span>
-      Alert.alert(
-        'Create DeFi Position',
-        `Create a ${type} position for ${asset} on ${protocol}?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { <span class="cstat-no" title="statement not covered" ></span>
             text: 'Create', 
             onPress: () =&gt; {
-              const position<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >: </span>DeFiPosition = {</span>
+              const position: DeFiPosition = {
 <span class="cstat-no" title="statement not covered" >                id: Date.now().toString(),</span>
-                protocol,<span class="cstat-no" title="statement not covered" ></span>
-                type: type a<span class="cstat-no" title="statement not covered" >s any,</span>
-                asset,<span class="cstat-no" title="statement not covered" ></span>
-                amount: 1000,<span class="cstat-no" title="statement not covered" ></span>
+                protocol,
+                type: type as any,
+                asset,<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span>
+<span class="cstat-no" title="statement not covered" >                amount: 1000,</span>
                 apy: 3.5,<span class="cstat-no" title="statement not covered" ></span>
-                value<span class="cstat-no" title="statement not covered" >: 1000,</span>
-                network: 'Ethereum',
-              };
-              onDeFiPosition<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >Cr</span>eate(position);</span>
-<span class="cstat-no" title="statement not covered" >              Alert.alert('Success', 'DeFi position created successfully!');</span>
-            }<span class="cstat-no" title="statement not covered" ></span>
-          },<span class="cstat-no" title="statement not covered" ></span>
+                value: 1000,<span class="cstat-no" title="statement not covered" ></span>
+                network: 'Eth<span class="cstat-no" title="statement not covered" >ereum',</span>
+              };<span class="cstat-no" title="statement not covered" ></span>
+              if (onDeFiP<span class="cstat-no" title="statement not covered" >ositionCreate) {</span>
+                onDeF<span class="cstat-no" title="statement not covered" >iPositionCreate(po</span>sition);
+              }
+              Alert.alert('Success', 'DeFi position created successfully!');
+            }<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span>
+<span class="cstat-no" title="statement not covered" >          },</span>
         ]<span class="cstat-no" title="statement not covered" ></span>
       );<span class="cstat-no" title="statement not covered" ></span>
     } catch (error) {<span class="cstat-no" title="statement not covered" ></span>
-      console.error('Error creating DeFi position:', error);
-    }
-  };<span class="cstat-no" title="statement not covered" ></span>
-<span class="cstat-no" title="statement not covered" ></span>
-  const voteOnProposal = async (proposalId: string, vote: boolean) =&gt; {
-<span class="cstat-no" title="statement not covered" >    try {</span>
+      console.error('Erro<span class="cstat-no" title="statement not covered" >r creating DeF</span>i position:', error);
+    }<span class="cstat-no" title="statement not covered" ></span>
+  };
+&nbsp;
+  co<span class="cstat-no" title="statement not covered" >nst voteOnProposal = async (proposalId: string, vote: boolean) =&gt; {</span>
+    try <span class="cstat-no" title="statement not covered" >{</span>
       Alert.alert(
-        'Vote on Proposal',
+<span class="cstat-no" title="statement not covered" >        'Vote on Proposal',</span>
         `Vote ${vote ? 'FOR' : 'AGAINST'} this proposal?`,
         [
           { text: 'Cancel', style: 'cancel' },
           { 
             text: 'Vote', 
             onPress: () =&gt; {
-              onGovernanceVote(proposalId, vote);
+              if (onGovernanceVote) {
+                onGovernanceVote(proposalId, vote);
+              }
               Alert.alert('Success', 'Vote recorded successfully!');
             }<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span>
           },
@@ -3424,7 +3442,7 @@ const styles = StyleSheet.create({
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-11-10T15:45:05.335Z
+                at 2025-11-20T00:57:54.136Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

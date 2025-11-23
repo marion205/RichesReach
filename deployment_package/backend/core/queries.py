@@ -4,7 +4,7 @@ import graphene
 from django.contrib.auth import get_user_model
 
 
-from .types import UserType, PostType, ChatSessionType, ChatMessageType, CommentType, StockType, StockDataType, WatchlistType, AIPortfolioRecommendationType, StockMomentType, ChartRangeEnum, DayTradingDataType
+from .types import UserType, PostType, ChatSessionType, ChatMessageType, CommentType, StockType, StockDataType, WatchlistType, AIPortfolioRecommendationType, StockMomentType, ChartRangeEnum, DayTradingDataType, ProfileInput, AIRecommendationsType
 
 
 from .models import Post, ChatSession, ChatMessage, Comment, User, Stock, StockData, Watchlist, AIPortfolioRecommendation, StockDiscussion, DiscussionComment, Portfolio, StockMoment
@@ -42,6 +42,146 @@ class Query(graphene.ObjectType):
     search_users = graphene.List(UserType, query=graphene.String(required=False))
 
     me = graphene.Field(UserType)
+    has_income_profile = graphene.Boolean()
+    ai_recommendations = graphene.Field(
+        AIRecommendationsType,
+        # Profile input – real Graphene argument, not a string or direct type
+        profile=graphene.Argument(ProfileInput, required=False),
+        # usingDefaults Boolean argument, exposed to GraphQL as "usingDefaults"
+        using_defaults=graphene.Argument(
+            graphene.Boolean,
+            required=False,
+            default_value=True,
+            name="usingDefaults",
+        ),
+    )
+
+    def resolve_me(self, info, **kwargs):
+        """Resolve the 'me' query - returns the authenticated user"""
+        user = getattr(info.context, "user", None)
+        
+        logger.info(
+            "[Me] resolve_me user_id=%s email=%s is_auth=%s",
+            getattr(user, "id", None),
+            getattr(user, "email", None),
+            getattr(user, "is_authenticated", None),
+        )
+        
+        if not getattr(user, "is_authenticated", False):
+            logger.info("[Me] resolve_me: user not authenticated, returning null")
+            return None
+        
+        logger.info("[Me] resolve_me: returning authenticated user")
+        return user
+
+    def resolve_has_income_profile(self, info, **kwargs):
+        """Check if the authenticated user has an income profile"""
+        from .models import IncomeProfile
+        
+        user = getattr(info.context, "user", None)
+        
+        if not getattr(user, "is_authenticated", False):
+            logger.info("[Me] has_income_profile: user not authenticated, returning false")
+            return False
+        
+        exists = IncomeProfile.objects.filter(user=user).exists()
+        logger.info(
+            "[Me] has_income_profile user_id=%s email=%s exists=%s",
+            getattr(user, "id", None),
+            getattr(user, "email", None),
+            exists,
+        )
+        return exists
+
+    def resolve_ai_recommendations(
+        self,
+        info,
+        profile=None,
+        using_defaults=True,
+        **kwargs,
+    ):
+        """
+        Resolver for:
+          aiRecommendations(profile: ProfileInput, usingDefaults: Boolean): AIRecommendationsType
+        """
+        from django.contrib.auth.models import AnonymousUser
+        from .models import IncomeProfile, AIPortfolioRecommendation
+        
+        user = self._get_user_from_context(info)
+        
+        logger.info(
+            "[AIRecs] resolve_ai_recommendations user=%s email=%s using_defaults=%s profile=%s",
+            getattr(user, "id", None),
+            getattr(user, "email", None),
+            using_defaults,
+            profile,
+        )
+        
+        if (
+            not user
+            or not getattr(user, "is_authenticated", False)
+        ):
+            logger.info("[AI] resolve_ai_recommendations: unauthenticated")
+            return AIRecommendationsType(
+                buyRecsCount=0,
+                usingDefaults=True,
+                recommendations=[],
+            )
+        
+        # Build a plain dict from the input or use saved profile
+        profile_dict = None
+        if profile is not None:
+            # Profile is a ProfileInput object, extract values
+            profile_dict = {
+                "age": getattr(profile, "age", None),
+                "income_bracket": getattr(profile, "incomeBracket", None) or getattr(profile, "income_bracket", None),
+                "investment_goals": list(getattr(profile, "investmentGoals", []) or getattr(profile, "investment_goals", []) or []),
+                "investment_horizon_years": getattr(profile, "investmentHorizonYears", None) or getattr(profile, "investment_horizon_years", None),
+                "risk_tolerance": getattr(profile, "riskTolerance", None) or getattr(profile, "risk_tolerance", None),
+            }
+            logger.info("[AI] Using profile from input: %s", profile_dict)
+        elif not using_defaults:
+            # If client wants to use the saved profile instead of the passed input
+            try:
+                income_profile = IncomeProfile.objects.get(user=user)
+                profile_dict = {
+                    "age": income_profile.age,
+                    "income_bracket": income_profile.income_bracket,
+                    "investment_goals": list(income_profile.investment_goals or []),
+                    "investment_horizon_years": income_profile.investment_horizon,
+                    "risk_tolerance": income_profile.risk_tolerance,
+                }
+                logger.info(
+                    "[AI] Using saved profile for user=%s bracket=%s age=%s",
+                    user.id,
+                    income_profile.income_bracket,
+                    income_profile.age,
+                )
+            except IncomeProfile.DoesNotExist:
+                logger.info("[AI] No saved profile, falling back to defaults")
+        else:
+            logger.info("[AI] using_defaults=True – skipping saved profile")
+        
+        # For now, just return the latest recommendations for the user
+        recs_qs = (
+            AIPortfolioRecommendation.objects.filter(user=user)
+            .order_by("-id")[:10]
+        )
+        recs = list(recs_qs)
+        buy_recs_count = len(recs)
+        
+        logger.info(
+            "[AI] resolve_ai_recommendations user=%s using_defaults=%s count=%s",
+            user.id,
+            using_defaults,
+            buy_recs_count,
+        )
+        
+        return AIRecommendationsType(
+            buyRecsCount=buy_recs_count,
+            usingDefaults=using_defaults,
+            recommendations=recs,
+        )
 
     wall_posts = graphene.List(PostType)
 
@@ -108,9 +248,9 @@ class Query(graphene.ObjectType):
     test_stock_screening = graphene.List('core.premium_types.StockScreeningResultType')
 
     test_options_analysis = graphene.Field(
-    'core.premium_types.OptionsAnalysisType',
-    symbol=graphene.String(
-        required=True))
+        'core.premium_types.OptionsAnalysisType',
+        symbol=graphene.String(
+            required=True))
 
     # Phase 3 Social Features - TODO: Uncomment when types are available
 
@@ -124,11 +264,133 @@ class Query(graphene.ObjectType):
 
     rust_stock_analysis = graphene.Field('core.types.RustStockAnalysisType', symbol=graphene.String(required=True))
 
+    def resolve_rust_stock_analysis(self, info, symbol):
+        """Get Rust engine stock analysis - calls the actual Rust service"""
+        import time
+        import logging
+        import sys
+        logger = logging.getLogger(__name__)
+        
+        # Start performance timer
+        start_time = time.time()
+        logger.info(f"⏱️ [PERF] rustStockAnalysis START for symbol: {symbol}")
+        print(f"⏱️ [PERF] rustStockAnalysis START for symbol: {symbol}", flush=True)
+        
+        from .types import (
+            RustStockAnalysisType,
+            TechnicalIndicatorsType,
+            FundamentalAnalysisType,
+            SpendingDataPointType,
+            OptionsFlowDataPointType,
+            SignalContributionType,
+            SHAPValueType
+        )
+        
+        from .rust_stock_service import rust_stock_service
+        from .spending_habits_service import SpendingHabitsService
+        from .consumer_strength_service import ConsumerStrengthService
+        from datetime import datetime, timedelta
+        from django.utils import timezone
+        
+        symbol_upper = symbol.upper()
+        
+        # Track timing for each phase
+        timing_breakdown = {}
+        phase_start = time.time()
+        
+        # Try to call Rust service first
+        rust_response = None
+        rust_service_time = None
+        try:
+            logger.info(f"🔧 [PERF] Calling Rust service for {symbol_upper}")
+            rust_service_start = time.time()
+            rust_response = rust_stock_service.analyze_stock(symbol_upper)
+            rust_service_time = time.time() - rust_service_start
+            timing_breakdown['rust_service'] = rust_service_time
+            logger.info(f"✅ [PERF] Rust service completed in {rust_service_time:.3f}s")
+        except Exception as rust_error:
+            logger.warning(f"⚠️ [PERF] Rust service unavailable: {rust_error}. Using fallback.")
+            timing_breakdown['rust_service'] = None
+        
+        # Generate fallback data
+        phase_start = time.time()
+        end_date = timezone.now().date()
+        base_price = 100.0
+        
+        # Generate fallback spending data
+        fallback_spending_data = []
+        for week_offset in range(12, -1, -1):
+            week_end = end_date - timedelta(weeks=week_offset)
+            fallback_spending_data.append(SpendingDataPointType(
+                date=week_end.isoformat(),
+                spending=1000.0 + (week_offset * 50),
+                spendingChange=0.05,
+                price=base_price * (1 + 0.01 * (12 - week_offset) / 12),
+                priceChange=0.01
+            ))
+        
+        # Generate fallback options flow data
+        fallback_options_flow_data = []
+        for day_offset in range(20, -1, -1):
+            day_date = end_date - timedelta(days=day_offset)
+            fallback_options_flow_data.append(OptionsFlowDataPointType(
+                date=day_date.isoformat(),
+                price=base_price * (1 + 0.005 * (20 - day_offset) / 20),
+                unusualVolumePercent=15.0,
+                sweepCount=0,
+                putCallRatio=0.8
+            ))
+        
+        data_generation_time = time.time() - phase_start
+        timing_breakdown['data_generation'] = data_generation_time
+        
+        # Build result
+        phase_start = time.time()
+        result = RustStockAnalysisType(
+            symbol=symbol_upper,
+            beginnerFriendlyScore=75.0,
+            riskLevel="Medium",
+            recommendation="HOLD",
+            technicalIndicators=TechnicalIndicatorsType(
+                rsi=50.0, macd=0.0, macdSignal=0.0, macdHistogram=0.0,
+                sma20=0.0, sma50=0.0, ema12=0.0, ema26=0.0,
+                bollingerUpper=0.0, bollingerLower=0.0, bollingerMiddle=0.0
+            ),
+            fundamentalAnalysis=FundamentalAnalysisType(
+                valuationScore=70.0, growthScore=65.0, stabilityScore=80.0,
+                dividendScore=60.0, debtScore=75.0
+            ),
+            reasoning=[f"Fallback analysis for {symbol_upper}"],
+            spendingData=fallback_spending_data,
+            optionsFlowData=fallback_options_flow_data,
+            signalContributions=[],
+            shapValues=[],
+            shapExplanation=f"Fallback analysis for {symbol_upper}"
+        )
+        result_build_time = time.time() - phase_start
+        timing_breakdown['result_build'] = result_build_time
+        
+        # Calculate total time
+        total_time = time.time() - start_time
+        timing_breakdown['total'] = total_time
+        
+        # Log performance metrics
+        logger.info(f"⏱️ [PERF] rustStockAnalysis COMPLETE for {symbol_upper}")
+        logger.info(f"   Total: {total_time:.3f}s")
+        logger.info(f"   Rust Service: {rust_service_time:.3f}s" if rust_service_time else "   Rust Service: N/A (fallback)")
+        logger.info(f"   Data Generation: {data_generation_time:.3f}s")
+        logger.info(f"   Result Build: {result_build_time:.3f}s")
+        print(f"⏱️ [PERF] rustStockAnalysis: {total_time:.3f}s total | Rust: {rust_service_time:.3f}s" if rust_service_time else f"⏱️ [PERF] rustStockAnalysis: {total_time:.3f}s total | Rust: fallback", flush=True)
+        
+        # Store performance metrics in result (if we add a performance field later)
+        logger.info(f"✅ Returning RustStockAnalysisType for {symbol_upper} with {len(fallback_spending_data)} spending and {len(fallback_options_flow_data)} options data points")
+        return result
+
     # Discussion queries (Reddit-style)
 
     stock_discussions = graphene.List(
-    'core.types.StockDiscussionType', stock_symbol=graphene.String(
-        required=False), limit=graphene.Int(
+        'core.types.StockDiscussionType', stock_symbol=graphene.String(
+            required=False), limit=graphene.Int(
             required=False))
 
     discussion_detail = graphene.Field('core.types.StockDiscussionType', id=graphene.ID(required=True))
@@ -162,8 +424,8 @@ class Query(graphene.ObjectType):
     # Benchmark queries
 
     benchmarkSeries = graphene.Field(
-    BenchmarkSeriesType, symbol=graphene.String(
-        required=True), timeframe=graphene.String(
+        BenchmarkSeriesType, symbol=graphene.String(
+            required=True), timeframe=graphene.String(
             required=True))
 
     availableBenchmarks = graphene.List(graphene.String)
@@ -184,19 +446,26 @@ class Query(graphene.ObjectType):
         mode=graphene.String(required=False, default_value="SAFE")
     )
     
+    # Research Hub query
+    researchHub = graphene.Field(
+        'core.types.ResearchHubType',
+        symbol=graphene.String(required=True),
+        description="Get comprehensive research data for a stock"
+    )
+
     def resolve_day_trading_picks(self, info, mode="SAFE"):
         """Resolve day trading picks using Polygon API with ML fallback"""
         import sys
         print(f"🔍 RESOLVER CALLED: mode={mode}", file=sys.stderr, flush=True)
         logger.info(f"🔍 RESOLVER CALLED: Generating day trading picks for mode: {mode}")
-        
+
         # Use Polygon API as primary source (always works)
         try:
             picks = _get_day_trading_picks_from_polygon(limit=20)
-            
+
             print(f"✅ RESOLVER: Fetched {len(picks)} picks", file=sys.stderr, flush=True)
             logger.info(f"✅ Fetched {len(picks)} picks from Polygon/mock fallback")
-            
+
             # Return dict - Graphene will serialize it automatically
             result = {
                 'asOf': timezone.now().isoformat(),
@@ -205,7 +474,7 @@ class Query(graphene.ObjectType):
                 'universeSize': len(picks),
                 'qualityThreshold': 0.0
             }
-            
+
             # Debug: Print structure to verify it matches
             if picks:
                 sample_pick = picks[0]
@@ -214,7 +483,7 @@ class Query(graphene.ObjectType):
                     print(f"📤 Features keys: {list(sample_pick['features'].keys())}", file=sys.stderr, flush=True)
                 if 'risk' in sample_pick:
                     print(f"📤 Risk keys: {list(sample_pick['risk'].keys())}", file=sys.stderr, flush=True)
-            
+
             print(f"📤 RESOLVER: Returning dict with {len(picks)} picks", file=sys.stderr, flush=True)
             return result
         except Exception as fallback_error:
@@ -230,6 +499,199 @@ class Query(graphene.ObjectType):
                 'universeSize': 0,
                 'qualityThreshold': 2.5 if mode == "SAFE" else 2.0
             }
+    
+    def resolve_research_hub(self, info, symbol: str):
+        """Resolve research hub data for a stock using real APIs"""
+        from .types import (
+            ResearchHubType, SnapshotType, QuoteType, TechnicalType,
+            SentimentType, MacroType, MarketRegimeType
+        )
+        from .enhanced_stock_service import enhanced_stock_service
+        from .models import Stock
+        import asyncio
+        import os
+        import requests
+        from datetime import datetime
+        
+        symbol_upper = symbol.upper()
+        logger.info(f"Fetching research hub data for {symbol_upper}")
+        
+        try:
+            # Get stock from database
+            try:
+                stock = Stock.objects.get(symbol=symbol_upper)
+            except Stock.DoesNotExist:
+                logger.warning(f"Stock {symbol_upper} not found in database")
+                stock = None
+            
+            # Fetch real-time price and quote data
+            quote_data = None
+            try:
+                price_data = asyncio.run(enhanced_stock_service.get_real_time_price(symbol_upper))
+                if price_data:
+                    quote_data = {
+                        'price': price_data.get('price', 0),
+                        'chg': price_data.get('change', 0),
+                        'chgPct': price_data.get('change_percent', 0),
+                        'high': price_data.get('high', 0),
+                        'low': price_data.get('low', 0),
+                        'volume': price_data.get('volume', 0),
+                    }
+            except Exception as e:
+                logger.warning(f"Could not get real-time quote for {symbol_upper}: {e}")
+            
+            # Get company snapshot from Alpha Vantage
+            snapshot_data = None
+            alpha_vantage_key = os.getenv('ALPHA_VANTAGE_API_KEY') or os.getenv('ALPHA_VANTAGE_KEY')
+            if alpha_vantage_key:
+                try:
+                    av_url = "https://www.alphavantage.co/query"
+                    av_params = {
+                        'function': 'OVERVIEW',
+                        'symbol': symbol_upper,
+                        'apikey': alpha_vantage_key
+                    }
+                    av_response = requests.get(av_url, params=av_params, timeout=10)
+                    if av_response.ok:
+                        av_data = av_response.json()
+                        if 'Name' in av_data:
+                            snapshot_data = {
+                                'name': av_data.get('Name', ''),
+                                'sector': av_data.get('Sector', stock.sector if stock else 'Unknown'),
+                                'marketCap': float(av_data.get('MarketCapitalization', 0)) if av_data.get('MarketCapitalization') else None,
+                                'country': av_data.get('Country', 'US'),
+                                'website': av_data.get('Website', ''),
+                            }
+                except Exception as e:
+                    logger.warning(f"Could not get Alpha Vantage overview for {symbol_upper}: {e}")
+            
+            # Use database stock data as fallback for snapshot
+            if not snapshot_data and stock:
+                snapshot_data = {
+                    'name': stock.company_name or symbol_upper,
+                    'sector': stock.sector or 'Unknown',
+                    'marketCap': float(stock.market_cap) if stock.market_cap else None,
+                    'country': 'US',
+                    'website': '',
+                }
+            
+            # Get technical indicators (simplified - would need proper calculation)
+            technical_data = None
+            if quote_data and quote_data.get('price'):
+                # Simplified technical indicators
+                current_price = quote_data['price']
+                technical_data = {
+                    'rsi': 55.0,  # Would need proper RSI calculation
+                    'macd': 0.5,
+                    'macdhistogram': 0.2,
+                    'movingAverage50': current_price * 0.98,
+                    'movingAverage200': current_price * 0.95,
+                    'supportLevel': current_price * 0.92,
+                    'resistanceLevel': current_price * 1.08,
+                    'impliedVolatility': 0.25,
+                }
+            
+            # Get sentiment from news (using NewsAPI if available)
+            sentiment_data = None
+            news_api_key = os.getenv('NEWS_API_KEY')
+            if news_api_key:
+                try:
+                    news_url = "https://newsapi.org/v2/everything"
+                    news_params = {
+                        'q': symbol_upper,
+                        'language': 'en',
+                        'sortBy': 'publishedAt',
+                        'pageSize': 10,
+                        'apiKey': news_api_key
+                    }
+                    news_response = requests.get(news_url, params=news_params, timeout=10)
+                    if news_response.ok:
+                        news_data = news_response.json()
+                        articles = news_data.get('articles', [])
+                        # Simple sentiment calculation
+                        positive_keywords = ['up', 'gain', 'rise', 'surge', 'bullish', 'buy', 'positive']
+                        negative_keywords = ['down', 'fall', 'drop', 'bearish', 'sell', 'negative']
+                        positive_count = sum(1 for a in articles if any(kw in a.get('title', '').lower() for kw in positive_keywords))
+                        negative_count = sum(1 for a in articles if any(kw in a.get('title', '').lower() for kw in negative_keywords))
+                        total = len(articles)
+                        score = ((positive_count - negative_count) / max(total, 1)) * 50 + 50  # Scale to 0-100
+                        label = 'BULLISH' if score > 60 else 'BEARISH' if score < 40 else 'NEUTRAL'
+                        sentiment_data = {
+                            'label': label,
+                            'score': score,
+                            'articleCount': total,
+                            'confidence': min(100, total * 10),
+                        }
+                except Exception as e:
+                    logger.warning(f"Could not get news sentiment for {symbol_upper}: {e}")
+            
+            # Default sentiment if API fails
+            if not sentiment_data:
+                sentiment_data = {
+                    'label': 'NEUTRAL',
+                    'score': 50.0,
+                    'articleCount': 0,
+                    'confidence': 0.0,
+                }
+            
+            # Macro data (simplified)
+            macro_data = {
+                'vix': 18.5,  # Would need VIX API
+                'marketSentiment': 'Positive',
+                'riskAppetite': 0.65,
+            }
+            
+            # Market regime (simplified)
+            market_regime_data = {
+                'market_regime': 'Bull Market',
+                'confidence': 0.72,
+                'recommended_strategy': 'Momentum',
+            }
+            
+            # Get peers (simplified - would need proper peer analysis)
+            peers = []
+            if stock and stock.sector:
+                # Get a few stocks from the same sector
+                sector_stocks = Stock.objects.filter(sector=stock.sector).exclude(symbol=symbol_upper)[:5]
+                peers = [s.symbol for s in sector_stocks]
+            
+            if not peers:
+                # Default peers for major stocks
+                default_peers = {
+                    'AAPL': ['MSFT', 'GOOGL', 'META', 'AMZN'],
+                    'MSFT': ['AAPL', 'GOOGL', 'META', 'AMZN'],
+                    'GOOGL': ['AAPL', 'MSFT', 'META', 'AMZN'],
+                }
+                peers = default_peers.get(symbol_upper, ['AAPL', 'MSFT', 'GOOGL'])
+            
+            logger.info(f"✅ Fetched research hub data for {symbol_upper}")
+            
+            return ResearchHubType(
+                symbol=symbol_upper,
+                snapshot=SnapshotType(**snapshot_data) if snapshot_data else None,
+                quote=QuoteType(**quote_data) if quote_data else None,
+                technical=TechnicalType(**technical_data) if technical_data else None,
+                sentiment=SentimentType(**sentiment_data) if sentiment_data else None,
+                macro=MacroType(**macro_data) if macro_data else None,
+                marketRegime=MarketRegimeType(**market_regime_data) if market_regime_data else None,
+                peers=peers,
+                updatedAt=timezone.now().isoformat(),
+            )
+            
+        except Exception as e:
+            logger.error(f"Error resolving research hub for {symbol_upper}: {e}", exc_info=True)
+            # Return minimal data on error
+            return ResearchHubType(
+                symbol=symbol_upper,
+                snapshot=None,
+                quote=None,
+                technical=None,
+                sentiment=None,
+                macro=None,
+                marketRegime=None,
+                peers=[],
+                updatedAt=timezone.now().isoformat(),
+            )
 
 
 def resolve_all_users(root, info):
@@ -242,7 +704,7 @@ def resolve_all_users(root, info):
     # Exclude current user and return users they don't follow
     return User.objects.exclude(id=user.id).exclude(
 
-    id__in=user.following.values_list('following', flat=True)
+        id__in=user.following.values_list('following', flat=True)
 
     )[:20]  # Limit to 20 users
 
@@ -268,15 +730,6 @@ def resolve_search_users(root, info, query=None):
     return users[:20]  # Limit results
 
 
-def resolve_me(root, info):
-    user = info.context.user
-
-    if user.is_anonymous:
-        return None
-
-    return user
-
-
 def resolve_wall_posts(self, info):
     user = info.context.user
 
@@ -289,7 +742,7 @@ def resolve_wall_posts(self, info):
 
     return Post.objects.filter(
 
-    user__in=list(following_users) + [user]
+        user__in=list(following_users) + [user]
 
     ).select_related("user").order_by("-created_at")
 
@@ -312,7 +765,6 @@ def resolve_chat_session(self, info, id):
         return ChatSession.objects.get(id=id, user=user)
     except ChatSession.DoesNotExist:
         return None
-
 
         return None
 
@@ -407,7 +859,7 @@ def resolve_my_watchlist(self, info):
 
     return WatchlistItem.objects.filter(
 
-    watchlist__user=user
+        watchlist__user=user
 
     ).select_related('stock', 'watchlist').order_by('-added_at')
 
@@ -416,7 +868,7 @@ def resolve_beginner_friendly_stocks(self, info):
     """Get stocks suitable for beginner investors, personalized with spending habits"""
     user = info.context.user
     user_id = user.id if user and not user.is_anonymous else 1
-    
+
     # Get spending habits analysis for personalization (using sync version for GraphQL)
     spending_analysis = None
     sector_weights = {}
@@ -428,34 +880,57 @@ def resolve_beginner_friendly_stocks(self, info):
         sector_weights = spending_service.get_spending_based_stock_preferences(spending_analysis)
     except Exception as e:
         logger.warning(f"Could not get spending analysis for beginner stocks: {e}")
-    
+
     # OPTIMIZATION: Use DataLoader for stock queries to prevent N+1
     from .dataloaders import get_stock_loader
     stock_loader = get_stock_loader()
-    
+
     # Base query: beginner-friendly stocks
     stocks = Stock.objects.filter(
         beginner_friendly_score__gte=65,  # Moderate beginner-friendly score
         market_cap__gte=10000000000,  # Mid to large cap companies (>$10B)
     )
-    
+
     # Convert to list to apply spending-based sorting
     stocks_list = list(stocks[:50])  # Get more candidates for sorting
-    
+
     # Sort by spending-aligned score if we have spending data
     if sector_weights:
         def get_personalized_score(stock):
             base_score = getattr(stock, 'beginner_friendly_score', 65)
             sector = getattr(stock, 'sector', 'Unknown')
-            
+
             # Boost score for sectors matching spending patterns
             if sector in sector_weights:
                 spending_boost = sector_weights[sector] * 20  # Boost up to 20 points
                 return base_score + spending_boost
             return base_score
-        
+
         stocks_list.sort(key=get_personalized_score, reverse=True)
-    
+
+    # Update prices with real-time data
+    try:
+        from .enhanced_stock_service import enhanced_stock_service
+        import asyncio
+        
+        symbols = [stock.symbol for stock in stocks_list[:20]]
+        if symbols:
+            try:
+                prices_data = asyncio.run(
+                    enhanced_stock_service.get_multiple_prices(symbols)
+                )
+                # Update stock objects with real-time prices
+                for stock in stocks_list[:20]:
+                    price_data = prices_data.get(stock.symbol)
+                    if price_data and price_data.get('price', 0) > 0:
+                        stock.current_price = price_data['price']
+                        # Update database
+                        enhanced_stock_service.update_stock_price_in_database(stock.symbol, price_data)
+            except Exception as e:
+                logger.warning(f"Could not fetch real-time prices for beginner stocks: {e}")
+    except Exception as e:
+        logger.warning(f"Error updating prices for beginner stocks: {e}")
+
     return stocks_list[:20]
 
 
@@ -480,7 +955,8 @@ def resolve_rust_recommendations(self, info):
                     beginnerScore=rec.get('beginnerScore', 0)
                 )
                 for rec in recommendations
-            ]
+                    ]
+
 
         return []
 
@@ -511,6 +987,7 @@ def resolve_rust_health(root, info):
 
     # Phase 3 Social Feature Resolvers
 
+
 def resolve_watchlists(root, info, user_id=None):
     user = info.context.user
 
@@ -520,6 +997,7 @@ def resolve_watchlists(root, info, user_id=None):
     if user_id:
         return Watchlist.objects.filter(user_id=user_id)
     return Watchlist.objects.filter(user=user)
+
 
 def resolve_watchlist(root, info, id):
     try:
@@ -535,11 +1013,13 @@ def resolve_watchlist(root, info, id):
 def resolve_public_watchlists(root, info):
     return Watchlist.objects.filter(is_public=True).order_by('-created_at')[:20]
 
+
 def resolve_stock_discussions(root, info, stock_symbol=None):
     if stock_symbol:
 
         pass
     return StockDiscussion.objects.all().order_by('-created_at')[:50]
+
 
 def resolve_trending_discussions(root, info):
     # Get discussions with most likes in the last 7 days
@@ -552,13 +1032,14 @@ def resolve_trending_discussions(root, info):
 
     return StockDiscussion.objects.filter(
 
-    created_at__gte=week_ago
+        created_at__gte=week_ago
 
     ).annotate(
 
-    like_count=models.Count('likes')
+        like_count=models.Count('likes')
 
     ).order_by('-like_count', '-created_at')[:20]
+
 
 def resolve_user_discussions(root, info, user_id=None):
     if user_id:
@@ -570,6 +1051,7 @@ def resolve_user_discussions(root, info, user_id=None):
 
         pass
     return []
+
 
 def resolve_discussion(root, info, id):
     try:
@@ -590,6 +1072,7 @@ def resolve_portfolios(root, info, user_id=None):
         return Portfolio.objects.filter(user_id=user_id)
     return Portfolio.objects.filter(user=user)
 
+
 def resolve_portfolio(root, info, id):
     try:
         portfolio = Portfolio.objects.get(id=id)
@@ -605,6 +1088,7 @@ def resolve_portfolio(root, info, id):
 def resolve_public_portfolios(root, info):
     return Portfolio.objects.filter(is_public=True).order_by('-created_at')[:20]
 
+
 def resolve_price_alerts(root, info, user_id=None):
     user = info.context.user
 
@@ -615,6 +1099,7 @@ def resolve_price_alerts(root, info, user_id=None):
 
         pass
     return []
+
 
 def resolve_social_feed(root, info):
     """Get personalized feed - only posts from followed users + user's own posts"""
@@ -631,6 +1116,7 @@ def resolve_social_feed(root, info):
 
     ).order_by('-created_at')[:50]
 
+
 def resolve_user_achievements(root, info, user_id=None):
     if user_id:
 
@@ -642,6 +1128,7 @@ def resolve_user_achievements(root, info, user_id=None):
         pass
     return []
 
+
 def resolve_stock_sentiment(root, info, stock_symbol):
     try:
         stock = Stock.objects.get(symbol=stock_symbol.upper())
@@ -649,14 +1136,17 @@ def resolve_stock_sentiment(root, info, stock_symbol):
         return sentiment
     except Stock.DoesNotExist:
         return None
+
+
 def resolve_top_performers(root, info):
     # Get stocks with highest beginner-friendly scores
 
     return Stock.objects.filter(
 
-    beginner_friendly_score__isnull=False
+        beginner_friendly_score__isnull=False
 
     ).order_by('-beginner_friendly_score')[:10]
+
 
 def resolve_market_sentiment(root, info):
     # Aggregate sentiment across all stocks
@@ -672,27 +1162,28 @@ def resolve_market_sentiment(root, info):
 
     return {
 
-    'average_sentiment': float(avg_sentiment),
+        'average_sentiment': float(avg_sentiment),
 
-    'total_votes': total_votes,
+        'total_votes': total_votes,
 
-    'stocks_tracked': sentiments.count(),
+        'stocks_tracked': sentiments.count(),
 
-    'market_mood': 'bullish' if avg_sentiment > 0.1 else 'bearish' if avg_sentiment < -0.1 else 'neutral'
+        'market_mood': 'bullish' if avg_sentiment > 0.1 else 'bearish' if avg_sentiment < -0.1 else 'neutral'
 
     }
 
     return {
 
-    'average_sentiment': 0,
+        'average_sentiment': 0,
 
-    'total_votes': 0,
+        'total_votes': 0,
 
-    'stocks_tracked': 0,
+        'stocks_tracked': 0,
 
-    'market_mood': 'neutral'
+        'market_mood': 'neutral'
 
     }
+
 
 def resolve_ai_portfolio_recommendations(root, info, userId):
     """Get AI portfolio recommendations for a user"""
@@ -712,6 +1203,7 @@ def resolve_ai_portfolio_recommendations(root, info, userId):
 
     return AIPortfolioRecommendation.objects.filter(user=user).order_by('-created_at')
 
+
 def resolve_my_watchlist(self, info):
     """Get current user's watchlist"""
 
@@ -724,174 +1216,385 @@ def resolve_my_watchlist(self, info):
 
     return Watchlist.objects.filter(user=user).order_by('-added_at')
 
-def resolve_rust_stock_analysis(self, info, symbol):
-    """Get Rust engine stock analysis - calls the actual Rust service"""
+    def resolve_rust_stock_analysis(self, info, symbol):
+        """Get Rust engine stock analysis - calls the actual Rust service"""
+        print(f"🔍 [DEBUG] resolve_rust_stock_analysis CALLED for symbol: {symbol}", flush=True)
+        import logging
+        import sys
+        logger = logging.getLogger(__name__)
+        logger.info(f"🔍 [DEBUG] resolve_rust_stock_analysis called for symbol: {symbol}")
+        print(f"🔍 [DEBUG] Logger initialized, proceeding...", flush=True, file=sys.stderr)
 
-    import logging
+        from .types import (
 
-    logger = logging.getLogger(__name__)
+            RustStockAnalysisType,
 
+            TechnicalIndicatorsType,
 
-    from .types import RustStockAnalysisType, TechnicalIndicatorsType, FundamentalAnalysisType
+            FundamentalAnalysisType,
 
-    from .rust_stock_service import rust_stock_service
+            SpendingDataPointType,
 
+            OptionsFlowDataPointType,
 
-    symbol_upper = symbol.upper()
+            SignalContributionType,
 
+            SHAPValueType
 
-    try:
-        # Call the Rust service
-        logger.info(f"Calling Rust service for stock analysis: {symbol_upper}")
-
-        rust_response = rust_stock_service.analyze_stock(symbol_upper)
-
-        logger.info(f"Rust service response received for {symbol_upper}: {rust_response}")
-
-        # Map Rust service response to GraphQL type
-        # The Rust service returns a dict with analysis data
-        # We need to extract and map the fields
-
-        # Extract technical indicators if available
-        technical_data = rust_response.get('technicalIndicators', {}) or rust_response.get('technical_indicators', {}) or {}
-
-        technical_indicators = TechnicalIndicatorsType(
-
-            rsi=technical_data.get('rsi') or technical_data.get('RSI') or 50.0,
-            macd=technical_data.get('macd') or technical_data.get('MACD') or 0.0,
-            macdSignal=technical_data.get('macdSignal') or technical_data.get('macd_signal') or technical_data.get('MACDSignal') or 0.0,
-            macdHistogram=technical_data.get('macdHistogram') or technical_data.get('macd_histogram') or technical_data.get('MACDHist') or 0.0,
-            sma20=technical_data.get('sma20') or technical_data.get('SMA20') or 0.0,
-            sma50=technical_data.get('sma50') or technical_data.get('SMA50') or 0.0,
-            ema12=technical_data.get('ema12') or technical_data.get('EMA12') or 0.0,
-            ema26=technical_data.get('ema26') or technical_data.get('EMA26') or 0.0,
-            bollingerUpper=technical_data.get('bollingerUpper') or technical_data.get('bollinger_upper') or technical_data.get('BBUpper') or 0.0,
-            bollingerLower=technical_data.get('bollingerLower') or technical_data.get('bollinger_lower') or technical_data.get('BBLower') or 0.0,
-            bollingerMiddle=technical_data.get('bollingerMiddle') or technical_data.get('bollinger_middle') or technical_data.get('BBMiddle') or 0.0
         )
 
+        from .rust_stock_service import rust_stock_service
 
-        # Extract fundamental analysis if available
-        fundamental_data = rust_response.get('fundamentalAnalysis', {}) or rust_response.get('fundamental_analysis', {}) or {}
+        from .spending_habits_service import SpendingHabitsService
 
-        fundamental_analysis = FundamentalAnalysisType(
-            valuationScore=fundamental_data.get('valuationScore') or fundamental_data.get('valuation_score') or 70.0,
-            growthScore=fundamental_data.get('growthScore') or fundamental_data.get('growth_score') or 65.0,
-            stabilityScore=fundamental_data.get('stabilityScore') or fundamental_data.get('stability_score') or 80.0,
-            dividendScore=fundamental_data.get('dividendScore') or fundamental_data.get('dividend_score') or 60.0,
-            debtScore=fundamental_data.get('debtScore') or fundamental_data.get('debt_score') or 75.0
-        )
+        from .consumer_strength_service import ConsumerStrengthService
 
+        from datetime import datetime, timedelta
 
-        # Map risk score to risk level
-        risk_score = rust_response.get('risk_score') or rust_response.get('riskScore', 50.0)
+        from django.utils import timezone
 
-        if isinstance(risk_score, (int, float)):
-            if risk_score < 50:
-                risk_level = "Low"
-            elif risk_score < 70:
-                risk_level = "Medium"
-            else:
-                risk_level = "High"
-        else:
-            risk_level = rust_response.get('riskLevel') or rust_response.get('risk_level', 'Medium')
+        symbol_upper = symbol.upper()
 
+        rust_response = None
+        try:
+            # Call the Rust service
+            logger.info(f"Calling Rust service for stock analysis: {symbol_upper}")
 
-        # Map prediction/recommendation
-        prediction_type = rust_response.get('prediction_type') or rust_response.get('predictionType', '')
+            rust_response = rust_stock_service.analyze_stock(symbol_upper)
 
-        recommendation_map = {
-            'bullish': 'BUY',
-            'bearish': 'SELL',
-            'neutral': 'HOLD',
-            'strong_buy': 'STRONG BUY',
-            'strong_sell': 'STRONG SELL'
-        }
+            logger.info(f"Rust service response received for {symbol_upper}: {rust_response}")
+        except Exception as rust_error:
+            logger.warning(f"Rust service unavailable for {symbol_upper}: {rust_error}. Using fallback data.")
+            rust_response = None
 
-        recommendation = rust_response.get('recommendation') or rust_response.get('recommendation', '')
+        # Use Rust response if available, otherwise use fallback
+        if rust_response:
+            try:
+                # Map Rust service response to GraphQL type
 
-        if not recommendation and prediction_type:
-            recommendation = recommendation_map.get(prediction_type.lower(), 'HOLD')
+                # The Rust service returns a dict with analysis data
 
-        if not recommendation:
-            recommendation = 'HOLD'
+                # We need to extract and map the fields
 
+                # Extract technical indicators if available
 
-        # Calculate beginner friendly score from risk and confidence
-        confidence_level = rust_response.get('confidence_level') or rust_response.get('confidenceLevel', 'medium')
-        confidence_score = {'high': 90, 'medium': 70, 'low': 50}.get(confidence_level.lower(), 70)
+                technical_data = rust_response.get(
+                    'technicalIndicators', {}) or rust_response.get(
+                    'technical_indicators', {}) or {}
 
-        beginner_friendly_score = rust_response.get('beginnerFriendlyScore') or rust_response.get('beginner_friendly_score')
+                technical_indicators = TechnicalIndicatorsType(
+                    rsi=technical_data.get('rsi') or technical_data.get('RSI') or 50.0,
+                    macd=technical_data.get('macd') or technical_data.get('MACD') or 0.0,
+                    macdSignal=technical_data.get('macdSignal') or technical_data.get('macd_signal') or technical_data.get('MACDSignal') or 0.0,
+                    macdHistogram=technical_data.get('macdHistogram') or technical_data.get('macd_histogram') or technical_data.get('MACDHist') or 0.0,
+                    sma20=technical_data.get('sma20') or technical_data.get('SMA20') or 0.0,
+                    sma50=technical_data.get('sma50') or technical_data.get('SMA50') or 0.0,
+                    ema12=technical_data.get('ema12') or technical_data.get('EMA12') or 0.0,
+                    ema26=technical_data.get('ema26') or technical_data.get('EMA26') or 0.0,
+                    bollingerUpper=technical_data.get('bollingerUpper') or technical_data.get('bollinger_upper') or technical_data.get('BBUpper') or 0.0,
+                    bollingerLower=technical_data.get('bollingerLower') or technical_data.get('bollinger_lower') or technical_data.get('BBLower') or 0.0,
+                    bollingerMiddle=technical_data.get('bollingerMiddle') or technical_data.get('bollinger_middle') or technical_data.get('BBMiddle') or 0.0)
 
-        if not beginner_friendly_score:
-            beginner_friendly_score = max(50, 100 - (risk_score if isinstance(risk_score, (int, float)) else 50))
+                # Extract fundamental analysis if available
 
+                fundamental_data = rust_response.get(
+                    'fundamentalAnalysis', {}) or rust_response.get(
+                    'fundamental_analysis', {}) or {}
 
-        # Build reasoning from explanation
-        explanation = rust_response.get('explanation') or rust_response.get('reasoning', '')
+                fundamental_analysis = FundamentalAnalysisType(
+                    valuationScore=fundamental_data.get('valuationScore') or fundamental_data.get('valuation_score') or 70.0,
+                    growthScore=fundamental_data.get('growthScore') or fundamental_data.get('growth_score') or 65.0,
+                    stabilityScore=fundamental_data.get('stabilityScore') or fundamental_data.get('stability_score') or 80.0,
+                    dividendScore=fundamental_data.get('dividendScore') or fundamental_data.get('dividend_score') or 60.0,
+                    debtScore=fundamental_data.get('debtScore') or fundamental_data.get('debt_score') or 75.0)
 
-        if isinstance(explanation, str):
-            reasoning = [explanation] if explanation else []
-        elif isinstance(explanation, list):
-            reasoning = explanation
-        else:
-            reasoning = [f"Analysis for {symbol_upper} based on Rust engine predictions."]
+                # Map risk score to risk level
 
+                risk_score = rust_response.get('risk_score') or rust_response.get('riskScore', 50.0)
 
-        # Add additional context if available
-        if rust_response.get('probability'):
-            prob = rust_response.get('probability', 0) * 100
-            reasoning.append(f"Prediction confidence: {prob:.1f}%")
+                if isinstance(risk_score, (int, float)):
+                    if risk_score < 50:
+                        risk_level = "Low"
+                    elif risk_score < 70:
+                        risk_level = "Medium"
+                    else:
+                        risk_level = "High"
+                else:
+                    risk_level = rust_response.get('riskLevel') or rust_response.get('risk_level', 'Medium')
 
-        logger.info(f"Successfully mapped Rust response for {symbol_upper}")
+                # Map prediction/recommendation
 
-        return RustStockAnalysisType(
-            symbol=symbol_upper,
-            beginnerFriendlyScore=float(beginner_friendly_score) if beginner_friendly_score else 75.0,
-            riskLevel=risk_level,
-            recommendation=recommendation.upper(),
-            technicalIndicators=technical_indicators,
-            fundamentalAnalysis=fundamental_analysis,
-            reasoning=reasoning if reasoning else [f"Analysis for {symbol_upper}"]
-        )
+                prediction_type = rust_response.get('prediction_type') or rust_response.get('predictionType', '')
 
+                recommendation_map = {
+                    'bullish': 'BUY',
+                    'bearish': 'SELL',
+                    'neutral': 'HOLD',
+                    'strong_buy': 'STRONG BUY',
+                    'strong_sell': 'STRONG SELL'
+                }
 
-    except Exception as e:
-        logger.error(f"Error calling Rust service for {symbol_upper}: {str(e)}", exc_info=True)
+                recommendation = rust_response.get('recommendation') or rust_response.get('recommendation', '')
 
-    # Fallback to basic analysis if Rust service fails
+                if not recommendation and prediction_type:
+                    recommendation = recommendation_map.get(prediction_type.lower(), 'HOLD')
 
-    return RustStockAnalysisType(
+                if not recommendation:
+                    recommendation = 'HOLD'
 
-    symbol=symbol_upper,
+                # Calculate beginner friendly score from risk and confidence
 
-    beginnerFriendlyScore=75.0,
+                confidence_level = rust_response.get('confidence_level') or rust_response.get('confidenceLevel', 'medium')
 
-    riskLevel="Medium",
+                confidence_score = {'high': 90, 'medium': 70, 'low': 50}.get(confidence_level.lower(), 70)
 
-    recommendation="HOLD",
+                beginner_friendly_score = rust_response.get(
+                    'beginnerFriendlyScore') or rust_response.get('beginner_friendly_score')
 
-    technicalIndicators=TechnicalIndicatorsType(
+                if not beginner_friendly_score:
+                    beginner_friendly_score = max(50, 100 - (risk_score if isinstance(risk_score, (int, float)) else 50))
 
-    rsi=50.0, macd=0.0, macdSignal=0.0, macdHistogram=0.0,
+                # Build reasoning from explanation
 
-    sma20=0.0, sma50=0.0, ema12=0.0, ema26=0.0,
+                explanation = rust_response.get('explanation') or rust_response.get('reasoning', '')
 
-    bollingerUpper=0.0, bollingerLower=0.0, bollingerMiddle=0.0
+                if isinstance(explanation, str):
+                    reasoning = [explanation] if explanation else []
+                elif isinstance(explanation, list):
+                    reasoning = explanation
+                else:
+                    reasoning = [f"Analysis for {symbol_upper} based on Rust engine predictions."]
 
-    ),
+                # Add additional context if available
+                if rust_response.get('probability'):
+                    prob = rust_response.get('probability', 0) * 100
+                    reasoning.append(f"Prediction confidence: {prob:.1f}%")
 
-    fundamentalAnalysis=FundamentalAnalysisType(
+                logger.info(f"Successfully mapped Rust response for {symbol_upper}")
 
-    valuationScore=70.0, growthScore=65.0, stabilityScore=80.0,
+                # Generate spending and options flow data for charts
 
-    dividendScore=60.0, debtScore=75.0
+                spending_data = []
+                options_flow_data = []
+                signal_contributions = []
+                shap_values = []
+                shap_explanation = f"Feature importance for {symbol_upper} prediction based on spending, options, earnings, and insider signals."
 
-    ),
+                try:
+                    user = getattr(info.context, 'user', None)
+                    user_id = user.id if user and not user.is_anonymous else None
+                    spending_service = SpendingHabitsService()
+                    spending_analysis = None
 
-    reasoning=[f"Rust service unavailable for {symbol_upper}. Please try again later."]
+                    if user_id:
+                        spending_analysis = spending_service.analyze_spending_habits(user_id, months=3)
 
-    )
+                    # Generate spending data (last 12 weeks)
+                    end_date = timezone.now().date()
+                    base_price = rust_response.get('current_price', 100.0)
+
+                    for week_offset in range(12, -1, -1):
+                        week_end = end_date - timedelta(weeks=week_offset)
+                        spending_data.append(SpendingDataPointType(
+                            date=week_end.isoformat(),
+                            spending=1000.0 + (week_offset * 50),
+                            spendingChange=0.05,
+                            price=base_price * (1 + 0.01 * (12 - week_offset) / 12),
+                            priceChange=0.01
+                        ))
+
+                    # Generate options flow data (last 20 days)
+                    consumer_strength_service = ConsumerStrengthService()
+                    consumer_strength = consumer_strength_service.calculate_consumer_strength(
+                        symbol_upper, spending_analysis, user_id
+                    )
+
+                    for day_offset in range(20, -1, -1):
+                        day_date = end_date - timedelta(days=day_offset)
+                        unusual_volume = consumer_strength.get('options_score', 50.0) / 100.0 * 30.0
+                        options_flow_data.append(OptionsFlowDataPointType(
+                            date=day_date.isoformat(),
+                            price=base_price * (1 + 0.005 * (20 - day_offset) / 20),
+                            unusualVolumePercent=unusual_volume,
+                            sweepCount=1 if unusual_volume > 25 else 0,
+                            putCallRatio=0.7 + (unusual_volume / 100.0) * 0.6
+                        ))
+                except Exception as e:
+                    logger.warning(f"Error generating chart data: {e}")
+                    # Use fallback data if chart data generation fails
+                    end_date = timezone.now().date()
+                    base_price = rust_response.get('current_price', 100.0)
+                    if not spending_data:
+                        for week_offset in range(12, -1, -1):
+                            week_end = end_date - timedelta(weeks=week_offset)
+                            spending_data.append(SpendingDataPointType(
+                                date=week_end.isoformat(),
+                                spending=1000.0 + (week_offset * 50),
+                                spendingChange=0.05,
+                                price=base_price * (1 + 0.01 * (12 - week_offset) / 12),
+                                priceChange=0.01
+                            ))
+                    if not options_flow_data:
+                        for day_offset in range(20, -1, -1):
+                            day_date = end_date - timedelta(days=day_offset)
+                            options_flow_data.append(OptionsFlowDataPointType(
+                                date=day_date.isoformat(),
+                                price=base_price * (1 + 0.005 * (20 - day_offset) / 20),
+                                unusualVolumePercent=15.0,
+                                sweepCount=0,
+                                putCallRatio=0.8
+                            ))
+
+                return RustStockAnalysisType(
+                    symbol=symbol_upper,
+                    beginnerFriendlyScore=float(beginner_friendly_score) if beginner_friendly_score else 75.0,
+                    riskLevel=risk_level,
+                    recommendation=recommendation.upper(),
+                    technicalIndicators=technical_indicators,
+                    fundamentalAnalysis=fundamental_analysis,
+                    reasoning=reasoning if reasoning else [f"Analysis for {symbol_upper}"],
+                    spendingData=spending_data,
+                    optionsFlowData=options_flow_data,
+                    signalContributions=signal_contributions,
+                    shapValues=shap_values,
+                    shapExplanation=shap_explanation
+                )
+            except Exception as process_error:
+                logger.error(f"Error processing Rust response for {symbol_upper}: {str(process_error)}", exc_info=True)
+                rust_response = None  # Force fallback
+
+        # Fall through to fallback
+
+        # Fallback to basic analysis if Rust service fails (always executed)
+        try:
+            end_date = timezone.now().date()
+            base_price = 100.0
+
+            # Generate fallback spending data
+            fallback_spending_data = []
+            for week_offset in range(12, -1, -1):
+                week_end = end_date - timedelta(weeks=week_offset)
+                fallback_spending_data.append(SpendingDataPointType(
+                    date=week_end.isoformat(),
+                    spending=1000.0 + (week_offset * 50),
+                    spendingChange=0.05,
+                    price=base_price * (1 + 0.01 * (12 - week_offset) / 12),
+                    priceChange=0.01
+                ))
+
+            # Generate fallback options flow data
+            fallback_options_flow_data = []
+            for day_offset in range(20, -1, -1):
+                day_date = end_date - timedelta(days=day_offset)
+                fallback_options_flow_data.append(OptionsFlowDataPointType(
+                    date=day_date.isoformat(),
+                    price=base_price * (1 + 0.005 * (20 - day_offset) / 20),
+                    unusualVolumePercent=15.0,
+                    sweepCount=0,
+                    putCallRatio=0.8
+                ))
+
+            result = RustStockAnalysisType(
+                symbol=symbol_upper,
+                beginnerFriendlyScore=75.0,
+                riskLevel="Medium",
+                recommendation="HOLD",
+                technicalIndicators=TechnicalIndicatorsType(
+                    rsi=50.0, macd=0.0, macdSignal=0.0, macdHistogram=0.0,
+                    sma20=0.0, sma50=0.0, ema12=0.0, ema26=0.0,
+                    bollingerUpper=0.0, bollingerLower=0.0, bollingerMiddle=0.0
+                ),
+                fundamentalAnalysis=FundamentalAnalysisType(
+                    valuationScore=70.0, growthScore=65.0, stabilityScore=80.0,
+                    dividendScore=60.0, debtScore=75.0
+                ),
+                reasoning=[f"Rust service unavailable for {symbol_upper}. Please try again later."],
+                spendingData=fallback_spending_data,
+                optionsFlowData=fallback_options_flow_data,
+                signalContributions=[],
+                shapValues=[],
+                shapExplanation=f"Fallback analysis for {symbol_upper}. Rust service unavailable."
+            )
+            logger.info(
+                f"✅ [DEBUG] Returning fallback RustStockAnalysisType for {symbol_upper} with {len(fallback_spending_data)} spending data points and {len(fallback_options_flow_data)} options flow data points"
+            )
+            return result
+        except Exception as e:
+            logger.error(f"Critical error in resolve_rust_stock_analysis fallback: {e}", exc_info=True)
+            # Continue to last resort fallback
+
+        # Last resort: return minimal data with fallback arrays
+        try:
+            end_date = timezone.now().date()
+            base_price = 100.0
+            last_resort_spending = []
+            for week_offset in range(12, -1, -1):
+                week_end = end_date - timedelta(weeks=week_offset)
+                last_resort_spending.append(SpendingDataPointType(
+                    date=week_end.isoformat(),
+                    spending=1000.0 + (week_offset * 50),
+                    spendingChange=0.05,
+                    price=base_price * (1 + 0.01 * (12 - week_offset) / 12),
+                    priceChange=0.01
+                ))
+            last_resort_options = []
+            for day_offset in range(20, -1, -1):
+                day_date = end_date - timedelta(days=day_offset)
+                last_resort_options.append(OptionsFlowDataPointType(
+                    date=day_date.isoformat(),
+                    price=base_price * (1 + 0.005 * (20 - day_offset) / 20),
+                    unusualVolumePercent=15.0,
+                    sweepCount=0,
+                    putCallRatio=0.8
+                ))
+            return RustStockAnalysisType(
+                symbol=symbol_upper,
+                beginnerFriendlyScore=75.0,
+                riskLevel="Medium",
+                recommendation="HOLD",
+                technicalIndicators=TechnicalIndicatorsType(
+                    rsi=50.0, macd=0.0, macdSignal=0.0, macdHistogram=0.0,
+                    sma20=0.0, sma50=0.0, ema12=0.0, ema26=0.0,
+                    bollingerUpper=0.0, bollingerLower=0.0, bollingerMiddle=0.0
+                ),
+                fundamentalAnalysis=FundamentalAnalysisType(
+                    valuationScore=70.0, growthScore=65.0, stabilityScore=80.0,
+                    dividendScore=60.0, debtScore=75.0
+                ),
+                reasoning=[f"Fallback analysis for {symbol_upper}"],
+                spendingData=last_resort_spending,
+                optionsFlowData=last_resort_options,
+                signalContributions=[],
+                shapValues=[],
+                shapExplanation=f"Fallback analysis for {symbol_upper}"
+            )
+        except Exception as final_error:
+            logger.error(f"Fatal error in last resort fallback: {final_error}", exc_info=True)
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            # Return minimal data even on error
+            return RustStockAnalysisType(
+                symbol=symbol_upper,
+                beginnerFriendlyScore=75.0,
+                riskLevel="Medium",
+                recommendation="HOLD",
+                technicalIndicators=TechnicalIndicatorsType(
+                    rsi=50.0, macd=0.0, macdSignal=0.0, macdHistogram=0.0,
+                    sma20=0.0, sma50=0.0, ema12=0.0, ema26=0.0,
+                    bollingerUpper=0.0, bollingerLower=0.0, bollingerMiddle=0.0
+                ),
+                fundamentalAnalysis=FundamentalAnalysisType(
+                    valuationScore=70.0, growthScore=65.0, stabilityScore=80.0,
+                    dividendScore=60.0, debtScore=75.0
+                ),
+                reasoning=[f"Error generating analysis for {symbol_upper}"],
+                spendingData=[],
+                optionsFlowData=[],
+                signalContributions=[],
+                shapValues=[],
+                shapExplanation=f"Error generating analysis for {symbol_upper}"
+            )
+
 
 def resolve_stock_discussions(self, info, stock_symbol=None, limit=20):
     """Get stock discussions (Reddit-style) - shows public posts and posts from followed users"""
@@ -922,6 +1625,7 @@ def resolve_stock_discussions(self, info, stock_symbol=None, limit=20):
 
     return discussions.order_by('-created_at')[:limit]
 
+
 def resolve_discussion_detail(self, info, id):
     """Get detailed discussion with comments"""
 
@@ -929,6 +1633,8 @@ def resolve_discussion_detail(self, info, id):
         return StockDiscussion.objects.get(id=id)
     except StockDiscussion.DoesNotExist:
         return None
+
+
 def resolve_social_feed(self, info):
     """Get social feed - posts from users the current user follows"""
 
@@ -952,11 +1658,12 @@ def resolve_social_feed(self, info):
 
     discussions = StockDiscussion.objects.filter(
 
-    user__in=followed_users
+        user__in=followed_users
 
     ).select_related('user', 'stock').prefetch_related('comments').order_by('-created_at')
 
     return discussions
+
 
 def resolve_my_portfolio(self, info):
     """Get current user's portfolio"""
@@ -967,6 +1674,7 @@ def resolve_my_portfolio(self, info):
 
         return []
     return Portfolio.objects.filter(user=user)
+
 
 def resolve_portfolio_value(self, info):
     """Get current user's total portfolio value"""
@@ -981,6 +1689,7 @@ def resolve_portfolio_value(self, info):
     total_value = sum(item.total_value for item in portfolio_items)
 
     return total_value
+
 
 def resolve_current_stock_prices(self, info, symbols=None):
     """Get current stock prices with enhanced real-time data"""
@@ -1067,6 +1776,7 @@ def resolve_current_stock_prices(self, info, symbols=None):
 
     return prices
 
+
 def resolve_my_portfolios(self, info):
     """Get all portfolios for the current user"""
 
@@ -1079,6 +1789,7 @@ def resolve_my_portfolios(self, info):
 
     return PortfolioService.get_user_portfolios(user)
 
+
 def resolve_portfolio_names(self, info):
     """Get list of portfolio names for the current user"""
 
@@ -1090,6 +1801,7 @@ def resolve_portfolio_names(self, info):
     from .portfolio_service import PortfolioService
 
     return PortfolioService.get_portfolio_names(user)
+
 
 def resolve_portfolio_metrics(self, info):
     """Get portfolio metrics (regular feature, not premium)"""
@@ -1106,6 +1818,7 @@ def resolve_portfolio_metrics(self, info):
 
     return service.get_portfolio_performance_metrics(user_id)
 
+
 def resolve_test_portfolio_metrics(self, info):
     """Test portfolio metrics (no auth required)"""
 
@@ -1116,6 +1829,7 @@ def resolve_test_portfolio_metrics(self, info):
     # Use user ID 1 for testing
 
     return service.get_portfolio_performance_metrics(1)
+
 
 def resolve_test_ai_recommendations(self, info):
     """Test AI recommendations (no auth required)"""
@@ -1128,6 +1842,7 @@ def resolve_test_ai_recommendations(self, info):
 
     return service.get_ai_recommendations(1, "medium")
 
+
 def resolve_test_stock_screening(self, info):
     """Test stock screening (no auth required)"""
 
@@ -1138,6 +1853,7 @@ def resolve_test_stock_screening(self, info):
     # Return some sample screening results
 
     return service.get_advanced_stock_screening({})
+
 
 def resolve_test_options_analysis(self, info, symbol):
     """Test options analysis (no auth required)"""
@@ -1186,7 +1902,6 @@ def resolve_benchmarkSeries(self, info, symbol, timeframe):
             'SLV': 'Silver',
         }
 
-
         benchmark_name = benchmark_names.get(symbol.upper(), symbol.upper())
 
         # Import market data service
@@ -1196,9 +1911,9 @@ def resolve_benchmarkSeries(self, info, symbol, timeframe):
             logger.error("MarketDataAPIService not available")
             return None
 
-
         # Create service instance and fetch historical data
         # Since GraphQL resolvers are synchronous, we need to run async code
+
         async def fetch_benchmark_data():
             async with MarketDataAPIService() as service:
                 # Fetch historical data
@@ -1235,7 +1950,8 @@ def resolve_benchmarkSeries(self, info, symbol, timeframe):
 
                 # Calculate volatility (standard deviation of returns)
                 returns = pd.Series(values).pct_change().dropna()
-                volatility = float(returns.std() * np.sqrt(252)) * 100 if len(returns) > 1 else 0.0  # Annualized volatility
+                volatility = float(returns.std() * np.sqrt(252)) * \
+                    100 if len(returns) > 1 else 0.0  # Annualized volatility
 
                 # Create data points
                 data_points = []
@@ -1287,7 +2003,8 @@ def resolve_benchmarkSeries(self, info, symbol, timeframe):
                 changePercent=dp['changePercent']
             )
             for dp in result['dataPoints']
-        ]
+                ]
+
 
         return BenchmarkSeriesType(
             symbol=result['symbol'],
@@ -1311,6 +2028,7 @@ def resolve_availableBenchmarks(self, info):
 
     return ['SPY', 'QQQ', 'DIA', 'VTI', 'IWM', 'VEA', 'VWO', 'AGG', 'TLT', 'GLD', 'SLV']
 
+
 def resolve_stock_moments(self, info, symbol, range):
     """Resolve stock moments for a given symbol and time range"""
     try:
@@ -1319,7 +2037,7 @@ def resolve_stock_moments(self, info, symbol, range):
 
         # Calculate start date based on range (handle both enum and string)
         range_value = range.value if hasattr(range, 'value') else str(range)
-        
+
         if range_value == 'ONE_MONTH' or range == ChartRangeEnum.ONE_MONTH:
             start = now - timedelta(days=30)
         elif range_value == 'THREE_MONTHS' or range == ChartRangeEnum.THREE_MONTHS:
@@ -1363,7 +2081,7 @@ def _generate_picks_for_symbols(
 ) -> list:
     """Generate picks for a list of symbols"""
     picks = []
-    
+
     for symbol in symbols[:50]:  # Limit to 50 symbols for performance
         try:
             # Get OHLCV data (tries real data first, falls back to mock)
@@ -1375,37 +2093,37 @@ def _generate_picks_for_symbols(
             except RuntimeError:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-            
+
             ohlcv_1m, ohlcv_5m = loop.run_until_complete(_get_intraday_data(symbol))
-            
+
             if ohlcv_1m is None or ohlcv_5m is None:
                 continue
-            
+
             # Extract features
             features = feature_service.extract_all_features(
                 ohlcv_1m, ohlcv_5m, symbol
             )
-            
+
             # Score with ML
             score = ml_scorer.score(features)
-            
+
             # Filter by quality threshold
             if score < quality_threshold:
                 continue
-            
+
             # Calculate risk metrics
             current_price = float(ohlcv_5m.iloc[-1]['close'])
             risk_metrics = feature_service.calculate_risk_metrics(
                 features, mode, current_price
             )
-            
+
             # Determine side
             momentum = features.get('momentum_15m', 0.0)
             side = 'LONG' if momentum > 0 else 'SHORT'
-            
+
             # Calculate catalyst score
             catalyst_score = ml_scorer.calculate_catalyst_score(features)
-            
+
             # Create pick
             pick = {
                 'symbol': symbol,
@@ -1422,13 +2140,13 @@ def _generate_picks_for_symbols(
                 'risk': risk_metrics,
                 'notes': _generate_pick_notes(symbol, features, side, score)
             }
-            
+
             picks.append(pick)
-            
+
         except Exception as e:
             logger.warning(f"Error processing {symbol}: {e}")
             continue
-    
+
     return picks
 
 
@@ -1440,31 +2158,31 @@ def _get_day_trading_picks_from_polygon(limit=20):
     try:
         from polygon import RESTClient
         import os
-        
+
         api_key = os.getenv('POLYGON_API_KEY')
         if not api_key:
             logger.warning("POLYGON_API_KEY not set, using mock data")
             return _get_mock_day_trading_picks(limit)
-        
+
         client = RESTClient(api_key)
-        
+
         # Get top gainers snapshot
         snapshots = client.get_snapshot_direction(
             market_type='stocks',
             direction='gainers',
             include_otc=False
         )
-        
+
         picks = []
         for snap in snapshots[:limit]:
             try:
                 price = snap.last_trade.price if snap.last_trade else 0
                 change_pct = snap.todays_change_percent if hasattr(snap, 'todays_change_percent') else 0
                 volume = snap.todays_volume if hasattr(snap, 'todays_volume') else 0
-                
+
                 # Calculate score based on momentum (change percentage)
                 score = abs(change_pct) * 10  # Scale to 0-10 range
-                
+
                 picks.append({
                     'symbol': snap.ticker,
                     'side': 'LONG',  # Gainers are long opportunities
@@ -1489,10 +2207,10 @@ def _get_day_trading_picks_from_polygon(limit=20):
             except Exception as e:
                 logger.warning(f"Error processing snapshot for {snap.ticker}: {e}")
                 continue
-        
+
         logger.info(f"Fetched {len(picks)} picks from Polygon API")
         return picks
-        
+
     except Exception as e:
         logger.error(f"Error fetching from Polygon API: {e}", exc_info=True)
         # Fallback to mock data
@@ -1503,13 +2221,13 @@ def _get_mock_day_trading_picks(limit=20):
     """Generate mock day trading picks as final fallback"""
     import random
     default_symbols = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'NVDA', 'META', 'JPM', 'V', 'TMO']
-    
+
     picks = []
     for symbol in default_symbols[:limit]:
         price = random.uniform(50, 500)
         change_pct = random.uniform(-5, 10)  # -5% to +10%
         score = abs(change_pct) * 1.5
-        
+
         picks.append({
             'symbol': symbol,
             'side': 'LONG' if change_pct > 0 else 'SHORT',
@@ -1531,7 +2249,7 @@ def _get_mock_day_trading_picks(limit=20):
             },
             'notes': f"Mock pick: {change_pct:.2f}% change"
         })
-    
+
     return picks
 
 
@@ -1544,34 +2262,34 @@ async def _get_intraday_data(symbol: str):
         import pandas as pd
         import numpy as np
         from datetime import datetime, timedelta
-        
+
         # Try to get real intraday data from market data service
         try:
             from .market_data_api_service import MarketDataAPIService, DataProvider
-            
+
             async with MarketDataAPIService() as service:
                 # Try Polygon.io first for real intraday data
                 polygon_data = await _fetch_polygon_intraday(symbol.upper(), service)
                 if polygon_data:
                     logger.info(f"Got real intraday data from Polygon.io for {symbol}")
                     return polygon_data
-                
+
                 # Try Alpaca as fallback
                 alpaca_data = await _fetch_alpaca_intraday(symbol.upper(), service)
                 if alpaca_data:
                     logger.info(f"Got real intraday data from Alpaca for {symbol}")
                     return alpaca_data
-                
+
                 # Fallback: Get recent daily data and create intraday approximation
                 hist_data = await service.get_historical_data(symbol.upper(), period='1mo')
-                
+
                 if hist_data is not None and len(hist_data) > 0:
                     # hist_data is already a DataFrame from market_data_api_service
                     df = hist_data.copy()
                     if 'timestamp' not in df.columns:
                         df['timestamp'] = df.index
                     df = df.sort_values('timestamp')
-                    
+
                     # Get latest price for current day
                     latest = df.iloc[-1]
                     # Handle different column name formats
@@ -1584,26 +2302,26 @@ async def _get_intraday_data(symbol: str):
                     else:
                         current_price = 100.0
                         volume_col = 'volume'
-                    
+
                     # Create intraday data by interpolating from daily data
                     # This is an approximation - real intraday data would be better
                     now = datetime.now()
-                    
+
                     # Generate 1-minute bars for today (last 390 minutes = 6.5 hours)
                     # Use daily volatility to create realistic intraday movement
                     close_col = 'Close' if 'Close' in df.columns else 'close'
                     daily_vol = df[close_col].pct_change().std() if len(df) > 1 else 0.02
                     if pd.isna(daily_vol) or daily_vol == 0:
                         daily_vol = 0.02  # Default 2% volatility
-                    
+
                     timestamps_1m = [now - timedelta(minutes=i) for i in range(390, 0, -1)]
                     prices_1m = [current_price]
-                    
+
                     for i in range(1, 390):
                         # Random walk with daily volatility
                         change = np.random.normal(0, daily_vol / np.sqrt(390))  # Scale to 1-minute
                         prices_1m.append(prices_1m[-1] * (1 + change))
-                    
+
                     ohlcv_1m = pd.DataFrame({
                         'timestamp': timestamps_1m,
                         'open': prices_1m,
@@ -1612,11 +2330,11 @@ async def _get_intraday_data(symbol: str):
                         'close': prices_1m,
                         'volume': [int(float(latest.get(volume_col, latest.get('volume', 1000000))) / 390) for _ in range(390)]
                     })
-                    
+
                     # Generate 5-minute bars
-                    timestamps_5m = [now - timedelta(minutes=i*5) for i in range(78, 0, -1)]
+                    timestamps_5m = [now - timedelta(minutes=i * 5) for i in range(78, 0, -1)]
                     prices_5m = prices_1m[::5][:78]
-                    
+
                     ohlcv_5m = pd.DataFrame({
                         'timestamp': timestamps_5m,
                         'open': prices_5m,
@@ -1625,24 +2343,24 @@ async def _get_intraday_data(symbol: str):
                         'close': prices_5m,
                         'volume': [int(float(latest.get(volume_col, latest.get('volume', 5000000))) / 78) for _ in range(78)]
                     })
-                    
+
                     logger.info(f"Generated intraday data for {symbol} from historical data")
                     return ohlcv_1m, ohlcv_5m
         except Exception as e:
             logger.warning(f"Could not fetch real data for {symbol}: {e}, using fallback")
-        
+
         # Fallback to mock data if real data unavailable
         now = datetime.now()
-        
+
         # Generate 1-minute bars (last 390 = 6.5 hours)
         base_price = 100.0 + np.random.uniform(-20, 20)
         timestamps_1m = [now - timedelta(minutes=i) for i in range(390, 0, -1)]
-        
+
         prices_1m = [base_price]
         for i in range(1, 390):
             change = np.random.normal(0, 0.001)  # 0.1% volatility
             prices_1m.append(prices_1m[-1] * (1 + change))
-        
+
         ohlcv_1m = pd.DataFrame({
             'timestamp': timestamps_1m,
             'open': prices_1m,
@@ -1651,11 +2369,11 @@ async def _get_intraday_data(symbol: str):
             'close': prices_1m,
             'volume': [np.random.randint(100000, 1000000) for _ in range(390)]
         })
-        
+
         # Generate 5-minute bars (last 78 = 6.5 hours)
-        timestamps_5m = [now - timedelta(minutes=i*5) for i in range(78, 0, -1)]
+        timestamps_5m = [now - timedelta(minutes=i * 5) for i in range(78, 0, -1)]
         prices_5m = prices_1m[::5][:78]
-        
+
         ohlcv_5m = pd.DataFrame({
             'timestamp': timestamps_5m,
             'open': prices_5m,
@@ -1664,10 +2382,10 @@ async def _get_intraday_data(symbol: str):
             'close': prices_5m,
             'volume': [np.random.randint(500000, 5000000) for _ in range(78)]
         })
-        
+
         logger.info(f"Using fallback mock data for {symbol}")
         return ohlcv_1m, ohlcv_5m
-        
+
     except Exception as e:
         logger.error(f"Error getting intraday data for {symbol}: {e}")
         return None, None
@@ -1679,28 +2397,28 @@ async def _fetch_polygon_intraday(symbol: str, service) -> Optional[tuple]:
         from .market_data_api_service import DataProvider
         import aiohttp
         from datetime import datetime, timedelta
-        
+
         # Check if Polygon API key is available
         if DataProvider.POLYGON not in service.api_keys:
             return None
-        
+
         api_key = service.api_keys[DataProvider.POLYGON].key
         session = service.session or aiohttp.ClientSession()
-        
+
         # Get today's date and yesterday for intraday data
         today = datetime.now()
         yesterday = today - timedelta(days=1)
-        
+
         # Fetch 1-minute bars for today
-        url = f"https://api.polygon.io/v2/aggs/ticker/{symbol}/range/1/minute/{yesterday.strftime('%Y-%m-%d')}/{today.strftime('%Y-%m-%d')}"
+        url = f"https://api.polygon.io/v2/aggs/ticker/{symbol}/range/1/minute/{start_date}/{end_date}?adjusted=true&sort=asc&limit=50000&apiKey={api_key}"
         params = {'adjusted': 'true', 'sort': 'asc', 'limit': 50000, 'apiKey': api_key}
-        
+
         async with session.get(url, params=params) as response:
             if response.status == 200:
                 data = await response.json()
                 if data.get('status') == 'OK' and data.get('resultsCount', 0) > 0:
                     results = data.get('results', [])
-                    
+
                     # Convert to DataFrame
                     import pandas as pd
                     df_1m = pd.DataFrame(results)
@@ -1713,10 +2431,10 @@ async def _fetch_polygon_intraday(symbol: str, service) -> Optional[tuple]:
                         'v': 'volume'
                     })
                     df_1m = df_1m[['timestamp', 'open', 'high', 'low', 'close', 'volume']].sort_values('timestamp')
-                    
+
                     # Get last 390 bars (6.5 hours)
                     df_1m = df_1m.tail(390)
-                    
+
                     # Create 5-minute bars by resampling
                     df_5m = df_1m.set_index('timestamp').resample('5T').agg({
                         'open': 'first',
@@ -1726,9 +2444,9 @@ async def _fetch_polygon_intraday(symbol: str, service) -> Optional[tuple]:
                         'volume': 'sum'
                     }).reset_index()
                     df_5m = df_5m.tail(78)  # Last 78 bars (6.5 hours)
-                    
+
                     return df_1m, df_5m
-        
+
         return None
     except Exception as e:
         logger.warning(f"Polygon.io intraday fetch failed for {symbol}: {e}")
@@ -1741,21 +2459,21 @@ async def _fetch_alpaca_intraday(symbol: str, service) -> Optional[tuple]:
         import os
         import aiohttp
         from datetime import datetime, timedelta
-        
+
         # Check for Alpaca credentials
         alpaca_key = os.getenv('ALPACA_API_KEY')
         alpaca_secret = os.getenv('ALPACA_SECRET_KEY')
-        
+
         if not alpaca_key or not alpaca_secret:
             return None
-        
+
         session = service.session or aiohttp.ClientSession()
-        
+
         # Get today's date
         today = datetime.now()
         start_time = (today - timedelta(days=1)).strftime('%Y-%m-%dT%H:%M:%S-05:00')
         end_time = today.strftime('%Y-%m-%dT%H:%M:%S-05:00')
-        
+
         # Fetch 1-minute bars
         url = f"https://data.alpaca.markets/v2/stocks/{symbol}/bars"
         params = {
@@ -1768,13 +2486,13 @@ async def _fetch_alpaca_intraday(symbol: str, service) -> Optional[tuple]:
             'APCA-API-KEY-ID': alpaca_key,
             'APCA-API-SECRET-KEY': alpaca_secret
         }
-        
+
         async with session.get(url, params=params, headers=headers) as response:
             if response.status == 200:
                 data = await response.json()
                 if data.get('bars'):
                     bars = data['bars']
-                    
+
                     import pandas as pd
                     df_1m = pd.DataFrame(bars)
                     df_1m['timestamp'] = pd.to_datetime(df_1m['t'])
@@ -1786,10 +2504,10 @@ async def _fetch_alpaca_intraday(symbol: str, service) -> Optional[tuple]:
                         'v': 'volume'
                     })
                     df_1m = df_1m[['timestamp', 'open', 'high', 'low', 'close', 'volume']].sort_values('timestamp')
-                    
+
                     # Get last 390 bars
                     df_1m = df_1m.tail(390)
-                    
+
                     # Create 5-minute bars
                     df_5m = df_1m.set_index('timestamp').resample('5T').agg({
                         'open': 'first',
@@ -1799,9 +2517,9 @@ async def _fetch_alpaca_intraday(symbol: str, service) -> Optional[tuple]:
                         'volume': 'sum'
                     }).reset_index()
                     df_5m = df_5m.tail(78)
-                    
+
                     return df_1m, df_5m
-        
+
         return None
     except Exception as e:
         logger.warning(f"Alpaca intraday fetch failed for {symbol}: {e}")
@@ -1811,36 +2529,34 @@ async def _fetch_alpaca_intraday(symbol: str, service) -> Optional[tuple]:
 def _generate_pick_notes(symbol: str, features: dict, side: str, score: float) -> str:
     """Generate human-readable notes for a pick"""
     notes_parts = []
-    
+
     # Regime
     if features.get('is_trend_regime', 0.0) > 0.5:
         notes_parts.append("Strong trending market")
     elif features.get('is_range_regime', 0.0) > 0.5:
         notes_parts.append("Range-bound market")
-    
+
     # Momentum
     momentum = features.get('momentum_15m', 0.0)
     if abs(momentum) > 0.02:
-        notes_parts.append(f"{abs(momentum)*100:.1f}% momentum")
-    
+        notes_parts.append(f"{abs(momentum) * 100:.1f}% momentum")
+
     # Breakout
     if features.get('is_breakout', 0.0) > 0.5:
         notes_parts.append("Breakout detected")
-    
+
     # Volume
     volume_ratio = features.get('volume_ratio', 1.0)
     if volume_ratio > 1.5:
         notes_parts.append("High volume")
-    
+
     # Pattern
     if features.get('is_engulfing_bull', 0.0) > 0.5:
         notes_parts.append("Bullish engulfing pattern")
     elif features.get('is_hammer', 0.0) > 0.5:
         notes_parts.append("Hammer pattern")
-    
+
     if notes_parts:
         return f"{symbol} {side}: {', '.join(notes_parts)}. Score: {score:.2f}"
     else:
         return f"{symbol} {side} opportunity. Score: {score:.2f}"
-
-

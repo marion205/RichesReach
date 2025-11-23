@@ -28,7 +28,135 @@ import { FEATURE_PORTFOLIO_METRICS } from '../config/flags';
 import { isMarketDataHealthy } from '../services/healthService';
 import { mark, PerformanceMarkers } from '../utils/timing';
 import { API_BASE } from '../config/api';
-import logger from '../utils/logger';
+// Create a safe logger that always works, even if the import fails
+// This prevents "Property 'logger' doesn't exist" errors
+const createSafeLogger = () => {
+  let loggerBase: any = null;
+  
+  try {
+    const loggerModule = require('../utils/logger');
+    loggerBase = loggerModule?.default || loggerModule?.logger || loggerModule;
+  } catch (e) {
+    // Import failed, use console fallback
+  }
+  
+  const safeConsole = typeof console !== 'undefined' ? console : {
+    log: () => {},
+    warn: () => {},
+    error: () => {},
+    info: () => {},
+    debug: () => {},
+  };
+  
+  return {
+    log: (...args: any[]) => {
+      try {
+        if (loggerBase && typeof loggerBase.log === 'function') {
+          loggerBase.log(...args);
+        } else {
+          safeConsole.log(...args);
+        }
+      } catch (e) {
+        safeConsole.log(...args);
+      }
+    },
+    warn: (...args: any[]) => {
+      try {
+        if (loggerBase && typeof loggerBase.warn === 'function') {
+          loggerBase.warn(...args);
+        } else {
+          safeConsole.warn(...args);
+        }
+      } catch (e) {
+        safeConsole.warn(...args);
+      }
+    },
+    error: (...args: any[]) => {
+      try {
+        if (loggerBase && typeof loggerBase.error === 'function') {
+          loggerBase.error(...args);
+        } else {
+          safeConsole.error(...args);
+        }
+      } catch (e) {
+        safeConsole.error(...args);
+      }
+    },
+    info: (...args: any[]) => {
+      try {
+        if (loggerBase && typeof loggerBase.info === 'function') {
+          loggerBase.info(...args);
+        } else {
+          safeConsole.info(...args);
+        }
+      } catch (e) {
+        safeConsole.info(...args);
+      }
+    },
+    debug: (...args: any[]) => {
+      try {
+        if (loggerBase && typeof loggerBase.debug === 'function') {
+          loggerBase.debug(...args);
+        } else {
+          safeConsole.debug(...args);
+        }
+      } catch (e) {
+        safeConsole.debug(...args);
+      }
+    },
+  };
+};
+
+// Initialize logger immediately - this ensures it's always defined
+let logger = createSafeLogger();
+
+// Final safety check - ensure logger is always a valid object
+if (!logger || typeof logger !== 'object') {
+  logger = {
+    log: (...args: any[]) => {
+      try {
+        if (typeof console !== 'undefined' && console.log) {
+          console.log(...args);
+        }
+      } catch (e) {}
+    },
+    warn: (...args: any[]) => {
+      try {
+        if (typeof console !== 'undefined' && console.warn) {
+          console.warn(...args);
+        }
+      } catch (e) {}
+    },
+    error: (...args: any[]) => {
+      try {
+        if (typeof console !== 'undefined' && console.error) {
+          console.error(...args);
+        }
+      } catch (e) {}
+    },
+    info: (...args: any[]) => {
+      try {
+        if (typeof console !== 'undefined' && console.info) {
+          console.info(...args);
+        }
+      } catch (e) {}
+    },
+    debug: (...args: any[]) => {
+      try {
+        if (typeof console !== 'undefined' && console.debug) {
+          console.debug(...args);
+        }
+      } catch (e) {}
+    },
+  };
+}
+
+// Ensure all methods exist
+if (!logger.log) logger.log = () => {};
+if (!logger.warn) logger.warn = () => {};
+if (!logger.error) logger.error = () => {};
+if (!logger.info) logger.info = () => {};
+if (!logger.debug) logger.debug = () => {};
 import AuraHalo from '../components/AuraHalo';
 import CalmGoalNudge from '../components/CalmGoalNudge';
 import { recognizeCalmGoalIntent } from '../services/VoiceCoachIntent';
@@ -1208,6 +1336,18 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
                 <View style={styles.learningCardContent}>
                   <Text style={styles.learningCardTitle}>AI Trading Coach</Text>
                   <Text style={styles.learningCardDescription}>Advanced AI-powered coaching</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.learningCard} onPress={() => go('paper-trading')}>
+                <View style={styles.learningCardIcon}>
+                  <Icon name="file-text" size={24} color="#00cc99" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={styles.learningCardTitle}>Paper Trading</Text>
+                  <Text style={styles.learningCardDescription}>Practice trading with $100k virtual money</Text>
+                  <Text style={styles.learningCardMeta}>Risk-Free • Real-Time P&L</Text>
                 </View>
                 <Icon name="chevron-right" size={16} color="#8E8E93" />
               </TouchableOpacity>

@@ -70,54 +70,49 @@ export const PrivacyDashboard: React.FC<PrivacyDashboardProps> = ({
   const [dataCategories, setDataCategories] = useState<DataCategory[]>([]);
   const [showDetails, setShowDetails] = useState<string | null>(null);
   
-  const { data, loading, refetch } = useQuery(GET_PRIVACY_SETTINGS);
-  const [updateSettings] = useMutation(UPDATE_PRIVACY_SETTINGS);
-
-  // Initialize data categories
-  useEffect(() => {
-    if (data?.privacySettings) {
-      const settings = data.privacySettings;
-      setDataCategories([
-        {
-          id: 'financial',
-          name: 'Financial Data',
-          description: 'Net worth, cashflow, positions',
-          icon: 'dollar-sign',
-          enabled: settings.dataSharingEnabled ?? true,
-          dataPoints: 12,
-          purpose: 'AI-powered recommendations and growth projections',
-          retentionDays: settings.dataRetentionDays ?? 90,
-        },
-        {
-          id: 'ai-analysis',
-          name: 'AI Analysis',
-          description: 'Life events, recommendations, insights',
-          icon: 'zap',
-          enabled: settings.aiAnalysisEnabled ?? true,
-          dataPoints: 8,
-          purpose: 'Personalized financial planning and goal tracking',
-          retentionDays: 90,
-        },
-        {
-          id: 'ml-predictions',
-          name: 'ML Predictions',
-          description: 'Growth rates, market regime, risk analysis',
-          icon: 'cpu',
-          enabled: settings.mlPredictionsEnabled ?? true,
-          dataPoints: 15,
-          purpose: 'Market predictions and portfolio optimization',
-          retentionDays: 60,
-        },
-        {
-          id: 'analytics',
-          name: 'Usage Analytics',
-          description: 'App usage, gesture interactions, feature engagement',
-          icon: 'bar-chart-2',
-          enabled: settings.analyticsEnabled ?? true,
-          dataPoints: 20,
-          purpose: 'Improve app experience and feature development',
-          retentionDays: 365,
-        },
+  // Helper function to create data categories from settings
+  const createDataCategories = (settings: any): DataCategory[] => {
+    return [
+      {
+        id: 'financial',
+        name: 'Financial Data',
+        description: 'Net worth, cashflow, positions',
+        icon: 'dollar-sign',
+        enabled: settings.dataSharingEnabled ?? true,
+        dataPoints: 12,
+        purpose: 'AI-powered recommendations and growth projections',
+        retentionDays: settings.dataRetentionDays ?? 90,
+      },
+      {
+        id: 'ai-analysis',
+        name: 'AI Analysis',
+        description: 'Life events, recommendations, insights',
+        icon: 'zap',
+        enabled: settings.aiAnalysisEnabled ?? true,
+        dataPoints: 8,
+        purpose: 'Personalized financial planning and goal tracking',
+        retentionDays: 90,
+      },
+      {
+        id: 'ml-predictions',
+        name: 'ML Predictions',
+        description: 'Growth rates, market regime, risk analysis',
+        icon: 'cpu',
+        enabled: settings.mlPredictionsEnabled ?? true,
+        dataPoints: 15,
+        purpose: 'Market predictions and portfolio optimization',
+        retentionDays: 60,
+      },
+      {
+        id: 'analytics',
+        name: 'Usage Analytics',
+        description: 'App usage, gesture interactions, feature engagement',
+        icon: 'bar-chart-2',
+        enabled: settings.analyticsEnabled ?? true,
+        dataPoints: 20,
+        purpose: 'Improve app experience and feature development',
+        retentionDays: 365,
+      },
         {
           id: 'session',
           name: 'Session Tracking',
@@ -128,9 +123,52 @@ export const PrivacyDashboard: React.FC<PrivacyDashboardProps> = ({
           purpose: 'Debug issues and optimize performance',
           retentionDays: 30,
         },
-      ]);
+      ];
+  };
+  
+  // Query with error handling - privacySettings may not exist in schema yet
+  const { data, loading, refetch, error } = useQuery(GET_PRIVACY_SETTINGS, {
+    errorPolicy: 'all', // Return both data and errors
+    fetchPolicy: 'cache-first', // Use cache if available
+    skip: false, // Still try to query, but handle errors gracefully
+  });
+  const [updateSettings] = useMutation(UPDATE_PRIVACY_SETTINGS, {
+    errorPolicy: 'all',
+  });
+
+  // Initialize data categories
+  useEffect(() => {
+    // Handle case where privacySettings doesn't exist in schema (use defaults)
+    if (error && error.graphQLErrors?.some((e: any) => e.message?.includes('Cannot query field'))) {
+      // Schema doesn't have privacySettings yet - use default values
+      const defaultSettings = {
+        dataSharingEnabled: true,
+        aiAnalysisEnabled: true,
+        mlPredictionsEnabled: true,
+        analyticsEnabled: true,
+        sessionTrackingEnabled: true,
+        dataRetentionDays: 90,
+      };
+      setDataCategories(createDataCategories(defaultSettings));
+      return;
     }
-  }, [data]);
+    
+    if (data?.privacySettings) {
+      const settings = data.privacySettings;
+      setDataCategories(createDataCategories(settings));
+    } else if (!loading && !error) {
+      // No data and no error - use defaults
+      const defaultSettings = {
+        dataSharingEnabled: true,
+        aiAnalysisEnabled: true,
+        mlPredictionsEnabled: true,
+        analyticsEnabled: true,
+        sessionTrackingEnabled: true,
+        dataRetentionDays: 90,
+      };
+      setDataCategories(createDataCategories(defaultSettings));
+    }
+  }, [data, error, loading]);
 
   const toggleCategory = async (categoryId: string) => {
     const updated = dataCategories.map(cat => 

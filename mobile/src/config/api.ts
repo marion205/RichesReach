@@ -14,17 +14,43 @@ const ENV_API_BASE_URL =
   Constants.expoConfig?.extra?.API_BASE;
 
 const prodHost = "http://api.richesreach.com:8000";
-// Default to localhost - works for iOS Simulator
-// For physical devices, set EXPO_PUBLIC_API_BASE_URL to your Mac's LAN IP
-const localHost = "http://localhost:8000";
+// Default to LAN IP instead of localhost (localhost doesn't work on physical devices)
+// For physical devices, use your Mac's LAN IP (update this to match your current IP)
+const LAN_IP = "192.168.1.240"; // Update this to match your Mac's current LAN IP
 
-// Use environment variable if available, otherwise use localhost for development
-export const API_BASE = ENV_API_BASE_URL || localHost;
+// CRITICAL: In development mode, ALWAYS use localhost for iOS
+// This prevents connection issues in the simulator
+let apiBase: string;
+
+if (__DEV__ && Platform.OS === 'ios') {
+  console.log('🔧 [API Config] DEV MODE + iOS: FORCING localhost');
+  apiBase = ENV_API_BASE_URL || "http://localhost:8000";
+} else {
+  // Use localhost for iOS Simulator, LAN IP for physical devices
+  const isSimulator = Platform.OS === 'ios' && (
+    !Constants.isDevice || 
+    Constants.executionEnvironment === 'storeClient'
+  );
+  const localHost = isSimulator ? "http://localhost:8000" : `http://${LAN_IP}:8000`;
+  
+  // Log detection for debugging
+  console.log('[API Config] Platform:', Platform.OS);
+  console.log('[API Config] Constants.isDevice:', Constants.isDevice);
+  console.log('[API Config] Constants.executionEnvironment:', Constants.executionEnvironment);
+  console.log('[API Config] __DEV__:', __DEV__);
+  console.log('[API Config] isSimulator:', isSimulator);
+  console.log('[API Config] localHost:', localHost);
+  
+  // Use environment variable if available, otherwise use localHost
+  apiBase = ENV_API_BASE_URL || localHost;
+}
+
+export const API_BASE = apiBase;
 
 // TTS API base URL (can be same as API_BASE or separate service)
 // TTS service runs on port 8001 by default
 const TTS_PORT = process.env.EXPO_PUBLIC_TTS_PORT || "8001";
-const TTS_HOST = process.env.EXPO_PUBLIC_TTS_HOST || "localhost";
+const TTS_HOST = process.env.EXPO_PUBLIC_TTS_HOST || LAN_IP; // Use LAN IP instead of localhost
 const defaultTTSUrl = `http://${TTS_HOST}:${TTS_PORT}`;
 
 export const TTS_API_BASE_URL = 

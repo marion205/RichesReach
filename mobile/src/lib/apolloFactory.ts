@@ -1,5 +1,7 @@
 // Apollo Client Factory - Single source of truth for all GraphQL clients
 import { ApolloClient, InMemoryCache, createHttpLink, ApolloLink } from '@apollo/client';
+import { setContext } from '@apollo/client/link/context';
+import { Observable } from '@apollo/client';
 import { persistCache, AsyncStorageWrapper } from 'apollo3-cache-persist';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import logger from '../utils/logger';
@@ -42,33 +44,131 @@ export function makeApolloClient() {
 
   const logLink = new ApolloLink((operation, forward) => {
     const operationType = operation.query.definitions?.[0]?.operation || 'unknown';
-    logger.log('[GQL]', operation.operationName || 'UNNAMED', `(${operationType})`, '->', GRAPHQL_URL);
-    if (operation.operationName === 'AddToWatchlist' || operation.query.loc?.source?.body?.includes('addToWatchlist')) {
-      logger.log('[GQL] AddToWatchlist mutation detected! Variables:', JSON.stringify(operation.variables, null, 2));
+    const startTime = Date.now();
+    const operationName = operation.operationName || 'UNNAMED';
+    
+    // Log request start
+    logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    logger.log(`🌐 [NETWORK] ${operationName} (${operationType})`);
+    logger.log(`📍 URL: ${GRAPHQL_URL}`);
+    logger.log(`📤 Variables:`, JSON.stringify(operation.variables, null, 2));
+    
+    if (!forward) {
+      logger.error(`❌ [NETWORK] ${operationName} - forward is undefined!`);
+      throw new Error('Apollo Link chain broken: forward is undefined');
     }
-    return forward!(operation);
+    
+    logger.log(`🔄 [NETWORK] ${operationName} - Forwarding to next link...`);
+    
+    // Set up a timeout warning
+    const timeoutWarning = setTimeout(() => {
+      const elapsed = Date.now() - startTime;
+      logger.warn(`⏱️ [NETWORK] ${operationName} - Still waiting for response (${elapsed}ms)...`);
+    }, 3000); // Warn after 3 seconds
+    
+    try {
+      const observable = forward(operation);
+      if (!observable) {
+        logger.error(`❌ [NETWORK] ${operationName} - forward() returned undefined!`);
+        throw new Error('Apollo Link chain broken: forward() returned undefined');
+      }
+      
+      // Wrap the observable to ensure timeout is cleared on both success and error
+      return new Observable((observer) => {
+        const subscription = observable.subscribe({
+          next: (response) => {
+            clearTimeout(timeoutWarning);
+            const duration = Date.now() - startTime;
+            
+            // Log response
+            if (response.errors && response.errors.length > 0) {
+              logger.error(`❌ [NETWORK] ${operationName} FAILED (${duration}ms)`);
+              logger.error(`   Errors:`, JSON.stringify(response.errors, null, 2));
+            } else {
+              logger.log(`✅ [NETWORK] ${operationName} SUCCESS (${duration}ms)`);
+              if (response.data) {
+                const dataKeys = Object.keys(response.data);
+                logger.log(`   Data keys: ${dataKeys.join(', ')}`);
+                // Log data for debugging if it's null or empty
+                if (dataKeys.length === 0) {
+                  logger.warn(`   ⚠️ Response data is empty`);
+                } else {
+                  // Log first data key value for debugging
+                  const firstKey = dataKeys[0];
+                  const firstValue = response.data[firstKey];
+                  if (firstValue === null || firstValue === undefined) {
+                    logger.warn(`   ⚠️ ${firstKey} is null/undefined`);
+                  } else if (Array.isArray(firstValue)) {
+                    logger.log(`   ${firstKey}: Array(${firstValue.length})`);
+                  } else if (typeof firstValue === 'object') {
+                    logger.log(`   ${firstKey}: Object`);
+                  }
+                }
+              } else {
+                logger.warn(`   ⚠️ Response has no data`);
+              }
+            }
+            logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            
+            observer.next(response);
+          },
+          error: (error) => {
+            clearTimeout(timeoutWarning);
+            const duration = Date.now() - startTime;
+            logger.error(`❌ [NETWORK] ${operationName} ERROR in observable (${duration}ms):`, {
+              error: error?.message,
+              name: error?.name,
+              stack: error?.stack?.substring(0, 500),
+            });
+            observer.error(error);
+          },
+          complete: () => {
+            clearTimeout(timeoutWarning);
+            observer.complete();
+          },
+        });
+        
+        return () => {
+          clearTimeout(timeoutWarning);
+          subscription.unsubscribe();
+        };
+      });
+    } catch (error) {
+      clearTimeout(timeoutWarning);
+      const duration = Date.now() - startTime;
+      logger.error(`❌ [NETWORK] ${operationName} ERROR in logLink (${duration}ms):`, {
+        error: error?.message,
+        name: error?.name,
+        stack: error?.stack?.substring(0, 500),
+      });
+      // Re-throw to let errorLink handle it
+      throw error;
+    }
   });
 
   // Auth link to add JWT token to requests
-  const authLink = new ApolloLink((operation, forward) => {
-    return new Promise((resolve, reject) => {
-        AsyncStorage.getItem('token').then((token) => {
-        if (token) {
-          logger.log('🔐 Apollo Client: Adding Bearer token to request');
-          logger.log('🔐 Apollo Client: Token length:', token.length);
-          logger.log('🔐 Apollo Client: Token preview:', token.substring(0, 20) + '...');
-          operation.setContext({
-            headers: {
-              authorization: `Bearer ${token}`,
-            },
-          });
-        } else {
-          logger.log('🔐 Apollo Client: No token found in AsyncStorage');
-          logger.log('🔐 Apollo Client: This will cause authentication failures');
-        }
-        resolve(forward!(operation));
-      }).catch(reject);
-    });
+  const authLink = setContext(async (_, { headers }) => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      if (token) {
+        logger.log('🔐 Apollo Client: Adding Bearer token to request');
+        logger.log('🔐 Apollo Client: Token length:', token.length);
+        logger.log('🔐 Apollo Client: Token preview:', token.substring(0, 20) + '...');
+        return {
+          headers: {
+            ...headers,
+            authorization: `Bearer ${token}`,
+          },
+        };
+      } else {
+        logger.log('🔐 Apollo Client: No token found in AsyncStorage');
+        logger.log('🔐 Apollo Client: This will cause authentication failures');
+        return { headers };
+      }
+    } catch (error) {
+      logger.error('🔐 Apollo Client: Error getting token:', error);
+      return { headers };
+    }
   });
 
   // Error link to handle authentication failures and suppress cache write warnings
@@ -80,72 +180,145 @@ export function makeApolloClient() {
       queryString: operation.query.loc?.source?.body?.substring(0, 200),
     });
     
-    return forward(operation).map((response) => {
-      // Debug AI recommendations queries
-      if (operation.operationName === 'GetAIRecommendations') {
-        logger.log('🔍 [Apollo Link] GetAIRecommendations response:', {
-          hasData: !!response.data,
-          hasAiRecommendations: !!response.data?.aiRecommendations,
-          aiRecommendationsKeys: response.data?.aiRecommendations ? Object.keys(response.data.aiRecommendations) : [],
-          buyRecsCount: response.data?.aiRecommendations?.buyRecommendations?.length ?? 0,
-          portfolioValue: response.data?.aiRecommendations?.portfolioAnalysis?.totalValue,
-          rawResponse: JSON.stringify(response.data).substring(0, 800),
-        });
-      }
-      
-      // Debug: Log mutation responses to see what we're getting
-      if (operation.operationName === 'AddToWatchlist' || 
-          (operation.query.loc?.source?.body?.includes('addToWatchlist'))) {
-        logger.log('🔍 [Apollo Link] AddToWatchlist mutation response:', {
-          operationName: operation.operationName,
-          responseData: response.data,
-          responseErrors: response.errors,
-          dataKeys: response.data ? Object.keys(response.data) : [],
-          fullResponse: JSON.stringify(response, null, 2).substring(0, 500),
-        });
-      }
-      
-      // Check for authentication errors
-      if (response.errors) {
-        response.errors.forEach((error) => {
-          if (error.message.includes('Signature has expired') || 
-              error.message.includes('Token is invalid') ||
-              error.message.includes('Authentication credentials were not provided')) {
-            logger.log('🔐 Authentication error detected, clearing token');
-            AsyncStorage.removeItem('token').catch((err) => logger.error('Failed to remove token:', err));
+    const observable = forward(operation);
+    if (!observable) {
+      logger.error('❌ [Apollo Link] forward(operation) returned undefined in errorLink');
+      throw new Error('Apollo Link chain broken: forward(operation) returned undefined');
+    }
+    
+    // Wrap the observable to handle both success and error cases
+    return new Observable((observer) => {
+      const subscription = observable.subscribe({
+        next: (response) => {
+          // Debug AI recommendations queries
+          if (operation.operationName === 'GetAIRecommendations') {
+            logger.log('🔍 [Apollo Link] GetAIRecommendations response:', {
+              hasData: !!response.data,
+              hasAiRecommendations: !!response.data?.aiRecommendations,
+              aiRecommendationsKeys: response.data?.aiRecommendations ? Object.keys(response.data.aiRecommendations) : [],
+              buyRecsCount: response.data?.aiRecommendations?.buyRecommendations?.length ?? 0,
+              portfolioValue: response.data?.aiRecommendations?.portfolioAnalysis?.totalValue,
+              rawResponse: JSON.stringify(response.data).substring(0, 800),
+            });
           }
-        });
-      }
-      return response;
-    }).catch((error) => {
-      // Production: Log all errors properly - don't suppress
-      logger.error('❌ Apollo Error Link caught error:', {
-        operation: operation.operationName,
-        errorName: error?.name,
-        errorMessage: error?.message,
-        errorStack: error?.stack?.substring(0, 500),
-        isAbortError: error?.name === 'AbortError',
-        isNetworkError: error?.message?.includes('network') || error?.message?.includes('fetch'),
-        fullError: JSON.stringify(error, Object.getOwnPropertyNames(error)).substring(0, 1000),
+          
+          // Debug: Log mutation responses to see what we're getting
+          if (operation.operationName === 'AddToWatchlist' || 
+              (operation.query.loc?.source?.body?.includes('addToWatchlist'))) {
+            logger.log('🔍 [Apollo Link] AddToWatchlist mutation response:', {
+              operationName: operation.operationName,
+              responseData: response.data,
+              responseErrors: response.errors,
+              dataKeys: response.data ? Object.keys(response.data) : [],
+              fullResponse: JSON.stringify(response, null, 2).substring(0, 500),
+            });
+          }
+          
+          // Check for authentication errors
+          if (response.errors) {
+            response.errors.forEach((error) => {
+              if (error.message.includes('Signature has expired') || 
+                  error.message.includes('Token is invalid') ||
+                  error.message.includes('Authentication credentials were not provided')) {
+                logger.log('🔐 Authentication error detected, clearing token');
+                AsyncStorage.removeItem('token').catch((err) => logger.error('Failed to remove token:', err));
+              }
+            });
+          }
+          observer.next(response);
+        },
+        error: (error) => {
+          // Enhanced error logging to show actual GraphQL errors
+          const graphQLErrors = error?.graphQLErrors || [];
+          const networkError = error?.networkError;
+          
+          if (graphQLErrors && graphQLErrors.length > 0) {
+            console.log('🔴 GraphQL Errors in', operation.operationName, ':', graphQLErrors);
+            graphQLErrors.forEach((gqlError: any, idx: number) => {
+              logger.error(`🔴 GraphQL Error ${idx + 1}:`, {
+                message: gqlError?.message,
+                locations: gqlError?.locations,
+                path: gqlError?.path,
+                extensions: gqlError?.extensions,
+              });
+            });
+          }
+          
+          if (networkError) {
+            console.log('🔴 Network Error in', operation.operationName, ':', networkError);
+            logger.error('🔴 Network Error:', {
+              name: networkError?.name,
+              message: networkError?.message,
+              statusCode: (networkError as any)?.statusCode,
+              result: (networkError as any)?.result,
+            });
+            
+            // If it's a ServerError, try to dump the response body
+            const anyNetErr = networkError as any;
+            if (anyNetErr.result) {
+              console.log('🔴 networkError.result:', anyNetErr.result);
+              logger.error('🔴 networkError.result:', JSON.stringify(anyNetErr.result, null, 2));
+            }
+          }
+          
+          // Production: Log all errors properly - don't suppress
+          logger.error('❌ Apollo Error Link caught error:', {
+            operation: operation.operationName,
+            errorName: error?.name,
+            errorMessage: error?.message,
+            errorStack: error?.stack?.substring(0, 500),
+            isAbortError: error?.name === 'AbortError',
+            isNetworkError: error?.message?.includes('network') || error?.message?.includes('fetch'),
+            fullError: JSON.stringify(error, Object.getOwnPropertyNames(error)).substring(0, 1000),
+          });
+          
+          // For GetAIRecommendations, log extra details
+          if (operation.operationName === 'GetAIRecommendations') {
+            logger.error('❌ GetAIRecommendations failed:', {
+              uri: GRAPHQL_URL,
+              variables: operation.variables,
+              errorType: error?.constructor?.name,
+              graphQLErrors: graphQLErrors,
+              networkError: networkError,
+            });
+          }
+          
+          // For GenerateAIRecommendations, log extra details
+          if (operation.operationName === 'GenerateAIRecommendations') {
+            console.log('🔴 GenerateAIRecommendations Error Details:', {
+              operationName: operation.operationName,
+              variables: operation.variables,
+              errorName: error?.name,
+              errorMessage: error?.message,
+              graphQLErrors: graphQLErrors,
+              networkError: networkError,
+              networkErrorResult: (networkError as any)?.result,
+              networkErrorResponse: (networkError as any)?.response,
+              networkErrorStatusCode: (networkError as any)?.statusCode,
+            });
+            logger.error('❌ GenerateAIRecommendations failed:', {
+              uri: GRAPHQL_URL,
+              variables: operation.variables,
+              errorType: error?.constructor?.name,
+              graphQLErrors: graphQLErrors,
+              networkError: networkError,
+              networkErrorResult: (networkError as any)?.result,
+              networkErrorResponse: (networkError as any)?.response,
+              networkErrorStatusCode: (networkError as any)?.statusCode,
+            });
+          }
+          
+          // Re-throw to let error handling components handle it
+          observer.error(error);
+        },
+        complete: () => {
+          observer.complete();
+        },
       });
       
-      // For GetAIRecommendations, log extra details
-      if (operation.operationName === 'GetAIRecommendations') {
-        logger.error('❌ GetAIRecommendations failed:', {
-          uri: GRAPHQL_URL,
-          variables: operation.variables,
-          errorType: error?.constructor?.name,
-        });
-      }
-      
-      logger.error('❌ Apollo Error:', {
-        operation: operation.operationName,
-        error: error?.message,
-        networkError: error?.networkError,
-        graphQLErrors: error?.graphQLErrors,
-      });
-      // Re-throw to let error handling components handle it
-      throw error;
+      return () => {
+        subscription.unsubscribe();
+      };
     });
   });
 
@@ -166,9 +339,23 @@ export function makeApolloClient() {
   const httpLink = createHttpLink({ 
     uri: GRAPHQL_URL, 
     fetch: (uri: RequestInfo | URL, options?: RequestInit) => {
+      const fetchStartTime = Date.now();
+      const urlString = uri.toString();
+      
+      // Log fetch request
+      logger.log(`🔵 [FETCH] Starting request to: ${urlString}`);
+      logger.log(`   Method: ${options?.method || 'POST'}`);
+      logger.log(`   Headers:`, JSON.stringify(options?.headers || {}, null, 2));
+      // Log request body for debugging (first 500 chars)
+      if (options?.body) {
+        const bodyStr = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
+        logger.log(`   Body preview:`, bodyStr.substring(0, 500));
+      }
+      
       // Add timeout to fetch requests for better performance
       const controller = new AbortController();
       const timeoutId = setTimeout(() => {
+        logger.error(`⏱️ [FETCH] TIMEOUT after 10s: ${urlString}`);
         controller.abort();
       }, 10000); // 10 second timeout
       
@@ -184,8 +371,22 @@ export function makeApolloClient() {
         ...options,
         signal: controller.signal,
       })
-      .then((response) => {
-        // Log response details for debugging
+      .then(async (response) => {
+        const fetchDuration = Date.now() - fetchStartTime;
+        logger.log(`🟢 [FETCH] Response received (${fetchDuration}ms): ${response.status} ${response.statusText}`);
+        if (!response.ok) {
+          logger.error(`   ❌ HTTP Error: ${response.status} ${response.statusText}`);
+          // For 400 errors, try to read and log the response body
+          if (response.status === 400) {
+            try {
+              const responseText = await response.clone().text();
+              logger.error(`   📄 400 Response Body:`, responseText.substring(0, 500));
+            } catch (e) {
+              logger.error(`   ⚠️ Could not read 400 response body:`, e);
+            }
+          }
+        }
+        // Log response details for debugging specific queries
         if (uri.toString().includes('GetAIRecommendations') || options?.body?.toString().includes('GetAIRecommendations')) {
           logger.log('📡 Fetch response for GetAIRecommendations:', {
             status: response.status,
@@ -197,14 +398,16 @@ export function makeApolloClient() {
         return response;
       })
       .catch((error) => {
+        const fetchDuration = Date.now() - fetchStartTime;
         // Log fetch errors
         if (error?.name === 'AbortError') {
-          logger.error('⏱️ Fetch timeout for:', uri.toString().substring(0, 100));
+          logger.error(`⏱️ [FETCH] TIMEOUT (${fetchDuration}ms): ${urlString.substring(0, 100)}`);
         } else {
-          logger.error('🌐 Fetch error:', {
-            uri: uri.toString().substring(0, 100),
+          logger.error(`🔴 [FETCH] ERROR (${fetchDuration}ms):`, {
+            uri: urlString.substring(0, 100),
             error: error?.message,
             name: error?.name,
+            stack: error?.stack?.substring(0, 200),
           });
         }
         throw error;

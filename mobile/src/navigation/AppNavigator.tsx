@@ -11,7 +11,86 @@ import BankAccountScreen from '../features/user/screens/BankAccountScreen';
 import { setNavigator } from './NavigationService';
 import GestureNavigation from '../components/GestureNavigation';
 import { TID } from '../testIDs';
-import logger from '../utils/logger';
+// Create a safe logger that always works, even if the import fails
+const createSafeLogger = () => {
+  let loggerBase: any = null;
+  
+  try {
+    const loggerModule = require('../utils/logger');
+    loggerBase = loggerModule?.default || loggerModule?.logger || loggerModule;
+  } catch (e) {
+    // Import failed, use console fallback
+  }
+  
+  const safeConsole = typeof console !== 'undefined' ? console : {
+    log: () => {},
+    warn: () => {},
+    error: () => {},
+    info: () => {},
+    debug: () => {},
+  };
+  
+  return {
+    log: (...args: any[]) => {
+      try {
+        if (loggerBase && typeof loggerBase.log === 'function') {
+          loggerBase.log(...args);
+        } else {
+          safeConsole.log(...args);
+        }
+      } catch (e) {
+        safeConsole.log(...args);
+      }
+    },
+    warn: (...args: any[]) => {
+      try {
+        if (loggerBase && typeof loggerBase.warn === 'function') {
+          loggerBase.warn(...args);
+        } else {
+          safeConsole.warn(...args);
+        }
+      } catch (e) {
+        safeConsole.warn(...args);
+      }
+    },
+    error: (...args: any[]) => {
+      try {
+        if (loggerBase && typeof loggerBase.error === 'function') {
+          loggerBase.error(...args);
+        } else {
+          safeConsole.error(...args);
+        }
+      } catch (e) {
+        safeConsole.error(...args);
+      }
+    },
+    info: (...args: any[]) => {
+      try {
+        if (loggerBase && typeof loggerBase.info === 'function') {
+          loggerBase.info(...args);
+        } else {
+          safeConsole.info(...args);
+        }
+      } catch (e) {
+        safeConsole.info(...args);
+      }
+    },
+    debug: (...args: any[]) => {
+      try {
+        if (loggerBase && typeof loggerBase.debug === 'function') {
+          loggerBase.debug(...args);
+        } else {
+          safeConsole.debug(...args);
+        }
+      } catch (e) {
+        safeConsole.debug(...args);
+      }
+    },
+  };
+};
+
+// Initialize logger immediately - this ensures it's always defined
+const logger = createSafeLogger();
 
 // Existing screens (paths reflect current project structure)
 import HomeScreen from '../navigation/HomeScreen';
@@ -37,9 +116,13 @@ import OptionsCopilotScreen from '../features/options/screens/OptionsCopilotScre
 import TomorrowScreen from '../features/futures/screens/TomorrowScreen';
 import DayTradingScreen from '../features/trading/screens/DayTradingScreen';
 import TradingScreenWrapper from './TradingScreenWrapper';
+import PaperTradingScreen from '../features/trading/screens/PaperTradingScreen';
 import MLSystemScreen from '../features/ml/screens/MLSystemScreen';
 import RiskManagementScreen from '../features/risk/screens/RiskManagementScreen';
 import PremiumAnalyticsScreen from './PremiumAnalyticsScreen';
+import ResearchReportScreen from '../features/research/screens/ResearchReportScreen';
+import SignalUpdatesScreen from '../features/portfolio/screens/SignalUpdatesScreen';
+import PortfolioLeaderboardScreen from '../features/social/screens/PortfolioLeaderboardScreen';
 // V2 single-screen utilities used from Home
 import OracleInsights from '../components/OracleInsights';
 import VoiceAIAssistant from '../components/VoiceAIAssistant';
@@ -204,6 +287,12 @@ function InvestStack() {
       <Stack.Screen name="options-copilot" component={OptionsCopilotScreen} options={{ headerShown: true, title: 'Advanced' }} />
       <Stack.Screen name="Tomorrow" component={TomorrowScreen} options={{ headerShown: true, title: 'Tomorrow' }} />
       <Stack.Screen name="DayTrading" component={TradingScreenWrapper} options={{ headerShown: false }} />
+      <Stack.Screen name="PaperTrading" component={PaperTradingScreen} options={{ headerShown: true, title: 'Paper Trading' }} />
+      <Stack.Screen name="paper-trading" component={PaperTradingScreen} options={{ headerShown: true, title: 'Paper Trading' }} />
+      <Stack.Screen name="ResearchReport" component={ResearchReportScreen} options={{ headerShown: true, title: 'Research Report' }} />
+      <Stack.Screen name="research-report" component={ResearchReportScreen} options={{ headerShown: true, title: 'Research Report' }} />
+      <Stack.Screen name="SignalUpdates" component={SignalUpdatesScreen} options={{ headerShown: true, title: 'Signal Updates' }} />
+      <Stack.Screen name="signal-updates" component={SignalUpdatesScreen} options={{ headerShown: true, title: 'Signal Updates' }} />
       <Stack.Screen name="MLSystem" component={MLSystemScreen} options={{ headerShown: true, title: 'ML System' }} />
       <Stack.Screen name="RiskManagement" component={RiskManagementScreen} options={{ headerShown: true, title: 'Risk Management' }} />
       <Stack.Screen name="ar-preview" component={ARNextMovePreview} options={{ headerShown: false }} />
@@ -274,6 +363,8 @@ function CommunityStack() {
       <Stack.Screen name="fireside" component={FiresideRoomsScreen} />
       <Stack.Screen name="fireside-room" component={FiresideRoomScreen} />
       <Stack.Screen name="chart-test" component={ChartTestScreen} options={{ headerShown: false }} />
+      {/* Social features */}
+      <Stack.Screen name="portfolio-leaderboard" component={PortfolioLeaderboardScreen} options={{ headerShown: true, title: 'Leaderboard' }} />
     </Stack.Navigator>
   );
 }

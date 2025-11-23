@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/160</span>
+                <span class='fraction'>0/161</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/148</span>
+                <span class='fraction'>0/149</span>
             </div>
         
             
@@ -323,7 +323,8 @@
 <a name='L258'></a><a href='#L258'>258</a>
 <a name='L259'></a><a href='#L259'>259</a>
 <a name='L260'></a><a href='#L260'>260</a>
-<a name='L261'></a><a href='#L261'>261</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L261'></a><a href='#L261'>261</a>
+<a name='L262'></a><a href='#L262'>262</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -367,6 +368,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -592,44 +594,45 @@ import<span class="cstat-no" title="statement not covered" > React, { createCont
 import AsyncStorage from '@react-native-async-storage/async-storage';
 impo<span class="cstat-no" title="statement not covered" >rt { useMutation } from '@apollo/cli</span>ent';
 import<span class="fstat-no" title="function not covered" > {</span> TOKEN_AUTH, VERIFY_TOKEN } from '../graphql/queries_corrected';
-<span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ></span></span>
-inte<span class="cstat-no" title="statement not covered" >rface User {</span>
-  id: string;
-  email: string;<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span>
-  us<span class="cstat-no" title="statement not covered" >ername: string;</span>
-  nam<span class="fstat-no" title="function not covered" >e:</span> string;
-  pr<span class="cstat-no" title="statement not covered" >ofilePic?: string;</span>
-  hasPremiumAccess: boolean;
-  subscriptionTier?<span class="cstat-no" title="statement not covered" >: string;<span class="fstat-no" title="function not covered" ></span></span>
-}<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span>
-<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span>
-interface AuthContext<span class="cstat-no" title="statement not covered" >Typ</span>e {
-  user: User<span class="cstat-no" title="statement not covered" > | null;<span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ></span></span></span>
-  token: str<span class="cstat-no" title="statement not covered" >ing | null;</span>
-  loading: boolean;
-  login:<span class="cstat-no" title="statement not covered" > (email: string, pa</span>ssword: string) =&gt; Promise&lt;boolean&gt;;
-  logout: () =&gt; Promise&lt;void&gt;;
-  ve<span class="cstat-no" title="statement not covered" >rifyTok<span class="fstat-no" title="function not covered" >en</span>: () =&gt; Promise&lt;boolean&gt;;</span>
-  isAuth<span class="cstat-no" title="statement not covered" >enticated: boolean;<span class="cstat-no" title="statement not covered" ></span></span>
-}<span class="cstat-no" title="statement not covered" ></span>
-<span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ></span></span></span></span></span></span>
-const Au<span class="cstat-no" title="statement not covered" >thContext = createContext&lt;AuthCon</span>textType | undefined&gt;(undefined);
+impo<span class="cstat-no" title="statement not covered" >rt logger from '../uti<span class="cstat-no" title="statement not covered" >ls/logge</span></span>r';
 <span class="cstat-no" title="statement not covered" ></span>
+interface User {
+  id: string;<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span>
+  em<span class="cstat-no" title="statement not covered" >ail: string;</span>
+  use<span class="fstat-no" title="function not covered" >rn</span>ame: string;
+  na<span class="cstat-no" title="statement not covered" >me: string;</span>
+  profilePic?: string;
+  hasPremiumAccess:<span class="cstat-no" title="statement not covered" > boolean;<span class="fstat-no" title="function not covered" ></span></span>
+  subscriptionTier<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >?:</span> string;</span>
+}<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span>
+<span class="cstat-no" title="statement not covered" ></span>
+interface Au<span class="cstat-no" title="statement not covered" >thContextType {<span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ></span></span></span>
+  user: User<span class="cstat-no" title="statement not covered" > | null;</span>
+  token: string | null;
+  loadin<span class="cstat-no" title="statement not covered" >g: boolean;</span>
+  login: (email: string, password: string) =&gt; Promise&lt;boolean&gt;;
+  lo<span class="cstat-no" title="statement not covered" >gout: (<span class="fstat-no" title="function not covered" >) </span>=&gt; Promise&lt;void&gt;;</span>
+  verify<span class="cstat-no" title="statement not covered" >Token: () =&gt; Promise&lt;boolea<span class="cstat-no" title="statement not covered" >n&gt;;</span></span>
+  isAuthenticated: bo<span class="cstat-no" title="statement not covered" >ole</span>an;
+}<span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ></span></span></span></span></span></span>
+<span class="cstat-no" title="statement not covered" ></span>
+const Au<span class="cstat-no" title="statement not covered" >thContext = cre</span>ateContext&lt;AuthContextType | undefined&gt;(undefined);
+&nbsp;
 interface AuthProviderProps {
-  children: ReactNode;
-}<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span>
-<span class="cstat-no" title="statement not covered" ></span>
-export const AuthProvider: React.FC&lt;AuthProviderProps&gt; = ({ children }) =&gt; {
+  children: ReactNode;<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span>
+}<span class="cstat-no" title="statement not covered" ></span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >export const AuthProvider: React.FC&lt;AuthProviderProps&gt; = ({ chi</span>ldren }) =&gt; {
 <span class="cstat-no" title="statement not covered" >  const [user, setUser] = useState&lt;User | null&gt;(null);</span>
-<span class="cstat-no" title="statement not covered" >  const [token, setToken] = useState&lt;string | null&gt;(null);</span>
-  const [loading, setL<span class="cstat-no" title="statement not covered" >oading] = useState(true);</span>
+  const [token, setTok<span class="cstat-no" title="statement not covered" >en] = useState&lt;string | null&gt;</span>(null);
+  const [loading, setLoading] = useState(true);
 &nbsp;
   const [tokenAuthMutation] = useMutation(TOKEN_AUTH);
   const [verifyTokenMutation] = useMutation(VERIFY_TOKEN);
-&nbsp;
-  // Load stored<span class="cstat-no" title="statement not covered" > token on app start</span>
-  useEffect(() =&gt; {<span class="cstat-no" title="statement not covered" ></span>
-    loadStoredTok<span class="cstat-no" title="statement not covered" >en();</span>
+<span class="cstat-no" title="statement not covered" ></span>
+  // Load stored token o<span class="cstat-no" title="statement not covered" >n app start</span>
+  useEffect(() =&gt;<span class="cstat-no" title="statement not covered" > {</span>
+    loadStoredToken();<span class="cstat-no" title="statement not covered" ></span>
   }, []);<span class="cstat-no" title="statement not covered" ></span>
 <span class="cstat-no" title="statement not covered" ></span>
   const loadStoredTok<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >en</span> = async () =&gt; {</span>
@@ -650,7 +653,7 @@ export const AuthProvider: React.FC&lt;AuthProviderProps&gt; = ({ children }) =&
         loadUserData(storedToken).catch(() =&gt; {});
       }<span class="cstat-no" title="statement not covered" ></span>
     } catch (error) {
-      console.error('Error loading stored token:', error);
+      logger.error('Error loading stored token:', error);
       setToken(null);
       setUser(null);
     } finally {
@@ -661,7 +664,7 @@ export const AuthProvider: React.FC&lt;AuthProviderProps&gt; = ({ children }) =&
 &nbsp;
   const verifyStoredToken = async (tokenToVerify: string): Promise&lt;boolean&gt; =&gt; {
     // DEVELOPMENT BYPASS: Always return true for testing
-    console.<span class="cstat-no" title="statement not covered" >log('🔧 DEVELOPMENT MODE: Token verification bypassed</span>');
+    logger.l<span class="cstat-no" title="statement not covered" >og('🔧 DEVELOPMENT MODE: Token verification bypassed');</span>
     return t<span class="cstat-no" title="statement not covered" >rue;</span>
   };<span class="cstat-no" title="statement not covered" ></span>
 &nbsp;
@@ -669,10 +672,10 @@ export const AuthProvider: React.FC&lt;AuthProviderProps&gt; = ({ children }) =&
     try {
       // Thi<span class="cstat-no" title="statement not covered" >s would typically b</span>e a GraphQL query to get user data
       // For now, we'll extract user info from the token or make a separate query
-      console.log('Loading user data for token:', authToken.substring(0, 20) + '...');
-      // TODO: Implement user <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >da</span>ta loading</span>
+      logger.log('Loading user data for token:', authToken.substring(0, 20) + '...');
+      // Future enhancement: I<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >mp</span>lement user data loading from GraphQL query or user service</span>
     } catch (error) {
-      co<span class="cstat-no" title="statement not covered" >nsole.error('Error loading user data:', error);</span>
+      lo<span class="cstat-no" title="statement not covered" >gger.error('Error loading user data:', error);</span>
     }<span class="cstat-no" title="statement not covered" ></span>
   };
 <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span>
@@ -680,28 +683,28 @@ export const AuthProvider: React.FC&lt;AuthProviderProps&gt; = ({ children }) =&
     setLoading(true);
     try {
       // DEV<span class="cstat-no" title="statement not covered" >ELOPMENT BYPASS: Always succeed for testing MemeQuest UI</span>
-      console.log('🔧 DEVELOPMENT MODE: Bypassing authentication for testing');
+      logger.log('🔧 DEVELOPMENT MODE: Bypassing authentication for testing');
       
       const devToken = 'dev-token-' + Date.now();
       setTok<span class="cstat-no" title="statement not covered" >en(devToken);</span>
       await AsyncStorage.setItem('token', devToken);
-      console.log('🔐 Dev token stored in AsyncStorage successfully');
+      logger.log('🔐 Dev token stored in AsyncStorage successfully');
       <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span>
       //<span class="cstat-no" title="statement not covered" > Set a basic user </span>object for authentication
       co<span class="cstat-no" title="statement not covered" >nst basicUser = {</span>
         id: '1',
-        emai<span class="cstat-no" title="statement not covered" >l: emailOrUsername.includes('@') ? emailOrUsername : `${emailOrUsername}@e</span>xample.com`,
+        emai<span class="cstat-no" title="statement not covered" >l: emailOrUsername.includes('@') ? emailOrUsername : `${emailOrUsername}@example.co</span>m`,
         username: emailOrUser<span class="cstat-no" title="statement not covered" >name.includes('@') ? email</span>OrUsername.split('@')[0] : emailOrUsername,
         name<span class="cstat-no" title="statement not covered" >: emailOrUsername.in</span>cludes('@') ? emailOrUsername.split('@')[0] : emailOrUsername,
         hasP<span class="cstat-no" title="statement not covered" >remiumAccess: false,</span>
       };<span class="cstat-no" title="statement not covered" ></span>
       setUser(basicUser);
-      console.log('🔐 User sta<span class="cstat-no" title="statement not covered" >te set:', basicUser);</span>
+      logger.log('🔐 User stat<span class="cstat-no" title="statement not covered" >e set:', basicUser);</span>
       
-      console.log('🔐 Development login successful, returning true');
+      logger.log('🔐 Development login successful, returning true');
       return true;
     } catch (error) {
-      console.error('Login error:', error);
+      logger.error('Login error:', error);
       return false;
     } finall<span class="cstat-no" title="statement not covered" >y {</span>
       setLoa<span class="cstat-no" title="statement not covered" >ding(false);</span>
@@ -709,16 +712,16 @@ export const AuthProvider: React.FC&lt;AuthProviderProps&gt; = ({ children }) =&
   };<span class="cstat-no" title="statement not covered" ></span>
 &nbsp;
   const restLoginFlexible = async (emailOrUsername: string, password: string): Promise&lt;string | null&gt; =&gt; {
-    // Use e<span class="cstat-no" title="statement not covered" >nvironment variable or fallback to loc</span>alhost
+    // Use e<span class="cstat-no" title="statement not covered" >nvironment variable or fallback to localhost</span>
     const ba<span class="cstat-no" title="statement not covered" >seUrl = proces</span>s.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000";
     const identifier = emailOrUsername.trim();
     
-    console.<span class="cstat-no" title="statement not covered" >log('🔍 AuthContext</span>: Using baseUrl:', baseUrl);
-    console.log('🔍 AuthContext: Environment variable:', process.env.EXPO_PUBLIC_API_BASE_URL);
+    logger.l<span class="cstat-no" title="statement not covered" >og('🔍 AuthContext:</span> Using baseUrl:', baseUrl);
+    logger.log('🔍 AuthContext: Environment variable:', process.env.EXPO_PUBLIC_API_BASE_URL);
     
     const attempt = async (pay<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >lo</span>ad: any) =&gt; {</span>
-      console.log('🔄 AuthContext: Attempting login to:', `${baseUrl}/api/auth/login/`);
-      console.log('🔄 Au<span class="cstat-no" title="statement not covered" >thContext: Payload:', payload);</span>
+      logger.log('🔄 AuthContext: Attempting login to:', `${baseUrl}/api/auth/login/`);
+      logger.log('🔄 Aut<span class="cstat-no" title="statement not covered" >hContext: Payload:', payload);</span>
       <span class="cstat-no" title="statement not covered" ></span>
       tr<span class="cstat-no" title="statement not covered" >y {</span>
 <span class="cstat-no" title="statement not covered" >        const response = await fetch(`${baseUrl}/api/auth/login/`, {</span>
@@ -727,14 +730,14 @@ export const AuthProvider: React.FC&lt;AuthProviderProps&gt; = ({ children }) =&
           bo<span class="cstat-no" title="statement not covered" >dy: JSON.stringify(payload),</span>
         });<span class="cstat-no" title="statement not covered" ></span>
         <span class="cstat-no" title="statement not covered" ></span>
-        console.log('📡 AuthContext: Response status:', response.status);
-        console.log('📡 AuthContext: Response ok:', response.ok);
+        logger.log('📡 AuthContext: Response status:', response.status);
+        logger.log('📡 AuthContext: Response ok:', response.ok);
         
         const json = await response.json().catch(() =&gt; ({}));
-        console.<span class="cstat-no" title="statement not covered" >log('📡 AuthContext: Response json:', json);</span>
+        logger.l<span class="cstat-no" title="statement not covered" >og('📡 AuthContext: Response json:', json);</span>
         <span class="cstat-no" title="statement not covered" ></span>
         if (!response.ok) {<span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span></span>
-          throw <span class="cstat-no" title="statement not covered" >new Error(json?.error || `Login failed with status ${</span>response.status}`);
+          throw <span class="cstat-no" title="statement not covered" >new Error(json?.error || `Login failed with status ${response.</span>status}`);
         }<span class="cstat-no" title="statement not covered" ></span>
         <span class="cstat-no" title="statement not covered" ></span>
         // Handle response format: /api/auth/login/ returns {token, user}
@@ -749,23 +752,23 @@ export const AuthProvider: React.FC&lt;AuthProviderProps&gt; = ({ children }) =&
         <span class="cstat-no" title="statement not covered" ></span>
         return json.access_token;
       } catch (fetchError) {
-        console.<span class="cstat-no" title="statement not covered" >error('❌ AuthContext: Fetch error:', fetchError);</span>
+        logger.e<span class="cstat-no" title="statement not covered" >rror('❌ AuthContext: Fetch error:', fetchError);</span>
         throw fe<span class="cstat-no" title="statement not covered" >tchError;</span>
       }
     };
 <span class="cstat-no" title="statement not covered" ></span>
     try {
       // 1) <span class="cstat-no" title="statement not covered" >Try as email first</span>
-      consol<span class="cstat-no" title="statement not covered" >e.log('🔄 Trying REST login with email:', identifier);</span>
+      logger<span class="cstat-no" title="statement not covered" >.log('🔄 Trying REST login with email:', identifier);</span>
       return await attempt({ email: identifier, password });
     } catch (emailError) {
-      consol<span class="cstat-no" title="statement not covered" >e.log('❌ Email login failed, trying username:', emailError.message);</span>
+      logger<span class="cstat-no" title="statement not covered" >.log('❌ Email login failed, trying username:', emailError.message);</span>
       try {<span class="cstat-no" title="statement not covered" ></span>
         // 2) Try as username
-        console.<span class="cstat-no" title="statement not covered" >log('🔄 Trying REST login with username:', identifier);</span>
+        logger.l<span class="cstat-no" title="statement not covered" >og('🔄 Trying REST login with username:', identifier);</span>
         return a<span class="cstat-no" title="statement not covered" >wait attempt({ username: identifier, password });</span>
       } catch (usernameError) {
-        console.error('❌ Both email and username login failed:', usernameError.message);
+        logger.error('❌ Both email and username login failed:', usernameError.message);
         return n<span class="cstat-no" title="statement not covered" >ull;</span>
       }<span class="cstat-no" title="statement not covered" ></span>
     }
@@ -777,15 +780,15 @@ export const AuthProvider: React.FC&lt;AuthProviderProps&gt; = ({ children }) =&
 <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span>
   const <span class="cstat-no" title="statement not covered" >logout = async (): Promise&lt;void&gt; =&gt; {</span>
     try {<span class="cstat-no" title="statement not covered" ></span>
-      consol<span class="cstat-no" title="statement not covered" >e.log('🔄 AuthC</span>ontext: Starting logout...');
+      logger<span class="cstat-no" title="statement not covered" >.log('🔄 AuthCo</span>ntext: Starting logout...');
       setUse<span class="cstat-no" title="statement not covered" >r(null);</span>
-      consol<span class="cstat-no" title="statement not covered" >e.log('✅ AuthCon</span>text: User set to null');
+      logger<span class="cstat-no" title="statement not covered" >.log('✅ AuthCont</span>ext: User set to null');
       setTok<span class="cstat-no" title="statement not covered" >en(null);</span>
-      consol<span class="cstat-no" title="statement not covered" >e.log('✅ AuthContext: Token set to null');</span>
+      logger<span class="cstat-no" title="statement not covered" >.log('✅ AuthContext: Token set to null');</span>
       await <span class="cstat-no" title="statement not covered" >AsyncStorage.removeItem('token');</span>
-      console.log('✅ AuthContext: Token removed from AsyncStorage');
+      logger.log('✅ AuthContext: Token removed from AsyncStorage');
     } catch (error) {
-      consol<span class="cstat-no" title="statement not covered" >e.error('❌ AuthContext logout error:', error);</span>
+      logger<span class="cstat-no" title="statement not covered" >.error('❌ AuthContext logout error:', error);</span>
     }
   };
 <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span>
@@ -799,7 +802,7 @@ export const AuthProvider: React.FC&lt;AuthProviderProps&gt; = ({ children }) =&
       }<span class="cstat-no" title="statement not covered" ></span>
       return isValid;
     } catch (error) {
-      consol<span class="cstat-no" title="statement not covered" >e.error('Token verification error:', error);</span>
+      logger<span class="cstat-no" title="statement not covered" >.error('Token verification error:', error);</span>
       return<span class="cstat-no" title="statement not covered" > false;</span>
     }
   };
@@ -850,7 +853,7 @@ export const useRequireAuth = () =&gt; {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-11-10T15:45:04.568Z
+                at 2025-11-20T00:57:52.315Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

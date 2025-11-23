@@ -22,6 +22,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import TradingButton from '../../../components/forms/TradingButton';
 import { StableNumberInput } from '../../../components/StableNumberInput';
 import SignalContributionChart from '../../../components/charts/SignalContributionChart';
+import SHAPFeatureImportanceChart from '../../../components/charts/SHAPFeatureImportanceChart';
 
 // Module-level sentinel to avoid React 18 StrictMode double-fire of auto-generation in dev
 const GEN_ONCE_SENTINEL = { fired: false };
@@ -70,20 +71,6 @@ const GET_AI_RECOMMENDATIONS = gql`
         sectorBreakdown
         riskScore
         diversificationScore
-        expectedImpact {
-          evPct
-          evAbs
-          per10k
-        }
-        risk {
-          volatilityEstimate
-          maxDrawdownPct
-        }
-        assetAllocation {
-          stocks
-          bonds
-          cash
-        }
       }
       buyRecommendations {
         symbol
@@ -93,14 +80,15 @@ const GET_AI_RECOMMENDATIONS = gql`
         reasoning
         targetPrice
         currentPrice
-        expectedReturn    # decimal like 0.05 = 5%
-        allocation        # percentage allocation like 25.3
+        expectedReturn
+        sector
+        riskLevel
+        mlScore
         consumerStrengthScore
         spendingGrowth
         optionsFlowScore
         earningsScore
         insiderScore
-        shapExplanation
       }
       sellRecommendations {
         symbol
@@ -127,10 +115,7 @@ const GET_AI_RECOMMENDATIONS = gql`
         discretionaryIncome
         suggestedBudget
         spendingHealth
-        topCategories {
-          category
-          amount
-        }
+        topCategories
         sectorPreferences
       }
     }
@@ -141,13 +126,15 @@ const GET_QUANT_SCREENER = gql`
   query GetQuantScreener {
     advancedStockScreening {
       symbol
+      companyName
       sector
+      marketCap
       peRatio
-      dividendYield
-      volatility
-      debtRatio
+      beginnerFriendlyScore
+      currentPrice
       mlScore
-      score
+      riskLevel
+      growthPotential
     }
   }
 `;
@@ -169,6 +156,14 @@ const CREATE_INCOME_PROFILE = gql`
     ) {
       success
       message
+      incomeProfile {
+        id
+        incomeBracket
+        age
+        investmentGoals
+        riskTolerance
+        investmentHorizon
+      }
     }
   }
 `;
@@ -182,7 +177,14 @@ const GENERATE_AI_RECOMMENDATIONS = gql`
         id
         riskProfile
         portfolioAllocation
-        recommendedStocks
+        recommendedStocks {
+          symbol
+          companyName
+          allocation
+          reasoning
+          riskLevel
+          expectedReturn
+        }
         expectedPortfolioReturn
         riskAssessment
       }
@@ -193,6 +195,37 @@ const GENERATE_AI_RECOMMENDATIONS = gql`
 /* -------------------------------- TYPES ----------------------------------- */
 interface AIPortfolioScreenProps {
   navigateTo?: (screen: string) => void;
+}
+
+// Helper function to parse topCategories JSON string
+type TopCategory = {
+  category?: string;
+  amount?: number;
+};
+
+function parseTopCategories(raw: string | null | undefined | TopCategory[]): TopCategory[] {
+  if (!raw) return [];
+  
+  // If it's already an array, return it
+  if (Array.isArray(raw)) {
+    return raw;
+  }
+  
+  // If it's a string, try to parse it
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed as TopCategory[];
+      }
+      return [];
+    } catch (e) {
+      logger.warn('[AI Recommendations] Failed to parse topCategories JSON:', e);
+      return [];
+    }
+  }
+  
+  return [];
 }
 
 // AI Recommendation Types
@@ -255,7 +288,7 @@ interface AIData {
     discretionaryIncome?: number;
     suggestedBudget?: number;
     spendingHealth?: string;
-    topCategories?: Array<{
+    topCategories?: string | Array<{
       category?: string;
       amount?: number;
     }>;
@@ -381,6 +414,7 @@ const computeExpectedImpact = (ai: AIData, totalValue?: number | null) => {
     ai?.buyRecommendations || [];
 
   if (!recs.length) {
+    logger.log('[ExpectedImpact] No buy recommendations found');
     return { evPct: null, evAbs: null, per10k: null };
   }
 
@@ -388,10 +422,19 @@ const computeExpectedImpact = (ai: AIData, totalValue?: number | null) => {
   let weightedReturn = 0;
 
   for (const r of recs) {
-    const er = Number(r?.expectedReturn ?? 0);   // e.g., 0.05 = 5%
-    let w = Number(r?.confidence ?? 0.5);        // default 0.5 if missing
+    // Backend sends expectedReturn as percentage (e.g., 15.0 for 15%), normalize to decimal
+    const erRaw = Number(r?.expectedReturn ?? 0);
+    const er = erRaw / 100;   // e.g., 15.0 → 0.15 = 15%
+    
+    // Backend sends confidence as percentage (e.g., 86.68 for 86.68%), normalize to decimal
+    const confRaw = Number(r?.confidence ?? 50);
+    let w = confRaw / 100;        // e.g., 86.68 → 0.8668, default 0.5 if missing
     if (w < 0) w = 0;
     if (w > 1) w = 1;
+    
+    const symbol = (r as any)?.symbol || 'unknown';
+    logger.log(`[ExpectedImpact] Rec ${symbol}: expectedReturn=${erRaw}% (${er}), confidence=${confRaw}% (${w}), contribution=${er * w}`);
+    
     weightedReturn += er * w;
     weightSum += w;
   }
@@ -399,6 +442,22 @@ const computeExpectedImpact = (ai: AIData, totalValue?: number | null) => {
   const evPct = weightSum > 0 ? (weightedReturn / weightSum) : null; // decimal (e.g., 0.04)
   const evAbs = totalValue != null && evPct != null ? totalValue * evPct : null;
   const per10k = evPct != null ? 10000 * evPct : null;
+
+  logger.log('[ExpectedImpact] Calculation:', {
+    recsCount: recs.length,
+    recs: recs.map((r: any) => ({
+      symbol: r?.symbol,
+      expectedReturn: r?.expectedReturn,
+      confidence: r?.confidence,
+    })),
+    weightSum,
+    weightedReturn,
+    evPct,
+    evPctPercent: evPct != null ? (evPct * 100).toFixed(2) + '%' : 'null',
+    evAbs,
+    per10k,
+    totalValue,
+  });
 
   return { evPct, evAbs, per10k };
 };
@@ -547,7 +606,8 @@ function blendScores(
     (z?.yield ?? 0)*w.yield;
 
   // normalize AI signal ~ expectedReturn * confidence
-  const ai = (Number(rec?.expectedReturn ?? 0) * Number(rec?.confidence ?? 0));
+  // Backend sends both as percentages, normalize to decimals
+  const ai = (Number(rec?.expectedReturn ?? 0) / 100) * (Number(rec?.confidence ?? 0) / 100);
   // relative weight: longer horizon → more factor, shorter → more "AI"
   const shortH = (horizon || '').match(/^(1-3|3-5)/i);
   const alpha = shortH ? 0.45 : 0.65; // weight on factorScore
@@ -850,33 +910,86 @@ const StockCard = React.memo(({ item, showPersonalized, optResult }: { item: Buy
 
   return (
   <View style={styles.stockCard}>
+    {/* Enhanced Header Section */}
     <View style={styles.stockHeader}>
       <View style={styles.stockInfo}>
-        <Text style={styles.stockSymbol}>{item.symbol}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+          <Text style={styles.stockSymbol}>{item.symbol}</Text>
+          {item.expectedReturn != null && (
+            <View style={{
+              marginLeft: 12,
+              paddingHorizontal: 8,
+              paddingVertical: 4,
+              borderRadius: 8,
+              backgroundColor: COLORS.primary + '15',
+            }}>
+              <Text style={{
+                fontSize: 13,
+                fontWeight: '700',
+                color: COLORS.primary,
+              }}>
+                {item.expectedReturn > 0 ? '+' : ''}{Number(item.expectedReturn).toFixed(1)}%
+              </Text>
+            </View>
+          )}
+        </View>
         <Text style={styles.companyName}>{item.companyName}</Text>
+        {item.reasoning && (
+          <Text style={{
+            fontSize: 13,
+            color: '#6B7280',
+            marginTop: 8,
+            fontStyle: 'italic',
+            lineHeight: 18,
+          }}>
+            {item.reasoning.length > 80 ? item.reasoning.substring(0, 80) + '...' : item.reasoning}
+          </Text>
+        )}
       </View>
-      <View style={styles.stockMetrics}>
-        <Text style={styles.allocationText}>
-          {item.allocation && Array.isArray(item.allocation) && item.allocation.length > 0 
-            ? `${item.allocation[0].percentage}%` 
-            : '—'}
-        </Text>
-        <Text style={styles.expectedReturn}>
-                        {item.expectedReturn != null ? `${(Number(item.expectedReturn) * 100).toFixed(1)}%` : 'N/A'}
-        </Text>
-      </View>
+      {item.allocation && Array.isArray(item.allocation) && item.allocation.length > 0 && (
+        <View style={styles.stockMetrics}>
+          <Text style={styles.allocationText}>
+            {item.allocation[0].percentage}%
+          </Text>
+          <Text style={{
+            fontSize: 11,
+            color: COLORS.subtext,
+            marginTop: 2,
+            fontWeight: '500',
+          }}>
+            Allocation
+          </Text>
+        </View>
+      )}
     </View>
     
-    {/* Additional data fields */}
+    {/* Key Metrics Row */}
     <View style={styles.stockDetails}>
-      {item.currentPrice && <Text style={styles.stockDetailText}>Current: ${item.currentPrice.toFixed(2)}</Text>}
-      {item.targetPrice &&  <Text style={styles.stockDetailText}>Target: ${item.targetPrice.toFixed(2)}</Text>}
-      {item.confidence &&    <Text style={styles.stockDetailText}>Conf: {Math.round(item.confidence * 100)}%</Text>}
-      {f?.sector &&         <Text style={styles.stockDetailText}>Sector: {f.sector}</Text>}
+      {item.currentPrice && (
+        <View style={styles.metricPill}>
+          <Text style={styles.metricLabel}>Current</Text>
+          <Text style={styles.metricValue}>${item.currentPrice.toFixed(2)}</Text>
+        </View>
+      )}
+      {item.targetPrice && (
+        <View style={styles.metricPill}>
+          <Text style={styles.metricLabel}>Target</Text>
+          <Text style={styles.metricValue}>${item.targetPrice.toFixed(2)}</Text>
+        </View>
+      )}
+      {item.confidence && (
+        <View style={styles.metricPill}>
+          <Text style={styles.metricLabel}>Conf</Text>
+          <Text style={styles.metricValue}>{item.confidence.toFixed(2)}%</Text>
+        </View>
+      )}
       {optResult?.weights?.[item.symbol] != null && (
-        <Text style={[styles.stockDetailText, { color: COLORS.primary, fontWeight: '600' }]}>
-          Suggested: {(optResult.weights[item.symbol]*100).toFixed(1)}%
-        </Text>
+        <View style={[styles.metricPill, { backgroundColor: COLORS.primary + '15', borderColor: COLORS.primary }]}>
+          <Text style={[styles.metricLabel, { color: COLORS.primary }]}>Suggested</Text>
+          <Text style={[styles.metricValue, { color: COLORS.primary }]}>
+            {(optResult.weights[item.symbol]*100).toFixed(1)}%
+          </Text>
+        </View>
       )}
     </View>
 
@@ -915,28 +1028,102 @@ const StockCard = React.memo(({ item, showPersonalized, optResult }: { item: Buy
     {!!item.reasoning && <Text style={styles.reasoning}>{item.reasoning}</Text>}
     
     {/* Week 3: Signal Contribution Chart */}
-    {(item.consumerStrengthScore != null || item.spendingGrowth != null || item.optionsFlowScore != null) && (
+    {(item.consumerStrengthScore != null || item.spendingGrowth != null || item.optionsFlowScore != null) && (() => {
+      const spendingGrowth = Number(item.spendingGrowth) || 0;
+      const optionsFlowScore = Number(item.optionsFlowScore) || 0;
+      const earningsScore = Number(item.earningsScore) || 0;
+      const insiderScore = Number(item.insiderScore) || 0;
+      
+      const contributions = [
+        { name: 'Spending', contribution: spendingGrowth, color: '#22c55e', description: 'Consumer spending growth' },
+        { name: 'Options Flow', contribution: optionsFlowScore, color: '#3b82f6', description: 'Smart money signals' },
+        { name: 'Earnings', contribution: earningsScore, color: '#f59e0b', description: 'Earnings surprise history' },
+        { name: 'Insider', contribution: insiderScore, color: '#8b5cf6', description: 'Insider trading activity' },
+      ].filter(c => c.contribution > 0);
+      
+      // Debug logging
+      logger.log(`[SignalContrib] ${item.symbol}: spending=${spendingGrowth}, options=${optionsFlowScore}, earnings=${earningsScore}, insider=${insiderScore}, consumer=${item.consumerStrengthScore}`);
+      
+      return (
+        <View style={{ marginTop: 12, marginBottom: 8 }}>
+          <SignalContributionChart
+            symbol={item.symbol}
+            contributions={contributions}
+            totalScore={item.consumerStrengthScore ? Number(item.consumerStrengthScore) / 100 : undefined}
+            reasoning={(item.shapExplanation || item.reasoning) as string | undefined}
+          />
+        </View>
+      );
+    })()}
+    
+    {/* Enhanced SHAP Feature Importance Chart */}
+    {item.shapExplanation?.topFeatures && item.shapExplanation.topFeatures.length > 0 && (
       <View style={{ marginTop: 12, marginBottom: 8 }}>
-        <SignalContributionChart
-          symbol={item.symbol}
-          contributions={[
-            { name: 'Spending', contribution: item.spendingGrowth || 0, color: '#22c55e', description: 'Consumer spending growth' },
-            { name: 'Options Flow', contribution: item.optionsFlowScore || 0, color: '#3b82f6', description: 'Smart money signals' },
-            { name: 'Earnings', contribution: item.earningsScore || 0, color: '#f59e0b', description: 'Earnings surprise history' },
-            { name: 'Insider', contribution: item.insiderScore || 0, color: '#8b5cf6', description: 'Insider trading activity' },
-          ].filter(c => c.contribution > 0)}
-          totalScore={item.consumerStrengthScore ? item.consumerStrengthScore / 100 : undefined}
-          reasoning={item.shapExplanation || item.reasoning}
+        <SHAPFeatureImportanceChart
+          features={item.shapExplanation.topFeatures.map((f: any) => ({
+            name: f.name,
+            value: f.value,
+            absValue: f.absValue,
+          }))}
+          prediction={item.shapExplanation.prediction}
+          title="Why This Prediction?"
         />
       </View>
     )}
     
     {/* Consumer Strength Score Badge */}
     {item.consumerStrengthScore != null && (
-      <View style={[styles.tag, { backgroundColor: item.consumerStrengthScore > 70 ? COLORS.success : item.consumerStrengthScore > 50 ? '#f59e0b' : COLORS.danger, marginTop: 8 }]}>
-        <Text style={styles.tagText}>
-          Consumer Strength: {Math.round(item.consumerStrengthScore)}/100
-        </Text>
+      <View style={{
+        marginTop: 12,
+        marginBottom: 8,
+        padding: 14,
+        borderRadius: 12,
+        backgroundColor: item.consumerStrengthScore > 70 ? '#ECFDF5' : item.consumerStrengthScore > 50 ? '#FFFBEB' : '#FEF2F2',
+        borderWidth: 2,
+        borderColor: item.consumerStrengthScore > 70 ? '#10B981' : item.consumerStrengthScore > 50 ? '#F59E0B' : '#EF4444',
+      }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={{
+            fontSize: 13,
+            fontWeight: '700',
+            color: item.consumerStrengthScore > 70 ? '#065F46' : item.consumerStrengthScore > 50 ? '#92400E' : '#991B1B',
+            textTransform: 'uppercase',
+            letterSpacing: 0.5,
+          }}>
+            Consumer Strength
+          </Text>
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: item.consumerStrengthScore > 70 ? '#10B981' : item.consumerStrengthScore > 50 ? '#F59E0B' : '#EF4444',
+            paddingHorizontal: 12,
+            paddingVertical: 6,
+            borderRadius: 20,
+          }}>
+            <Text style={{
+              fontSize: 16,
+              fontWeight: '800',
+              color: '#FFFFFF',
+            }}>
+              {Math.round(item.consumerStrengthScore)}/100
+            </Text>
+          </View>
+        </View>
+        {/* Progress bar */}
+        <View style={{
+          marginTop: 10,
+          height: 6,
+          borderRadius: 3,
+          backgroundColor: '#E5E7EB',
+          overflow: 'hidden',
+        }}>
+          <View style={{
+            height: '100%',
+            width: `${item.consumerStrengthScore}%`,
+            backgroundColor: item.consumerStrengthScore > 70 ? '#10B981' : item.consumerStrengthScore > 50 ? '#F59E0B' : '#EF4444',
+            borderRadius: 3,
+          }} />
+        </View>
       </View>
     )}
     
@@ -1250,6 +1437,7 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
   const [isGeneratingRecommendations, setIsGeneratingRecommendations] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [userLoadingTimeout, setUserLoadingTimeout] = useState(false);
+  const [profileJustCreated, setProfileJustCreated] = useState(false);
 
   // form state
   const [incomeBracket, setIncomeBracket] = useState('');
@@ -1265,9 +1453,22 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
     error: userError,
     refetch: refetchUser,
   } = useQuery(GET_USER_PROFILE, {
-    fetchPolicy: 'cache-and-network',
+    fetchPolicy: 'cache-and-network', // Always check network first
     nextFetchPolicy: 'cache-first',
     notifyOnNetworkStatusChange: true,
+    // Force refetch on mount to ensure we have latest data
+    onCompleted: (data) => {
+      logger.log('✅ GET_USER_PROFILE completed:', {
+        hasMe: !!data?.me,
+        hasIncomeProfile: !!data?.me?.incomeProfile,
+        incomeProfile: data?.me?.incomeProfile,
+      });
+      // 🔍 Raw response logging for debugging
+      logger.log('🔍 Raw GetUserProfile data:', JSON.stringify(data, null, 2));
+    },
+    onError: (error) => {
+      logger.error('❌ GET_USER_PROFILE error:', error);
+    },
   });
 
   const user = userData?.me;
@@ -1298,59 +1499,119 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
     return 5; // Default to 5 years
   }, []);
   
+  // ✅ Simplified: Check if profile exists (backend confirms it's saved)
+  const incomeProfile = effectiveUserEarly?.incomeProfile ?? null;
+  const hasProfile = !!incomeProfile || profileJustCreated;
+  
   // Memoized profile input and defaults detection
   const { profileInput, usingDefaults } = useMemo(() => {
-    const p = effectiveUserEarly?.incomeProfile ?? {};
-    const hasRT = !!p?.riskTolerance;
-    const hasHZ = !!p?.investmentHorizon;
+    // Build fallback defaults
+    const fallbackInput = {
+      age: 30,
+      incomeBracket: 'Unknown',
+      investmentGoals: [] as string[],
+      riskTolerance: 'Moderate',
+      investmentHorizonYears: 5,
+    };
+    
+    // If we have a profile, use it; otherwise use defaults
+    if (!hasProfile || !incomeProfile) {
+      return { profileInput: fallbackInput, usingDefaults: true };
+    }
+    
+    // Build profile input from saved profile
+    const p = incomeProfile;
+    const horizonValue = p?.investmentHorizon;
+    let horizonYears: number;
+    
+    // Handle investmentHorizon: could be number, string, or undefined
+    if (typeof horizonValue === 'number') {
+      horizonYears = horizonValue;
+    } else if (typeof horizonValue === 'string') {
+      horizonYears = mapHorizonToYears(horizonValue);
+    } else {
+      horizonYears = 5; // Default
+    }
+    
     const input = {
-      riskTolerance: p?.riskTolerance ?? 'Moderate',
-      investmentHorizonYears: mapHorizonToYears(p?.investmentHorizon),
-      age: typeof p?.age === 'number' ? p.age : 30,
+      age: typeof p?.age === 'number' ? p.age : (typeof p?.age === 'string' ? parseInt(p.age, 10) || 30 : 30),
       incomeBracket: p?.incomeBracket ?? 'Unknown',
       investmentGoals: Array.isArray(p?.investmentGoals) ? p.investmentGoals : [],
+      riskTolerance: p?.riskTolerance ?? 'Moderate',
+      investmentHorizonYears: horizonYears,
     };
-    return { profileInput: input, usingDefaults: !(hasRT && hasHZ) };
-  }, [effectiveUserEarly?.incomeProfile, mapHorizonToYears]);
-  
-  // Check if profile exists AND has meaningful data (for UI display purposes)
-  const hasProfile = !!effectiveUserEarly?.incomeProfile && 
-    effectiveUserEarly.incomeProfile.age && 
-    effectiveUserEarly.incomeProfile.incomeBracket && 
-    effectiveUserEarly.incomeProfile.investmentHorizon && 
-    effectiveUserEarly.incomeProfile.riskTolerance && 
-    effectiveUserEarly.incomeProfile.investmentGoals?.length > 0;
+    
+    return { profileInput: input, usingDefaults: false };
+  }, [incomeProfile, mapHorizonToYears, hasProfile]);
   
   // Debug logging for profile validation
   logger.log('🔍 Profile Debug:', {
-    hasIncomeProfile: !!effectiveUserEarly?.incomeProfile,
-    incomeProfileObject: effectiveUserEarly?.incomeProfile,
-    age: effectiveUserEarly?.incomeProfile?.age,
-    incomeBracket: effectiveUserEarly?.incomeProfile?.incomeBracket,
-    investmentHorizon: effectiveUserEarly?.incomeProfile?.investmentHorizon,
-    riskTolerance: effectiveUserEarly?.incomeProfile?.riskTolerance,
-    investmentGoals: effectiveUserEarly?.incomeProfile?.investmentGoals,
+    hasIncomeProfile: !!incomeProfile,
+    incomeProfileObject: incomeProfile,
+    age: incomeProfile?.age,
+    incomeBracket: incomeProfile?.incomeBracket,
+    investmentHorizon: incomeProfile?.investmentHorizon,
+    riskTolerance: incomeProfile?.riskTolerance,
+    investmentGoals: incomeProfile?.investmentGoals,
     hasProfile: hasProfile,
     profileInput,
     usingDefaults,
     fullUserData: userData,
-    userDataMe: userData?.me
+    userDataMe: userData?.me,
+    profileJustCreated: profileJustCreated,
+    userLoading,
+    userError: userError?.message,
   });
 
-  // Pre-populate form fields when profile form is shown (only once)
+  // 👇 only initialize once from server, don't keep resetting
+  const [didInitFromServer, setDidInitFromServer] = useState(false);
+
+  // Pre-populate form fields when profile form is shown (only once, never reset on errors)
+  // Use a ref to track if we've already initialized to prevent re-initialization after refetches
+  const hasInitializedRef = useRef(false);
+  
   useEffect(() => {
-    logger.log('🔍 Form initialization useEffect called, showProfileForm:', showProfileForm);
-    if (showProfileForm) {
-      logger.log('🔍 Initializing form fields with user profile:', user?.incomeProfile);
-      // Initialize with existing profile data if available, otherwise use empty defaults
-      setIncomeBracket(effectiveUserEarly?.incomeProfile?.incomeBracket || '');
-      setAge(effectiveUserEarly?.incomeProfile?.age?.toString() || '');
-      setSelectedGoals(effectiveUserEarly?.incomeProfile?.investmentGoals || []);
-      setRiskTolerance(effectiveUserEarly?.incomeProfile?.riskTolerance || '');
-      setInvestmentHorizon(effectiveUserEarly?.incomeProfile?.investmentHorizon || '');
-      logger.log('🔍 Form fields initialized - age set to:', effectiveUserEarly?.incomeProfile?.age?.toString() || '');
+    logger.log('🔍 Form initialization useEffect called, showProfileForm:', showProfileForm, 'didInitFromServer:', didInitFromServer, 'hasInitializedRef:', hasInitializedRef.current);
+    
+    // Only initialize once from server (use ref to persist across re-renders)
+    if (hasInitializedRef.current || didInitFromServer) {
+      logger.log('[Profile] Already initialized from server, skipping');
+      return;
     }
-  }, [showProfileForm]); // Only depend on showProfileForm to avoid unnecessary re-runs
+    
+    // Don't initialize while loading
+    if (userLoading) {
+      logger.log('[Profile] Still loading, skipping init');
+      return;
+    }
+    
+    // Don't reset on errors - preserve local state
+    if (userError) {
+      logger.log('[Profile] Skipping init from server due to error:', userError.message);
+      return;
+    }
+    
+    // Only initialize when form is shown
+    if (!showProfileForm) {
+      return;
+    }
+    
+    const profile = effectiveUserEarly?.incomeProfile;
+    if (!profile) {
+      logger.log('[Profile] No server profile, leaving local state as-is');
+      return;
+    }
+    
+    logger.log('[Profile] Initializing form state from server:', profile);
+    setAge(String(profile.age ?? ''));
+    setIncomeBracket(profile.incomeBracket ?? '');
+    setRiskTolerance(profile.riskTolerance ?? 'Moderate');
+    setInvestmentHorizon(String(profile.investmentHorizon ?? ''));
+    setSelectedGoals(profile.investmentGoals ?? []);
+    setDidInitFromServer(true);
+    hasInitializedRef.current = true; // Mark as initialized using ref
+    logger.log('🔍 Form fields initialized from server - age set to:', String(profile.age ?? ''));
+  }, [didInitFromServer, userLoading, userError, showProfileForm]); // Removed effectiveUserEarly?.incomeProfile from deps
 
   // Track age state changes
   useEffect(() => {
@@ -1358,7 +1619,7 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
   }, [age]);
   
 
-  // ✅ AI recs (skip only while ME is loading)
+  // ✅ AI recs - wait for user profile to load first
   const {
     data: recommendationsData,
     loading: recommendationsLoading,
@@ -1370,9 +1631,9 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
       profile: profileInput, 
       usingDefaults 
     },
-    skip: userLoading, // Only skip while ME is loading
-    fetchPolicy: 'cache-first', // ✅ Optimized: Use cache first for instant load
-    nextFetchPolicy: 'cache-first', // ✅ Keep using cache for subsequent loads
+    skip: userLoading || !!userError || !user, // Don't fire until user profile is loaded
+    fetchPolicy: 'network-only', // Always fetch fresh data with correct profile
+    nextFetchPolicy: 'cache-first', // Use cache for subsequent loads
     errorPolicy: 'all',
     notifyOnNetworkStatusChange: false, // ✅ Don't block UI on network status changes
     onCompleted: (data) => {
@@ -1382,13 +1643,16 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
         recs,
         portfolioValue: data?.aiRecommendations?.portfolioAnalysis?.totalValue,
         hasData: !!data,
+        hasAiRecommendations: !!data?.aiRecommendations,
         keys: Object.keys(data?.aiRecommendations ?? {}),
+        fullData: JSON.stringify(data, null, 2),
       });
     },
     onError: (error) => {
       logger.error('❌ AI Recommendations Query Error:', error?.message);
       logger.error('   GraphQL errors:', error?.graphQLErrors);
       logger.error('   Network error:', error?.networkError);
+      logger.error('   Full error:', JSON.stringify(error, null, 2));
     },
   });
 
@@ -1401,8 +1665,43 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
   // mutations - optimized: don't block on refetch
   const [createIncomeProfile, { loading: creatingProfile }] = useMutation(CREATE_INCOME_PROFILE, {
     // Update cache after mutation to reflect new profile
-    refetchQueries: [{ query: GET_USER_PROFILE }],
-    awaitRefetchQueries: false, // Don't block - fetch in background
+    refetchQueries: [{ query: GET_USER_PROFILE }, { query: GET_AI_RECOMMENDATIONS }],
+    awaitRefetchQueries: true, // Wait for refetch to complete so hasProfile updates
+    update: (cache, { data }) => {
+      // Optimistically update the cache with the new profile
+      if (data?.createIncomeProfile?.incomeProfile) {
+        try {
+          // Try to read existing data, but create if it doesn't exist
+          let existingData;
+          try {
+            existingData = cache.readQuery({ query: GET_USER_PROFILE });
+          } catch (e) {
+            // If no data exists, create a new entry
+            existingData = { me: null };
+          }
+          
+          // Update or create the me object with the new profile
+          cache.writeQuery({
+            query: GET_USER_PROFILE,
+            data: {
+              me: existingData?.me ? {
+                ...existingData.me,
+                incomeProfile: data.createIncomeProfile.incomeProfile,
+              } : {
+                id: '1', // Fallback ID
+                email: 'demo@example.com', // Fallback email
+                name: 'Demo User',
+                incomeProfile: data.createIncomeProfile.incomeProfile,
+              },
+            },
+          });
+          
+          logger.log('✅ Cache updated with new profile:', data.createIncomeProfile.incomeProfile);
+        } catch (e) {
+          logger.warn('Failed to update cache optimistically:', e);
+        }
+      }
+    },
   });
   const [generateAIRecommendations] = useMutation(GENERATE_AI_RECOMMENDATIONS);
   const client = useApolloClient();
@@ -1413,12 +1712,22 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
 
   // Production: Use real data only - no mock fallbacks
   const ai = useMemo(() => {
+    logger.log('🔍 AI Recommendations Memo - Input:', {
+      hasRecommendationsData: !!recommendationsData,
+      hasAiRecommendations: !!recommendationsData?.aiRecommendations,
+      recommendationsError: recommendationsError?.message,
+      recommendationsLoading,
+      fullData: JSON.stringify(recommendationsData, null, 2),
+    });
+    
     const realData = recommendationsData?.aiRecommendations;
     if (!realData && recommendationsError) {
       logger.error('❌ AI Recommendations Error:', {
         error: recommendationsError?.message,
         hasData: !!recommendationsData,
         loading: recommendationsLoading,
+        graphQLErrors: recommendationsError?.graphQLErrors,
+        networkError: recommendationsError?.networkError,
       });
       // Return null/undefined - let UI handle empty state
       return null;
@@ -1428,6 +1737,14 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
         hasPortfolioAnalysis: !!realData?.portfolioAnalysis,
         buyRecsCount: realData?.buyRecommendations?.length || 0,
         keys: Object.keys(realData),
+        portfolioAnalysis: realData?.portfolioAnalysis,
+        buyRecommendations: realData?.buyRecommendations,
+      });
+    } else {
+      logger.warn('⚠️ No AI recommendations data available:', {
+        recommendationsData,
+        recommendationsError,
+        recommendationsLoading,
       });
     }
     return realData;
@@ -1619,31 +1936,96 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
           logger.warn('Cache eviction warning:', e);
         }
         
-        // Refetch in background
-        refetchUser({ fetchPolicy: 'network-only' }).catch((err) => logger.warn('Failed to refetch user:', err));
+        // Refetch in background - use cache-and-network to preserve optimistic update
+        setTimeout(() => {
+          refetchUser({ fetchPolicy: 'cache-and-network' }).catch((err) => logger.warn('Failed to refetch user:', err));
+        }, 500);
         return;
       }
 
       if (data?.createIncomeProfile?.success) {
         // Show success immediately - don't wait for anything
         setShowProfileForm(false);
+        // Set flag to show recommendations immediately
+        setProfileJustCreated(true);
         
-        // Optimistically update cache immediately
-        try {
-          client.cache.evict({ fieldName: 'me' });
-          client.cache.gc();
-        } catch (e) {
-          logger.warn('Cache eviction warning:', e);
+        logger.log('✅ Profile created successfully, updating cache and refetching...');
+        
+        // ✅ Update local state from the mutation result
+        const saved = data?.createIncomeProfile?.incomeProfile;
+        if (saved) {
+          setAge(String(saved.age ?? ''));
+          setIncomeBracket(saved.incomeBracket ?? '');
+          setRiskTolerance(saved.riskTolerance ?? 'Moderate');
+          setInvestmentHorizon(String(saved.investmentHorizon ?? ''));
+          setSelectedGoals(saved.investmentGoals ?? []);
+          setDidInitFromServer(true);
+          hasInitializedRef.current = true; // Mark as initialized using ref
+          logger.log('✅ Local form state updated from mutation result');
         }
         
-        // Refetch and generate recommendations in background - don't block UI
-        Promise.all([
-          refetchUser({ fetchPolicy: 'network-only' }).catch((err) => logger.warn('Failed to refetch user:', err)),
-          // Generate recommendations in background
-          new Promise(resolve => setTimeout(resolve, 100)).then(() => 
-            handleGenerateRecommendations().catch((err) => logger.warn('Failed to generate recommendations:', err))
-          )
-        ]).catch((err) => logger.warn('Failed to handle profile update:', err));
+        // Update cache with the returned profile data immediately
+        if (data?.createIncomeProfile?.incomeProfile) {
+          try {
+            let existingData;
+            try {
+              existingData = client.readQuery({ query: GET_USER_PROFILE });
+            } catch (e) {
+              // If query doesn't exist in cache, create it
+              existingData = { me: null };
+            }
+            
+            // Update or create the me object with the new profile
+            client.writeQuery({
+              query: GET_USER_PROFILE,
+              data: {
+                me: existingData?.me ? {
+                  ...existingData.me,
+                  incomeProfile: data.createIncomeProfile.incomeProfile,
+                } : {
+                  id: '1', // Fallback ID
+                  email: 'demo@example.com', // Fallback email
+                  name: 'Demo User',
+                  incomeProfile: data.createIncomeProfile.incomeProfile,
+                },
+              },
+            });
+            logger.log('✅ Cache updated with new profile:', data.createIncomeProfile.incomeProfile);
+          } catch (e) {
+            logger.warn('Failed to update cache:', e);
+          }
+        }
+        
+        // Refetch user profile to ensure we have the latest data
+        // Use cache-first to preserve the optimistic update, then check network after a delay
+        // This prevents the refetch from overwriting the saved profile with stale data
+        setTimeout(() => {
+          refetchUser({ fetchPolicy: 'cache-and-network' })
+            .then(() => {
+              logger.log('✅ User profile refetched, now refetching recommendations...');
+              // Clear recommendations cache to force fresh fetch
+              client.cache.evict({ fieldName: 'aiRecommendations' });
+              client.cache.gc();
+              // Refetch recommendations with updated profile
+              return refetchRecommendations({ 
+                fetchPolicy: 'cache-and-network',
+              });
+            })
+            .then(() => {
+              logger.log('✅ Recommendations refetched with new profile');
+              // Clear the flag after a delay to let the real hasProfile take over
+              setTimeout(() => {
+                setProfileJustCreated(false);
+              }, 2000);
+            })
+            .catch((err) => {
+              logger.warn('Failed to refetch after profile creation:', err);
+              // Clear the flag even on error
+              setTimeout(() => {
+                setProfileJustCreated(false);
+              }, 2000);
+            });
+        }, 500); // Wait 500ms for backend to process the mutation
       } else {
         // For demo: don't block on API errors, use optimistic update
         const errorMsg = data?.createIncomeProfile?.message || 'Failed to create profile';
@@ -1680,11 +2062,14 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
           logger.log('[AIPortfolio] ✅ Optimistically updated Apollo cache with profile (API error case)');
           
           // Trigger refetch to update the component with new cache data
-          refetchUser({ fetchPolicy: 'cache-first' }).then(() => {
-            logger.log('[AIPortfolio] ✅ User profile refetched after optimistic update (API error case)');
-          }).catch(e => {
-            logger.warn('[AIPortfolio] Could not refetch user after optimistic update:', e);
-          });
+          // Use cache-first to preserve optimistic update, delay to avoid race condition
+          setTimeout(() => {
+            refetchUser({ fetchPolicy: 'cache-first' }).then(() => {
+              logger.log('[AIPortfolio] ✅ User profile refetched after optimistic update (API error case)');
+            }).catch(e => {
+              logger.warn('[AIPortfolio] Could not refetch user after optimistic update:', e);
+            });
+          }, 500);
         } catch (cacheError) {
           logger.warn('[AIPortfolio] Could not update cache optimistically:', cacheError);
         }
@@ -1740,11 +2125,14 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
           logger.log('[AIPortfolio] ✅ Optimistically updated Apollo cache with profile');
           
           // Trigger refetch to update the component with new cache data
-          refetchUser({ fetchPolicy: 'cache-first' }).then(() => {
-            logger.log('[AIPortfolio] ✅ User profile refetched after optimistic update');
-          }).catch(e => {
-            logger.warn('[AIPortfolio] Could not refetch user after optimistic update:', e);
-          });
+          // Use cache-first to preserve optimistic update, delay to avoid race condition
+          setTimeout(() => {
+            refetchUser({ fetchPolicy: 'cache-first' }).then(() => {
+              logger.log('[AIPortfolio] ✅ User profile refetched after optimistic update');
+            }).catch(e => {
+              logger.warn('[AIPortfolio] Could not refetch user after optimistic update:', e);
+            });
+          }, 500);
         } catch (cacheError) {
           logger.warn('[AIPortfolio] Could not update cache optimistically:', cacheError);
         }
@@ -1797,12 +2185,8 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
         profileInput 
       });
       logger.log('🚀 Calling generateAIRecommendations GraphQL mutation...');
-      const res = await generateAIRecommendations({
-        variables: {
-          profile: profileInput,
-          usingDefaults: !hasProfile
-        }
-      });
+      // Note: This mutation doesn't accept variables - it uses the user's income profile
+      const res = await generateAIRecommendations();
       
       logger.log('📥 GraphQL Response received:', {
         success: res.data?.generateAiRecommendations?.success,
@@ -1852,10 +2236,27 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
 
   // Refresh data when component mounts or profile changes
   useEffect(() => {
-    if (hasProfile) {
-      refetchRecommendations({ fetchPolicy: 'network-only' });
+    if (hasProfile && !userLoading) {
+      logger.log('🔄 Profile detected, refetching recommendations...', {
+        hasProfile,
+        userLoading,
+        incomeProfile: effectiveUserEarly?.incomeProfile,
+      });
+      // Clear cache to ensure fresh data
+      client.cache.evict({ fieldName: 'aiRecommendations' });
+      client.cache.gc();
+      refetchRecommendations({ fetchPolicy: 'network-only' })
+        .then(() => logger.log('✅ Recommendations refetched after profile change'))
+        .catch((err) => logger.warn('Failed to refetch recommendations:', err));
+    } else if (!hasProfile && !userLoading) {
+      logger.log('⚠️ No profile detected, but user is loaded:', {
+        hasProfile,
+        userLoading,
+        hasIncomeProfile: !!effectiveUserEarly?.incomeProfile,
+        incomeProfile: effectiveUserEarly?.incomeProfile,
+      });
     }
-  }, [hasProfile, refetchRecommendations]);
+  }, [hasProfile, userLoading, refetchRecommendations, client, effectiveUserEarly]);
 
   // Auto-generate recommendations once if AI data is missing (works with defaults)
   const autoGenTriggeredRef = React.useRef(false);
@@ -2260,19 +2661,22 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
               </Text>
             </View>
           )}
-          {ai.spendingInsights.topCategories && ai.spendingInsights.topCategories.length > 0 && (
-            <View style={{ marginTop: 8 }}>
-              <Text style={[styles.spendingLabel, { marginBottom: 4 }]}>Top Spending Categories</Text>
-              {ai.spendingInsights.topCategories.slice(0, 3).map((cat, idx) => (
-                <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
-                  <Text style={{ fontSize: 12, color: COLORS.subtext }}>{cat.category}</Text>
-                  <Text style={{ fontSize: 12, color: COLORS.text, fontWeight: '600' }}>
-                    ${cat.amount?.toFixed(2)}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          )}
+          {(() => {
+            const topCategories = parseTopCategories(ai.spendingInsights?.topCategories);
+            return topCategories && topCategories.length > 0 && (
+              <View style={{ marginTop: 8 }}>
+                <Text style={[styles.spendingLabel, { marginBottom: 4 }]}>Top Spending Categories</Text>
+                {topCategories.slice(0, 3).map((cat, idx) => (
+                  <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
+                    <Text style={{ fontSize: 12, color: COLORS.subtext }}>{cat.category}</Text>
+                    <Text style={{ fontSize: 12, color: COLORS.text, fontWeight: '600' }}>
+                      ${cat.amount?.toFixed(2)}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            );
+          })()}
         </View>
       )}
 
@@ -2922,32 +3326,145 @@ const styles = StyleSheet.create({
   allocationValue: { fontSize: 18, fontWeight: 'bold', color: COLORS.primary },
 
   stocksSection: { marginBottom: 20 },
-  stockCard: { backgroundColor: COLORS.pill, borderRadius: 8, padding: 16, marginBottom: 12 },
-  stockHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
+  stockCard: { 
+    backgroundColor: '#FFFFFF', 
+    borderRadius: 16, 
+    padding: 20, 
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+  },
+  stockHeader: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'flex-start', 
+    marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
   stockInfo: { flex: 1 },
-  stockSymbol: { fontSize: 18, fontWeight: 'bold', color: COLORS.primary },
-  companyName: { fontSize: 14, color: COLORS.subtext, marginTop: 2 },
-  stockMetrics: { alignItems: 'flex-end' },
-  allocationText: { fontSize: 16, fontWeight: 'bold', color: COLORS.text },
-  expectedReturn: { fontSize: 12, color: COLORS.subtext, marginTop: 2 },
-  stockDetails: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 8, marginBottom: 8 },
-  stockDetailText: { fontSize: 12, color: COLORS.subtext, backgroundColor: COLORS.muted, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  reasoning: { fontSize: 14, color: '#374151', lineHeight: 20, marginBottom: 12 },
-  stockTags: { flexDirection: 'row', gap: 8 },
-  tag: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
-  tagText: { fontSize: 12, color: '#fff', fontWeight: '600' },
+  stockSymbol: { 
+    fontSize: 22, 
+    fontWeight: '700', 
+    color: COLORS.primary,
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  companyName: { 
+    fontSize: 15, 
+    color: '#6B7280', 
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  stockMetrics: { 
+    alignItems: 'flex-end',
+    marginLeft: 12,
+  },
+  allocationText: { 
+    fontSize: 18, 
+    fontWeight: '700', 
+    color: COLORS.text,
+    marginBottom: 4,
+  },
+  expectedReturn: { 
+    fontSize: 13, 
+    color: COLORS.primary, 
+    marginTop: 2,
+    fontWeight: '600',
+  },
+  stockDetails: { 
+    flexDirection: 'row', 
+    flexWrap: 'wrap', 
+    gap: 10, 
+    marginTop: 16, 
+    marginBottom: 16,
+  },
+  metricPill: {
+    backgroundColor: '#F9FAFB',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  metricLabel: {
+    fontSize: 11,
+    color: '#6B7280',
+    fontWeight: '600',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  metricValue: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  stockDetailText: { 
+    fontSize: 13, 
+    color: '#4B5563', 
+    backgroundColor: '#F9FAFB', 
+    paddingHorizontal: 10, 
+    paddingVertical: 6, 
+    borderRadius: 8,
+    fontWeight: '500',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  reasoning: { 
+    fontSize: 14, 
+    color: '#374151', 
+    lineHeight: 22, 
+    marginBottom: 12,
+    fontStyle: 'italic',
+  },
+  stockTags: { 
+    flexDirection: 'row', 
+    gap: 8,
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  tag: { 
+    paddingHorizontal: 12, 
+    paddingVertical: 6, 
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  tagText: { 
+    fontSize: 12, 
+    color: '#fff', 
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
   
   tradingButtons: { 
     flexDirection: 'row', 
-    gap: 8, 
-    marginTop: 12,
-    justifyContent: 'space-between'
+    gap: 12, 
+    marginTop: 16,
+    justifyContent: 'space-between',
   },
   tradingButton: {
     flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 6,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
   },
 
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.bg },

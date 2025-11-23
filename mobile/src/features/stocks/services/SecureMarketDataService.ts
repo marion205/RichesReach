@@ -4,6 +4,7 @@
  */
 import { API_BASE } from '../../../config/api';
 import logger from '../../../utils/logger';
+import { imageCache } from '../../../utils/imageCache';
 
 export interface Quote {
   symbol: string;
@@ -55,10 +56,21 @@ export class SecureMarketDataService {
     const key = symbols.sort().join(',');
     const now = Date.now();
 
-    // Serve from cache if available
+    // Check persistent cache first (imageCache)
+    const cachedData = await imageCache.getCachedData<Quote[]>(`quotes_${key}`, CACHE_TTL_MS);
+    if (cachedData) {
+      logger.log(`📊 Persistent cache hit for symbols: ${key}`);
+      // Also update memory cache
+      cache.set(key, { at: now, data: cachedData });
+      return cachedData;
+    }
+
+    // Serve from memory cache if available
     const hit = cache.get(key);
     if (hit && now - hit.at < CACHE_TTL_MS) {
-      logger.log(`📊 Cache hit for symbols: ${key}`);
+      logger.log(`📊 Memory cache hit for symbols: ${key}`);
+      // Also update persistent cache
+      await imageCache.cacheData(`quotes_${key}`, hit.data, CACHE_TTL_MS);
       return hit.data;
     }
 
@@ -70,9 +82,10 @@ export class SecureMarketDataService {
     }
 
     const promise = this._fetchQuotesFromBackend(symbols)
-      .then(data => {
-        // Cache successful response
+      .then(async data => {
+        // Cache successful response in both memory and persistent cache
         cache.set(key, { at: now, data });
+        await imageCache.cacheData(`quotes_${key}`, data, CACHE_TTL_MS);
         return data;
       })
       .catch(err => {
@@ -101,7 +114,10 @@ export class SecureMarketDataService {
     const symbolsParam = symbols.join(',');
     const url = `${API_BASE}/api/market/quotes?symbols=${encodeURIComponent(symbolsParam)}`;
     
-    logger.log(`📡 Fetching quotes from backend: ${symbolsParam}`);
+    logger.log(`📡 [DEBUG] Fetching quotes from backend`);
+    logger.log(`📡 [DEBUG] URL: ${url}`);
+    logger.log(`📡 [DEBUG] Symbols: ${symbolsParam}`);
+    logger.log(`📡 [DEBUG] API_BASE: ${API_BASE}`);
     
     try {
       // Use AbortController for proper timeout handling
@@ -118,11 +134,22 @@ export class SecureMarketDataService {
       
       clearTimeout(timeoutId);
 
+      logger.log(`📡 [DEBUG] Quotes response status: ${response.status} ${response.statusText}`);
+      logger.log(`📡 [DEBUG] Quotes response ok: ${response.ok}`);
+
       if (!response.ok) {
+        const errorText = await response.text().catch(() => '');
+        logger.error(`❌ [DEBUG] Error fetching quotes: HTTP ${response.status}`);
+        logger.error(`❌ [DEBUG] Response body: ${errorText.substring(0, 300)}`);
+        
         if (response.status === 429) {
           // Rate limit response
-          const errorData = await response.json();
-          throw new Error(`RATE_LIMIT: ${errorData.message || 'Rate limit exceeded'}`);
+          try {
+            const errorData = JSON.parse(errorText);
+            throw new Error(`RATE_LIMIT: ${errorData.message || 'Rate limit exceeded'}`);
+          } catch {
+            throw new Error(`RATE_LIMIT: Rate limit exceeded`);
+          }
         }
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }

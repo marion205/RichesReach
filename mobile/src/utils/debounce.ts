@@ -1,37 +1,49 @@
 /**
- * Simple debounce utility for performance optimization
+ * Debounce utility for API calls and user input
+ * Prevents excessive function calls by delaying execution
  */
+
 export function debounce<T extends (...args: any[]) => any>(
   func: T,
-  wait: number
+  wait: number,
+  immediate?: boolean
 ): (...args: Parameters<T>) => void {
   let timeout: NodeJS.Timeout | null = null;
-  
-  return (...args: Parameters<T>) => {
+
+  return function executedFunction(...args: Parameters<T>) {
+    const later = () => {
+      timeout = null;
+      if (!immediate) func(...args);
+    };
+
+    const callNow = immediate && !timeout;
+
     if (timeout) {
       clearTimeout(timeout);
     }
-    
-    timeout = setTimeout(() => {
+
+    timeout = setTimeout(later, wait);
+
+    if (callNow) {
       func(...args);
-    }, wait);
+    }
   };
 }
 
 /**
- * Throttle utility for limiting function calls
+ * Throttle utility - limits function execution to once per time period
  */
 export function throttle<T extends (...args: any[]) => any>(
   func: T,
   limit: number
 ): (...args: Parameters<T>) => void {
-  let inThrottle: boolean = false;
-  
-  return (...args: Parameters<T>) => {
+  let inThrottle: boolean;
+
+  return function executedFunction(...args: Parameters<T>) {
     if (!inThrottle) {
       func(...args);
       inThrottle = true;
-      setTimeout(() => inThrottle = false, limit);
+      setTimeout(() => (inThrottle = false), limit);
     }
   };
 }

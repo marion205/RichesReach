@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/444</span>
+                <span class='fraction'>0/442</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/392</span>
+                <span class='fraction'>0/390</span>
             </div>
         
             
@@ -834,14 +834,7 @@
 <a name='L769'></a><a href='#L769'>769</a>
 <a name='L770'></a><a href='#L770'>770</a>
 <a name='L771'></a><a href='#L771'>771</a>
-<a name='L772'></a><a href='#L772'>772</a>
-<a name='L773'></a><a href='#L773'>773</a>
-<a name='L774'></a><a href='#L774'>774</a>
-<a name='L775'></a><a href='#L775'>775</a>
-<a name='L776'></a><a href='#L776'>776</a>
-<a name='L777'></a><a href='#L777'>777</a>
-<a name='L778'></a><a href='#L778'>778</a>
-<a name='L779'></a><a href='#L779'>779</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L772'></a><a href='#L772'>772</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -884,6 +877,9 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -892,23 +888,13 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -1623,78 +1609,71 @@
 import './config/sentr<span class="cstat-no" title="statement not covered" >y';<span class="fstat-no" title="function not covered" ></span></span>
 <span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ></span></span>
 // Import Reani<span class="cstat-no" title="statement not covered" >mated first (required for worklets)</span>
+// N<span class="cstat-no" title="statement not covered" >OTE: If app crashes during startup with ReanimatedModule.mm:166 error,</span>
+// thi<span class="cstat-no" title="statement not covered" >s is a known issue with Reanimat<span class="fstat-no" title="function not covered" >ed</span> 4.1.1 + RN<span class="cstat-no" title="statement not covered" > 0.81 + Expo </span>SDK 5</span>4
+// Solution: Update to react-native-reanimated ~3.15.0 or wait for fix
 impo<span class="cstat-no" title="statement not covered" >rt 'react-native-reanimated';</span>
-<span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span></span>
-// Import gesture handler (required for react-native-tab-view)
-impo<span class="cstat-no" title="statement not covered" >rt 'react-native-gesture-handler';</span>
 <span class="fstat-no" title="function not covered" ></span>
-// I<span class="cstat-no" title="statement not covered" >mport URL polyfill fir<span class="cstat-no" title="statement not covered" >st to fi</span></span>x React Native URL.protocol issues
-impo<span class="cstat-no" title="statement not covered" >rt 'react-nati</span>ve-url-polyfill/auto';
+// I<span class="cstat-no" title="statement not covered" >mport gesture handler <span class="cstat-no" title="statement not covered" >(require</span></span>d for react-native-tab-view)
+impo<span class="cstat-no" title="statement not covered" >rt 'react-nati</span>ve-gesture-handler';
 &nbsp;
-// Suppress React Native <span class="cstat-no" title="statement not covered" >warnings in development<span class="fstat-no" title="function not covered" ></span></span>
-impo<span class="cstat-no" title="statement not covered" >rt { LogBox } from 'react-native';</span>
-LogBo<span class="fstat-no" title="function not covered" >x.</span>ignoreLogs([
-  'S<span class="cstat-no" title="statement not covered" >afeAreaView has be</span>en deprecated',
-  'NetInfo not available',
-  'Store reset whil<span class="cstat-no" title="statement not covered" >e query was in flight',<span class="fstat-no" title="function not covered" ></span></span>
-  'Network request<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" > f</span>ailed',</span>
-  'Netwo<span class="cstat-no" title="statement not covered" >rk request timed out',<span class="fstat-no" title="function not covered" ></span></span>
-  'Text strings must <span class="cstat-no" title="statement not covered" >be </span>rendered within a &lt;Text&gt; component',
-  'Console E<span class="cstat-no" title="statement not covered" >rror'<span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ></span></span></span>
-]);<span class="cstat-no" title="statement not covered" ></span>
-LogBox.ignoreAllLogs(true);
-<span class="cstat-no" title="statement not covered" ></span>
-import React, { useState, useEffect, lazy, Suspense } from 'react';
-impo<span class="cstat-no" title="statement not covered" >rt { Vi<span class="fstat-no" title="function not covered" >ew</span>, Text, StyleSheet, ActivityIndicator } from 'react-native';</span>
-import {<span class="cstat-no" title="statement not covered" > GestureHandlerRootView } f<span class="cstat-no" title="statement not covered" >rom 'react-n</span></span>ative-gesture-handler';
+// Import URL polyfill fi<span class="cstat-no" title="statement not covered" >rst to fix React Native URL.protocol issues<span class="fstat-no" title="function not covered" ></span></span>
+impo<span class="cstat-no" title="statement not covered" >rt 'react-native-url-polyfill/auto';</span>
+<span class="fstat-no" title="function not covered" ></span>
+// N<span class="cstat-no" title="statement not covered" >ote: LogBox setup </span>moved to index.js (before App import) to catch early errors
+&nbsp;
+import React, { use<span class="cstat-no" title="statement not covered" >State, useEffect, lazy, Suspense<span class="fstat-no" title="function not covered" > }</span> from 'react';</span>
+import { View, Tex<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >t,</span> StyleSheet, ActivityIndicator } from 'react-native';</span>
+import {<span class="cstat-no" title="statement not covered" > GestureHandlerRootView } from 'react-na<span class="fstat-no" title="function not covered" >ti</span>ve-gesture-handler';</span>
 import { SafeAreaProv<span class="cstat-no" title="statement not covered" >ide</span>r } from 'react-native-safe-area-context';
-import A<span class="cstat-no" title="statement not covered" >polloProvider fro<span class="cstat-no" title="statement not covered" >m './ApolloPr<span class="cstat-no" title="statement not covered" >ovider';<span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ></span></span></span></span></span></span>
-import A<span class="cstat-no" title="statement not covered" >syncStorage from '@react-native-a</span>sync-storage/async-storage';
-import J<span class="cstat-no" title="statement not covered" >WTAuthService f</span>rom './features/auth/services/JWTAuthService';
-import Toast from 'react-native-toast-message';
+import Apoll<span class="cstat-no" title="statement not covered" >oProvider from '.<span class="cstat-no" title="statement not covered" >/ApolloProvider';<span class="cstat-no" title="statement not covered" ></span></span></span>
+import Async<span class="cstat-no" title="statement not covered" >Storage fro</span>m '@react-native-async-storage/async-storage';
+import JWTAuthService from './features/auth/services/JWTAuthService';
+import T<span class="cstat-no" title="statement not covered" >oast from 'react-na</span>tive-toast-message';
 // Version 2 Features
-import { ThemeProvider<span class="cstat-no" title="statement not covered" > } from './theme/PersonalizedTheme<span class="fstat-no" title="function not covered" >s'</span>;</span>
-impo<span class="cstat-no" title="statement not covered" >rt GestureNavigation from './components/GestureNavigation';</span>
-import ZeroFrictionOnboarding from './features/onboarding/ZeroFrictionOnboarding';
-<span class="cstat-no" title="statement not covered" >import ErrorBoundary from './components/ErrorBoundary';</span>
-<span class="cstat-no" title="statement not covered" >import WellnessScoreDas</span>hboard from './components/WellnessScoreDashboard';
-import ARPortfolioPrev<span class="cstat-no" title="statement not covered" >iew from './components/ARPort</span>folioPreview';
+impo<span class="cstat-no" title="statement not covered" >rt { Th<span class="fstat-no" title="function not covered" >em</span>eProvider } from './theme/PersonalizedThemes';</span>
+import G<span class="cstat-no" title="statement not covered" >estureNavigation from './co<span class="cstat-no" title="statement not covered" >mponents/Ges</span></span>tureNavigation';
+import ZeroFrictionOn<span class="cstat-no" title="statement not covered" >boa</span>rding from './features/onboarding/ZeroFrictionOnboarding';
+import E<span class="cstat-no" title="statement not covered" >rrorBoundary from<span class="cstat-no" title="statement not covered" > './component<span class="cstat-no" title="statement not covered" >s/ErrorBounda</span>ry';<span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ></span></span></span></span></span>
+import W<span class="cstat-no" title="statement not covered" >ellnessScoreDashboard from './com</span>ponents/WellnessScoreDashboard';
+import A<span class="cstat-no" title="statement not covered" >RPortfolioPrevi</span>ew from './components/ARPortfolioPreview';
 import SentryTestButton from './components/SentryTestButton';
-<span class="cstat-no" title="statement not covered" >import OfflineInsightsServic</span>e from './services/OfflineInsightsService';
-// Use only Expo Go compatible services to avoid "Exception in HostFunction" errors
-<span class="cstat-no" title="statement not covered" >import expoGoCompatibleNotificationS</span>ervice from './features/notifications/services/ExpoGoCompatibleNotificationService';
-import expoGoCompatiblePriceAlertService from './features/stocks/services/ExpoGoCompatiblePriceAlertService';
-<span class="cstat-no" title="statement not covered" >// Always use Expo Go compatible services</span> to prevent crashes
-const pushNotificationService = expoGoCompatibleNotificationService;
-<span class="cstat-no" title="statement not covered" >const priceAlertService = expoGoCompatibleP</span>riceAlertService;
-// Screens
-import HomeScreen from <span class="cstat-no" title="statement not covered" >'./navigation/HomeScreen</span>';
-<span class="cstat-no" title="statement not covered" >import AppNavigator from './navigation/AppNavigator';</span>
+import OfflineInsightsService from './services/OfflineInsightsService';
+import logger from './<span class="cstat-no" title="statement not covered" >utils/logger';<span class="fstat-no" title="function not covered" ></span></span>
+// U<span class="cstat-no" title="statement not covered" >se only Expo Go compatible services to avoid "Exception in </span>HostFunction" errors
+import expoGoCompatibleNotificationService from './features/notifications/services/ExpoGoCompatibleNotificationService';
+<span class="cstat-no" title="statement not covered" >import expoGoCompatiblePriceAlertService from './features/stock</span>s/services/ExpoGoCompatiblePriceAlertService';
+<span class="cstat-no" title="statement not covered" >// Always use Expo Go c</span>ompatible services to prevent crashes
+const pushNotification<span class="cstat-no" title="statement not covered" >Service = expoGoCompatibleNot</span>ificationService;
+const priceAlertService = expoGoCompatiblePriceAlertService;
+<span class="cstat-no" title="statement not covered" >// Screens</span>
+import HomeScreen from './navigation/HomeScreen';
+import AppNavigator from './navigation/AppNavigator';
 import LoginScreen from './features/auth/screens/LoginScreen';
 import ForgotPasswordScreen from './features/auth/screens/ForgotPasswordScreen';
-import SignUpScreen from './features/auth/screens/SignUpScreen';
+<span class="cstat-no" title="statement not covered" >import SignUpScreen from './features</span>/auth/screens/SignUpScreen';
 import ProfileScreen from './features/user/screens/ProfileScreen';
-import AccountManagementScreen from './features/user/screens/AccountManagementScreen';
+<span class="cstat-no" title="statement not covered" >import AccountManagementScreen from './fe</span>atures/user/screens/AccountManagementScreen';
 import StockScreen from './features/stocks/screens/StockScreen';
-import PriceChartScreen from './features/stocks/screens/PriceChartScreen';
+<span class="cstat-no" title="statement not covered" >import PriceChartScreen from './features/st</span>ocks/screens/PriceChartScreen';
 // ✅ Code splitting: Heavy screens lazy-loaded (reduces initial bundle size)
-<span class="cstat-no" title="statement not covered" >// StockDetailScreen, AIPortfolioScreen, Po</span>rtfolioManagementScreen moved to lazy imports below
-import SocialScr<span class="cstat-no" title="statement not covered" >een from './features/social/scr</span>eens/SocialScreen';
-import PortfolioScreen <span class="cstat-no" title="statement not covered" >from './features/portfol</span>io/screens/PortfolioScreen';
-import PremiumAnalyticsScreen from './n<span class="cstat-no" title="statement not covered" >avigation/PremiumAnalyticsScreen';</span>
-import SubscriptionScreen from './feature<span class="cstat-no" title="statement not covered" >s/user/screens/SubscriptionScreen';</span>
-import LearningPathsScree<span class="cstat-no" title="statement not covered" >n from './features/learning/screens/LearningP</span>athsScreen';
-import OnboardingScreen, <span class="cstat-no" title="statement not covered" >{ UserProfile } from './features/auth/screens/OnboardingScreen';</span>
-import DiscoverUsersScreen from './fe<span class="cstat-no" title="statement not covered" >atures/social/screens/DiscoverUsersScreen';</span>
-import UserProfileScreen from './features/user/screens/UserProfileScreen';
-import UserPortfoliosScreen f<span class="cstat-no" title="statement not covered" >rom './features/portfolio/screens/User</span>PortfoliosScreen';
-import SimpleCircleDetailScr<span class="cstat-no" title="statement not covered" >een from './features/community/screens/SimpleCircleDetailSc</span>reen';
-import UserActivityScreen from '.<span class="cstat-no" title="statement not covered" >/features/social/screens/UserActivityScreen';</span>
-import MessageScreen fro<span class="cstat-no" title="statement not covered" >m './features/social/screens/MessageScreen';</span>
-import TradingScreen from './feat<span class="cstat-no" title="statement not covered" >ures/stocks/screens/TradingScreen';</span>
-import DayTradingScreen from <span class="cstat-no" title="statement not covered" >'./features/trading/screens/DayTradingScreen';</span>
-import MLSystemScreen from <span class="cstat-no" title="statement not covered" >'./features/ml/screens/MLSystemScreen';</span>
-import RiskManagementScreen from <span class="cstat-no" title="statement not covered" >'./features/risk/screens/RiskManagementScreen';</span>
+// StockDetailSc<span class="cstat-no" title="statement not covered" >reen, AIPortfolioScreen, Portfo</span>lioManagementScreen moved to lazy imports below
+import SocialScreen fro<span class="cstat-no" title="statement not covered" >m './features/social/scr</span>eens/SocialScreen';
+import PortfolioScreen from './features<span class="cstat-no" title="statement not covered" >/portfolio/screens/PortfolioScreen';</span>
+import PremiumAnalyticsScreen from './nav<span class="cstat-no" title="statement not covered" >igation/PremiumAnalyticsScreen';</span>
+import SubscriptionScreen<span class="cstat-no" title="statement not covered" > from './features/user/screens/SubscriptionSc</span>reen';
+import LearningPathsScree<span class="cstat-no" title="statement not covered" >n from './features/learning/screens/LearningPathsScreen';</span>
+import OnboardingScreen, { UserProfil<span class="cstat-no" title="statement not covered" >e } from './features/auth/screens/OnboardingScreen';</span>
+import DiscoverUsersScreen from './features/social/screens/DiscoverUsersScreen';
+import UserProfileScreen from<span class="cstat-no" title="statement not covered" > './features/user/screens/UserProfileS</span>creen';
+import UserPortfoliosScreen <span class="cstat-no" title="statement not covered" >from './features/portfolio/screens/UserPortfoliosScreen';</span>
+import SimpleCircleDetailScreen f<span class="cstat-no" title="statement not covered" >rom './features/community/screens/SimpleCircleDetailScreen';</span>
+import UserActivityScree<span class="cstat-no" title="statement not covered" >n from './features/social/screens/UserActivityScreen';</span>
+import MessageScreen from './feat<span class="cstat-no" title="statement not covered" >ures/social/screens/MessageScreen';</span>
+import TradingScreen from './<span class="cstat-no" title="statement not covered" >features/stocks/screens/TradingScreen';</span>
+import DayTradingScreen fro<span class="cstat-no" title="statement not covered" >m './features/trading/screens/DayTradingScreen';</span>
+import MLSystemScreen from './fea<span class="cstat-no" title="statement not covered" >tures/ml/screens/MLSystemScreen';</span>
+import RiskManage<span class="cstat-no" title="statement not covered" >mentScreen from './features/risk/screens/Ri</span>skManagementScreen';
 // Swing Trading Screens
 import { SignalsScreen, RiskCoachScreen, Swing<span class="cstat-no" title="statement not covered" >TradingDashboard } from './features/swingTrading';</span>
 import LeaderboardScreen from './features/sw<span class="cstat-no" title="statement not covered" >ingTrading/screens/LeaderboardScreen';</span>
@@ -1798,12 +1777,12 @@ if (!__DEV__) {<span class="cstat-no" title="statement not covered" ></span>
 &nbsp;
 // Handle authentication state changes
 useEffect(() =&gt; {
-  console.log('🔐 Auth state changed:', { isAuthenticated, currentScreen, user });
+  logger.log('🔐 Auth state changed:', { isAuthenticated, currentScreen, user });
   if (isAuthenticated &amp;&amp; currentScreen === 'login') {
-    console.log('🔐 User is authenticated, navigating to home');
+    logger.log('🔐 User is authenticated, navigating to home');
     setCurrentScreen('home');
   } else if (!isAuthenticated &amp;&amp; currentScreen !== 'login' &amp;&amp; currentScreen !== 'forgot-password' &amp;&amp; currentScreen !== 'signup') {
-    console.log('🔐 User is not authenticated, navigating to login');
+    logger.log('🔐 User is not authenticated, navigating to login');
     setCurrentScreen('login');
   }
 }, [isAuthenticated, currentScreen, user]);
@@ -1818,10 +1797,10 @@ useEffect(() =&gt; {
     const checkOnboarding = async () =&gt; {
       try {
 <span class="cstat-no" title="statement not covered" >        const onboardingCom<span class="fstat-no" title="function not covered" >pl</span>eted = await UserProfileService.getInstance().isOnboardingCompleted();</span>
-<span class="cstat-no" title="statement not covered" >        console.log('✅ Onboarding check result:', onboardingCompleted);</span>
+<span class="cstat-no" title="statement not covered" >        logger.log('✅ Onboarding check result:', onboardingCompleted);</span>
 <span class="cstat-no" title="statement not covered" >        setHasCompletedOnboarding(onboardingCompleted);</span>
       } catc<span class="cstat-no" title="statement not covered" >h (error) {</span>
-        cons<span class="cstat-no" title="statement not covered" >ole.error('Error checking </span>onboarding status:', error);
+        logg<span class="cstat-no" title="statement not covered" >er.error('Error checking o</span>nboarding status:', error);
         setHasCompletedOnboarding(false); // Default to false on error
       }<span class="cstat-no" title="statement not covered" ></span>
     };<span class="cstat-no" title="statement not covered" ></span>
@@ -1863,7 +1842,7 @@ if (priceAlertService) {
         await dawnRitualScheduler.scheduleDailyRitual(preferences);
       }<span class="cstat-no" title="statement not covered" ></span>
 } catch (error) {<span class="cstat-no" title="statement not covered" ></span>
-console.error('E<span class="cstat-no" title="statement not covered" >rror initializing services</span>:', error);
+logger.error('Er<span class="cstat-no" title="statement not covered" >ror initializing services:</span>', error);
 } finally {
 setIsLoading(fal<span class="cstat-no" title="statement not covered" >se);</span>
 }<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span>
@@ -1871,7 +1850,7 @@ setIsLoading(fal<span class="cstat-no" title="statement not covered" >se);</span
 initializeServices();
 }, []);<span class="cstat-no" title="statement not covered" ></span>
 const navigateTo = (<span class="cstat-no" title="statement not covered" >screen: string, params?: any) =&gt; {<span class="fstat-no" title="function not covered" ></span></span>
-  console.log('🔍 navigateTo called:', { screen, params });
+  logger.log('🔍 navigateTo called:', { screen, params });
   
   // Handle Version 2 special screens<span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span></span>
   if (screen === 'ar-preview') {<span class="cstat-no" title="statement not covered" ></span>
@@ -1885,13 +1864,13 @@ const navigateTo = (<span class="cstat-no" title="statement not covered" >screen
   }
   <span class="cstat-no" title="statement not covered" ></span>
   if (screen === 'StockDetail') {
-    console.log('🔍 Navigating to StockDetail with params:', params);
+    logger.log('🔍 Navigating to StockDetail with params:', params);
     // S<span class="cstat-no" title="statement not covered" >tore params for StockD</span>etail screen
     setCurrentScreen('StockDetail');
     // Store params in <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >a </span>way that the screen can access them</span>
     (win<span class="cstat-no" title="statement not covered" >dow as any).__stockDetailParams = params || {};</span>
   } else if (screen === 'SBLOCBankSelection') {
-    cons<span class="cstat-no" title="statement not covered" >ole.log('🔍 Navigating to SBLOCBankSelection with params:', params);</span>
+    logg<span class="cstat-no" title="statement not covered" >er.log('🔍 Navigating to SBLOCBankSelection with params:', params);</span>
     // Store<span class="cstat-no" title="statement not covered" > params for SBLOCBankSel</span>ection screen
     setCurre<span class="cstat-no" title="statement not covered" >ntScreen</span>('SBLOCBankSelection');
     // Store params in a way that the screen can access them
@@ -1913,7 +1892,7 @@ setCurrentSc<span class="cstat-no" title="statement not covered" >reen(screen);<
 }
 };<span class="cstat-no" title="statement not covered" ></span>
 const handleLogin = async (token?: string) =&gt; {
-console.log('<span class="cstat-no" title="statement not covered" >🎉 App handleLogin called with token:', token);</span>
+logger.log('�<span class="cstat-no" title="statement not covered" >� App handleLogin called with token:', token);</span>
 // Check onboarding status fir<span class="cstat-no" title="statement not covered" >st before navigating</span>
 await checkO<span class="cstat-no" title="statement not covered" >nboardingStatus();</span>
 // Navigation will be handled by the onboarding check or by the auth state effect
@@ -1932,7 +1911,7 @@ if (!onboardingCompleted) {
 setCurrentScreen('onboarding');
 }<span class="cstat-no" title="statement not covered" ></span>
 } catch (error) {
-console.error('Error checking onboarding status:', error);
+logger.error('Error checking onboarding status:', error);
 setCurrentScreen('onboar<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >di</span>ng');</span>
 }<span class="cstat-no" title="statement not covered" ></span>
 };
@@ -1944,34 +1923,34 @@ await userProfileService.markOnboardingCompleted();
 setHasCo<span class="cstat-no" title="statement not covered" >mpletedOnboarding(true);</span>
 setCurre<span class="cstat-no" title="statement not covered" >ntScreen('home');</span>
 } catch (error) {
-console.error('Error saving user p<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >ro</span>file:', error);</span>
+logger.error('Error saving user pr<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >of</span>ile:', error);</span>
 }<span class="cstat-no" title="statement not covered" ></span>
 };<span class="cstat-no" title="statement not covered" ></span>
 const handleLogout = async () =&gt; {<span class="cstat-no" title="statement not covered" ></span>
 try {<span class="cstat-no" title="statement not covered" ></span>
-    console.<span class="cstat-no" title="statement not covered" >log('🔄 Starting logout process...');</span>
+    logger.l<span class="cstat-no" title="statement not covered" >og('🔄 Starting logout process...');</span>
     <span class="cstat-no" title="statement not covered" ></span>
     // Clear JWT service
     const jwtService = JWTAuthService.getInstance();
     await jwtService.logout();
-    console.<span class="cstat-no" title="statement not covered" >log('✅ JWT service cleared');</span>
+    logger.l<span class="cstat-no" title="statement not covered" >og('✅ JWT service cleared');</span>
     <span class="cstat-no" title="statement not covered" ></span>
     // Clear AuthContext state
     await authLogout();
-    console.log('✅ AuthContext cleare<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >d'</span>);</span>
+    logger.log('✅ AuthContext cleared<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >')</span>;</span>
     <span class="cstat-no" title="statement not covered" ></span>
     // Clear local state<span class="cstat-no" title="statement not covered" ></span>
     setCurre<span class="cstat-no" title="statement not covered" >ntScreen('login');</span>
     setHasCo<span class="cstat-no" title="statement not covered" >mpletedOnboarding(false);</span>
-    console.<span class="cstat-no" title="statement not covered" >log('✅ Local state cleared, navig</span>ating to login');
+    logger.l<span class="cstat-no" title="statement not covered" >og('✅ Local state cleared, naviga</span>ting to login');
 } catch (err<span class="cstat-no" title="statement not covered" >or) {</span>
-    console.error('❌ Logout error:', error);
+    logger.error('❌ Logout error:', error);
     // Still navigate to login even if there's an error
     setCurre<span class="cstat-no" title="statement not covered" >ntScreen('login');</span>
 }
 };
 const renderScreen = () =<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >&gt; </span>{</span>
-console.<span class="cstat-no" title="statement not covered" >log('🔍 renderScreen called:', { currentScreen, isLoggedIn, isLoading });</span>
+logger.l<span class="cstat-no" title="statement not covered" >og('🔍 renderScreen called:', { currentScreen, isLoggedIn, isLoading });</span>
 // Show load<span class="cstat-no" title="statement not covered" >ing screen while initializing</span>
 if (isLoading) {
 return (<span class="cstat-no" title="statement not covered" ></span>
@@ -1981,7 +1960,7 @@ return (<span class="cstat-no" title="statement not covered" ></span>
 );<span class="cstat-no" title="statement not covered" ></span>
 }<span class="cstat-no" title="statement not covered" ></span>
 if (!isLoggedIn) {
-console.log(<span class="cstat-no" title="statement not covered" >'🔍 User not logged in, sho</span>wing login screen');
+logger.log('<span class="cstat-no" title="statement not covered" >🔍 User not logged in, show</span>ing login screen');
 switch (curr<span class="cstat-no" title="statement not covered" >entScreen) {</span>
 case 'login'<span class="cstat-no" title="statement not covered" >:</span>
 return &lt;LoginScreen 
@@ -1998,7 +1977,7 @@ case 'si<span class="cstat-no" title="statement not covered" >gnup':</span>
 return (<span class="cstat-no" title="statement not covered" ></span>
 &lt;ZeroFrictionOnboarding
 onComple<span class="cstat-no" title="statement not covered" >te={(profile) =&gt; {</span>
-console.log(<span class="cstat-no" title="statement not covered" >'✅ Onboarding completed with profile:', profile);</span>
+logger.log('<span class="cstat-no" title="statement not covered" >✅ Onboarding completed with profile:', profile);</span>
 setHasComple<span class="cstat-no" title="statement not covered" >tedOnboarding(true);</span>
 setCurrentScreen('home');
 }}<span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ><span class="fstat-no" title="function not covered" ></span></span></span></span></span>
@@ -2021,13 +2000,13 @@ if (isLoggedIn &amp;&amp; hasCompletedOnboarding === false) {
   return<span class="cstat-no" title="statement not covered" > (</span>
     &lt;ZeroFri<span class="cstat-no" title="statement not covered" >ctionOnboarding<span class="fstat-no" title="function not covered" ></span></span>
       onComplete={as<span class="cstat-no" title="statement not covered" >ync (profile) =&gt; {</span>
-        console.log(<span class="cstat-no" title="statement not covered" >'✅ Onboarding completed with profile:', profile);</span>
+        logger.log('<span class="cstat-no" title="statement not covered" >✅ Onboarding completed with profile:', profile);</span>
         try {<span class="cstat-no" title="statement not covered" ></span>
           const userProf<span class="cstat-no" title="statement not covered" >ileService = UserProfileService.getInstance();</span>
           await userProf<span class="cstat-no" title="statement not covered" >ileService.saveProfile(profile);</span>
           await userProfileService.markOnboardingCompleted();
         } catch (error) {
-          console.error(<span class="cstat-no" title="statement not covered" >'Error saving profile:', error);</span>
+          logger.error('<span class="cstat-no" title="statement not covered" >Error saving profile:', error);</span>
         }
         setHasComple<span class="cstat-no" title="statement not covered" >tedOnboarding(true);</span>
         setCurrentSc<span class="cstat-no" title="statement not covered" >reen('home');</span>
@@ -2037,7 +2016,7 @@ if (isLoggedIn &amp;&amp; hasCompletedOnboarding === false) {
           const userProf<span class="cstat-no" title="statement not covered" >ileService = UserProfileService.getInstance();</span>
           await userProfileService.markOnboardingCompleted();
         } catch (error) {
-          console.error(<span class="cstat-no" title="statement not covered" >'Error marking onboarding as completed:', error);</span>
+          logger.error('<span class="cstat-no" title="statement not covered" >Error marking onboarding as completed:', error);</span>
         }
         setHasComple<span class="cstat-no" title="statement not covered" >tedOnboarding(true);</span>
         setCurrentSc<span class="cstat-no" title="statement not covered" >reen('home');</span>
@@ -2059,13 +2038,13 @@ if (isLoggedIn &amp;&amp; hasCompletedOnboarding === null) {
 if (isLoggedIn &amp;&amp; hasCompletedOnboarding) {
   return &lt;AppNav<span class="cstat-no" title="statement not covered" >igator /&gt;;</span>
 }
-console.log('🔍 <span class="cstat-no" title="statement not covered" >Main switch statement, currentScreen:', currentScreen);</span>
+logger.log('🔍 M<span class="cstat-no" title="statement not covered" >ain switch statement, currentScreen:', currentScreen);</span>
 switch (currentScreen) {
 case 'home':<span class="cstat-no" title="statement not covered" ></span>
-console.log('🔍 Rendering HomeScreen');
+logger.log('🔍 Rendering HomeScreen');
 return &lt;HomeScre<span class="cstat-no" title="statement not covered" >en navigateTo={navigateTo} /&gt;;</span>
 case 'onboarding':
-return &lt;Onboardi<span class="cstat-no" title="statement not covered" >ngScreen onComplete={handleOnboardingComplete} </span>/&gt;;
+return &lt;Onboardi<span class="cstat-no" title="statement not covered" >ngScreen onComplete={handleOnboardingComplete} /&gt;;</span>
 case 'profile':<span class="cstat-no" title="statement not covered" ></span>
 return &lt;ProfileS<span class="cstat-no" title="statement not covered" >creen navigateTo={navigateTo} onLogout={handleLogout} /&gt;;</span>
 case 'account-ma<span class="cstat-no" title="statement not covered" >nagement':<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ><span class="fstat-no" title="function not covered" ></span></span></span></span>
@@ -2073,9 +2052,9 @@ return &lt;AccountManagementScreen navigateTo={navigateTo} /&gt;;
         case 'st<span class="cstat-no" title="statement not covered" >ock':<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span></span>
           return &lt;StockScreen navigateTo={navigateTo} /&gt;;
         case 'St<span class="cstat-no" title="statement not covered" >ockDetail':</span>
-          console.log('🔍 Rendering StockDetailScreen');
+          logger.log('🔍 Rendering StockDetailScreen');
           const <span class="cstat-no" title="statement not covered" >stockDetailParams = (window as any).__stockDetailParams || {};</span>
-          console.log('🔍 StockDetail params:', stockDetailParams);
+          logger.log('🔍 StockDetail params:', stockDetailParams);
           return<span class="cstat-no" title="statement not covered" > (</span>
             &lt;Suspense fallback={&lt;ScreenLoader /&gt;}&gt;
               &lt;S<span class="cstat-no" title="statement not covered" >tockDetailScreen navigation={{ navigate: navigateTo, goBack: () =&gt; setCurrentScreen('stock'),</span> setParams: (params: any) =&gt; {} }} route={{ params: stockDetailParams }} /&gt;
@@ -2189,7 +2168,7 @@ case 'portfolio-learning':
 return &lt;Portfoli<span class="cstat-no" title="statement not covered" >oLearningScreen navigation={{ navigate: navigateTo, goBack: () =&gt; setCurr<span class="fstat-no" title="function not covered" >en</span>tScreen('h<span class="cstat-no" title="statement not covered" >ome') }} /&gt;;<span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ><span class="fstat-no" title="function not covered" ></span></span></span></span></span></span>
         case 'SBLOCBankSelection':
           const <span class="cstat-no" title="statement not covered" >sblocParams = (window as any).__sblocParams || { amountUsd: 25000 };<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span></span>
-          console.log('🔍 Rendering SBLOCBankSelectionScreen with params:', sblocParams);
+          logger.log('🔍 Rendering SBLOCBankSelectionScreen with params:', sblocParams);
           return<span class="cstat-no" title="statement not covered" > &lt;SBLOCBankSelectionScreen navigation={{ navigate: navigateTo, go</span>Back: () =&gt; setCurrentScreen('bank-accounts') }} route={{ params: sblocParams }} /&gt;;
 case 'SBLOCApplication':
 return &lt;SBLOCApp<span class="cstat-no" title="statement not covered" >licationScreen navigation={{ navigate: navigateTo, goBack: () =&gt; set</span>CurrentScreen('SBLOCBankSelection') }} route={{ params: { sessionUrl: '', referral: { id: '', bank: { id: '', name: '', minLtv: 0, maxLtv: 0, minLineUsd: 0, maxLineUsd: 0, typicalAprMin: 0, typicalAprMax: 0, isActive: true, priority: 0 } } } }} /&gt;;
@@ -2219,9 +2198,9 @@ case 'notificati<span class="cstat-no" title="statement not covered" >on-center'
 return &lt;NotificationCent<span class="cstat-no" title="statement not covered" >erScreen /&gt;;</span>
         case 'wealth-circles':
           return &lt;WealthCircles2 <span class="fstat-no" title="function not covered" ></span>
-            onCirclePres<span class="cstat-no" title="statement not covered" >s={(circle) =&gt; setCurrentScreen('circle-det</span>ail')}
-            onCreateCircle={() =&gt; console.log('Create circle')}
-            onJoinCircle={(circleId) =&gt; console.log('Join circle:', circleId)}
+            onCirclePres<span class="cstat-no" title="statement not covered" >s={(circle) =&gt; setCurrentScreen('circle-detail')}</span>
+            onCreateCircle={() =&gt; logger.log('Create circle')}
+            onJoinCircle={(circleId) =&gt; logger.log('Join circle:', circleId)}
           /&gt;;
         case 'ci<span class="cstat-no" title="statement not covered" >rcle-detail':<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ><span class="fstat-no" title="function not covered" ></span></span></span></span>
           return &lt;Simple<span class="cstat-no" title="statement not covered" >CircleDetailScreen </span>
@@ -2256,11 +2235,11 @@ return &lt;MarketingRoc<span class="cstat-no" title="statement not covered" >ket
 case 'oracle-insights':
 return &lt;OracleIn<span class="cstat-no" title="statement not covered" >sights </span>
   onInsightPress={(insight) =&gt; {<span class="cstat-no" title="statement not covered" ></span>
-    console.log('Ora<span class="cstat-no" title="statement not covered" >cle insight pressed:', insight);</span>
+    logger.log('Orac<span class="cstat-no" title="statement not covered" >le insight pressed:', insight);</span>
     // Navigate to insight detail or handle the insight
   }}<span class="cstat-no" title="statement not covered" ></span>
   onGenerateInsight={() =&gt; {<span class="cstat-no" title="statement not covered" ></span>
-    console.log('Gen<span class="cstat-no" title="statement not covered" >erate insight requested');</span>
+    logger.log('Gene<span class="cstat-no" title="statement not covered" >rate insight requested');</span>
     // Handle insight generation
   }}<span class="cstat-no" title="statement not covered" ></span>
 /&gt;;
@@ -2268,22 +2247,22 @@ return &lt;OracleIn<span class="cstat-no" title="statement not covered" >sights 
 <span class="cstat-no" title="statement not covered" >            return &lt;VoiceAIAssistant <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ><span class="fstat-no" title="function not covered" ></span></span></span></span>
               onClose={(<span class="cstat-no" title="statement not covered" >) =&gt; navigateTo('home')} </span>
               onInsightG<span class="cstat-no" title="statement not covered" >enerated={(insight) =&gt; {</span>
-                console.log('Insight generated:', insight);<span class="fstat-no" title="function not covered" ></span>
+                logger.log('Insight generated:', insight);<span class="fstat-no" title="function not covered" ></span>
                 // You c<span class="cstat-no" title="statement not covered" >an add logic here to handle insights</span>
               }} <span class="cstat-no" title="statement not covered" ></span>
             /&gt;;<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span>
             case 'blockchain-integration':
 <span class="fstat-no" title="function not covered" >            r</span>eturn &lt;BlockchainIntegration 
 <span class="cstat-no" title="statement not covered" >              onPortfolioTokenize={(portfolio) =&gt; {</span>
-                console.log('Portfolio tokenized:', portfolio);
+                logger.log('Portfolio tokenized:', portfolio);
 <span class="cstat-no" title="statement not covered" >                // You can add logic here to handle tokenization</span>
               }}
               onDeFiPositionCreate={(position) =&gt; {
-                console.log('DeFi position created:', position);
+                logger.log('DeFi position created:', position);
                 // You can add logic here to handle DeFi positions
               }}
               onGovernanceVote={(proposalId, vote) =&gt; {
-                console.log('Governance vote:', proposalId, vote);
+                logger.log('Governance vote:', proposalId, vote);
                 // You can add logic here to handle governance votes
               }}
             /&gt;;
@@ -2344,7 +2323,7 @@ return (
     portfolio={portfolioData}
     onClose={() =&gt; setShowARPreview(false)}
     onTrade={(action) =&gt; {
-      console.log('AR Trade Action:', action);
+      logger.log('AR Trade Action:', action);
       setShowARPreview(false);
     }}
   /&gt;
@@ -2354,7 +2333,7 @@ return (
   &lt;WellnessScoreDashboard
     portfolio={portfolioData}
     onActionPress={(action) =&gt; {
-      console.log('Wellness Action:', action);
+      logger.log('Wellness Action:', action);
       setShowWellnessDashboard(false);
     }}
     onClose={() =&gt; setShowWellnessDashboard(false)}
@@ -2404,7 +2383,7 @@ color: '#8E8E93',
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-11-10T15:45:05.335Z
+                at 2025-11-20T00:57:54.136Z
             </div>
         <script src="../prettify.js"></script>
         <script>

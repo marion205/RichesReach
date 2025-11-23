@@ -109,6 +109,41 @@ import asyncio
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict
 
+# ==== INSTANT DEBUG FOR BOOL vs STR COMPARISON ====
+import builtins
+import traceback
+
+_original_lt = builtins.__lt__
+_original_gt = builtins.__gt__
+_original_le = builtins.__le__
+_original_ge = builtins.__ge__
+
+def _safe_lt(a, b):
+    if (type(a) is bool and type(b) is str) or (type(a) is str and type(b) is bool):
+        print("\n" + "="*60)
+        print("🔥 ILLEGAL COMPARISON DETECTED: bool ↔ str")
+        print(f"    {a!r} ({type(a).__name__})  <  {b!r} ({type(b).__name__})")
+        traceback.print_stack(limit=15)
+        print("="*60 + "\n")
+        raise TypeError(f"Cannot compare {type(a).__name__} and {type(b).__name__}")
+    return _original_lt(a, b)
+
+def _safe_gt(a, b):
+    if (type(a) is bool and type(b) is str) or (type(a) is str and type(b) is bool):
+        print("\n" + "="*60)
+        print("🔥 ILLEGAL COMPARISON DETECTED: bool ↔ str")
+        print(f"    {a!r} ({type(a).__name__})  >  {b!r} ({type(b).__name__})")
+        traceback.print_stack(limit=15)
+        print("="*60 + "\n")
+        raise TypeError(f"Cannot compare {type(a).__name__} and {type(b).__name__}")
+    return _original_gt(a, b)
+
+builtins.__lt__ = _safe_lt
+builtins.__gt__ = _safe_gt
+builtins.__le__ = lambda a, b: not _safe_gt(a, b) if (type(a) is bool and type(b) is str) or (type(a) is str and type(b) is bool) else _original_le(a, b)
+builtins.__ge__ = lambda a, b: not _safe_lt(a, b) if (type(a) is bool and type(b) is str) or (type(a) is str and type(b) is bool) else _original_ge(a, b)
+# ==== END DEBUG PATCH ====
+
 # Load environment variables from .env files (for API keys)
 try:
     from dotenv import load_dotenv
@@ -1244,27 +1279,190 @@ async def graphql_endpoint(request: Request):
         variables = body.get("variables", {})
         operation_name = body.get("operationName", "")
         
+        # Fix: Normalize variables to prevent Boolean/string comparison errors
+        # GraphQL or cache systems might try to sort/compare variables, causing TypeError
+        def normalize_value(v):
+            """Convert values to JSON-serializable types to prevent comparison errors"""
+            if isinstance(v, bool):
+                return v  # Keep bools as-is
+            elif isinstance(v, (int, float)):
+                return v  # Keep numbers as-is
+            elif isinstance(v, str):
+                return v  # Keep strings as-is
+            elif isinstance(v, dict):
+                return {k: normalize_value(v2) for k, v2 in v.items()}
+            elif isinstance(v, list):
+                return [normalize_value(item) for item in v]
+            elif v is None:
+                return None
+            else:
+                # Convert unknown types to string to prevent comparison errors
+                return str(v)
+        
+        # Normalize variables to ensure all values are safe for comparison/sorting
+        if variables:
+            variables = normalize_value(variables)
+        
         # Enhanced debug logging
         print(f"DEBUG: GraphQL operation={operation_name}, query_preview={query_str[:150]}...")
+        
+        # Extract user from authorization token
+        user = None
+        try:
+            from core.authentication import get_user_from_token
+            import logging
+            logger = logging.getLogger(__name__)
+            
+            auth_header = request.headers.get("authorization", "")
+            if not auth_header:
+                auth_header = request.headers.get("Authorization", "")  # Try capitalized version
+            
+            token = None
+            if auth_header.lower().startswith("bearer "):
+                token = auth_header.split(" ", 1)[1].strip()
+            
+            if token:
+                # DEV MODE: Handle dev-token-* by auto-logging in as test user
+                if token.startswith("dev-token-"):
+                    from django.contrib.auth import get_user_model
+                    User = get_user_model()
+                    # Run in executor since it uses Django ORM
+                    loop = asyncio.get_event_loop()
+                    try:
+                        user = await loop.run_in_executor(
+                            None,
+                            lambda: User.objects.filter(email="test@example.com").first() or 
+                                    User.objects.filter(email="demo@example.com").first()
+                        )
+                        if user:
+                            logger.info(f"[GraphQL] Dev token → Using user: {user.email}")
+                    except Exception as exec_err:
+                        logger.warning(f"Error getting dev user in executor: {exec_err}")
+                        user = None
+                else:
+                    # Production: Use real JWT token validation
+                    loop = asyncio.get_event_loop()
+                    try:
+                        user = await loop.run_in_executor(None, get_user_from_token, token)
+                    except Exception as exec_err:
+                        logger.warning(f"Error getting user from token in executor: {exec_err}")
+                        user = None
+                logger.info(
+                    "GraphQL auth → token=%s user_id=%s email=%s is_auth=%s",
+                    token[:12] + "..." if token and len(token) > 12 else (token or ""),
+                    getattr(user, "id", None) if user else None,
+                    getattr(user, "email", None) if user else None,
+                    getattr(user, "is_authenticated", None) if user else None,
+                )
+            else:
+                logger.info("GraphQL auth → No Bearer token in authorization header")
+        except Exception as auth_error:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"GraphQL auth error: {auth_error}")
+            import traceback
+            traceback.print_exc()
         
         # If Django schema is available, use it (production mode with PostgreSQL)
         if graphene_schema:
             try:
+                # Import AnonymousUser for proper user handling
+                from django.contrib.auth.models import AnonymousUser
+                import logging
+                context_logger = logging.getLogger(__name__)
+                
+                # Create context with both request and user
+                # The context needs to be a simple object with user attribute
+                # Also includes META for RateLimiter compatibility
+                class GraphQLContext:
+                    def __init__(self, request, user):
+                        # raw FastAPI request (starlette Request)
+                        self.request = request
+                        
+                        # if user is None, use AnonymousUser
+                        # CRITICAL: Ensure user has is_authenticated attribute
+                        if user is None:
+                            self.user = AnonymousUser()
+                        else:
+                            self.user = user
+                            # Ensure is_authenticated is True for real users
+                            if not hasattr(self.user, 'is_authenticated'):
+                                # For Django User objects, this should already exist
+                                # But ensure it's set correctly
+                                pass
+                        
+                        # emulate Django's .META so existing utils still work
+                        headers = {k.upper().replace("-", "_"): v for k, v in request.headers.items()}
+                        self.META = {
+                            **{f"HTTP_{k}": v for k, v in headers.items()},
+                            "REMOTE_ADDR": request.client.host if request.client else None,
+                        }
+                        
+                        # for debugging - log the actual user state
+                        context_logger.info(
+                            "[GraphQLContext] Created context user=%s email=%s is_auth=%s type=%s",
+                            getattr(self.user, "id", None),
+                            getattr(self.user, "email", None),
+                            getattr(self.user, "is_authenticated", None),
+                            type(self.user).__name__,
+                        )
+                
+                context = GraphQLContext(request, user)
+                
                 # Run in thread pool since graphene.execute is synchronous
                 # but we're in an async FastAPI endpoint
+                # (Global patch at module level will catch bool/str comparisons)
                 loop = asyncio.get_event_loop()
-                result = await loop.run_in_executor(
-                    None,
-                    lambda: graphene_schema.execute(
-                        query_str,
-                        variables=variables,
-                        operation_name=operation_name,
-                        context={'request': request}
+                try:
+                    result = await loop.run_in_executor(
+                        None,
+                        lambda: graphene_schema.execute(
+                            query_str,
+                            variables=variables,
+                            operation_name=operation_name,
+                            context=context
+                        )
                     )
-                )
+                except Exception as exec_error:
+                    # 🔥 FULL TRACEBACK for debugging
+                    print("=" * 80)
+                    print(f"🔥 GRAPHQL FATAL ERROR: {repr(exec_error)}")
+                    print(f"Operation: {operation_name}")
+                    traceback.print_exc()  # full stack trace in the server console
+                    print("=" * 80)
+                    # Re-raise in dev to see full traceback in uvicorn logs
+                    raise
+                    # If you prefer not to re-raise, uncomment below:
+                    # return {
+                    #     "data": {},
+                    #     "errors": [{"message": str(exec_error)}]
+                    # }
                 
                 if result.errors:
-                    print(f"⚠️ GraphQL errors: {result.errors}")
+                    logger.warning(f"⚠️ GraphQL errors: {result.errors}")
+                    # Log full traceback for comparison errors
+                    for error in result.errors:
+                        error_str = str(error)
+                        if "'<' not supported" in error_str or "'>' not supported" in error_str:
+                            print("=" * 80)
+                            print(f"🔥 COMPARISON ERROR DETECTED IN GRAPHQL RESULT: {error_str}")
+                            print(f"🔥 Error type: {type(error)}")
+                            print(f"🔥 Error repr: {repr(error)}")
+                            # Try to extract original exception
+                            if hasattr(error, 'original_error'):
+                                print(f"🔥 Original error found: {error.original_error}")
+                                traceback.print_exception(type(error.original_error), error.original_error, getattr(error.original_error, '__traceback__', None))
+                            elif hasattr(error, '__cause__') and error.__cause__:
+                                print(f"🔥 Error cause found: {error.__cause__}")
+                                traceback.print_exception(type(error.__cause__), error.__cause__, getattr(error.__cause__, '__traceback__', None))
+                            elif hasattr(error, '__traceback__'):
+                                print(f"🔥 Error has traceback attribute")
+                                traceback.print_exception(type(error), error, error.__traceback__)
+                            else:
+                                print("🔥 No traceback found in error object, printing current stack:")
+                                traceback.print_stack()
+                            print("=" * 80)
+                    
                     error_messages = []
                     for error in result.errors:
                         if hasattr(error, 'message'):
@@ -1282,10 +1480,14 @@ async def graphql_endpoint(request: Request):
                     "errors": []
                 }
             except Exception as schema_error:
-                print(f"⚠️ Django schema execution failed: {schema_error}")
+                print("=" * 80)
+                print(f"🔥 GRAPHQL SCHEMA ERROR: {repr(schema_error)}")
                 import traceback
-                traceback.print_exc()
-                # Fall through to custom handlers as fallback
+                traceback.print_exc()  # full stack trace
+                print("=" * 80)
+                # Re-raise to see full traceback
+                raise
+                # Fall through to custom handlers as fallback (if not re-raising)
         
         # Fallback to custom handlers if Django schema not available
         print("⚠️ Using custom GraphQL handlers (fallback mode)")
@@ -2904,12 +3106,18 @@ async def graphql_endpoint(request: Request):
         }
         
     except Exception as e:
-        print(f"GraphQL Error: {e}")
-        # Return empty data object instead of null to prevent UI errors
-        return {
-            "data": {},
-            "errors": [{"message": str(e)}]
-        }
+        print("=" * 80)
+        print(f"🔥 GRAPHQL FATAL ERROR: {repr(e)}")
+        import traceback
+        traceback.print_exc()  # full stack trace in the server console
+        print("=" * 80)
+        # Re-raise to see full traceback in uvicorn
+        raise
+        # If you prefer not to re-raise, uncomment below:
+        # return {
+        #     "data": {},
+        #     "errors": [{"message": str(e)}]
+        # }
 
 if __name__ == "__main__":
     print("🚀 Starting RichesReach Main Server...")

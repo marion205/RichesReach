@@ -131,6 +131,8 @@ jest.mock('react-native-reanimated', () => {
   return Reanimated;
 });
 
+// Modal mock is in setupTests.ts to avoid circular dependencies
+
 // Mock react-native-gesture-handler
 jest.mock('react-native-gesture-handler', () => {
   const View = require('react-native/Libraries/Components/View/View');

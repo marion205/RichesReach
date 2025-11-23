@@ -256,8 +256,8 @@ export const StockMomentsIntegration: React.FC<StockMomentsIntegrationProps> = (
   }, [onAnalyticsEvent, chartRange]);
 
   // Early return for loading - but only if we don't have mock data ready to show
-  // If showMock is true, we should show the moments (which will be mock data) instead of loading
-  if (loading && !showMock && effectiveMoments.length === 0) {
+  // If effectiveMoments has data (real or mock), we should show it instead of loading
+  if (loading && effectiveMoments.length === 0) {
     return (
       <View style={styles.loadingContainer} accessible={true} accessibilityRole="progressbar">
         <ActivityIndicator size="small" color="#6B7280" />
@@ -309,7 +309,7 @@ export const StockMomentsIntegration: React.FC<StockMomentsIntegrationProps> = (
           onMomentChange={(m) => setActiveMomentId(m?.id ?? null)}
           onAnalyticsEvent={handleAnalytics}
           introText={`Here's the story behind ${symbol.toUpperCase()}'s recent moves. Let's walk through the key moments on the chart.`}
-          speakFn={(text, moment) => playWealthOracle(text, symbol, moment)}
+          speakFn={(text, moment, onComplete) => playWealthOracle(text, symbol, moment, onComplete)}
           stopFn={stopWealthOracle}
         />
       </View>

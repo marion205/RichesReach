@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/100</span>
+                <span class='fraction'>0/101</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/100</span>
+                <span class='fraction'>0/101</span>
             </div>
         
             
@@ -388,10 +388,12 @@
 <a name='L323'></a><a href='#L323'>323</a>
 <a name='L324'></a><a href='#L324'>324</a>
 <a name='L325'></a><a href='#L325'>325</a>
-<a name='L326'></a><a href='#L326'>326</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L326'></a><a href='#L326'>326</a>
+<a name='L327'></a><a href='#L327'>327</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -715,11 +717,12 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import io, { Socket } from 'socket.io-client';
 import { GiftedChat, I<span class="cstat-no" title="statement not covered" >Message } from 'react-native-gifte<span class="fstat-no" title="function not covered" >d-</span>chat';</span>
-<span class="cstat-no" title="statement not covered" ></span>
-export interface ChatConfig {
+impo<span class="cstat-no" title="statement not covered" >rt logger from '../utils/logger';</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >export interface ChatConfig {</span>
 <span class="cstat-no" title="statement not covered" >  serverUrl: string;</span>
-<span class="cstat-no" title="statement not covered" >  reconnectAttempts?: number;</span>
-  reconnectDelay?: number;<span class="cstat-no" title="statement not covered" ></span>
+  reconnectAttempts?: numbe<span class="cstat-no" title="statement not covered" >r;</span>
+  reconnectDelay?<span class="cstat-no" title="statement not covered" >: number;</span>
 }
 <span class="fstat-no" title="function not covered" ></span>
 export i<span class="cstat-no" title="statement not covered" >nterface ChatMessage</span> extends IMessage {
@@ -776,9 +779,9 @@ export class SocketChatService {
       });<span class="cstat-no" title="statement not covered" ></span>
 <span class="cstat-no" title="statement not covered" ></span>
       this.setupSocketListeners();
-      co<span class="cstat-no" title="statement not covered" >nsole.log('✅ Socket Chat Service<span class="fstat-no" title="function not covered" > i</span>nitialized');</span>
+      lo<span class="cstat-no" title="statement not covered" >gger.log('✅ Socket Chat Service <span class="fstat-no" title="function not covered" >in</span>itialized');</span>
     } catch <span class="cstat-no" title="statement not covered" >(error) {</span>
-      consol<span class="cstat-no" title="statement not covered" >e.error('❌ Failed to initialize</span> Socket Chat Service:', error);
+      logger<span class="cstat-no" title="statement not covered" >.error('❌ Failed to initialize </span>Socket Chat Service:', error);
       throw error;
     }<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span>
   }<span class="cstat-no" title="statement not covered" ></span>
@@ -811,54 +814,54 @@ export class SocketChatService {
     if (!this.socket) return;
 &nbsp;
 <span class="fstat-no" title="function not covered" >    th</span>is.socket.on('connect', () =&gt; {
-      co<span class="cstat-no" title="statement not covered" >nsole.log('🔌 Connected to chat server');</span>
+      lo<span class="cstat-no" title="statement not covered" >gger.log('🔌 Connected to chat server');</span>
       this.i<span class="cstat-no" title="statement not covered" >sConnected = true;</span>
       this.onConnected?.();
     });<span class="cstat-no" title="statement not covered" ></span>
 <span class="cstat-no" title="statement not covered" ></span>
     this<span class="cstat-no" title="statement not covered" >.socket.on('disconnect', () =&gt; {</span>
-      console.log('🔌 Disconnected from chat server');
+      logger.log('🔌 Disconnected from chat server');
       this.isConnected = false;
       this.onDisconnected?.();
     });
 <span class="cstat-no" title="statement not covered" ></span>
     this.socket.on('connect_error', (error) =&gt; {
-      console.error('❌ Connection error:', error);
+      logger.error('❌ Connection error:', error);
 <span class="fstat-no" title="function not covered" ></span>      this.onError?.(error.message);
     });<span class="cstat-no" title="statement not covered" ></span>
 <span class="cstat-no" title="statement not covered" ></span>
     this.socket.on('new-message', (message: ChatMessage) =&gt; {
-      console.log('💬 Ne<span class="cstat-no" title="statement not covered" >w message received:', message);</span>
+      logger.log('💬 New<span class="cstat-no" title="statement not covered" > message received:', message);</span>
       this.onNewMessage?.(message);
     });
 &nbsp;
     this.socket.on('chat-history', (messages: ChatMessage[]) =&gt; {
-      console.log('📜 Chat history loaded:', messages.length, 'messages');
+      logger.log('📜 Chat history loaded:', messages.length, 'messages');
       this.onMessageHistory?.(messages);
     });
 &nbsp;
     this.socket.on('user-joined', (user: UserInfo) =&gt; {
-      console.log('👤 User joined chat:', user);
+      logger.log('👤 User joined chat:', user);
       this.onUserJoined?.(user);
     });
 &nbsp;
     this.socket.on('user-left', (userId: string) =&gt; {
-      console.log('👋 User left chat:', userId);
+      logger.log('👋 User left chat:', userId);
       this.onUserLeft?.(userId);
     });<span class="cstat-no" title="statement not covered" ></span>
 &nbsp;
     this.socket.on('typing-start', (user: UserInfo) =&gt; {
-      console.log('⌨️ User started typing:', user);
+      logger.log('⌨️ User started typing:', user);
       this.onTypingStart?.(user);
     });
 &nbsp;
-    this<span class="cstat-no" title="statement not covered" >.socket.on('typing-stop', (userId: string)</span> =&gt; {
-      console.log('⌨️ User stopped typing:', userId);
+    this<span class="cstat-no" title="statement not covered" >.socket.on('typing-stop', (userId: string) =&gt; {</span>
+      logger.log('⌨️ User stopped typing:', userId);
       this.onTypingStop?.(userId);
 <span class="fstat-no" title="function not covered" >    })</span>;
 <span class="cstat-no" title="statement not covered" ></span>
     this.soc<span class="cstat-no" title="statement not covered" >ket.on('error', (error: { message: string }) =&gt;</span> {
-      console.error('❌ Socket error:', error.message);
+      logger.error('❌ Socket error:', error.message);
       th<span class="cstat-no" title="statement not covered" >is.onError?.(error.message);</span>
     });
   }
@@ -866,7 +869,7 @@ export class SocketChatService {
   // Join a chat room
   async joinRoom(roomId: string, user: UserInfo): Promise&lt;void&gt; {
     if (!this.socket) {
-      th<span class="cstat-no" title="statement not covered" >row new Error('Socket Chat Service not initialize</span>d');
+      th<span class="cstat-no" title="statement not covered" >row new Error('Socket Chat Service not initialized');</span>
     }
 &nbsp;
 <span class="fstat-no" title="function not covered" >    th</span>is.currentRoom = roomId;
@@ -878,7 +881,7 @@ export class SocketChatService {
       userName: user.userName
     });
 &nbsp;
-    console.log(`💬 Joined chat room: ${roomId}`);
+    logger.log(`💬 Joined chat room: ${roomId}`);
   }<span class="fstat-no" title="function not covered" ></span>
 <span class="cstat-no" title="statement not covered" ></span>
   // Send a <span class="cstat-no" title="statement not covered" >text mes</span>sage
@@ -913,7 +916,7 @@ export class SocketChatService {
       type: 'text'
     });
 &nbsp;
-    console.log('📤 Message sent:', content);
+    logger.log('📤 Message sent:', content);
   }
 &nbsp;
   // Send a system message
@@ -930,7 +933,7 @@ export class SocketChatService {
       type: 'system'
     });<span class="cstat-no" title="statement not covered" ></span>
 <span class="cstat-no" title="statement not covered" ></span>
-    cons<span class="cstat-no" title="statement not covered" >ole.log('📤 System message sent:',</span> content);
+    logg<span class="cstat-no" title="statement not covered" >er.log('📤 System message sent:', content);</span>
   }
 &nbsp;
   //<span class="fstat-no" title="function not covered" > S</span>tart typing indicator
@@ -1001,7 +1004,7 @@ export class SocketChatService {
     this.currentRoom = null;
     this.currentUser = null;
 &nbsp;
-    console.log('👋 Left chat room');
+    logger.log('👋 Left chat room');
   }
 &nbsp;
   // Check if connected
@@ -1035,7 +1038,7 @@ export class SocketChatService {
     this.currentRoom = null;
     this.currentUser = null;
 &nbsp;
-    console.log('🔌 Socket Chat Service disconnected');
+    logger.log('🔌 Socket Chat Service disconnected');
   }
 }
 &nbsp;</pre></td></tr></table></pre>
@@ -1045,7 +1048,7 @@ export class SocketChatService {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-11-10T15:45:05.335Z
+                at 2025-11-20T00:57:54.136Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

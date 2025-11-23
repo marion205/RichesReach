@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/285</span>
+                <span class='fraction'>0/286</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/284</span>
+                <span class='fraction'>0/285</span>
             </div>
         
             
@@ -831,7 +831,8 @@
 <a name='L766'></a><a href='#L766'>766</a>
 <a name='L767'></a><a href='#L767'>767</a>
 <a name='L768'></a><a href='#L768'>768</a>
-<a name='L769'></a><a href='#L769'>769</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L769'></a><a href='#L769'>769</a>
+<a name='L770'></a><a href='#L770'>770</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -845,6 +846,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -1608,11 +1610,12 @@ impo<span class="cstat-no" title="statement not covered" >rt expoGoCompatiblePri
 import { SecureMarketDa<span class="cstat-no" title="statement not covered" >taService } from '../fea</span>tures/stocks/services/SecureMarketDataService';
 // Import endpoint configuration to avoid URL mutation issues
 import { WS_STOCK_PRICES, WS_DISCUSSIONS, WS<span class="cstat-no" title="statement not covered" >_PORTFOLIO } from '../api/endpoints';</span>
-export interface StockPrice {
-symbol: string;<span class="cstat-no" title="statement not covered" ></span>
-price: number;
-change: number;<span class="cstat-no" title="statement not covered" ></span>
-change_percent: number;
+import logger from '../utils/logger';
+export interface StockPrice {<span class="cstat-no" title="statement not covered" ></span>
+symbol: string;
+price: number;<span class="cstat-no" title="statement not covered" ></span>
+change: number;
+change_percent: numb<span class="cstat-no" title="statement not covered" >er;</span>
 volume: number;<span class="cstat-no" title="statement not covered" ></span>
 timestamp: number;
 }<span class="fstat-no" title="function not covered" ></span>
@@ -1725,7 +1728,7 @@ this.handleAppBackground();
 } catch (error) {
 // AppState not available, skip app state monitoring
 if (<span class="fstat-no" title="function not covered" >__</span>DEV__) {
-console.<span class="cstat-no" title="statement not covered" >warn('AppState not available, skipping app state monitoring');</span>
+logger.w<span class="cstat-no" title="statement not covered" >arn('AppState not available, skipping app state monitoring');</span>
 }
 }<span class="cstat-no" title="statement not covered" ></span>
 }
@@ -1748,7 +1751,7 @@ this.handleN<span class="cstat-no" title="statement not covered" >etworkDisconne
 } ca<span class="fstat-no" title="function not covered" >tc</span>h (error) {
 // NetIn<span class="cstat-no" title="statement not covered" >fo not available, sk</span>ip network monitoring
 if (__DEV__) {
-console.warn('NetInfo not available, skipping network monitoring');
+logger.warn('NetInfo not available, skipping network monitoring');
 }
 }
 }<span class="fstat-no" title="function not covered" ></span>
@@ -1803,7 +1806,7 @@ this.dis<span class="cstat-no" title="statement not covered" >connect();</span>
 this.onConne<span class="cstat-no" title="statement not covered" >ctionStatusChange?.(false);</span>
 }<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span>
 } catch (error) <span class="cstat-no" title="statement not covered" >{</span>
-console.error('T<span class="cstat-no" title="statement not covered" >oken validation error:', </span>error);
+logger.error('To<span class="cstat-no" title="statement not covered" >ken validation error:', e</span>rror);
 }<span class="cstat-no" title="statement not covered" ></span>
 }<span class="cstat-no" title="statement not covered" ></span>
 public setToken(token: string) {
@@ -1830,7 +1833,7 @@ tradingFrequency: 'w<span class="cstat-no" title="statement not covered" >eekly'
 };
 await intelligentPriceAlertService.setUserProfile(profile);
 } catch (err<span class="cstat-no" title="statement not covered" >or) {<span class="fstat-no" title="function not covered" ></span></span>
-console.error('E<span class="cstat-no" title="statement not covered" >rror setting up intelligen</span>t alerts:', error);
+logger.error('Er<span class="cstat-no" title="statement not covered" >ror setting up intelligent</span> alerts:', error);
 }
 }<span class="cstat-no" title="statement not covered" ></span>
 public setCallbacks(<span class="cstat-no" title="statement not covered" >callbacks: {</span>
@@ -1866,9 +1869,9 @@ public conne<span class="cstat-no" title="statement not covered" >ct() {</span>
     // this.connectD<span class="cstat-no" title="statement not covered" >iscussions(WS_DISCUSSIONS);</span>
     // Connect to portfolio WebSocket (disabled for now - using mock data)
     // this.connectPortfolio(WS_PORTFOLIO);
-    console.log('Web<span class="cstat-no" title="statement not covered" >Socket connections disabled - using polling only');</span>
+    logger.log('WebS<span class="cstat-no" title="statement not covered" >ocket connections disabled - using polling only');</span>
   } catch (error) {
-    console.log('WebSocket server not available, using polling only');
+    logger.log('WebSocket server not available, using polling only');
     // Conti<span class="cstat-no" title="statement not covered" >nue with polling-only mode<span class="fstat-no" title="function not covered" ></span></span>
   }<span class="cstat-no" title="statement not covered" ></span>
 }
@@ -1899,7 +1902,7 @@ try {<span class="cstat-no" title="statement not covered" ></span>
 const data = JSON.parse(event.data);
 this.handleStockPriceMessage(data);
 } catch (error) {<span class="cstat-no" title="statement not covered" ></span>
-console.error('Error parsing stock price message:', error);
+logger.error('Error parsing stock price message:', error);
 }
 };<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span>
 this.stockPriceS<span class="cstat-no" title="statement not covered" >ocket.onclose = (event) =&gt; {</span>
@@ -1912,12 +1915,12 @@ this.stockPriceS<span class="cstat-no" title="statement not covered" >ocket.oncl
   this.handl<span class="cstat-no" title="statement not covered" >eReconnect('stock-prices');</span>
 };
 this.stockPriceSocket.onerror = (error) =&gt; {
-cons<span class="fstat-no" title="function not covered" >ol</span>e.error('Stock prices WebSocket error:', error);
+logg<span class="fstat-no" title="function not covered" >er</span>.error('Stock prices WebSocket error:', error);
 // If We<span class="cstat-no" title="statement not covered" >bSocket fails, fall back to real market data polling</span>
 this.startRealMarketDataPolling();
 };
 } catch (error) <span class="cstat-no" title="statement not covered" >{</span>
-console.error('Error creating stock prices WebSocket:', error);
+logger.error('Error creating stock prices WebSocket:', error);
 }
 }<span class="cstat-no" title="statement not covered" ></span>
 private connectDiscussions(wsUrl: string) {
@@ -1937,17 +1940,17 @@ try {<span class="cstat-no" title="statement not covered" ></span>
 const data = JSO<span class="cstat-no" title="statement not covered" >N.parse</span>(event.data);
 this.handleDiscussionMessage(data);
 } catch (error) <span class="cstat-no" title="statement not covered" >{</span>
-console.error('Error parsing discussion message:', error);
+logger.error('Error parsing discussion message:', error);
 }
 };
 this.discussionSocket.onclose = (event) =&gt; {
 this.handleReconnect('discussions');
 };
 this.discussionSocket.onerror = (error) =&gt; {
-console.error('D<span class="cstat-no" title="statement not covered" >iscussions WebSocket error:', error);</span>
+logger.error('Di<span class="cstat-no" title="statement not covered" >scussions WebSocket error:', error);</span>
 };<span class="cstat-no" title="statement not covered" ></span>
 } catch (error) {
-console.error('E<span class="cstat-no" title="statement not covered" >rror cr</span>eating discussions WebSocket:', error);
+logger.error('Er<span class="cstat-no" title="statement not covered" >ror cre</span>ating discussions WebSocket:', error);
 }
 }
 private connectPortfolio(wsUrl: string) {
@@ -1967,17 +1970,17 @@ try {
 const data = JSO<span class="cstat-no" title="statement not covered" >N.parse</span>(event.data);
 this.handlePortfolioMessage(data);
 } catch (error) {
-console.error('Error parsing portfolio WebSocket message:', error);
+logger.error('Error parsing portfolio WebSocket message:', error);
 }
 };<span class="fstat-no" title="function not covered" ></span>
 this.por<span class="cstat-no" title="statement not covered" >tfolioSocket.onclose = () =&gt; {</span>
 this.handleReconnect('portfolio');
 };<span class="cstat-no" title="statement not covered" ></span>
 this.portfolioSocket.onerror = (error) =&gt; {
-console.error('Portfolio WebSocket error:', error);
+logger.error('Portfolio WebSocket error:', error);
 };
 } catch (error) {
-console.error('Error creating portfolio WebSocket:', error);
+logger.error('Error creating portfolio WebSocket:', error);
 }
 }
 private handleStockPriceMessage(data: any) {
@@ -2181,7 +2184,7 @@ this.showInt<span class="cstat-no" title="statement not covered" >elligentAlert(
 }
 }
 } catch (error) {
-console.error('Error in big day movement analysis:', error);
+logger.error('Error in big day movement analysis:', error);
 }
 }
 /**
@@ -2201,7 +2204,7 @@ this.marketDataInterval = setInterval(async () =&gt; {
 try {
 await this.fetchAndUpdateRealMarketData();
 } ca<span class="fstat-no" title="function not covered" >tc</span>h (error) {
-console.error('Error fetching r<span class="cstat-no" title="statement not covered" >eal market data:', error);</span>
+logger.error('Error fetching re<span class="cstat-no" title="statement not covered" >al market data:', error);</span>
 }
 }, 30000); // 30 seconds
 // Initial fetch
@@ -2228,7 +2231,7 @@ expoGoCompatiblePriceAlertService.checkAlerts<span class="fstat-no" title="funct
 this.checkForBigDayMovement(stockPrice);
 });<span class="cstat-no" title="statement not covered" ></span>
 } catch (error) {
-console.error('Failed to fetch real market data:', error);
+logger.error('Failed to fetch real market data:', error);
 // Fall back to mock data if real data fails
 this.generateMockStockPrices();
 }
@@ -2374,7 +2377,7 @@ export default webSocketService;
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-11-10T15:45:05.335Z
+                at 2025-11-20T00:57:54.136Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

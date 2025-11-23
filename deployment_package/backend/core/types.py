@@ -11,13 +11,35 @@ class UserType(DjangoObjectType):
 
     # Add camelCase fields for frontend compatibility
     profilePic = graphene.String()  # camelCase field
-    # Add income profile field
-    incomeProfile = graphene.Field('core.types.IncomeProfileType')
+    # Add income profile field - snake_case in Python, camelCase in GraphQL
+    income_profile = graphene.Field('core.types.IncomeProfileType')
 
-    def resolve_incomeProfile(self, info):
+    def resolve_income_profile(self, info):
+        """
+        Resolve incomeProfile field for UserType.
+        Returns the most recent IncomeProfile for this user, or None if none exists.
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
         try:
-            return self.incomeProfile
-        except BaseException:
+            user_id = getattr(self, 'id', 'unknown')
+            user_email = getattr(self, 'email', 'unknown')
+            
+            logger.info(f"[UserType.resolve_incomeProfile] Resolving for user={user_id} email={user_email}")
+            
+            # Use filter().latest() to get the most recent profile (handles multiple profiles gracefully)
+            # Since it's a OneToOneField, there should only be one, but this is safer
+            from .models import IncomeProfile
+            try:
+                profile = IncomeProfile.objects.filter(user=self).latest('id')
+                logger.info(f"[UserType.resolve_incomeProfile] Found profile id={profile.id} for user {user_id}")
+                return profile
+            except IncomeProfile.DoesNotExist:
+                logger.info(f"[UserType.resolve_incomeProfile] No profile found for user {user_id}")
+                return None
+        except Exception as e:
+            logger.exception(f"[UserType.resolve_incomeProfile] Error resolving incomeProfile for user {getattr(self, 'email', 'unknown')}: {e}")
             return None
 
     # Resolver for camelCase field
@@ -25,18 +47,18 @@ class UserType(DjangoObjectType):
         return self.profile_pic
 
     # Add computed fields that the frontend expects
-        followers_count = graphene.Int()
-        following_count = graphene.Int()
-        is_following_user = graphene.Boolean()
-        is_followed_by_user = graphene.Boolean()
+    followers_count = graphene.Int()
+    following_count = graphene.Int()
+    is_following_user = graphene.Boolean()
+    is_followed_by_user = graphene.Boolean()
     # Add camelCase aliases for frontend compatibility
-        followersCount = graphene.Int()
-        followingCount = graphene.Int()
-        isFollowingUser = graphene.Boolean()
-        isFollowedByUser = graphene.Boolean()
+    followersCount = graphene.Int()
+    followingCount = graphene.Int()
+    isFollowingUser = graphene.Boolean()
+    isFollowedByUser = graphene.Boolean()
     # Add subscription status fields
-        hasPremiumAccess = graphene.Boolean()
-        subscriptionTier = graphene.String()
+    hasPremiumAccess = graphene.Boolean()
+    subscriptionTier = graphene.String()
 
     def resolve_followers_count(self, info):
         return self.followers.count()
@@ -128,6 +150,15 @@ class IncomeProfileType(DjangoObjectType):
         return self.updated_at
 
 
+class ProfileInput(graphene.InputObjectType):
+    """Profile input for AI recommendations"""
+    age = graphene.Int(required=False)
+    incomeBracket = graphene.String(required=False)
+    investmentGoals = graphene.List(graphene.String, required=False)
+    investmentHorizonYears = graphene.Int(required=False)
+    riskTolerance = graphene.String(required=False)
+
+
 class StockRecommendationType(graphene.ObjectType):
     """Individual stock recommendation within a portfolio"""
     symbol = graphene.String()
@@ -136,6 +167,13 @@ class StockRecommendationType(graphene.ObjectType):
     reasoning = graphene.String()
     riskLevel = graphene.String()
     expectedReturn = graphene.Float()
+
+
+class AIRecommendationsType(graphene.ObjectType):
+    """Simplified AI recommendations response matching frontend expectations"""
+    buyRecsCount = graphene.Int()
+    usingDefaults = graphene.Boolean()
+    recommendations = graphene.List('core.types.AIPortfolioRecommendationType')
 
 
 class AIPortfolioRecommendationType(DjangoObjectType):
@@ -221,6 +259,39 @@ class FundamentalAnalysisType(graphene.ObjectType):
     stabilityScore = graphene.Float()
     dividendScore = graphene.Float()
     debtScore = graphene.Float()
+class SpendingDataPointType(graphene.ObjectType):
+    """Spending data point for consumer spending surge chart"""
+    date = graphene.String()
+    spending = graphene.Float()
+    spendingChange = graphene.Float()
+    price = graphene.Float()
+    priceChange = graphene.Float()
+
+
+class OptionsFlowDataPointType(graphene.ObjectType):
+    """Options flow data point for smart money flow chart"""
+    date = graphene.String()
+    price = graphene.Float()
+    unusualVolumePercent = graphene.Float()
+    sweepCount = graphene.Int()
+    putCallRatio = graphene.Float()
+
+
+class SignalContributionType(graphene.ObjectType):
+    """Signal contribution for feature importance"""
+    name = graphene.String()
+    contribution = graphene.Float()
+    color = graphene.String()
+    description = graphene.String()
+
+
+class SHAPValueType(graphene.ObjectType):
+    """SHAP value for explainability"""
+    feature = graphene.String()
+    value = graphene.Float()
+    importance = graphene.Float()
+
+
 class RustStockAnalysisType(graphene.ObjectType):
 
 
@@ -232,6 +303,12 @@ class RustStockAnalysisType(graphene.ObjectType):
     technicalIndicators = graphene.Field(TechnicalIndicatorsType)
     fundamentalAnalysis = graphene.Field(FundamentalAnalysisType)
     reasoning = graphene.List(graphene.String)
+    # Week 3: Chart data fields
+    spendingData = graphene.List(SpendingDataPointType)
+    optionsFlowData = graphene.List(OptionsFlowDataPointType)
+    signalContributions = graphene.List(SignalContributionType)
+    shapValues = graphene.List(SHAPValueType)
+    shapExplanation = graphene.String()
 
 
 class PostType(DjangoObjectType):
@@ -301,6 +378,9 @@ class StockType(DjangoObjectType):
         return self.company_name
     
     def resolve_currentPrice(self, info):
+        """Return current price from database (updated by resolvers that fetch real-time data)"""
+        # Note: Real-time price fetching is handled in the resolvers (beginnerFriendlyStocks, aiRecommendations)
+        # to avoid async issues in GraphQL resolvers. The database price is updated there.
         if self.current_price:
             return float(self.current_price)
         return None
@@ -769,3 +849,70 @@ class DayTradingDataType(graphene.ObjectType):
     picks = graphene.List(DayTradingPickType)
     universeSize = graphene.Int()
     qualityThreshold = graphene.Float()
+
+
+# Research Hub Types
+class SnapshotType(graphene.ObjectType):
+    """Company snapshot data"""
+    name = graphene.String()
+    sector = graphene.String()
+    marketCap = graphene.Float()
+    country = graphene.String()
+    website = graphene.String()
+
+
+class QuoteType(graphene.ObjectType):
+    """Stock quote data"""
+    price = graphene.Float()
+    chg = graphene.Float()
+    chgPct = graphene.Float()
+    high = graphene.Float()
+    low = graphene.Float()
+    volume = graphene.Float()
+
+
+class TechnicalType(graphene.ObjectType):
+    """Technical analysis indicators"""
+    rsi = graphene.Float()
+    macd = graphene.Float()
+    macdhistogram = graphene.Float()
+    movingAverage50 = graphene.Float()
+    movingAverage200 = graphene.Float()
+    supportLevel = graphene.Float()
+    resistanceLevel = graphene.Float()
+    impliedVolatility = graphene.Float()
+
+
+class SentimentType(graphene.ObjectType):
+    """Sentiment analysis data"""
+    label = graphene.String()
+    score = graphene.Float()
+    articleCount = graphene.Int()
+    confidence = graphene.Float()
+
+
+class MacroType(graphene.ObjectType):
+    """Macro market data"""
+    vix = graphene.Float()
+    marketSentiment = graphene.String()
+    riskAppetite = graphene.Float()
+
+
+class MarketRegimeType(graphene.ObjectType):
+    """Market regime analysis"""
+    market_regime = graphene.String()
+    confidence = graphene.Float()
+    recommended_strategy = graphene.String()
+
+
+class ResearchHubType(graphene.ObjectType):
+    """Complete research hub data for a stock"""
+    symbol = graphene.String()
+    snapshot = graphene.Field(SnapshotType)
+    quote = graphene.Field(QuoteType)
+    technical = graphene.Field(TechnicalType)
+    sentiment = graphene.Field(SentimentType)
+    macro = graphene.Field(MacroType)
+    marketRegime = graphene.Field(MarketRegimeType)
+    peers = graphene.List(graphene.String)
+    updatedAt = graphene.String()
