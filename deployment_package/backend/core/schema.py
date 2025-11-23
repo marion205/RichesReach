@@ -1,9 +1,7 @@
 # core/schema.py
+import logging
 import graphene
-try:
-    import graphql_jwt
-except ImportError:
-    graphql_jwt = None  # Make it optional for testing
+from django.contrib.auth import get_user_model
 
 # Import base Query and Mutation
 from .queries import Query
@@ -20,13 +18,15 @@ from .benchmark_types import BenchmarkSeriesType, BenchmarkDataPointType
 
 # Import premium queries and mutations
 try:
-    from .premium_types import PremiumQueries, PremiumMutations
+    from .premium_types import PremiumQueries, PremiumMutations, ProfileInput, AIRecommendationsType
 except (ImportError, SyntaxError):
     # Create empty classes if premium_types can't be imported
     class PremiumQueries(graphene.ObjectType):
         pass
     class PremiumMutations(graphene.ObjectType):
         pass
+    ProfileInput = None
+    AIRecommendationsType = None
 
 # Import other feature modules (optional - create empty if not available)
 try:
@@ -65,23 +65,58 @@ except (ImportError, SyntaxError):
     class SBLOCMutations(graphene.ObjectType):
         pass
 
+try:
+    from .paper_trading_types import PaperTradingQueries, PaperTradingMutations
+except (ImportError, SyntaxError):
+    class PaperTradingQueries(graphene.ObjectType):
+        pass
+    class PaperTradingMutations(graphene.ObjectType):
+        pass
+
+try:
+    from .social_types import SocialQueries
+except (ImportError, SyntaxError):
+    class SocialQueries(graphene.ObjectType):
+        pass
+
+try:
+    from .privacy_types import PrivacyQueries, PrivacyMutations
+except (ImportError, SyntaxError):
+    class PrivacyQueries(graphene.ObjectType):
+        pass
+    class PrivacyMutations(graphene.ObjectType):
+        pass
+
+try:
+    from .ai_insights_types import AIInsightsQueries, AIInsightsMutations
+except (ImportError, SyntaxError):
+    class AIInsightsQueries(graphene.ObjectType):
+        pass
+    class AIInsightsMutations(graphene.ObjectType):
+        pass
+
+logger = logging.getLogger(__name__)
+User = get_user_model()
 
 # -------------------- QUERY --------------------
+# Base Query has resolve_me which will be available in ExtendedQuery
+# The resolve_me in queries.py should work, but let's ensure it uses proper context
 
-class ExtendedQuery(PremiumQueries, BrokerQueries, BankingQueries, SBLOCQueries, Query, graphene.ObjectType):
+class ExtendedQuery(PremiumQueries, BrokerQueries, BankingQueries, SBLOCQueries, PaperTradingQueries, SocialQueries, PrivacyQueries, AIInsightsQueries, Query, graphene.ObjectType):
     """
     Final Query type exposed by the schema.
 
     - Inherits your existing base Query (stocks, dayTradingPicks, etc.)
     - Adds PremiumQueries (premium_portfolio_metrics, ai_recommendations, etc.)
     - Adds Broker, Banking, and SBLOC queries
+    - The base Query class has resolve_me which will be available here
     """
     pass
 
 
 # ------------------- MUTATION ------------------
 
-class ExtendedMutation(PremiumMutations, BrokerMutations, BankingMutations, SBLOCMutations, Mutation, graphene.ObjectType):
+class ExtendedMutation(PremiumMutations, BrokerMutations, BankingMutations, SBLOCMutations, PaperTradingMutations, PrivacyMutations, AIInsightsMutations, Mutation, graphene.ObjectType):
     """
     Final Mutation type exposed by the schema.
 
@@ -94,8 +129,16 @@ class ExtendedMutation(PremiumMutations, BrokerMutations, BankingMutations, SBLO
 
 # -------------------- SCHEMA --------------------
 
+# Collect all types that need explicit registration
+schema_types = [BenchmarkSeriesType, BenchmarkDataPointType]
+if ProfileInput:
+    # InputObjectType doesn't need to be in types, but ensure it's imported
+    pass
+if AIRecommendationsType:
+    schema_types.append(AIRecommendationsType)
+
 schema = graphene.Schema(
     query=ExtendedQuery,
     mutation=ExtendedMutation,
-    types=[]  # Let Graphene auto-discover types
+    types=schema_types  # Explicitly register types that need it
 )

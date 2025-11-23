@@ -16,7 +16,8 @@ os.makedirs(MEDIA_DIR, exist_ok=True)
 
 
 # Max text length to prevent abuse
-MAX_TEXT_LENGTH = 1500
+# Increased to allow full paragraphs to be read
+MAX_TEXT_LENGTH = 5000  # ~800 words, enough for most story moments
 
 
 class TTSRequest(BaseModel):
@@ -61,11 +62,14 @@ async def synthesize(req: TTSRequest, request: Request):
     from fastapi import HTTPException
     
     # Guard: Truncate text if too long
+    original_length = len(req.text)
     text = req.text[:MAX_TEXT_LENGTH] if len(req.text) > MAX_TEXT_LENGTH else req.text
     
     if len(req.text) > MAX_TEXT_LENGTH:
         # Log warning but proceed with truncated text
-        print(f"[TTS] Text truncated from {len(req.text)} to {MAX_TEXT_LENGTH} chars")
+        print(f"[TTS] Text truncated from {original_length} to {MAX_TEXT_LENGTH} chars")
+    else:
+        print(f"[TTS] Processing text of length {original_length} chars (no truncation needed)")
     
     try:
         filename = f"{req.symbol}_{req.moment_id}_{uuid.uuid4().hex}.mp3"

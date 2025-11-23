@@ -25,14 +25,14 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/138</span>
+                <span class='fraction'>0/142</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/79</span>
+                <span class='fraction'>0/81</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/127</span>
+                <span class='fraction'>0/131</span>
             </div>
         
             
@@ -405,7 +405,12 @@
 <a name='L340'></a><a href='#L340'>340</a>
 <a name='L341'></a><a href='#L341'>341</a>
 <a name='L342'></a><a href='#L342'>342</a>
-<a name='L343'></a><a href='#L343'>343</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L343'></a><a href='#L343'>343</a>
+<a name='L344'></a><a href='#L344'>344</a>
+<a name='L345'></a><a href='#L345'>345</a>
+<a name='L346'></a><a href='#L346'>346</a>
+<a name='L347'></a><a href='#L347'>347</a>
+<a name='L348'></a><a href='#L348'>348</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -449,6 +454,7 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -724,8 +730,11 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -734,6 +743,8 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -745,52 +756,52 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import * as Notifications from 'expo-notifications';
+<span class="cline-any cline-no">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import * as Notifications from 'expo-notifications';
 import * as Device fro<span class="cstat-no" title="statement not covered" >m 'expo-device';<span class="fstat-no" title="function not covered" ></span></span>
 impo<span class="cstat-no" title="statement not covered" >rt Constants from 'exp<span class="cstat-no" title="statement not covered" >o-consta</span></span>nts';
 import { Platfo<span class="cstat-no" title="statement not covered" >rm } from 'react-native';</span>
 impo<span class="cstat-no" title="statement not covered" >rt AsyncStorage from '@react-native-async-storage/async-storage';</span>
-// Con<span class="cstat-no" title="statement not covered" >figure notification behavior<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span></span>
-Notifications.setNotificationHandler({
-hand<span class="cstat-no" title="statement not covered" >leNotification: async () =&gt; ({</span>
-should<span class="fstat-no" title="function not covered" >Sh</span>owAlert: true,
-shou<span class="cstat-no" title="statement not covered" >ldPlaySound: true,<span class="cstat-no" title="statement not covered" ></span></span>
-shou<span class="cstat-no" title="statement not covered" >ldSetBadge: tr</span>ue,
-shouldShowBanner: true,
-shouldShowList: true,<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span>
-}),<span class="cstat-no" title="statement not covered" ></span>
-});<span class="fstat-no" title="function not covered" ></span>
-expo<span class="cstat-no" title="statement not covered" >rt interface Notif</span>icationData {
-type: 'price_alert' | 'mention' | 'discussion_update' | 'follow' | 'general';
+import<span class="cstat-no" title="statement not covered" > logger from '../../../utils/log<span class="fstat-no" title="function not covered" >ge</span>r';<span class="cstat-no" title="statement not covered" ></span></span>
+// Configure notification behavior
+Noti<span class="cstat-no" title="statement not covered" >fications.setNotificationHandler({</span>
+handle<span class="fstat-no" title="function not covered" >No</span>tification: async () =&gt; ({
+shou<span class="cstat-no" title="statement not covered" >ldShowAlert: true,<span class="cstat-no" title="statement not covered" ></span></span>
+shou<span class="cstat-no" title="statement not covered" >ldPlaySound: t</span>rue,
+shouldSetBadge: true,
+shouldShowBanner: true,<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span>
+shou<span class="cstat-no" title="statement not covered" >ldShowList: true,</span>
+}),<span class="fstat-no" title="function not covered" ></span>
+});<span class="cstat-no" title="statement not covered" ></span>
+export interface NotificationData {
+type: 'price_alert'<span class="cstat-no" title="statement not covered" > | 'mention' | 'discussion_updat<span class="fstat-no" title="function not covered" >e'</span> | 'follow' | 'general';</span>
 title: string;<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span>
-body: string;<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span>
-data?: a<span class="cstat-no" title="statement not covered" >ny;<span class="fstat-no" title="function not covered" ></span></span>
-}<span class="cstat-no" title="statement not covered" ></span>
-export inter<span class="cstat-no" title="statement not covered" >face PriceAlert {<span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ></span></span></span>
-symbol: stri<span class="cstat-no" title="statement not covered" >ng;</span>
-currentPrice: number;
-targetPr<span class="cstat-no" title="statement not covered" >ice: number;</span>
-alertType: 'above' | 'below';
-}<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span>
-class Pu<span class="cstat-no" title="statement not covered" >shNotificationService {<span class="cstat-no" title="statement not covered" ></span></span>
-private expoPushToken<span class="cstat-no" title="statement not covered" >: s</span>tring | null = null;
-private <span class="cstat-no" title="statement not covered" >isInitialized = f<span class="cstat-no" title="statement not covered" >alse;<span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ></span></span></span></span></span></span>
+body: st<span class="cstat-no" title="statement not covered" >ring;<span class="fstat-no" title="function not covered" ></span></span>
+data?: any;<span class="cstat-no" title="statement not covered" ></span>
+}<span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ></span></span></span>
+export inter<span class="cstat-no" title="statement not covered" >face PriceA</span>lert {
+symbol: string;
+currentP<span class="cstat-no" title="statement not covered" >rice: number;</span>
+targetPrice: number;
+aler<span class="cstat-no" title="statement not covered" >tType: <span class="fstat-no" title="function not covered" >'a</span>bove' | 'below';</span>
+}<span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ></span></span>
+class PushNotificatio<span class="cstat-no" title="statement not covered" >nSe</span>rvice {
+private <span class="cstat-no" title="statement not covered" >expoPushToken: st<span class="cstat-no" title="statement not covered" >ring | null =<span class="cstat-no" title="statement not covered" > null;<span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ></span></span></span></span></span></span>
+private <span class="cstat-no" title="statement not covered" >isInitialized = false;</span>
 /**<span class="cstat-no" title="statement not covered" ></span>
-* Initia<span class="cstat-no" title="statement not covered" >lize push notif</span>ications
+* Initialize push notifications
 */
-public async initialize(): Promise&lt;boolean&gt; {
-try {<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span>
-if (<span class="cstat-no" title="statement not covered" >this.isInitialized) {</span>
-return true;
+public async initializ<span class="cstat-no" title="statement not covered" >e(): Promise&lt;boolean&gt; {<span class="fstat-no" title="function not covered" ></span></span>
+try <span class="cstat-no" title="statement not covered" >{</span>
+if (this.isInitialized) {
+<span class="cstat-no" title="statement not covered" >return true;</span>
 <span class="cstat-no" title="statement not covered" >}</span>
-<span class="cstat-no" title="statement not covered" >// Check if device supports push notificat</span>ions
-if (!Device.isDevice) <span class="cstat-no" title="statement not covered" >{</span>
+// Check if device sup<span class="cstat-no" title="statement not covered" >ports push notifications</span>
+if (!Device.isD<span class="cstat-no" title="statement not covered" >evice) {</span>
 return false;<span class="cstat-no" title="statement not covered" ></span>
 }<span class="cstat-no" title="statement not covered" ></span>
-// Check if running in <span class="cstat-no" title="statement not covered" >Expo Go (which has limit</span>ed notification support)
-if (__DEV__ &amp;&amp; !Constant<span class="cstat-no" title="statement not covered" >s.expoConfig?.extra?.eas) {</span>
+// Check if running in E<span class="cstat-no" title="statement not covered" >xpo Go (which has limited notification support)</span>
+if (__DEV__ &amp;&amp; !C<span class="cstat-no" title="statement not covered" >onstants.expoConfig?.extra?.eas) {</span>
 // Return true but with limited functionality
 <span class="cstat-no" title="statement not covered" >this.isInitialized = true;</span>
 return true;<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span>
@@ -819,7 +830,7 @@ await this.setupAndroidChannels();
 this.isInitializ<span class="cstat-no" title="statement not covered" >ed = true;</span>
 return true;
 } catch (error) {
-console.erro<span class="cstat-no" title="statement not covered" >r('Error initializing push notifications:', error);</span>
+logger.error<span class="cstat-no" title="statement not covered" >('Error initializing push notifications:', error);</span>
 return false;
 }<span class="cstat-no" title="statement not covered" ></span>
 }<span class="cstat-no" title="statement not covered" ></span>
@@ -857,7 +868,7 @@ vibrationPattern: [0, 250, 250, 250],
 lightColor: '#FF231F7C',
 });
 } ca<span class="fstat-no" title="function not covered" >tc</span>h (error) {
-console.<span class="cstat-no" title="statement not covered" >error('Error setting up Android channels:', error);</span>
+logger.e<span class="cstat-no" title="statement not covered" >rror('Error setting up Android channels:', error);</span>
 }<span class="cstat-no" title="statement not covered" ></span>
 }
 /**
@@ -883,7 +894,7 @@ trigger: nul<span class="cstat-no" title="statement not covered" >l, // Show imm
 ...(Platform.OS === 'android' &amp;&amp; { channelId }),
 });
 } catch (error) {
-console.error('Error sending local notification:', error);
+logger.error('Error sending local notification:', error);
 }
 }
 /**
@@ -989,7 +1000,7 @@ trigger,
 });<span class="fstat-no" title="function not covered" ></span>
 return n<span class="cstat-no" title="statement not covered" >otificationId;</span>
 } catch (error) {
-console.error('E<span class="cstat-no" title="statement not covered" >rror scheduling notific</span>ation:', error);
+logger.error('Er<span class="cstat-no" title="statement not covered" >ror scheduling notifica</span>tion:', error);
 throw error;
 }<span class="cstat-no" title="statement not covered" ></span>
 }
@@ -1000,7 +1011,7 @@ public async cancelNotification(notificationId: string): Promise&lt;void&gt; {
 try {<span class="cstat-no" title="statement not covered" ></span>
 await Notifications.cancelScheduledNotificationAsync(notificationId);
 } catch (error) {
-console.error('Error cancelling notification:', error);
+logger.error('Error cancelling notification:', error);
 }
 }
 /**<span class="fstat-no" title="function not covered" ></span>
@@ -1010,7 +1021,7 @@ public async cancelAllNotifications<span class="cstat-no" title="statement not c
 try {
 await Notifications.cancelAllScheduledNotificationsAsync();
 } catch (error) {
-console.error('Error cancelling all notifications:', error);
+logger.error('Error cancelling all notifications:', error);
 }
 }
 /**
@@ -1020,7 +1031,7 @@ public async<span class="cstat-no" title="statement not covered" > getScheduledN
 try {
 return await Notifications.getAllScheduledNotificationsAsync();
 } catch (err<span class="cstat-no" title="statement not covered" >or) {</span>
-console.erro<span class="cstat-no" title="statement not covered" >r('Error gett</span>ing scheduled notifications:', error);
+logger.error<span class="cstat-no" title="statement not covered" >('Error getti</span>ng scheduled notifications:', error);
 return [];
 }
 }
@@ -1034,69 +1045,73 @@ responseListener: Notifications.Subscription;
 // Listener <span class="cstat-no" title="statement not covered" >for notifications received while app is running</span>
 const notificationListener = Notifications.addNotificationReceivedListener(notification =&gt; {
 });
-// Listener for user interactions with notifications
-const responseListener = Notifications.addNotificationResponseReceivedListener(response =&gt; {
-const data = response.notification.request.content.data;
-// H<span class="fstat-no" title="function not covered" >an</span>dle different notification types
-if (data<span class="cstat-no" title="statement not covered" >.type === 'price_alert') {</span>
-// Navigate <span class="cstat-no" title="statement not covered" >to stock details</span>
-} else if (data.type === 'mention') {
-// Navigate to discussion
-} else if (d<span class="cstat-no" title="statement not covered" >ata.type === 'follow') {</span>
-// Navigate to user profile
-}
-});
-return {
+  // Listener for user interactions with notifications
+  const responseListener = Notifications.addNotificationResponseReceivedListener(response =&gt; {
+    const data = response.notification.request.content.data;
+<span class="fstat-no" title="function not covered" >    //</span> Handle different notification types
+    if (<span class="cstat-no" title="statement not covered" >data.type === 'price_alert') {</span>
+      // Nav<span class="cstat-no" title="statement not covered" >igate to stock details</span>
+    } else if (data.type === 'mention') {
+      // Navigate to discussion
+    } else i<span class="cstat-no" title="statement not covered" >f (data.type === 'follow') {</span>
+      // Navigate to user profile
+    } else if (data.type === 'dawn_ritual') {
+      // Trigger Dawn Ritual - emit event that PortfolioScreen can listen to
+      const { DeviceEventEmitter } = require('react-native');
+      DeviceEventEmitter.emit('openDawnRitual');
+<span class="fstat-no" title="function not covered" >    }</span>
+  });<span class="cstat-no" title="statement not covered" ></span>
+return {<span class="cstat-no" title="statement not covered" ></span>
 notificationListener,
-resp<span class="fstat-no" title="function not covered" >on</span>seListener,
+responseListener,
 };<span class="cstat-no" title="statement not covered" ></span>
 }<span class="cstat-no" title="statement not covered" ></span>
 /**
 * Remove notification listeners
-*/<span class="cstat-no" title="statement not covered" ></span>
-public remov<span class="cstat-no" title="statement not covered" >eNotificati</span>onListeners(
+*/
+public removeNotificationListeners(
 notificationListener: Notifications.Subscription,
-responseListener: Notifications.Subscription
+resp<span class="fstat-no" title="function not covered" >on</span>seListener: Notifications.Subscription
 ): void {
-Notifications.removeNotificationSubscription(notificationListener);
+Notifications.removeNotificationSubsc<span class="cstat-no" title="statement not covered" >ription(notificationListener);<span class="fstat-no" title="function not covered" ></span></span>
 Notifications.removeNotificationSubscription(responseListener);
-}<span class="fstat-no" title="function not covered" ></span>
-/**
-* Check if notifications are enabled<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span>
-*/
-public async areNotificationsEnabled(): Promise&lt;boolean&gt; {
-try {<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span>
-const { status } = await <span class="cstat-no" title="statement not covered" >Notifications.getPermissionsAsync();</span>
-return status === 'granted';
-} catch (err<span class="cstat-no" title="statement not covered" >or) {</span>
-console.error('Error checking notification permissions:', error);
-return false;
-}<span class="cstat-no" title="statement not covered" ></span>
 }
-/**
-* Request notific<span class="cstat-no" title="statement not covered" >ation permissions</span>
+/**<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span>
+* Check if notifications <span class="cstat-no" title="statement not covered" >are enabled</span>
 */
-public async requestPermissions(): Promise&lt;boolean&gt; {
+public async<span class="cstat-no" title="statement not covered" > areNotificationsEnabled(): Promise&lt;boolean&gt; {</span>
 try {
-const { <span class="cstat-no" title="statement not covered" >status } = await Notifications.requestPermissionsAsync();</span>
-return status === 'granted';
+const { status } = await Notifications.getPermissionsAsync();
+return status ===<span class="cstat-no" title="statement not covered" > 'granted';</span>
 } catch (error) {
-console.error('Error requesting notification permissions:', error);
+logger.error('Error checking notification permissions:', error);
+return false;<span class="cstat-no" title="statement not covered" ></span>
+}
+}
+/**<span class="cstat-no" title="statement not covered" ></span>
+* Request notification permissions
+*/<span class="cstat-no" title="statement not covered" ></span>
+public async req<span class="cstat-no" title="statement not covered" >uestPermissions(): Promise&lt;boolean&gt; {</span>
+try {
+const { status } = await Notifications.requestPermissionsAsync();
+return s<span class="cstat-no" title="statement not covered" >tatus === 'granted';</span>
+} catch (error) {
+logger.error('Error requesting notification permissions:', error);
 return false;
 }
 }
 }
-// E<span class="fstat-no" title="function not covered" >xp</span>ort singleton instance
-export c<span class="cstat-no" title="statement not covered" >onst pushNotificationService = new PushNotificationService();</span>
+// Export singleton instance
+expo<span class="fstat-no" title="function not covered" >rt</span> const pushNotificationService = new PushNotificationService();
 export d<span class="cstat-no" title="statement not covered" >efault pushNotificationService;</span>
-&nbsp;</pre></td></tr></table></pre>
+<span class="cstat-no" title="statement not covered" ></span></pre></td></tr></table></pre>
 
                 <div class='push'></div><!-- for sticky footer -->
             </div><!-- /wrapper -->
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-11-10T15:45:05.335Z
+                at 2025-11-20T00:57:54.136Z
             </div>
         <script src="../../../../prettify.js"></script>
         <script>

@@ -19,8 +19,25 @@ load_dotenv(env_path)
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-wk_qy339*l)1xg=(f6_e@9+d7sgi7%#0t!e17a3nkeu&p#@zq9')
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '127.0.0.1,localhost,10.0.0.64,192.168.1.151,0.0.0.0').split(',')
+# Get ALLOWED_HOSTS from env or use default
+allowed_hosts_env = os.getenv('ALLOWED_HOSTS', '')
+if allowed_hosts_env:
+    ALLOWED_HOSTS = allowed_hosts_env.split(',')
+else:
+    ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '10.0.0.64', '192.168.1.151', '192.168.1.240', '0.0.0.0']
+
+# Always add common local development IPs if not already present
+local_ips = ['127.0.0.1', 'localhost', '192.168.1.240', '192.168.1.151', '0.0.0.0']
+for ip in local_ips:
+    if ip not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(ip)
+
+# Force DEBUG=True for local development
+is_local = any(ip in ALLOWED_HOSTS for ip in ['127.0.0.1', 'localhost', '192.168.1.240', '192.168.1.151', '0.0.0.0'])
+if is_local:
+    DEBUG = True  # Always enable DEBUG for local development
+else:
+    DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 # Frontend URL for email links
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
 # Feature Flags - Week 4 Beta Launch
@@ -206,8 +223,11 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ALLOW_ALL_ORIGINS = True # For dev only
 
 # Security Settings (Production)
-# Only enable if not in development
-if not DEBUG:
+# Check if we're in local development (DEBUG mode or local IPs)
+is_local_dev = DEBUG or any(ip in ALLOWED_HOSTS for ip in ['127.0.0.1', 'localhost', '192.168.1.240', '192.168.1.151', '0.0.0.0'])
+
+# Only enable SSL redirect if not in development
+if not is_local_dev:
     SECURE_SSL_REDIRECT = os.getenv('SECURE_SSL_REDIRECT', 'True').lower() == 'true'
     SESSION_COOKIE_SECURE = os.getenv('SESSION_COOKIE_SECURE', 'True').lower() == 'true'
     CSRF_COOKIE_SECURE = os.getenv('CSRF_COOKIE_SECURE', 'True').lower() == 'true'
@@ -215,18 +235,27 @@ if not DEBUG:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = os.getenv('SECURE_HSTS_INCLUDE_SUBDOMAINS', 'True').lower() == 'true'
     SECURE_HSTS_PRELOAD = os.getenv('SECURE_HSTS_PRELOAD', 'True').lower() == 'true'
 else:
-    # Development settings
+    # Development settings - disable SSL redirect for local development
     SECURE_SSL_REDIRECT = False
     SESSION_COOKIE_SECURE = False
     CSRF_COOKIE_SECURE = False
     SECURE_HSTS_SECONDS = 0
     SECURE_HSTS_INCLUDE_SUBDOMAINS = False
     SECURE_HSTS_PRELOAD = False
+# Build GRAPHENE middleware list - make graphql_jwt optional
+graphene_middleware = [
+    "graphene_django.debug.DjangoDebugMiddleware",  # Add debug middleware for better error handling
+]
+try:
+    import graphql_jwt
+    graphene_middleware.append("graphql_jwt.middleware.JSONWebTokenMiddleware")
+except ImportError:
+    # graphql_jwt is optional - continue without it
+    pass
+
 GRAPHENE = {
 "SCHEMA": "core.schema.schema",
-"MIDDLEWARE": [
-"graphql_jwt.middleware.JSONWebTokenMiddleware"
-],
+"MIDDLEWARE": graphene_middleware,
 "SCHEMA_INDEPTH_LIMIT": 20,
 "SCHEMA_OUTPUT": "schema.json",
 }

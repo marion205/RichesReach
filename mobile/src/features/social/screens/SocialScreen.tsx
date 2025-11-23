@@ -887,11 +887,21 @@ return (
   />
 )}
 
-{/* Navigation */}
-<SocialNav 
-feedType={feedType}
-onFeedTypeChange={handleFeedTypeChange}
-/>
+      {/* Navigation */}
+      <SocialNav 
+        feedType={feedType}
+        onFeedTypeChange={handleFeedTypeChange}
+      />
+      
+      {/* Leaderboard Quick Access */}
+      <TouchableOpacity 
+        style={styles.leaderboardButton}
+        onPress={() => onNavigate?.('portfolio-leaderboard')}
+      >
+        <Icon name="award" size={20} color="#FFD700" />
+        <Text style={styles.leaderboardButtonText}>View Leaderboard</Text>
+        <Icon name="chevron-right" size={18} color="#8E8E93" />
+      </TouchableOpacity>
       {/* Content */}
       <View style={styles.content}>
         {feedType === 'trending' ? (
@@ -1470,11 +1480,32 @@ backgroundColor: '#FFFFFF',
 borderBottomWidth: 1,
 borderBottomColor: '#E5E5EA',
 },
-headerButtons: {
-flexDirection: 'row',
-alignItems: 'center',
-gap: 8,
-},
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  leaderboardButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    padding: 16,
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  leaderboardButtonText: {
+    flex: 1,
+    marginLeft: 12,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+  },
 headerTitle: {
 fontSize: 24,
 fontWeight: '700',

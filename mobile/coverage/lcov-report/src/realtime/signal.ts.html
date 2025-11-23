@@ -25,28 +25,28 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/22</span>
+                <span class='fraction'>0/28</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/6</span>
+                <span class='fraction'>0/15</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/4</span>
+                <span class='fraction'>0/5</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/22</span>
+                <span class='fraction'>0/28</span>
             </div>
         
             
@@ -109,7 +109,15 @@
 <a name='L44'></a><a href='#L44'>44</a>
 <a name='L45'></a><a href='#L45'>45</a>
 <a name='L46'></a><a href='#L46'>46</a>
-<a name='L47'></a><a href='#L47'>47</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L47'></a><a href='#L47'>47</a>
+<a name='L48'></a><a href='#L48'>48</a>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -128,78 +136,82 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import { io, Socket } from 'socket.io-client';
-<span class="cstat-no" title="statement not covered" >import { ENV } from '../config/env';</span>
-<span class="cstat-no" title="statement not covered" >import { refreshJwt } from '../auth/tok</span>en';
+import { ENV } from '.<span class="cstat-no" title="statement not covered" >./config/env';<span class="fstat-no" title="function not covered" ></span></span>
+impo<span class="cstat-no" title="statement not covered" >rt { refreshJwt } from '../auth/token';</span>
+import logger from '../utils/logger';
 <span class="cstat-no" title="statement not covered" ></span>
-export functio<span class="cstat-no" title="statement not covered" >n connectSignal(getJwt: (</span>) =&gt; Promise&lt;string&gt; | string): Socket {
-  const socket: <span class="cstat-no" title="statement not covered" >Socket = io(ENV.SIGNAL_UR</span>L, {
-    trans<span class="fstat-no" title="function not covered" >ports: ['webso</span>cket'],
-    path: '/socket.<span class="cstat-no" title="statement not covered" >io',</span>
-    autoConnect: false,
-    reconnection: true,
-    reconnectionAttempts: 10,
+<span class="cstat-no" title="statement not covered" >export function connectSignal(getJwt: (</span>) =&gt; Promise&lt;string&gt; | string): Socket {
+  const socket: Socket = io<span class="cstat-no" title="statement not covered" >(ENV.SIGNAL_URL, {</span>
+    transports<span class="cstat-no" title="statement not covered" >: ['websocket'],</span>
+    path: '/sock<span class="cstat-no" title="statement not covered" >et.io',</span>
+    autoConnect: <span class="cstat-no" title="statement not covered" >false,</span>
+    recon<span class="fstat-no" title="function not covered" >nection: true,</span>
+    reconnectionAtt<span class="cstat-no" title="statement not covered" >empts: 10,</span>
     reconnectionDelay: 500,
     reconnectionDelayMax: 5000,
     timeout: 10000,
   });
 &nbsp;
-  socket.on('connect_error', (err) =&gt; {
-<span class="cstat-no" title="statement not covered" >    console.warn('[Signal] conn<span class="fstat-no" title="function not covered" >ec</span>t_error', (err as any)?.message || err);</span>
-  });<span class="cstat-no" title="statement not covered" ></span>
-&nbsp;
-  so<span class="cstat-no" title="statement not covered" >cket.on('connect_error', as<span class="fstat-no" title="function not covered" >yn</span>c (err: any) =&gt; {</span>
-    const msg = Stri<span class="cstat-no" title="statement not covered" >ng(err?.message || '');</span>
-    if (<span class="cstat-no" title="statement not covered" >msg.includes('401')) {</span>
-      try {<span class="cstat-no" title="statement not covered" ></span>
-        await re<span class="cstat-no" title="statement not covered" >freshJwt();</span>
-        socket.d<span class="cstat-no" title="statement not covered" >isconnect();</span>
-        socket.c<span class="cstat-no" title="statement not covered" >onnect();</span>
-      } catch (e) {
-        console.warn('[Signal] refresh failed', e);
-      }<span class="cstat-no" title="statement not covered" ></span>
-    }
+  socket.on('connect_error', (err: unknown) =&gt; {
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    logger.warn('[Signal] connect_error', errorMessage);
   });
-&nbsp;
-  (a<span class="cstat-no" title="statement not covered" >s<span class="fstat-no" title="function not covered" >yn</span>c () =&gt; {</span>
-    const token = awai<span class="cstat-no" title="statement not covered" >t getJwt();</span>
-    // @ts-ignore
-    sock<span class="cstat-no" title="statement not covered" >et.auth = { token };</span>
-    // @ts-ignore
-    sock<span class="cstat-no" title="statement not covered" >et.io.opts.extraHeaders = { Authorization: `Bearer ${token}` };</span>
+<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span>
+  socket.on('connect_error', <span class="cstat-no" title="statement not covered" >async (err: unknown) =&gt; {</span>
+    cons<span class="cstat-no" title="statement not covered" >t errorMessage = err instanceof Error ? err.message : String(er</span>r);
+    const msg = errorMessage;
+<span class="cstat-no" title="statement not covered" >    if (msg.includes('401')) {<span class="fstat-no" title="function not covered" ></span></span>
+      try {<span class="cstat-no" title="statement not covered" ></span>
+        await refres<span class="cstat-no" title="statement not covered" >hJwt();</span>
+<span class="cstat-no" title="statement not covered" >        socket.disconnect();</span>
+        sock<span class="cstat-no" title="statement not covered" >et.connect();</span>
+      } catch (e<span class="cstat-no" title="statement not covered" >) {</span>
+        const re<span class="cstat-no" title="statement not covered" >freshError = e instan</span>ceof Error ? e.message : String(e);
+        logger.w<span class="cstat-no" title="statement not covered" >arn('[Signal] refr</span>esh failed', refreshError);
+      }
+    }
+  });<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" ></span>
+  (async () =&gt; {
+    const token = await getJwt();
+    // @ts-expect-error: socket.auth is a custom property for socket.io authentication
+<span class="cstat-no" title="statement not covered" >    s<span class="fstat-no" title="function not covered" >oc</span>ket.auth = { token };</span>
+    // @ts-expect-erro<span class="cstat-no" title="statement not covered" >r: socket.io.op</span>ts.extraHeaders is a valid socket.io option but not in types
+    socket.io.opts.extraHeaders = { Authorization: `Bearer ${token}` };
     sock<span class="cstat-no" title="statement not covered" >et.connect();</span>
   })();
 <span class="cstat-no" title="statement not covered" ></span>
-  return socket;
+  return<span class="cstat-no" title="statement not covered" > socket;</span>
 }
-&nbsp;
+<span class="cstat-no" title="statement not covered" ></span>
 &nbsp;
 &nbsp;</pre></td></tr></table></pre>
 
@@ -208,7 +220,7 @@ export functio<span class="cstat-no" title="statement not covered" >n connectSig
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-11-10T15:45:04.568Z
+                at 2025-11-20T00:57:52.315Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

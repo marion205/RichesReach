@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import {
   ActivityIndicator,
   ScrollView,
   RefreshControl,
+  Modal,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Notifications from 'expo-notifications';
@@ -23,10 +24,179 @@ import { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-
 import * as ImagePicker from 'expo-image-picker';
 import { Video } from 'expo-av';
 import Animated from 'react-native-reanimated';
-import RichesLiveStreaming from '../../../components/RichesLiveStreaming';
-import AdvancedLiveStreaming from '../../../components/AdvancedLiveStreaming';
+import LiveStreamCamera from '../../../components/LiveStreamCamera';
 import VoiceAI from '../../../components/VoiceAI';
 import VoiceAIIntegration from '../../../components/VoiceAIIntegration';
+import { API_BASE_URL } from '../../../config/api';
+import { debounce } from '../../../utils/debounce';
+import { imageCache } from '../../../utils/imageCache';
+
+// Create a safe logger that always works, even if the import fails
+const createSafeLogger = () => {
+  let loggerBase: any = null;
+  
+  try {
+    const loggerModule = require('../../../utils/logger');
+    loggerBase = loggerModule?.default || loggerModule?.logger || loggerModule;
+  } catch (e) {
+    // Import failed, use console fallback
+  }
+  
+  const safeConsole = typeof console !== 'undefined' ? console : {
+    log: () => {},
+    warn: () => {},
+    error: () => {},
+    info: () => {},
+    debug: () => {},
+  };
+  
+  return {
+    log: (...args: any[]) => {
+      try {
+        if (loggerBase && typeof loggerBase.log === 'function') {
+          loggerBase.log(...args);
+        } else {
+          safeConsole.log(...args);
+        }
+      } catch (e) {
+        safeConsole.log(...args);
+      }
+    },
+    warn: (...args: any[]) => {
+      try {
+        if (loggerBase && typeof loggerBase.warn === 'function') {
+          loggerBase.warn(...args);
+        } else {
+          safeConsole.warn(...args);
+        }
+      } catch (e) {
+        safeConsole.warn(...args);
+      }
+    },
+    error: (...args: any[]) => {
+      try {
+        if (loggerBase && typeof loggerBase.error === 'function') {
+          loggerBase.error(...args);
+        } else {
+          safeConsole.error(...args);
+        }
+      } catch (e) {
+        safeConsole.error(...args);
+      }
+    },
+    info: (...args: any[]) => {
+      try {
+        if (loggerBase && typeof loggerBase.info === 'function') {
+          loggerBase.info(...args);
+        } else {
+          safeConsole.info(...args);
+        }
+      } catch (e) {
+        safeConsole.info(...args);
+      }
+    },
+    debug: (...args: any[]) => {
+      try {
+        if (loggerBase && typeof loggerBase.debug === 'function') {
+          loggerBase.debug(...args);
+        } else {
+          safeConsole.debug(...args);
+        }
+      } catch (e) {
+        safeConsole.debug(...args);
+      }
+    },
+  };
+};
+
+// Initialize logger immediately - this ensures it's always defined
+let logger = createSafeLogger();
+
+// Final safety check - ensure logger is always a valid object
+if (!logger || typeof logger !== 'object') {
+  logger = {
+    log: (...args: any[]) => {
+      try {
+        if (typeof console !== 'undefined' && console.log) {
+          console.log(...args);
+        }
+      } catch (e) {}
+    },
+    warn: (...args: any[]) => {
+      try {
+        if (typeof console !== 'undefined' && console.warn) {
+          console.warn(...args);
+        }
+      } catch (e) {}
+    },
+    error: (...args: any[]) => {
+      try {
+        if (typeof console !== 'undefined' && console.error) {
+          console.error(...args);
+        }
+      } catch (e) {}
+    },
+    info: (...args: any[]) => {
+      try {
+        if (typeof console !== 'undefined' && console.info) {
+          console.info(...args);
+        }
+      } catch (e) {}
+    },
+    debug: (...args: any[]) => {
+      try {
+        if (typeof console !== 'undefined' && console.debug) {
+          console.debug(...args);
+        }
+      } catch (e) {}
+    },
+  };
+}
+
+// Ensure all methods exist
+if (!logger.log) logger.log = () => {};
+if (!logger.warn) logger.warn = () => {};
+if (!logger.error) logger.error = () => {};
+if (!logger.info) logger.info = () => {};
+if (!logger.debug) logger.debug = () => {};
+
+// Cached Image Component for optimized rendering
+const CachedImage = React.memo<{ uri: string; style: any }>(({ uri, style }) => {
+  const [imageUri, setImageUri] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadImage = async () => {
+      if (!uri) return;
+      
+      // Check cache first
+      const cached = await imageCache.getCachedData<string>(`image_${uri}`);
+      if (cached) {
+        setImageUri(cached);
+        return;
+      }
+
+      // Preload and cache
+      try {
+        await imageCache.preloadImage(uri);
+        setImageUri(uri);
+        await imageCache.cacheData(`image_${uri}`, uri);
+      } catch (error) {
+        logger.warn('Failed to load image:', uri);
+        setImageUri(uri); // Fallback to direct URI
+      }
+    };
+
+    loadImage();
+  }, [uri]);
+
+  if (!imageUri) {
+    return <View style={style} />;
+  }
+
+  return <Image source={{ uri: imageUri }} style={style} />;
+});
+
+CachedImage.displayName = 'CachedImage';
 
 const { height: screenHeight } = Dimensions.get('window');
 
@@ -122,6 +292,9 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [newPostText, setNewPostText] = useState('');
   const [selectedMedia, setSelectedMedia] = useState<Media | null>(null);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
@@ -129,7 +302,6 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [liveStreamModalVisible, setLiveStreamModalVisible] = useState(false);
   const [isLiveHost, setIsLiveHost] = useState(false);
-  const [useAdvancedStreaming, setUseAdvancedStreaming] = useState(true);
   const [voiceAIModalVisible, setVoiceAIModalVisible] = useState(false);
   const [voiceAISettings, setVoiceAISettings] = useState({
     enabled: true,
@@ -181,9 +353,13 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
     };
   }, []);
 
-  // Load Posts Function (Hybrid: Real API + Mock Fallback with Timeout)
-  const loadPosts = useCallback(async () => {
-    setLoading(true);
+  // Load Posts Function (Hybrid: Real API + Mock Fallback with Timeout) - with pagination
+  const loadPosts = useCallback(async (pageNum: number = 1, append: boolean = false) => {
+    if (append) {
+      setLoadingMore(true);
+    } else {
+      setLoading(true);
+    }
     try {
       logger.log('🔄 Attempting to load real posts from API...');
       
@@ -192,8 +368,14 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
         setTimeout(() => reject(new Error('Request timeout')), 5000)
       );
       
-      // Try to get real posts from your Django backend
-      const fetchPromise = fetch(`${process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000"}/api/wealth-circles/${circle.id}/posts/`, {
+      // Try to get real posts from your Django backend with pagination
+      const postsUrl = `${API_BASE_URL}/api/wealth-circles/${circle.id}/posts/?page=${pageNum}&limit=10`;
+      logger.log('📝 [DEBUG] Fetching posts from:', postsUrl);
+      logger.log('📝 [DEBUG] API_BASE_URL:', API_BASE_URL);
+      logger.log('📝 [DEBUG] Circle ID:', circle.id);
+      logger.log('📝 [DEBUG] Page:', pageNum);
+      
+      const fetchPromise = fetch(postsUrl, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -202,6 +384,9 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
       });
 
       const response = await Promise.race([fetchPromise, timeoutPromise]) as Response;
+
+      logger.log('📝 [DEBUG] Posts response status:', response.status, response.statusText);
+      logger.log('📝 [DEBUG] Posts response ok:', response.ok);
 
       if (response.ok) {
         const apiPosts = await response.json();
@@ -246,18 +431,34 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
             isLiked: post.is_liked || false,
           }));
           
-          setPosts(transformed);
+          if (append) {
+            setPosts(prev => [...prev, ...transformed]);
+          } else {
+            setPosts(transformed);
+          }
+          setHasMore(transformed.length === 10); // If we got 10 posts, there might be more
           logger.log('🎉 Using real API data for posts');
         } else {
           // No posts from API, use mock data for demo
-          logger.log('📝 No posts from API, using mock data for demo');
-          setPosts(mockPosts);
+          if (!append) {
+            logger.log('📝 No posts from API, using mock data for demo');
+            setPosts(mockPosts);
+          }
+          setHasMore(false);
         }
       } else {
+        const errorText = await response.text().catch(() => '');
+        logger.warn('⚠️ [DEBUG] Posts API returned error');
+        logger.warn('⚠️ [DEBUG] Status:', response.status, response.statusText);
+        logger.warn('⚠️ [DEBUG] Response body:', errorText.substring(0, 300));
         logger.log('⚠️ API returned error, falling back to mock data');
         setPosts(mockPosts);
       }
-    } catch (err) {
+    } catch (err: any) {
+      logger.error('❌ [DEBUG] Error loading posts from API');
+      logger.error('❌ [DEBUG] Error name:', err?.name);
+      logger.error('❌ [DEBUG] Error message:', err?.message);
+      logger.error('❌ [DEBUG] Error stack:', err?.stack?.substring(0, 300));
       logger.error('❌ Error loading posts from API:', err);
       logger.log('🔄 Falling back to mock data for demo...');
       // Always set mock posts for demo if API fails
@@ -265,13 +466,33 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
     } finally {
       // Always set loading to false, even if there was an error
       setLoading(false);
+      setLoadingMore(false);
     }
   }, [circle.id]);
 
+  // Debounced version of loadPosts to prevent excessive API calls
+  const debouncedLoadPosts = useMemo(
+    () => debounce((pageNum: number, append: boolean) => {
+      loadPosts(pageNum, append);
+    }, 300),
+    [loadPosts]
+  );
+
+  // Load more posts (lazy loading)
+  const loadMorePosts = useCallback(() => {
+    if (!loadingMore && hasMore && !loading) {
+      const nextPage = page + 1;
+      setPage(nextPage);
+      loadPosts(nextPage, true);
+    }
+  }, [page, loadingMore, hasMore, loading, loadPosts]);
+
   // Load posts on component mount
   useEffect(() => {
-    loadPosts();
-  }, [loadPosts]);
+    setPage(1);
+    setHasMore(true);
+    loadPosts(1, false);
+  }, [circle.id]); // Only reload when circle.id changes
 
   // Debug: log post shape to catch invalid children
   useEffect(() => {
@@ -433,7 +654,7 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
     <TouchableOpacity style={styles.postContainer} onPress={() => onPostPress(item.id)} activeOpacity={0.7}>
       {/* User Header */}
       <View style={styles.postHeader}>
-        <Image source={{ uri: item.user.avatar }} style={styles.userAvatar} />
+        <CachedImage uri={item.user.avatar} style={styles.userAvatar} />
         <View style={styles.userInfo}>
           <Text style={styles.userName}>{safeUser}</Text>
           <Text style={styles.postTimestamp}>{safeTimestamp}</Text>
@@ -447,7 +668,7 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
       {item.media && (
         <Animated.View style={animatedMediaStyle}>
           {item.media.type === 'image' ? (
-            <Image source={{ uri: item.media.uri }} style={styles.postMedia} />
+            <CachedImage uri={item.media.uri} style={styles.postMedia} />
           ) : (
             <Video
               ref={videoRef}
@@ -561,11 +782,11 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
   };
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
+    <KeyboardAvoidingView testID="simple-circle-detail-screen" style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
       <View style={styles.innerContainer}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <TouchableOpacity testID="back-button" onPress={() => navigation.goBack()} style={styles.backButton}>
             <Text style={styles.backButtonText}>←</Text>
           </TouchableOpacity>
           <View style={styles.headerContent}>
@@ -585,13 +806,13 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
         {/* Quick Actions Bar */}
         <View style={styles.actionsBar}>
           {!isLive ? (
-            <TouchableOpacity onPress={startLiveStream} style={styles.actionButton}>
+            <TouchableOpacity testID="go-live-button" onPress={startLiveStream} style={styles.actionButton}>
               <LinearGradient colors={['#FF3B30', '#FF9500']} style={styles.actionGradient}>
                 <Text style={styles.actionText}>Go Live</Text>
               </LinearGradient>
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity onPress={endLiveStream} style={styles.actionButton}>
+            <TouchableOpacity testID="end-live-button" onPress={endLiveStream} style={styles.actionButton}>
               <LinearGradient colors={['#FF3B30', '#FF6B6B']} style={styles.actionGradient}>
                 <Text style={styles.actionText}>End Live</Text>
               </LinearGradient>
@@ -600,19 +821,6 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
           <TouchableOpacity onPress={joinLiveStream} style={styles.actionButton}>
             <LinearGradient colors={['#34C759', '#30D158']} style={styles.actionGradient}>
               <Text style={styles.actionText}>Join Live</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.actionButton} 
-            onPress={() => setUseAdvancedStreaming(!useAdvancedStreaming)}
-          >
-            <LinearGradient 
-              colors={useAdvancedStreaming ? ['#FF9500', '#FFCC02'] : ['#007AFF', '#5856D6']} 
-              style={styles.actionGradient}
-            >
-              <Text style={styles.actionText}>
-                {useAdvancedStreaming ? 'Advanced' : 'Basic'}
-              </Text>
             </LinearGradient>
           </TouchableOpacity>
           <TouchableOpacity onPress={openVoiceAISettings} style={styles.actionButton}>
@@ -624,6 +832,7 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
 
         {/* Posts Feed */}
         <FlatList
+          testID="posts-list"
           data={posts}
           renderItem={renderPost}
           keyExtractor={(item) => item.id}
@@ -648,7 +857,22 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
               </View>
             ) : null
           }
-          ListFooterComponent={<View style={styles.footerSpacer} />}
+          ListFooterComponent={
+            loadingMore ? (
+              <View style={{ padding: 20, alignItems: 'center' }}>
+                <ActivityIndicator size="small" color="#007AFF" />
+              </View>
+            ) : (
+              <View style={styles.footerSpacer} />
+            )
+          }
+          onEndReached={loadMorePosts}
+          onEndReachedThreshold={0.5}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={10}
+          windowSize={10}
+          initialNumToRender={5}
+          updateCellsBatchingPeriod={50}
         />
       </View>
 
@@ -722,24 +946,32 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
         </View>
       )}
 
-      {/* RichesReach Live Streaming Modal */}
-      {useAdvancedStreaming ? (
-        <AdvancedLiveStreaming
-          visible={liveStreamModalVisible}
-          onClose={closeLiveStreamModal}
+      {/* RichesReach Live Streaming Modal - Using LiveStreamCamera for front camera preview */}
+      <Modal
+        visible={liveStreamModalVisible}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={closeLiveStreamModal}
+      >
+        <LiveStreamCamera
           circleId={circle.id}
-          isHost={isLiveHost}
           circleName={circle.name}
-        />
-      ) : (
-        <RichesLiveStreaming
           visible={liveStreamModalVisible}
+          onStartLiveStream={async ({ circleId, camera }) => {
+            logger.log('🎥 [SimpleCircleDetailScreen] Starting live stream for circle:', circleId);
+            setIsLive(true);
+            // Add your actual streaming logic here
+            // For now, just mark as live
+          }}
+          onStopLiveStream={async ({ circleId, camera }) => {
+            logger.log('🛑 [SimpleCircleDetailScreen] Stopping live stream for circle:', circleId);
+            setIsLive(false);
+            setLiveStreamModalVisible(false);
+            // Add your actual streaming stop logic here
+          }}
           onClose={closeLiveStreamModal}
-          circleId={circle.id}
-          isHost={isLiveHost}
-          circleName={circle.name}
         />
-      )}
+      </Modal>
 
       {/* Voice AI Integration Modal */}
       <VoiceAIIntegration

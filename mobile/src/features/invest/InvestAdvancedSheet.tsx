@@ -23,6 +23,9 @@ export default function InvestAdvancedSheet() {
         <Pressable style={styles.row} onPress={() => navigation.navigate('Screeners')}>
           <Text style={styles.rowText}>Screeners</Text>
         </Pressable>
+        <Pressable style={styles.row} onPress={() => navigation.navigate('paper-trading')}>
+          <Text style={styles.rowText}>Paper Trading</Text>
+        </Pressable>
 
         <Pressable style={[styles.row, styles.close]} onPress={() => navigation.goBack()}>
           <Text style={styles.rowText}>Close</Text>

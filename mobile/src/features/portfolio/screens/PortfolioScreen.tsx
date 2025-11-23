@@ -915,16 +915,28 @@ Advanced options strategies and market sentiment
 <Text style={styles.analyticsSubtext}>Worst decline</Text>
 </View>
 </View>
-<TouchableOpacity 
-style={styles.analyticsButton}
-onPress={() => go('premium-analytics')}
->
-<View style={styles.analyticsButtonContent}>
-<Icon name="pie-chart" size={20} color="#007AFF" />
-<Text style={styles.analyticsButtonText}>View Detailed Analytics</Text>
-<Icon name="chevron-right" size={16} color="#8E8E93" />
-</View>
-</TouchableOpacity>
+      <TouchableOpacity 
+        style={styles.analyticsButton}
+        onPress={() => go('premium-analytics')}
+      >
+        <View style={styles.analyticsButtonContent}>
+          <Icon name="pie-chart" size={20} color="#007AFF" />
+          <Text style={styles.analyticsButtonText}>View Detailed Analytics</Text>
+          <Icon name="chevron-right" size={16} color="#8E8E93" />
+        </View>
+      </TouchableOpacity>
+      
+      {/* Signal Updates Button */}
+      <TouchableOpacity 
+        style={[styles.analyticsButton, { marginTop: 12 }]}
+        onPress={() => go('signal-updates', { mode: 'portfolio' })}
+      >
+        <View style={styles.analyticsButtonContent}>
+          <Icon name="activity" size={20} color="#10B981" />
+          <Text style={styles.analyticsButtonText}>Portfolio Signal Updates</Text>
+          <Icon name="chevron-right" size={16} color="#8E8E93" />
+        </View>
+      </TouchableOpacity>
 </View>
 </ScrollView>
   {/* Celebration Overlay */}

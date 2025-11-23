@@ -10,6 +10,8 @@ import {
   useColorScheme,
   RefreshControl,
   StatusBar,
+  Linking,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient'; // Add for gradients
 import Icon from 'react-native-vector-icons/Feather';
@@ -68,6 +70,7 @@ interface StockOverviewData {
 interface NewsArticle {
   title: string;
   publishedAt: string;
+  url?: string;
   [key: string]: unknown;
 }
 
@@ -327,7 +330,29 @@ const OverviewRoute = React.memo(({ data }: { data: StockOverviewData }) => {
         {/* News Cards */}
         <Text style={styles.sectionTitle}>Recent News</Text>
         {data?.news?.map((article: NewsArticle, idx: number) => (
-          <TouchableOpacity key={idx} style={styles.newsCard} activeOpacity={0.8}>
+          <TouchableOpacity
+            key={idx}
+            style={styles.newsCard}
+            activeOpacity={0.8}
+            onPress={async () => {
+              const url = article.url;
+              if (url) {
+                try {
+                  const canOpen = await Linking.canOpenURL(url);
+                  if (canOpen) {
+                    await Linking.openURL(url);
+                  } else {
+                    Alert.alert('Error', 'Unable to open this article URL');
+                  }
+                } catch (error) {
+                  logger.error('Error opening news article:', error);
+                  Alert.alert('Error', 'Failed to open article. Please try again.');
+                }
+              } else {
+                Alert.alert('No URL', 'This article does not have a valid URL.');
+              }
+            }}
+          >
             <Text style={styles.newsTitle}>{article.title}</Text>
             <View style={styles.newsFooter}>
               <Text style={styles.newsDate}>{new Date(article.publishedAt).toLocaleDateString()}</Text>
@@ -359,6 +384,11 @@ const ChartRoute = React.memo(({
 }) => {
   const translateX = useSharedValue(0);
 
+  // Reset translateX when component mounts or timeframe changes
+  useEffect(() => {
+    translateX.value = 0;
+  }, [timeframe]);
+
   // Debounced timeframe change to prevent rapid API calls
   const debouncedTimeframeChange = useCallback(
     debounce((tf: string) => onTimeframeChange(tf), 300),
@@ -378,9 +408,21 @@ const ChartRoute = React.memo(({
           newIndex = Math.min(timeframes.length - 1, currentIndex + 1);
         }
         if (newIndex !== currentIndex) {
-          translateX.value = withSpring(translationX > 0 ? -50 : 50);
+          translateX.value = withSpring(translationX > 0 ? -50 : 50, {
+            damping: 15,
+            stiffness: 150,
+          }, () => {
+            // Reset after animation completes
+            translateX.value = 0;
+          });
           debouncedTimeframeChange(timeframes[newIndex]);
+        } else {
+          // Reset if no change
+          translateX.value = withSpring(0);
         }
+      } else {
+        // Reset if gesture is too small
+        translateX.value = withSpring(0);
       }
     }
   };
@@ -434,7 +476,7 @@ const ChartRoute = React.memo(({
 
   if (loading) {
     return (
-      <Animated.View style={[styles.tabContent, animatedStyle]}>
+      <Animated.View style={styles.tabContent}>
         <View style={styles.chartContainer}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
           <Text style={styles.loadingText}>Loading chart data...</Text>
@@ -445,7 +487,7 @@ const ChartRoute = React.memo(({
 
   if (!processedData.length) {
     return (
-      <Animated.View style={[styles.tabContent, animatedStyle]}>
+      <Animated.View style={styles.tabContent}>
         <View style={styles.chartContainer}>
           <Icon name="bar-chart-2" size={48} color={theme.colors.textSecondary} />
           <Text style={styles.noDataText}>No chart data available</Text>
@@ -461,9 +503,10 @@ const ChartRoute = React.memo(({
   }
 
   return (
-    <PanGestureHandler onGestureEvent={onGestureEvent}>
-      <Animated.View style={[styles.tabContent, animatedStyle]}>
-        <ScrollView showsVerticalScrollIndicator={false}>
+    <Animated.View style={styles.tabContent}>
+      <PanGestureHandler onGestureEvent={onGestureEvent}>
+        <Animated.View style={animatedStyle}>
+          <ScrollView showsVerticalScrollIndicator={false}>
           {/* Enhanced Timeframe Selector */}
           <View style={styles.timeframeSelector}>
             {['1D', '5D', '1M', '3M', '1Y'].map((tf) => (
@@ -484,6 +527,21 @@ const ChartRoute = React.memo(({
               </TouchableOpacity>
             ))}
           </View>
+
+          {/* Key Moments Integration (Story Chart) - Moved to first position */}
+          {priceSeriesForMoments.length > 0 ? (
+            <StockMomentsIntegration
+              symbol={symbol}
+              priceSeries={priceSeriesForMoments}
+              chartRange={chartRange}
+            />
+          ) : (
+            <View style={{ padding: 16, alignItems: 'center' }}>
+              <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>
+                Chart data loading... Key moments will appear here.
+              </Text>
+            </View>
+          )}
 
           {/* Advanced Candlestick Chart with Volume Bars */}
           <View style={styles.chartContainer}>
@@ -523,24 +581,10 @@ const ChartRoute = React.memo(({
               </Text>
             </View>
           </View>
-
-          {/* Key Moments Integration */}
-          {priceSeriesForMoments.length > 0 ? (
-            <StockMomentsIntegration
-              symbol={symbol}
-              priceSeries={priceSeriesForMoments}
-              chartRange={chartRange}
-            />
-          ) : (
-            <View style={{ padding: 16, alignItems: 'center' }}>
-              <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>
-                Chart data loading... Key moments will appear here.
-              </Text>
-            </View>
-          )}
-        </ScrollView>
-      </Animated.View>
-    </PanGestureHandler>
+          </ScrollView>
+        </Animated.View>
+      </PanGestureHandler>
+    </Animated.View>
   );
 });
 
@@ -554,15 +598,6 @@ const FinancialsRoute = React.memo(({ marketCap, peRatio, dividendYield, earning
   stockData?: StockDataExtended;
 }) => {
   const [selectedMetric, setSelectedMetric] = useState('valuation');
-  const scale = useSharedValue(0);
-  
-  useEffect(() => {
-    scale.value = withSpring(1);
-  }, []);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
 
   // Enhanced metrics with more comprehensive data
   const valuationMetrics = [
@@ -580,10 +615,10 @@ const FinancialsRoute = React.memo(({ marketCap, peRatio, dividendYield, earning
   ];
 
   const growthMetrics = [
-    { label: 'Revenue Growth', value: stockData?.revenueGrowth ? `${(stockData.revenueGrowth * 100).toFixed(1)}%` : 'N/A', icon: 'trending-up', color: theme.colors.primary },
-    { label: 'EPS Growth', value: stockData?.epsGrowth ? `${(stockData.epsGrowth * 100).toFixed(1)}%` : 'N/A', icon: 'bar-chart', color: theme.colors.accent },
-    { label: 'Dividend Yield', value: dividendYield ? `${(dividendYield * 100).toFixed(2)}%` : 'N/A', icon: 'dollar-sign', color: theme.colors.primary },
-    { label: 'Payout Ratio', value: stockData?.payoutRatio ? `${(stockData.payoutRatio * 100).toFixed(1)}%` : 'N/A', icon: 'pie-chart', color: theme.colors.accent },
+    { label: 'Revenue Growth', value: stockData?.revenueGrowth !== undefined && stockData.revenueGrowth !== null ? `${(stockData.revenueGrowth * 100).toFixed(1)}%` : 'N/A', icon: 'trending-up', color: theme.colors.primary },
+    { label: 'EPS Growth', value: stockData?.epsGrowth !== undefined && stockData.epsGrowth !== null ? `${(stockData.epsGrowth * 100).toFixed(1)}%` : 'N/A', icon: 'bar-chart', color: theme.colors.accent },
+    { label: 'Dividend Yield', value: dividendYield !== undefined && dividendYield !== null ? `${(dividendYield * 100).toFixed(2)}%` : 'N/A', icon: 'dollar-sign', color: theme.colors.primary },
+    { label: 'Payout Ratio', value: stockData?.payoutRatio !== undefined && stockData.payoutRatio !== null ? `${(stockData.payoutRatio * 100).toFixed(1)}%` : 'N/A', icon: 'pie-chart', color: theme.colors.accent },
   ];
 
   const getMetricCategory = () => {
@@ -596,7 +631,11 @@ const FinancialsRoute = React.memo(({ marketCap, peRatio, dividendYield, earning
   };
 
   return (
-    <Animated.ScrollView style={[styles.tabContent, animatedStyle]} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+    <View style={styles.tabContent}>
+      <ScrollView 
+        showsVerticalScrollIndicator={false} 
+        contentContainerStyle={styles.scrollContent}
+      >
       {/* Hero Financial Overview */}
       <View style={styles.financialHero}>
         <LinearGradient
@@ -807,7 +846,8 @@ const FinancialsRoute = React.memo(({ marketCap, peRatio, dividendYield, earning
           </View>
         </View>
       </View>
-    </Animated.ScrollView>
+      </ScrollView>
+    </View>
   );
 });
 
@@ -858,11 +898,9 @@ const TrendsRoute = React.memo(({ symbol, insiderData, institutionalData, sentim
   analystData: AnalystData | null | undefined;
 }) => {
   const [aiInsight, setAiInsight] = useState('Generating AI insights...');
-  const opacity = useSharedValue(0);
+  const opacity = useSharedValue(1); // Start at 1 instead of 0
 
   useEffect(() => {
-    opacity.value = withTiming(1, { duration: 500 });
-    
     // Generate AI insight based on all available data
     const generateInsight = async () => {
       const recentTrades = insiderData || [];
@@ -908,16 +946,12 @@ const TrendsRoute = React.memo(({ symbol, insiderData, institutionalData, sentim
     generateInsight();
   }, [insiderData, institutionalData, sentimentData, analystData]);
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-  }));
-
   return (
-    <Animated.ScrollView
-      style={[styles.tabContent, animatedStyle]}
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={styles.scrollContent}
-    >
+    <View style={styles.tabContent}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
       {/* AI Insight Hero */}
       <View style={styles.aiInsightCard}>
         <LinearGradient
@@ -1135,7 +1169,8 @@ const TrendsRoute = React.memo(({ symbol, insiderData, institutionalData, sentim
           </>
         ) : <Text style={styles.noData}>No institutional ownership data available.</Text>}
       </View>
-    </Animated.ScrollView>
+      </ScrollView>
+    </View>
   );
 });
 
@@ -1178,7 +1213,7 @@ export default function StockDetailScreen({ navigation, route }: StockDetailScre
   // Week 3: Fetch stock analysis data for charts
   const GET_STOCK_ANALYSIS = gql`
     query GetStockAnalysis($symbol: String!) {
-      stockAnalysis(symbol: $symbol) {
+      rustStockAnalysis(symbol: $symbol) {
         symbol
         spendingData {
           date
@@ -1210,11 +1245,42 @@ export default function StockDetailScreen({ navigation, route }: StockDetailScre
     }
   `;
 
+  // Performance tracking state
+  const [queryPerformance, setQueryPerformance] = useState<{
+    startTime?: number;
+    endTime?: number;
+    duration?: number;
+  }>({});
+
   const { data: analysisData, loading: analysisLoading } = useQuery(GET_STOCK_ANALYSIS, {
     variables: { symbol },
     skip: !symbol,
     fetchPolicy: 'cache-first',
+    onCompleted: (data) => {
+      const endTime = Date.now();
+      if (queryPerformance.startTime) {
+        const duration = endTime - queryPerformance.startTime;
+        setQueryPerformance(prev => ({ ...prev, endTime, duration }));
+        logger.log(`⏱️ [PERF] GraphQL query completed in ${duration}ms`);
+        console.log(`⏱️ [PERF] rustStockAnalysis query: ${duration}ms`);
+      }
+    },
+    onError: (error) => {
+      const endTime = Date.now();
+      if (queryPerformance.startTime) {
+        const duration = endTime - queryPerformance.startTime;
+        setQueryPerformance(prev => ({ ...prev, endTime, duration }));
+        logger.error(`⏱️ [PERF] GraphQL query failed after ${duration}ms:`, error);
+      }
+    },
   });
+
+  // Track query start time
+  useEffect(() => {
+    if (symbol && !analysisLoading && !analysisData) {
+      setQueryPerformance({ startTime: Date.now() });
+    }
+  }, [symbol, analysisLoading, analysisData]);
 
   useEffect(() => {
     fetchStockData();
@@ -1312,7 +1378,22 @@ export default function StockDetailScreen({ navigation, route }: StockDetailScre
         peRatio={stockData?.peRatio}
         dividendYield={stockData?.dividendYield}
         earningsData={stockData?.earnings}
-        stockData={stockData}
+        stockData={{
+          ...stockData,
+          // Map keyMetrics to top-level properties for FinancialsRoute
+          roe: stockData?.keyMetrics?.roe,
+          roa: stockData?.keyMetrics?.roa,
+          grossMargin: stockData?.keyMetrics?.grossProfit && stockData?.keyMetrics?.revenue
+            ? stockData.keyMetrics.grossProfit / stockData.keyMetrics.revenue
+            : undefined,
+          netMargin: stockData?.keyMetrics?.netIncome && stockData?.keyMetrics?.revenue
+            ? stockData.keyMetrics.netIncome / stockData.keyMetrics.revenue
+            : undefined,
+          revenueGrowth: stockData?.keyMetrics?.revenueGrowth,
+          epsGrowth: stockData?.keyMetrics?.epsGrowth,
+          // Ensure payoutRatio is included
+          payoutRatio: stockData?.payoutRatio,
+        } as StockDataExtended}
       />
     ),
     trends: () => (
@@ -1325,7 +1406,7 @@ export default function StockDetailScreen({ navigation, route }: StockDetailScre
       />
     ),
     insights: () => {
-      const analysis = analysisData?.stockAnalysis;
+      const analysis = analysisData?.rustStockAnalysis;
       const spendingData = analysis?.spendingData || [];
       const optionsFlowData = analysis?.optionsFlowData || [];
       
@@ -1336,7 +1417,33 @@ export default function StockDetailScreen({ navigation, route }: StockDetailScre
       }));
       
       return (
-        <View style={{ padding: 16 }}>
+        <ScrollView 
+          style={{ flex: 1 }}
+          contentContainerStyle={{ padding: 16 }}
+          showsVerticalScrollIndicator={true}
+        >
+          {/* Performance Metrics Display */}
+          {queryPerformance.duration !== undefined && (
+            <View style={{
+              backgroundColor: '#f5f5f5',
+              padding: 12,
+              borderRadius: 8,
+              marginBottom: 16,
+              borderLeftWidth: 4,
+              borderLeftColor: queryPerformance.duration < 1000 ? '#4caf50' : queryPerformance.duration < 3000 ? '#ff9800' : '#f44336',
+            }}>
+              <Text style={{ fontSize: 14, fontWeight: '600', marginBottom: 4, color: '#333' }}>
+                ⏱️ Gen AI Performance
+              </Text>
+              <Text style={{ fontSize: 12, color: '#666' }}>
+                Query Time: {queryPerformance.duration}ms
+              </Text>
+              <Text style={{ fontSize: 11, color: '#999', marginTop: 2 }}>
+                {queryPerformance.duration < 1000 ? '⚡ Excellent' : queryPerformance.duration < 3000 ? '✅ Good' : '⚠️ Slow'}
+              </Text>
+            </View>
+          )}
+          
           <ConsumerSpendingSurgeChart
             symbol={symbol}
             spendingData={spendingData}
@@ -1351,9 +1458,14 @@ export default function StockDetailScreen({ navigation, route }: StockDetailScre
             <View style={{ padding: 20, alignItems: 'center' }}>
               <ActivityIndicator size="small" color="#00cc99" />
               <Text style={{ marginTop: 8, color: '#666' }}>Loading AI insights...</Text>
+              {queryPerformance.startTime && !queryPerformance.endTime && (
+                <Text style={{ marginTop: 4, color: '#999', fontSize: 11 }}>
+                  Query in progress... ({Date.now() - queryPerformance.startTime}ms)
+                </Text>
+              )}
             </View>
           )}
-        </View>
+        </ScrollView>
       );
     },
     trade: () => (
@@ -1410,9 +1522,23 @@ export default function StockDetailScreen({ navigation, route }: StockDetailScre
             </Text>
           </View>
         </View>
-        <TouchableOpacity style={styles.headerAction}>
-          <Icon name="share-2" size={24} color={theme.colors.text} />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity 
+            style={styles.headerAction}
+            onPress={() => navigation.navigate('research-report', { symbol })}
+          >
+            <Icon name="file-text" size={24} color={theme.colors.text} />
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.headerAction}
+            onPress={() => navigation.navigate('signal-updates', { symbol, mode: 'single' })}
+          >
+            <Icon name="activity" size={24} color={theme.colors.text} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.headerAction}>
+            <Icon name="share-2" size={24} color={theme.colors.text} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Enhanced Tab Bar with Icons */}

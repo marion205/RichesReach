@@ -2,6 +2,7 @@
 import uuid
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
+from django.utils import timezone
 
 class UserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
@@ -222,7 +223,7 @@ class Watchlist(models.Model):
     added_at = models.DateTimeField(auto_now_add=True)
     notes = models.TextField(blank=True, null=True) # User's personal notes about the stock
     target_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True) # User's target price
-    created_at = models.DateTimeField(auto_now_add=True) # For compatibility with existing table
+    created_at = models.DateTimeField(default=timezone.now) # For compatibility with existing table
     updated_at = models.DateTimeField(auto_now=True) # For compatibility with existing table
     description = models.TextField(blank=True, default="") # For compatibility with existing table
     is_public = models.BooleanField(default=False) # For compatibility with existing table
@@ -409,3 +410,12 @@ class StockMoment(models.Model):
     
     def __str__(self):
         return f"{self.symbol} @ {self.timestamp} ({self.category})"
+
+
+# Import paper trading models so Django can detect them for migrations
+from .paper_trading_models import (
+    PaperTradingAccount,
+    PaperTradingPosition,
+    PaperTradingOrder,
+    PaperTradingTrade,
+)

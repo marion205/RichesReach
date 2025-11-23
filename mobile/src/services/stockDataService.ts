@@ -166,8 +166,34 @@ interface PeerStock {
   marketCap: number;
 }
 
-// Free API configurations
+// API key configuration
+// Note: In production, these should come from a secure config service or environment variables
+// For now, using keys from setup_day_trading_env.sh
+const getPolygonApiKey = () => {
+  // Try Expo environment variable first, then fallback to configured key
+  return process.env.EXPO_PUBLIC_POLYGON_API_KEY || 'uuKmy9dPAjaSVXVEtCumQPga1dqEPDS2';
+};
+
+const getAlpacaCredentials = () => {
+  // Try Expo environment variables first, then fallback to configured keys
+  return {
+    apiKey: process.env.EXPO_PUBLIC_ALPACA_API_KEY || 'CKVL76T6J6F5BNDADQ322V2BJK',
+    apiSecret: process.env.EXPO_PUBLIC_ALPACA_SECRET_KEY || '6CGQRytfGBWauNSFdVA75jvisv1ctPuMHXU1mwovDXQz',
+  };
+};
+
 const API_CONFIGS = {
+  polygon: {
+    baseUrl: 'https://api.polygon.io',
+    apiKey: getPolygonApiKey(),
+    rateLimit: 5, // calls per minute (free tier)
+  },
+  alpaca: {
+    baseUrl: 'https://data.alpaca.markets',
+    apiKey: getAlpacaCredentials().apiKey,
+    apiSecret: getAlpacaCredentials().apiSecret,
+    rateLimit: 200, // calls per minute
+  },
   finnhub: {
     baseUrl: 'https://finnhub.io/api/v1',
     apiKey: 'd2rnitpr01qv11lfegugd2rnitpr01qv11lfegv0', // Your existing key
@@ -204,8 +230,233 @@ function setCachedData(key: string, data: any): void {
   cache.set(key, { data, timestamp: Date.now() });
 }
 
-// Generate realistic chart data
-function generateChartData(symbol: string, currentPrice: number, timeframe?: string): ChartDataPoint[] {
+// Fetch real chart data with multiple data source fallbacks
+async function fetchChartData(symbol: string, currentPrice: number, timeframe?: string): Promise<ChartDataPoint[]> {
+  const cacheKey = `chart_${symbol}_${timeframe || '1M'}`;
+  const cached = getCachedData(cacheKey);
+  if (cached) return cached;
+
+  if (!USE_REAL_APIS) {
+    logger.log(`Using mock data for chart (APIs disabled)`);
+    return generateFallbackChartData(symbol, currentPrice, timeframe);
+  }
+
+  // Try data sources in priority order: Polygon -> Alpaca -> Finnhub -> Fallback
+  const dataSources = [
+    { name: 'Polygon', fetch: fetchPolygonChartData },
+    { name: 'Alpaca', fetch: fetchAlpacaChartData },
+    { name: 'Finnhub', fetch: fetchFinnhubChartData },
+  ];
+
+  for (const source of dataSources) {
+    try {
+      logger.log(`Trying ${source.name} for chart data: ${symbol} (${timeframe || '1M'})...`);
+      const chartData = await source.fetch(symbol, currentPrice, timeframe);
+      if (chartData && chartData.length > 0) {
+        setCachedData(cacheKey, chartData);
+        logger.log(`✅ Fetched ${chartData.length} chart data points from ${source.name} for ${symbol}`);
+        return chartData;
+      }
+    } catch (error) {
+      logger.warn(`${source.name} chart data fetch failed:`, error);
+      // Continue to next source
+    }
+  }
+
+  // All sources failed, use fallback
+  logger.log(`All data sources failed for ${symbol}, using fallback`);
+  return generateFallbackChartData(symbol, currentPrice, timeframe);
+}
+
+// Fetch chart data from Polygon API
+async function fetchPolygonChartData(symbol: string, currentPrice: number, timeframe?: string): Promise<ChartDataPoint[]> {
+  if (!API_CONFIGS.polygon.apiKey) {
+    throw new Error('Polygon API key not configured');
+  }
+
+  // Map timeframe to Polygon parameters
+  let multiplier = 1;
+  let timespan = 'day';
+  let daysBack = 30;
+  
+  if (timeframe === '1D') {
+    multiplier = 5;
+    timespan = 'minute';
+    daysBack = 1;
+  } else if (timeframe === '5D') {
+    multiplier = 15;
+    timespan = 'minute';
+    daysBack = 5;
+  } else if (timeframe === '1M') {
+    multiplier = 1;
+    timespan = 'day';
+    daysBack = 30;
+  } else if (timeframe === '3M') {
+    multiplier = 1;
+    timespan = 'day';
+    daysBack = 90;
+  } else if (timeframe === '1Y') {
+    multiplier = 1;
+    timespan = 'week';
+    daysBack = 365;
+  }
+
+  const toDate = new Date();
+  const fromDate = new Date(toDate.getTime() - daysBack * 24 * 60 * 60 * 1000);
+  const fromStr = fromDate.toISOString().split('T')[0];
+  const toStr = toDate.toISOString().split('T')[0];
+
+  const url = `${API_CONFIGS.polygon.baseUrl}/v2/aggs/ticker/${symbol}/range/${multiplier}/${timespan}/${fromStr}/${toStr}?adjusted=true&sort=asc&limit=50000&apiKey=${API_CONFIGS.polygon.apiKey}`;
+  
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: { 'Accept': 'application/json' },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Polygon API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  
+  if (data.resultsStatus === 'ok' && data.results && data.results.length > 0) {
+    return data.results.map((bar: any) => ({
+      timestamp: new Date(bar.t).toISOString(),
+      open: bar.o,
+      high: bar.h,
+      low: bar.l,
+      close: bar.c,
+      volume: bar.v || 0
+    }));
+  }
+  
+  throw new Error('No data from Polygon');
+}
+
+// Fetch chart data from Alpaca API
+async function fetchAlpacaChartData(symbol: string, currentPrice: number, timeframe?: string): Promise<ChartDataPoint[]> {
+  if (!API_CONFIGS.alpaca.apiKey || !API_CONFIGS.alpaca.apiSecret) {
+    throw new Error('Alpaca API credentials not configured');
+  }
+
+  // Map timeframe to Alpaca timeframe
+  let timeframeStr = '1Day';
+  let daysBack = 30;
+  
+  if (timeframe === '1D') {
+    timeframeStr = '5Min';
+    daysBack = 1;
+  } else if (timeframe === '5D') {
+    timeframeStr = '15Min';
+    daysBack = 5;
+  } else if (timeframe === '1M') {
+    timeframeStr = '1Day';
+    daysBack = 30;
+  } else if (timeframe === '3M') {
+    timeframeStr = '1Day';
+    daysBack = 90;
+  } else if (timeframe === '1Y') {
+    timeframeStr = '1Week';
+    daysBack = 365;
+  }
+
+  const toDate = new Date();
+  const fromDate = new Date(toDate.getTime() - daysBack * 24 * 60 * 60 * 1000);
+  const fromStr = fromDate.toISOString();
+  const toStr = toDate.toISOString();
+
+  const url = `${API_CONFIGS.alpaca.baseUrl}/v2/stocks/${symbol}/bars?timeframe=${timeframeStr}&start=${fromStr}&end=${toStr}&limit=10000`;
+  
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'APCA-API-KEY-ID': API_CONFIGS.alpaca.apiKey,
+      'APCA-API-SECRET-KEY': API_CONFIGS.alpaca.apiSecret,
+      'Accept': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Alpaca API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  
+  if (data.bars && data.bars.length > 0) {
+    return data.bars.map((bar: any) => ({
+      timestamp: bar.t,
+      open: bar.o,
+      high: bar.h,
+      low: bar.l,
+      close: bar.c,
+      volume: bar.v || 0
+    }));
+  }
+  
+  throw new Error('No data from Alpaca');
+}
+
+// Fetch chart data from Finnhub API
+async function fetchFinnhubChartData(symbol: string, currentPrice: number, timeframe?: string): Promise<ChartDataPoint[]> {
+  // Map timeframe to Finnhub resolution and date range
+  let resolution = 'D'; // Daily by default
+  let daysBack = 30;
+  const now = Math.floor(Date.now() / 1000);
+  let fromTimestamp = now - (daysBack * 24 * 60 * 60);
+  
+  if (timeframe === '1D') {
+    resolution = '5'; // 5-minute intervals for intraday
+    daysBack = 1;
+    fromTimestamp = now - (1 * 24 * 60 * 60);
+  } else if (timeframe === '5D') {
+    resolution = '15'; // 15-minute intervals
+    daysBack = 5;
+    fromTimestamp = now - (5 * 24 * 60 * 60);
+  } else if (timeframe === '1M') {
+    resolution = 'D'; // Daily
+    daysBack = 30;
+    fromTimestamp = now - (30 * 24 * 60 * 60);
+  } else if (timeframe === '3M') {
+    resolution = 'D'; // Daily
+    daysBack = 90;
+    fromTimestamp = now - (90 * 24 * 60 * 60);
+  } else if (timeframe === '1Y') {
+    resolution = 'W'; // Weekly for 1 year
+    daysBack = 365;
+    fromTimestamp = now - (365 * 24 * 60 * 60);
+  }
+  
+  const response = await fetch(
+    `${API_CONFIGS.finnhub.baseUrl}/stock/candle?symbol=${symbol}&resolution=${resolution}&from=${fromTimestamp}&to=${now}&token=${API_CONFIGS.finnhub.apiKey}`,
+    {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+    }
+  );
+  
+  if (!response.ok) {
+    throw new Error(`Finnhub API error: ${response.status}`);
+  }
+  
+  const data = await response.json();
+  
+  if (data.s === 'ok' && data.t && data.t.length > 0) {
+    // Convert Finnhub candle data to ChartDataPoint format
+    return data.t.map((timestamp: number, i: number) => ({
+      timestamp: new Date(timestamp * 1000).toISOString(),
+      open: data.o[i] || currentPrice,
+      high: data.h[i] || currentPrice,
+      low: data.l[i] || currentPrice,
+      close: data.c[i] || currentPrice,
+      volume: data.v[i] || 0
+    }));
+  }
+  
+  throw new Error('No data from Finnhub');
+}
+
+// Generate fallback chart data (used when API fails)
+function generateFallbackChartData(symbol: string, currentPrice: number, timeframe?: string): ChartDataPoint[] {
   // Convert timeframe to days
   let days = 30; // default
   if (timeframe === '1D') days = 1;
@@ -266,8 +517,80 @@ function generateKeyMetrics(symbol: string): KeyMetrics {
   };
 }
 
-// Generate realistic news data
-function generateNews(symbol: string): NewsItem[] {
+// Fetch real news data from NewsAPI
+async function fetchNews(symbol: string): Promise<NewsItem[]> {
+  const cacheKey = `news_${symbol}`;
+  const cached = getCachedData(cacheKey);
+  if (cached) return cached;
+
+  if (!USE_REAL_APIS) {
+    logger.log(`Using mock data for news (APIs disabled)`);
+    return generateMockNews(symbol);
+  }
+
+  try {
+    logger.log(`Fetching news for ${symbol}...`);
+    const response = await fetch(
+      `${API_CONFIGS.newsApi.baseUrl}/everything?q=${encodeURIComponent(symbol)}&apiKey=${API_CONFIGS.newsApi.apiKey}&sortBy=publishedAt&pageSize=10&language=en`,
+      {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+        },
+      }
+    );
+    
+    if (!response.ok) {
+      logger.warn(`News API error: ${response.status} ${response.statusText}`);
+      return generateMockNews(symbol);
+    }
+    
+    const data = await response.json();
+    logger.log('News API response:', data);
+    
+    if (data.status === 'ok' && data.articles && data.articles.length > 0) {
+      const newsItems: NewsItem[] = data.articles.map((article: any) => {
+        // Simple sentiment analysis based on keywords
+        const content = `${article.title} ${article.description || ''}`.toLowerCase();
+        const positiveWords = ['beat', 'strong', 'growth', 'positive', 'bullish', 'up', 'gain', 'rise', 'surge'];
+        const negativeWords = ['miss', 'weak', 'decline', 'negative', 'bearish', 'down', 'loss', 'fall', 'drop'];
+        
+        const positiveCount = positiveWords.filter(word => content.includes(word)).length;
+        const negativeCount = negativeWords.filter(word => content.includes(word)).length;
+        
+        let sentiment = 'neutral';
+        if (positiveCount > negativeCount) {
+          sentiment = 'positive';
+        } else if (negativeCount > positiveCount) {
+          sentiment = 'negative';
+        }
+        
+        return {
+          title: article.title || 'No title',
+          summary: article.description || article.content?.substring(0, 200) + '...' || 'No summary available',
+          url: article.url || '',
+          publishedAt: article.publishedAt || new Date().toISOString(),
+          source: article.source?.name || 'Unknown',
+          sentiment
+        };
+      });
+      
+      setCachedData(cacheKey, newsItems);
+      logger.log(`✅ Fetched ${newsItems.length} news articles for ${symbol}`);
+      return newsItems;
+    } else {
+      logger.log(`No news articles found for ${symbol}, using mock data`);
+      return generateMockNews(symbol);
+    }
+  } catch (error) {
+    logger.error(`Error fetching news for ${symbol}:`, error);
+    logger.log('Using mock data as fallback');
+    return generateMockNews(symbol);
+  }
+}
+
+// Generate realistic news data (fallback)
+function generateMockNews(symbol: string): NewsItem[] {
   const newsTemplates = [
     {
       title: `${symbol} Reports Strong Q4 Earnings, Beats Expectations`,
@@ -825,7 +1148,7 @@ export async function getStockComprehensive(symbol: string, timeframe?: string):
       return null;
     }
 
-    // Fetch company profile for additional data
+    // Fetch company profile and financial metrics
     let companyName = `${symbol} Corporation`;
     let sector = 'Technology';
     let industry = 'Software';
@@ -833,6 +1156,21 @@ export async function getStockComprehensive(symbol: string, timeframe?: string):
     let website = `https://www.${symbol.toLowerCase()}.com`;
     let employees = 0;
     let founded = 'Unknown';
+    let marketCap = 0;
+    let peRatio = 0;
+    let priceToBook = 0;
+    let priceToSales = 0;
+    let dividendYield = 0;
+    let dividendRate = 0;
+    let payoutRatio = 0;
+    let volume = 0;
+    let avgVolume = 0;
+    let roe = 0;
+    let roa = 0;
+    let grossMargin = 0;
+    let netMargin = 0;
+    let revenueGrowth = 0;
+    let epsGrowth = 0;
     
     try {
       const profileResponse = await fetch(
@@ -853,11 +1191,92 @@ export async function getStockComprehensive(symbol: string, timeframe?: string):
           website = profileData.weburl || website;
           employees = profileData.employees || employees;
           founded = profileData.founded || founded;
+          marketCap = profileData.marketCapitalization || 0;
           logger.log(`✅ Fetched company profile for ${symbol}`);
         }
       }
     } catch (profileError) {
       logger.error(`Error fetching profile for ${symbol}:`, profileError);
+    }
+
+    // Fetch volume from quote (we already have quote data, but fetch again for volume)
+    // Note: We could reuse the quote data from above, but this ensures we have volume
+    try {
+      const volumeResponse = await fetch(
+        `${API_CONFIGS.finnhub.baseUrl}/quote?symbol=${symbol}&token=${API_CONFIGS.finnhub.apiKey}`,
+        {
+          method: 'GET',
+          headers: { 'Accept': 'application/json' },
+        }
+      );
+      
+      if (volumeResponse.ok) {
+        const volumeData = await volumeResponse.json();
+        if (volumeData) {
+          volume = volumeData.v || 0; // Volume
+          avgVolume = volume; // Use current volume as approximation
+        }
+      }
+    } catch (volumeError) {
+      logger.warn(`Error fetching volume for ${symbol}:`, volumeError);
+    }
+
+    // For P/E ratio and other metrics, try Alpha Vantage as fallback
+    // Alpha Vantage OVERVIEW endpoint has comprehensive financial data
+    let avData: any = null;
+    if (API_CONFIGS.alphaVantage.apiKey) {
+      try {
+        const avResponse = await fetch(
+          `${API_CONFIGS.alphaVantage.baseUrl}?function=OVERVIEW&symbol=${symbol}&apikey=${API_CONFIGS.alphaVantage.apiKey}`,
+          {
+            method: 'GET',
+            headers: { 'Accept': 'application/json' },
+          }
+        );
+        
+        if (avResponse.ok) {
+          avData = await avResponse.json();
+          if (avData && !avData.Note && !avData.Information) { // Alpha Vantage returns Note/Information on rate limit
+            peRatio = !isNaN(parseFloat(avData.PERatio)) ? parseFloat(avData.PERatio) : peRatio;
+            priceToBook = !isNaN(parseFloat(avData.PriceToBookRatio)) ? parseFloat(avData.PriceToBookRatio) : priceToBook;
+            priceToSales = !isNaN(parseFloat(avData.PriceToSalesRatioTTM)) ? parseFloat(avData.PriceToSalesRatioTTM) : priceToSales;
+            const divYield = parseFloat(avData.DividendYield);
+            dividendYield = !isNaN(divYield) ? divYield : dividendYield;
+            if (avData.MarketCapitalization) {
+              marketCap = parseFloat(avData.MarketCapitalization) || marketCap;
+            }
+            // Profitability metrics
+            roe = parseFloat(avData.ReturnOnEquityTTM) || 0;
+            roa = parseFloat(avData.ReturnOnAssetsTTM) || 0;
+            // Calculate gross margin from GrossProfitTTM and RevenueTTM
+            const grossProfitTTM = parseFloat(avData.GrossProfitTTM);
+            const revenueTTM = parseFloat(avData.RevenueTTM);
+            if (grossProfitTTM && revenueTTM && revenueTTM > 0) {
+              grossMargin = grossProfitTTM / revenueTTM;
+            }
+            netMargin = parseFloat(avData.ProfitMargin) || 0;
+            // Payout ratio - calculate from dividend per share and EPS if available
+            if (avData.DividendPerShare && avData.EPS) {
+              const divPerShare = parseFloat(avData.DividendPerShare);
+              const eps = parseFloat(avData.EPS);
+              if (!isNaN(divPerShare) && !isNaN(eps) && eps > 0) {
+                payoutRatio = divPerShare / eps;
+              }
+            } else if (avData.PayoutRatio) {
+              const payout = parseFloat(avData.PayoutRatio);
+              if (!isNaN(payout)) {
+                payoutRatio = payout;
+              }
+            }
+            // Growth metrics
+            revenueGrowth = parseFloat(avData.QuarterlyRevenueGrowthYOY) || 0;
+            epsGrowth = parseFloat(avData.QuarterlyEarningsGrowthYOY) || 0;
+            logger.log(`✅ Fetched comprehensive financial metrics from Alpha Vantage for ${symbol}`);
+          }
+        }
+      } catch (avError) {
+        logger.warn(`Error fetching Alpha Vantage metrics for ${symbol}:`, avError);
+      }
     }
 
     // Calculate day high/low from price and change
@@ -874,28 +1293,38 @@ export async function getStockComprehensive(symbol: string, timeframe?: string):
       website,
       employees,
       founded: founded.toString(),
-      marketCap: 0, // Would need to fetch from API
-      peRatio: 0, // Would need to fetch from API
-      pegRatio: 0,
-      priceToBook: 0,
-      priceToSales: 0,
-      dividendYield: 0,
-      dividendRate: 0,
+      marketCap: marketCap || 0,
+      peRatio: peRatio || 0,
+      pegRatio: 0, // PEG ratio typically needs to be calculated from P/E and growth rate
+      priceToBook: priceToBook || 0,
+      priceToSales: priceToSales || 0,
+      dividendYield: dividendYield || 0,
+      dividendRate: dividendRate || 0,
       exDividendDate: new Date().toISOString(),
-      payoutRatio: 0,
+      payoutRatio: payoutRatio || 0,
       currentPrice: parseFloat(currentPrice.toFixed(2)),
       previousClose: parseFloat(previousClose.toFixed(2)),
       dayHigh: parseFloat(dayHigh.toFixed(2)),
       dayLow: parseFloat(dayLow.toFixed(2)),
       week52High: parseFloat((currentPrice * 1.3).toFixed(2)), // Approximate
       week52Low: parseFloat((currentPrice * 0.7).toFixed(2)), // Approximate
-      volume: 0, // Would need to fetch from API
-      avgVolume: 0,
+      volume: volume || 0,
+      avgVolume: avgVolume || 0,
       change: parseFloat(change.toFixed(2)),
       changePercent: parseFloat(changePercent.toFixed(2)),
-      chartData: generateChartData(symbol, currentPrice, timeframe),
-      keyMetrics: generateKeyMetrics(symbol),
-      news: generateNews(symbol),
+      chartData: await fetchChartData(symbol, currentPrice, timeframe),
+      keyMetrics: (() => {
+        const baseMetrics = generateKeyMetrics(symbol);
+        return {
+          ...baseMetrics,
+          // Override with real data if available
+          roe: roe || baseMetrics.roe,
+          roa: roa || baseMetrics.roa,
+          revenueGrowth: revenueGrowth || baseMetrics.revenueGrowth,
+          epsGrowth: epsGrowth || baseMetrics.epsGrowth,
+        };
+      })(),
+      news: await fetchNews(symbol),
       analystRatings: await fetchAnalystRatings(symbol, currentPrice),
       earnings: generateEarnings(symbol),
       insiderTrades: await fetchInsiderTrades(symbol),

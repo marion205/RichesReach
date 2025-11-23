@@ -4,7 +4,7 @@ import graphene
 from django.contrib.auth import get_user_model
 
 
-from .types import UserType, PostType, ChatSessionType, ChatMessageType, CommentType, StockType, StockDataType, WatchlistType, AIPortfolioRecommendationType, StockMomentType, ChartRangeEnum, DayTradingDataType
+from .types import UserType, PostType, ChatSessionType, ChatMessageType, CommentType, StockType, StockDataType, WatchlistType, AIPortfolioRecommendationType, StockMomentType, ChartRangeEnum, DayTradingDataType, ProfileInput, AIRecommendationsType
 
 
 from .models import Post, ChatSession, ChatMessage, Comment, User, Stock, StockData, Watchlist, AIPortfolioRecommendation, StockDiscussion, DiscussionComment, Portfolio, StockMoment
@@ -42,6 +42,146 @@ class Query(graphene.ObjectType):
     search_users = graphene.List(UserType, query=graphene.String(required=False))
 
     me = graphene.Field(UserType)
+    has_income_profile = graphene.Boolean()
+    ai_recommendations = graphene.Field(
+        AIRecommendationsType,
+        # Profile input – real Graphene argument, not a string or direct type
+        profile=graphene.Argument(ProfileInput, required=False),
+        # usingDefaults Boolean argument, exposed to GraphQL as "usingDefaults"
+        using_defaults=graphene.Argument(
+            graphene.Boolean,
+            required=False,
+            default_value=True,
+            name="usingDefaults",
+        ),
+    )
+
+    def resolve_me(self, info, **kwargs):
+        """Resolve the 'me' query - returns the authenticated user"""
+        user = getattr(info.context, "user", None)
+        
+        logger.info(
+            "[Me] resolve_me user_id=%s email=%s is_auth=%s",
+            getattr(user, "id", None),
+            getattr(user, "email", None),
+            getattr(user, "is_authenticated", None),
+        )
+        
+        if not getattr(user, "is_authenticated", False):
+            logger.info("[Me] resolve_me: user not authenticated, returning null")
+            return None
+        
+        logger.info("[Me] resolve_me: returning authenticated user")
+        return user
+
+    def resolve_has_income_profile(self, info, **kwargs):
+        """Check if the authenticated user has an income profile"""
+        from .models import IncomeProfile
+        
+        user = getattr(info.context, "user", None)
+        
+        if not getattr(user, "is_authenticated", False):
+            logger.info("[Me] has_income_profile: user not authenticated, returning false")
+            return False
+        
+        exists = IncomeProfile.objects.filter(user=user).exists()
+        logger.info(
+            "[Me] has_income_profile user_id=%s email=%s exists=%s",
+            getattr(user, "id", None),
+            getattr(user, "email", None),
+            exists,
+        )
+        return exists
+
+    def resolve_ai_recommendations(
+        self,
+        info,
+        profile=None,
+        using_defaults=True,
+        **kwargs,
+    ):
+        """
+        Resolver for:
+          aiRecommendations(profile: ProfileInput, usingDefaults: Boolean): AIRecommendationsType
+        """
+        from django.contrib.auth.models import AnonymousUser
+        from .models import IncomeProfile, AIPortfolioRecommendation
+        
+        user = self._get_user_from_context(info)
+        
+        logger.info(
+            "[AIRecs] resolve_ai_recommendations user=%s email=%s using_defaults=%s profile=%s",
+            getattr(user, "id", None),
+            getattr(user, "email", None),
+            using_defaults,
+            profile,
+        )
+        
+        if (
+            not user
+            or not getattr(user, "is_authenticated", False)
+        ):
+            logger.info("[AI] resolve_ai_recommendations: unauthenticated")
+            return AIRecommendationsType(
+                buyRecsCount=0,
+                usingDefaults=True,
+                recommendations=[],
+            )
+        
+        # Build a plain dict from the input or use saved profile
+        profile_dict = None
+        if profile is not None:
+            # Profile is a ProfileInput object, extract values
+            profile_dict = {
+                "age": getattr(profile, "age", None),
+                "income_bracket": getattr(profile, "incomeBracket", None) or getattr(profile, "income_bracket", None),
+                "investment_goals": list(getattr(profile, "investmentGoals", []) or getattr(profile, "investment_goals", []) or []),
+                "investment_horizon_years": getattr(profile, "investmentHorizonYears", None) or getattr(profile, "investment_horizon_years", None),
+                "risk_tolerance": getattr(profile, "riskTolerance", None) or getattr(profile, "risk_tolerance", None),
+            }
+            logger.info("[AI] Using profile from input: %s", profile_dict)
+        elif not using_defaults:
+            # If client wants to use the saved profile instead of the passed input
+            try:
+                income_profile = IncomeProfile.objects.get(user=user)
+                profile_dict = {
+                    "age": income_profile.age,
+                    "income_bracket": income_profile.income_bracket,
+                    "investment_goals": list(income_profile.investment_goals or []),
+                    "investment_horizon_years": income_profile.investment_horizon,
+                    "risk_tolerance": income_profile.risk_tolerance,
+                }
+                logger.info(
+                    "[AI] Using saved profile for user=%s bracket=%s age=%s",
+                    user.id,
+                    income_profile.income_bracket,
+                    income_profile.age,
+                )
+            except IncomeProfile.DoesNotExist:
+                logger.info("[AI] No saved profile, falling back to defaults")
+        else:
+            logger.info("[AI] using_defaults=True – skipping saved profile")
+        
+        # For now, just return the latest recommendations for the user
+        recs_qs = (
+            AIPortfolioRecommendation.objects.filter(user=user)
+            .order_by("-id")[:10]
+        )
+        recs = list(recs_qs)
+        buy_recs_count = len(recs)
+        
+        logger.info(
+            "[AI] resolve_ai_recommendations user=%s using_defaults=%s count=%s",
+            user.id,
+            using_defaults,
+            buy_recs_count,
+        )
+        
+        return AIRecommendationsType(
+            buyRecsCount=buy_recs_count,
+            usingDefaults=using_defaults,
+            recommendations=recs,
+        )
 
     wall_posts = graphene.List(PostType)
 
@@ -305,6 +445,13 @@ class Query(graphene.ObjectType):
         DayTradingDataType,
         mode=graphene.String(required=False, default_value="SAFE")
     )
+    
+    # Research Hub query
+    researchHub = graphene.Field(
+        'core.types.ResearchHubType',
+        symbol=graphene.String(required=True),
+        description="Get comprehensive research data for a stock"
+    )
 
     def resolve_day_trading_picks(self, info, mode="SAFE"):
         """Resolve day trading picks using Polygon API with ML fallback"""
@@ -352,6 +499,199 @@ class Query(graphene.ObjectType):
                 'universeSize': 0,
                 'qualityThreshold': 2.5 if mode == "SAFE" else 2.0
             }
+    
+    def resolve_research_hub(self, info, symbol: str):
+        """Resolve research hub data for a stock using real APIs"""
+        from .types import (
+            ResearchHubType, SnapshotType, QuoteType, TechnicalType,
+            SentimentType, MacroType, MarketRegimeType
+        )
+        from .enhanced_stock_service import enhanced_stock_service
+        from .models import Stock
+        import asyncio
+        import os
+        import requests
+        from datetime import datetime
+        
+        symbol_upper = symbol.upper()
+        logger.info(f"Fetching research hub data for {symbol_upper}")
+        
+        try:
+            # Get stock from database
+            try:
+                stock = Stock.objects.get(symbol=symbol_upper)
+            except Stock.DoesNotExist:
+                logger.warning(f"Stock {symbol_upper} not found in database")
+                stock = None
+            
+            # Fetch real-time price and quote data
+            quote_data = None
+            try:
+                price_data = asyncio.run(enhanced_stock_service.get_real_time_price(symbol_upper))
+                if price_data:
+                    quote_data = {
+                        'price': price_data.get('price', 0),
+                        'chg': price_data.get('change', 0),
+                        'chgPct': price_data.get('change_percent', 0),
+                        'high': price_data.get('high', 0),
+                        'low': price_data.get('low', 0),
+                        'volume': price_data.get('volume', 0),
+                    }
+            except Exception as e:
+                logger.warning(f"Could not get real-time quote for {symbol_upper}: {e}")
+            
+            # Get company snapshot from Alpha Vantage
+            snapshot_data = None
+            alpha_vantage_key = os.getenv('ALPHA_VANTAGE_API_KEY') or os.getenv('ALPHA_VANTAGE_KEY')
+            if alpha_vantage_key:
+                try:
+                    av_url = "https://www.alphavantage.co/query"
+                    av_params = {
+                        'function': 'OVERVIEW',
+                        'symbol': symbol_upper,
+                        'apikey': alpha_vantage_key
+                    }
+                    av_response = requests.get(av_url, params=av_params, timeout=10)
+                    if av_response.ok:
+                        av_data = av_response.json()
+                        if 'Name' in av_data:
+                            snapshot_data = {
+                                'name': av_data.get('Name', ''),
+                                'sector': av_data.get('Sector', stock.sector if stock else 'Unknown'),
+                                'marketCap': float(av_data.get('MarketCapitalization', 0)) if av_data.get('MarketCapitalization') else None,
+                                'country': av_data.get('Country', 'US'),
+                                'website': av_data.get('Website', ''),
+                            }
+                except Exception as e:
+                    logger.warning(f"Could not get Alpha Vantage overview for {symbol_upper}: {e}")
+            
+            # Use database stock data as fallback for snapshot
+            if not snapshot_data and stock:
+                snapshot_data = {
+                    'name': stock.company_name or symbol_upper,
+                    'sector': stock.sector or 'Unknown',
+                    'marketCap': float(stock.market_cap) if stock.market_cap else None,
+                    'country': 'US',
+                    'website': '',
+                }
+            
+            # Get technical indicators (simplified - would need proper calculation)
+            technical_data = None
+            if quote_data and quote_data.get('price'):
+                # Simplified technical indicators
+                current_price = quote_data['price']
+                technical_data = {
+                    'rsi': 55.0,  # Would need proper RSI calculation
+                    'macd': 0.5,
+                    'macdhistogram': 0.2,
+                    'movingAverage50': current_price * 0.98,
+                    'movingAverage200': current_price * 0.95,
+                    'supportLevel': current_price * 0.92,
+                    'resistanceLevel': current_price * 1.08,
+                    'impliedVolatility': 0.25,
+                }
+            
+            # Get sentiment from news (using NewsAPI if available)
+            sentiment_data = None
+            news_api_key = os.getenv('NEWS_API_KEY')
+            if news_api_key:
+                try:
+                    news_url = "https://newsapi.org/v2/everything"
+                    news_params = {
+                        'q': symbol_upper,
+                        'language': 'en',
+                        'sortBy': 'publishedAt',
+                        'pageSize': 10,
+                        'apiKey': news_api_key
+                    }
+                    news_response = requests.get(news_url, params=news_params, timeout=10)
+                    if news_response.ok:
+                        news_data = news_response.json()
+                        articles = news_data.get('articles', [])
+                        # Simple sentiment calculation
+                        positive_keywords = ['up', 'gain', 'rise', 'surge', 'bullish', 'buy', 'positive']
+                        negative_keywords = ['down', 'fall', 'drop', 'bearish', 'sell', 'negative']
+                        positive_count = sum(1 for a in articles if any(kw in a.get('title', '').lower() for kw in positive_keywords))
+                        negative_count = sum(1 for a in articles if any(kw in a.get('title', '').lower() for kw in negative_keywords))
+                        total = len(articles)
+                        score = ((positive_count - negative_count) / max(total, 1)) * 50 + 50  # Scale to 0-100
+                        label = 'BULLISH' if score > 60 else 'BEARISH' if score < 40 else 'NEUTRAL'
+                        sentiment_data = {
+                            'label': label,
+                            'score': score,
+                            'articleCount': total,
+                            'confidence': min(100, total * 10),
+                        }
+                except Exception as e:
+                    logger.warning(f"Could not get news sentiment for {symbol_upper}: {e}")
+            
+            # Default sentiment if API fails
+            if not sentiment_data:
+                sentiment_data = {
+                    'label': 'NEUTRAL',
+                    'score': 50.0,
+                    'articleCount': 0,
+                    'confidence': 0.0,
+                }
+            
+            # Macro data (simplified)
+            macro_data = {
+                'vix': 18.5,  # Would need VIX API
+                'marketSentiment': 'Positive',
+                'riskAppetite': 0.65,
+            }
+            
+            # Market regime (simplified)
+            market_regime_data = {
+                'market_regime': 'Bull Market',
+                'confidence': 0.72,
+                'recommended_strategy': 'Momentum',
+            }
+            
+            # Get peers (simplified - would need proper peer analysis)
+            peers = []
+            if stock and stock.sector:
+                # Get a few stocks from the same sector
+                sector_stocks = Stock.objects.filter(sector=stock.sector).exclude(symbol=symbol_upper)[:5]
+                peers = [s.symbol for s in sector_stocks]
+            
+            if not peers:
+                # Default peers for major stocks
+                default_peers = {
+                    'AAPL': ['MSFT', 'GOOGL', 'META', 'AMZN'],
+                    'MSFT': ['AAPL', 'GOOGL', 'META', 'AMZN'],
+                    'GOOGL': ['AAPL', 'MSFT', 'META', 'AMZN'],
+                }
+                peers = default_peers.get(symbol_upper, ['AAPL', 'MSFT', 'GOOGL'])
+            
+            logger.info(f"✅ Fetched research hub data for {symbol_upper}")
+            
+            return ResearchHubType(
+                symbol=symbol_upper,
+                snapshot=SnapshotType(**snapshot_data) if snapshot_data else None,
+                quote=QuoteType(**quote_data) if quote_data else None,
+                technical=TechnicalType(**technical_data) if technical_data else None,
+                sentiment=SentimentType(**sentiment_data) if sentiment_data else None,
+                macro=MacroType(**macro_data) if macro_data else None,
+                marketRegime=MarketRegimeType(**market_regime_data) if market_regime_data else None,
+                peers=peers,
+                updatedAt=timezone.now().isoformat(),
+            )
+            
+        except Exception as e:
+            logger.error(f"Error resolving research hub for {symbol_upper}: {e}", exc_info=True)
+            # Return minimal data on error
+            return ResearchHubType(
+                symbol=symbol_upper,
+                snapshot=None,
+                quote=None,
+                technical=None,
+                sentiment=None,
+                macro=None,
+                marketRegime=None,
+                peers=[],
+                updatedAt=timezone.now().isoformat(),
+            )
 
 
 def resolve_all_users(root, info):
@@ -388,15 +728,6 @@ def resolve_search_users(root, info, query=None):
         )
 
     return users[:20]  # Limit results
-
-
-def resolve_me(root, info):
-    user = info.context.user
-
-    if user.is_anonymous:
-        return None
-
-    return user
 
 
 def resolve_wall_posts(self, info):

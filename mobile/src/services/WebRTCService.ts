@@ -191,7 +191,15 @@ export class WebRTCService {
 
   // Join a room
   async joinRoom(roomId: string, userId: string, userName: string, isHost: boolean = false): Promise<void> {
+    logger.log('🎥 [DEBUG] ========== joinRoom() called ==========');
+    logger.log('🎥 [DEBUG] Room ID:', roomId);
+    logger.log('🎥 [DEBUG] User ID:', userId);
+    logger.log('🎥 [DEBUG] User Name:', userName);
+    logger.log('🎥 [DEBUG] Is Host:', isHost);
+    logger.log('🎥 [DEBUG] Socket available:', !!this.socket);
+    
     if (!this.socket) {
+      logger.error('❌ [DEBUG] Socket is null, cannot join room');
       throw new Error('WebRTC Service not initialized');
     }
 
@@ -199,6 +207,7 @@ export class WebRTCService {
     this.userId = userId;
     this.isHost = isHost;
 
+    logger.log('🎥 [DEBUG] Emitting join-room event...');
     // Join room via socket
     this.socket.emit('join-room', {
       roomId,
@@ -206,32 +215,55 @@ export class WebRTCService {
       userName,
       isHost
     });
+    logger.log('✅ [DEBUG] join-room event emitted');
 
+    logger.log('🎥 [DEBUG] Initializing peer connection...');
     // Initialize peer connection
     await this.initializePeerConnection();
+    logger.log('✅ [DEBUG] Peer connection initialized');
 
     // Get user media if host
     if (isHost) {
+      logger.log('🎥 [DEBUG] User is host, starting local stream...');
       await this.startLocalStream();
+      logger.log('✅ [DEBUG] Local stream started');
+    } else {
+      logger.log('🎥 [DEBUG] User is not host, skipping local stream');
     }
+    
+    logger.log('✅ [DEBUG] joinRoom() completed successfully');
   }
 
   // Initialize peer connection
   private async initializePeerConnection(): Promise<void> {
+    logger.log('🎥 [DEBUG] ========== initializePeerConnection() called ==========');
+    logger.log('🎥 [DEBUG] RTCPeerConnection available:', !!RTCPeerConnection);
+    
     if (!RTCPeerConnection) {
-      logger.warn('⚠️ RTCPeerConnection not available (Expo Go)');
+      logger.warn('⚠️ [DEBUG] RTCPeerConnection not available (Expo Go)');
+      logger.warn('⚠️ [DEBUG] This means react-native-webrtc is not available');
       return;
     }
 
+    logger.log('🎥 [DEBUG] Configuring ICE servers...');
+    logger.log('🎥 [DEBUG] STUN servers:', this.config.stunServers);
+    logger.log('🎥 [DEBUG] TURN servers:', this.config.turnServers);
+    
     const iceServers: RTCIceServer[] = this.config.stunServers.map(stun => ({ urls: stun }));
     if (this.config.turnServers) {
       iceServers.push(...this.config.turnServers);
     }
+    
+    logger.log('🎥 [DEBUG] Total ICE servers:', iceServers.length);
+    logger.log('🎥 [DEBUG] Creating RTCPeerConnection...');
 
     this.peerConnection = new RTCPeerConnection({
       iceServers,
       iceCandidatePoolSize: 10,
     });
+    
+    logger.log('✅ [DEBUG] RTCPeerConnection created');
+    logger.log('🎥 [DEBUG] Setting up event handlers...');
 
     // Handle remote streams
     this.peerConnection.ontrack = (event) => {
@@ -252,22 +284,100 @@ export class WebRTCService {
         });
       }
     };
+    
+    logger.log('✅ [DEBUG] Peer connection event handlers set up');
+    logger.log('✅ [DEBUG] initializePeerConnection() completed');
   }
 
   // Start local media stream
   private async startLocalStream(): Promise<void> {
+    logger.log('🎥 [DEBUG] ========== startLocalStream() called ==========');
+    logger.log('🎥 [DEBUG] mediaDevices available:', !!mediaDevices);
+    logger.log('🎥 [DEBUG] mediaDevices type:', typeof mediaDevices);
+    
     if (!mediaDevices) {
-      logger.warn('⚠️ mediaDevices not available (Expo Go)');
+      logger.warn('⚠️ [DEBUG] mediaDevices not available (Expo Go)');
+      logger.warn('⚠️ [DEBUG] This means react-native-webrtc is not available');
       return;
     }
 
     try {
+      logger.log('🎥 [DEBUG] Starting camera initialization...');
+      
+      // Try to enumerate devices and find front camera
+      let videoConstraints: any = {
+        width: { min: 640, ideal: 1280, max: 1920 },
+        height: { min: 480, ideal: 720, max: 1080 },
+        frameRate: { min: 15, ideal: 30, max: 30 },
+      };
+
+      logger.log('🎥 [DEBUG] Base video constraints:', JSON.stringify(videoConstraints));
+
+      // PRIMARY METHOD: Use facingMode first (most reliable for front camera)
+      // This works on both iOS and Android with react-native-webrtc
+      logger.log('🎥 [DEBUG] Using facingMode: user (front camera) as primary method');
+      videoConstraints.facingMode = 'user';
+      
+      // SECONDARY: Try to enumerate devices to get more info (for debugging)
+      try {
+        logger.log('🎥 [DEBUG] Attempting to enumerate devices for debugging...');
+        const devices = await mediaDevices.enumerateDevices();
+        logger.log('🎥 [DEBUG] Total devices found:', devices.length);
+        logger.log('🎥 [DEBUG] All devices:', JSON.stringify(devices.map((d: any) => ({
+          kind: d.kind,
+          label: d.label || 'NO LABEL',
+          deviceId: d.deviceId ? d.deviceId.substring(0, 20) + '...' : 'NO ID',
+          facing: d.facing || 'NO FACING',
+        })), null, 2));
+        
+        const videoDevices = devices.filter((device: any) => device.kind === 'videoinput');
+        logger.log('🎥 [DEBUG] Video input devices found:', videoDevices.length);
+        
+        if (videoDevices.length > 0) {
+          logger.log('🎥 [DEBUG] Video devices details:', JSON.stringify(videoDevices.map((d: any) => ({
+            label: d.label || 'NO LABEL',
+            deviceId: d.deviceId ? d.deviceId.substring(0, 30) + '...' : 'NO ID',
+            facing: d.facing || 'NO FACING',
+            kind: d.kind,
+          })), null, 2));
+          
+          // Try to find a definitively identified front camera
+          const frontCamera = videoDevices.find((device: any) => {
+            const label = (device.label || '').toLowerCase();
+            const hasFront = label.includes('front') || label.includes('facing') || label.includes('selfie');
+            const facingFront = device.facing === 'front' || device.facing === 'user';
+            logger.log(`🎥 [DEBUG] Checking device: label="${device.label || 'NO LABEL'}", facing="${device.facing || 'NO FACING'}", hasFront=${hasFront}, facingFront=${facingFront}`);
+            return hasFront || facingFront;
+          });
+          
+          // Only override if we found a definitively identified front camera
+          if (frontCamera && frontCamera.deviceId && (frontCamera.facing === 'front' || frontCamera.facing === 'user')) {
+            logger.log('✅ [DEBUG] Found definitively identified front camera, using deviceId');
+            videoConstraints.deviceId = { exact: frontCamera.deviceId };
+            delete videoConstraints.facingMode; // Remove facingMode when using deviceId
+            logger.log('✅ [DEBUG] Front camera label:', frontCamera.label || 'NO LABEL');
+            logger.log('✅ [DEBUG] Front camera deviceId:', frontCamera.deviceId.substring(0, 30) + '...');
+            logger.log('✅ [DEBUG] Front camera facing:', frontCamera.facing || 'NO FACING');
+          } else {
+            logger.log('🎥 [DEBUG] No definitively identified front camera found, keeping facingMode: user');
+            logger.log('🎥 [DEBUG] This is fine - facingMode: user will use the front camera');
+          }
+        } else {
+          logger.log('⚠️ [DEBUG] No video devices found, using facingMode: user');
+        }
+      } catch (enumError: any) {
+        // If enumeration fails, that's fine - we're using facingMode anyway
+        logger.warn('⚠️ [DEBUG] Could not enumerate devices (this is OK, using facingMode)');
+        logger.warn('⚠️ [DEBUG] Error name:', enumError?.name);
+        logger.warn('⚠️ [DEBUG] Error message:', enumError?.message);
+        logger.log('🎥 [DEBUG] Continuing with facingMode: user (front camera)');
+      }
+
+      logger.log('🎥 [DEBUG] Final video constraints:', JSON.stringify(videoConstraints, null, 2));
+      logger.log('🎥 [DEBUG] Calling getUserMedia with constraints...');
+
       const stream = await mediaDevices.getUserMedia({
-        video: {
-          width: { min: 640, ideal: 1280, max: 1920 },
-          height: { min: 480, ideal: 720, max: 1080 },
-          frameRate: { min: 15, ideal: 30, max: 30 },
-        },
+        video: videoConstraints,
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
@@ -275,15 +385,44 @@ export class WebRTCService {
         },
       });
 
+      logger.log('✅ [DEBUG] getUserMedia succeeded!');
+      logger.log('✅ [DEBUG] Stream ID:', stream.id);
+      logger.log('✅ [DEBUG] Stream active:', stream.active);
+      
+      const videoTracks = stream.getVideoTracks();
+      const audioTracks = stream.getAudioTracks();
+      logger.log('✅ [DEBUG] Video tracks:', videoTracks.length);
+      logger.log('✅ [DEBUG] Audio tracks:', audioTracks.length);
+      
+      if (videoTracks.length > 0) {
+        const track = videoTracks[0];
+        const settings = track.getSettings();
+        const constraints = track.getConstraints();
+        logger.log('✅ [DEBUG] Video track settings:', JSON.stringify(settings, null, 2));
+        logger.log('✅ [DEBUG] Video track constraints:', JSON.stringify(constraints, null, 2));
+        logger.log('✅ [DEBUG] Video track enabled:', track.enabled);
+        logger.log('✅ [DEBUG] Video track readyState:', track.readyState);
+        logger.log('✅ [DEBUG] Video track facingMode:', settings.facingMode);
+        logger.log('✅ [DEBUG] Video track deviceId:', settings.deviceId?.substring(0, 30) + '...');
+      }
+
       this.localStream = stream;
 
       // Add tracks to peer connection
-      stream.getTracks().forEach(track => {
+      logger.log('🎥 [DEBUG] Adding tracks to peer connection...');
+      stream.getTracks().forEach((track, index) => {
+        logger.log(`🎥 [DEBUG] Adding track ${index}: kind=${track.kind}, enabled=${track.enabled}, readyState=${track.readyState}`);
         this.peerConnection?.addTrack(track, stream);
       });
 
-      logger.log('📹 Local stream started');
-    } catch (error) {
+      logger.log('✅ [DEBUG] Local stream started successfully!');
+      logger.log('📹 Local stream started with front camera');
+    } catch (error: any) {
+      logger.error('❌ [DEBUG] Failed to start local stream');
+      logger.error('❌ [DEBUG] Error name:', error?.name);
+      logger.error('❌ [DEBUG] Error message:', error?.message);
+      logger.error('❌ [DEBUG] Error stack:', error?.stack?.substring(0, 500));
+      logger.error('❌ [DEBUG] Full error:', JSON.stringify(error, Object.getOwnPropertyNames(error)).substring(0, 1000));
       logger.error('❌ Failed to start local stream:', error);
       throw error;
     }

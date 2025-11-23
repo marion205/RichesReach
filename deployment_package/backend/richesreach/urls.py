@@ -6,6 +6,9 @@ from django.urls import path, include
 from core.views import graphql_view
 from graphene_django.views import GraphQLView
 from core.daytrading_test_schema import schema as daytrading_test_schema
+from core.market_views import QuotesView
+from core.wealth_circles_views import WealthCirclePostsView
+from core.voices_views import VoicesListView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -17,5 +20,11 @@ urlpatterns = [
     path('', include('core.banking_urls')),
     # Alpaca OAuth endpoints
     path('api/auth/alpaca/', include('core.alpaca_oauth_urls')),
+    # Market data endpoints
+    path('api/market/quotes/', QuotesView.as_view(), name='market_quotes'),
+    # Wealth circles endpoints
+    path('api/wealth-circles/<str:circle_id>/posts/', WealthCirclePostsView.as_view(), name='wealth_circle_posts'),
+    # Voice/TTS endpoints
+    path('api/voices/', VoicesListView.as_view(), name='voices_list'),
 ]
 

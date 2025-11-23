@@ -407,15 +407,231 @@ class OptionsAnalysisService:
         underlying_price: float,
     ) -> Optional[Dict[str, Any]]:
         """
-        Try to fetch real options chain from APIs
+        Try to fetch real options chain from Polygon API
         """
-        if not self.use_real_data:
+        if not self.use_real_data or not self.polygon_api_key:
             return None
         
-        # Note: Options chain data typically requires premium API access
-        # For now, we'll try Polygon but may need to fallback to mock
-        # Polygon options endpoint requires premium subscription
-        return None  # Will use mock for now
+        try:
+            import requests
+            from datetime import datetime, timedelta
+            
+            # Get options contracts from Polygon
+            url = "https://api.polygon.io/v3/reference/options/contracts"
+            params = {
+                'underlying_ticker': symbol.upper(),
+                'limit': 1000,  # Get more contracts to have good coverage
+                'apiKey': self.polygon_api_key
+            }
+            
+            response = requests.get(url, params=params, timeout=10)
+            if not response.ok:
+                logger.warning(f"Polygon options contracts API returned {response.status_code} for {symbol}")
+                return None
+            
+            data = response.json()
+            results = data.get('results', [])
+            if not results:
+                logger.info(f"No options contracts found for {symbol}")
+                return None
+            
+            # Group contracts by expiration date
+            options_by_expiry: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
+            expiration_dates = set()
+            
+            for contract in results:
+                expiry = contract.get('expiration_date')
+                if not expiry:
+                    continue
+                    
+                expiration_dates.add(expiry)
+                
+                if expiry not in options_by_expiry:
+                    options_by_expiry[expiry] = {'calls': [], 'puts': []}
+                
+                contract_type = contract.get('contract_type', '').lower()
+                strike = contract.get('strike_price', 0)
+                
+                # Get quotes for this contract (if available)
+                contract_ticker = contract.get('ticker', '')
+                bid, ask, volume, last_price = self._get_option_quote(contract_ticker)
+                
+                option_data = {
+                    'symbol': symbol,
+                    'contract_symbol': contract_ticker,
+                    'strike': float(strike),
+                    'expiration_date': expiry,
+                    'option_type': contract_type,
+                    'bid': bid,
+                    'ask': ask,
+                    'last_price': last_price,
+                    'volume': volume,
+                    'open_interest': contract.get('shares_per_contract', 0) * contract.get('open_interest', 0),
+                    'implied_volatility': 0.0,  # Would need separate API call
+                    'delta': 0.0,  # Would need Greeks calculation
+                    'gamma': 0.0,
+                    'theta': 0.0,
+                    'vega': 0.0,
+                    'rho': 0.0,
+                    'intrinsic_value': self._calculate_intrinsic_value(
+                        underlying_price, strike, contract_type
+                    ),
+                    'time_value': max(0, last_price - self._calculate_intrinsic_value(
+                        underlying_price, strike, contract_type
+                    )),
+                    'days_to_expiration': self._days_to_expiration(expiry),
+                }
+                
+                if contract_type == 'call':
+                    options_by_expiry[expiry]['calls'].append(option_data)
+                elif contract_type == 'put':
+                    options_by_expiry[expiry]['puts'].append(option_data)
+            
+            # Sort expiration dates
+            sorted_expirations = sorted(list(expiration_dates))
+            
+            # Collect all calls and puts from all expirations
+            all_calls = []
+            all_puts = []
+            
+            for exp in sorted_expirations:
+                if exp in options_by_expiry:
+                    all_calls.extend(options_by_expiry[exp]['calls'])
+                    all_puts.extend(options_by_expiry[exp]['puts'])
+            
+            # Calculate Greeks for all contracts
+            for contract in all_calls + all_puts:
+                self._calculate_greeks(contract, underlying_price)
+            
+            # Sort by strike for easier display
+            all_calls = sorted(all_calls, key=lambda x: (x['expiration_date'], x['strike']))
+            all_puts = sorted(all_puts, key=lambda x: (x['expiration_date'], x['strike']))
+            
+            logger.info(f"✅ Fetched real options chain for {symbol}: {len(all_calls)} calls, {len(all_puts)} puts across {len(sorted_expirations)} expirations")
+            
+            return {
+                'expiration_dates': sorted_expirations,
+                'calls': all_calls[:200],  # Limit to 200 total for performance
+                'puts': all_puts[:200],
+                'greeks': {
+                    'delta': 0.5,  # Aggregate Greeks would need calculation
+                    'gamma': 0.02,
+                    'theta': -0.12,
+                    'vega': 0.25,
+                    'rho': 0.04,
+                },
+            }
+            
+            return None
+            
+        except Exception as e:
+            logger.warning(f"Error fetching real options chain from Polygon for {symbol}: {e}")
+            return None
+    
+    def _get_option_quote(self, contract_ticker: str) -> tuple:
+        """
+        Get bid, ask, volume, and last price for an options contract from Polygon
+        """
+        if not self.polygon_api_key:
+            return 0.0, 0.0, 0, 0.0
+        
+        try:
+            import requests
+            # Get previous day's close for the option
+            url = f"https://api.polygon.io/v2/aggs/ticker/{contract_ticker}/prev"
+            params = {'adjusted': 'true', 'apiKey': self.polygon_api_key}
+            response = requests.get(url, params=params, timeout=5)
+            
+            if response.ok:
+                data = response.json()
+                results = data.get('results', [])
+                if results and len(results) > 0:
+                    last_price = float(results[0].get('c', 0))  # close price
+                    volume = int(results[0].get('v', 0))
+                    # Estimate bid/ask spread (typically 1-2% for liquid options)
+                    spread = last_price * 0.02
+                    bid = max(0, last_price - spread / 2)
+                    ask = last_price + spread / 2
+                    return bid, ask, volume, last_price
+            
+            # Fallback: try to get snapshot if available
+            url = f"https://api.polygon.io/v2/snapshot/option/{contract_ticker}"
+            params = {'apiKey': self.polygon_api_key}
+            response = requests.get(url, params=params, timeout=5)
+            
+            if response.ok:
+                data = response.json()
+                # Polygon snapshot format may vary
+                if 'results' in data and len(data['results']) > 0:
+                    result = data['results'][0]
+                    bid = float(result.get('bid', 0))
+                    ask = float(result.get('ask', 0))
+                    last_price = float(result.get('last_quote', {}).get('last', 0))
+                    volume = int(result.get('day', {}).get('v', 0))
+                    return bid, ask, volume, last_price
+            
+            return 0.0, 0.0, 0, 0.0
+            
+        except Exception as e:
+            logger.debug(f"Could not get quote for {contract_ticker}: {e}")
+            return 0.0, 0.0, 0, 0.0
+    
+    def _calculate_intrinsic_value(self, underlying_price: float, strike: float, option_type: str) -> float:
+        """Calculate intrinsic value of an option"""
+        if option_type == 'call':
+            return max(0, underlying_price - strike)
+        elif option_type == 'put':
+            return max(0, strike - underlying_price)
+        return 0.0
+    
+    def _days_to_expiration(self, expiration_date: str) -> int:
+        """Calculate days to expiration"""
+        try:
+            from datetime import datetime
+            exp = datetime.strptime(expiration_date, '%Y-%m-%d')
+            today = datetime.now()
+            return (exp - today).days
+        except:
+            return 0
+    
+    def _calculate_greeks(self, contract: Dict[str, Any], underlying_price: float):
+        """
+        Calculate simplified Greeks for an option contract
+        This is a simplified approximation - for production, use proper Black-Scholes
+        """
+        try:
+            strike = contract.get('strike', 0)
+            expiration_date = contract.get('expiration_date', '')
+            option_type = contract.get('option_type', 'call')
+            days_to_exp = contract.get('days_to_expiration', 30)
+            iv = contract.get('implied_volatility', 0.25)
+            
+            if days_to_exp <= 0:
+                days_to_exp = 1
+            
+            # Simplified Delta calculation
+            if option_type == 'call':
+                moneyness = underlying_price / strike if strike > 0 else 1.0
+                contract['delta'] = min(1.0, max(0.0, moneyness * 0.7))
+            else:
+                moneyness = strike / underlying_price if underlying_price > 0 else 1.0
+                contract['delta'] = max(-1.0, min(0.0, -moneyness * 0.7))
+            
+            # Simplified other Greeks
+            contract['gamma'] = 0.02
+            contract['theta'] = -0.15 / (days_to_exp / 30)  # Time decay
+            contract['vega'] = 0.3
+            contract['rho'] = 0.05 if option_type == 'call' else -0.03
+            contract['implied_volatility'] = iv if iv > 0 else 0.25
+            
+        except Exception as e:
+            logger.debug(f"Error calculating Greeks: {e}")
+            # Set defaults
+            contract['delta'] = 0.5
+            contract['gamma'] = 0.02
+            contract['theta'] = -0.15
+            contract['vega'] = 0.3
+            contract['rho'] = 0.04
     
     def _get_real_unusual_flow(
         self,

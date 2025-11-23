@@ -36,6 +36,7 @@ export default function InvestHubScreen({ navigateTo: navigateToProp }: InvestHu
       { key: 'tomorrow', title: 'Tomorrow', subtitle: 'Trade tomorrow\'s markets today', icon: 'calendar', to: 'Tomorrow' },
       { key: 'trade', title: 'Trading', subtitle: 'Live & options', icon: 'activity', to: 'trading' },
       { key: 'portfolio', title: 'Portfolio', subtitle: 'Positions & P/L', icon: 'pie-chart', to: 'Portfolio' },
+      { key: 'paper-trading', title: 'Paper Trading', subtitle: 'Practice without risk', icon: 'edit-3', to: 'paper-trading' },
     ],
     []
   );

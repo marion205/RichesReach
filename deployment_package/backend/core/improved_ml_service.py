@@ -11,32 +11,35 @@ import warnings
 warnings.filterwarnings('ignore')
 # ML imports
 try:
-from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor, VotingRegressor
-from sklearn.linear_model import Ridge, Lasso, ElasticNet
-from sklearn.preprocessing import StandardScaler, RobustScaler
-from sklearn.model_selection import TimeSeriesSplit, cross_val_score
-from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
-from sklearn.feature_selection import SelectKBest, f_regression
-import yfinance as yf
-ML_AVAILABLE = True
+    from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor, VotingRegressor
+    from sklearn.linear_model import Ridge, Lasso, ElasticNet
+    from sklearn.preprocessing import StandardScaler, RobustScaler
+    from sklearn.model_selection import TimeSeriesSplit, cross_val_score
+    from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
+    from sklearn.feature_selection import SelectKBest, f_regression
+    import yfinance as yf
+    ML_AVAILABLE = True
 except ImportError as e:
-logging.warning(f"ML libraries not available: {e}")
-ML_AVAILABLE = False
+    logging.warning(f"ML libraries not available: {e}")
+    ML_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
+
+
 class ImprovedMLService:
-"""
-Improved ML Service with proper validation, regularization, and enhanced features
-"""
-def __init__(self):
-self.ml_available = ML_AVAILABLE
-if not self.ml_available:
-logger.warning("Improved ML Service initialized in fallback mode")
-# Initialize models with regularization
-self.stock_scorer = None
-self.scaler = RobustScaler() # More robust to outliers
-self.feature_selector = None
-# Model parameters with regularization
-self.model_params = {
+    """
+    Improved ML Service with proper validation, regularization, and enhanced features
+    """
+    def __init__(self):
+        self.ml_available = ML_AVAILABLE
+        if not self.ml_available:
+            logger.warning("Improved ML Service initialized in fallback mode")
+        # Initialize models with regularization
+        self.stock_scorer = None
+        self.scaler = RobustScaler()  # More robust to outliers
+        self.feature_selector = None
+        # Model parameters with regularization
+        self.model_params = {
 'random_forest': {
 'n_estimators': 100,
 'max_depth': 5, # Prevent overfitting

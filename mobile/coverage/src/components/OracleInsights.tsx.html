@@ -25,14 +25,14 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/171</span>
+                <span class='fraction'>0/172</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/154</span>
+                <span class='fraction'>0/157</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/151</span>
+                <span class='fraction'>0/154</span>
             </div>
         
             
@@ -949,7 +949,11 @@
 <a name='L884'></a><a href='#L884'>884</a>
 <a name='L885'></a><a href='#L885'>885</a>
 <a name='L886'></a><a href='#L886'>886</a>
-<a name='L887'></a><a href='#L887'>887</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L887'></a><a href='#L887'>887</a>
+<a name='L888'></a><a href='#L888'>888</a>
+<a name='L889'></a><a href='#L889'>889</a>
+<a name='L890'></a><a href='#L890'>890</a>
+<a name='L891'></a><a href='#L891'>891</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -1353,6 +1357,10 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -1873,8 +1881,8 @@ interface Or<span class="cstat-no" title="statement not covered" >acleEvent {<sp
 }<span class="cstat-no" title="statement not covered" ></span>
 &nbsp;
 <span class="cstat-no" title="statement not covered" >interface OracleInsightsProps {</span>
-<span class="cstat-no" title="statement not covered" >  onInsightPress: (insight: Oracle</span>Event) =&gt; void;
-  onGenerateInsight: (<span class="cstat-no" title="statement not covered" >) =&gt; void;</span>
+<span class="cstat-no" title="statement not covered" >  onInsightPress?: (insight: Oracl</span>eEvent) =&gt; void;
+  onGenerateInsight?: <span class="cstat-no" title="statement not covered" >() =&gt; void;</span>
 }<span class="cstat-no" title="statement not covered" ></span>
 <span class="cstat-no" title="statement not covered" ></span>
 // Mock insights function - ext<span class="cstat-no" title="statement not covered" >racted for reuse</span>
@@ -1926,12 +1934,12 @@ const getMockInsights = (): OracleEvent[] =&gt; [
   },
 ];
 &nbsp;
-export default function OracleInsights({ onInsightPress, onGenerateInsight }: OracleInsightsProps) {
+export default function OracleInsights({ onInsightPress, onGenerateInsight }: OracleInsightsProps = {}) {
   const theme = useTheme();
   // Start with mock data immediately for instant loading
   const [insights, setInsights] = useState&lt;OracleEvent[]&gt;(getMockInsights());
   const [loading, setLoading] = useState(false); // Changed to false - show content immediately
-  const [<span class="fstat-no" title="function not covered" >refreshing, set</span>Refreshing] = useState(false);
+  const [<span class="fstat-no" title="function not covered" >refreshing, set</span>Refreshing] = useState(false);<span class="branch-0 cbranch-no" title="branch not covered" ></span>
   const [generatin<span class="cstat-no" title="statement not covered" >g, setGenerating] = useState(false);</span>
   const [selectedInsight, setSelectedInsight] = useState&lt;OracleEvent | null&gt;(null);
   <span class="cstat-no" title="statement not covered" ></span>
@@ -2240,27 +2248,27 @@ export default function OracleInsights({ onInsightPress, onGenerateInsight }: Or
   const getEventTypeIcon = (eventType: string) =&gt; {
     switch (eventType) {
       case 'market_regime_change': return '📈';
-      case 'portfolio_optimization': return '⚖️';<span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ><span class="fstat-no" title="function not covered" ><span class="fstat-no" title="function not covered" ></span></span></span></span></span></span>
-      case 'tax_opportunity': return '💰';
-      case 'risk_alert': return '🛡️';
-      cas<span class="fstat-no" title="function not covered" >e 'learning_</span>recommendation': return '🎓';
-      case 'behavi<span class="cstat-no" title="statement not covered" >oral_intervention': return '🧠';</span>
-<span class="cstat-no" title="statement not covered" >      case 'opportunity_alert': return '🎯';</span>
+      case 'portfolio_optimization': return '⚖️';<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ><span class="fstat-no" title="function not covered" ></span></span></span>
+      case 'tax_opportunity'<span class="cstat-no" title="statement not covered" >: return '💰';</span>
+      case 'risk_alert': return <span class="cstat-no" title="statement not covered" >'🛡️';</span>
+      case 'learning_recommendation': return '🎓';
+      case 'behavioral_intervention': retu<span class="fstat-no" title="function not covered" >rn</span> '🧠<span class="cstat-no" title="statement not covered" >';</span>
+      case 'opportunity_alert': return '🎯';
       default: return '🔮';
-    }
-  };<span class="fstat-no" title="function not covered" ></span>
+    }<span class="fstat-no" title="function not covered" ></span>
+  };<span class="cstat-no" title="statement not covered" ></span>
 <span class="cstat-no" title="statement not covered" ></span>
-  if (loading) {<span class="cstat-no" title="statement not covered" ></span>
+  if (loading) {
     return (
-      &lt;View style={styles.loadingContainer}&gt;
-        &lt;ActivityIndicator
-          size="large"
+      &lt;View style={styles.loadingContainer}&gt;<span class="fstat-no" title="function not covered" ></span>
+        &lt;ActivityIndicator<span class="cstat-no" title="statement not covered" ></span>
+          size="large"<span class="cstat-no" title="statement not covered" ></span>
           color="#7C3AED"
-          style<span class="cstat-no" title="statement not covered" >={styles.loadingAnimation}</span>
+          style={styles.loadingAnimation}
         /&gt;
         &lt;Text style={styles.loadingText}&gt;Analyzing your portfolio...&lt;/Text&gt;
       &lt;/View&gt;
-    );
+    );<span class="cstat-no" title="statement not covered" ></span>
   }
 &nbsp;
   return (
@@ -2368,7 +2376,11 @@ export default function OracleInsights({ onInsightPress, onGenerateInsight }: Or
             &lt;InsightCard
               key={insight.id}
               insight={insight}
-              onPress={() =&gt; onInsightPress(insight)}
+              onPress={() =&gt; {
+                if (onInsightPress) {
+                  onInsightPress(insight);
+                }
+              }}
               onAcknowledge={() =&gt; acknowledgeInsight(insight.id)}
               getPriorityColor={getPriorityColor}
               getPriorityIcon={getPriorityIcon}
@@ -2728,7 +2740,7 @@ const styles = StyleSheet.create({
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-11-10T15:45:05.335Z
+                at 2025-11-20T00:57:54.136Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

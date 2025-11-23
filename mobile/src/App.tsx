@@ -174,9 +174,13 @@ useEffect(() => {
   if (isAuthenticated && currentScreen === 'login') {
     logger.log('🔐 User is authenticated, navigating to home');
     setCurrentScreen('home');
-  } else if (!isAuthenticated && currentScreen !== 'login' && currentScreen !== 'forgot-password' && currentScreen !== 'signup') {
-    logger.log('🔐 User is not authenticated, navigating to login');
-    setCurrentScreen('login');
+  } else if (!isAuthenticated) {
+    // Always navigate to login if not authenticated, regardless of current screen
+    if (currentScreen !== 'login' && currentScreen !== 'forgot-password' && currentScreen !== 'signup') {
+      logger.log('🔐 User is not authenticated, navigating to login');
+      setCurrentScreen('login');
+      setHasCompletedOnboarding(false);
+    }
   }
 }, [isAuthenticated, currentScreen, user]);
 
@@ -323,29 +327,47 @@ const handleLogout = async () => {
 try {
     logger.log('🔄 Starting logout process...');
     
+    // CRITICAL: Set screen to login FIRST, before any async operations
+    // This ensures renderScreen() will return LoginScreen immediately
+    setCurrentScreen('login');
+    setHasCompletedOnboarding(false);
+    logger.log('✅ Local state cleared, navigating to login (IMMEDIATE)');
+    
     // Clear JWT service
     const jwtService = JWTAuthService.getInstance();
     await jwtService.logout();
     logger.log('✅ JWT service cleared');
     
-    // Clear AuthContext state
+    // Clear AuthContext state (this will trigger isAuthenticated to become false)
     await authLogout();
     logger.log('✅ AuthContext cleared');
     
-    // Clear local state
+    // Force navigation to login screen again after auth clears
     setCurrentScreen('login');
     setHasCompletedOnboarding(false);
-    logger.log('✅ Local state cleared, navigating to login');
+    logger.log('✅ Forced navigation to login screen (after auth clear)');
 } catch (error) {
     logger.error('❌ Logout error:', error);
     // Still navigate to login even if there's an error
     setCurrentScreen('login');
+    setHasCompletedOnboarding(false);
 }
 };
 const renderScreen = () => {
-logger.log('🔍 renderScreen called:', { currentScreen, isLoggedIn, isLoading });
-// Show loading screen while initializing
-if (isLoading) {
+logger.log('🔍 renderScreen called:', { currentScreen, isLoggedIn, isLoading, isAuthenticated, hasCompletedOnboarding });
+// ✅ 1) Hard gate: if not authenticated OR explicitly on login screen → only show Login
+// This MUST be checked FIRST, before any isLoggedIn checks
+// Even if isLoggedIn is still true (state hasn't updated yet), we show login
+if (!isAuthenticated || currentScreen === 'login') {
+logger.log('🔍 Showing login screen (auth gate)');
+return <LoginScreen 
+onLogin={handleLogin} 
+onNavigateToSignUp={() => setCurrentScreen('signup')} 
+onNavigateToForgotPassword={() => setCurrentScreen('forgot-password')} 
+/>;
+}
+// Show loading screen while initializing (but not if we're explicitly on login)
+if (isLoading && currentScreen !== 'login') {
 return (
 <View style={styles.loadingContainer}>
 <Text style={styles.loadingText}>Loading...</Text>
@@ -427,9 +449,24 @@ if (isLoggedIn && hasCompletedOnboarding === null) {
     </View>
   );
 }
-// If logged in and onboarding complete, use new tab/stack navigator
-if (isLoggedIn && hasCompletedOnboarding) {
-  return <AppNavigator />;
+// ✅ 2) Once authenticated, mount NavigationContainer + AppNavigator
+// BUT only if we're NOT explicitly on login screen (handled above)
+// CRITICAL: This check ensures AppNavigator is NOT rendered when currentScreen === 'login'
+// which happens immediately when logout is called
+// Use key prop to force remount when auth state changes
+if (isLoggedIn && hasCompletedOnboarding && currentScreen !== 'login') {
+  logger.log('🔍 Rendering AppNavigator (user is logged in and not on login screen)');
+  return <AppNavigator key={`app-nav-${isAuthenticated}`} />;
+}
+// If we reach here and currentScreen is 'login', we should have already returned LoginScreen above
+// But if somehow we didn't, return LoginScreen as fallback
+if (currentScreen === 'login' || !isAuthenticated) {
+  logger.log('🔍 Fallback: Showing login screen');
+  return <LoginScreen 
+    onLogin={handleLogin} 
+    onNavigateToSignUp={() => setCurrentScreen('signup')} 
+    onNavigateToForgotPassword={() => setCurrentScreen('forgot-password')} 
+  />;
 }
 logger.log('🔍 Main switch statement, currentScreen:', currentScreen);
 switch (currentScreen) {

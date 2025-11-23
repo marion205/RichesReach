@@ -25,28 +25,28 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/87</span>
+                <span class='fraction'>0/90</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/24</span>
+                <span class='fraction'>0/31</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/30</span>
+                <span class='fraction'>0/31</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/77</span>
+                <span class='fraction'>0/80</span>
             </div>
         
             
@@ -302,11 +302,17 @@
 <a name='L237'></a><a href='#L237'>237</a>
 <a name='L238'></a><a href='#L238'>238</a>
 <a name='L239'></a><a href='#L239'>239</a>
-<a name='L240'></a><a href='#L240'>240</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L240'></a><a href='#L240'>240</a>
+<a name='L241'></a><a href='#L241'>241</a>
+<a name='L242'></a><a href='#L242'>242</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -524,8 +530,6 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -542,186 +546,188 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/**
-<span class="cstat-no" title="statement not covered" >* Expo Go Compatible Price Alert Service</span>
-<span class="cstat-no" title="statement not covered" >* This service provides basic price alert functional</span>ity without native modules
+* Expo Go Compatible P<span class="cstat-no" title="statement not covered" >rice Alert Service<span class="fstat-no" title="function not covered" ></span></span>
+* Th<span class="cstat-no" title="statement not covered" >is service provides basic price alert functionality without</span> native modules
 * that cause "Exception in HostFunction" errors in Expo Go
-*/<span class="fstat-no" title="function not covered" ></span>
-export i<span class="cstat-no" title="statement not covered" >nterface PriceAlert {</span>
-id: stri<span class="cstat-no" title="statement not covered" >ng;</span>
-symbol: <span class="cstat-no" title="statement not covered" >string;</span>
-targetPrice: number;
-alertType: 'above' | 'below';
-isActive: boolean;
-createdAt: number;
-trig<span class="fstat-no" title="function not covered" >ge</span>redAt?: number;
-}<span class="cstat-no" title="statement not covered" ></span>
-export inter<span class="cstat-no" title="statement not covered" >face Sto</span>ckPrice {
+<span class="cstat-no" title="statement not covered" >*/</span>
+<span class="cstat-no" title="statement not covered" >export interface PriceAlert {</span>
+id: string;<span class="cstat-no" title="statement not covered" ></span>
 symbol: string;
-price: n<span class="cstat-no" title="statement not covered" >umber;</span>
-change: <span class="cstat-no" title="statement not covered" >number;</span>
-change_percent: number;
+targ<span class="fstat-no" title="function not covered" >et</span>Price: number;
+alertTyp<span class="cstat-no" title="statement not covered" >e: 'above' | 'below';</span>
+isActive<span class="cstat-no" title="statement not covered" >: boolean;</span>
+createdA<span class="cstat-no" title="statement not covered" >t: number;</span>
+triggeredAt?: number;
 }
+import logger from '../../../utils/logger';
+&nbsp;
+expo<span class="fstat-no" title="function not covered" >rt</span> interface StockPrice {
+symbol: <span class="cstat-no" title="statement not covered" >string;</span>
+price: numbe<span class="cstat-no" title="statement not covered" >r;</span>
+change: number;
+change_p<span class="cstat-no" title="statement not covered" >ercent: number;</span>
+}<span class="cstat-no" title="statement not covered" ></span>
 class ExpoGoCompatiblePriceAlertService {
 private readonly STORAGE_KEY = 'price_alerts';
-priv<span class="fstat-no" title="function not covered" >at</span>e alerts: PriceAlert[] = [];
-private <span class="cstat-no" title="statement not covered" >isInitialized = false;</span>
-/**
-* Initialize the service
-*/<span class="cstat-no" title="statement not covered" ></span>
+private alerts: PriceAlert[] = [];
+private isInitialized = false;
+/**<span class="fstat-no" title="function not covered" ></span>
+* Initia<span class="cstat-no" title="statement not covered" >lize the service</span>
+*/
 public async initialize(): Promise&lt;void&gt; {
-if (this.isInitialized) {
-return;<span class="cstat-no" title="statement not covered" ></span>
-}<span class="cstat-no" title="statement not covered" ></span>
-await this.loadAlerts();
-this.isInitialized = true;
+if (this.isI<span class="cstat-no" title="statement not covered" >nitialized) {</span>
+return;
+}
+await this.l<span class="cstat-no" title="statement not covered" >oadAlerts();</span>
+this.isIniti<span class="cstat-no" title="statement not covered" >alized = true;</span>
 }
 /**
 * Load alerts from storage (simplified for Expo Go)
-*/<span class="fstat-no" title="function not covered" ></span>
-private <span class="cstat-no" title="statement not covered" >async loadAlerts(): Promise&lt;void&gt; {</span>
-try {
-// In Expo Go, we'll use a simple in-memory storage
+*/
+private async loadAlerts(): Promise&lt;void&gt; {
+try <span class="fstat-no" title="function not covered" >{</span>
+// In Ex<span class="cstat-no" title="statement not covered" >po Go, we'll use a simple in-memory storage</span>
 // In production, this would use AsyncStorage
-this.alerts <span class="cstat-no" title="statement not covered" >= [];</span>
+this.alerts = [];
 } catch (error) {
-console.error('Error loading price alerts:', error);
+logger.error<span class="cstat-no" title="statement not covered" >('Error loading price alerts:', error);</span>
 this.alerts = [];
 }
 }
-/**<span class="fstat-no" title="function not covered" ></span>
-* Save a<span class="cstat-no" title="statement not covered" >lerts to storage (simplif</span>ied for Expo Go)
-*/
-private async saveAlerts(): Pr<span class="cstat-no" title="statement not covered" >omise&lt;void&gt; {<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span></span>
+/**
+* Save alerts to storage (simplified for Expo Go)
+*/<span class="fstat-no" title="function not covered" ></span>
+private <span class="cstat-no" title="statement not covered" >async saveAlerts(): Promi</span>se&lt;void&gt; {
 try {
-// In Expo Go, we'll just log the alerts
+// In Expo Go, we'll just log <span class="cstat-no" title="statement not covered" >the alerts<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span></span>
 } catch (error) {
-console.<span class="cstat-no" title="statement not covered" >error('Error saving price alerts:', error);</span>
-}<span class="cstat-no" title="statement not covered" ></span>
+logger.error('Error saving price alerts:', error);
 }
+}<span class="cstat-no" title="statement not covered" ></span>
 /**<span class="cstat-no" title="statement not covered" ></span>
 * Add a new price alert
-*/
+*/<span class="cstat-no" title="statement not covered" ></span>
 public async addAlert(symbol: string, targetPrice: number, alertType: 'above' | 'below'): Promise&lt;PriceAlert&gt; {
 await this.initialize();
 // Check if alert already exists for this symbol and target price
 const existingAlert = this.alerts.find(
 alert =&gt; alert.symbol === symbol &amp;&amp; 
-alert.ta<span class="cstat-no" title="statement not covered" >rgetPrice === targetPrice</span> &amp;&amp; 
-alert.al<span class="cstat-no" title="statement not covered" >ertType === alertType &amp;&amp;</span>
+alert.targetPrice === targetPrice &amp;&amp; 
+alert.alertType === alertType &amp;&amp;
 alert.is<span class="cstat-no" title="statement not covered" >Active</span>
-);
-if (existingAlert) {
+);<span class="cstat-no" title="statement not covered" ></span>
+if (exis<span class="cstat-no" title="statement not covered" >tingAlert) {</span>
 throw new Error('Alert already exists for this price');
 }
-cons<span class="fstat-no" title="function not covered" >t </span>alert: PriceAlert = {
-id: this<span class="cstat-no" title="statement not covered" >.generateId(),</span>
-symbol: <span class="cstat-no" title="statement not covered" >symbol.toUpperCase(),<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span></span>
+const alert: PriceAlert = {
+id: this.generateId(),
+symb<span class="fstat-no" title="function not covered" >ol</span>: symbol.toUpperCase(),
 targetPr<span class="cstat-no" title="statement not covered" >ice,</span>
-alertType,
-isActive: true,
+alertTyp<span class="cstat-no" title="statement not covered" >e,<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span></span>
+isActive<span class="cstat-no" title="statement not covered" >: true,</span>
 createdAt: Date.now(),
 };
-this<span class="fstat-no" title="function not covered" >.a</span>lerts.push(alert);
-await th<span class="cstat-no" title="statement not covered" >is.saveAlerts();</span>
-return alert;<span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span></span>
+this.alerts.push(alert);
+await this.saveAlerts();
+retu<span class="fstat-no" title="function not covered" >rn</span> alert;
 }<span class="cstat-no" title="statement not covered" ></span>
-/**<span class="cstat-no" title="statement not covered" ></span>
-* Remove a p<span class="cstat-no" title="statement not covered" >rice alert</span>
-*/
-public async removeAlert(alertId: string): Promise&lt;void&gt; {
+/**<span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span></span>
+* Remove<span class="cstat-no" title="statement not covered" > a price alert</span>
+*/<span class="cstat-no" title="statement not covered" ></span>
+public async<span class="cstat-no" title="statement not covered" > removeAlert(alertId: str</span>ing): Promise&lt;void&gt; {
 await this.initialize();
 this.alerts = this.alerts.filter(alert =&gt; alert.id !== alertId);
 await this.saveAlerts();
-}<span class="fstat-no" title="function not covered" ></span>
-/**<span class="cstat-no" title="statement not covered" ></span>
-* Update<span class="cstat-no" title="statement not covered" > a price alert</span>
-*/
-public async updateAlert(alertId: string, updates: Partial&lt;PriceAlert&gt;): Promise&lt;void&gt; {
+}
+/**
+* Up<span class="fstat-no" title="function not covered" >da</span>te a price alert
+*/<span class="cstat-no" title="statement not covered" ></span>
+public a<span class="cstat-no" title="statement not covered" >sync updateAlert(alertId:</span> string, updates: Partial&lt;PriceAlert&gt;): Promise&lt;void&gt; {
 await this.initialize();
 const alertIndex = this.alerts.findIndex(alert =&gt; alert.id === alertId);
-if (<span class="fstat-no" title="function not covered" >al</span>ertIndex !== -1) {
-this.ale<span class="cstat-no" title="statement not covered" >rts[alertIndex] = { ...th</span>is.alerts[alertIndex], ...updates };
-await th<span class="cstat-no" title="statement not covered" >is.saveAlerts();<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span></span>
-}
-}
+if (alertIndex !== -1) {
+this.alerts[alertIndex] = { ...this.alerts[alertIndex], ...updates };
+awai<span class="fstat-no" title="function not covered" >t </span>this.saveAlerts();
+}<span class="cstat-no" title="statement not covered" ></span>
+}<span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span></span>
 /**
 * Get all alerts
-*/<span class="fstat-no" title="function not covered" ></span>
-public a<span class="cstat-no" title="statement not covered" >sync getAllAlerts(): Prom</span>ise&lt;PriceAlert[]&gt; {
-await th<span class="cstat-no" title="statement not covered" >is.initialize();<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span></span>
-return [...this.alerts];
-}
+*/
+public async getAllAlerts(): Promise&lt;PriceAlert[]&gt; {
+awai<span class="fstat-no" title="function not covered" >t </span>this.initialize();
+return [<span class="cstat-no" title="statement not covered" >...this.alerts];</span>
+}<span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span></span>
 /**
 * Get active alerts
-*/<span class="fstat-no" title="function not covered" ></span>
-public a<span class="cstat-no" title="statement not covered" >sync getActiveAlerts(): P</span>romise&lt;PriceAlert[]&gt; {
-await this.initialize();<span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span></span>
-return t<span class="cstat-no" title="statement not covered" >his.alerts.filter(alert =&gt; alert.isActive);</span>
+*/
+public async getActiveAlerts(): Promise&lt;PriceAlert[]&gt; {
+awai<span class="fstat-no" title="function not covered" >t </span>this.initialize();
+return t<span class="cstat-no" title="statement not covered" >his.alerts.filter(alert =</span>&gt; alert.isActive);
 }<span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span></span>
 /**<span class="cstat-no" title="statement not covered" ></span>
-* Get alerts for<span class="cstat-no" title="statement not covered" > a specifi</span>c symbol
-*/
-public async getAlertsForSymbol(sy<span class="cstat-no" title="statement not covered" >mbol: string): Promise&lt;PriceAlert[]&gt; {</span>
-await this.i<span class="cstat-no" title="statement not covered" >nitialize();</span>
-return this.aler<span class="cstat-no" title="statement not covered" >ts.filter(alert =&gt; alert.symbol === symbol.toU</span>pperCase());
-}
-/**
+* Get alerts for a specific symbo<span class="cstat-no" title="statement not covered" >l<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span></span>
+*/<span class="cstat-no" title="statement not covered" ></span>
+public async get<span class="cstat-no" title="statement not covered" >AlertsForS</span>ymbol(symbol: string): Promise&lt;PriceAlert[]&gt; {
+await this.initialize();
+return this.alerts.filter(alert =&gt;<span class="cstat-no" title="statement not covered" > alert.symbol === symbol.toUpperCase());</span>
+}<span class="cstat-no" title="statement not covered" ></span>
+/**<span class="cstat-no" title="statement not covered" ></span>
 * Check price alerts against current prices
 */
 public async checkAlerts(prices: StockPrice[]): Promise&lt;void&gt; {
 await this.initialize();
-cons<span class="fstat-no" title="function not covered" >t </span>activeAlerts = this.alerts.filter(alert =&gt; alert.isActive);
-for (con<span class="cstat-no" title="statement not covered" >st alert of activeAlerts) {</span>
-const curren<span class="cstat-no" title="statement not covered" >tPrice = prices.find(price =&gt; price.symbol</span> === alert.symbol);
-if (!currentPrice) {
-continue;
-}<span class="cstat-no" title="statement not covered" ></span>
+const activeAlerts = this.alerts.filter(alert =&gt; alert.isActive);
+for (const alert of activeAlerts) {
+cons<span class="fstat-no" title="function not covered" >t </span>currentPrice = prices.find(price =&gt; price.symbol === alert.symbol);
+if (!cur<span class="cstat-no" title="statement not covered" >rentPrice) {</span>
+continue;<span class="cstat-no" title="statement not covered" ></span>
+}
 const shouldTrigger = this.shouldTriggerAlert(alert, currentPrice.price);
-if (shouldTrigger) {
+if (shouldTr<span class="cstat-no" title="statement not covered" >igger) {</span>
 await this.triggerAlert(alert, currentPrice);
 }
 }
-}<span class="fstat-no" title="function not covered" ></span>
-/**<span class="cstat-no" title="statement not covered" ></span>
-* Check if an alert should trigger
-*/
-private shou<span class="cstat-no" title="statement not covered" >ldTriggerAlert(alert: PriceAlert, currentPrice: number): boolean {</span>
+}
+/**
+* Ch<span class="fstat-no" title="function not covered" >ec</span>k if an alert should trigger
+*/<span class="cstat-no" title="statement not covered" ></span>
+private shouldTriggerAlert(alert: PriceAlert, currentPrice: number): boolean {
 if (alert.alertType === 'above') {
-return currentPrice &gt;= alert.targetPrice;
+return curre<span class="cstat-no" title="statement not covered" >ntPrice &gt;= alert.targetPrice;</span>
 } else {
 return currentPrice &lt;= alert.targetPrice;
 }
-}<span class="cstat-no" title="statement not covered" ></span>
+}
 /**
-* Trigger a price alert
+* Trigger a <span class="cstat-no" title="statement not covered" >price alert</span>
 */
 private async triggerAlert(alert: PriceAlert, currentPrice: StockPrice): Promise&lt;void&gt; {
 try {
-// I<span class="fstat-no" title="function not covered" >n </span>Expo Go compatible mode, just log the alert
-// Mark <span class="cstat-no" title="statement not covered" >alert as triggered</span>
-await th<span class="cstat-no" title="statement not covered" >is.updateAlert(alert.id, </span>{
-triggeredAt: Date.now(),
-isActive: false,
+// In Expo Go compatible mode, just log the alert
+// Mark alert as triggered
+awai<span class="fstat-no" title="function not covered" >t </span>this.updateAlert(alert.id, {
+triggere<span class="cstat-no" title="statement not covered" >dAt: Date.now(),</span>
+isActive<span class="cstat-no" title="statement not covered" >: false,</span>
 });
 } catch (error) {
-cons<span class="fstat-no" title="function not covered" >ol</span>e.error('Error triggering price alert:', error);
-}<span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span></span>
-}<span class="cstat-no" title="statement not covered" ></span>
-/**
-* Clear all alerts
+logger.error('Error triggering price alert:', error);
+}
+}<span class="fstat-no" title="function not covered" ></span>
+/**<span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span></span>
+* Clear <span class="cstat-no" title="statement not covered" >all alerts</span>
 */
 public async clearAllAlerts(): Promise&lt;void&gt; {
-this<span class="fstat-no" title="function not covered" >.a</span>lerts = [];
-await th<span class="cstat-no" title="statement not covered" >is.saveAlerts();</span>
-}<span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span></span>
-/**<span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span></span>
-* Clear triggered alerts<span class="cstat-no" title="statement not covered" ></span>
-*/<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span>
-public async<span class="cstat-no" title="statement not covered" > clearTriggeredAlerts(): Promise&lt;void&gt; {</span>
-this.alerts = this.alerts.filter(alert =&gt; !alert.triggeredAt);
-await th<span class="cstat-no" title="statement not covered" >is.saveAlerts();</span>
+this.alerts = [];
+await this.saveAlerts();
+}<span class="fstat-no" title="function not covered" ></span>
+/**<span class="cstat-no" title="statement not covered" ></span>
+* Clear triggered alert<span class="cstat-no" title="statement not covered" >s<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span></span>
+*/<span class="cstat-no" title="statement not covered" ><span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span></span>
+public async clearTrigger<span class="cstat-no" title="statement not covered" >edA</span>lerts(): Promise&lt;void&gt; {
+this.ale<span class="cstat-no" title="statement not covered" >rts = this.alerts.fi<span class="fstat-no" title="function not covered" >lt</span>er(alert =&gt; !alert.triggeredAt);</span>
+await this.s<span class="cstat-no" title="statement not covered" >aveAlerts();</span>
 }
-/**
+/**<span class="cstat-no" title="statement not covered" ></span>
 * Get alert statistics
 */
 public async getAlertStats(): Promise&lt;{
@@ -729,42 +735,42 @@ total: number;
 active: number;
 triggered: number;
 bySymbol: { [symbol: string]: number };
-}&gt; {<span class="fstat-no" title="function not covered" ></span>
-await th<span class="cstat-no" title="statement not covered" >is.initialize();</span>
-const active = this.alerts.filter(alert =&gt; alert.isActive).length;
-const triggered = this.alerts.filter(alert =&gt; alert.triggeredAt).length;
+}&gt; {
+await this.initialize();
+cons<span class="fstat-no" title="function not covered" >t </span>active = this.alerts.filter(alert =&gt; alert.isActive).length;
+const tr<span class="cstat-no" title="statement not covered" >iggered = this.alerts.filter(alert =&gt; alert.triggeredAt).length;</span>
 const bySymbol: { [symbol: string]: number } = {};
 this.alerts.forEach(alert =&gt; {
-bySy<span class="fstat-no" title="function not covered" >mb</span>ol[alert.symbol] = (bySymbol[alert.symbol] || 0) + 1;
-});<span class="cstat-no" title="statement not covered" ></span>
-return {<span class="cstat-no" title="statement not covered" ></span>
-total: this.alerts.length,
-active,
+bySymbol[alert.symbol] = (bySymbol[alert.symbol] || 0) + 1;
+});
+retu<span class="fstat-no" title="function not covered" >rn</span> {
+total: t<span class="cstat-no" title="statement not covered" >his.alerts.length,</span>
+active,<span class="cstat-no" title="statement not covered" ></span>
 triggered,
 bySymbol,
-};<span class="fstat-no" title="function not covered" ></span>
+};
+}
+/**<span class="fstat-no" title="function not covered" ></span>
+* Genera<span class="cstat-no" title="statement not covered" >te a unique ID</span>
+*/<span class="cstat-no" title="statement not covered" ></span>
+private generateId(): string {
+return Date.<span class="cstat-no" title="statement not covered" >now().toString(36) + Math.random().toString(36).substr(2);</span>
 }<span class="cstat-no" title="statement not covered" ></span>
 /**<span class="cstat-no" title="statement not covered" ></span>
-* Generate a unique ID
-*/<span class="cstat-no" title="statement not covered" ></span>
-private generate<span class="cstat-no" title="statement not covered" >Id(): string {</span>
-return Date.now().to<span class="cstat-no" title="statement not covered" >String(36) + Math.random().toString(36).s</span>ubstr(2);
+* Export alerts to JSON
+*/
+public async<span class="cstat-no" title="statement not covered" > exportAlerts(): Promise&lt;strin</span>g&gt; {
+await this.i<span class="cstat-no" title="statement not covered" >nitialize();</span>
+return JSON.stringify(this.alerts, null, 2);
 }
-/**
-* Export ale<span class="cstat-no" title="statement not covered" >rts to JSON</span>
-*/<span class="cstat-no" title="statement not covered" ></span>
-public async exportAlerts(): Promise&lt;string&gt; {
-await this.initialize();
-return JSON.<span class="cstat-no" title="statement not covered" >stringify(this.alerts, null, 2);</span>
-}<span class="cstat-no" title="statement not covered" ></span>
-/**
-* Import alerts from JSON
+/**<span class="cstat-no" title="statement not covered" ></span>
+* Import ale<span class="cstat-no" title="statement not covered" >rts from JSON</span>
 */
 public async importAlerts(alertsJson: string): Promise&lt;void&gt; {
-<span class="cstat-no" title="statement not covered" >try {</span>
-<span class="cstat-no" title="statement not covered" >const importedAlerts: PriceAlert[] = JSON.parse(alertsJson);</span>
-// Validate imported alerts
-for (const alert of importedAlerts) {
+try {
+const importedAlerts: PriceAlert[] = JSON.parse(alertsJson);
+<span class="cstat-no" title="statement not covered" >// Validate imported alerts</span>
+<span class="cstat-no" title="statement not covered" >for (const alert of importedAlerts) {</span>
 if (!alert.id || !alert.symbol || !alert.targetPrice || !alert.alertType) {
 throw new Error('Invalid alert format');
 }
@@ -772,7 +778,7 @@ throw new Error('Invalid alert format');
 this.alerts = importedAlerts;
 await this.saveAlerts();
 } catch (error) {
-console.error('Error importing price alerts:', error);
+logger.error('Error importing price alerts:', error);
 throw error;
 }
 }
@@ -787,7 +793,7 @@ export default expoGoCompatiblePriceAlertService;
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-11-10T15:45:05.335Z
+                at 2025-11-20T00:57:54.136Z
             </div>
         <script src="../../../../prettify.js"></script>
         <script>

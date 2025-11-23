@@ -24,6 +24,7 @@ import SblocCalculatorModal from '../../../components/forms/SblocCalculatorModal
 import { FEATURES } from '../../../config/featureFlags';
 import { globalNavigate } from '../../../navigation/NavigationService';
 import { PrivacyDashboard } from '../../privacy/components/PrivacyDashboard';
+import { useAuth } from '../../../contexts/AuthContext';
 
 // --- Design tokens (light theme) ---
 const UI = {
@@ -138,6 +139,7 @@ onLogout?: () => void;
 const { width } = Dimensions.get('window');
 const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigateTo, onLogout }) => {
   const navigation = useNavigation<any>();
+  const { logout: authLogout } = useAuth();
   const [showSBLOCModal, setShowSBLOCModal] = useState(false);
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const [showSblocCalculator, setShowSblocCalculator] = useState(false);
@@ -167,18 +169,26 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigateTo, onLogout }) =
   // Non-blocking queries - fetch in background, show UI immediately
   const { data: meData, loading: meLoading, error: meError } = useQuery(GET_ME, {
     errorPolicy: 'all',
-    fetchPolicy: 'cache-only', // Only use cache, don't fetch if missing
-    nextFetchPolicy: 'cache-first', // Then fetch in background
-    notifyOnNetworkStatusChange: false,
+    fetchPolicy: 'cache-and-network', // Try cache first, then network
+    notifyOnNetworkStatusChange: true,
     returnPartialData: true,
   });
   
-  // Fetch in background if cache miss
+  // If query fails with auth error, clear token and trigger login
   useEffect(() => {
-    if (!meData && !meLoading) {
-      client.query({ query: GET_ME, fetchPolicy: 'network-only' }).catch(console.warn);
+    if (meError) {
+      const errorMessage = meError.message || '';
+      // Check if it's an authentication error
+      if (errorMessage.includes('Authentication') || 
+          errorMessage.includes('Not authenticated') ||
+          errorMessage.includes('401') ||
+          errorMessage.includes('Unauthorized')) {
+        console.warn('⚠️ Authentication error in Profile, clearing token');
+        // Clear token to trigger login screen
+        AsyncStorage.removeItem('token').catch(console.error);
+      }
     }
-  }, [meData, meLoading, client]);
+  }, [meError]);
 
 const { data: portfoliosData, loading: portfoliosLoading, error: portfoliosError, refetch: refetchPortfolios } = useQuery(GET_MY_PORTFOLIOS, {
   notifyOnNetworkStatusChange: false,
@@ -317,22 +327,20 @@ console.log('Portfolio Data Debug:', {
 
 const handleLogout = async () => {
 try {
-    console.log('🔄 ProfileScreen: Starting logout...');
+    console.log('🔴 Logout button pressed');
     
-    // Clear cache safely without resetting store while queries are in flight
+    // Clear Apollo cache
     await client.cache.reset();
     console.log('✅ ProfileScreen: Apollo cache cleared');
     
-    await AsyncStorage.removeItem('token');
-    console.log('✅ ProfileScreen: Token removed from AsyncStorage');
+    // ✅ ONLY call AuthContext logout - no navigation here
+    // The root App will handle rendering LoginScreen based on auth state
+    await authLogout();
+    console.log('✅ ProfileScreen: AuthContext logout completed');
     
-    // Call the main app's logout function
+    // Also call onLogout if provided (for backwards compatibility)
     if (onLogout) {
-        console.log('🔄 ProfileScreen: Calling main app logout...');
         await onLogout();
-        console.log('✅ ProfileScreen: Main app logout completed');
-    } else {
-        console.warn('⚠️ ProfileScreen: No onLogout function provided');
     }
 } catch (error) {
     console.error('❌ ProfileScreen logout error:', error);
@@ -496,8 +504,28 @@ showsVerticalScrollIndicator={false}
 </View>
 ) : (
   <View style={[styles.heroCard, shadow]}>
-    <Text style={styles.heroName}>Error Loading Profile</Text>
-    <Text style={styles.heroEmail}>{meError?.message || 'Please try again'}</Text>
+    <Text style={styles.heroName}>
+      {meLoading ? 'Loading Profile...' : 'Authentication Required'}
+    </Text>
+    <Text style={styles.heroEmail}>
+      {meLoading 
+        ? 'Please wait...' 
+        : meError?.message?.includes('Authentication') || meError?.message?.includes('Not authenticated')
+          ? 'Please log in to view your profile'
+          : meError?.message || 'Please try again'}
+    </Text>
+    {!meLoading && meError && (
+      <TouchableOpacity 
+        style={[styles.ctaBtn, { marginTop: 12 }]} 
+        onPress={async () => {
+          // Clear token and trigger login
+          await AsyncStorage.removeItem('token');
+          // App will automatically show login screen
+        }}
+      >
+        <Text style={styles.ctaBtnTxt}>Go to Login</Text>
+      </TouchableOpacity>
+    )}
   </View>
 )}
 </View>
