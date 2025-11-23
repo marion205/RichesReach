@@ -590,7 +590,7 @@ return 'neutral';
 // Extract stock symbols from text
 private extractStockSymbols(text: string): string[] {
 const symbols: string[] = [];
-const commonSymbols = ['AAPL', 'MSFT', 'GOOGL', 'TSLA', 'AMZN', 'META', 'NVDA', 'NFLX', 'AMD', 'INTC', 'CRM', 'ADBE', 'PYPL', 'UBER', 'LYFT'];
+const commonSymbols = ['T', 'META', 'MSFT', 'NFLX', 'NVDA', 'PYPL', 'TSLA', 'UBER'];
 commonSymbols.forEach(symbol => {
 if (text.toUpperCase().includes(symbol)) {
 symbols.push(symbol);

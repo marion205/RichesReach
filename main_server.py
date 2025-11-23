@@ -377,6 +377,26 @@ except ImportError as e:
 except Exception as e:
     print(f"⚠️ Error registering Credit Building API router: {e}")
 
+# Register Futures API router
+try:
+    import sys
+    import os
+    deployment_backend_path = os.path.join(os.path.dirname(__file__), 'deployment_package', 'backend')
+    if os.path.exists(deployment_backend_path) and deployment_backend_path not in sys.path:
+        sys.path.insert(0, deployment_backend_path)
+    
+    backend_path = os.path.join(os.path.dirname(__file__), 'backend', 'backend')
+    if backend_path not in sys.path:
+        sys.path.insert(0, backend_path)
+    
+    from core.futures_api import router as futures_router
+    app.include_router(futures_router)
+    print("✅ Futures API router registered")
+except ImportError as e:
+    print(f"⚠️ Futures API router not available: {e}")
+except Exception as e:
+    print(f"⚠️ Error registering Futures API router: {e}")
+
 @app.get("/health")
 async def health():
     return {"status": "ok", "schemaVersion": "1.0.0", "timestamp": datetime.now().isoformat()}

@@ -128,6 +128,7 @@ class PlaceOrder(graphene.Mutation):
     order_id = graphene.String()
     alpaca_order_id = graphene.String()
     status = graphene.String()
+    execution_suggestion = graphene.JSONString(description="Execution suggestion that was used")
     error = graphene.String()
     
     @staticmethod
@@ -189,19 +190,48 @@ class PlaceOrder(graphene.Mutation):
                 guardrail_checks_passed=True,
             )
             
-            # Prepare order for Alpaca
-            alpaca_order = {
-                'symbol': symbol.upper(),
-                'qty': str(quantity),
-                'side': side.lower(),
-                'type': order_type.lower(),
-                'time_in_force': kwargs.get('time_in_force', 'day').lower(),
-            }
-            
-            if kwargs.get('limit_price'):
-                alpaca_order['limit_price'] = str(kwargs['limit_price'])
-            if kwargs.get('stop_price'):
-                alpaca_order['stop_price'] = str(kwargs['stop_price'])
+            # Use ExecutionAdvisor if signal_data provided and use_execution_suggestions is True
+            execution_suggestion = None
+            if kwargs.get('use_execution_suggestions', True) and kwargs.get('signal_data'):
+                try:
+                    from .alpaca_order_adapter import AlpacaOrderAdapter
+                    adapter = AlpacaOrderAdapter()
+                    signal_type = kwargs.get('signal_type', 'day_trading')
+                    order_data = adapter.create_order_from_signal(
+                        kwargs['signal_data'],
+                        signal_type=signal_type
+                    )
+                    alpaca_order = order_data.get('alpaca_order', {})
+                    execution_suggestion = order_data.get('execution_suggestion')
+                    logger.info(f"✅ Used execution suggestions for {symbol} order")
+                except Exception as e:
+                    logger.warning(f"⚠️ Execution suggestions failed, using manual order: {e}")
+                    # Fallback to manual order
+                    alpaca_order = {
+                        'symbol': symbol.upper(),
+                        'qty': str(quantity),
+                        'side': side.lower(),
+                        'type': order_type.lower(),
+                        'time_in_force': kwargs.get('time_in_force', 'day').lower(),
+                    }
+                    if kwargs.get('limit_price'):
+                        alpaca_order['limit_price'] = str(kwargs['limit_price'])
+                    if kwargs.get('stop_price'):
+                        alpaca_order['stop_price'] = str(kwargs['stop_price'])
+            else:
+                # Prepare order for Alpaca (manual)
+                alpaca_order = {
+                    'symbol': symbol.upper(),
+                    'qty': str(quantity),
+                    'side': side.lower(),
+                    'type': order_type.lower(),
+                    'time_in_force': kwargs.get('time_in_force', 'day').lower(),
+                }
+                
+                if kwargs.get('limit_price'):
+                    alpaca_order['limit_price'] = str(kwargs['limit_price'])
+                if kwargs.get('stop_price'):
+                    alpaca_order['stop_price'] = str(kwargs['stop_price'])
             
             # Submit to Alpaca
             result = alpaca_service.create_order(broker_account.alpaca_account_id, alpaca_order)
@@ -224,7 +254,8 @@ class PlaceOrder(graphene.Mutation):
                 success=True,
                 order_id=broker_order.client_order_id,
                 alpaca_order_id=broker_order.alpaca_order_id or '',
-                status=broker_order.status
+                status=broker_order.status,
+                execution_suggestion=execution_suggestion
             )
         
         except BrokerAccount.DoesNotExist:

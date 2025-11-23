@@ -13,7 +13,10 @@ import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { useQuery, useMutation, useApolloClient } from '@apollo/client';
 import { gql } from '@apollo/client';
 import { GET_DAY_TRADING_PICKS, LOG_DAY_TRADING_OUTCOME } from '../../../graphql/dayTrading';
+import { GET_EXECUTION_SUGGESTION } from '../../../graphql/execution';
 import Icon from 'react-native-vector-icons/Feather';
+import { ExecutionSuggestionCard } from '../components/ExecutionSuggestionCard';
+import { HeaderButtons } from '../components/HeaderButtons';
 import SparkMini from '../../../components/charts/SparkMini';
 import * as Haptics from 'expo-haptics';
 import * as Speech from 'expo-speech';
@@ -31,29 +34,44 @@ interface DayTradingPick {
   side: Side;
   score: number;
   features: {
-    momentum_15m: number;
-    rvol_10m: number;
-    vwap_dist: number;
-    breakout_pct: number;
-    spread_bps: number;
-    catalyst_score: number;
+    momentum15m: number;
+    rvol10m: number;
+    vwapDist: number;
+    breakoutPct: number;
+    spreadBps: number;
+    catalystScore: number;
+    orderImbalance?: number;
+    bidDepth?: number;
+    askDepth?: number;
+    depthImbalance?: number;
+    executionQualityScore?: number;
+    microstructureRisky?: boolean;
   };
   risk: {
-    atr_5m: number;
-    size_shares: number;
+    atr5m: number;
+    sizeShares: number;
     stop: number;
     targets: number[];
-    time_stop_min: number;
+    timeStopMin: number;
   };
   notes: string;
 }
 
 interface DayTradingData {
-  as_of: string;
+  asOf: string;
   mode: TradingMode;
   picks: DayTradingPick[];
-  universe_size: number;
-  quality_threshold: number;
+  universeSize: number;
+  qualityThreshold: number;
+  universeSource?: string; // "CORE" or "DYNAMIC_MOVERS"
+  // Diagnostic fields
+  scannedCount?: number;
+  passedLiquidity?: number;
+  passedQuality?: number;
+  failedDataFetch?: number;
+  filteredByMicrostructure?: number;
+  filteredByVolatility?: number;
+  filteredByMomentum?: number;
 }
 
 const GET_TRADING_QUOTE = gql`
@@ -289,83 +307,103 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
     GET_DAY_TRADING_PICKS,
     {
       variables: { mode },
-      fetchPolicy: 'cache-and-network',
+      fetchPolicy: 'network-only', // Force network fetch to avoid stale cache showing empty picks
       notifyOnNetworkStatusChange: true,
       errorPolicy: 'all',
+      // Force schema refresh by bypassing cache completely
+      context: {
+        fetchOptions: {
+          cache: 'no-store',
+        },
+      },
     },
   );
+
+  // Force schema refresh on mount if we get schema errors
+  useEffect(() => {
+    if (error?.graphQLErrors?.some((e: any) => e.message?.includes('Cannot query field'))) {
+      if (__DEV__) {
+        console.log('🔄 Schema mismatch detected - clearing Apollo cache and retrying');
+      }
+      // Clear cache and reset store to force schema re-introspection
+      client.resetStore()
+        .then(() => {
+          if (__DEV__) {
+            console.log('✅ Apollo cache cleared - retrying query');
+          }
+          // Retry the query after cache is cleared
+          refetch({ mode });
+        })
+        .catch((e) => {
+          if (__DEV__) {
+            console.log('⚠️ Cache reset error (non-fatal):', e);
+          }
+        });
+    }
+  }, [error, client, refetch, mode]);
 
   const [logOutcome] = useMutation(LOG_DAY_TRADING_OUTCOME, {
     errorPolicy: 'all',
   });
 
-  // Mock day trading picks for demo when API is unavailable
-  const getMockDayTradingPicks = (mode: TradingMode): DayTradingPick[] => {
-    const symbols = mode === 'SAFE' 
-      ? ['AAPL', 'MSFT', 'GOOGL', 'TSLA', 'NVDA']
-      : ['SPY', 'QQQ', 'IWM', 'AMD', 'NFLX', 'META', 'AMZN'];
-    
-    return symbols.map((symbol, index) => {
-      const basePrice = 100 + Math.random() * 200;
-      const side: Side = Math.random() > 0.5 ? 'LONG' : 'SHORT';
-      const score = mode === 'SAFE' ? 1.5 + Math.random() * 0.5 : 2.0 + Math.random() * 1.0;
-      const momentum = 0.5 + Math.random() * 0.4;
-      const rvol = 1.2 + Math.random() * 0.8;
-      
-      return {
-        symbol,
-        side,
-        score,
-        features: {
-          momentum_15m: momentum,
-          rvol_10m: rvol,
-          vwap_dist: (Math.random() - 0.5) * 0.1,
-          breakout_pct: 0.3 + Math.random() * 0.4,
-          spread_bps: 2 + Math.random() * 3,
-          catalyst_score: 0.6 + Math.random() * 0.3,
-        },
-        risk: {
-          atr_5m: basePrice * 0.01,
-          size_shares: mode === 'SAFE' ? 100 : 200,
-          stop: side === 'LONG' ? basePrice * 0.98 : basePrice * 1.02,
-          targets: side === 'LONG' 
-            ? [basePrice * 1.02, basePrice * 1.04, basePrice * 1.06]
-            : [basePrice * 0.98, basePrice * 0.96, basePrice * 0.94],
-          time_stop_min: mode === 'SAFE' ? 45 : 25,
-        },
-        notes: `${symbol} showing ${side === 'LONG' ? 'bullish' : 'bearish'} momentum with ${(score * 100).toFixed(0)}% confidence.`,
-      };
-    });
-  };
-
+  // GraphQL returns camelCase - Apollo Client handles the transformation
+  // Debug: log the raw data to see what we're getting
+  if (__DEV__) {
+    if (error) {
+      console.log('❌ GraphQL Error:', JSON.stringify(error, null, 2));
+    }
+    if (data?.dayTradingPicks) {
+      console.log('📊 Day Trading Data:', JSON.stringify(data.dayTradingPicks, null, 2));
+      console.log('📊 Picks Array:', data.dayTradingPicks.picks);
+      console.log('📊 Picks Length:', data.dayTradingPicks.picks?.length ?? 0);
+    } else if (data) {
+      console.log('📊 Data (no dayTradingPicks):', JSON.stringify(data, null, 2));
+    }
+    if (loading) {
+      console.log('⏳ Loading state:', loading);
+    }
+  }
+  
   const dayTradingData: DayTradingData | null = data?.dayTradingPicks ?? null;
 
-  // Use real data if available, otherwise use mock data for demo
-  const picks = useMemo(() => {
-    if (dayTradingData?.picks && dayTradingData.picks.length > 0) {
-      return dayTradingData.picks;
-    }
-    // If error occurred, loading completed with no data, or no data available, use mock picks
-    const hasError = error && !dayTradingData;
-    const hasNetworkError = error?.message?.includes('Network request failed');
-    const loadingCompleted = !loading && (!dayTradingData || !dayTradingData.picks || dayTradingData.picks.length === 0);
-    
-    // Always return mock data for optimistic loading (show immediately, replace when real data arrives)
-    if (hasError || hasNetworkError || loadingCompleted || !dayTradingData) {
-      return getMockDayTradingPicks(mode);
-    }
-    // While actively loading, show mock data immediately (optimistic loading)
-    return getMockDayTradingPicks(mode);
-  }, [dayTradingData?.picks, loading, error, mode]);
+  // Use real data from API
+  const effectiveData = dayTradingData;
 
-  // Create mock dayTradingData object for display when using mock picks
-  const effectiveDayTradingData: DayTradingData | null = dayTradingData || (picks.length > 0 ? {
-    as_of: new Date().toISOString(),
-    mode,
-    picks,
-    universe_size: mode === 'SAFE' ? 500 : 1000,
-    quality_threshold: mode === 'SAFE' ? 1.5 : 2.0,
-  } : null);
+  // Use only real data from API - no mock data fallback
+  const picks = useMemo(() => {
+    if (__DEV__) {
+      console.log('🔍 useMemo picks - effectiveData:', effectiveData);
+      console.log('🔍 useMemo picks - effectiveData?.picks:', effectiveData?.picks);
+      console.log('🔍 useMemo picks - effectiveData?.picks?.length:', effectiveData?.picks?.length ?? 0);
+      if (effectiveData) {
+        console.log('📊 Diagnostics:', {
+          scanned: effectiveData.scannedCount,
+          passedLiquidity: effectiveData.passedLiquidity,
+          passedQuality: effectiveData.passedQuality,
+          failedFetch: effectiveData.failedDataFetch,
+          filteredMicrostructure: effectiveData.filteredByMicrostructure,
+          filteredVolatility: effectiveData.filteredByVolatility,
+          filteredMomentum: effectiveData.filteredByMomentum,
+        });
+      }
+    }
+    if (effectiveData?.picks && effectiveData.picks.length > 0) {
+      // Backend now returns up to 10 picks - use all of them
+      const result = effectiveData.picks;
+      if (__DEV__) {
+        console.log('✅ Returning picks:', result.length, result.map(p => p.symbol));
+      }
+      return result;
+    }
+    // Return empty array if no real data available
+    if (__DEV__) {
+      console.log('⚠️ No picks available - returning empty array');
+    }
+    return [];
+  }, [dayTradingData?.picks]);
+
+  // Use real data for metadata display
+  const effectiveDayTradingData: DayTradingData | null = dayTradingData;
 
   // --- helpers ---
   const isMarketHours = useCallback(() => {
@@ -378,6 +416,47 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
     const mins = h * 60 + m;
     // 9:30–16:00 local time
     return mins >= 9 * 60 + 30 && mins <= 16 * 60;
+  }, []);
+
+  const getMarketStatus = useCallback(() => {
+    const now = new Date();
+    const day = now.getDay(); // 0 Sun ... 6 Sat
+    const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][day];
+    
+    if (day === 0 || day === 6) {
+      return {
+        isOpen: false,
+        message: `Markets are closed (${dayName}). Trading resumes Monday–Friday, 9:30 AM–4:00 PM ET.`,
+        isWeekend: true,
+      };
+    }
+    
+    const h = now.getHours();
+    const m = now.getMinutes();
+    const mins = h * 60 + m;
+    const marketOpen = 9 * 60 + 30; // 9:30 AM
+    const marketClose = 16 * 60; // 4:00 PM
+    
+    if (mins < marketOpen) {
+      return {
+        isOpen: false,
+        message: `Markets open at 9:30 AM ET. Pre-market activity may be limited.`,
+        isPreMarket: true,
+      };
+    }
+    
+    if (mins > marketClose) {
+      return {
+        isOpen: false,
+        message: `Markets closed at 4:00 PM ET. After-hours activity may be limited.`,
+        isAfterHours: true,
+      };
+    }
+    
+    return {
+      isOpen: true,
+      message: 'Markets are open',
+    };
   }, []);
 
   const fetchQuotes = useCallback(async (symbols: string[]) => {
@@ -462,14 +541,38 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await refetch({ mode });
+      // Force network fetch (bypass cache) - fetchPolicy is set to 'network-only' in useQuery
+      if (__DEV__) {
+        console.log('🔄 Refreshing picks for mode:', mode);
+        // Clear Apollo cache for this query to ensure fresh data and schema
+        try {
+          await client.cache.evict({ fieldName: 'dayTradingPicks' });
+          await client.cache.gc();
+          // Also reset the cache to force schema refresh
+          await client.resetStore();
+        } catch (e) {
+          console.log('⚠️ Cache clear error (non-fatal):', e);
+        }
+      }
+      const result = await refetch({ mode });
+      if (__DEV__) {
+        console.log('🔄 Refetch result:', JSON.stringify(result.data?.dayTradingPicks, null, 2));
+        console.log('🔄 Refetch picks count:', result.data?.dayTradingPicks?.picks?.length ?? 0);
+        if (result.data?.dayTradingPicks?.picks) {
+          console.log('🔄 Refetch picks symbols:', result.data.dayTradingPicks.picks.map((p: DayTradingPick) => p.symbol));
+        }
+      }
       const symbols = [...new Set(picks.map((p) => p.symbol))];
       await fetchQuotes(symbols);
       await fetchCharts(symbols);
+    } catch (err) {
+      if (__DEV__) {
+        console.error('❌ Refresh error:', err);
+      }
     } finally {
       setRefreshing(false);
     }
-  }, [mode, refetch, picks, fetchQuotes, fetchCharts]);
+  }, [mode, refetch, picks, fetchQuotes, fetchCharts, client]);
 
   const handleModeChange = useCallback(
     async (newMode: TradingMode) => {
@@ -588,7 +691,7 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
         'Execute Trade',
         `Execute ${pick.side} ${pick.symbol}?\n\nEntry: $${(entry ?? 0).toFixed(2)}\nStop: $${(pick.risk?.stop ?? 0).toFixed(
           2,
-        )}\nTarget: $${Number(primaryTarget ?? 0).toFixed(2)}\nSize: ${pick.risk?.size_shares ?? 0} shares`,
+        )}\nTarget: $${Number(primaryTarget ?? 0).toFixed(2)}\nSize: ${pick.risk?.sizeShares ?? 0} shares`,
         [
           { text: 'Cancel', style: 'cancel' },
           {
@@ -605,7 +708,7 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
                       entryPrice: entry,
                       stopPrice: pick.risk.stop,
                       targetPrice: primaryTarget,
-                      sizeShares: pick.risk.size_shares,
+                      sizeShares: pick.risk.sizeShares,
                       features: pick.features,
                       score: pick.score,
                       executedAt: new Date().toISOString(),
@@ -626,140 +729,62 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
     [logOutcome, mode],
   );
 
-  // Memoized renderPick
-  const MemoizedPick = React.memo(({ item }: { item: DayTradingPick }) => {
-    const entry = computeEntry(item);
-    const target = item.risk?.targets?.[0] ?? entry;
-    const quote = quotes[item.symbol];
-    const chartData = charts[item.symbol] || [];
-    const changePercent = quote?.changePercent ?? 0;
-    const isSelected = selectedPick?.symbol === item.symbol;
+  // MemoizedPick is now defined outside this component (see below)
+  // This prevents it from being recreated on every render
+
+  // Use refs to keep handlers stable - they never change identity
+  const navigateToRef = useRef(navigateTo);
+  useEffect(() => {
+    navigateToRef.current = navigateTo;
+  }, [navigateTo]);
+
+  // Stable wrapper callbacks that never change - they use refs internally
+  const handleRiskPress = useCallback(() => {
+    navigateToRef.current?.('risk-management');
+  }, []); // Empty deps - this callback never changes
+
+  const handleMLPress = useCallback(() => {
+    navigateToRef.current?.('ml-system');
+  }, []); // Empty deps - this callback never changes
+
+  const handleBackPress = useCallback(() => {
+    navigateToRef.current?.('trading');
+  }, []); // Empty deps - this callback never changes
+
+  // Memoize header buttons - only recreate if navigateTo existence changes
+  const headerButtonsElement = useMemo(() => {
+    if (!navigateTo) return null;
+    
+    if (__DEV__) {
+      console.log('🔧 Creating HeaderButtons element');
+    }
     
     return (
-      <TouchableOpacity 
-        style={[
-          styles.card, 
-          { 
-            backgroundColor: C.card, 
-            borderColor: isSelected ? '#4CAF50' : C.border,
-            borderWidth: isSelected ? 2 : 1,
-          }
-        ]}
-        onPress={() => selectPick(item)}
-        activeOpacity={0.7}
-      >
-        <View>
-        {/* Header */}
-        <View style={styles.pickHeader}>
-          <View style={styles.pickSymbolWrap}>
-            <View style={styles.symbolIcon}>
-              <Icon name="trending-up" size={20} color={getSideColor(item.side)} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.pickSymbol, { color: C.text }]} accessibilityRole="text" accessibilityLabel={`Symbol ${item.symbol}`}>
-                {item.symbol}
-              </Text>
-              {quote && (
-                <View style={styles.changeWrap}>
-                  <Text style={[styles.changeValue, { color: getChangeColor(changePercent) }]}>
-                    {changePercent >= 0 ? `+${changePercent.toFixed(2)}%` : `${changePercent.toFixed(2)}%`}
-                  </Text>
-                  <Text style={[styles.changeLabel, { color: C.sub }]}>Live</Text>
-                </View>
-              )}
-            </View>
-            <View style={[styles.badge, { backgroundColor: getSideColor(item.side) }]}>
-              <Text style={styles.badgeText}>{item.side}</Text>
-            </View>
-          </View>
-          <View style={styles.pickScoreWrap}>
-            <Text style={[styles.scoreValue, { color: getScoreColor(item.score) }]}>{(item.score ?? 0).toFixed(2)}</Text>
-            <Text style={[styles.scoreLabel, { color: C.sub }]}>Score</Text>
-          </View>
-        </View>
-
-        {/* Live Chart */}
-        <View style={styles.chartContainer}>
-          {chartData && chartData.length > 0 ? (
-            <>
-              <SparkMini 
-                data={chartData} 
-                width={chartData.length * 2} 
-                height={60} 
-                upColor={C.long}
-                downColor={C.short}
-                neutralColor={C.sub}
-              />
-              <View style={styles.chartFooter}>
-                <Text style={[styles.chartPrice, { color: getChangeColor(changePercent) }]}>
-                  {quote ? `$${quote.currentPrice?.toFixed(2)}` : 'N/A'}
-                </Text>
-                <Text style={styles.chartTime}>1D Intraday</Text>
-              </View>
-            </>
-          ) : (
-            <View style={[styles.chartPlaceholder, { backgroundColor: C.border }]}>
-              <Text style={[styles.chartPlaceholderText, { color: C.sub }]}>Chart Loading...</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Features */}
-        <View style={styles.block}>
-          <View style={styles.blockHeader}>
-            <Icon name="bar-chart-2" size={16} color={C.sub} />
-            <Text style={[styles.blockTitle, { color: C.text }]}>Key Features</Text>
-          </View>
-          <View style={styles.grid}>
-            <KV label="Momentum" value={(item.features?.momentum15m ?? 0).toFixed(3)} />
-            <KV label="RVOL" value={`${(item.features?.rvol10m ?? 0).toFixed(2)}x`} />
-            <KV label="VWAP" value={(item.features?.vwapDist ?? 0).toFixed(3)} />
-            <KV label="Breakout" value={(item.features?.breakoutPct ?? 0).toFixed(3)} />
-          </View>
-        </View>
-
-        {/* Risk */}
-        <View style={styles.block}>
-          <View style={styles.blockHeader}>
-            <Icon name="shield" size={16} color={C.sub} />
-            <Text style={[styles.blockTitle, { color: C.text }]}>Risk Management</Text>
-          </View>
-          <View style={styles.grid}>
-            <KV label="Size" value={`${item.risk?.sizeShares ?? 0} shares`} />
-            <KV label="Entry" value={`$${(entry ?? 0).toFixed(2)}`} />
-            <KV label="Stop" value={`$${(item.risk?.stop ?? 0).toFixed(2)}`} />
-            <KV label="Target" value={`$${Number(target ?? 0).toFixed(2)}`} />
-            <KV label="Time Stop" value={`${item.risk?.timeStopMin ?? 0} min`} />
-            <KV label="ATR(5m)" value={`${(item.risk?.atr5m ?? 0).toFixed(2)}`} />
-          </View>
-        </View>
-
-        {item.notes ? <Text style={[styles.notes, { color: C.sub }]}>{item.notes}</Text> : null}
-
-        <TouchableOpacity
-          style={[styles.executeBtn, { backgroundColor: getSideColor(item.side) }]}
-          onPress={() => handleTradeExecution(item)}
-          accessibilityRole="button"
-          accessibilityLabel={`Execute ${item.side} ${item.symbol}`}
-        >
-          <Icon name="zap" size={18} color="#fff" style={{ marginRight: 8 }} />
-          <Text style={styles.executeBtnText}>Execute {item.side} Trade</Text>
-        </TouchableOpacity>
-        </View>
-      </TouchableOpacity>
+      <HeaderButtons
+        onRiskPress={handleRiskPress}
+        onMLPress={handleMLPress}
+      />
     );
-  });
-
-  MemoizedPick.displayName = 'MemoizedPick';
+  }, [!!navigateTo, handleRiskPress, handleMLPress]); // Only recreate if navigateTo existence changes
 
   // ---- header / top ----
-  const Header = (
-    <View>
+  // Memoize just the top header bar separately to keep buttons stable
+  const HeaderTopBar = useMemo(() => {
+    if (__DEV__) {
+      console.log('🔧 Creating HeaderTopBar');
+    }
+    
+    return (
       <View style={[styles.header, { backgroundColor: C.card, borderBottomColor: C.border }]}>
         <View style={styles.headerRow}>
           <View style={styles.headerLeft}>
             {navigateTo && (
-              <TouchableOpacity style={styles.backBtn} onPress={() => navigateTo('trading')} accessibilityRole="button" accessibilityLabel="Back">
+              <TouchableOpacity 
+                style={styles.backBtn} 
+                onPress={handleBackPress} 
+                accessibilityRole="button" 
+                accessibilityLabel="Back"
+              >
                 <Icon name="arrow-left" size={20} color={C.primary} />
               </TouchableOpacity>
             )}
@@ -768,20 +793,15 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
               <Text style={[styles.subtitle, { color: C.sub }]}>Execute trades and manage signals</Text>
             </View>
           </View>
-          {navigateTo && (
-            <View style={styles.headerRight}>
-              <TouchableOpacity style={[styles.pillBtn, { backgroundColor: '#EE6C4D' }]} onPress={() => navigateTo('risk-management')}>
-                <Icon name="shield" size={14} color="#fff" style={{ marginRight: 4 }} />
-                <Text style={styles.pillBtnText}>Risk</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.pillBtn, { backgroundColor: '#9C27B0' }]} onPress={() => navigateTo('ml-system')}>
-                <Icon name="cpu" size={14} color="#fff" style={{ marginRight: 4 }} />
-                <Text style={styles.pillBtnText}>ML</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+          {headerButtonsElement}
         </View>
       </View>
+    );
+  }, [!!navigateTo, handleBackPress, headerButtonsElement]); // Only recreate if navigateTo existence changes
+
+  const Header = useMemo(() => (
+    <View>
+      {HeaderTopBar}
 
       {/* Mode Toggle */}
       <View style={[styles.modeWrap, { backgroundColor: C.card, shadowColor: '#000' }]}>
@@ -829,6 +849,11 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
             ? '0.5% risk per trade • 45 min time-stop • Large-cap/liquid universe'
             : '1.2% risk per trade • 25 min time-stop • Extended universe'}
         </Text>
+        {effectiveDayTradingData?.universeSource === 'DYNAMIC_MOVERS' && (
+          <Text style={[styles.infoText, { color: C.primary, fontSize: 11, marginTop: 4, fontStyle: 'italic' }]}>
+            Scanning today's biggest movers, then filtering through RichesReach risk rules
+          </Text>
+        )}
       </View>
 
       {/* Market Status */}
@@ -837,22 +862,48 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
           <View style={styles.marketRow}>
             <Icon name="clock" size={14} color={C.sub} />
             <Text style={[styles.marketText, { color: C.sub, marginLeft: 8 }]}>
-              Last Updated: {new Date(effectiveDayTradingData.as_of).toLocaleTimeString()}
+              Last Updated: {(() => {
+                if (!effectiveDayTradingData.asOf) return 'Just now';
+                try {
+                  const date = new Date(effectiveDayTradingData.asOf);
+                  if (isNaN(date.getTime())) return 'Just now';
+                  return date.toLocaleTimeString();
+                } catch {
+                  return 'Just now';
+                }
+              })()}
             </Text>
           </View>
           <View style={styles.marketRow}>
             <Icon name="globe" size={14} color={C.sub} />
             <Text style={[styles.marketText, { color: C.sub, marginLeft: 8 }]}>
-              Universe: {effectiveDayTradingData.universe_size} • Threshold: {effectiveDayTradingData.quality_threshold}
+              Universe: {effectiveDayTradingData.universeSize ?? 0} • Threshold: {effectiveDayTradingData.qualityThreshold ?? 'N/A'}
             </Text>
           </View>
+          {effectiveDayTradingData.universeSource && (
+            <View style={styles.marketRow}>
+              <Icon 
+                name={effectiveDayTradingData.universeSource === 'DYNAMIC_MOVERS' ? 'trending-up' : 'layers'} 
+                size={14} 
+                color={effectiveDayTradingData.universeSource === 'DYNAMIC_MOVERS' ? C.primary : C.sub} 
+              />
+              <Text style={[styles.marketText, { 
+                color: effectiveDayTradingData.universeSource === 'DYNAMIC_MOVERS' ? C.primary : C.sub, 
+                marginLeft: 8,
+                fontWeight: effectiveDayTradingData.universeSource === 'DYNAMIC_MOVERS' ? '600' : '400'
+              }]}>
+                Source: {effectiveDayTradingData.universeSource === 'DYNAMIC_MOVERS' 
+                  ? 'Dynamic Discovery (Polygon movers)' 
+                  : 'Core Universe'}
+              </Text>
+            </View>
+          )}
         </View>
       )}
     </View>
-  );
+  ), [navigateTo, mode, handleModeChange, effectiveDayTradingData, handleBackPress]);
 
-  // Never show error state - always use mock data as fallback
-  // The picks useMemo already handles this, so we just render normally
+  // Only show real data - empty state is handled by ListEmptyComponent
 
   return (
     <OnboardingGuard 
@@ -886,38 +937,143 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
           </View>
         )}
 
-        <FlatList
-          data={picks}
-          keyExtractor={(item, idx) => `${item.symbol}-${item.side}-${idx}`}
-          ListHeaderComponent={Header}
-          renderItem={({ item }) => <MemoizedPick item={item} />}
-          contentContainerStyle={{ paddingBottom: 24 }}
-          refreshControl={<RefreshControl refreshing={refreshing || networkStatus === 4} onRefresh={onRefresh} tintColor={C.primary} />}
-          initialNumToRender={3}
-          maxToRenderPerBatch={3}
-          windowSize={10}
-          removeClippedSubviews={true}
-          onViewableItemsChanged={onViewableItemsChanged}
-          viewabilityConfig={viewabilityConfig}
-          ListEmptyComponent={
-            <View style={styles.emptyWrap}>
-              <Icon name="inbox" size={64} color={C.sub} />
-              <Text style={[styles.emptyTitle, { color: C.sub }]}>No qualifying picks for {mode} mode</Text>
-              <Text style={[styles.emptySub, { color: C.sub }]}>
-                Quality threshold not met or market conditions unsuitable
-              </Text>
-            </View>
-          }
-          ListFooterComponent={
-            <View style={[styles.disclaimer, { borderLeftColor: C.warnBorder, backgroundColor: C.warnBg, marginTop: 20 }]}>
-              <Icon name="alert-circle" size={16} color={C.warnText} style={{ marginRight: 8 }} />
-              <Text style={[styles.disclaimerText, { color: C.warnText }]}>
-                Day trading involves significant risk. Only trade with capital you can afford to lose. Past performance does
-                not guarantee future results.
-              </Text>
-            </View>
-          }
-        />
+        {/* Loading, Error, or Picks List */}
+        {loading && picks.length === 0 ? (
+          <View style={styles.emptyWrap}>
+            <ActivityIndicator size="large" color={C.primary} />
+            <Text style={[styles.emptyTitle, { color: C.sub, marginTop: 16 }]}>Loading picks...</Text>
+          </View>
+        ) : error ? (
+          <View style={[styles.emptyWrap, { padding: 20 }]}>
+            <Icon name="alert-circle" size={48} color={C.red} />
+            <Text style={[styles.emptyTitle, { color: C.red, marginTop: 16 }]}>Error loading picks</Text>
+            <Text style={[styles.emptySub, { color: C.sub, marginTop: 8 }]}>
+              {error.message || 'Unknown error occurred'}
+            </Text>
+            <TouchableOpacity 
+              style={[styles.retryButton, { backgroundColor: C.primary, marginTop: 16 }]}
+              onPress={() => refetch({ mode })}
+            >
+              <Text style={[styles.retryButtonText, { color: '#fff' }]}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <FlatList
+            data={picks}
+            keyExtractor={(item) => `${item.symbol}-${item.side}`}
+            ListHeaderComponent={Header}
+            renderItem={({ item }) => (
+              <MemoizedPick
+                item={item}
+                quotes={quotes}
+                charts={charts}
+                C={C}
+                selectedPick={selectedPick}
+                selectPick={selectPick}
+                computeEntry={computeEntry}
+                handleTradeExecution={handleTradeExecution}
+              />
+            )}
+            contentContainerStyle={{ paddingBottom: 24 }}
+            refreshControl={<RefreshControl refreshing={refreshing || networkStatus === 4} onRefresh={onRefresh} tintColor={C.primary} />}
+            initialNumToRender={5}
+            maxToRenderPerBatch={5}
+            windowSize={10}
+            removeClippedSubviews={true}
+            onViewableItemsChanged={onViewableItemsChanged}
+            viewabilityConfig={viewabilityConfig}
+            ListEmptyComponent={
+              <View style={styles.emptyWrap}>
+                <Icon name="inbox" size={64} color={C.sub} />
+                <Text style={[styles.emptyTitle, { color: C.sub }]}>No qualifying picks for {mode} mode</Text>
+                
+                {/* Market status message */}
+                {(() => {
+                  const marketStatus = getMarketStatus();
+                  if (!marketStatus.isOpen) {
+                    return (
+                      <View style={{ marginTop: 16, padding: 16, backgroundColor: C.bg, borderRadius: 12, width: '100%', marginBottom: 8 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                          <Icon name="clock" size={20} color={C.amber} style={{ marginRight: 8 }} />
+                          <Text style={[styles.emptySub, { color: C.amber, fontWeight: '700', fontSize: 14 }]}>
+                            Markets Closed
+                          </Text>
+                        </View>
+                        <Text style={[styles.emptySub, { color: C.sub, fontSize: 12, lineHeight: 18 }]}>
+                          {marketStatus.message}
+                        </Text>
+                        {marketStatus.isWeekend && (
+                          <Text style={[styles.emptySub, { color: C.sub, fontSize: 11, marginTop: 8, fontStyle: 'italic' }]}>
+                            This is normal behavior. Picks will populate when markets reopen.
+                          </Text>
+                        )}
+                      </View>
+                    );
+                  }
+                  return (
+                    <Text style={[styles.emptySub, { color: C.sub }]}>
+                      Quality threshold not met or market conditions unsuitable
+                    </Text>
+                  );
+                })()}
+                {dayTradingData && (
+                  <View style={{ marginTop: 16, padding: 16, backgroundColor: C.bg, borderRadius: 12, width: '100%' }}>
+                    <Text style={[styles.emptySub, { color: C.sub, fontSize: 12, marginBottom: 8 }]}>
+                      Diagnostic Info:
+                    </Text>
+                    <Text style={[styles.emptySub, { color: C.sub, fontSize: 11 }]}>
+                      Scanned: {dayTradingData.scannedCount ?? dayTradingData.universeSize} symbols
+                    </Text>
+                    {dayTradingData.failedDataFetch !== undefined && dayTradingData.failedDataFetch > 0 && (
+                      <Text style={[styles.emptySub, { color: C.red, fontSize: 11 }]}>
+                        Failed data fetch: {dayTradingData.failedDataFetch} (market closed or API issues)
+                      </Text>
+                    )}
+                    {dayTradingData.passedLiquidity !== undefined && (
+                      <Text style={[styles.emptySub, { color: C.sub, fontSize: 11 }]}>
+                        Passed liquidity: {dayTradingData.passedLiquidity}
+                      </Text>
+                    )}
+                    {dayTradingData.passedQuality !== undefined && (
+                      <Text style={[styles.emptySub, { color: C.sub, fontSize: 11 }]}>
+                        Passed quality threshold: {dayTradingData.passedQuality}
+                      </Text>
+                    )}
+                    {(dayTradingData.filteredByVolatility !== undefined || 
+                      dayTradingData.filteredByMomentum !== undefined || 
+                      dayTradingData.filteredByMicrostructure !== undefined) && (
+                      <Text style={[styles.emptySub, { color: C.sub, fontSize: 11, marginTop: 8 }]}>
+                        Filtered by: Volatility ({dayTradingData.filteredByVolatility ?? 0}), 
+                        Momentum ({dayTradingData.filteredByMomentum ?? 0}), 
+                        Microstructure ({dayTradingData.filteredByMicrostructure ?? 0})
+                      </Text>
+                    )}
+                  </View>
+                )}
+                <TouchableOpacity 
+                  style={[styles.retryButton, { backgroundColor: C.primary, marginTop: 16 }]}
+                  onPress={() => {
+                    if (__DEV__) {
+                      console.log('🔄 Manual retry triggered');
+                    }
+                    refetch({ mode });
+                  }}
+                >
+                  <Text style={[styles.retryButtonText, { color: '#fff' }]}>Force Refresh</Text>
+                </TouchableOpacity>
+              </View>
+            }
+            ListFooterComponent={
+              <View style={[styles.disclaimer, { borderLeftColor: C.warnBorder, backgroundColor: C.warnBg, marginTop: 20 }]}>
+                <Icon name="alert-circle" size={16} color={C.warnText} style={{ marginRight: 8 }} />
+                <Text style={[styles.disclaimerText, { color: C.warnText }]}>
+                  Day trading involves significant risk. Only trade with capital you can afford to lose. Past performance does
+                  not guarantee future results.
+                </Text>
+              </View>
+            }
+          />
+        )}
       </View>
     </PanGestureHandler>
     </OnboardingGuard>
@@ -933,6 +1089,306 @@ function KV({ label, value, color }: { label: string; value: string; color?: str
     </View>
   );
 }
+
+/* ============ MemoizedPick - Top-level component to prevent recreation ============ */
+interface MemoizedPickProps {
+  item: DayTradingPick;
+  quotes: { [key: string]: TradingQuote };
+  charts: { [key: string]: number[] };
+  C: any;
+  selectedPick: DayTradingPick | null;
+  selectPick: (pick: DayTradingPick) => void;
+  computeEntry: (pick: DayTradingPick) => number;
+  handleTradeExecution: (pick: DayTradingPick) => void;
+}
+
+const MemoizedPick = React.memo(function MemoizedPick({
+  item,
+  quotes,
+  charts,
+  C,
+  selectedPick,
+  selectPick,
+  computeEntry,
+  handleTradeExecution,
+}: MemoizedPickProps) {
+  const entry = computeEntry(item);
+  const target = item.risk?.targets?.[0] ?? entry;
+  const quote = quotes[item.symbol];
+  const chartData = charts[item.symbol] || [];
+  const changePercent = quote?.changePercent ?? 0;
+  const isSelected = selectedPick?.symbol === item.symbol;
+
+  // Helper functions defined inside component
+  const getSideColor = (side: Side) => (side === 'LONG' ? C.long : C.short);
+  const getScoreColor = (score: number) => (score >= 2 ? C.long : score >= 1 ? C.aggressive : C.short);
+  const getChangeColor = (changePercent: number) => (changePercent >= 0 ? C.long : C.short);
+
+  const queryVariables = useMemo(() => {
+    const entryPrice = entry || (item.risk?.stop ? item.risk.stop + (item.risk?.atr5m || 1) : undefined);
+
+    const signalObj = {
+      symbol: item.symbol,
+      side: item.side,
+      entry_price: entryPrice,
+      risk: {
+        stop: item.risk?.stop,
+        targets: item.risk?.targets || [],
+        sizeShares: item.risk?.sizeShares || 100,
+        atr5m: item.risk?.atr5m,
+        atr1d: item.risk?.atr1d,
+      },
+      features: {
+        spreadBps: item.features?.spreadBps || 5.0,
+        executionQualityScore: item.features?.executionQualityScore,
+      },
+    };
+
+    return {
+      signal: JSON.stringify(signalObj),
+      signalType: 'day_trading',
+    };
+  }, [
+    item.symbol,
+    item.side,
+    entry,
+    item.risk?.stop,
+    item.risk?.targets,
+    item.risk?.sizeShares,
+    item.risk?.atr5m,
+    item.risk?.atr1d,
+    item.features?.spreadBps,
+    item.features?.executionQualityScore,
+  ]);
+
+  const [stableSuggestion, setStableSuggestion] = useState<any>(null);
+
+  const { data, loading, error } = useQuery(GET_EXECUTION_SUGGESTION, {
+    variables: queryVariables,
+    errorPolicy: 'all',
+    fetchPolicy: 'cache-and-network',
+    nextFetchPolicy: 'cache-first',
+    notifyOnNetworkStatusChange: false,
+    returnPartialData: true,
+  });
+
+  // Keep the last GOOD suggestion so the card doesn't blink during refetches
+  useEffect(() => {
+    const rawSuggestion = data?.executionSuggestion;
+
+    if (rawSuggestion) {
+      setStableSuggestion(rawSuggestion);
+
+      if (__DEV__) {
+        console.log(`✅ Execution suggestion received for ${item.symbol}:`, {
+          hasOrderType: 'orderType' in rawSuggestion,
+          hasPriceBand: !!rawSuggestion.priceBand,
+        });
+      }
+    }
+
+    // IMPORTANT: do NOT set stableSuggestion back to null on refetch.
+    // If rawSuggestion is null during a refetch, we keep the old suggestion
+  }, [data?.executionSuggestion, item.symbol]);
+
+  // Debug logging (hook always runs, but only logs in dev)
+  useEffect(() => {
+    if (!__DEV__) return;
+
+    console.log(`🔍 ExecutionSuggestion query for ${item.symbol}:`, {
+      loading,
+      hasData: !!data?.executionSuggestion,
+      hasStableData: !!stableSuggestion,
+      error: error?.message,
+    });
+  }, [loading, data, stableSuggestion, error, item.symbol]);
+
+  const effectiveSuggestion = stableSuggestion;
+  const isRefreshing = loading && !!effectiveSuggestion;
+
+  if (__DEV__ && !effectiveSuggestion && !loading) {
+    console.log(`⚠️ No execution suggestion for ${item.symbol} - error:`, error?.message);
+  }
+
+  return (
+    <TouchableOpacity
+      style={[
+        styles.card,
+        {
+          backgroundColor: C.card,
+          borderColor: isSelected ? '#4CAF50' : C.border,
+          borderWidth: isSelected ? 2 : 1,
+        },
+      ]}
+      onPress={() => selectPick(item)}
+      activeOpacity={0.7}
+    >
+      <View>
+        {/* Header */}
+        <View style={styles.pickHeader}>
+          <View style={styles.pickSymbolWrap}>
+            <View style={styles.symbolIcon}>
+              <Icon name="trending-up" size={20} color={getSideColor(item.side)} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text
+                style={[styles.pickSymbol, { color: C.text }]}
+                accessibilityRole="text"
+                accessibilityLabel={`Symbol ${item.symbol}`}
+              >
+                {item.symbol}
+              </Text>
+              {quote && (
+                <View style={styles.changeWrap}>
+                  <Text
+                    style={[styles.changeValue, { color: getChangeColor(changePercent) }]}
+                  >
+                    {changePercent >= 0
+                      ? `+${changePercent.toFixed(2)}%`
+                      : `${changePercent.toFixed(2)}%`}
+                  </Text>
+                  <Text style={[styles.changeLabel, { color: C.sub }]}>Live</Text>
+                </View>
+              )}
+            </View>
+            <View style={[styles.badge, { backgroundColor: getSideColor(item.side) }]}>
+              <Text style={styles.badgeText}>{item.side}</Text>
+            </View>
+          </View>
+          <View style={styles.pickScoreWrap}>
+            <Text
+              style={[styles.scoreValue, { color: getScoreColor(item.score) }]}
+            >
+              {(item.score ?? 0).toFixed(2)}
+            </Text>
+            <Text style={[styles.scoreLabel, { color: C.sub }]}>Score</Text>
+          </View>
+        </View>
+
+        {/* Live Chart */}
+        <View style={styles.chartContainer}>
+          {chartData && chartData.length > 0 ? (
+            <>
+              <SparkMini
+                data={chartData}
+                width={chartData.length * 2}
+                height={60}
+                upColor={C.long}
+                downColor={C.short}
+                neutralColor={C.sub}
+              />
+              <View style={styles.chartFooter}>
+                <Text
+                  style={[styles.chartPrice, { color: getChangeColor(changePercent) }]}
+                >
+                  {quote ? `$${quote.currentPrice?.toFixed(2)}` : 'N/A'}
+                </Text>
+                <Text style={styles.chartTime}>1D Intraday</Text>
+              </View>
+            </>
+          ) : (
+            <View style={[styles.chartPlaceholder, { backgroundColor: C.border }]}>
+              <Text
+                style={[styles.chartPlaceholderText, { color: C.sub }]}
+              >
+                Chart Loading...
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* Features */}
+        <View style={styles.block}>
+          <View style={styles.blockHeader}>
+            <Icon name="bar-chart-2" size={16} color={C.sub} />
+            <Text style={[styles.blockTitle, { color: C.text }]}>Key Features</Text>
+          </View>
+          <View style={styles.grid}>
+            <KV label="Momentum" value={(item.features?.momentum15m ?? 0).toFixed(3)} />
+            <KV label="RVOL" value={`${(item.features?.rvol10m ?? 0).toFixed(2)}x`} />
+            <KV label="VWAP" value={(item.features?.vwapDist ?? 0).toFixed(3)} />
+            <KV label="Breakout" value={(item.features?.breakoutPct ?? 0).toFixed(3)} />
+          </View>
+        </View>
+
+        {/* Risk */}
+        <View style={styles.block}>
+          <View style={styles.blockHeader}>
+            <Icon name="shield" size={16} color={C.sub} />
+            <Text style={[styles.blockTitle, { color: C.text }]}>Risk Management</Text>
+          </View>
+          <View style={styles.grid}>
+            <KV label="Size" value={`${item.risk?.sizeShares ?? 0} shares`} />
+            <KV label="Entry" value={`$${(entry ?? 0).toFixed(2)}`} />
+            <KV label="Stop" value={`$${(item.risk?.stop ?? 0).toFixed(2)}`} />
+            <KV label="Target" value={`$${Number(target ?? 0).toFixed(2)}`} />
+            <KV label="Time Stop" value={`${item.risk?.timeStopMin ?? 0} min`} />
+            <KV label="ATR(5m)" value={`${(item.risk?.atr5m ?? 0).toFixed(2)}`} />
+          </View>
+        </View>
+
+        {item.notes ? (
+          <Text style={[styles.notes, { color: C.sub }]}>{item.notes}</Text>
+        ) : null}
+
+        {/* Execution Suggestion */}
+        {loading && !effectiveSuggestion ? (
+          <View
+            style={[
+              styles.card,
+              {
+                padding: 12,
+                marginTop: 12,
+                backgroundColor: '#F5F5F5',
+                borderRadius: 12,
+              },
+            ]}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Icon name="zap" size={16} color={C.primary} />
+              <Text
+                style={{
+                  fontSize: 14,
+                  fontWeight: '600',
+                  color: C.text,
+                }}
+              >
+                Smart Order Suggestion
+              </Text>
+              <ActivityIndicator size="small" color={C.primary} />
+            </View>
+            <Text
+              style={{
+                fontSize: 12,
+                color: C.sub,
+                marginTop: 8,
+              }}
+            >
+              Loading execution suggestion...
+            </Text>
+          </View>
+        ) : (
+          <ExecutionSuggestionCard
+            suggestion={effectiveSuggestion}
+            isRefreshing={isRefreshing}
+          />
+        )}
+
+        <TouchableOpacity
+          style={[styles.executeBtn, { backgroundColor: getSideColor(item.side) }]}
+          onPress={() => handleTradeExecution(item)}
+          accessibilityRole="button"
+          accessibilityLabel={`Execute ${item.side} ${item.symbol}`}
+        >
+          <Icon name="zap" size={18} color="#fff" style={{ marginRight: 8 }} />
+          <Text style={styles.executeBtnText}>Execute {item.side} Trade</Text>
+        </TouchableOpacity>
+      </View>
+    </TouchableOpacity>
+  );
+});
+
+MemoizedPick.displayName = 'MemoizedPick';
 
 /* ============ Styles ============ */
 const styles = StyleSheet.create({
@@ -1113,6 +1569,17 @@ const styles = StyleSheet.create({
   emptyWrap: { padding: 60, alignItems: 'center', justifyContent: 'center' },
   emptyTitle: { fontSize: 18, fontWeight: '800', textAlign: 'center', marginBottom: 8 },
   emptySub: { fontSize: 14, textAlign: 'center' },
+  retryButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  retryButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
 
   disclaimer: {
     marginHorizontal: 20,

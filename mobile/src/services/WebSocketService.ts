@@ -590,7 +590,7 @@ logger.error('Error in big day movement analysis:', error);
 */
 // Real market data polling
 private marketDataInterval?: NodeJS.Timeout;
-private watchedSymbols: string[] = ['AAPL', 'MSFT', 'GOOGL', 'TSLA', 'AMZN', 'META', 'NVDA', 'NFLX', 'AMD', 'INTC', 'CRM', 'ADBE', 'PYPL', 'UBER', 'LYFT'];
+private watchedSymbols: string[] = ['T', 'META', 'MSFT', 'NFLX', 'NVDA', 'PYPL', 'TSLA', 'UBER'];
 private startRealMarketDataPolling() {
 // Clear any existing interval
 if (this.marketDataInterval) {

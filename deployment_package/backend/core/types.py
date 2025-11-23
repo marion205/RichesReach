@@ -821,6 +821,13 @@ class DayTradingFeaturesType(graphene.ObjectType):
     breakoutPct = graphene.Float()
     spreadBps = graphene.Float()
     catalystScore = graphene.Float()
+    # Microstructure features (optional - only present if L2 data available)
+    orderImbalance = graphene.Float(description="Order imbalance: -1 (bearish) to +1 (bullish)")
+    bidDepth = graphene.Float(description="Total bid depth in dollars (top 5 levels)")
+    askDepth = graphene.Float(description="Total ask depth in dollars (top 5 levels)")
+    depthImbalance = graphene.Float(description="Depth imbalance: (bid_depth - ask_depth) / total")
+    executionQualityScore = graphene.Float(description="Execution quality score: 0-10 (higher = better)")
+    microstructureRisky = graphene.Boolean(description="True if execution quality is low (thin depth, wide spread)")
 
 
 class DayTradingRiskType(graphene.ObjectType):
@@ -849,6 +856,129 @@ class DayTradingDataType(graphene.ObjectType):
     picks = graphene.List(DayTradingPickType)
     universeSize = graphene.Int()
     qualityThreshold = graphene.Float()
+    universeSource = graphene.String()  # "CORE" or "DYNAMIC_MOVERS"
+    # Diagnostic fields to understand why picks might be empty
+    scannedCount = graphene.Int(description="Total symbols scanned from universe")
+    passedLiquidity = graphene.Int(description="Symbols that passed liquidity/volume filters")
+    passedQuality = graphene.Int(description="Symbols that passed quality threshold")
+    failedDataFetch = graphene.Int(description="Symbols that failed data fetching (API issues, market closed, etc.)")
+    filteredByMicrostructure = graphene.Int(description="Symbols filtered out by microstructure/execution quality")
+    filteredByVolatility = graphene.Int(description="Symbols filtered out by volatility constraints")
+    filteredByMomentum = graphene.Int(description="Symbols filtered out by momentum requirements")
+
+
+class DayTradingStatsType(graphene.ObjectType):
+    """GraphQL type for day trading strategy performance stats"""
+    mode = graphene.String()  # "SAFE" or "AGGRESSIVE"
+    period = graphene.String()  # "DAILY", "WEEKLY", "MONTHLY", "ALL_TIME"
+    asOf = graphene.String()  # When stats were calculated
+    winRate = graphene.Float()
+    sharpeRatio = graphene.Float()
+    maxDrawdown = graphene.Float()
+    avgPnlPerSignal = graphene.Float()
+    totalSignals = graphene.Int()
+    signalsEvaluated = graphene.Int()
+    totalPnlPercent = graphene.Float()
+    sortinoRatio = graphene.Float()
+    calmarRatio = graphene.Float()
+
+
+# Swing Trading Types (Phase 2: Breadth of Alphas)
+class SwingTradingFeaturesType(graphene.ObjectType):
+    """GraphQL type for swing trading features"""
+    momentum5d = graphene.Float(description="5-day momentum")
+    rvol5d = graphene.Float(description="5-day relative volume")
+    atr1d = graphene.Float(description="1-day ATR")
+    breakoutStrength = graphene.Float(description="Breakout strength (for breakout strategy)")
+    rsi = graphene.Float(description="RSI (for mean reversion strategy)")
+    distFromMA20 = graphene.Float(description="Distance from 20-day MA (for mean reversion)")
+    reversionPotential = graphene.Float(description="Mean reversion potential")
+    high20d = graphene.Float(description="20-day high (for breakout strategy)")
+
+
+class SwingTradingRiskType(graphene.ObjectType):
+    """GraphQL type for swing trading risk metrics"""
+    atr1d = graphene.Float()
+    sizeShares = graphene.Int()
+    stop = graphene.Float()
+    targets = graphene.List(graphene.Float)
+    holdDays = graphene.Int(description="Expected hold period in days (2-5)")
+
+
+class SwingTradingPickType(graphene.ObjectType):
+    """GraphQL type for a swing trading pick"""
+    symbol = graphene.String()
+    side = graphene.String()  # "LONG" or "SHORT"
+    strategy = graphene.String()  # "MOMENTUM", "BREAKOUT", "MEAN_REVERSION"
+    score = graphene.Float()
+    features = graphene.Field(SwingTradingFeaturesType)
+    risk = graphene.Field(SwingTradingRiskType)
+    entry_price = graphene.Float()
+    notes = graphene.String()
+
+
+class SwingTradingDataType(graphene.ObjectType):
+    """GraphQL type for swing trading picks data"""
+    asOf = graphene.String()
+    strategy = graphene.String()  # "MOMENTUM", "BREAKOUT", "MEAN_REVERSION"
+    picks = graphene.List(SwingTradingPickType)
+    universeSize = graphene.Int()
+    universeSource = graphene.String()  # "CORE", "DYNAMIC_MOVERS", "ETF"
+
+
+class SwingTradingStatsType(graphene.ObjectType):
+    """GraphQL type for swing trading strategy performance stats"""
+    strategy = graphene.String()  # "MOMENTUM", "BREAKOUT", "MEAN_REVERSION"
+    period = graphene.String()  # "DAILY", "WEEKLY", "MONTHLY", "ALL_TIME"
+    asOf = graphene.String()  # When stats were calculated
+    winRate = graphene.Float()
+    sharpeRatio = graphene.Float()
+    maxDrawdown = graphene.Float()
+    avgPnlPerSignal = graphene.Float()
+    totalSignals = graphene.Int()
+    signalsEvaluated = graphene.Int()
+    totalPnlPercent = graphene.Float()
+    sortinoRatio = graphene.Float()
+    calmarRatio = graphene.Float()
+
+
+# Execution Intelligence Types (Phase 3)
+class BracketLegsType(graphene.ObjectType):
+    """GraphQL type for bracket order legs"""
+    stop = graphene.Float()
+    target1 = graphene.Float()
+    target2 = graphene.Float()
+    orderStructure = graphene.JSONString(description="Suggested order structure")
+
+
+class ExecutionSuggestionType(graphene.ObjectType):
+    """GraphQL type for execution order suggestions"""
+    orderType = graphene.String(description="LIMIT, MARKET, STOP_LIMIT, etc.")
+    priceBand = graphene.List(graphene.Float, description="Suggested price range [min, max]")
+    timeInForce = graphene.String(description="DAY, IOC, GTC, etc.")
+    entryStrategy = graphene.String(description="Human-readable entry strategy")
+    bracketLegs = graphene.Field(BracketLegsType)
+    suggestedSize = graphene.Int()
+    rationale = graphene.String(description="Explanation of the suggestion")
+    microstructureSummary = graphene.String(description="One-line microstructure hint: 'Spread 0.08% · Book: Bid-leaning · Liquidity: Strong'")
+
+
+class EntryTimingSuggestionType(graphene.ObjectType):
+    """GraphQL type for entry timing suggestions"""
+    recommendation = graphene.String(description="ENTER_NOW or WAIT_FOR_PULLBACK")
+    waitReason = graphene.String()
+    pullbackTarget = graphene.Float()
+    currentDistancePct = graphene.Float()
+
+
+class ExecutionQualityStatsType(graphene.ObjectType):
+    """GraphQL type for execution quality statistics"""
+    avgSlippagePct = graphene.Float(description="Average slippage percentage")
+    avgQualityScore = graphene.Float(description="Average execution quality score (0-10)")
+    chasedCount = graphene.Int(description="Number of times price was chased")
+    totalFills = graphene.Int(description="Total number of fills analyzed")
+    improvementTips = graphene.List(graphene.String, description="Coaching tips for improvement")
+    periodDays = graphene.Int(description="Number of days analyzed")
 
 
 # Research Hub Types
