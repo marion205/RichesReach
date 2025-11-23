@@ -419,3 +419,11 @@ from .paper_trading_models import (
     PaperTradingOrder,
     PaperTradingTrade,
 )
+
+# Import signal performance models so Django can detect them for migrations
+from .signal_performance_models import (
+    DayTradingSignal,
+    SignalPerformance,
+    StrategyPerformance,
+    UserRiskBudget,
+)

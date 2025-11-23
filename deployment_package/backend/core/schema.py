@@ -15,6 +15,7 @@ except (ImportError, SyntaxError):
 # Import all types to ensure they're registered
 from .types import *
 from .benchmark_types import BenchmarkSeriesType, BenchmarkDataPointType
+from .broker_types import BrokerAccountType, BrokerOrderType, BrokerPositionType
 
 # Import premium queries and mutations
 try:
@@ -111,7 +112,73 @@ class ExtendedQuery(PremiumQueries, BrokerQueries, BankingQueries, SBLOCQueries,
     - Adds Broker, Banking, and SBLOC queries
     - The base Query class has resolve_me which will be available here
     """
-    pass
+    
+    # Legacy aliases for backward compatibility with mobile app
+    # These map old field names to new canonical names
+    
+    alpaca_account = graphene.Field(
+        BrokerAccountType,
+        user_id=graphene.Int(required=True),
+        name='alpacaAccount',
+        description="Deprecated alias for brokerAccount. Use brokerAccount instead."
+    )
+    
+    trading_account = graphene.Field(
+        BrokerAccountType,
+        name='tradingAccount',
+        description="Deprecated alias for brokerAccount. Use brokerAccount instead."
+    )
+    
+    trading_positions = graphene.List(
+        BrokerPositionType,
+        name='tradingPositions',
+        description="Deprecated alias for brokerPositions. Use brokerPositions instead."
+    )
+    
+    trading_orders = graphene.List(
+        BrokerOrderType,
+        status=graphene.String(),
+        limit=graphene.Int(),
+        name='tradingOrders',
+        description="Deprecated alias for brokerOrders. Use brokerOrders instead."
+    )
+    
+    # Note: stockChartData resolver will be implemented to return proper chart data
+    # For now, this field exists to prevent GraphQL schema errors
+    stock_chart_data = graphene.JSONString(
+        symbol=graphene.String(required=True),
+        timeframe=graphene.String(required=True),
+        name='stockChartData',
+        description="Get stock chart data (OHLCV) for a symbol and timeframe. Returns JSON with data array, currentPrice, change, changePercent."
+    )
+    
+    def resolve_alpaca_account(self, info, user_id):
+        """Legacy alias: resolve alpacaAccount by delegating to brokerAccount"""
+        # For now, just return the current user's broker account
+        # The old API took user_id, but new API uses authenticated user
+        user = info.context.user
+        if not user.is_authenticated:
+            return None
+        return self.resolve_broker_account(info)
+    
+    def resolve_trading_account(self, info):
+        """Legacy alias: resolve tradingAccount by delegating to brokerAccount"""
+        return self.resolve_broker_account(info)
+    
+    def resolve_trading_positions(self, info, **kwargs):
+        """Legacy alias: resolve tradingPositions by delegating to brokerPositions"""
+        return self.resolve_broker_positions(info)
+    
+    def resolve_trading_orders(self, info, status=None, limit=None):
+        """Legacy alias: resolve tradingOrders by delegating to brokerOrders"""
+        return self.resolve_broker_orders(info, status=status, limit=limit or 50)
+    
+    def resolve_stock_chart_data(self, info, symbol, timeframe):
+        """Resolve stockChartData - returns chart data in the format expected by frontend"""
+        # TODO: Implement proper chart data fetching from market data APIs
+        # For now, return None to prevent errors but allow the query to succeed
+        logger.warning(f"stockChartData called for {symbol} with timeframe {timeframe} - returning None (not yet fully implemented)")
+        return None
 
 
 # ------------------- MUTATION ------------------

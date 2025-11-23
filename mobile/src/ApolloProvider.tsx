@@ -9,11 +9,21 @@ import JWTAuthService from './features/auth/services/JWTAuthService';
   try {
     const baseUrl = process.env.EXPO_PUBLIC_API_BASE_URL;
     if (baseUrl) {
-      const response = await fetch(`${baseUrl}/health`, { 
-        method: 'GET',
-        signal: AbortSignal.timeout(5000), // 5 second timeout
-      } as RequestInit);
-      console.log('[health] Status:', response.status, 'Text:', await response.text());
+      // Use AbortController instead of AbortSignal.timeout (not available in React Native)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      
+      try {
+        const response = await fetch(`${baseUrl}/health`, { 
+          method: 'GET',
+          signal: controller.signal,
+        } as RequestInit);
+        clearTimeout(timeoutId);
+        console.log('[health] Status:', response.status, 'Text:', await response.text());
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        throw fetchError;
+      }
     } else {
       console.log('[health] Skipping - no API base URL set yet');
     }
