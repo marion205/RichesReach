@@ -6,6 +6,42 @@ import Icon from 'react-native-vector-icons/Feather';
 import { useApolloClient, gql, useQuery, useMutation } from '@apollo/client';
 import { ADD_TO_WATCHLIST, REMOVE_FROM_WATCHLIST } from '../../../graphql/mutations';
 
+const GET_OPTIONS_ANALYSIS = gql`
+  query GetOptionsAnalysis($symbol: String!) {
+    optionsAnalysis(symbol: $symbol) {
+      underlyingSymbol
+      underlyingPrice
+      optionsChain {
+        expirationDates
+        calls {
+          strike
+          bid
+          ask
+          volume
+          expirationDate
+          delta
+          gamma
+          theta
+          vega
+          impliedVolatility
+        }
+        puts {
+          strike
+          bid
+          ask
+          volume
+          expirationDate
+          delta
+          gamma
+          theta
+          vega
+          impliedVolatility
+        }
+      }
+    }
+  }
+`;
+
 import StockCard from '../../../components/common/StockCard';
 import WatchlistCard, { WatchlistItem } from '../../../components/common/WatchlistCard';
 import BudgetImpactModal from '../../../components/common/BudgetImpactModal';
@@ -216,10 +252,7 @@ const GET_AI_STOCK_RECOMMENDATIONS = gql`
         discretionaryIncome
         suggestedBudget
         spendingHealth
-        topCategories {
-          category
-          amount
-        }
+        topCategories
         sectorPreferences
       }
     }
@@ -538,6 +571,83 @@ interface RustAnalysis {
   
   // Options trading state
   const [optionsSymbol, setOptionsSymbol] = useState('AAPL');
+  const [selectedExpiration, setSelectedExpiration] = useState<string | null>(null);
+  
+  // Fetch options analysis
+  const { data: optionsData, loading: optionsLoading, error: optionsError, refetch: refetchOptions } = useQuery(GET_OPTIONS_ANALYSIS, {
+    variables: { symbol: optionsSymbol },
+    skip: !optionsSymbol || optionsSymbol.length === 0,
+    fetchPolicy: 'cache-and-network',
+    errorPolicy: 'all',
+  });
+  
+  // Transform options data for OptionChainCard
+  const transformedOptionsData = React.useMemo(() => {
+    if (!optionsData?.optionsAnalysis?.optionsChain) {
+      return {
+        underlyingPrice: null,
+        expiration: null,
+        calls: [],
+        puts: [],
+      };
+    }
+    
+    const chain = optionsData.optionsAnalysis.optionsChain;
+    const expirationDates = chain.expirationDates || [];
+    const selectedExp = selectedExpiration || expirationDates[0] || null;
+    
+    // Filter calls and puts for selected expiration
+    const calls = (chain.calls || [])
+      .filter((c: any) => !selectedExp || c.expirationDate === selectedExp)
+      .map((c: any) => ({
+        strike: c.strike || 0,
+        bid: c.bid || 0,
+        ask: c.ask || 0,
+        volume: c.volume || 0,
+        optionType: 'CALL' as const,
+        greeks: {
+          delta: c.delta || 0,
+          gamma: c.gamma || 0,
+          theta: c.theta || 0,
+          vega: c.vega || 0,
+          iv: c.impliedVolatility || 0,
+          probITM: c.delta ? Math.abs(c.delta) : 0,
+        },
+      }));
+    
+    const puts = (chain.puts || [])
+      .filter((p: any) => !selectedExp || p.expirationDate === selectedExp)
+      .map((p: any) => ({
+        strike: p.strike || 0,
+        bid: p.bid || 0,
+        ask: p.ask || 0,
+        volume: p.volume || 0,
+        optionType: 'PUT' as const,
+        greeks: {
+          delta: p.delta || 0,
+          gamma: p.gamma || 0,
+          theta: p.theta || 0,
+          vega: p.vega || 0,
+          iv: p.impliedVolatility || 0,
+          probITM: p.delta ? Math.abs(p.delta) : 0,
+        },
+      }));
+    
+    return {
+      underlyingPrice: optionsData.optionsAnalysis.underlyingPrice || null,
+      expiration: selectedExp,
+      expirationDates,
+      calls,
+      puts,
+    };
+  }, [optionsData, selectedExpiration]);
+  
+  // Set default expiration when data loads
+  React.useEffect(() => {
+    if (transformedOptionsData.expirationDates && transformedOptionsData.expirationDates.length > 0 && !selectedExpiration) {
+      setSelectedExpiration(transformedOptionsData.expirationDates[0]);
+    }
+  }, [transformedOptionsData.expirationDates, selectedExpiration]);
 interface OptionOrder {
   id: string;
   symbol: string;
@@ -587,14 +697,6 @@ interface OptionOrder {
       nextFetchPolicy: 'cache-first', // Keep using cache for subsequent loads
       errorPolicy: 'all',
       notifyOnNetworkStatusChange: true
-    });
-
-  // AI-powered recommendations for Browse All tab
-  const { data: aiRecommendationsData, loading: aiRecommendationsLoading, error: aiRecommendationsError } =
-    useQuery(GET_AI_STOCK_RECOMMENDATIONS, {
-      fetchPolicy: 'cache-first', // Use cache first for faster loads
-      nextFetchPolicy: 'cache-first', // Keep using cache for subsequent loads
-      errorPolicy: 'all'
     });
 
   // User profile for income-based recommendations (load first)
@@ -1476,7 +1578,7 @@ interface OptionOrder {
         marketCap: rec.marketCap || getMarketCapForSymbol(rec.symbol),
         peRatio: rec.peRatio || getPERatioForSymbol(rec.symbol),
         dividendYield: rec.dividendYield || getDividendYieldForSymbol(rec.symbol),
-        beginnerFriendlyScore: Math.round(rec.confidence * 100), // Convert confidence to score
+        beginnerFriendlyScore: Math.round(rec.confidence), // Backend sends confidence as 0-100, use directly
         currentPrice: rec.currentPrice,
         __typename: 'Stock',
         // Add AI-specific fields
@@ -1486,23 +1588,28 @@ interface OptionOrder {
         targetPrice: rec.targetPrice,
         expectedReturn: rec.expectedReturn,
         // Add detailed breakdown for budget impact analysis
-        beginnerScoreBreakdown: {
-          score: Math.round(rec.confidence * 100),
-          factors: [
-            {
-              name: 'AI Confidence',
-              weight: 0.3,
-              value: rec.confidence,
-              contrib: Math.round(rec.confidence * 30),
-              detail: `AI confidence score: ${(rec.confidence * 100).toFixed(1)}% - ${rec.reasoning}`
-            },
-            {
-              name: 'Expected Return',
-              weight: 0.25,
-              value: rec.expectedReturn ? Math.min(1, rec.expectedReturn / 0.2) : 0.5,
-              contrib: rec.expectedReturn ? Math.round((rec.expectedReturn / 0.2) * 25) : 12,
-              detail: `Expected return: ${rec.expectedReturn ? (rec.expectedReturn * 100).toFixed(1) : 'N/A'}% annually`
-            },
+        // Backend sends confidence and expectedReturn as percentages (0-100), normalize to decimals
+        beginnerScoreBreakdown: (() => {
+          const confidenceDecimal = rec.confidence / 100; // Normalize to 0-1
+          const expectedReturnDecimal = rec.expectedReturn ? rec.expectedReturn / 100 : null; // Normalize to 0-1
+          
+          return {
+            score: Math.round(rec.confidence), // Backend sends as 0-100
+            factors: [
+              {
+                name: 'AI Confidence',
+                weight: 0.3,
+                value: confidenceDecimal, // Use normalized 0-1 value
+                contrib: Math.round(confidenceDecimal * 30),
+                detail: `AI confidence score: ${rec.confidence.toFixed(1)}% - ${rec.reasoning}`
+              },
+              {
+                name: 'Expected Return',
+                weight: 0.25,
+                value: expectedReturnDecimal ? Math.min(1, expectedReturnDecimal / 0.2) : 0.5,
+                contrib: expectedReturnDecimal ? Math.round((expectedReturnDecimal / 0.2) * 25) : 12,
+                detail: `Expected return: ${rec.expectedReturn ? rec.expectedReturn.toFixed(1) : 'N/A'}% annually`
+              },
             {
               name: 'Target Price',
               weight: 0.2,
@@ -1527,11 +1634,12 @@ interface OptionOrder {
           ],
           notes: [
             rec.reasoning || 'AI-recommended stock based on current market analysis',
-            rec.expectedReturn ? `Expected annual return: ${(rec.expectedReturn * 100).toFixed(1)}%` : 'Return analysis pending',
+            rec.expectedReturn ? `Expected annual return: ${rec.expectedReturn.toFixed(1)}%` : 'Return analysis pending',
             rec.targetPrice ? `Price target: $${rec.targetPrice}` : 'Price target analysis pending'
           ]
-        }
-      }));
+        };
+      })()
+    }));
       
       // For Browse All, prioritize search results (real-time data) when searching, otherwise use AI recommendations
       let data;
@@ -2148,59 +2256,69 @@ placeholderTextColor="#999"
                 </View>
 
                 {/* Options Chain */}
-                <OptionChainCard
-                  symbol={optionsSymbol}
-                  expiration="2024-02-16"
-                  underlyingPrice={243.36}
-                  calls={[
-                    { 
-                      strike: 140, bid: 8.50, ask: 8.80, volume: 1250, optionType: 'CALL',
-                      greeks: { delta: 0.85, gamma: 0.02, theta: -0.12, vega: 0.18, iv: 0.22, probITM: 0.85 }
-                    },
-                    { 
-                      strike: 145, bid: 6.20, ask: 6.50, volume: 890, optionType: 'CALL',
-                      greeks: { delta: 0.72, gamma: 0.03, theta: -0.15, vega: 0.22, iv: 0.24, probITM: 0.72 }
-                    },
-                    { 
-                      strike: 150, bid: 4.10, ask: 4.40, volume: 2100, optionType: 'CALL',
-                      greeks: { delta: 0.58, gamma: 0.04, theta: -0.18, vega: 0.25, iv: 0.26, probITM: 0.58 }
-                    },
-                    { 
-                      strike: 155, bid: 2.50, ask: 2.80, volume: 1560, optionType: 'CALL',
-                      greeks: { delta: 0.42, gamma: 0.05, theta: -0.20, vega: 0.28, iv: 0.28, probITM: 0.42 }
-                    },
-                    { 
-                      strike: 160, bid: 1.40, ask: 1.70, volume: 980, optionType: 'CALL',
-                      greeks: { delta: 0.28, gamma: 0.04, theta: -0.18, vega: 0.25, iv: 0.30, probITM: 0.28 }
-                    },
-                  ]}
-                  puts={[
-                    { 
-                      strike: 140, bid: 1.20, ask: 1.50, volume: 890, optionType: 'PUT',
-                      greeks: { delta: -0.15, gamma: 0.02, theta: -0.08, vega: 0.18, iv: 0.22, probITM: 0.15 }
-                    },
-                    { 
-                      strike: 145, bid: 2.10, ask: 2.40, volume: 1200, optionType: 'PUT',
-                      greeks: { delta: -0.28, gamma: 0.03, theta: -0.10, vega: 0.22, iv: 0.24, probITM: 0.28 }
-                    },
-                    { 
-                      strike: 150, bid: 3.50, ask: 3.80, volume: 1800, optionType: 'PUT',
-                      greeks: { delta: -0.42, gamma: 0.04, theta: -0.12, vega: 0.25, iv: 0.26, probITM: 0.42 }
-                    },
-                    { 
-                      strike: 155, bid: 5.20, ask: 5.50, volume: 1100, optionType: 'PUT',
-                      greeks: { delta: -0.58, gamma: 0.05, theta: -0.15, vega: 0.28, iv: 0.28, probITM: 0.58 }
-                    },
-                    { 
-                      strike: 160, bid: 7.10, ask: 7.40, volume: 750, optionType: 'PUT',
-                      greeks: { delta: -0.72, gamma: 0.04, theta: -0.18, vega: 0.25, iv: 0.30, probITM: 0.72 }
-                    },
-                  ]}
-                  selected={selectedOption}
-                  onSelect={(opt) => setSelectedOption(opt)}
-                  fullBleed
-                  gutter={20}
-                />
+                {optionsLoading ? (
+                  <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color={UI?.colors?.accent ?? '#00cc99'} />
+                    <Text style={styles.loadingText}>Loading options data...</Text>
+                  </View>
+                ) : optionsError ? (
+                  <View style={styles.errorContainer}>
+                    <Icon name="alert-circle" size={24} color="#ef4444" />
+                    <Text style={styles.errorText}>Error loading options data</Text>
+                    <TouchableOpacity
+                      style={styles.retryButton}
+                      onPress={() => refetchOptions()}
+                    >
+                      <Text style={styles.retryButtonText}>Retry</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : transformedOptionsData.expiration ? (
+                  <>
+                    {/* Expiration Selector */}
+                    {transformedOptionsData.expirationDates && transformedOptionsData.expirationDates.length > 1 && (
+                      <View style={styles.expirationSelector}>
+                        <Text style={styles.expirationLabel}>Expiration:</Text>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                          {transformedOptionsData.expirationDates.map((exp: string) => (
+                            <TouchableOpacity
+                              key={exp}
+                              style={[
+                                styles.expirationChip,
+                                selectedExpiration === exp && styles.expirationChipSelected,
+                              ]}
+                              onPress={() => setSelectedExpiration(exp)}
+                            >
+                              <Text
+                                style={[
+                                  styles.expirationChipText,
+                                  selectedExpiration === exp && styles.expirationChipTextSelected,
+                                ]}
+                              >
+                                {exp}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </ScrollView>
+                      </View>
+                    )}
+                    <OptionChainCard
+                      symbol={optionsSymbol}
+                      expiration={transformedOptionsData.expiration}
+                      underlyingPrice={transformedOptionsData.underlyingPrice || undefined}
+                      calls={transformedOptionsData.calls}
+                      puts={transformedOptionsData.puts}
+                      selected={selectedOption}
+                      onSelect={(opt) => setSelectedOption(opt)}
+                      fullBleed
+                      gutter={20}
+                    />
+                  </>
+                ) : (
+                  <View style={styles.emptyContainer}>
+                    <Icon name="info" size={24} color="#6b7280" />
+                    <Text style={styles.emptyText}>Enter a symbol to view options chain</Text>
+                  </View>
+                )}
               </View>
             )}
             ListFooterComponent={() => (
@@ -3134,6 +3252,83 @@ searchContainer: {
     fontSize: 12,
     color: '#666',
     marginBottom: 4,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#666',
+  },
+  errorContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+  },
+  errorText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#ef4444',
+    textAlign: 'center',
+  },
+  retryButton: {
+    marginTop: 16,
+    backgroundColor: '#00cc99',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+  },
+  emptyText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#6b7280',
+    textAlign: 'center',
+  },
+  expirationSelector: {
+    marginBottom: 16,
+    paddingHorizontal: 4,
+  },
+  expirationLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  expirationChip: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    backgroundColor: '#f1f5f9',
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  expirationChipSelected: {
+    backgroundColor: '#00cc99',
+    borderColor: '#00cc99',
+  },
+  expirationChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  expirationChipTextSelected: {
+    color: '#fff',
   },
   cancelButton: {
     backgroundColor: '#FF3B30',
