@@ -537,6 +537,10 @@ const TaxOptimizationScreen: React.FC = () => {
   const [showSmartHarvestModal, setShowSmartHarvestModal] = useState(false);
   const [smartHarvestData, setSmartHarvestData] = useState<any>(null);
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
+  const [autoHarvestEnabled, setAutoHarvestEnabled] = useState<boolean>(false);
+  const [autoHarvestMinLoss, setAutoHarvestMinLoss] = useState<number>(100); // Minimum $100 loss to auto-harvest
+  const [autoHarvestMaxTrades, setAutoHarvestMaxTrades] = useState<number>(5); // Max trades per day
+  const [autoHarvestLastRun, setAutoHarvestLastRun] = useState<Date | null>(null);
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Memoized tax calculations
@@ -558,6 +562,119 @@ const TaxOptimizationScreen: React.FC = () => {
       marginalRate: incomeTax.effectiveRate,
     };
   }, [userIncome, filingStatus, state]);
+
+  // Load auto-harvest settings from storage
+  useEffect(() => {
+    const loadAutoHarvestSettings = async () => {
+      try {
+        const enabled = await AsyncStorage.getItem('auto_harvest_enabled');
+        const minLoss = await AsyncStorage.getItem('auto_harvest_min_loss');
+        const maxTrades = await AsyncStorage.getItem('auto_harvest_max_trades');
+        const lastRun = await AsyncStorage.getItem('auto_harvest_last_run');
+        
+        if (enabled !== null) setAutoHarvestEnabled(enabled === 'true');
+        if (minLoss !== null) setAutoHarvestMinLoss(parseFloat(minLoss));
+        if (maxTrades !== null) setAutoHarvestMaxTrades(parseInt(maxTrades, 10));
+        if (lastRun !== null) setAutoHarvestLastRun(new Date(lastRun));
+      } catch (error) {
+        console.error('Error loading auto-harvest settings:', error);
+      }
+    };
+    
+    loadAutoHarvestSettings();
+  }, []);
+
+  // Save auto-harvest settings
+  const saveAutoHarvestSettings = useCallback(async () => {
+    try {
+      await AsyncStorage.setItem('auto_harvest_enabled', autoHarvestEnabled.toString());
+      await AsyncStorage.setItem('auto_harvest_min_loss', autoHarvestMinLoss.toString());
+      await AsyncStorage.setItem('auto_harvest_max_trades', autoHarvestMaxTrades.toString());
+      if (autoHarvestLastRun) {
+        await AsyncStorage.setItem('auto_harvest_last_run', autoHarvestLastRun.toISOString());
+      }
+    } catch (error) {
+      console.error('Error saving auto-harvest settings:', error);
+    }
+  }, [autoHarvestEnabled, autoHarvestMinLoss, autoHarvestMaxTrades, autoHarvestLastRun]);
+
+  // Auto-harvest check (runs when data loads and auto-harvest is enabled)
+  useEffect(() => {
+    if (!autoHarvestEnabled || !data.lossHarvesting || loading) return;
+    
+    // Check if we've already run today
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (autoHarvestLastRun && new Date(autoHarvestLastRun) >= today) {
+      return; // Already ran today
+    }
+
+    const lossHoldings = data.lossHarvesting?.holdings?.filter((h: any) => {
+      const loss = Math.abs(h.unrealizedGain || h.returnAmount || 0);
+      return !h.washSaleRisk && loss >= autoHarvestMinLoss;
+    }) || [];
+
+    if (lossHoldings.length === 0) return;
+
+    // Auto-execute harvest
+    const executeAutoHarvest = async () => {
+      try {
+        if (!token) return;
+
+        const response = await fetch(`${API_BASE}/api/tax/smart-harvest/recommendations`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            holdings: lossHoldings.slice(0, autoHarvestMaxTrades).map((h: any) => ({
+              symbol: h.symbol,
+              shares: h.quantity || h.shares,
+              costBasis: h.costBasis,
+              currentPrice: h.currentPrice || h.current_price,
+              unrealizedGain: h.unrealizedGain || h.returnAmount,
+            })),
+          }),
+        });
+
+        if (!response.ok) return;
+
+        const recommendations = await response.json();
+        
+        // Auto-execute without user approval
+        const executeResponse = await fetch(`${API_BASE}/api/tax/smart-harvest/execute`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            trades: recommendations.trades,
+          }),
+        });
+
+        if (executeResponse.ok) {
+          const result = await executeResponse.json();
+          setAutoHarvestLastRun(new Date());
+          saveAutoHarvestSettings();
+          
+          // Show notification
+          Alert.alert(
+            'Auto-Harvest Executed',
+            `Automatically harvested ${result.tradesExecuted} positions. Estimated savings: $${recommendations.totalSavings.toLocaleString()}`,
+            [{ text: 'OK', onPress: () => loadData() }]
+          );
+        }
+      } catch (error) {
+        console.error('Auto-harvest error:', error);
+        // Silent fail - don't bother user with errors in auto mode
+      }
+    };
+
+    executeAutoHarvest();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoHarvestEnabled, data.lossHarvesting, autoHarvestMinLoss, autoHarvestMaxTrades, autoHarvestLastRun, token, loading]);
 
   // Load cached data
   const loadCachedData = useCallback(async () => {
@@ -1320,6 +1437,23 @@ PDF report has been generated. Check your email or download from the app.
         {/* Loss Harvesting Tab */}
         {activeTab === 'loss-harvesting' && (
           <View>
+            {autoHarvestEnabled && (
+              <View style={[styles.metricsCard, { backgroundColor: '#F0F9FF', borderColor: '#2563EB', borderWidth: 1 }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                  <Ionicons name="flash" size={20} color="#2563EB" />
+                  <Text style={[styles.cardTitle, { marginLeft: 8, color: '#2563EB' }]}>Auto-Harvest Active</Text>
+                </View>
+                <Text style={styles.helperText}>
+                  Tax-loss harvesting is running automatically. You'll be notified when trades are executed.
+                </Text>
+                {autoHarvestLastRun && (
+                  <Text style={[styles.helperText, { marginTop: 4, fontSize: 12 }]}>
+                    Last run: {autoHarvestLastRun.toLocaleDateString()} {autoHarvestLastRun.toLocaleTimeString()}
+                  </Text>
+                )}
+              </View>
+            )}
+            
             <View style={styles.metricsCard}>
               <Text style={styles.cardTitle}>Loss Harvesting Opportunities</Text>
               <View style={styles.metricRow}>
@@ -1334,7 +1468,7 @@ PDF report has been generated. Check your email or download from the app.
               </Text>
               
               {/* Smart Harvest Button */}
-              {sectionData.holdings && sectionData.holdings.length > 0 && (
+              {sectionData.holdings && sectionData.holdings.length > 0 && !autoHarvestEnabled && (
                 <TouchableOpacity
                   style={styles.smartHarvestButton}
                   onPress={handleSmartHarvest}
@@ -1705,16 +1839,24 @@ PDF report has been generated. Check your email or download from the app.
         visible={showSettingsModal}
         animationType="slide"
         transparent={true}
-        onRequestClose={() => setShowSettingsModal(false)}
+        onRequestClose={() => {
+          saveAutoHarvestSettings();
+          setShowSettingsModal(false);
+        }}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Tax Settings</Text>
-              <TouchableOpacity onPress={() => setShowSettingsModal(false)}>
+              <TouchableOpacity onPress={() => {
+                saveAutoHarvestSettings();
+                setShowSettingsModal(false);
+              }}>
                 <Ionicons name="close" size={24} color="#111827" />
               </TouchableOpacity>
             </View>
+            
+            <ScrollView style={styles.modalScrollView}>
 
             <View style={styles.modalSection}>
               <Text style={styles.modalLabel}>Filing Status</Text>
@@ -1779,6 +1921,85 @@ PDF report has been generated. Check your email or download from the app.
                 ))}
               </ScrollView>
             </View>
+
+            {/* Auto-Harvest Section */}
+            <View style={styles.modalSection}>
+              <View style={styles.settingsRow}>
+                <View style={styles.settingsRowLeft}>
+                  <Text style={styles.modalLabel}>Auto-Harvest Losses</Text>
+                  <Text style={styles.helperText}>
+                    Automatically harvest tax losses without approval (like Wealthfront)
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => {
+                    const newValue = !autoHarvestEnabled;
+                    setAutoHarvestEnabled(newValue);
+                    if (newValue) {
+                      Alert.alert(
+                        'Auto-Harvest Enabled',
+                        'Tax-loss harvesting will now run automatically when opportunities are detected. You\'ll receive a notification when trades are executed.',
+                        [{ text: 'OK' }]
+                      );
+                    }
+                  }}
+                  style={[
+                    styles.toggle,
+                    autoHarvestEnabled && styles.toggleActive,
+                  ]}
+                >
+                  <View style={[
+                    styles.toggleThumb,
+                    autoHarvestEnabled && styles.toggleThumbActive,
+                  ]} />
+                </TouchableOpacity>
+              </View>
+
+              {autoHarvestEnabled && (
+                <>
+                  <View style={styles.settingsRow}>
+                    <Text style={styles.modalLabel}>Minimum Loss ($)</Text>
+                    <TextInput
+                      style={styles.settingsInput}
+                      value={autoHarvestMinLoss.toString()}
+                      onChangeText={(text) => {
+                        const value = parseFloat(text) || 0;
+                        setAutoHarvestMinLoss(Math.max(0, value));
+                      }}
+                      keyboardType="numeric"
+                      placeholder="100"
+                    />
+                  </View>
+                  <Text style={styles.helperText}>
+                    Only harvest losses above this amount
+                  </Text>
+
+                  <View style={styles.settingsRow}>
+                    <Text style={styles.modalLabel}>Max Trades Per Day</Text>
+                    <TextInput
+                      style={styles.settingsInput}
+                      value={autoHarvestMaxTrades.toString()}
+                      onChangeText={(text) => {
+                        const value = parseInt(text, 10) || 0;
+                        setAutoHarvestMaxTrades(Math.max(1, Math.min(10, value)));
+                      }}
+                      keyboardType="numeric"
+                      placeholder="5"
+                    />
+                  </View>
+                  <Text style={styles.helperText}>
+                    Limit number of auto-harvest trades per day
+                  </Text>
+
+                  {autoHarvestLastRun && (
+                    <Text style={styles.helperText}>
+                      Last run: {autoHarvestLastRun.toLocaleDateString()} {autoHarvestLastRun.toLocaleTimeString()}
+                    </Text>
+                  )}
+                </>
+              )}
+            </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -2438,6 +2659,53 @@ const styles = StyleSheet.create({
   },
   stateScrollView: {
     maxHeight: 200,
+  },
+  modalScrollView: {
+    maxHeight: 500,
+  },
+  settingsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  settingsRowLeft: {
+    flex: 1,
+    marginRight: 16,
+  },
+  toggle: {
+    width: 50,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#E5E7EB',
+    justifyContent: 'center',
+    padding: 2,
+  },
+  toggleActive: {
+    backgroundColor: '#2563EB',
+  },
+  toggleThumb: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  toggleThumbActive: {
+    transform: [{ translateX: 20 }],
+  },
+  settingsInput: {
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    padding: 8,
+    width: 100,
+    fontSize: 14,
+    textAlign: 'right',
   },
   input: {
     borderWidth: 1,
