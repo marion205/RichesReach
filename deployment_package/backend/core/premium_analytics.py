@@ -824,8 +824,13 @@ class PremiumAnalyticsService:
             )
 
         # Extract profile attributes for ML scoring
-        age = profile.get('age', 30) if profile else 30
-        investment_horizon_years = profile.get('investment_horizon_years', 5) if profile else 5
+        # Handle None values explicitly to avoid comparison errors
+        age = profile.get('age') if profile else None
+        age = age if age is not None else 30
+        
+        investment_horizon_years = profile.get('investment_horizon_years') if profile else None
+        investment_horizon_years = investment_horizon_years if investment_horizon_years is not None else 5
+        
         investment_goals = profile.get('investment_goals', []) if profile else []
         
         # Score all stocks using ML/AI based on profile
@@ -871,7 +876,7 @@ class PremiumAnalyticsService:
                     ml_score *= 1.05  # Growth stocks OK
             
             # 2. Investment horizon adjustment
-            if investment_horizon_years >= 10:
+            if investment_horizon_years is not None and investment_horizon_years >= 10:
                 # Long-term: prefer value stocks, lower P/E
                 if pe_ratio > 0 and pe_ratio < 20:
                     ml_score *= 1.1  # Boost value stocks
@@ -1010,7 +1015,7 @@ class PremiumAnalyticsService:
                 reasoning_parts.append("growth potential matches your risk tolerance")
             if sector_weights and sector in sector_weights and sector_weights[sector] > 0.1:
                 reasoning_parts.append(f"aligned with your spending in {sector}")
-            if investment_horizon_years >= 10 and item['pe_ratio'] > 0 and item['pe_ratio'] < 20:
+            if investment_horizon_years is not None and investment_horizon_years >= 10 and item['pe_ratio'] > 0 and item['pe_ratio'] < 20:
                 reasoning_parts.append("value characteristics for long-term holding")
             
             reasoning = "Attractive fundamentals and risk profile for your settings."

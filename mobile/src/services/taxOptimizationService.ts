@@ -78,7 +78,7 @@ export interface TaxBracketAnalysisResponse {
 class TaxOptimizationService {
   private getAuthHeaders(token: string) {
     return {
-      'Authorization': `Token ${token}`,
+      'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
     };
   }

@@ -96,14 +96,19 @@ export default function LoginScreen({ onLogin, onNavigateToSignUp, onNavigateToF
       const success = await authLogin(email, password);
       if (success) {
         console.log('✅ Login successful!');
+        // Clear any previous errors before navigating
+        setLoginError(null);
         onLogin('success');
+        return; // Exit early on success
       } else {
-        throw new Error('Login failed');
+        throw new Error('Login failed: Authentication returned false');
       }
     } catch (error) {
       console.error('❌ Login failed:', error);
-      setLoginError(error instanceof Error ? error : new Error('An error occurred'));
-      Alert.alert('Login Failed', error instanceof Error ? error.message : 'An error occurred');
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred';
+      setLoginError(new Error(errorMessage));
+      // Only show alert if login actually failed (don't navigate)
+      Alert.alert('Login Failed', errorMessage);
     } finally {
       inFlight.current = false;
       setLoginLoading(false);

@@ -185,7 +185,11 @@ class CreateIncomeProfile(graphene.Mutation):
         final_risk_tolerance = risk_tolerance or riskTolerance
         final_investment_horizon = investment_horizon or investmentHorizon
 
-        user = info.context.user
+        from .graphql_utils import get_user_from_context
+        user = get_user_from_context(info.context)
+        
+        if not user:
+            raise GraphQLError("You must be logged in to create an income profile.")
         
         logger.info(f"[CreateIncomeProfile] user={user.id} email={user.email}")
 
@@ -255,8 +259,8 @@ class GenerateAIRecommendations(graphene.Mutation):
     recommendations = graphene.List("core.types.AIPortfolioRecommendationType")
 
     def mutate(self, info):
-
-        user = info.context.user
+        from .graphql_utils import get_user_from_context
+        user = get_user_from_context(info.context)
 
         if not user.is_authenticated:
 
@@ -490,11 +494,13 @@ class AddToWatchlist(graphene.Mutation):
         notes = graphene.String(required=False)
 
     def mutate(self, info, stock_symbol, notes=None):
-
-        user = info.context.user
-
-        if not user.is_authenticated:
-
+        # Support both object-style (context.user) and dict-style (context.get('user'))
+        ctx = info.context
+        user = getattr(ctx, "user", None)
+        if user is None and isinstance(ctx, dict):
+            user = ctx.get("user")
+        
+        if not user or not getattr(user, "is_authenticated", False):
             raise GraphQLError("You must be logged in to add stocks to your watchlist.")
 
         try:
@@ -502,9 +508,8 @@ class AddToWatchlist(graphene.Mutation):
             stock, _ = Stock.objects.get_or_create(
                 symbol=stock_symbol.upper(),
                 defaults={
-                    "name": f"{stock_symbol.upper()} Inc.",
+                    "company_name": f"{stock_symbol.upper()} Inc.",
                     "sector": "Unknown",
-                    "industry": "Unknown",
                     "market_cap": 0,
                     "pe_ratio": 0,
                     "dividend_yield": 0,
@@ -556,11 +561,13 @@ class RemoveFromWatchlist(graphene.Mutation):
         stock_symbol = graphene.String(required=True)
 
     def mutate(self, info, stock_symbol):
-
-        user = info.context.user
-
-        if not user.is_authenticated:
-
+        # Support both object-style (context.user) and dict-style (context.get('user'))
+        ctx = info.context
+        user = getattr(ctx, "user", None)
+        if user is None and isinstance(ctx, dict):
+            user = ctx.get("user")
+        
+        if not user or not getattr(user, "is_authenticated", False):
             raise GraphQLError("You must be logged in to remove stocks from your watchlist.")
 
         try:

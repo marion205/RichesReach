@@ -139,8 +139,10 @@ class RestAuthService {
 
       const data = await response.json();
       
-      if (data.token) {
-        const token = data.token;
+      // Backend returns either 'access_token' or 'token'
+      const token = data.access_token || data.token;
+      
+      if (token) {
         const payload = this.decodeToken(token);
         
         if (!payload) {

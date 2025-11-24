@@ -206,6 +206,20 @@ class Query(graphene.ObjectType):
     stocks = graphene.List(StockType, search=graphene.String(required=False))
 
     stock = graphene.Field(StockType, symbol=graphene.String(required=True))
+    
+    def resolve_stock(self, info, symbol):
+        """Get a specific stock by symbol"""
+        from .models import Stock
+        
+        # Normalize the symbol
+        symbol = (symbol or "").strip().upper()
+        if not symbol:
+            return None
+        
+        try:
+            return Stock.objects.get(symbol=symbol)
+        except Stock.DoesNotExist:
+            return None
 
     # my_watchlist = graphene.List(WatchlistItemType) # TODO: Uncomment when WatchlistItemType is available
 
@@ -234,6 +248,30 @@ class Query(graphene.ObjectType):
     # Regular portfolio analytics (not premium)
 
     portfolio_metrics = graphene.Field('core.premium_types.PortfolioMetricsType')
+    
+    def resolve_portfolio_metrics(self, info):
+        """Get portfolio metrics (regular feature, not premium)"""
+        from .graphql_utils import get_user_from_context
+        from .premium_analytics import PremiumAnalyticsService
+
+        user = get_user_from_context(info.context)
+        
+        if not user or getattr(user, "is_anonymous", True):
+            # Return empty metrics dict instead of null for better UX
+            service = PremiumAnalyticsService()
+            empty_metrics = service._empty_portfolio_metrics()
+            return empty_metrics
+
+        service = PremiumAnalyticsService()
+        metrics = service.get_portfolio_performance_metrics(user.id)
+        
+        # Defensive: if service returns None, return empty metrics instead of null
+        if metrics is None:
+            empty_metrics = service._empty_portfolio_metrics()
+            return empty_metrics
+        
+        # Return dict directly - Graphene will use it as self for PortfolioMetricsType resolvers
+        return metrics
 
     # Stock price queries
 
@@ -261,6 +299,17 @@ class Query(graphene.ObjectType):
     public_watchlists = graphene.List(WatchlistType)
 
     my_watchlist = graphene.List(WatchlistType)
+    
+    def resolve_my_watchlist(self, info):
+        """Get current user's watchlist items"""
+        from .graphql_utils import get_user_from_context
+        user = get_user_from_context(info.context)
+
+        if not user or getattr(user, "is_anonymous", True):
+            return []
+        
+        from .models import Watchlist
+        return Watchlist.objects.filter(user=user).select_related('stock').order_by('-added_at')
 
     rust_stock_analysis = graphene.Field('core.types.RustStockAnalysisType', symbol=graphene.String(required=True))
 
@@ -1180,33 +1229,6 @@ def resolve_stocks(self, info, search=None):
     return Stock.objects.all()[:100]  # Limit to 100 stocks
 
 
-def resolve_stock(self, info, symbol):
-    """Get a specific stock by symbol (using DataLoader to prevent N+1)"""
-    from .dataloaders import get_stock_loader
-    stock_loader = get_stock_loader()
-    return stock_loader.load(symbol.upper())
-
-
-def resolve_my_watchlist(self, info):
-    """Get current user's watchlist items"""
-
-    user = info.context.user
-
-    if user.is_anonymous:
-
-        return []
-    if user.is_anonymous:
-
-        return []
-    from .models import WatchlistItem
-
-    return WatchlistItem.objects.filter(
-
-        watchlist__user=user
-
-    ).select_related('stock', 'watchlist').order_by('-added_at')
-
-
 def resolve_beginner_friendly_stocks(self, info):
     """Get stocks suitable for beginner investors, personalized with spending habits"""
     user = info.context.user
@@ -1546,18 +1568,6 @@ def resolve_ai_portfolio_recommendations(root, info, userId):
 
     return AIPortfolioRecommendation.objects.filter(user=user).order_by('-created_at')
 
-
-def resolve_my_watchlist(self, info):
-    """Get current user's watchlist"""
-
-    user = info.context.user
-
-    if user.is_anonymous:
-
-        return []
-    from .models import Watchlist
-
-    return Watchlist.objects.filter(user=user).order_by('-added_at')
 
     def resolve_rust_stock_analysis(self, info, symbol):
         """Get Rust engine stock analysis - calls the actual Rust service"""
@@ -2146,20 +2156,6 @@ def resolve_portfolio_names(self, info):
     return PortfolioService.get_portfolio_names(user)
 
 
-def resolve_portfolio_metrics(self, info):
-    """Get portfolio metrics (regular feature, not premium)"""
-
-    from .premium_analytics import PremiumAnalyticsService
-
-    service = PremiumAnalyticsService()
-
-    # For testing purposes, use user ID 1 if no user is authenticated
-
-    user = info.context.user
-
-    user_id = user.id if user and not user.is_anonymous else 1
-
-    return service.get_portfolio_performance_metrics(user_id)
 
 
 def resolve_test_portfolio_metrics(self, info):

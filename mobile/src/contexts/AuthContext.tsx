@@ -95,29 +95,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const login = async (emailOrUsername: string, password: string): Promise<boolean> => {
     setLoading(true);
     try {
-      // DEVELOPMENT BYPASS: Always succeed for testing MemeQuest UI
-      logger.log('🔧 DEVELOPMENT MODE: Bypassing authentication for testing');
+      // Try REST login first
+      logger.log('🔐 Attempting REST login...');
+      const token = await restLoginFlexible(emailOrUsername, password);
       
-      const devToken = 'dev-token-' + Date.now();
-      setToken(devToken);
-      await AsyncStorage.setItem('token', devToken);
-      logger.log('🔐 Dev token stored in AsyncStorage successfully');
-      
-      // Set a basic user object for authentication
-      const basicUser = {
-        id: '1',
-        email: emailOrUsername.includes('@') ? emailOrUsername : `${emailOrUsername}@example.com`,
-        username: emailOrUsername.includes('@') ? emailOrUsername.split('@')[0] : emailOrUsername,
-        name: emailOrUsername.includes('@') ? emailOrUsername.split('@')[0] : emailOrUsername,
-        hasPremiumAccess: false,
-      };
-      setUser(basicUser);
-      logger.log('🔐 User state set:', basicUser);
-      
-      logger.log('🔐 Development login successful, returning true');
-      return true;
+      if (token) {
+        setToken(token);
+        await AsyncStorage.setItem('token', token);
+        logger.log('🔐 Token stored in AsyncStorage successfully');
+        logger.log('🔐 Login successful, returning true');
+        return true;
+      } else {
+        // REST login failed - don't fallback automatically, return false
+        logger.warn('🔐 REST login failed, no token received');
+        return false;
+      }
     } catch (error) {
       logger.error('Login error:', error);
+      // Only return false on actual errors, don't fallback
       return false;
     } finally {
       setLoading(false);
@@ -153,8 +148,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           throw new Error(json?.error || `Login failed with status ${response.status}`);
         }
         
-        // Handle response format: /api/auth/login/ returns {token, user}
-        if (!json.access_token) {
+        // Handle response format: /api/auth/login/ returns {access_token, token, user}
+        // Accept either access_token or token
+        const token = json.access_token || json.token;
+        if (!token) {
           throw new Error('Missing token in response');
         }
         
@@ -163,7 +160,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setUser(json.user);
         }
         
-        return json.access_token;
+        logger.log('✅ AuthContext: Login successful, token received');
+        return token;
       } catch (fetchError) {
         logger.error('❌ AuthContext: Fetch error:', fetchError);
         throw fetchError;
