@@ -58,3 +58,6 @@ cryptography>=41.0.0
 # Channels (WebSocket support)
 channels>=4.0.0
 channels-redis>=4.1.0
+
+# PDF Generation
+reportlab>=4.0.0
