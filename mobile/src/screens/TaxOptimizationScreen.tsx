@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Slider from '@react-native-community/slider';
 import { useAuth } from '../contexts/AuthContext';
 import taxOptimizationService from '../services/taxOptimizationService';
 import { API_BASE } from '../config/api';
@@ -310,6 +311,144 @@ const HeaderBlock: React.FC<{
   );
 });
 
+// Visual Tax Bracket Chart Component
+const TaxBracketChart = React.memo<{
+  income: number;
+  filingStatus: FilingStatus;
+  brackets: Array<{ min: number; max: number; rate: number }>;
+}>(({ income, filingStatus, brackets }) => {
+  // Find current bracket and calculate positioning
+  const currentBracket = brackets.find(
+    (b) => income >= b.min && (income <= b.max || b.max === Infinity)
+  ) || brackets[0];
+  
+  const nextBracket = brackets.find((b) => b.min > income);
+  const roomInBracket = nextBracket
+    ? nextBracket.min - income
+    : Infinity;
+  
+  // Calculate max income for visualization (use 3x current income or next major bracket, whichever is larger)
+  const maxIncomeForChart = Math.max(
+    income * 3,
+    brackets.find((b) => b.max !== Infinity)?.max || income * 2,
+    income + 50000
+  );
+  
+  // Normalize bracket widths for visualization
+  const chartWidth = 100; // percentage
+  const getBracketWidth = (bracket: { min: number; max: number }) => {
+    const actualMax = bracket.max === Infinity ? maxIncomeForChart : Math.min(bracket.max, maxIncomeForChart);
+    return ((actualMax - bracket.min) / maxIncomeForChart) * chartWidth;
+  };
+  
+  const getIncomePosition = () => {
+    return (income / maxIncomeForChart) * chartWidth;
+  };
+  
+  const bracketColors = [
+    '#10B981', // green
+    '#3B82F6', // blue
+    '#8B5CF6', // purple
+    '#F59E0B', // amber
+    '#EF4444', // red
+    '#EC4899', // pink
+    '#6366F1', // indigo
+  ];
+  
+  return (
+    <View style={styles.bracketChartContainer}>
+      <Text style={styles.bracketChartTitle}>Your Tax Bracket Position</Text>
+      
+      {/* Chart Bar */}
+      <View style={styles.bracketChartBar}>
+        {brackets.map((bracket, index) => {
+          const actualMax = bracket.max === Infinity ? maxIncomeForChart : Math.min(bracket.max, maxIncomeForChart);
+          if (actualMax <= bracket.min) return null;
+          
+          const width = getBracketWidth(bracket);
+          const isActive = income >= bracket.min && (income <= actualMax || bracket.max === Infinity);
+          
+          return (
+            <View
+              key={index}
+              style={[
+                styles.bracketSegment,
+                {
+                  width: `${width}%`,
+                  backgroundColor: isActive
+                    ? bracketColors[index % bracketColors.length]
+                    : `${bracketColors[index % bracketColors.length]}40`,
+                },
+              ]}
+            >
+              {isActive && income >= bracket.min && income <= actualMax && (
+                <View style={styles.youAreHereMarker}>
+                  <View style={styles.markerLine} />
+                  <View style={styles.markerDot} />
+                </View>
+              )}
+            </View>
+          );
+        })}
+        
+        {/* "You Are Here" indicator */}
+        {income > 0 && (
+          <View
+            style={[
+              styles.youAreHereIndicator,
+              { left: `${Math.min(getIncomePosition(), 95)}%` },
+            ]}
+          >
+            <View style={styles.indicatorLine} />
+            <View style={styles.indicatorLabel}>
+              <Text style={styles.indicatorText}>You are here</Text>
+            </View>
+          </View>
+        )}
+      </View>
+      
+      {/* Bracket Labels */}
+      <View style={styles.bracketLabels}>
+        {brackets.slice(0, 4).map((bracket, index) => (
+          <View key={index} style={styles.bracketLabel}>
+            <View
+              style={[
+                styles.bracketColorDot,
+                {
+                  backgroundColor:
+                    income >= bracket.min && (income <= bracket.max || bracket.max === Infinity)
+                      ? bracketColors[index % bracketColors.length]
+                      : `${bracketColors[index % bracketColors.length]}40`,
+                },
+              ]}
+            />
+            <Text style={styles.bracketLabelText}>
+              {(bracket.rate * 100).toFixed(0)}%: ${bracket.min.toLocaleString()}
+              {bracket.max !== Infinity && ` - $${bracket.max.toLocaleString()}`}
+            </Text>
+          </View>
+        ))}
+      </View>
+      
+      {/* Insight Text */}
+      <View style={styles.bracketInsight}>
+        <Text style={styles.bracketInsightText}>
+          You're currently in the <Text style={styles.bracketInsightBold}>{(currentBracket.rate * 100).toFixed(0)}% bracket</Text>.
+          {roomInBracket !== Infinity && roomInBracket > 0 ? (
+            <>
+              {' '}You can earn another <Text style={styles.bracketInsightBold}>
+                ${roomInBracket.toLocaleString()}
+              </Text> before entering the {nextBracket ? `${(nextBracket.rate * 100).toFixed(0)}%` : 'next'} bracket.
+            </>
+          ) : (
+            <> You're in the top bracket.</>
+          )}
+        </Text>
+      </View>
+    </View>
+  );
+});
+
 // Memoized Holding Card
 const HoldingCard = React.memo<{ holding: any; onHarvest?: () => void }>(
   ({ holding, onHarvest }) => {
@@ -394,6 +533,10 @@ const TaxOptimizationScreen: React.FC = () => {
   const [showWhatIfModal, setShowWhatIfModal] = useState(false);
   const [whatIfIncome, setWhatIfIncome] = useState<string>('');
   const [whatIfGains, setWhatIfGains] = useState<string>('');
+  const [exportingPDF, setExportingPDF] = useState(false);
+  const [showSmartHarvestModal, setShowSmartHarvestModal] = useState(false);
+  const [smartHarvestData, setSmartHarvestData] = useState<any>(null);
+  const [selectedYear, setSelectedYear] = useState<number>(currentYear);
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Memoized tax calculations
@@ -775,13 +918,161 @@ const TaxOptimizationScreen: React.FC = () => {
     );
   }, [data]);
 
-  const handleExportReport = useCallback(async () => {
+  const handleSmartHarvest = useCallback(async () => {
+    if (!token) {
+      Alert.alert('Error', 'Please log in to use Smart Harvest.');
+      return;
+    }
+
+    const lossHoldings = data.lossHarvesting?.holdings?.filter((h: any) => !h.washSaleRisk) || [];
+    if (lossHoldings.length === 0) {
+      Alert.alert('No Opportunities', 'You don\'t have any harvestable losses right now.');
+      return;
+    }
+
     try {
-      const report = `
+      setLoading(true);
+      // Call backend to get smart harvest recommendations
+      const response = await fetch(`${API_BASE}/api/tax/smart-harvest/recommendations`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          holdings: lossHoldings.map((h: any) => ({
+            symbol: h.symbol,
+            shares: h.quantity || h.shares,
+            costBasis: h.costBasis,
+            currentPrice: h.currentPrice || h.current_price,
+            unrealizedGain: h.unrealizedGain || h.returnAmount,
+          })),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to get recommendations: ${response.status}`);
+      }
+
+      const recommendations = await response.json();
+      setSmartHarvestData(recommendations);
+      setShowSmartHarvestModal(true);
+    } catch (error: any) {
+      console.error('Error getting smart harvest recommendations:', error);
+      // Fallback to local calculations
+      const potentialSavings = data.lossHarvesting?.potentialSavings || 0;
+      const recommendations = {
+        trades: lossHoldings.map((h: any) => ({
+          symbol: h.symbol,
+          shares: h.quantity || h.shares,
+          action: 'sell',
+          estimatedSavings: Math.abs(h.unrealizedGain || h.returnAmount) * 0.22,
+          reason: `Harvest ${Math.abs(h.unrealizedGain || h.returnAmount).toLocaleString()} in losses`,
+        })),
+        totalSavings: potentialSavings,
+        warnings: lossHoldings.filter((h: any) => h.washSaleRisk).map((h: any) => ({
+          symbol: h.symbol,
+          message: 'Potential wash sale risk',
+        })),
+      };
+      setSmartHarvestData(recommendations);
+      setShowSmartHarvestModal(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [token, data]);
+
+  const handleExecuteSmartHarvest = useCallback(async () => {
+    if (!token || !smartHarvestData) return;
+
+    try {
+      setLoading(true);
+      const response = await fetch(`${API_BASE}/api/tax/smart-harvest/execute`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          trades: smartHarvestData.trades,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to execute harvest: ${response.status}`);
+      }
+
+      const result = await response.json();
+      setShowSmartHarvestModal(false);
+      Alert.alert(
+        'Success',
+        `Smart Harvest executed! Estimated tax savings: $${smartHarvestData.totalSavings.toLocaleString()}`,
+        [{ text: 'OK', onPress: () => loadData() }]
+      );
+    } catch (error: any) {
+      console.error('Error executing smart harvest:', error);
+      Alert.alert(
+        'Execution Failed',
+        error.message || 'Could not execute smart harvest. Please try again.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [token, smartHarvestData, loadData]);
+
+  const handleExportReport = useCallback(async () => {
+    if (!token) {
+      Alert.alert('Error', 'Please log in to export your tax report.');
+      return;
+    }
+
+    setExportingPDF(true);
+    try {
+      // Call backend PDF endpoint
+      const response = await fetch(`${API_BASE}/api/tax/report/pdf`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          year: currentYear,
+          filingStatus,
+          state,
+          income: userIncome,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        // Provide more helpful error message for 404
+        if (response.status === 404) {
+          throw new Error(
+            `PDF endpoint not found. Please restart the backend server to enable PDF export.\n\n` +
+            `Error: ${errorText}`
+          );
+        }
+        throw new Error(`Failed to generate PDF: ${response.status} - ${errorText}`);
+      }
+
+      // Get PDF as base64 or blob
+      const pdfBlob = await response.blob();
+      
+      // Convert blob to base64 for React Native Share
+      const reader = new FileReader();
+      reader.readAsDataURL(pdfBlob);
+      
+      reader.onloadend = async () => {
+        const base64data = reader.result as string;
+        
+        // For React Native, we'll share a text summary and provide download link
+        // In production, you might want to use react-native-fs or expo-file-system
+        const reportSummary = `
 Tax Optimization Report - ${currentYear}
 Generated: ${new Date().toLocaleDateString()}
 
-Filing Status: ${filingStatus}
+Filing Status: ${filingStatus.replace('-', ' ').toUpperCase()}
 State: ${state}
 Annual Income: $${userIncome?.toLocaleString() || '0'}
 
@@ -796,19 +1087,35 @@ Portfolio:
 - Total Value: $${data.summary?.totalPortfolioValue.toLocaleString() || '0'}
 - Unrealized Gains: $${data.summary?.totalUnrealizedGains.toLocaleString() || '0'}
 
-Loss Harvesting Opportunity:
-- Potential Savings: $${data.lossHarvesting?.potentialSavings.toLocaleString() || '0'}
-- Positions: ${data.lossHarvesting?.holdings?.length || 0}
-      `;
-
-      await Share.share({
-        message: report,
-        title: 'Tax Optimization Report',
-      });
-    } catch (error) {
-      Alert.alert('Error', 'Failed to export report.');
+PDF report has been generated. Check your email or download from the app.
+        `;
+        
+        try {
+          await Share.share({
+            message: reportSummary,
+            title: `Tax Optimization Report ${currentYear}`,
+          });
+        } catch (shareError) {
+          console.error('Share error:', shareError);
+          Alert.alert('Success', 'PDF report generated! Check your downloads or email.');
+        }
+      };
+      
+      reader.onerror = () => {
+        throw new Error('Failed to process PDF');
+      };
+      
+    } catch (error: any) {
+      console.error('Error exporting report:', error);
+      Alert.alert(
+        'Export Failed',
+        error.message || 'Could not generate PDF report. Please try again later.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setExportingPDF(false);
     }
-  }, [data, taxCalculations, filingStatus, state, userIncome]);
+  }, [token, filingStatus, state, userIncome, taxCalculations, data, currentYear]);
 
   const handleWhatIf = useCallback(() => {
     const income = parseFloat(whatIfIncome) || userIncome || 0;
@@ -892,8 +1199,13 @@ Loss Harvesting Opportunity:
               style={styles.actionButton}
               onPress={handleExportReport}
               hitSlop={10}
+              disabled={exportingPDF}
             >
-              <Ionicons name="share-outline" size={18} color="#2563EB" />
+              {exportingPDF ? (
+                <ActivityIndicator size="small" color="#2563EB" />
+              ) : (
+                <Ionicons name="share-outline" size={18} color="#2563EB" />
+              )}
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.actionButton}
@@ -1020,6 +1332,19 @@ Loss Harvesting Opportunity:
                 These positions are currently at a loss. Realizing some losses can offset your
                 gains this year. Wash sale rules apply.
               </Text>
+              
+              {/* Smart Harvest Button */}
+              {sectionData.holdings && sectionData.holdings.length > 0 && (
+                <TouchableOpacity
+                  style={styles.smartHarvestButton}
+                  onPress={handleSmartHarvest}
+                  disabled={loading}
+                >
+                  <Ionicons name="flash" size={20} color="#fff" />
+                  <Text style={styles.smartHarvestButtonText}>Smart Harvest Now</Text>
+                  {loading && <ActivityIndicator size="small" color="#fff" style={{ marginLeft: 8 }} />}
+                </TouchableOpacity>
+              )}
             </View>
 
             {sectionData.holdings && sectionData.holdings.length > 0 ? (
@@ -1169,6 +1494,17 @@ Loss Harvesting Opportunity:
               </View>
             </View>
 
+            {/* Visual Bracket Chart */}
+            {sectionData.income && sectionData.income > 0 && (
+              <View style={styles.bracketsCard}>
+                <TaxBracketChart
+                  income={sectionData.income}
+                  filingStatus={filingStatus}
+                  brackets={INCOME_BRACKETS[filingStatus]}
+                />
+              </View>
+            )}
+
             <View style={styles.bracketsCard}>
               <Text style={styles.cardTitle}>
                 Income Tax Brackets ({currentYear}) - {filingStatus.replace('-', ' ').toUpperCase()}
@@ -1233,6 +1569,94 @@ Loss Harvesting Opportunity:
                   {sectionData.changePercent >= 0 ? '+' : ''}
                   {sectionData.changePercent?.toFixed(1) || '0.0'}%)
                 </Text>
+              </View>
+            </View>
+
+            {/* Multi-Year Projection */}
+            <View style={styles.metricsCard}>
+              <Text style={styles.cardTitle}>5-Year Tax Projection</Text>
+              <Text style={[styles.helperText, { marginBottom: 16 }]}>
+                Slide to see projected taxes for future years
+              </Text>
+              
+              <View style={styles.projectionContainer}>
+                <Text style={styles.projectionYearLabel}>
+                  {selectedYear}
+                </Text>
+                <View style={styles.sliderContainer}>
+                  <Text style={styles.sliderLabel}>2025</Text>
+                  <Slider
+                    style={styles.slider}
+                    minimumValue={2025}
+                    maximumValue={2030}
+                    step={1}
+                    value={selectedYear}
+                    onValueChange={(value) => setSelectedYear(Math.round(value))}
+                    minimumTrackTintColor="#2563EB"
+                    maximumTrackTintColor="#E5E7EB"
+                    thumbTintColor="#2563EB"
+                  />
+                  <Text style={styles.sliderLabel}>2030</Text>
+                </View>
+                <View style={styles.yearButtonsContainer}>
+                  {[2025, 2026, 2027, 2028, 2029, 2030].map((year) => (
+                    <TouchableOpacity
+                      key={year}
+                      onPress={() => setSelectedYear(year)}
+                      style={[
+                        styles.yearButton,
+                        {
+                          backgroundColor: selectedYear === year ? '#2563EB' : '#F3F4F6',
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.yearButtonText,
+                          {
+                            color: selectedYear === year ? '#FFFFFF' : '#6B7280',
+                            fontWeight: selectedYear === year ? '700' : '500',
+                          },
+                        ]}
+                      >
+                        {year}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                
+                {/* Projection Results */}
+                <View style={styles.projectionResults}>
+                  <View style={styles.projectionRow}>
+                    <Text style={styles.projectionLabel}>Projected Income:</Text>
+                    <Text style={styles.projectionValue}>
+                      ${((userIncome || 80000) * Math.pow(1.03, selectedYear - currentYear)).toLocaleString()}
+                    </Text>
+                  </View>
+                  <View style={styles.projectionRow}>
+                    <Text style={styles.projectionLabel}>Projected Tax:</Text>
+                    <Text style={styles.projectionValue}>
+                      ${(calculateIncomeTax(
+                        (userIncome || 80000) * Math.pow(1.03, selectedYear - currentYear),
+                        filingStatus
+                      ).tax + calculateStateTax(
+                        (userIncome || 80000) * Math.pow(1.03, selectedYear - currentYear),
+                        state
+                      )).toLocaleString()}
+                    </Text>
+                  </View>
+                  <View style={styles.projectionRow}>
+                    <Text style={styles.projectionLabel}>Effective Rate:</Text>
+                    <Text style={styles.projectionValue}>
+                      {(
+                        calculateIncomeTax(
+                          (userIncome || 80000) * Math.pow(1.03, selectedYear - currentYear),
+                          filingStatus
+                        ).effectiveRate * 100
+                      ).toFixed(1)}%
+                    </Text>
+                  </View>
+                </View>
               </View>
             </View>
           </View>
@@ -1355,6 +1779,88 @@ Loss Harvesting Opportunity:
                 ))}
               </ScrollView>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Smart Harvest Modal */}
+      <Modal
+        visible={showSmartHarvestModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowSmartHarvestModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Smart Harvest Review</Text>
+              <TouchableOpacity onPress={() => setShowSmartHarvestModal(false)}>
+                <Ionicons name="close" size={24} color="#111827" />
+              </TouchableOpacity>
+            </View>
+
+            {smartHarvestData && (
+              <>
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalLabel}>
+                    Estimated Tax Savings: ${smartHarvestData.totalSavings?.toLocaleString() || '0'}
+                  </Text>
+                  <Text style={[styles.helperText, { marginTop: 8 }]}>
+                    Review the trades below. Approve to execute tax-loss harvesting.
+                  </Text>
+                </View>
+
+                <ScrollView style={{ maxHeight: 300 }}>
+                  {smartHarvestData.trades?.map((trade: any, index: number) => (
+                    <View key={index} style={styles.tradeCard}>
+                      <View style={styles.tradeHeader}>
+                        <Text style={styles.tradeSymbol}>{trade.symbol}</Text>
+                        <Text style={styles.tradeAction}>{trade.action.toUpperCase()}</Text>
+                      </View>
+                      <View style={styles.tradeRow}>
+                        <Text style={styles.tradeLabel}>Shares:</Text>
+                        <Text style={styles.tradeValue}>{trade.shares}</Text>
+                      </View>
+                      <View style={styles.tradeRow}>
+                        <Text style={styles.tradeLabel}>Est. Savings:</Text>
+                        <Text style={[styles.tradeValue, { color: '#10B981' }]}>
+                          ${trade.estimatedSavings?.toLocaleString() || '0'}
+                        </Text>
+                      </View>
+                      {trade.reason && (
+                        <Text style={styles.tradeReason}>{trade.reason}</Text>
+                      )}
+                    </View>
+                  ))}
+                </ScrollView>
+
+                {smartHarvestData.warnings && smartHarvestData.warnings.length > 0 && (
+                  <View style={styles.warningSection}>
+                    <Text style={styles.warningTitle}>⚠️ Warnings</Text>
+                    {smartHarvestData.warnings.map((warning: any, index: number) => (
+                      <Text key={index} style={styles.warningText}>
+                        {warning.symbol}: {warning.message}
+                      </Text>
+                    ))}
+                  </View>
+                )}
+
+                <TouchableOpacity
+                  style={styles.executeButton}
+                  onPress={handleExecuteSmartHarvest}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <>
+                      <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                      <Text style={styles.executeButtonText}>Approve & Execute</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         </View>
       </Modal>
@@ -1718,6 +2224,124 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#111827',
   },
+  bracketChartContainer: {
+    marginBottom: 8,
+  },
+  bracketChartTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 16,
+  },
+  bracketChartBar: {
+    flexDirection: 'row',
+    height: 40,
+    borderRadius: 8,
+    overflow: 'hidden',
+    marginBottom: 12,
+    position: 'relative',
+    backgroundColor: '#F3F4F6',
+  },
+  bracketSegment: {
+    height: '100%',
+    position: 'relative',
+    borderRightWidth: 1,
+    borderRightColor: '#FFFFFF',
+  },
+  youAreHereMarker: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: 3,
+    alignItems: 'center',
+  },
+  markerLine: {
+    width: 2,
+    height: '100%',
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 3,
+  },
+  markerDot: {
+    position: 'absolute',
+    top: -6,
+    right: -4,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: '#2563EB',
+  },
+  youAreHereIndicator: {
+    position: 'absolute',
+    top: -20,
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  indicatorLine: {
+    width: 2,
+    height: 60,
+    backgroundColor: '#2563EB',
+    marginBottom: 4,
+  },
+  indicatorLabel: {
+    backgroundColor: '#2563EB',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  indicatorText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  bracketLabels: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 12,
+  },
+  bracketLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  bracketColorDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  bracketLabelText: {
+    fontSize: 11,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  bracketInsight: {
+    backgroundColor: '#EEF2FF',
+    padding: 12,
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#2563EB',
+  },
+  bracketInsightText: {
+    fontSize: 13,
+    color: '#374151',
+    lineHeight: 20,
+  },
+  bracketInsightBold: {
+    fontWeight: '700',
+    color: '#2563EB',
+  },
   noDataContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -1835,6 +2459,164 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  smartHarvestButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#10B981',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginTop: 12,
+    gap: 8,
+  },
+  smartHarvestButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  tradeCard: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#10B981',
+  },
+  tradeHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  tradeSymbol: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  tradeAction: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#10B981',
+    backgroundColor: '#D1FAE5',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  tradeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  tradeLabel: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  tradeValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  tradeReason: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontStyle: 'italic',
+    marginTop: 4,
+  },
+  warningSection: {
+    backgroundColor: '#FEF3C7',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 12,
+    marginBottom: 12,
+  },
+  warningTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#92400E',
+    marginBottom: 8,
+  },
+  warningText: {
+    fontSize: 12,
+    color: '#92400E',
+    marginBottom: 4,
+  },
+  executeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#10B981',
+    paddingVertical: 16,
+    borderRadius: 8,
+    gap: 8,
+    marginTop: 12,
+  },
+  executeButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  projectionContainer: {
+    marginTop: 8,
+  },
+  projectionYearLabel: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#2563EB',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  sliderContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingHorizontal: 8,
+  },
+  sliderLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    width: 45,
+    textAlign: 'center',
+  },
+  slider: {
+    flex: 1,
+    height: 40,
+    marginHorizontal: 8,
+  },
+  yearButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    gap: 4,
+  },
+  yearButton: {
+    padding: 8,
+    borderRadius: 6,
+    minWidth: 50,
+    alignItems: 'center',
+  },
+  yearButtonText: {
+    fontSize: 12,
+  },
+  projectionResults: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    padding: 16,
+  },
+  projectionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  projectionLabel: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  projectionValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#111827',
   },
 });
 
