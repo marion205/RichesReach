@@ -91,8 +91,8 @@ const GET_PREMIUM_PORTFOLIO_METRICS = gql`
 `;
 
 const GET_AI_RECOMMENDATIONS = gql`
-  query GetAIRecommendations($riskTolerance: String) {
-    aiRecommendations(riskTolerance: $riskTolerance) {
+  query GetAIRecommendations($profile: ProfileInput, $usingDefaults: Boolean) {
+    aiRecommendations(profile: $profile, usingDefaults: $usingDefaults) {
       portfolioAnalysis {
         totalValue
         numHoldings
@@ -336,7 +336,10 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
   } = useQuery(
     GET_AI_RECOMMENDATIONS,
     {
-      variables: { riskTolerance: 'medium' },
+      variables: { 
+        profile: { riskTolerance: 'Moderate' },
+        usingDefaults: true 
+      },
       errorPolicy: 'all',
       fetchPolicy: 'network-only',
       onCompleted: (data) => {
@@ -520,7 +523,7 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
     if (!displayMetrics) {
       return (
         <View style={styles.errorContainer}>
-          <Icon name="alert-circle" size={48} color="#ef4444" />
+          <Icon name="alert-circle" size={64} color="#ef4444" />
           <Text style={styles.errorText}>No portfolio data available</Text>
           <Text style={styles.errorDetails}>
             Please add holdings to your portfolio to view metrics
@@ -655,11 +658,11 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
     if (!recommendations) {
       return (
         <View style={styles.errorContainer}>
-          <Icon name="cpu" size={48} color="#007AFF" />
+          <Icon name="cpu" size={64} color="#007AFF" />
           <Text style={styles.errorText}>Unable to load AI recommendations</Text>
           {recommendationsError && (
             <Text style={styles.errorDetails}>
-              Error: {recommendationsError.message}
+              {recommendationsError.message}
             </Text>
           )}
         </View>
@@ -701,13 +704,17 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
               <View style={styles.analysisItem}>
                 <Text style={styles.analysisLabel}>Risk Score</Text>
                 <Text style={styles.analysisValue}>
-                  {recommendations.portfolioAnalysis.riskScore || 'N/A'}
+                  {recommendations.portfolioAnalysis.riskScore 
+                    ? Number(recommendations.portfolioAnalysis.riskScore).toFixed(1)
+                    : 'N/A'}
                 </Text>
               </View>
               <View style={styles.analysisItem}>
                 <Text style={styles.analysisLabel}>Diversification Score</Text>
                 <Text style={styles.analysisValue}>
-                  {recommendations.portfolioAnalysis.diversificationScore || 'N/A'}
+                  {recommendations.portfolioAnalysis.diversificationScore 
+                    ? Number(recommendations.portfolioAnalysis.diversificationScore).toFixed(1)
+                    : 'N/A'}
                 </Text>
               </View>
             </View>
@@ -802,9 +809,9 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
                   }}
                   disabled={rebalanceLoading}
                 >
-                  <Icon name={rebalanceLoading ? "loader" : "refresh-cw"} size={16} color="#fff" />
+                  <Icon name={rebalanceLoading ? "loader" : "refresh-cw"} size={13} color="#fff" />
                   <Text style={styles.rebalanceButtonText}>
-                    {rebalanceLoading ? 'Analyzing & Rebalancing...' : 'AI Rebalance'}
+                    {rebalanceLoading ? 'Rebalancing...' : 'AI Rebalance'}
                   </Text>
                 </TouchableOpacity>
               ) : (
@@ -812,7 +819,7 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
                   style={[styles.rebalanceButton, styles.rebalanceButtonDisabled]}
                   disabled={true}
                 >
-                  <Icon name="refresh-cw" size={16} color="#8E8E93" />
+                  <Icon name="refresh-cw" size={14} color="#8E8E93" />
                   <Text style={[styles.rebalanceButtonText, { color: '#8E8E93' }]}>
                     No Rebalancing Needed
                   </Text>
@@ -822,7 +829,7 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
                 style={styles.viewResultsButton}
                 onPress={() => setShowRebalancingResults(true)}
               >
-                <Icon name="clock" size={16} color="#007AFF" />
+                <Icon name="clock" size={13} color="#007AFF" />
                 <Text style={styles.viewResultsButtonText}>View Results</Text>
               </TouchableOpacity>
             </View>
@@ -831,7 +838,7 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
             recommendations.rebalanceSuggestions.map((suggestion: any, index: number) => (
               <View key={index} style={styles.rebalanceCard}>
                 <View style={styles.rebalanceHeader}>
-                  <Text style={styles.rebalanceAction}>{suggestion.action}</Text>
+                  <Text style={styles.rebalanceAction} numberOfLines={2}>{suggestion.action}</Text>
                   <View style={[
                     styles.priorityBadge,
                     { backgroundColor: suggestion.priority === 'High' ? '#ef4444' : suggestion.priority === 'Medium' ? '#FF9500' : '#34C759' }
@@ -839,17 +846,25 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
                     <Text style={styles.priorityText}>{suggestion.priority}</Text>
                   </View>
                 </View>
-                <Text style={styles.rebalanceReasoning}>{suggestion.reasoning}</Text>
-                <View style={styles.rebalanceAllocation}>
-                  <Text style={styles.allocationLabel}>Current: {suggestion.currentAllocation}%</Text>
-                  <Text style={styles.allocationArrow}>→</Text>
-                  <Text style={styles.allocationLabel}>Suggested: {suggestion.suggestedAllocation}%</Text>
-                </View>
+                {suggestion.reasoning && (
+                  <Text style={styles.rebalanceReasoning}>{suggestion.reasoning}</Text>
+                )}
+                {(suggestion.currentAllocation !== undefined || suggestion.suggestedAllocation !== undefined) && (
+                  <View style={styles.rebalanceAllocation}>
+                    <Text style={styles.allocationLabel} numberOfLines={1}>
+                      Current: {Number(suggestion.currentAllocation || 0).toFixed(1)}%
+                    </Text>
+                    <Text style={styles.allocationArrow}>→</Text>
+                    <Text style={styles.allocationLabel} numberOfLines={1}>
+                      Suggested: {Number(suggestion.suggestedAllocation || 0).toFixed(1)}%
+                    </Text>
+                  </View>
+                )}
               </View>
             ))
           ) : (
             <View style={styles.noSuggestionsCard}>
-              <Icon name="check-circle" size={24} color="#34C759" />
+              <Icon name="check-circle" size={48} color="#34C759" />
               <Text style={styles.noSuggestionsTitle}>Portfolio is Well Balanced</Text>
               <Text style={styles.noSuggestionsText}>
                 No rebalancing suggestions at this time. Your portfolio appears to be well diversified.
@@ -1211,7 +1226,15 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
         <View style={styles.section}>
           <TouchableOpacity
             style={styles.aiOptionsButton}
-            onPress={() => safeNavigateTo('ai-options')}
+            onPress={() => {
+              // Use React Navigation to navigate within InvestStack
+              if (navigation && typeof navigation.navigate === 'function') {
+                navigation.navigate('AIOptions');
+              } else {
+                // Fallback to custom navigateTo if available
+                safeNavigateTo('AIOptions');
+              }
+            }}
           >
             <View style={styles.aiOptionsContent}>
               <View style={styles.aiOptionsHeader}>
@@ -1334,10 +1357,10 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
         {/* Error Message - only show if there's an actual error */}
         {!options && !optionsLoading && optionsError && (
           <View style={styles.errorContainer}>
-            <Icon name="alert-circle" size={48} color="#ef4444" />
+            <Icon name="alert-circle" size={64} color="#ef4444" />
             <Text style={styles.errorText}>Unable to load options data</Text>
             <Text style={styles.errorDetails}>
-              Error: {optionsError.message}
+              {optionsError.message}
             </Text>
           </View>
         )}
@@ -1345,7 +1368,7 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
         {/* No data message when no error but also no data */}
         {!options && !optionsLoading && !optionsError && (
           <View style={styles.errorContainer}>
-            <Icon name="info" size={48} color="#007AFF" />
+            <Icon name="info" size={64} color="#007AFF" />
             <Text style={styles.errorText}>No options data available</Text>
             <Text style={styles.errorDetails}>
               Please select a stock symbol to view options analysis
@@ -1787,21 +1810,23 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 40,
+    paddingVertical: 60,
+    paddingHorizontal: 24,
   },
   errorText: {
-    fontSize: 16,
+    fontSize: 18,
     color: '#ef4444',
-    marginTop: 16,
+    marginTop: 20,
     textAlign: 'center',
-    fontWeight: '500',
+    fontWeight: '600',
   },
   errorDetails: {
-    fontSize: 12,
-    color: '#dc2626',
+    fontSize: 14,
+    color: '#6b7280',
     textAlign: 'center',
-    marginTop: 8,
+    marginTop: 12,
     paddingHorizontal: 20,
+    lineHeight: 20,
   },
   section: {
     marginBottom: 24,
@@ -1809,14 +1834,17 @@ const styles = StyleSheet.create({
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 16,
+    gap: 16,
+    width: '100%',
   },
   sectionTitle: {
     fontSize: 20,
     fontWeight: '700',
     color: '#1f2937',
-    marginBottom: 16,
+    flex: 1,
+    flexShrink: 1,
   },
   mockDataIndicator: {
     backgroundColor: '#fef3c7',
@@ -2034,42 +2062,49 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   rebalanceButtons: {
-    flexDirection: 'row',
-    gap: 12,
+    flexDirection: 'column',
+    gap: 6,
+    alignItems: 'stretch',
+    flexShrink: 0,
+    minWidth: 100,
+    maxWidth: 110,
   },
   rebalanceButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#007AFF',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
     borderRadius: 8,
-    flex: 1,
+    gap: 5,
+    width: '100%',
   },
   rebalanceButtonDisabled: {
     backgroundColor: '#e5e7eb',
   },
   rebalanceButtonText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
-    marginLeft: 8,
   },
   viewResultsButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#f3f4f6',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#e5e7eb',
+    width: '100%',
+    gap: 5,
   },
   viewResultsButtonText: {
     color: '#007AFF',
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
-    marginLeft: 8,
   },
   rebalanceCard: {
     backgroundColor: '#fff',
@@ -2088,17 +2123,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
+    gap: 12,
   },
   rebalanceAction: {
     fontSize: 16,
     fontWeight: '600',
     color: '#1f2937',
+    flex: 1,
+    marginRight: 8,
   },
   priorityBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: 6,
+    minWidth: 50,
+    alignItems: 'center',
   },
   priorityText: {
     fontSize: 12,
@@ -2108,45 +2148,54 @@ const styles = StyleSheet.create({
   rebalanceReasoning: {
     fontSize: 14,
     color: '#6b7280',
-    marginBottom: 12,
+    marginTop: 4,
+    marginBottom: 16,
     lineHeight: 20,
   },
   rebalanceAllocation: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 8,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   allocationLabel: {
     fontSize: 14,
     color: '#6b7280',
     fontWeight: '500',
+    flexShrink: 1,
   },
   allocationArrow: {
     fontSize: 16,
     color: '#007AFF',
-    marginHorizontal: 12,
+    marginHorizontal: 8,
     fontWeight: '600',
   },
   noSuggestionsCard: {
     backgroundColor: '#f0fdf4',
-    padding: 16,
+    padding: 24,
     borderRadius: 12,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#bbf7d0',
   },
   noSuggestionsTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: '700',
     color: '#1f2937',
-    marginTop: 8,
-    marginBottom: 4,
+    marginTop: 16,
+    marginBottom: 8,
   },
   noSuggestionsText: {
     fontSize: 14,
     color: '#6b7280',
     textAlign: 'center',
     lineHeight: 20,
+    marginTop: 4,
   },
   // Stock Screening Styles
   filterGroup: {

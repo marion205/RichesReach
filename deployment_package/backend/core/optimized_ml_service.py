@@ -17,26 +17,26 @@ from sklearn.pipeline import Pipeline
 import logging
 logger = logging.getLogger(__name__)
 class OptimizedMLService:
-"""
-Optimized ML Service with model persistence, hyperparameter tuning, and cross-validation
-"""
-def __init__(self, models_dir: str = "ml_models"):
-# Initialize models directory
-self.models_dir = os.path.join(os.getcwd(), 'ml_models')
-self._ensure_models_directory()
-# Initialize model storage
-self.models = {}
-self.scalers = {}
-self.encoders = {}
-self.is_trained = False
-# Load existing models if available
-try:
-self._load_existing_models()
-logger.info("Optimized ML Service initialized with model persistence")
-except Exception as e:
-logger.warning(f"Could not load existing models: {e}")
-logger.info("Will train new models on first use")
-def _ensure_models_directory(self):
+    """
+    Optimized ML Service with model persistence, hyperparameter tuning, and cross-validation
+    """
+    def __init__(self, models_dir: str = "ml_models"):
+        # Initialize models directory
+        self.models_dir = os.path.join(os.getcwd(), 'ml_models')
+        self._ensure_models_directory()
+        # Initialize model storage
+        self.models = {}
+        self.scalers = {}
+        self.encoders = {}
+        self.is_trained = False
+        # Load existing models if available
+        try:
+            self._load_existing_models()
+            logger.info("Optimized ML Service initialized with model persistence")
+        except Exception as e:
+            logger.warning(f"Could not load existing models: {e}")
+            logger.info("Will train new models on first use")
+    def _ensure_models_directory(self):
 """Ensure the models directory exists"""
 if not os.path.exists(self.models_dir):
 os.makedirs(self.models_dir)

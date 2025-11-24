@@ -204,7 +204,7 @@ export function makeApolloClient() {
           
           // Debug: Log mutation responses to see what we're getting
           if (operation.operationName === 'AddToWatchlist' || 
-              (operation.query.loc?.source?.body?.includes('addToWatchlist'))) {
+              (operation.query.loc?.source?.body && operation.query.loc.source.body.includes('addToWatchlist'))) {
             logger.log('🔍 [Apollo Link] AddToWatchlist mutation response:', {
               operationName: operation.operationName,
               responseData: response.data,
@@ -217,9 +217,10 @@ export function makeApolloClient() {
           // Check for authentication errors
           if (response.errors) {
             response.errors.forEach((error) => {
-              if (error.message.includes('Signature has expired') || 
-                  error.message.includes('Token is invalid') ||
-                  error.message.includes('Authentication credentials were not provided')) {
+              const errorMessage = error?.message || '';
+              if (errorMessage.includes('Signature has expired') || 
+                  errorMessage.includes('Token is invalid') ||
+                  errorMessage.includes('Authentication credentials were not provided')) {
                 logger.log('🔐 Authentication error detected, clearing token');
                 AsyncStorage.removeItem('token').catch((err) => logger.error('Failed to remove token:', err));
               }
@@ -268,7 +269,7 @@ export function makeApolloClient() {
             errorMessage: error?.message,
             errorStack: error?.stack?.substring(0, 500),
             isAbortError: error?.name === 'AbortError',
-            isNetworkError: error?.message?.includes('network') || error?.message?.includes('fetch'),
+            isNetworkError: (error?.message || '').includes('network') || (error?.message || '').includes('fetch'),
             fullError: JSON.stringify(error, Object.getOwnPropertyNames(error)).substring(0, 1000),
           });
           
@@ -326,9 +327,9 @@ export function makeApolloClient() {
   // All other errors should be logged properly
   const originalConsoleError = console.error;
   console.error = (...args: any[]) => {
-    const message = args[0]?.toString() || '';
+    const message = (args[0]?.toString() || '');
     // Only suppress "Missing field" cache write warnings - these are expected with partial GraphQL responses
-    if (message.includes('Missing field') && message.includes('while writing result')) {
+    if (message && message.includes('Missing field') && message.includes('while writing result')) {
       // This is expected - partial results are handled by our cache typePolicies
       return;
     }
@@ -387,7 +388,8 @@ export function makeApolloClient() {
           }
         }
         // Log response details for debugging specific queries
-        if (uri.toString().includes('GetAIRecommendations') || options?.body?.toString().includes('GetAIRecommendations')) {
+        const bodyString = options?.body?.toString() || '';
+        if (uri.toString().includes('GetAIRecommendations') || bodyString.includes('GetAIRecommendations')) {
           logger.log('📡 Fetch response for GetAIRecommendations:', {
             status: response.status,
             statusText: response.statusText,

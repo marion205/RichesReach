@@ -31,12 +31,12 @@ python manage.py makemigrations --check --dry-run core > /dev/null 2>&1 || {
 }
 
 echo ""
-echo "📡 Starting Django server on http://127.0.0.1:8000"
-echo "📡 GraphQL Playground: http://127.0.0.1:8000/graphql"
+echo "📡 Starting Django server on http://0.0.0.0:8000 (accessible from iOS Simulator)"
+echo "📡 GraphQL Playground: http://localhost:8000/graphql"
 echo ""
 echo "Press Ctrl+C to stop the server"
 echo ""
 
-# Start the server
-python manage.py runserver
+# Start the server bound to 0.0.0.0 so iOS Simulator can access it
+python manage.py runserver 0.0.0.0:8000
 

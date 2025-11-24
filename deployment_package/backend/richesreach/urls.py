@@ -9,6 +9,8 @@ from core.daytrading_test_schema import schema as daytrading_test_schema
 from core.market_views import QuotesView
 from core.wealth_circles_views import WealthCirclePostsView
 from core.voices_views import VoicesListView
+from core.ai_options_views import AIOptionsRecommendationsView
+from core.auth_views import LoginView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -18,6 +20,8 @@ urlpatterns = [
     path('graphql-daytrading-test/', GraphQLView.as_view(schema=daytrading_test_schema, graphiql=True), name='graphql-daytrading-test'),
     # Include core app URLs (banking endpoints)
     path('', include('core.banking_urls')),
+    # Authentication endpoints
+    path('api/auth/login/', LoginView.as_view(), name='auth_login'),
     # Alpaca OAuth endpoints
     path('api/auth/alpaca/', include('core.alpaca_oauth_urls')),
     # Market data endpoints
@@ -26,5 +30,7 @@ urlpatterns = [
     path('api/wealth-circles/<str:circle_id>/posts/', WealthCirclePostsView.as_view(), name='wealth_circle_posts'),
     # Voice/TTS endpoints
     path('api/voices/', VoicesListView.as_view(), name='voices_list'),
+    # AI Options endpoints
+    path('api/ai-options/recommendations/', AIOptionsRecommendationsView.as_view(), name='ai_options_recommendations'),
 ]
 
