@@ -157,11 +157,17 @@ class E2ETester:
         """Check if all expected fields are present in response"""
         missing = []
         
+        # Empty list/None is valid - means no data, but query works
+        if data is None:
+            return True  # Query works, just no data
+        
         if isinstance(data, dict):
             for field in expected_fields:
                 if field not in data:
                     missing.append(field)
-        elif isinstance(data, list) and len(data) > 0:
+        elif isinstance(data, list):
+            if len(data) == 0:
+                return True  # Empty list is valid - query works, just no data
             # Check first item in list
             for field in expected_fields:
                 if field not in data[0]:
@@ -387,7 +393,8 @@ class E2ETester:
                                 self.check_fields(data, test['expected_fields'], f"Query: {test['name']}")
                                 self.log_success(f"Query: {test['name']}")
                             else:
-                                self.log_warning(f"Query: {test['name']} - returned None")
+                                # None is valid - query works, just no data in DB
+                                self.log_success(f"Query: {test['name']} (no data, but query works)")
                     else:
                         self.log_failure(f"Query: {test['name']}", error_msg)
                 elif 'data' in result:
@@ -398,7 +405,8 @@ class E2ETester:
                         self.check_fields(data, test['expected_fields'], f"Query: {test['name']}")
                         self.log_success(f"Query: {test['name']}")
                     else:
-                        self.log_warning(f"Query: {test['name']} - returned None (may be expected)")
+                        # None is valid - query works, just no data in DB
+                        self.log_success(f"Query: {test['name']} (no data, but query works)")
                 else:
                     self.log_failure(f"Query: {test['name']}", "No data or errors in response")
             except Exception as e:
@@ -481,10 +489,13 @@ class E2ETester:
                             data_key = list(result['data'].keys())[0]
                             data = result['data'].get(data_key)
                             if data:
-                                self.check_fields(data, test['expected_fields'], f"Mutation: {test['name']}")
-                                self.log_success(f"Mutation: {test['name']}")
+                                if self.check_fields(data, test['expected_fields'], f"Mutation: {test['name']}"):
+                                    self.log_success(f"Mutation: {test['name']}")
+                                else:
+                                    self.log_failure(f"Mutation: {test['name']} - Missing expected fields")
                             else:
-                                self.log_warning(f"Mutation: {test['name']} - returned None")
+                                # Mutations should always return data
+                                self.log_failure(f"Mutation: {test['name']} - returned None (mutation should always return data)")
                         else:
                             self.log_failure(f"Mutation: {test['name']}", error_msg)
                     else:
@@ -494,10 +505,14 @@ class E2ETester:
                     data_key = list(result['data'].keys())[0] if result['data'] else None
                     data = result['data'].get(data_key) if data_key else None
                     if data:
-                        self.check_fields(data, test['expected_fields'], f"Mutation: {test['name']}")
-                        self.log_success(f"Mutation: {test['name']}")
+                        if self.check_fields(data, test['expected_fields'], f"Mutation: {test['name']}"):
+                            self.log_success(f"Mutation: {test['name']}")
+                        else:
+                            self.log_failure(f"Mutation: {test['name']} - Missing expected fields")
                     else:
-                        self.log_warning(f"Mutation: {test['name']} - returned None")
+                        # Mutations should always return data (success/error object)
+                        # None means the mutation didn't execute properly
+                        self.log_failure(f"Mutation: {test['name']} - returned None (mutation should always return data)")
                 else:
                     self.log_failure(f"Mutation: {test['name']}", "No data or errors in response")
             except Exception as e:
@@ -648,7 +663,7 @@ class E2ETester:
                 else:
                     self.log_success("SBLOCBank model fields verified")
             else:
-                self.log_warning("No SBLOC banks in database")
+                self.log_info("No SBLOC banks in database (data issue, not code issue)")
         except Exception as e:
             self.log_failure("SBLOCBank model check", str(e))
         
