@@ -1,17 +1,19 @@
 """
 Unit tests for GraphQL banking mutations
 """
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 from graphene.test import Client
+from django.utils import timezone
 
-from core.banking_mutations import RefreshBankAccount, SetPrimaryBankAccount, SyncBankTransactions
+from core.banking_mutations import BankingMutations, LinkBankAccount, InitiateFunding
 from core.banking_models import BankAccount, BankProviderAccount
+from core.broker_models import BrokerAccount, BrokerFunding
 try:
     from core.schema import schema
 except ImportError:
-    schema = None  # May not be available in all test contexts
+    schema = None
 
 User = get_user_model()
 
@@ -36,7 +38,14 @@ class BankingMutationsTestCase(TestCase):
             provider_account=self.provider_account,
             yodlee_account_id='acc_456',
             provider='Test Bank',
+            name='Checking Account',
+            mask='1234',
+            account_type='CHECKING',
             is_verified=True,
+        )
+        self.broker_account = BrokerAccount.objects.create(
+            user=self.user,
+            kyc_status='APPROVED'
         )
     
     def _create_context(self, user=None):
@@ -45,118 +54,135 @@ class BankingMutationsTestCase(TestCase):
         context.user = user or self.user
         return context
     
-    @patch('core.banking_mutations.refresh_bank_accounts_task')
-    def test_refresh_bank_account_success(self, mock_task):
-        """Test successful bank account refresh"""
-        context = self._create_context()
+    def test_linkBankAccount_success(self):
+        """Test linking a bank account successfully"""
         info = Mock()
-        info.context = context
+        info.context = self._create_context()
         
-        result = RefreshBankAccount.mutate(None, info, account_id=self.bank_account.id)
-        
-        self.assertTrue(result.success)
-        self.assertIsNotNone(result.account)
-        mock_task.delay.assert_called_once_with(self.user.id, self.provider_account.id)
-    
-    def test_refresh_bank_account_unauthenticated(self):
-        """Test refresh bank account without authentication"""
-        context = self._create_context()
-        # Use Mock for unauthenticated user
-        from unittest.mock import Mock
-        context.user = Mock()
-        context.user.is_authenticated = False
-        info = Mock()
-        info.context = context
-        
-        result = RefreshBankAccount.mutate(None, info, account_id=self.bank_account.id)
-        
-        self.assertFalse(result.success)
-        self.assertEqual(result.message, "Authentication required")
-    
-    def test_refresh_bank_account_not_found(self):
-        """Test refresh non-existent bank account"""
-        context = self._create_context()
-        info = Mock()
-        info.context = context
-        
-        # The mutation catches DoesNotExist and returns a result, doesn't raise
-        result = RefreshBankAccount.mutate(None, info, account_id=99999)
-        self.assertFalse(result.success)
-        self.assertEqual(result.message, "Bank account not found")
-    
-    def test_set_primary_account_success(self):
-        """Test setting primary account"""
-        # Create another account
-        account2 = BankAccount.objects.create(
-            user=self.user,
-            provider_account=self.provider_account,
-            yodlee_account_id='acc_789',
-            provider='Test Bank 2',
-            is_verified=True,
+        result = LinkBankAccount.mutate(
+            None,
+            info,
+            bank_name='New Bank',
+            account_number='1234567890',
+            routing_number='987654321'
         )
         
-        context = self._create_context()
+        self.assertTrue(result.success)
+        self.assertIsNotNone(result.bank_account)
+        self.assertIsNotNone(result.bankAccount)
+        self.assertEqual(result.bankAccount.bankName, 'New Bank')
+        self.assertEqual(result.bankAccount.accountType, 'CHECKING')
+        self.assertEqual(result.bankAccount.status, 'PENDING')
+    
+    def test_linkBankAccount_duplicate(self):
+        """Test linking duplicate bank account"""
         info = Mock()
-        info.context = context
+        info.context = self._create_context()
         
-        result = SetPrimaryBankAccount.mutate(None, info, account_id=account2.id)
+        # Try to link same account again
+        result = LinkBankAccount.mutate(
+            None,
+            info,
+            bank_name='Test Bank',
+            account_number='1234567890',
+            routing_number='987654321'
+        )
+        
+        # Should fail or return existing account
+        # The implementation checks for existing accounts
+        self.assertIsNotNone(result.bank_account or result.bankAccount)
+    
+    def test_linkBankAccount_camelCase(self):
+        """Test linkBankAccount with camelCase arguments"""
+        info = Mock()
+        info.context = self._create_context()
+        
+        result = LinkBankAccount.mutate(
+            None,
+            info,
+            bank_name=None,
+            account_number=None,
+            routing_number=None,
+            bankName='New Bank',
+            accountNumber='1234567890',
+            routingNumber='987654321'
+        )
         
         self.assertTrue(result.success)
-        account2.refresh_from_db()
-        self.assertTrue(account2.is_primary)
-        
-        # Other accounts should not be primary
-        self.bank_account.refresh_from_db()
-        self.assertFalse(self.bank_account.is_primary)
+        self.assertIsNotNone(result.bank_account)
     
-    def test_set_primary_account_unauthenticated(self):
-        """Test set primary account without authentication"""
-        context = self._create_context()
-        # Use Mock for unauthenticated user
-        from unittest.mock import Mock
-        context.user = Mock()
-        context.user.is_authenticated = False
+    def test_initiateFunding_success(self):
+        """Test initiating funding successfully"""
         info = Mock()
-        info.context = context
+        info.context = self._create_context()
         
-        result = SetPrimaryBankAccount.mutate(None, info, account_id=self.bank_account.id)
-        
-        self.assertFalse(result.success)
-        self.assertEqual(result.message, "Authentication required")
-    
-    @patch('core.banking_mutations.sync_transactions_task')
-    def test_sync_transactions_success(self, mock_task):
-        """Test successful transaction sync"""
-        context = self._create_context()
-        info = Mock()
-        info.context = context
-        
-        result = SyncBankTransactions.mutate(None, info, account_id=self.bank_account.id)
+        result = InitiateFunding.mutate(
+            None,
+            info,
+            amount=500.00,
+            bank_account_id=str(self.bank_account.id)
+        )
         
         self.assertTrue(result.success)
-        # Account for optional from_date and to_date parameters
-        mock_task.delay.assert_called_once()
-        call_args = mock_task.delay.call_args
-        self.assertEqual(call_args[0][0], self.user.id)
-        self.assertEqual(call_args[0][1], self.bank_account.id)
+        self.assertIsNotNone(result.funding)
+        self.assertEqual(result.funding.amount, 500.0)
+        self.assertEqual(result.funding.status, 'PENDING')
+        self.assertIsNotNone(result.funding.estimatedCompletion)
     
-    def test_sync_transactions_unauthenticated(self):
-        """Test sync transactions without authentication"""
-        context = self._create_context()
-        # Use Mock for unauthenticated user
-        from unittest.mock import Mock
-        context.user = Mock()
-        context.user.is_authenticated = False
+    def test_initiateFunding_invalid_amount(self):
+        """Test initiating funding with invalid amount"""
         info = Mock()
-        info.context = context
+        info.context = self._create_context()
         
-        result = SyncBankTransactions.mutate(None, info, account_id=self.bank_account.id)
+        result = InitiateFunding.mutate(
+            None,
+            info,
+            amount=-100.00,
+            bank_account_id=str(self.bank_account.id)
+        )
         
         self.assertFalse(result.success)
-        self.assertEqual(result.message, "Authentication required")
+        self.assertIn('greater than zero', result.message)
+    
+    def test_initiateFunding_no_broker_account(self):
+        """Test initiating funding without broker account"""
+        # Delete broker account
+        self.broker_account.delete()
+        
+        info = Mock()
+        info.context = self._create_context()
+        
+        result = InitiateFunding.mutate(
+            None,
+            info,
+            amount=500.00,
+            bank_account_id=str(self.bank_account.id)
+        )
+        
+        self.assertFalse(result.success)
+        self.assertIn('Broker account not found', result.message)
+    
+    def test_initiateFunding_unverified_account(self):
+        """Test initiating funding with unverified bank account"""
+        # Make bank account unverified
+        self.bank_account.is_verified = False
+        self.bank_account.save()
+        
+        info = Mock()
+        info.context = self._create_context()
+        
+        result = InitiateFunding.mutate(
+            None,
+            info,
+            amount=500.00,
+            bank_account_id=str(self.bank_account.id)
+        )
+        
+        self.assertFalse(result.success)
+        self.assertIn('verified', result.message.lower())
 
 
-class BankingGraphQLMutationsIntegrationTestCase(TestCase):
+class BankingMutationsGraphQLTestCase(TestCase):
     """Integration tests for GraphQL banking mutations"""
     
     def setUp(self):
@@ -166,38 +192,75 @@ class BankingGraphQLMutationsIntegrationTestCase(TestCase):
             password='testpass123',
             name='Test User'
         )
-        # Skip tests if schema is not available (graphql_jwt not installed)
         if schema is None:
-            self.skipTest("GraphQL schema not available (graphql_jwt not installed)")
+            self.skipTest("GraphQL schema not available")
         self.client = Client(schema)
-        
+    
     def _execute_mutation(self, mutation, user=None):
         """Execute GraphQL mutation"""
         context = Mock()
         context.user = user or self.user
         return self.client.execute(mutation, context_value=context)
     
-    @patch('core.banking_mutations.refresh_bank_accounts_task')
-    def test_refresh_bank_account_mutation(self, mock_task):
-        """Test refreshBankAccount GraphQL mutation"""
-        # Create test account
-        provider_account = BankProviderAccount.objects.create(
+    def test_linkBankAccount_mutation(self):
+        """Test linkBankAccount GraphQL mutation"""
+        mutation = '''
+        mutation {
+            linkBankAccount(
+                bankName: "Test Bank"
+                accountNumber: "1234567890"
+                routingNumber: "987654321"
+            ) {
+                success
+                message
+                bankAccount {
+                    id
+                    bankName
+                    accountType
+                    status
+                }
+            }
+        }
+        '''
+        
+        result = self._execute_mutation(mutation)
+        
+        self.assertNotIn('errors', result)
+        self.assertIn('data', result)
+        self.assertIn('linkBankAccount', result['data'])
+        self.assertTrue(result['data']['linkBankAccount']['success'])
+        self.assertIsNotNone(result['data']['linkBankAccount']['bankAccount'])
+    
+    def test_initiateFunding_mutation(self):
+        """Test initiateFunding GraphQL mutation"""
+        # Create required accounts
+        broker_account = BrokerAccount.objects.create(
             user=self.user,
-            provider_account_id='123',
-            provider_name='Test Bank',
+            kyc_status='APPROVED'
         )
         bank_account = BankAccount.objects.create(
             user=self.user,
-            provider_account=provider_account,
-            yodlee_account_id='acc_456',
             provider='Test Bank',
+            name='Test Account',
+            mask='1234',
+            account_type='CHECKING',
+            is_verified=True,
         )
         
         mutation = '''
         mutation {
-            refreshBankAccount(accountId: %d) {
+            initiateFunding(
+                amount: 1000.00
+                bankAccountId: "%s"
+            ) {
                 success
                 message
+                funding {
+                    id
+                    amount
+                    status
+                    estimatedCompletion
+                }
             }
         }
         ''' % bank_account.id
@@ -206,6 +269,6 @@ class BankingGraphQLMutationsIntegrationTestCase(TestCase):
         
         self.assertNotIn('errors', result)
         self.assertIn('data', result)
-        self.assertTrue(result['data']['refreshBankAccount']['success'])
-        mock_task.delay.assert_called_once()
-
+        self.assertIn('initiateFunding', result['data'])
+        self.assertTrue(result['data']['initiateFunding']['success'])
+        self.assertIsNotNone(result['data']['initiateFunding']['funding'])

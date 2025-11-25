@@ -77,17 +77,37 @@ class YodleeService {
    */
   async createFastLinkSession(): Promise<FastLinkSession> {
     try {
-      // Get auth token from AsyncStorage
+      // Get auth token from AsyncStorage - AuthContext stores it as 'token'
       const AsyncStorage = require('@react-native-async-storage/async-storage').default;
-      const token = await AsyncStorage.getItem('authToken');
       
+      // Try 'token' first (what AuthContext uses), then fallback to other keys
+      let token = await AsyncStorage.getItem('token');
+      if (!token) {
+        token = await AsyncStorage.getItem('authToken') || 
+                await AsyncStorage.getItem('access_token') ||
+                await AsyncStorage.getItem('jwt_token');
+      }
+      
+      console.log('🔵 [YodleeService] Token retrieved:', token ? `${token.substring(0, 30)}...` : 'NOT FOUND');
+      
+      // Build headers - ALWAYS include Authorization if token exists
       const headers: Record<string, string> = {
+        'Accept': 'application/json',
         'Content-Type': 'application/json',
       };
       
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
+        console.log('🔵 [YodleeService] Authorization header set:', `Bearer ${token.substring(0, 30)}...`);
+      } else {
+        console.error('❌ [YodleeService] No token found in AsyncStorage!');
+        console.error('❌ [YodleeService] Tried keys: token, authToken, access_token, jwt_token');
+        throw new Error('Authentication token not found. Please log in again.');
       }
+      
+      console.log('🔵 [YodleeService] Request URL:', `${this.baseUrl}/fastlink/start`);
+      console.log('🔵 [YodleeService] Request method: GET');
+      console.log('🔵 [YodleeService] Request headers:', Object.keys(headers).map(k => `${k}: ${k === 'Authorization' ? headers[k].substring(0, 30) + '...' : headers[k]}`));
       
       const response = await fetch(`${this.baseUrl}/fastlink/start`, {
         method: 'GET',
@@ -262,19 +282,50 @@ class YodleeService {
    */
   async checkAvailability(): Promise<boolean> {
     try {
+      // Get auth token for the request - try 'token' first (what AuthContext uses)
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      let token = await AsyncStorage.getItem('token');
+      if (!token) {
+        token = await AsyncStorage.getItem('authToken') || 
+                await AsyncStorage.getItem('access_token') ||
+                await AsyncStorage.getItem('jwt_token');
+      }
+      
+      const headers: Record<string, string> = {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      };
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
       const response = await fetch(`${this.baseUrl}/fastlink/start`, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
       });
 
       // If we get a 503, Yodlee is disabled
       if (response.status === 503) {
+        console.log('Yodlee is disabled (503 response)');
         return false;
       }
+      
+      // If we get 401, Yodlee is enabled but auth is required (which is expected)
+      if (response.status === 401) {
+        console.log('Yodlee is available (401 = auth required, which is expected)');
+        return true;
+      }
 
-      return response.ok;
+      // If we get 200, Yodlee is available and working
+      if (response.ok) {
+        console.log('Yodlee is available (200 response)');
+        return true;
+      }
+
+      // Other status codes mean Yodlee might be available but there's an issue
+      console.log(`Yodlee availability check returned status ${response.status}`);
+      return false;
     } catch (error) {
       console.error('Failed to check Yodlee availability:', error);
       return false;

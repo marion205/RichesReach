@@ -1024,8 +1024,11 @@ export default function CircleDetailScreenSelfHosted({ route, navigation }: Circ
         throw new Error(errorData.error || 'Transcription failed');
       }
     } catch (err) {
-      logger.error('Transcription error:', err);
-      Alert.alert('Transcription Error', 'Failed to process voice. Please try again.');
+      // Only show alert if it's not a network error (Whisper API may not be running)
+      if (!(err instanceof TypeError && err.message === 'Network request failed')) {
+        logger.error('Transcription error:', err);
+        Alert.alert('Transcription Error', 'Failed to process voice. Please try again.');
+      }
     } finally {
       setIsTranscribing(false);
     }

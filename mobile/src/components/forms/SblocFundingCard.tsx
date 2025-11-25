@@ -31,7 +31,7 @@ const SblocFundingCard: React.FC<Props> = ({ onPress, maxBorrow, aprPct, portfol
   };
 
   return (
-    <View style={styles.card}>
+    <View style={styles.card} pointerEvents="box-none">
       <View style={styles.row}>
         <View style={styles.iconWrap}><Icon name="shield" size={18} color="#10B981" /></View>
         <Text style={[styles.title, { marginLeft: 8 }]}>Borrow against portfolio</Text>
@@ -40,12 +40,19 @@ const SblocFundingCard: React.FC<Props> = ({ onPress, maxBorrow, aprPct, portfol
       <TouchableOpacity 
         style={styles.cta} 
         onPress={handlePress}
-        onPressIn={() => console.log('🔵 SblocFundingCard: onPressIn triggered')}
-        onPressOut={() => console.log('🔵 SblocFundingCard: onPressOut triggered')}
-        activeOpacity={0.8}
+        onPressIn={() => {
+          console.log('🔵 SblocFundingCard: onPressIn triggered');
+        }}
+        onPressOut={() => {
+          console.log('🔵 SblocFundingCard: onPressOut triggered');
+        }}
+        activeOpacity={0.7}
         accessibilityRole="button"
         accessibilityLabel="Estimate and draw from portfolio"
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+        disabled={false}
+        delayPressIn={0}
+        delayPressOut={0}
       >
         <Text style={styles.ctaText}>Estimate & Draw</Text>
         <Icon name="chevron-right" size={18} color="#fff" style={{ marginLeft: 6 }} />
@@ -67,6 +74,7 @@ const styles = StyleSheet.create({
     shadowOpacity:0.06, 
     shadowRadius:8,
     elevation:2,
+    overflow: 'visible',
   },
   row:{ 
     flexDirection:'row', 
@@ -97,11 +105,14 @@ const styles = StyleSheet.create({
     backgroundColor:'#10B981', 
     borderRadius:10, 
     paddingVertical:14,
+    paddingHorizontal:16,
     shadowColor:'#10B981',
     shadowOffset:{width:0,height:2},
     shadowOpacity:0.2,
     shadowRadius:4,
     elevation:3,
+    minHeight:48,
+    zIndex:10,
   },
   ctaText:{ 
     color:'#fff', 

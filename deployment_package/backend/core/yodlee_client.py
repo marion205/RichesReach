@@ -15,14 +15,25 @@ class YodleeClient:
     """Client for Yodlee API integration"""
     
     def __init__(self):
-        self.base_url = os.getenv('YODLEE_BASE_URL', 'https://sandbox.api.yodlee.com/ysl')
-        self.client_id = os.getenv('YODLEE_CLIENT_ID', '')
-        self.client_secret = os.getenv('YODLEE_SECRET', '')
-        self.app_id = os.getenv('YODLEE_APP_ID', '')
-        self.fastlink_url = os.getenv('YODLEE_FASTLINK_URL', 'https://fastlink.yodlee.com')
-        self.webhook_secret = os.getenv('YODLEE_WEBHOOK_SECRET', '')
+        # CRITICAL: Strip whitespace to avoid Y303 errors from hidden newlines/spaces
+        self.base_url = os.getenv('YODLEE_BASE_URL', 'https://sandbox.api.yodlee.com/ysl').strip()
+        self.client_id = os.getenv('YODLEE_CLIENT_ID', '').strip()
+        self.client_secret = os.getenv('YODLEE_SECRET', '').strip()
+        self.app_id = os.getenv('YODLEE_APP_ID', '').strip()
+        self.fastlink_url = os.getenv('YODLEE_FASTLINK_URL', 'https://fastlink.yodlee.com').strip()
+        self.webhook_secret = os.getenv('YODLEE_WEBHOOK_SECRET', '').strip()
         
-        if not self.client_id or not self.client_secret:
+        # Debug logging for credential validation
+        if self.client_id and self.client_secret:
+            logger.info(f"🔵 YodleeClient initialized: base_url={self.base_url}, client_id_length={len(self.client_id)}, secret_length={len(self.client_secret)}")
+            # Check for common issues
+            if '\n' in self.client_id or '\n' in self.client_secret:
+                logger.warning("⚠️  Newline detected in credentials (should be stripped)")
+            if self.client_id.startswith(' ') or self.client_id.endswith(' '):
+                logger.warning("⚠️  Whitespace detected in client_id (should be stripped)")
+            if self.client_secret.startswith(' ') or self.client_secret.endswith(' '):
+                logger.warning("⚠️  Whitespace detected in client_secret (should be stripped)")
+        else:
             logger.warning("Yodlee credentials not configured")
         
         # Cache for access tokens (user_id -> token)
@@ -38,9 +49,13 @@ class YodleeClient:
         if include_auth and self.client_id and self.client_secret:
             # Basic auth for Yodlee
             import base64
+            # Build credentials string and encode
             credentials = f"{self.client_id}:{self.client_secret}"
             encoded = base64.b64encode(credentials.encode()).decode()
             headers['Authorization'] = f"Basic {encoded}"
+            
+            # Debug logging (first 50 chars of base64 only, for troubleshooting)
+            logger.debug(f"🔵 Yodlee auth: RAW credentials length={len(credentials)}, B64 length={len(encoded)}, B64 (first 50)={encoded[:50]}...")
         
         return headers
     
@@ -57,35 +72,57 @@ class YodleeClient:
     
     def _get_user_token(self, user_id: str) -> Optional[str]:
         """Get or create user access token"""
+        # Validate credentials first
+        if not self.client_id or not self.client_secret:
+            logger.error("Yodlee credentials not configured. Set YODLEE_CLIENT_ID and YODLEE_SECRET environment variables.")
+            return None
+        
         # Check cache first
         if user_id in self._user_tokens:
+            logger.debug(f"🔵 Using cached token for user {user_id}")
             return self._user_tokens[user_id]
         
         # Create user session/login
         try:
             login_url = f"{self.base_url}/auth/token"
-            payload = {
-                'loginName': f"user_{user_id}",  # Yodlee expects unique loginName per user
-            }
+            # Yodlee requires loginName as a header, not in JSON body
+            headers = self._get_headers()
+            login_name = f"user_{user_id}"  # Yodlee expects unique loginName per user
+            headers['loginName'] = login_name
+            
+            # Empty payload or minimal payload
+            payload = {}
+            
+            logger.info(f"🔵 Requesting user token: URL={login_url}, loginName={login_name}")
+            logger.debug(f"🔵 Request headers: {list(headers.keys())}")
             
             response = requests.post(
                 login_url,
-                headers=self._get_headers(),
+                headers=headers,
                 json=payload,
                 timeout=10
             )
+            
+            logger.info(f"🔵 Token response: status={response.status_code}")
             
             if response.status_code == 200:
                 data = response.json()
                 token = data.get('token', {}).get('accessToken')
                 if token:
                     self._user_tokens[user_id] = token
+                    logger.info(f"✅ User token obtained for user {user_id}")
                     return token
+                else:
+                    logger.warning(f"⚠️  Token response missing accessToken: {data}")
             else:
-                logger.error(f"Failed to get user token: {response.status_code} - {response.text}")
+                error_text = response.text[:500] if response.text else "No error text"
+                logger.error(f"❌ Failed to get user token: {response.status_code} - {error_text}")
+                # If Y303, log detailed diagnostic info
+                if 'Y303' in error_text or response.status_code == 400:
+                    logger.error(f"🔍 Y303 Diagnostic: client_id length={len(self.client_id)}, secret length={len(self.client_secret)}, base_url={self.base_url}")
         
         except Exception as e:
-            logger.error(f"Error getting user token: {e}")
+            logger.error(f"Error getting user token: {e}", exc_info=True)
         
         return None
     

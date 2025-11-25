@@ -128,24 +128,50 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     logger.log('🔍 AuthContext: Environment variable:', process.env.EXPO_PUBLIC_API_BASE_URL);
     
     const attempt = async (payload: any) => {
-      logger.log('🔄 AuthContext: Attempting login to:', `${baseUrl}/api/auth/login/`);
-      logger.log('🔄 AuthContext: Payload:', payload);
+      const loginUrl = `${baseUrl}/api/auth/login/`;
+      logger.log('🔄 AuthContext: Attempting login to:', loginUrl);
+      logger.log('🔄 AuthContext: Payload:', { ...payload, password: '***' });
       
       try {
-        const response = await fetch(`${baseUrl}/api/auth/login/`, {
+        const response = await fetch(loginUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
+        }).catch((fetchError) => {
+          // Network errors (connection refused, timeout, etc.)
+          logger.error('❌ AuthContext: Network error:', fetchError);
+          if (fetchError.message?.includes('Network request failed') || 
+              fetchError.message?.includes('Failed to fetch') ||
+              fetchError.message?.includes('ECONNREFUSED')) {
+            throw new Error(
+              `Cannot connect to server at ${baseUrl}. ` +
+              `Please check:\n` +
+              `1. Backend is running on port 8000\n` +
+              `2. Using correct IP address (not localhost on physical device)\n` +
+              `3. Firewall allows connections`
+            );
+          }
+          throw fetchError;
         });
         
         logger.log('📡 AuthContext: Response status:', response.status);
         logger.log('📡 AuthContext: Response ok:', response.ok);
         
-        const json = await response.json().catch(() => ({}));
+        const json = await response.json().catch((parseError) => {
+          logger.error('❌ AuthContext: Failed to parse response:', parseError);
+          return { error: 'Invalid response from server' };
+        });
         logger.log('📡 AuthContext: Response json:', json);
         
         if (!response.ok) {
-          throw new Error(json?.error || `Login failed with status ${response.status}`);
+          const errorDetail = json?.detail || json?.error || `Login failed with status ${response.status}`;
+          logger.error('❌ AuthContext: Login failed:', {
+            status: response.status,
+            statusText: response.statusText,
+            error: errorDetail,
+            response: json
+          });
+          throw new Error(errorDetail);
         }
         
         // Handle response format: /api/auth/login/ returns {access_token, token, user}
@@ -162,8 +188,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         
         logger.log('✅ AuthContext: Login successful, token received');
         return token;
-      } catch (fetchError) {
+      } catch (fetchError: any) {
         logger.error('❌ AuthContext: Fetch error:', fetchError);
+        // Re-throw with more context if it's a network error
+        if (fetchError.message?.includes('Network request failed') || 
+            fetchError.message?.includes('Failed to fetch')) {
+          throw new Error(
+            `Network error: Cannot reach ${baseUrl}/api/auth/login/\n\n` +
+            `Possible fixes:\n` +
+            `- Check backend is running: curl ${baseUrl}/health\n` +
+            `- On physical device, use LAN IP instead of localhost\n` +
+            `- Check EXPO_PUBLIC_API_BASE_URL environment variable`
+          );
+        }
         throw fetchError;
       }
     };

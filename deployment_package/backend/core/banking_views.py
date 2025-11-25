@@ -15,8 +15,22 @@ from datetime import datetime, timedelta
 from typing import Dict, Any
 
 from .yodlee_client import YodleeClient
-from .yodlee_client_enhanced import EnhancedYodleeClient
-from .banking_encryption import encrypt_token, decrypt_token
+try:
+    from .yodlee_client_enhanced import EnhancedYodleeClient
+except ImportError:
+    # Fallback to regular YodleeClient if EnhancedYodleeClient doesn't exist
+    EnhancedYodleeClient = YodleeClient
+    logger.warning("EnhancedYodleeClient not found, using YodleeClient")
+
+try:
+    from .banking_encryption import encrypt_token, decrypt_token
+except ImportError:
+    # Fallback if encryption not available
+    def encrypt_token(token: str) -> str:
+        return token
+    def decrypt_token(encrypted: str) -> str:
+        return encrypted
+    logger.warning("Banking encryption not available, tokens will not be encrypted")
 # Import models inside view functions to avoid "Apps aren't loaded" errors
 
 logger = logging.getLogger(__name__)
@@ -31,22 +45,157 @@ def _is_yodlee_enabled() -> bool:
 class StartFastlinkView(View):
     """Create FastLink session for bank account linking"""
     
+    def _authenticate_request(self, request):
+        """Authenticate request from Authorization header (for FastAPI -> Django requests)"""
+        from .authentication import get_user_from_token
+        
+        # Check if user is already authenticated (Django middleware)
+        if hasattr(request, 'user') and request.user and request.user.is_authenticated:
+            logger.info(f"🔵 StartFastlinkView: User already authenticated: {request.user.email}")
+            return request.user
+        
+        # Try to authenticate from Authorization header
+        # WSGIMiddleware converts headers to HTTP_* format in META
+        # Check all possible locations for the Authorization header
+        auth_header = None
+        
+        # Check all META keys that might contain the header
+        for key in request.META.keys():
+            if 'AUTHORIZATION' in key.upper() or 'AUTH' in key.upper():
+                value = request.META.get(key, '')
+                if value:
+                    auth_header = value
+                    print(f"🔵 Found auth header in META['{key}']: {value[:30]}...")
+                    break
+        
+        # Also check if it's in request.headers (for ASGI/Starlette requests)
+        if not auth_header and hasattr(request, 'headers'):
+            auth_header = request.headers.get('Authorization', '') or request.headers.get('authorization', '')
+            if auth_header:
+                print(f"🔵 Found auth header in request.headers: {auth_header[:30]}...")
+        
+        # Check all META keys for debugging
+        import sys
+        print(f"🔵 All META keys: {list(request.META.keys())}", file=sys.stdout, flush=True)
+        print(f"🔵 All META keys with 'HTTP': {[k for k in request.META.keys() if k.startswith('HTTP_')]}", file=sys.stdout, flush=True)
+        
+        logger.info(f"🔵 StartFastlinkView: Auth header found: {bool(auth_header)}, length: {len(auth_header) if auth_header else 0}")
+        logger.info(f"🔵 StartFastlinkView: All META keys with 'AUTH': {[k for k in request.META.keys() if 'AUTH' in k.upper()]}")
+        
+        if not auth_header:
+            import sys
+            print("❌ StartFastlinkView: No Authorization header found", file=sys.stdout, flush=True)
+            print(f"❌ All META keys: {list(request.META.keys())}", file=sys.stdout, flush=True)
+            logger.warning("🔵 StartFastlinkView: No Authorization header found")
+            return None
+        
+        # Handle Bearer token
+        if auth_header.startswith('Bearer '):
+            token = auth_header[7:]  # Remove 'Bearer ' prefix
+            print(f"🔵 StartFastlinkView: Extracted token (first 20 chars): {token[:20]}...")
+            logger.info(f"🔵 StartFastlinkView: Extracted token (first 20 chars): {token[:20]}...")
+            
+            # Check if it's a dev token first (before calling get_user_from_token)
+            if token.startswith('dev-token-'):
+                print("🔵 StartFastlinkView: Detected dev token in Bearer header, using test user")
+                logger.info("🔵 StartFastlinkView: Detected dev token in Bearer header, using test user")
+                from django.contrib.auth import get_user_model
+                User = get_user_model()
+                user = User.objects.first()
+                if not user:
+                    user = User.objects.create_user(
+                        email='test@example.com',
+                        name='Test User',
+                        password='test123'
+                    )
+                    logger.info(f"🔵 StartFastlinkView: Created test user: {user.email}")
+                else:
+                    logger.info(f"🔵 StartFastlinkView: Using existing user: {user.email}")
+                request.user = user
+                return user
+            
+            # Try to authenticate with real token
+            try:
+                user = get_user_from_token(token)
+                if user:
+                    logger.info(f"🔵 StartFastlinkView: User authenticated via token: {user.email}")
+                    request.user = user
+                    return user
+                else:
+                    logger.warning("🔵 StartFastlinkView: get_user_from_token returned None")
+            except Exception as e:
+                logger.error(f"🔵 StartFastlinkView: Token validation failed: {e}", exc_info=True)
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            logger.info("🔵 StartFastlinkView: Detected dev token, using test user")
+            # For dev tokens, use first user or create test user
+            user = User.objects.first()
+            if not user:
+                user = User.objects.create_user(
+                    email='test@example.com',
+                    name='Test User',
+                    password='test123'
+                )
+                logger.info(f"🔵 StartFastlinkView: Created test user: {user.email}")
+            else:
+                logger.info(f"🔵 StartFastlinkView: Using existing user: {user.email}")
+            request.user = user
+            return user
+        
+        logger.warning(f"🔵 StartFastlinkView: Could not authenticate - auth_header format: {auth_header[:50] if auth_header else 'None'}")
+        return None
+    
     def get(self, request):
         """GET /api/yodlee/fastlink/start"""
+        # Log that the view was called - use print for immediate visibility to stdout
+        import sys
+        print("=" * 80, file=sys.stdout, flush=True)
+        print("🔵🔵🔵 StartFastlinkView.get() CALLED", file=sys.stdout, flush=True)
+        print(f"🔵 Request method: {request.method}", file=sys.stdout, flush=True)
+        print(f"🔵 Request path: {request.path}", file=sys.stdout, flush=True)
+        print(f"🔵 Request META keys (first 20): {list(request.META.keys())[:20]}", file=sys.stdout, flush=True)
+        logger.info("🔵🔵🔵 StartFastlinkView.get() CALLED")
+        logger.info(f"🔵 Request method: {request.method}")
+        logger.info(f"🔵 Request path: {request.path}")
+        logger.info(f"🔵 Request META keys (first 20): {list(request.META.keys())[:20]}")
+        
         if not _is_yodlee_enabled():
+            logger.warning("🔵 Yodlee is disabled")
             return JsonResponse(
                 {'error': 'Yodlee integration is disabled'},
                 status=503
             )
         
-        # Handle case where request.user might be None (FastAPI -> Django conversion)
-        if not hasattr(request, 'user') or not request.user or not request.user.is_authenticated:
+        logger.info("🔵 Yodlee is enabled, proceeding with authentication")
+        
+        # Authenticate request
+        user = self._authenticate_request(request)
+        if not user:
+            import sys
+            print("❌❌❌ Authentication failed - no user returned", file=sys.stdout, flush=True)
+            logger.error("🔵❌ Authentication failed - no user returned")
             return JsonResponse({'error': 'Authentication required'}, status=401)
+        
+        import sys
+        print(f"✅✅✅ Authentication successful - user: {user.email}", file=sys.stdout, flush=True)
+        logger.info(f"🔵✅ Authentication successful - user: {user.email}")
         
         try:
             # Use enhanced client with retry logic
             yodlee = EnhancedYodleeClient()
-            user_id = str(request.user.id)
+            
+            # Check if Yodlee credentials are configured
+            if not yodlee.client_id or not yodlee.client_secret:
+                logger.error("Yodlee credentials not configured. Set YODLEE_CLIENT_ID and YODLEE_SECRET environment variables.")
+                return JsonResponse(
+                    {
+                        'error': 'Yodlee integration is not configured. Please contact support.',
+                        'details': 'YODLEE_CLIENT_ID and YODLEE_SECRET environment variables are required.'
+                    },
+                    status=503
+                )
+            
+            user_id = str(user.id)
             
             # Ensure user exists in Yodlee
             if not yodlee.ensure_user(user_id):

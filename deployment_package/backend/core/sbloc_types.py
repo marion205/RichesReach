@@ -20,7 +20,7 @@ class SBLOCBankType(DjangoObjectType):
             'min_ltv',
             'max_ltv',
             'notes',
-            'regions',
+            # 'regions',  # Removed - using custom resolver below
             'min_loan_usd',
             'is_active',
             'priority',
@@ -33,6 +33,7 @@ class SBLOCBankType(DjangoObjectType):
     minLtv = graphene.Float(description="Minimum LTV (as decimal)")
     maxLtv = graphene.Float(description="Maximum LTV (as decimal)")
     minLoanUsd = graphene.Int(description="Minimum loan amount in USD")
+    regions = graphene.List(graphene.String, description="Supported regions")
     
     def resolve_logoUrl(self, info):
         """Resolve logo URL"""
@@ -57,6 +58,19 @@ class SBLOCBankType(DjangoObjectType):
     def resolve_minLoanUsd(self, info):
         """Resolve minimum loan amount"""
         return int(self.min_loan_usd) if self.min_loan_usd else None
+    
+    def resolve_regions(self, info):
+        """Resolve regions as a list instead of JSON string"""
+        if isinstance(self.regions, str):
+            import json
+            try:
+                return json.loads(self.regions)
+            except (json.JSONDecodeError, TypeError):
+                return []
+        elif isinstance(self.regions, list):
+            return self.regions
+        else:
+            return []
 
 
 class SBLOCSessionType(DjangoObjectType):
@@ -92,4 +106,15 @@ class SBLOCSessionType(DjangoObjectType):
     def resolve_amountUsd(self, info):
         """Resolve amount in USD"""
         return int(self.amount_usd) if self.amount_usd else None
+
+
+class SBLOCOfferType(graphene.ObjectType):
+    """GraphQL type for SBLOC offer/quote"""
+    ltv = graphene.Float(description="Loan-to-value ratio (e.g., 0.5 for 50%)")
+    apr = graphene.Float(description="Annual percentage rate (e.g., 0.085 for 8.5%)")
+    minDraw = graphene.Int(description="Minimum draw amount in USD")
+    maxDrawMultiplier = graphene.Float(description="Maximum draw multiplier (e.g., 0.95)")
+    disclosures = graphene.List(graphene.String, description="Required disclosures")
+    eligibleEquity = graphene.Float(description="Eligible equity value in USD")
+    updatedAt = graphene.String(description="Last updated timestamp")
 

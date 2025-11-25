@@ -75,9 +75,11 @@ except (ImportError, SyntaxError):
         pass
 
 try:
-    from .social_types import SocialQueries
+    from .social_types import SocialQueries, SocialMutations
 except (ImportError, SyntaxError):
     class SocialQueries(graphene.ObjectType):
+        pass
+    class SocialMutations(graphene.ObjectType):
         pass
 
 try:
@@ -183,7 +185,7 @@ class ExtendedQuery(PremiumQueries, BrokerQueries, BankingQueries, SBLOCQueries,
 
 # ------------------- MUTATION ------------------
 
-class ExtendedMutation(PremiumMutations, BrokerMutations, BankingMutations, SBLOCMutations, PaperTradingMutations, PrivacyMutations, AIInsightsMutations, Mutation, graphene.ObjectType):
+class ExtendedMutation(PremiumMutations, BrokerMutations, BankingMutations, SBLOCMutations, PaperTradingMutations, SocialMutations, PrivacyMutations, AIInsightsMutations, Mutation, graphene.ObjectType):
     """
     Final Mutation type exposed by the schema.
 
@@ -197,12 +199,24 @@ class ExtendedMutation(PremiumMutations, BrokerMutations, BankingMutations, SBLO
 # -------------------- SCHEMA --------------------
 
 # Collect all types that need explicit registration
+try:
+    from .sbloc_types import SBLOCBankType, SBLOCSessionType
+    SBLOC_TYPES_AVAILABLE = True
+except ImportError:
+    SBLOC_TYPES_AVAILABLE = False
+    SBLOCBankType = None
+    SBLOCSessionType = None
+
 schema_types = [BenchmarkSeriesType, BenchmarkDataPointType]
 if ProfileInput:
     # InputObjectType doesn't need to be in types, but ensure it's imported
     pass
 if AIRecommendationsType:
     schema_types.append(AIRecommendationsType)
+if SBLOC_TYPES_AVAILABLE and SBLOCBankType:
+    schema_types.append(SBLOCBankType)
+    if SBLOCSessionType:
+        schema_types.append(SBLOCSessionType)
 
 schema = graphene.Schema(
     query=ExtendedQuery,

@@ -16,7 +16,7 @@ import 'react-native-url-polyfill/auto';
 // Note: LogBox setup moved to index.js (before App import) to catch early errors
 
 import React, { useState, useEffect, lazy, Suspense } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, LogBox } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import ApolloProvider from './ApolloProvider';
@@ -141,6 +141,114 @@ const { user, isAuthenticated, loading, logout: authLogout } = useAuth();
 const [currentScreen, setCurrentScreen] = useState('login');
 // Version 2 State
 const [showARPreview, setShowARPreview] = useState(false);
+
+// Store setCurrentScreen in a ref to ensure it's always available
+const setCurrentScreenRef = React.useRef(setCurrentScreen);
+React.useEffect(() => {
+  setCurrentScreenRef.current = setCurrentScreen;
+}, [setCurrentScreen]);
+
+// Make setCurrentScreen available globally for direct navigation
+// Update the global function whenever setCurrentScreenRef changes
+React.useEffect(() => {
+  if (typeof window !== 'undefined') {
+    (window as any).__setCurrentScreen = (screen: string) => {
+      logger.log('🔵 __setCurrentScreen called with:', screen);
+      logger.log('🔵 Current screen before:', currentScreen);
+      logger.log('🔵 isAuthenticated:', isAuthenticated);
+      logger.log('🔵 setCurrentScreenRef.current type:', typeof setCurrentScreenRef.current);
+      
+      // Use React's startTransition to ensure state update is processed
+      if (setCurrentScreenRef.current && typeof setCurrentScreenRef.current === 'function') {
+        logger.log('🔵 Calling setCurrentScreenRef.current');
+        // Force synchronous state update
+        setCurrentScreenRef.current(screen);
+        logger.log('🔵 setCurrentScreen called via ref, new screen should be:', screen);
+        
+        // Force a re-render check
+        setTimeout(() => {
+          logger.log('🔵 After 100ms - checking if screen updated');
+          logger.log('🔵 If still not updated, there may be an auth gate blocking it');
+        }, 100);
+      } else {
+        logger.error('❌ setCurrentScreenRef.current is not a function!', setCurrentScreenRef.current);
+        // Try direct setCurrentScreen as last resort
+        if (typeof setCurrentScreen === 'function') {
+          logger.log('🔵 Trying direct setCurrentScreen');
+          setCurrentScreen(screen);
+        } else {
+          logger.error('❌ setCurrentScreen is also not a function!');
+        }
+      }
+    };
+    logger.log('✅ Exposed setCurrentScreen globally');
+  }
+  return () => {
+    if (typeof window !== 'undefined') {
+      delete (window as any).__setCurrentScreen;
+    }
+  };
+}, [setCurrentScreenRef]); // Update when ref changes
+
+// Listen for force navigation requests (fallback when navigateTo prop fails)
+// Use polling instead of window events (React Native doesn't support addEventListener)
+React.useEffect(() => {
+  if (typeof window === 'undefined') return;
+  
+  const pollInterval = setInterval(() => {
+    const forceNav = (window as any).__forceNavigateTo;
+    const timestamp = (window as any).__forceNavigateTimestamp;
+    
+    if (forceNav) {
+      const params = (window as any).__sblocParams || {};
+      logger.log('🔍 Poll detected navigation request to:', forceNav, 'timestamp:', timestamp);
+      logger.log('🔍 Available methods:', {
+        hasNavigateToGlobal: !!(window as any).__navigateToGlobal,
+        hasSetCurrentScreen: !!(window as any).__setCurrentScreen,
+        setCurrentScreenType: typeof (window as any).__setCurrentScreen
+      });
+      
+      // Try global function first
+      if ((window as any).__navigateToGlobal) {
+        logger.log('🔍 Using global navigateTo function');
+        delete (window as any).__forceNavigateTo;
+        delete (window as any).__forceNavigateTimestamp;
+        try {
+          (window as any).__navigateToGlobal(forceNav, params);
+          logger.log('✅ Global navigateTo called');
+        } catch (error) {
+          logger.error('❌ Error calling global navigateTo:', error);
+        }
+      } else if ((window as any).__setCurrentScreen) {
+        // Fallback to direct setCurrentScreen
+        logger.log('🔍 Using direct setCurrentScreen, calling with:', forceNav);
+        delete (window as any).__forceNavigateTo;
+        delete (window as any).__forceNavigateTimestamp;
+        try {
+          const setScreenFn = (window as any).__setCurrentScreen;
+          if (typeof setScreenFn === 'function') {
+            setScreenFn(forceNav);
+            logger.log('✅ setCurrentScreen called with:', forceNav);
+          } else {
+            logger.error('❌ setScreenFn is not a function!');
+          }
+        } catch (error) {
+          logger.error('❌ Error calling setCurrentScreen:', error);
+        }
+      } else {
+        logger.error('❌ No navigation method available!');
+        logger.error('❌ Available:', {
+          navigateToGlobal: !!(window as any).__navigateToGlobal,
+          setCurrentScreen: !!(window as any).__setCurrentScreen
+        });
+      }
+    }
+  }, 50); // Check every 50ms for faster response
+  
+  return () => {
+    clearInterval(pollInterval);
+  };
+}, []);
 const [showWellnessDashboard, setShowWellnessDashboard] = useState(false);
 const [portfolioData, setPortfolioData] = useState({
   totalValue: 125000,
@@ -176,10 +284,17 @@ useEffect(() => {
     setCurrentScreen('home');
   } else if (!isAuthenticated) {
     // Always navigate to login if not authenticated, regardless of current screen
-    if (currentScreen !== 'login' && currentScreen !== 'forgot-password' && currentScreen !== 'signup') {
+    // EXCEPTION: Allow certain screens to be navigated to even if auth check is pending
+    // (e.g., when navigating from authenticated screens like bank-accounts)
+    const authBypassScreens = ['SBLOCBankSelection', 'SBLOCApplication', 'bank-accounts'];
+    const isAuthBypassScreen = authBypassScreens.includes(currentScreen);
+    
+    if (currentScreen !== 'login' && currentScreen !== 'forgot-password' && currentScreen !== 'signup' && !isAuthBypassScreen) {
       logger.log('🔐 User is not authenticated, navigating to login');
       setCurrentScreen('login');
       setHasCompletedOnboarding(false);
+    } else if (isAuthBypassScreen) {
+      logger.log('🔐 Auth bypass screen detected, allowing navigation:', currentScreen);
     }
   }
 }, [isAuthenticated, currentScreen, user]);
@@ -246,8 +361,24 @@ setIsLoading(false);
 };
 initializeServices();
 }, []);
+
+// Suppress React Navigation warnings - this app uses custom navigation system
+LogBox.ignoreLogs([
+  "The action 'NAVIGATE' with payload",
+  "was not handled by any navigator",
+]);
+
+// Global navigateTo function - will be set below and available via window
+let globalNavigateToFunction: ((screen: string, params?: any) => void) | null = null;
+
 const navigateTo = (screen: string, params?: any) => {
   logger.log('🔍 navigateTo called:', { screen, params });
+  
+  // Store globally for fallback access
+  globalNavigateToFunction = navigateTo;
+  if (typeof window !== 'undefined') {
+    (window as any).__navigateToGlobal = navigateTo;
+  }
   
   // Handle Version 2 special screens
   if (screen === 'ar-preview') {
@@ -353,123 +484,191 @@ try {
     setHasCompletedOnboarding(false);
 }
 };
+// renderScreen is a regular function (not memoized) so it always sees the latest currentScreen
+// This is correct - we want it to re-render whenever currentScreen changes
 const renderScreen = () => {
 logger.log('🔍 renderScreen called:', { currentScreen, isLoggedIn, isLoading, isAuthenticated, hasCompletedOnboarding });
-// ✅ 1) Hard gate: if not authenticated OR explicitly on login screen → only show Login
-// This MUST be checked FIRST, before any isLoggedIn checks
-// Even if isLoggedIn is still true (state hasn't updated yet), we show login
-if (!isAuthenticated || currentScreen === 'login') {
-logger.log('🔍 Showing login screen (auth gate)');
-return <LoginScreen 
-onLogin={handleLogin} 
-onNavigateToSignUp={() => setCurrentScreen('signup')} 
-onNavigateToForgotPassword={() => setCurrentScreen('forgot-password')} 
-/>;
-}
-// Show loading screen while initializing (but not if we're explicitly on login)
-if (isLoading && currentScreen !== 'login') {
-return (
-<View style={styles.loadingContainer}>
-<Text style={styles.loadingText}>Loading...</Text>
-</View>
-);
-}
-if (!isLoggedIn) {
-logger.log('🔍 User not logged in, showing login screen');
-switch (currentScreen) {
-case 'login':
-return <LoginScreen 
-onLogin={handleLogin} 
-onNavigateToSignUp={() => setCurrentScreen('signup')} 
-onNavigateToForgotPassword={() => setCurrentScreen('forgot-password')} 
-/>;
-case 'forgot-password':
-return <ForgotPasswordScreen 
-onNavigateToLogin={() => setCurrentScreen('login')} 
-onNavigateToResetPassword={(email) => setCurrentScreen('login')} 
-/>;
-case 'signup':
-return (
-<ZeroFrictionOnboarding
-onComplete={(profile) => {
-logger.log('✅ Onboarding completed with profile:', profile);
-setHasCompletedOnboarding(true);
-setCurrentScreen('home');
-}}
-onSkip={() => {
-setCurrentScreen('login');
-}}
-/>
-);
-default:
-return <LoginScreen 
-onLogin={handleLogin} 
-onNavigateToSignUp={() => setCurrentScreen('signup')} 
-onNavigateToForgotPassword={() => setCurrentScreen('forgot-password')} 
-/>;
-}
-}
-// Show onboarding if user is logged in but hasn't completed onboarding
-// Only show if we've checked and confirmed onboarding is not completed
-if (isLoggedIn && hasCompletedOnboarding === false) {
-  return (
-    <ZeroFrictionOnboarding
-      onComplete={async (profile) => {
-        logger.log('✅ Onboarding completed with profile:', profile);
-        try {
-          const userProfileService = UserProfileService.getInstance();
-          await userProfileService.saveProfile(profile);
-          await userProfileService.markOnboardingCompleted();
-        } catch (error) {
-          logger.error('Error saving profile:', error);
-        }
-        setHasCompletedOnboarding(true);
-        setCurrentScreen('home');
-      }}
-      onSkip={async () => {
-        try {
-          const userProfileService = UserProfileService.getInstance();
-          await userProfileService.markOnboardingCompleted();
-        } catch (error) {
-          logger.error('Error marking onboarding as completed:', error);
-        }
-        setHasCompletedOnboarding(true);
-        setCurrentScreen('home');
-      }}
-    />
-  );
-}
+  
+  // Check for pending navigation requests
+  if (typeof window !== 'undefined' && (window as any).__forceNavigateTo) {
+    const targetScreen = (window as any).__forceNavigateTo;
+    logger.log('🔍 renderScreen detected pending navigation to:', targetScreen);
+    logger.log('🔍 But currentScreen is still:', currentScreen);
+    // Don't delete here - let polling handle it to avoid race conditions
+  }
 
-// Show loading while checking onboarding status
-if (isLoggedIn && hasCompletedOnboarding === null) {
-  return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-      <ActivityIndicator size="large" color="#667eea" />
-      <Text style={{ marginTop: 16, color: '#666' }}>Loading...</Text>
-    </View>
-  );
-}
-// ✅ 2) Once authenticated, mount NavigationContainer + AppNavigator
-// BUT only if we're NOT explicitly on login screen (handled above)
-// CRITICAL: This check ensures AppNavigator is NOT rendered when currentScreen === 'login'
-// which happens immediately when logout is called
-// Use key prop to force remount when auth state changes
-if (isLoggedIn && hasCompletedOnboarding && currentScreen !== 'login') {
-  logger.log('🔍 Rendering AppNavigator (user is logged in and not on login screen)');
-  return <AppNavigator key={`app-nav-${isAuthenticated}`} />;
-}
-// If we reach here and currentScreen is 'login', we should have already returned LoginScreen above
-// But if somehow we didn't, return LoginScreen as fallback
-if (currentScreen === 'login' || !isAuthenticated) {
-  logger.log('🔍 Fallback: Showing login screen');
-  return <LoginScreen 
-    onLogin={handleLogin} 
-    onNavigateToSignUp={() => setCurrentScreen('signup')} 
-    onNavigateToForgotPassword={() => setCurrentScreen('forgot-password')} 
-  />;
-}
-logger.log('🔍 Main switch statement, currentScreen:', currentScreen);
-switch (currentScreen) {
+  // ============================================================================
+  // SHELL SCREENS PATTERN: Define screens that should be rendered directly
+  // (not through AppNavigator). These include auth flows, SBLOC flows, etc.
+  // ============================================================================
+  const SHELL_SCREENS = new Set([
+    'login',
+    'signup',
+    'forgot-password',
+    'onboarding',
+    'SBLOCBankSelection',
+    'SBLOCApplication',
+    'SblocStatus',
+    'bank-accounts',
+  ] as const);
+  
+  const isShellScreen = SHELL_SCREENS.has(currentScreen);
+  
+  // ============================================================================
+  // 1) AUTH & ONBOARDING GATES
+  // ============================================================================
+  
+  // Show loading while checking onboarding status
+  if (isLoggedIn && hasCompletedOnboarding === null) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#667eea" />
+        <Text style={{ marginTop: 16, color: '#666' }}>Loading...</Text>
+      </View>
+    );
+  }
+  
+  // Show onboarding if user is logged in but hasn't completed onboarding
+  if (isLoggedIn && hasCompletedOnboarding === false) {
+    return (
+      <ZeroFrictionOnboarding
+        onComplete={async (profile) => {
+          logger.log('✅ Onboarding completed with profile:', profile);
+          try {
+            const userProfileService = UserProfileService.getInstance();
+            await userProfileService.saveProfile(profile);
+            await userProfileService.markOnboardingCompleted();
+          } catch (error) {
+            logger.error('Error saving profile:', error);
+          }
+          setHasCompletedOnboarding(true);
+          setCurrentScreen('home');
+        }}
+        onSkip={async () => {
+          try {
+            const userProfileService = UserProfileService.getInstance();
+            await userProfileService.markOnboardingCompleted();
+          } catch (error) {
+            logger.error('Error marking onboarding as completed:', error);
+          }
+          setHasCompletedOnboarding(true);
+          setCurrentScreen('home');
+        }}
+      />
+    );
+  }
+  
+  // Show loading screen while initializing (but not if we're explicitly on login)
+  if (isLoading && currentScreen !== 'login') {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.loadingText}>Loading...</Text>
+      </View>
+    );
+  }
+  
+  // ============================================================================
+  // 2) SHELL SCREENS: Render directly (auth flows, SBLOC, etc.)
+  // ============================================================================
+  // These screens are rendered outside of AppNavigator, either because:
+  // - They're part of auth/onboarding flows
+  // - They need custom navigation handling
+  // - They're accessed before full app initialization
+  if (!isLoggedIn || isShellScreen) {
+    logger.log('🔍 Rendering shell screen:', currentScreen);
+    
+    switch (currentScreen) {
+      case 'login':
+        return <LoginScreen 
+          onLogin={handleLogin} 
+          onNavigateToSignUp={() => setCurrentScreen('signup')} 
+          onNavigateToForgotPassword={() => setCurrentScreen('forgot-password')} 
+        />;
+      case 'signup':
+        return (
+          <ZeroFrictionOnboarding
+            onComplete={(profile) => {
+              logger.log('✅ Onboarding completed with profile:', profile);
+              setHasCompletedOnboarding(true);
+              setCurrentScreen('home');
+            }}
+            onSkip={() => {
+              setCurrentScreen('login');
+            }}
+          />
+        );
+      case 'forgot-password':
+        return <ForgotPasswordScreen 
+          onNavigateToLogin={() => setCurrentScreen('login')} 
+          onNavigateToResetPassword={(email) => setCurrentScreen('login')} 
+        />;
+      case 'onboarding':
+        return <OnboardingScreen onComplete={handleOnboardingComplete} />;
+      case 'bank-accounts':
+        // Ensure navigateTo is available (should always be defined, but double-check)
+        if (!navigateTo) {
+          logger.error('❌ navigateTo is undefined when rendering BankAccountScreen!');
+        }
+        // Check for window-based navigation request (fallback if navigateTo prop fails)
+        if (typeof window !== 'undefined' && (window as any).__forceNavigateTo) {
+          const targetScreen = (window as any).__forceNavigateTo;
+          const params = (window as any).__sblocParams || {};
+          delete (window as any).__forceNavigateTo;
+          logger.log('🔍 Window-based navigation requested to:', targetScreen, 'with params:', params);
+          // Navigate immediately using the function directly
+          if (navigateTo) {
+            navigateTo(targetScreen, params);
+          } else if ((window as any).__navigateToGlobal) {
+            (window as any).__navigateToGlobal(targetScreen, params);
+          }
+        }
+        return <BankAccountScreen navigateTo={navigateTo || ((window as any)?.__navigateToGlobal)} navigation={{ navigate: navigateTo || ((window as any)?.__navigateToGlobal), goBack: () => setCurrentScreen('home') }} />;
+      case 'SBLOCBankSelection':
+        const sblocParams = (window as any).__sblocParams || { amountUsd: 25000 };
+        logger.log('🔍 Rendering SBLOCBankSelectionScreen with params:', sblocParams);
+        logger.log('🔍 currentScreen is:', currentScreen);
+        return <SBLOCBankSelectionScreen 
+          navigation={{ 
+            navigate: navigateTo || ((screen: string, params?: any) => setCurrentScreen(screen)), 
+            goBack: () => setCurrentScreen('bank-accounts') 
+          }} 
+          route={{ params: sblocParams }} 
+        />;
+      case 'SBLOCApplication':
+        return <SBLOCApplicationScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('SBLOCBankSelection') }} route={{ params: { sessionUrl: '', referral: { id: '', bank: { id: '', name: '', minLtv: 0, maxLtv: 0, minLineUsd: 0, maxLineUsd: 0, typicalAprMin: 0, typicalAprMax: 0, isActive: true, priority: 0 } } } }} />;
+      case 'SblocStatus':
+        return <SBLOCApplicationScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('SBLOCBankSelection') }} route={{ params: { sessionId: '' } }} />;
+      default:
+        // If not logged in and not on a shell screen, show login
+        if (!isLoggedIn) {
+          logger.log('🔍 User not logged in, showing login screen');
+          return <LoginScreen 
+            onLogin={handleLogin} 
+            onNavigateToSignUp={() => setCurrentScreen('signup')} 
+            onNavigateToForgotPassword={() => setCurrentScreen('forgot-password')} 
+          />;
+        }
+        // If logged in but on a shell screen that's not handled above, fall through to main switch
+        break;
+    }
+  }
+  
+  // ============================================================================
+  // 3) FULL APP NAVIGATOR: Render AppNavigator for all in-app screens
+  // ============================================================================
+  // Once authenticated and onboarded, and not on a shell screen, render the full app
+  if (isLoggedIn && hasCompletedOnboarding && !isShellScreen) {
+    logger.log('🔍 Rendering AppNavigator (user is logged in and not on shell screen)');
+    return <AppNavigator key={`app-nav-${isAuthenticated}`} />;
+  }
+  
+  // ============================================================================
+  // 4) MAIN SWITCH: Handle remaining screens that aren't shell screens
+  // ============================================================================
+  // This handles screens that are part of the main app but need direct rendering
+  // (e.g., screens that need custom params or navigation handling)
+  logger.log('🔍 Main switch statement, currentScreen:', currentScreen);
+  switch (currentScreen) {
 case 'home':
 logger.log('🔍 Rendering HomeScreen');
 return <HomeScreen navigateTo={navigateTo} />;
@@ -586,9 +785,7 @@ return <DayTradingScreen navigateTo={navigateTo} />;
           return <BacktestingScreen navigateTo={navigateTo} />;
         case 'swing-leaderboard':
           return <LeaderboardScreen navigateTo={navigateTo} />;
-        case 'bank-accounts':
-return <BankAccountScreen navigateTo={navigateTo} navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('home') }} />;
-case 'notifications':
+        case 'notifications':
 return <NotificationsScreen navigateTo={navigateTo} />;
 case 'options-learning':
 return <OptionsLearningScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('home') }} />;
@@ -596,14 +793,6 @@ case 'sbloc-learning':
 return <SBLOCLearningScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('home') }} />;
 case 'portfolio-learning':
 return <PortfolioLearningScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('home') }} />;
-        case 'SBLOCBankSelection':
-          const sblocParams = (window as any).__sblocParams || { amountUsd: 25000 };
-          logger.log('🔍 Rendering SBLOCBankSelectionScreen with params:', sblocParams);
-          return <SBLOCBankSelectionScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('bank-accounts') }} route={{ params: sblocParams }} />;
-case 'SBLOCApplication':
-return <SBLOCApplicationScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('SBLOCBankSelection') }} route={{ params: { sessionUrl: '', referral: { id: '', bank: { id: '', name: '', minLtv: 0, maxLtv: 0, minLineUsd: 0, maxLineUsd: 0, typicalAprMin: 0, typicalAprMax: 0, isActive: true, priority: 0 } } } }} />;
-        case 'SblocStatus':
-          return <SBLOCApplicationScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('SBLOCBankSelection') }} route={{ params: { sessionId: '' } }} />;
 case 'news-preferences':
 return <NewsPreferencesScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('profile') }} />;
 case 'tax-optimization':

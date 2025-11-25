@@ -1,7 +1,26 @@
 let navigator: any = null;
+let navigatorReadyCallbacks: Array<() => void> = [];
 
 export function setNavigator(ref: any) {
   navigator = ref;
+  console.log('✅ NavigationService: Navigator set, executing', navigatorReadyCallbacks.length, 'pending callbacks');
+  // Execute any pending callbacks
+  navigatorReadyCallbacks.forEach(callback => {
+    try {
+      callback();
+    } catch (error) {
+      console.error('NavigationService: Error in ready callback', error);
+    }
+  });
+  navigatorReadyCallbacks = [];
+}
+
+export function onNavigatorReady(callback: () => void) {
+  if (navigator) {
+    callback();
+  } else {
+    navigatorReadyCallbacks.push(callback);
+  }
 }
 
 export function navigate(name: string, params?: any) {
@@ -15,8 +34,30 @@ export function navigate(name: string, params?: any) {
  * Supports patterns like 'Learn', { screen: 'tutor-module' }
  */
 export function globalNavigate(name: string | any, params?: any) {
+  // Wait a bit if navigator isn't ready yet (it might still be initializing)
   if (!navigator) {
-    console.warn('NavigationService: Navigator not set. Name:', name);
+    console.warn('NavigationService: Navigator not set yet. Name:', name, '- Will queue and retry');
+    // Queue the navigation to execute when navigator is ready
+    onNavigatorReady(() => {
+      console.log('NavigationService: Executing queued navigation to', name);
+      globalNavigate(name, params);
+    });
+    // Also retry after delays as fallback
+    setTimeout(() => {
+      if (navigator) {
+        globalNavigate(name, params);
+      } else {
+        console.warn('NavigationService: Navigator still not available after 100ms, will keep retrying');
+        // Keep retrying with exponential backoff
+        setTimeout(() => {
+          if (navigator) {
+            globalNavigate(name, params);
+          } else {
+            console.error('NavigationService: Navigator still not available after 300ms');
+          }
+        }, 200);
+      }
+    }, 100);
     return;
   }
 
@@ -57,7 +98,26 @@ export function globalNavigate(name: string | any, params?: any) {
       navigator.navigate(name as never, params as never);
       console.log('NavigationService: Direct navigation successful to', name);
     }
-  } catch (error) {
+  } catch (error: any) {
+    // Check if it's the "navigation object hasn't been initialized" error
+    const errorMessage = error?.message || String(error);
+    if (errorMessage.includes("navigation' object hasn't been initialized")) {
+      console.warn('NavigationService: Navigation not ready yet, will retry:', name);
+      // Retry after a short delay
+      setTimeout(() => {
+        if (navigator && navigator.navigate) {
+          try {
+            if (typeof name === 'string') {
+              navigator.navigate(name as never, params as never);
+            }
+          } catch (retryError) {
+            console.error('NavigationService: Retry also failed', retryError);
+          }
+        }
+      }, 200);
+      return;
+    }
+    
     console.error('NavigationService: Navigation error', error, { name, params });
     // Try alternative navigation method if available
     if (navigator.navigate) {

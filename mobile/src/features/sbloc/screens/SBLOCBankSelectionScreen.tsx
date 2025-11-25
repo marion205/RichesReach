@@ -9,9 +9,12 @@ import {
   ActivityIndicator,
   TextInput,
   Platform,
+  SafeAreaView,
 } from 'react-native';
 import { useQuery, useMutation, gql } from '@apollo/client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import TopHeader from '../../../components/common/TopHeader';
+import Feather from 'react-native-vector-icons/Feather';
 
 type Bank = {
   id: string;
@@ -215,15 +218,40 @@ export default function SblocBankSelectionScreen({ route, navigation }: any) {
   }
 
   return (
-    <View style={{ flex: 1, padding: 16 }}>
-      {/* Filters */}
-      <View style={{ marginBottom: 12 }}>
-        <Text style={{ fontSize: 18, fontWeight: '700' }} accessibilityRole="header">
-          SBLOC Request
-        </Text>
-        <Text style={{ color: '#666', marginBottom: 8 }}>
-          Compare providers. Continue to a secure, hosted application.
-        </Text>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+      <TopHeader 
+        currentScreen="SBLOCBankSelection" 
+        onNavigate={(screen) => {
+          // Fallback navigation
+          if (navigation?.navigate) {
+            navigation.navigate(screen as never);
+          }
+        }}
+        navigateTo={navigation?.navigate ? (screen: string, params?: any) => {
+          // Use the navigation prop's navigate function (which is actually navigateTo from App.tsx)
+          // This works for shell screens that are outside AppNavigator
+          if (navigation.navigate) {
+            navigation.navigate(screen, params);
+          }
+        } : undefined}
+        title="SBLOC Request"
+        showBackButton={true}
+        onBack={() => {
+          if (navigation?.goBack) {
+            navigation.goBack();
+          } else if (navigation?.navigate) {
+            navigation.navigate('bank-accounts');
+          }
+        }}
+        hideMicButton={true}
+        hideProfileButton={true}
+      />
+      <View style={{ flex: 1, padding: 16 }}>
+        {/* Filters */}
+        <View style={{ marginBottom: 12 }}>
+          <Text style={{ color: '#666', marginBottom: 8 }}>
+            Compare providers. Continue to a secure, hosted application.
+          </Text>
 
         <View style={{ flexDirection: 'row', gap: 8 }}>
           {/* Amount input */}
@@ -389,6 +417,7 @@ export default function SblocBankSelectionScreen({ route, navigation }: any) {
           ListFooterComponent={<View style={{ height: 8 }} />}
         />
       )}
-    </View>
+      </View>
+    </SafeAreaView>
   );
 }

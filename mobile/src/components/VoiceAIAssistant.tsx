@@ -647,7 +647,10 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
           // Using a timeout wrapper instead
         });
       } catch (networkError: unknown) {
-        logger.error('Transcription error:', networkError);
+        // Only log if it's not a network error (Whisper API may not be running)
+        if (!(networkError instanceof TypeError && networkError.message === 'Network request failed')) {
+          logger.error('Transcription error:', networkError);
+        }
         // Network error - use fallback mock response
         logger.warn('⚠️ Network error, using mock transcription');
         const mockResponse = {
