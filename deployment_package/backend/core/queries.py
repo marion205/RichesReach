@@ -4,7 +4,7 @@ import graphene
 from django.contrib.auth import get_user_model
 
 
-from .types import UserType, PostType, ChatSessionType, ChatMessageType, CommentType, StockType, StockDataType, WatchlistType, AIPortfolioRecommendationType, StockMomentType, ChartRangeEnum, DayTradingDataType, DayTradingStatsType, ProfileInput, AIRecommendationsType, SwingTradingDataType, SwingTradingStatsType, ExecutionSuggestionType, EntryTimingSuggestionType, ExecutionQualityStatsType
+from .types import UserType, PostType, ChatSessionType, ChatMessageType, CommentType, StockType, StockDataType, WatchlistType, AIPortfolioRecommendationType, StockMomentType, ChartRangeEnum, DayTradingDataType, DayTradingStatsType, ProfileInput, AIRecommendationsType, SwingTradingDataType, SwingTradingStatsType, ExecutionSuggestionType, EntryTimingSuggestionType, ExecutionQualityStatsType, PreMarketDataType
 
 
 from .models import Post, ChatSession, ChatMessage, Comment, User, Stock, StockData, Watchlist, AIPortfolioRecommendation, StockDiscussion, DiscussionComment, Portfolio, StockMoment
@@ -502,6 +502,13 @@ class Query(graphene.ObjectType):
         description="Get day trading strategy performance stats (Citadel Board)"
     )
     
+    pre_market_picks = graphene.Field(
+        PreMarketDataType,
+        mode=graphene.String(required=False, default_value="AGGRESSIVE"),
+        limit=graphene.Int(required=False, default_value=20),
+        description="Get pre-market quality setups (4AM-9:30AM ET)"
+    )
+    
     # Swing Trading queries (Phase 2: Breadth of Alphas)
     swing_trading_picks = graphene.Field(
         SwingTradingDataType,
@@ -733,6 +740,64 @@ class Query(graphene.ObjectType):
         except Exception as e:
             logger.error(f"❌ Error fetching day trading stats: {e}", exc_info=True)
             return []
+    
+    def resolve_pre_market_picks(self, info, mode="AGGRESSIVE", limit=20):
+        """Resolve pre-market picks - scans pre-market movers and flags quality setups"""
+        from .pre_market_scanner import PreMarketScanner
+        from django.utils import timezone
+        
+        try:
+            scanner = PreMarketScanner()
+            
+            # Check if we're in pre-market hours
+            if not scanner.is_pre_market_hours():
+                logger.warning(f"Pre-market scan requested outside pre-market hours")
+                return {
+                    'asOf': timezone.now().isoformat(),
+                    'mode': mode,
+                    'picks': [],
+                    'totalScanned': 0,
+                    'minutesUntilOpen': scanner._minutes_until_open(),
+                }
+            
+            # Run pre-market scan
+            setups = scanner.scan_pre_market_sync(mode=mode, limit=limit)
+            
+            # Convert to GraphQL format
+            picks = []
+            for setup in setups:
+                picks.append({
+                    'symbol': setup['symbol'],
+                    'side': setup['side'],
+                    'score': setup['score'],
+                    'preMarketPrice': setup['pre_market_price'],
+                    'preMarketChangePct': setup['pre_market_change_pct'],
+                    'volume': setup['volume'],
+                    'marketCap': setup['market_cap'],
+                    'prevClose': setup['prev_close'],
+                    'notes': setup['notes'],
+                    'scannedAt': setup['scanned_at'],
+                })
+            
+            logger.info(f"✅ Pre-market scan: {len(picks)} setups found (mode: {mode})")
+            
+            return {
+                'asOf': timezone.now().isoformat(),
+                'mode': mode,
+                'picks': picks,
+                'totalScanned': len(setups) if setups else 0,
+                'minutesUntilOpen': scanner._minutes_until_open(),
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Error in pre-market scan: {e}", exc_info=True)
+            return {
+                'asOf': timezone.now().isoformat(),
+                'mode': mode,
+                'picks': [],
+                'totalScanned': 0,
+                'minutesUntilOpen': 0,
+            }
     
     def resolve_swing_trading_stats(self, info, strategy=None, period="ALL_TIME"):
         """Resolve swing trading strategy performance stats"""
@@ -2543,13 +2608,27 @@ def _get_dynamic_universe_from_polygon(mode, max_symbols=100):
         max_price = 500.0  # Avoid ultra-high priced stocks
         min_volume = 5_000_000  # 5M shares minimum
         min_market_cap = 50_000_000_000  # $50B minimum
-        max_change_pct = 0.15  # Reject anything with >15% intraday move (too volatile)
+        base_max_change_pct = 0.15  # Base: 15% max intraday move
     else:  # AGGRESSIVE
         min_price = 2.0
         max_price = 500.0
         min_volume = 1_000_000  # 1M shares minimum
         min_market_cap = 1_000_000_000  # $1B minimum
-        max_change_pct = 0.30  # Allow up to 30% moves
+        base_max_change_pct = 0.30  # Base: 30% max intraday move
+    
+    # Dynamic % change threshold based on time of day (pre-market catch, avoid late pumps)
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    et_hour = (now.hour - 5) % 24  # Convert UTC to ET (simplified, doesn't account for DST)
+    
+    if et_hour < 10:  # Pre-10AM ET: Allow higher moves (catch early momentum)
+        max_change_pct = base_max_change_pct * 1.67  # 50% for AGGRESSIVE, 25% for SAFE
+    elif et_hour < 14:  # 10AM-2PM ET: Standard threshold
+        max_change_pct = base_max_change_pct  # 30% for AGGRESSIVE, 15% for SAFE
+    else:  # Post-2PM ET: Stricter (avoid late pumps)
+        max_change_pct = base_max_change_pct * 0.33  # 10% for AGGRESSIVE, 5% for SAFE
+    
+    logger.debug(f"Dynamic max_change_pct for {mode} mode at {et_hour}:00 ET: {max_change_pct:.1%}")
     
     try:
         # Fetch top gainers and losers from Polygon with detailed ticker data

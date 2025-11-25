@@ -883,6 +883,29 @@ class DayTradingStatsType(graphene.ObjectType):
     calmarRatio = graphene.Float()
 
 
+class PreMarketPickType(graphene.ObjectType):
+    """GraphQL type for pre-market pick"""
+    symbol = graphene.String()
+    side = graphene.String()
+    score = graphene.Float()
+    preMarketPrice = graphene.Float()
+    preMarketChangePct = graphene.Float()
+    volume = graphene.Int()
+    marketCap = graphene.Float()
+    prevClose = graphene.Float()
+    notes = graphene.String()
+    scannedAt = graphene.String()
+
+
+class PreMarketDataType(graphene.ObjectType):
+    """GraphQL type for pre-market scan results"""
+    asOf = graphene.String()
+    mode = graphene.String()
+    picks = graphene.List(PreMarketPickType)
+    totalScanned = graphene.Int()
+    minutesUntilOpen = graphene.Int()
+
+
 # Swing Trading Types (Phase 2: Breadth of Alphas)
 class SwingTradingFeaturesType(graphene.ObjectType):
     """GraphQL type for swing trading features"""

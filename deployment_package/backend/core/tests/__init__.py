@@ -1,4 +1,1 @@
-"""
-Test suite for core banking functionality
-"""
-
+# Tests package

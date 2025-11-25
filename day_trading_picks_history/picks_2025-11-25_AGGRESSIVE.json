@@ -1,0 +1,132 @@
+{
+  "date": "2025-11-25",
+  "timestamp": "2025-11-25T16:45:16.592591",
+  "mode": "AGGRESSIVE",
+  "picks": [
+    {
+      "symbol": "PYPL",
+      "side": "SHORT",
+      "score": 4.9,
+      "features": {
+        "momentum15m": -0.001,
+        "rvol10m": 2.33,
+        "vwapDist": -0.0001,
+        "breakoutPct": 0.001,
+        "spreadBps": 5.0,
+        "catalystScore": 0.19
+      },
+      "risk": {
+        "atr5m": 0.04,
+        "sizeShares": 100,
+        "stop": 61.43,
+        "targets": [
+          58.1,
+          56.28
+        ],
+        "timeStopMin": 25
+      },
+      "notes": "AGGRESSIVE mode: -0.10% momentum, 2.3x volume"
+    },
+    {
+      "symbol": "SHOP",
+      "side": "LONG",
+      "score": 3.39,
+      "features": {
+        "momentum15m": 0.0038,
+        "rvol10m": 1.38,
+        "vwapDist": 0.0058,
+        "breakoutPct": 0.0038,
+        "spreadBps": 5.0,
+        "catalystScore": 0.76
+      },
+      "risk": {
+        "atr5m": 0.2,
+        "sizeShares": 100,
+        "stop": 153.75,
+        "targets": [
+          162.33,
+          167.02
+        ],
+        "timeStopMin": 25
+      },
+      "notes": "AGGRESSIVE mode: 0.38% momentum, 1.4x volume"
+    },
+    {
+      "symbol": "SOFI",
+      "side": "LONG",
+      "score": 1.78,
+      "features": {
+        "momentum15m": 0.0007,
+        "rvol10m": 0.75,
+        "vwapDist": 0.0085,
+        "breakoutPct": 0.0007,
+        "spreadBps": 5.0,
+        "catalystScore": 0.14
+      },
+      "risk": {
+        "atr5m": 0.03,
+        "sizeShares": 100,
+        "stop": 27.07,
+        "targets": [
+          28.58,
+          29.4
+        ],
+        "timeStopMin": 25
+      },
+      "notes": "AGGRESSIVE mode: 0.07% momentum, 0.7x volume"
+    },
+    {
+      "symbol": "SPOT",
+      "side": "SHORT",
+      "score": 0.78,
+      "features": {
+        "momentum15m": -0.0017,
+        "rvol10m": 0.12,
+        "vwapDist": 0.008,
+        "breakoutPct": 0.0017,
+        "spreadBps": 5.0,
+        "catalystScore": 0.34
+      },
+      "risk": {
+        "atr5m": 1.13,
+        "sizeShares": 100,
+        "stop": 597.83,
+        "targets": [
+          565.44,
+          547.77
+        ],
+        "timeStopMin": 25
+      },
+      "notes": "AGGRESSIVE mode: -0.17% momentum, 0.1x volume"
+    },
+    {
+      "symbol": "BILL",
+      "side": "LONG",
+      "score": 0.46,
+      "features": {
+        "momentum15m": 0.0018,
+        "rvol10m": 0.0,
+        "vwapDist": 0.0039,
+        "breakoutPct": 0.0018,
+        "spreadBps": 5.0,
+        "catalystScore": 0.36
+      },
+      "risk": {
+        "atr5m": 0.07,
+        "sizeShares": 100,
+        "stop": 48.7,
+        "targets": [
+          51.42,
+          52.9
+        ],
+        "timeStopMin": 25
+      },
+      "notes": "AGGRESSIVE mode: 0.18% momentum, 0.0x volume"
+    }
+  ],
+  "metadata": {
+    "asOf": "2025-11-25T21:45:16.520108+00:00",
+    "universeSize": 40,
+    "qualityThreshold": 2.0
+  }
+}
