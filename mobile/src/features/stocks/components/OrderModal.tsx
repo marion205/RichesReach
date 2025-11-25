@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,8 @@ import {
 import Icon from 'react-native-vector-icons/Feather';
 import { OrderForm } from './OrderForm';
 import { OrderFormState, OrderFormActions } from '../hooks/useOrderForm';
+import { PreExecutionRiskCheckModal } from '../../components/common/PreExecutionRiskCheckModal';
+import { LearnWhileTradingModal } from '../../components/common/LearnWhileTradingModal';
 
 const C = {
   bg: '#F5F6FA',
@@ -43,14 +45,36 @@ export const OrderModal: React.FC<OrderModalProps> = ({
   onSBLOCPress,
   form,
 }) => {
+  const [showRiskCheck, setShowRiskCheck] = useState(false);
+  const [showLearnModal, setShowLearnModal] = useState(false);
+  
   const validationError = form.validate();
   const disabled = Boolean(validationError) || isSubmitting;
 
   const handleSubmit = async () => {
     if (!disabled) {
-      await onSubmit();
+      // Show risk check if stop loss is set
+      if (form.orderType === 'stop_loss' && form.stopPrice) {
+        setShowRiskCheck(true);
+      } else {
+        await onSubmit();
+      }
     }
   };
+  
+  const handleRiskCheckConfirm = async () => {
+    setShowRiskCheck(false);
+    await onSubmit();
+  };
+  
+  const currentPrice = quoteData?.tradingQuote
+    ? (form.orderSide === 'buy' ? quoteData.tradingQuote.ask : quoteData.tradingQuote.bid)
+    : 0;
+  const stopPrice = form.stopPrice ? parseFloat(form.stopPrice) : undefined;
+  const quantity = form.quantity ? parseFloat(form.quantity) : 0;
+  const totalRisk = stopPrice && quantity && currentPrice
+    ? Math.abs(currentPrice - stopPrice) * quantity
+    : undefined;
 
   return (
     <Modal
@@ -88,9 +112,44 @@ export const OrderModal: React.FC<OrderModalProps> = ({
             )}
           </TouchableOpacity>
 
+          {/* Help Button */}
+          <TouchableOpacity
+            style={styles.helpButton}
+            onPress={() => setShowLearnModal(true)}
+          >
+            <Icon name="book-open" size={16} color="#007AFF" />
+            <Text style={styles.helpButtonText}>Learn About Trading</Text>
+          </TouchableOpacity>
+
           <View style={{ height: 24 }} />
         </ScrollView>
       </SafeAreaView>
+      
+      {/* Pre-Execution Risk Check Modal */}
+      {form.orderType === 'stop_loss' && stopPrice && (
+        <PreExecutionRiskCheckModal
+          visible={showRiskCheck}
+          onClose={() => setShowRiskCheck(false)}
+          onConfirm={handleRiskCheckConfirm}
+          symbol={form.symbol.toUpperCase()}
+          side={form.orderSide.toUpperCase() as 'BUY' | 'SELL'}
+          quantity={quantity}
+          entryPrice={currentPrice || (form.price ? parseFloat(form.price) : 0)}
+          stopPrice={stopPrice}
+          totalRisk={totalRisk}
+          onLearnMore={() => {
+            setShowRiskCheck(false);
+            setShowLearnModal(true);
+          }}
+        />
+      )}
+      
+      {/* Learn While Trading Modal */}
+      <LearnWhileTradingModal
+        visible={showLearnModal}
+        onClose={() => setShowLearnModal(false)}
+        topic={form.orderType === 'stop_loss' ? 'stop_loss' : undefined}
+      />
     </Modal>
   );
 };
@@ -141,6 +200,24 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '800',
+  },
+  helpButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: '#EFF6FF',
+    marginTop: 16,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  helpButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#007AFF',
   },
 });
 

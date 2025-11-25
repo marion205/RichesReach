@@ -36,6 +36,7 @@ import { GestureEventPayload } from 'react-native-gesture-handler';
 import ConsumerSpendingSurgeChart from '../../../components/charts/ConsumerSpendingSurgeChart';
 import SmartMoneyFlowChart from '../../../components/charts/SmartMoneyFlowChart';
 import { useQuery, gql } from '@apollo/client';
+import { ChartAnnotations } from '../../../components/common/ChartAnnotations';
 
 const { width } = Dimensions.get('window');
 
@@ -561,6 +562,49 @@ const ChartRoute = React.memo(({
               <CandlestickChart.PriceText />
               <CandlestickChart.DatetimeText />
             </CandlestickChart.Provider>
+            
+            {/* Chart Annotations - Example stop loss/entry/target levels */}
+            {(() => {
+              if (!processedData.length || !stockData?.currentPrice) return null;
+              
+              const currentPrice = stockData.currentPrice;
+              const minPrice = Math.min(...processedData.map((d: any) => d.low || d.close || d.price || 0));
+              const maxPrice = Math.max(...processedData.map((d: any) => d.high || d.close || d.price || 0));
+              
+              // Example annotations for educational purposes
+              const exampleAnnotations = [
+                {
+                  price: currentPrice * 0.95,
+                  label: 'Stop Loss',
+                  color: '#EF4444',
+                  type: 'stop' as const,
+                  description: 'A stop loss at 5% below current price limits your maximum loss. This is a common risk management technique for long positions.',
+                },
+                {
+                  price: currentPrice,
+                  label: 'Current',
+                  color: '#007AFF',
+                  type: 'entry' as const,
+                  description: 'Current market price. This is where you would enter a trade if buying now.',
+                },
+                {
+                  price: currentPrice * 1.10,
+                  label: 'Take Profit',
+                  color: '#22C55E',
+                  type: 'target' as const,
+                  description: 'A take profit target at 10% above entry gives you a 2:1 risk/reward ratio (risk 5% to gain 10%).',
+                },
+              ];
+              
+              return (
+                <ChartAnnotations
+                  annotations={exampleAnnotations}
+                  chartHeight={300}
+                  minPrice={minPrice}
+                  maxPrice={maxPrice}
+                />
+              );
+            })()}
             
             {/* Volume Bars Overlay */}
             <View style={styles.volumeContainer}>

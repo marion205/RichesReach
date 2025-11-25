@@ -25,6 +25,10 @@ import { useVoice } from '../../../contexts/VoiceContext';
 import { useNavigation } from '@react-navigation/native';
 import OnboardingGuard from '../../../components/OnboardingGuard';
 import logger from '../../../utils/logger';
+import EducationalTooltip from '../../../components/common/EducationalTooltip';
+import { RiskRewardDiagram } from '../../../components/common/RiskRewardDiagram';
+import { WhyThisTradeModal } from '../../../components/common/WhyThisTradeModal';
+import { LearnWhileTradingModal } from '../../../components/common/LearnWhileTradingModal';
 
 type TradingMode = 'SAFE' | 'AGGRESSIVE';
 type Side = 'LONG' | 'SHORT';
@@ -127,6 +131,8 @@ interface GestureEvent {
 }
 
 export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen: string) => void }) {
+  const [showWhyThisTrade, setShowWhyThisTrade] = useState<DayTradingPick | null>(null);
+  const [showLearnModal, setShowLearnModal] = useState(false);
   const navigation = useNavigation();
   const [mode, setMode] = useState<TradingMode>('SAFE');
   const [refreshing, setRefreshing] = useState(false);
@@ -1075,19 +1081,98 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
           />
         )}
       </View>
+      
+      {/* Why This Trade Modal */}
+      {showWhyThisTrade && (() => {
+        const pick = showWhyThisTrade;
+        const entry = computeEntry(pick);
+        const target = pick.risk?.targets?.[0] ?? entry;
+        const risk = Math.abs(entry - (pick.risk?.stop ?? 0));
+        const reward = Math.abs(target - entry);
+        const rrRatio = risk > 0 ? reward / risk : 0;
+        
+        // Generate trade signals from pick features
+        const signals = [
+          {
+            name: 'Momentum (15m)',
+            value: pick.features?.momentum15m ?? 0,
+            strength: (pick.features?.momentum15m ?? 0) > 0.5 ? 'strong' : (pick.features?.momentum15m ?? 0) > 0.2 ? 'moderate' : 'weak',
+            explanation: `15-minute momentum of ${(pick.features?.momentum15m ?? 0).toFixed(3)} indicates ${pick.side === 'LONG' ? 'upward' : 'downward'} price movement. Higher values suggest stronger momentum.`,
+            color: pick.side === 'LONG' ? '#22C55E' : '#EF4444',
+          },
+          {
+            name: 'Relative Volume',
+            value: `${(pick.features?.rvol10m ?? 0).toFixed(2)}x`,
+            strength: (pick.features?.rvol10m ?? 0) > 2 ? 'strong' : (pick.features?.rvol10m ?? 0) > 1.5 ? 'moderate' : 'weak',
+            explanation: `Volume is ${(pick.features?.rvol10m ?? 0).toFixed(2)}x the average, indicating ${(pick.features?.rvol10m ?? 0) > 1.5 ? 'strong' : 'moderate'} interest. Higher volume confirms price moves.`,
+            color: '#007AFF',
+          },
+          {
+            name: 'VWAP Distance',
+            value: (pick.features?.vwapDist ?? 0).toFixed(3),
+            strength: Math.abs(pick.features?.vwapDist ?? 0) > 0.02 ? 'strong' : Math.abs(pick.features?.vwapDist ?? 0) > 0.01 ? 'moderate' : 'weak',
+            explanation: `Price is ${Math.abs(pick.features?.vwapDist ?? 0).toFixed(3)} away from VWAP. ${pick.side === 'LONG' ? 'Above' : 'Below'} VWAP suggests ${pick.side === 'LONG' ? 'bullish' : 'bearish'} momentum.`,
+            color: '#F59E0B',
+          },
+          {
+            name: 'Breakout Potential',
+            value: `${((pick.features?.breakoutPct ?? 0) * 100).toFixed(1)}%`,
+            strength: (pick.features?.breakoutPct ?? 0) > 0.03 ? 'strong' : (pick.features?.breakoutPct ?? 0) > 0.01 ? 'moderate' : 'weak',
+            explanation: `Breakout potential of ${((pick.features?.breakoutPct ?? 0) * 100).toFixed(1)}% suggests the stock may break through key resistance/support levels.`,
+            color: '#8B5CF6',
+          },
+        ];
+        
+        return (
+          <WhyThisTradeModal
+            visible={true}
+            onClose={() => setShowWhyThisTrade(null)}
+            symbol={pick.symbol}
+            side={pick.side}
+            signals={signals}
+            confidenceScore={pick.score}
+            riskRewardRatio={rrRatio}
+            entryPrice={entry}
+            stopPrice={pick.risk?.stop}
+            targetPrice={target}
+          />
+        );
+      })()}
+      
+      {/* Learn While Trading Modal */}
+      <LearnWhileTradingModal
+        visible={showLearnModal}
+        onClose={() => setShowLearnModal(false)}
+        onNavigateToRiskCoach={() => {
+          setShowLearnModal(false);
+          if (navigateTo) {
+            navigateTo('RiskCoach');
+          }
+        }}
+      />
     </PanGestureHandler>
     </OnboardingGuard>
   );
 }
 
 /* ============ Small subcomponent ============ */
-function KV({ label, value, color }: { label: string; value: string; color?: string }) {
-  return (
+function KV({ label, value, color, tooltip }: { label: string; value: string; color?: string; tooltip?: { term: string; explanation: string } }) {
+  const content = (
     <View style={{ width: '48%', marginBottom: 12 }}>
       <Text style={{ fontSize: 13, color: '#718096' }}>{label}</Text>
       <Text style={{ fontSize: 16, fontWeight: '800', color: color || '#1A202C' }}>{value}</Text>
     </View>
   );
+
+  if (tooltip) {
+    return (
+      <EducationalTooltip term={tooltip.term} explanation={tooltip.explanation} position="top">
+        {content}
+      </EducationalTooltip>
+    );
+  }
+
+  return content;
 }
 
 /* ============ MemoizedPick - Top-level component to prevent recreation ============ */
@@ -1320,12 +1405,65 @@ const MemoizedPick = React.memo(function MemoizedPick({
           <View style={styles.grid}>
             <KV label="Size" value={`${item.risk?.sizeShares ?? 0} shares`} />
             <KV label="Entry" value={`$${(entry ?? 0).toFixed(2)}`} />
-            <KV label="Stop" value={`$${(item.risk?.stop ?? 0).toFixed(2)}`} />
-            <KV label="Target" value={`$${Number(target ?? 0).toFixed(2)}`} />
-            <KV label="Time Stop" value={`${item.risk?.timeStopMin ?? 0} min`} />
-            <KV label="ATR(5m)" value={`${(item.risk?.atr5m ?? 0).toFixed(2)}`} />
+            <KV 
+              label="Stop" 
+              value={`$${(item.risk?.stop ?? 0).toFixed(2)}`}
+              tooltip={{
+                term: "Stop Loss",
+                explanation: "The price where your trade automatically exits to limit loss. This stop is calculated based on 1.5x ATR (Average True Range) for SAFE mode or 2x ATR for AGGRESSIVE mode. ATR measures volatility - higher ATR means the stock moves more, so wider stops are needed to avoid getting stopped out by normal price fluctuations."
+              }}
+            />
+            <KV 
+              label="Target" 
+              value={`$${Number(target ?? 0).toFixed(2)}`}
+              tooltip={{
+                term: "Take Profit Target",
+                explanation: "The price where you should take profit. The risk:reward ratio compares potential profit to potential loss. Aim for at least 2:1 (risk $1 to make $2). This target is calculated based on the stop distance to maintain a good risk:reward ratio."
+              }}
+            />
+            <KV 
+              label="Time Stop" 
+              value={`${item.risk?.timeStopMin ?? 0} min`}
+              tooltip={{
+                term: "Time Stop",
+                explanation: "Exit the trade after this many minutes regardless of price. This prevents holding losing positions too long. For SAFE mode: 45 minutes, for AGGRESSIVE mode: 25 minutes. Time stops help enforce discipline and prevent emotional trading."
+              }}
+            />
+            <KV 
+              label="ATR(5m)" 
+              value={`${(item.risk?.atr5m ?? 0).toFixed(2)}`}
+              tooltip={{
+                term: "ATR (Average True Range)",
+                explanation: "ATR measures volatility over a 5-minute period. Higher ATR means the stock moves more (more volatile). Use ATR to set stop loss distance: 1.5-2x ATR for day trading, 2-3x ATR for swing trading. This ensures stops are wide enough to avoid normal price noise but tight enough to limit losses."
+              }}
+            />
           </View>
         </View>
+
+        {/* Risk/Reward Diagram */}
+        {item.risk?.stop && target && (
+          <View style={{ marginTop: 16, marginBottom: 8 }}>
+            <RiskRewardDiagram
+              entryPrice={entry || item.risk.stop + (item.risk.atr5m || 1)}
+              stopPrice={item.risk.stop}
+              targetPrice={target}
+              side={item.side}
+              showLabels={true}
+              height={180}
+            />
+          </View>
+        )}
+
+        {/* Why This Trade Button */}
+        <TouchableOpacity
+          style={[styles.whyTradeButton, { borderColor: getSideColor(item.side) }]}
+          onPress={() => selectPick(item)}
+        >
+          <Icon name="lightbulb" size={16} color={getSideColor(item.side)} />
+          <Text style={[styles.whyTradeText, { color: getSideColor(item.side) }]}>
+            Why This Trade?
+          </Text>
+        </TouchableOpacity>
 
         {item.notes ? (
           <Text style={[styles.notes, { color: C.sub }]}>{item.notes}</Text>
@@ -1565,6 +1703,23 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   executeBtnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
+  whyTradeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    marginTop: 12,
+    marginBottom: 8,
+    gap: 8,
+    backgroundColor: 'transparent',
+  },
+  whyTradeText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
 
   emptyWrap: { padding: 60, alignItems: 'center', justifyContent: 'center' },
   emptyTitle: { fontSize: 18, fontWeight: '800', textAlign: 'center', marginBottom: 8 },

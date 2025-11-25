@@ -596,6 +596,17 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
                 </Text>
               </TouchableOpacity>
             ))}
+            <TouchableOpacity
+              style={styles.helpTabButton}
+              onPress={() => {
+                // Navigate to learn modal or risk coach
+                if (navigateTo) {
+                  navigateTo('RiskCoach');
+                }
+              }}
+            >
+              <Icon name="book-open" size={16} color="#007AFF" />
+            </TouchableOpacity>
           </View>
 
           {/* Content */}

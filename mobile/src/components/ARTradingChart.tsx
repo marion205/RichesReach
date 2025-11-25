@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useVoice } from '../../contexts/VoiceContext';
 import { useMutation, gql } from '@apollo/client';
+import { PreExecutionRiskCheckModal } from './common/PreExecutionRiskCheckModal';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -97,20 +98,28 @@ const ARTradingChart: React.FC<ARTradingChartProps> = ({
     }
   };
 
+  const [showRiskCheck, setShowRiskCheck] = useState(false);
+  
   const executeTrade = async (side: 'LONG' | 'SHORT') => {
+    // Show risk check before execution
+    setShowRiskCheck(true);
+  };
+  
+  const handleRiskCheckConfirm = async () => {
+    setShowRiskCheck(false);
     try {
       // Haptic feedback
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       
       // Voice confirmation
-      speakText(`${selectedVoice.name}: Executing ${side} trade for ${pick.symbol}`);
+      speakText(`${selectedVoice.name}: Executing ${pick.side} trade for ${pick.symbol}`);
       
       // Place order
       const { data } = await placeOrderMutation({
         variables: {
           input: {
             symbol: pick.symbol,
-            side: side,
+            side: pick.side,
             qty: pick.risk.size_shares,
             type: 'MARKET',
             clientNonce: `${pick.symbol}-${Date.now()}`,
@@ -126,7 +135,7 @@ const ARTradingChart: React.FC<ARTradingChartProps> = ({
         speakText(`Trade executed successfully! Order ID: ${data.placeOrder.id}`);
         
         // Callback
-        onTradeExecuted(pick, side);
+        onTradeExecuted(pick, pick.side);
       }
     } catch (error) {
       console.error('Trade execution failed:', error);
@@ -345,6 +354,22 @@ const ARTradingChart: React.FC<ARTradingChartProps> = ({
           </Text>
         </TouchableOpacity>
       </View>
+      
+      {/* Pre-Execution Risk Check Modal */}
+      {showRiskCheck && (
+        <PreExecutionRiskCheckModal
+          visible={showRiskCheck}
+          onClose={() => setShowRiskCheck(false)}
+          onConfirm={handleRiskCheckConfirm}
+          symbol={pick.symbol}
+          side={pick.side}
+          quantity={pick.risk.size_shares}
+          entryPrice={pick.risk.stop ? pick.risk.stop + (pick.risk.atr_5m || 1) : 0}
+          stopPrice={pick.risk.stop}
+          targetPrice={pick.risk.targets?.[0]}
+          totalRisk={pick.risk.stop ? Math.abs((pick.risk.stop + (pick.risk.atr_5m || 1)) - pick.risk.stop) * pick.risk.size_shares : undefined}
+        />
+      )}
     </View>
   );
 };

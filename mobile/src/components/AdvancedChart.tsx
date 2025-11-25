@@ -23,6 +23,7 @@ import Animated, {
   withSpring,
   runOnJS,
 } from 'react-native-reanimated';
+import EducationalTooltip from './common/EducationalTooltip';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -406,55 +407,79 @@ export const AdvancedChart: React.FC<AdvancedChartProps> = ({
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={styles.indicatorCards}>
               {/* RSI */}
-              <View style={styles.indicatorCard}>
-                <Text style={styles.indicatorLabel}>RSI</Text>
-                <Text style={[
-                  styles.indicatorValue,
-                  { color: getRSIColor(technicalData.rsi) }
-                ]}>
-                  {technicalData.rsi.toFixed(1)}
-                </Text>
-                <Text style={styles.indicatorStatus}>
-                  {technicalData.rsi > 70 ? 'Overbought' : 
-                   technicalData.rsi < 30 ? 'Oversold' : 'Neutral'}
-                </Text>
-              </View>
+              <EducationalTooltip
+                term="RSI (Relative Strength Index)"
+                explanation="RSI measures momentum on a scale of 0-100. Values above 70 indicate overbought conditions (potential sell signal), while values below 30 indicate oversold conditions (potential buy signal). RSI helps identify when a stock may reverse direction. Use with price action confirmation for stronger signals."
+                position="top"
+              >
+                <View style={styles.indicatorCard}>
+                  <Text style={styles.indicatorLabel}>RSI</Text>
+                  <Text style={[
+                    styles.indicatorValue,
+                    { color: getRSIColor(technicalData.rsi) }
+                  ]}>
+                    {technicalData.rsi.toFixed(1)}
+                  </Text>
+                  <Text style={styles.indicatorStatus}>
+                    {technicalData.rsi > 70 ? 'Overbought' : 
+                     technicalData.rsi < 30 ? 'Oversold' : 'Neutral'}
+                  </Text>
+                </View>
+              </EducationalTooltip>
 
               {/* MACD */}
-              <View style={styles.indicatorCard}>
-                <Text style={styles.indicatorLabel}>MACD</Text>
-                <Text style={[
-                  styles.indicatorValue,
-                  { color: getMACDColor(technicalData.macd.macd, technicalData.macd.signal) }
-                ]}>
-                  {technicalData.macd.macd.toFixed(3)}
-                </Text>
-                <Text style={styles.indicatorStatus}>
-                  Signal: {technicalData.macd.signal.toFixed(3)}
-                </Text>
-              </View>
+              <EducationalTooltip
+                term="MACD (Moving Average Convergence Divergence)"
+                explanation="MACD shows momentum and trend changes. When the MACD line crosses above the signal line, it's a bullish signal (buy). When it crosses below, it's bearish (sell). The histogram shows momentum strength. Use MACD with price action confirmation - stronger signals occur when MACD crosses in the direction of the overall trend."
+                position="top"
+              >
+                <View style={styles.indicatorCard}>
+                  <Text style={styles.indicatorLabel}>MACD</Text>
+                  <Text style={[
+                    styles.indicatorValue,
+                    { color: getMACDColor(technicalData.macd.macd, technicalData.macd.signal) }
+                  ]}>
+                    {technicalData.macd.macd.toFixed(3)}
+                  </Text>
+                  <Text style={styles.indicatorStatus}>
+                    Signal: {technicalData.macd.signal.toFixed(3)}
+                  </Text>
+                </View>
+              </EducationalTooltip>
 
               {/* Bollinger Bands */}
-              <View style={styles.indicatorCard}>
-                <Text style={styles.indicatorLabel}>Bollinger</Text>
-                <Text style={styles.indicatorValue}>
-                  {technicalData.bollingerBands.middle.toFixed(2)}
-                </Text>
-                <Text style={styles.indicatorStatus}>
-                  ±{((technicalData.bollingerBands.upper - technicalData.bollingerBands.lower) / 2).toFixed(2)}
-                </Text>
-              </View>
+              <EducationalTooltip
+                term="Bollinger Bands"
+                explanation="Bollinger Bands show price volatility. The middle line is a moving average, with upper and lower bands representing standard deviations. When price touches the upper band, the stock may be overbought (potential sell). When price touches the lower band, it may be oversold (potential buy). Wider bands indicate higher volatility."
+                position="top"
+              >
+                <View style={styles.indicatorCard}>
+                  <Text style={styles.indicatorLabel}>Bollinger</Text>
+                  <Text style={styles.indicatorValue}>
+                    {technicalData.bollingerBands.middle.toFixed(2)}
+                  </Text>
+                  <Text style={styles.indicatorStatus}>
+                    ±{((technicalData.bollingerBands.upper - technicalData.bollingerBands.lower) / 2).toFixed(2)}
+                  </Text>
+                </View>
+              </EducationalTooltip>
 
               {/* Moving Averages */}
-              <View style={styles.indicatorCard}>
-                <Text style={styles.indicatorLabel}>MA 20/50/200</Text>
-                <Text style={styles.indicatorValue}>
-                  {technicalData.movingAverages.sma20.toFixed(2)}
-                </Text>
-                <Text style={styles.indicatorStatus}>
-                  {technicalData.movingAverages.sma50.toFixed(2)} / {technicalData.movingAverages.sma200.toFixed(2)}
-                </Text>
-              </View>
+              <EducationalTooltip
+                term="Moving Averages (MA)"
+                explanation="Moving averages smooth out price data to show trends. When price is above the MA, it indicates an uptrend (buy signal). When price is below, it's a downtrend (sell signal). MA 20 shows short-term trends, MA 50 shows medium-term, and MA 200 shows long-term trends. Golden cross (MA 20 crosses above MA 50) is bullish."
+                position="top"
+              >
+                <View style={styles.indicatorCard}>
+                  <Text style={styles.indicatorLabel}>MA 20/50/200</Text>
+                  <Text style={styles.indicatorValue}>
+                    {technicalData.movingAverages.sma20.toFixed(2)}
+                  </Text>
+                  <Text style={styles.indicatorStatus}>
+                    {technicalData.movingAverages.sma50.toFixed(2)} / {technicalData.movingAverages.sma200.toFixed(2)}
+                  </Text>
+                </View>
+              </EducationalTooltip>
             </View>
           </ScrollView>
         </View>

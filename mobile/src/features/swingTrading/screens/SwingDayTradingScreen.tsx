@@ -5,6 +5,7 @@ import {
 import { useQuery, useMutation } from '@apollo/client';
 import { GET_DAY_TRADING_PICKS, LOG_DAY_TRADING_OUTCOME } from '../../../graphql/dayTrading';
 import Icon from 'react-native-vector-icons/Feather';
+import EducationalTooltip from '../../../components/common/EducationalTooltip';
 
 type Side = 'LONG' | 'SHORT';
 type TradingMode = 'SAFE' | 'AGGRESSIVE';
@@ -141,9 +142,30 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (s: stri
         <Text style={s.sectionTitle}>Risk</Text>
         <View style={s.grid}>
           <KV k="Size" v={`${item.risk.sizeShares} sh`} />
-          <KV k="Stop" v={`$${item.risk.stop.toFixed(2)}`} />
-          <KV k="Target" v={item.risk.targets?.[0] ? `$${item.risk.targets[0].toFixed(2)}` : '—'} />
-          <KV k="Time Stop" v={`${item.risk.timeStopMin}m`} />
+          <KV 
+            k="Stop" 
+            v={`$${item.risk.stop.toFixed(2)}`}
+            tooltip={{
+              term: "Stop Loss",
+              explanation: "The price where your trade automatically exits to limit loss. This stop is calculated based on 1.5x ATR (Average True Range) for SAFE mode or 2x ATR for AGGRESSIVE mode. ATR measures volatility - higher ATR means the stock moves more, so wider stops are needed to avoid getting stopped out by normal price fluctuations."
+            }}
+          />
+          <KV 
+            k="Target" 
+            v={item.risk.targets?.[0] ? `$${item.risk.targets[0].toFixed(2)}` : '—'}
+            tooltip={{
+              term: "Take Profit Target",
+              explanation: "The price where you should take profit. The risk:reward ratio compares potential profit to potential loss. Aim for at least 2:1 (risk $1 to make $2). This target is calculated based on the stop distance to maintain a good risk:reward ratio."
+            }}
+          />
+          <KV 
+            k="Time Stop" 
+            v={`${item.risk.timeStopMin}m`}
+            tooltip={{
+              term: "Time Stop",
+              explanation: "Exit the trade after this many minutes regardless of price. This prevents holding losing positions too long. For SAFE mode: 45 minutes, for AGGRESSIVE mode: 25 minutes. Time stops help enforce discipline and prevent emotional trading."
+            }}
+          />
         </View>
       </View>
 
@@ -203,12 +225,24 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (s: stri
   );
 }
 
-const KV = ({ k, v }: { k: string; v: string }) => (
-  <View style={{ width: '48%', marginBottom: 6 }}>
-    <Text style={{ fontSize: 12, color: C.sub }}>{k}</Text>
-    <Text style={{ fontSize: 14, fontWeight: '700', color: C.text }}>{v}</Text>
-  </View>
-);
+const KV = ({ k, v, tooltip }: { k: string; v: string; tooltip?: { term: string; explanation: string } }) => {
+  const content = (
+    <View style={{ width: '48%', marginBottom: 6 }}>
+      <Text style={{ fontSize: 12, color: C.sub }}>{k}</Text>
+      <Text style={{ fontSize: 14, fontWeight: '700', color: C.text }}>{v}</Text>
+    </View>
+  );
+  
+  if (tooltip) {
+    return (
+      <EducationalTooltip term={tooltip.term} explanation={tooltip.explanation} position="top">
+        {content}
+      </EducationalTooltip>
+    );
+  }
+  
+  return content;
+};
 
 const s = StyleSheet.create({
   header: { backgroundColor: C.card, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.line, padding: 12, marginBottom: 8 },

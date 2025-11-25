@@ -439,30 +439,66 @@ function ResearchBody({ data }: { data: ResearchData }) {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Technical Analysis</Text>
           <View style={styles.metricsGrid}>
-            <View style={styles.metricItem}>
-              <Text style={styles.metricLabel}>RSI (14)</Text>
-              <Text style={styles.metricValue}>{safeNum(technical.rsi)}</Text>
-            </View>
-            <View style={styles.metricItem}>
-              <Text style={styles.metricLabel}>MACD</Text>
-              <Text style={styles.metricValue}>{safeNum(technical.macd)}</Text>
-            </View>
-            <View style={styles.metricItem}>
-              <Text style={styles.metricLabel}>MA 50</Text>
-              <Text style={styles.metricValue}>{safeMoney(technical.movingAverage50)}</Text>
-            </View>
-            <View style={styles.metricItem}>
-              <Text style={styles.metricLabel}>MA 200</Text>
-              <Text style={styles.metricValue}>{safeMoney(technical.movingAverage200)}</Text>
-            </View>
-            <View style={styles.metricItem}>
-              <Text style={styles.metricLabel}>Support</Text>
-              <Text style={styles.metricValue}>{safeMoney(technical.supportLevel)}</Text>
-            </View>
-            <View style={styles.metricItem}>
-              <Text style={styles.metricLabel}>Resistance</Text>
-              <Text style={styles.metricValue}>{safeMoney(technical.resistanceLevel)}</Text>
-            </View>
+            <EducationalTooltip
+              term="RSI (Relative Strength Index)"
+              explanation="RSI measures momentum on a scale of 0-100. Values above 70 indicate overbought conditions (potential sell signal), while values below 30 indicate oversold conditions (potential buy signal). Use with price action confirmation for stronger signals."
+              position="top"
+            >
+              <View style={styles.metricItem}>
+                <Text style={styles.metricLabel}>RSI (14)</Text>
+                <Text style={styles.metricValue}>{safeNum(technical.rsi)}</Text>
+              </View>
+            </EducationalTooltip>
+            <EducationalTooltip
+              term="MACD (Moving Average Convergence Divergence)"
+              explanation="MACD shows momentum and trend changes. When MACD crosses above signal line, it's a bullish signal (buy). When it crosses below, it's bearish (sell). Use MACD with price action confirmation - stronger signals occur when MACD crosses in the direction of the overall trend."
+              position="top"
+            >
+              <View style={styles.metricItem}>
+                <Text style={styles.metricLabel}>MACD</Text>
+                <Text style={styles.metricValue}>{safeNum(technical.macd)}</Text>
+              </View>
+            </EducationalTooltip>
+            <EducationalTooltip
+              term="Moving Average 50"
+              explanation="The 50-day moving average shows the average price over 50 days. When price is above MA 50, it indicates an uptrend (buy signal). When price is below, it's a downtrend (sell signal). MA 50 is a medium-term trend indicator."
+              position="top"
+            >
+              <View style={styles.metricItem}>
+                <Text style={styles.metricLabel}>MA 50</Text>
+                <Text style={styles.metricValue}>{safeMoney(technical.movingAverage50)}</Text>
+              </View>
+            </EducationalTooltip>
+            <EducationalTooltip
+              term="Moving Average 200"
+              explanation="The 200-day moving average shows the long-term trend. When price is above MA 200, it indicates a strong uptrend. When price is below, it's a bearish trend. MA 200 is often used as a major support/resistance level."
+              position="top"
+            >
+              <View style={styles.metricItem}>
+                <Text style={styles.metricLabel}>MA 200</Text>
+                <Text style={styles.metricValue}>{safeMoney(technical.movingAverage200)}</Text>
+              </View>
+            </EducationalTooltip>
+            <EducationalTooltip
+              term="Support Level"
+              explanation="Support is a price level where buying pressure increases, preventing the price from falling further. It's a good place to set stop loss for long positions (below support). Support levels are often tested multiple times - the more times tested, the stronger the support."
+              position="top"
+            >
+              <View style={styles.metricItem}>
+                <Text style={styles.metricLabel}>Support</Text>
+                <Text style={styles.metricValue}>{safeMoney(technical.supportLevel)}</Text>
+              </View>
+            </EducationalTooltip>
+            <EducationalTooltip
+              term="Resistance Level"
+              explanation="Resistance is a price level where selling pressure increases, preventing the price from rising further. It's a good place to set take profit targets or stop loss for short positions (above resistance). Resistance levels are often tested multiple times - breaking through resistance can signal a strong move up."
+              position="top"
+            >
+              <View style={styles.metricItem}>
+                <Text style={styles.metricLabel}>Resistance</Text>
+                <Text style={styles.metricValue}>{safeMoney(technical.resistanceLevel)}</Text>
+              </View>
+            </EducationalTooltip>
           </View>
         </View>
       )}

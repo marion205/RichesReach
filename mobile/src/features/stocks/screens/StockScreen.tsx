@@ -52,6 +52,7 @@ import { useStockSearch } from '../../../shared/hooks/useStockSearch';
 import { useWatchlist, GET_MY_WATCHLIST } from '../../../shared/hooks/useWatchlist';
 import { UI } from '../../../shared/constants';
 import logger from '../../../utils/logger';
+import EducationalTooltip from '../../../components/common/EducationalTooltip';
 
 // Chart data adapter utilities
 const toMs = (t: string | number | Date) =>
@@ -2624,22 +2625,46 @@ placeholderTextColor="#999"
                     Technical Indicators
                   </Text>
                   <View style={{ backgroundColor: '#f8f9fa', padding: 16, borderRadius: 12, marginBottom: 12 }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-                      <Text style={{ color: '#6b7280' }}>RSI (14):</Text>
-                      <Text style={{ fontWeight: '600', color: '#1a1a1a' }}>{rust.technicalIndicators.rsi?.toFixed(2)}</Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-                      <Text style={{ color: '#6b7280' }}>MACD:</Text>
-                      <Text style={{ fontWeight: '600', color: '#1a1a1a' }}>{rust.technicalIndicators.macd?.toFixed(3)}</Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-                      <Text style={{ color: '#6b7280' }}>SMA 20:</Text>
-                      <Text style={{ fontWeight: '600', color: '#1a1a1a' }}>${rust.technicalIndicators.sma20?.toFixed(2)}</Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-                      <Text style={{ color: '#6b7280' }}>SMA 50:</Text>
-                      <Text style={{ fontWeight: '600', color: '#1a1a1a' }}>${rust.technicalIndicators.sma50?.toFixed(2)}</Text>
-                    </View>
+                    <EducationalTooltip
+                      term="RSI (Relative Strength Index)"
+                      explanation="RSI measures momentum on a scale of 0-100. Values above 70 indicate overbought conditions (potential sell signal), while values below 30 indicate oversold conditions (potential buy signal). Use with price action confirmation for stronger signals."
+                      position="top"
+                    >
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <Text style={{ color: '#6b7280' }}>RSI (14):</Text>
+                        <Text style={{ fontWeight: '600', color: '#1a1a1a' }}>{rust.technicalIndicators.rsi?.toFixed(2)}</Text>
+                      </View>
+                    </EducationalTooltip>
+                    <EducationalTooltip
+                      term="MACD (Moving Average Convergence Divergence)"
+                      explanation="MACD shows momentum and trend changes. When MACD crosses above signal line, it's a bullish signal (buy). When it crosses below, it's bearish (sell). Use MACD with price action confirmation - stronger signals occur when MACD crosses in the direction of the overall trend."
+                      position="top"
+                    >
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <Text style={{ color: '#6b7280' }}>MACD:</Text>
+                        <Text style={{ fontWeight: '600', color: '#1a1a1a' }}>{rust.technicalIndicators.macd?.toFixed(3)}</Text>
+                      </View>
+                    </EducationalTooltip>
+                    <EducationalTooltip
+                      term="SMA 20 (Simple Moving Average 20)"
+                      explanation="The 20-day moving average shows short-term trends. When price is above SMA 20, it indicates an uptrend (buy signal). When price is below, it's a downtrend (sell signal). SMA 20 is a short-term trend indicator used for day trading and swing trading."
+                      position="top"
+                    >
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <Text style={{ color: '#6b7280' }}>SMA 20:</Text>
+                        <Text style={{ fontWeight: '600', color: '#1a1a1a' }}>${rust.technicalIndicators.sma20?.toFixed(2)}</Text>
+                      </View>
+                    </EducationalTooltip>
+                    <EducationalTooltip
+                      term="SMA 50 (Simple Moving Average 50)"
+                      explanation="The 50-day moving average shows medium-term trends. When price is above SMA 50, it indicates an uptrend. When price is below, it's a downtrend. SMA 50 is often used as a support/resistance level and for swing trading decisions."
+                      position="top"
+                    >
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <Text style={{ color: '#6b7280' }}>SMA 50:</Text>
+                        <Text style={{ fontWeight: '600', color: '#1a1a1a' }}>${rust.technicalIndicators.sma50?.toFixed(2)}</Text>
+                      </View>
+                    </EducationalTooltip>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
                       <Text style={{ color: '#6b7280' }}>Bollinger Upper:</Text>
                       <Text style={{ fontWeight: '600', color: '#1a1a1a' }}>${rust.technicalIndicators.bollingerUpper?.toFixed(2)}</Text>

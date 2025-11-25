@@ -13,6 +13,8 @@ import {
   validateStopPrice,
 } from '../../../utils/validation';
 import { getMockPrice } from '../constants/mockPrices';
+import EducationalTooltip from '../../../components/common/EducationalTooltip';
+import { RiskRewardDiagram } from '../../../components/common/RiskRewardDiagram';
 
 const C = {
   bg: '#F5F6FA',
@@ -472,7 +474,13 @@ export const OrderForm: React.FC<OrderFormProps> = ({
       {orderType === 'stop_loss' && (
         <View style={{ marginTop: 12 }}>
           <View style={styles.labelRow}>
-            <Text style={styles.inputLabel}>Stop Price</Text>
+            <EducationalTooltip
+              term="Stop Loss"
+              explanation="A stop loss automatically sells your position if the price reaches this level, limiting your maximum loss. For example, if you buy at $100 and set a stop at $95, your maximum loss is $5 per share. Use ATR (Average True Range) to determine stop distance: 1.5-2x ATR for day trading, 2-3x ATR for swing trading."
+              position="top"
+            >
+              <Text style={styles.inputLabel}>Stop Price</Text>
+            </EducationalTooltip>
             {validations.stopPrice.touched && (
               validations.stopPrice.isValid ? (
                 <Icon name="check-circle" size={16} color={C.green} />
@@ -501,6 +509,58 @@ export const OrderForm: React.FC<OrderFormProps> = ({
             <Text style={styles.hintText}>
               Current {orderSide === 'buy' ? 'ask' : 'bid'}: ${orderSide === 'buy' ? quoteData.tradingQuote.ask?.toFixed(2) : quoteData.tradingQuote.bid?.toFixed(2)}
             </Text>
+          )}
+          {/* Risk Preview for Stop Loss */}
+          {stopPrice && quantity && quoteData?.tradingQuote && (
+            <>
+              <View style={styles.riskPreviewCard}>
+                <View style={styles.riskPreviewHeader}>
+                  <Icon name="shield" size={16} color={C.primary} />
+                  <Text style={styles.riskPreviewTitle}>Risk Preview</Text>
+                </View>
+                {(() => {
+                  const currentPrice = orderSide === 'buy' ? quoteData.tradingQuote.ask : quoteData.tradingQuote.bid;
+                  const stopPriceNum = parseFloat(stopPrice) || 0;
+                  const qtyNum = parseFloat(quantity) || 0;
+                  const riskPerShare = Math.abs(currentPrice - stopPriceNum);
+                  const totalRisk = riskPerShare * qtyNum;
+                  return (
+                    <>
+                      <View style={styles.riskPreviewRow}>
+                        <Text style={styles.riskPreviewLabel}>Risk per share:</Text>
+                        <Text style={styles.riskPreviewValue}>${riskPerShare.toFixed(2)}</Text>
+                      </View>
+                      <View style={styles.riskPreviewRow}>
+                        <Text style={styles.riskPreviewLabel}>Total risk:</Text>
+                        <Text style={[styles.riskPreviewValue, { color: C.red }]}>${totalRisk.toFixed(2)}</Text>
+                      </View>
+                    </>
+                  );
+                })()}
+              </View>
+              {/* Risk/Reward Diagram */}
+              {(() => {
+                const currentPrice = orderSide === 'buy' ? quoteData.tradingQuote.ask : quoteData.tradingQuote.bid;
+                const stopPriceNum = parseFloat(stopPrice) || 0;
+                const risk = Math.abs(currentPrice - stopPriceNum);
+                // Calculate target based on 2:1 risk/reward ratio
+                const targetPrice = orderSide === 'buy' 
+                  ? currentPrice + (risk * 2)
+                  : currentPrice - (risk * 2);
+                return (
+                  <View style={{ marginTop: 12 }}>
+                    <RiskRewardDiagram
+                      entryPrice={currentPrice}
+                      stopPrice={stopPriceNum}
+                      targetPrice={targetPrice}
+                      side={orderSide.toUpperCase() as 'BUY' | 'SELL'}
+                      showLabels={true}
+                      height={180}
+                    />
+                  </View>
+                );
+              })()}
+            </>
           )}
         </View>
       )}
@@ -828,6 +888,40 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff',
     marginLeft: 6,
+  },
+  riskPreviewCard: {
+    backgroundColor: '#FEF3C7',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  riskPreviewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  riskPreviewTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#92400E',
+    marginLeft: 6,
+  },
+  riskPreviewRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  riskPreviewLabel: {
+    fontSize: 13,
+    color: '#92400E',
+  },
+  riskPreviewValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#92400E',
   },
 });
 
