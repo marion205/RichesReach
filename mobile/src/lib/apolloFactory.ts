@@ -233,6 +233,29 @@ export function makeApolloClient() {
           const graphQLErrors = error?.graphQLErrors || [];
           const networkError = error?.networkError;
           
+          // Check for authentication errors (401/403) - these should trigger logout
+          const isAuthError = networkError && 'statusCode' in networkError && 
+            ((networkError as any).statusCode === 401 || (networkError as any).statusCode === 403);
+          
+          // Check for auth-related GraphQL errors
+          const hasAuthGraphQLError = graphQLErrors.some((gqlError: any) => {
+            const message = gqlError?.message || '';
+            return message.includes('Signature has expired') || 
+                   message.includes('Token is invalid') ||
+                   message.includes('Authentication credentials were not provided') ||
+                   message.includes('Not authenticated');
+          });
+          
+          // Only handle auth errors - let other errors (400/500) pass through to UI
+          if (isAuthError || hasAuthGraphQLError) {
+            logger.warn('🔐 [Apollo] Authentication error detected - clearing token and logging out');
+            AsyncStorage.removeItem('token').catch((err) => logger.error('Failed to remove token:', err));
+            // Note: Don't navigate here - let the auth context handle it via state changes
+          } else {
+            // For non-auth errors (400/500), just log them - don't bounce to login
+            logger.warn(`⚠️ [Apollo] Non-auth error in ${operation.operationName} - keeping user on current screen`);
+          }
+          
           if (graphQLErrors && graphQLErrors.length > 0) {
             console.log('🔴 GraphQL Errors in', operation.operationName, ':', graphQLErrors);
             graphQLErrors.forEach((gqlError: any, idx: number) => {

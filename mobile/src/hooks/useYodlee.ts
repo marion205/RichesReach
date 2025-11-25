@@ -3,7 +3,7 @@
  * Provides easy access to Yodlee services with state management
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Alert } from 'react-native';
 import yodleeService, { 
   FastLinkSession, 
@@ -177,6 +177,11 @@ export const useYodlee = (): UseYodleeReturn => {
       setIsLoading(false);
     }
   }, [fetchAccounts]);
+
+  // Check availability on mount
+  useEffect(() => {
+    checkAvailability();
+  }, [checkAvailability]);
 
   return {
     // State

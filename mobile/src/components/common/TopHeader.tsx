@@ -7,9 +7,23 @@ interface TopHeaderProps {
   currentScreen: string;
   onNavigate: (screen: string) => void;
   title?: string;
+  navigateTo?: (screen: string, params?: any) => void; // Custom navigation function for shell screens
+  showBackButton?: boolean; // Show back button instead of default buttons
+  onBack?: () => void; // Back button handler
+  hideMicButton?: boolean; // Hide mic button
+  hideProfileButton?: boolean; // Hide profile button
 }
 
-const TopHeader: React.FC<TopHeaderProps> = ({ currentScreen, onNavigate, title }) => {
+const TopHeader: React.FC<TopHeaderProps> = ({ 
+  currentScreen, 
+  onNavigate, 
+  title, 
+  navigateTo,
+  showBackButton = false,
+  onBack,
+  hideMicButton = false,
+  hideProfileButton = false,
+}) => {
   const getScreenTitle = () => {
     if (title) return title;
     
@@ -33,39 +47,67 @@ const TopHeader: React.FC<TopHeaderProps> = ({ currentScreen, onNavigate, title 
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       <View style={styles.content}>
-        <Text style={styles.title}>{getScreenTitle()}</Text>
+        {showBackButton && onBack ? (
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={onBack}
+            accessibilityLabel="Back"
+          >
+            <Feather name="arrow-left" size={24} color="#1C1C1E" />
+          </TouchableOpacity>
+        ) : null}
+        <Text style={[styles.title, showBackButton && styles.titleWithBack]}>{getScreenTitle()}</Text>
         <View style={styles.rightSection}>
-          <TouchableOpacity
-            style={styles.micButton}
-            onPress={() => {
-              try { globalNavigate('Home'); } catch {}
-              setTimeout(() => DeviceEventEmitter.emit('calm_goal_mic'), 150);
-            }}
-            accessibilityLabel="Voice"
-          >
-            <Feather name="mic" size={20} color="#1C1C1E" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.profileButton}
-            onPress={() => {
-              try {
-                // Profile is in HomeStack, use nested navigation
-                globalNavigate('Home', { screen: 'Profile' });
-              } catch {
-                try {
-                  globalNavigate('Profile');
-                } catch {
-                  onNavigate('profile');
+          {!hideMicButton && (
+            <TouchableOpacity
+              style={styles.micButton}
+              onPress={() => {
+                // Try custom navigateTo first (for shell screens), then globalNavigate, then onNavigate
+                if (navigateTo) {
+                  navigateTo('home');
+                } else {
+                  try { 
+                    globalNavigate('Home'); 
+                  } catch {
+                    onNavigate('home');
+                  }
                 }
-              }
-            }}
-          >
-            <Feather
-              name="user"
-              size={24}
-              color={currentScreen === 'profile' ? '#007AFF' : '#8E8E93'}
-            />
-          </TouchableOpacity>
+                setTimeout(() => DeviceEventEmitter.emit('calm_goal_mic'), 150);
+              }}
+              accessibilityLabel="Voice"
+            >
+              <Feather name="mic" size={20} color="#1C1C1E" />
+            </TouchableOpacity>
+          )}
+          {!hideProfileButton && (
+            <TouchableOpacity
+              style={styles.profileButton}
+              onPress={() => {
+                // Try custom navigateTo first (for shell screens), then globalNavigate, then onNavigate
+                if (navigateTo) {
+                  // For shell screens, navigate directly to profile
+                  navigateTo('profile');
+                } else {
+                  try {
+                    // Profile is in HomeStack, use nested navigation
+                    globalNavigate('Home', { screen: 'Profile' });
+                  } catch {
+                    try {
+                      globalNavigate('Profile');
+                    } catch {
+                      onNavigate('profile');
+                    }
+                  }
+                }
+              }}
+            >
+              <Feather
+                name="user"
+                size={24}
+                color={currentScreen === 'profile' ? '#007AFF' : '#8E8E93'}
+              />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     </View>
@@ -106,6 +148,15 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 20,
     backgroundColor: '#F2F2F7',
+  },
+  backButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#F2F2F7',
+    marginRight: 12,
+  },
+  titleWithBack: {
+    marginLeft: 0,
   },
 });
 

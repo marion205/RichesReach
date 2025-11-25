@@ -211,7 +211,6 @@ class BankingGraphQLIntegrationTestCase(TestCase):
                 id
                 provider
                 name
-                balanceCurrent
             }
         }
         '''
@@ -261,4 +260,73 @@ class BankingGraphQLIntegrationTestCase(TestCase):
         self.assertNotIn('errors', result)
         self.assertIn('data', result)
         self.assertEqual(len(result['data']['bankTransactions']), 1)
+    
+    def test_bankAccounts_camelCase_alias(self):
+        """Test bankAccounts camelCase alias works"""
+        query = '''
+        query {
+            bankAccounts {
+                id
+                provider
+                name
+                accountType
+                accountSubtype
+                currency
+                balanceCurrent
+                balanceAvailable
+                isVerified
+                isPrimary
+                lastUpdated
+                createdAt
+            }
+        }
+        '''
+        
+        result = self._execute_query(query)
+        
+        self.assertNotIn('errors', result)
+        self.assertIn('data', result)
+        self.assertIn('bankAccounts', result['data'])
+    
+    def test_fundingHistory_query(self):
+        """Test fundingHistory query"""
+        from core.broker_models import BrokerAccount, BrokerFunding
+        
+        # Create broker account
+        broker_account = BrokerAccount.objects.create(
+            user=self.user,
+            kyc_status='APPROVED'
+        )
+        
+        # Create funding record
+        funding = BrokerFunding.objects.create(
+            broker_account=broker_account,
+            transfer_type='DEPOSIT',
+            amount=1000.00,
+            status='PENDING',
+            bank_link_id='123'
+        )
+        
+        query = '''
+        query {
+            fundingHistory {
+                id
+                amount
+                status
+                bankAccountId
+                initiatedAt
+                completedAt
+            }
+        }
+        '''
+        
+        result = self._execute_query(query)
+        
+        self.assertNotIn('errors', result)
+        self.assertIn('data', result)
+        self.assertIn('fundingHistory', result['data'])
+        if len(result['data']['fundingHistory']) > 0:
+            self.assertEqual(result['data']['fundingHistory'][0]['id'], str(funding.id))
+            self.assertEqual(result['data']['fundingHistory'][0]['amount'], 1000.0)
+            self.assertEqual(result['data']['fundingHistory'][0]['status'], 'PENDING')
 

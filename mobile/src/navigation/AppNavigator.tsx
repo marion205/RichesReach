@@ -385,12 +385,53 @@ export default function AppNavigator() {
   // Removed swipe gesture handler to fix tab navigation
   // Tabs should work with standard React Navigation tab bar
 
+  // Set navigator reference when NavigationContainer is ready
+  const setNavigatorRef = React.useCallback((ref: any) => {
+    navRef.current = ref;
+    if (ref) {
+      // Use setTimeout to ensure ref is fully initialized
+      setTimeout(() => {
+        setNavigator(ref);
+        console.log('✅ NavigationService: Navigator set via ref callback');
+      }, 0);
+    }
+  }, []);
+
   React.useEffect(() => {
-    if (navRef.current) setNavigator(navRef.current);
+    // Try to set navigator immediately
+    if (navRef.current) {
+      setNavigator(navRef.current);
+      console.log('✅ NavigationService: Navigator set in useEffect');
+    }
+    // Also set it after a short delay to ensure it's ready
+    const timeout = setTimeout(() => {
+      if (navRef.current) {
+        setNavigator(navRef.current);
+        console.log('✅ NavigationService: Navigator set in useEffect (delayed)');
+      }
+    }, 50);
+    return () => clearTimeout(timeout);
   }, []);
 
   return (
-    <NavigationContainer ref={navRef} onStateChange={handleStateChange}>
+    <NavigationContainer 
+      ref={setNavigatorRef}
+      onStateChange={handleStateChange}
+      onReady={() => {
+        // onReady is called when NavigationContainer is fully ready
+        if (navRef.current) {
+          setNavigator(navRef.current);
+          console.log('✅ NavigationService: Navigator set on ready (NavigationContainer ready)');
+          // Ensure navigator is definitely set with a small delay
+          setTimeout(() => {
+            if (navRef.current) {
+              setNavigator(navRef.current);
+              console.log('✅ NavigationService: Navigator re-set after onReady delay');
+            }
+          }, 50);
+        }
+      }}
+    >
       <GestureNavigation
         onNavigate={(screen) => {
           const { globalNavigate } = require('../navigation/NavigationService');

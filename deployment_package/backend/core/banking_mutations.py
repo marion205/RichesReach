@@ -3,7 +3,7 @@ GraphQL Mutations for Banking Operations
 """
 import graphene
 import logging
-from .banking_types import BankAccountType, BankTransactionType
+from .banking_types import BankAccountType, BankTransactionType, FundingType
 from .banking_models import BankAccount, BankProviderAccount
 from .yodlee_client import YodleeClient
 from django.utils import timezone
@@ -186,9 +186,216 @@ class SyncBankTransactions(graphene.Mutation):
             )
 
 
+class LinkBankAccountResultType(graphene.ObjectType):
+    """Result type for linkBankAccount mutation"""
+    id = graphene.ID()
+    bankName = graphene.String()
+    accountType = graphene.String()
+    status = graphene.String()
+
+
+class LinkBankAccount(graphene.Mutation):
+    """Link a bank account manually (fallback when Yodlee is not available)"""
+    
+    class Arguments:
+        bank_name = graphene.String(required=True)
+        account_number = graphene.String(required=True)
+        routing_number = graphene.String(required=True)
+        # Also accept camelCase for frontend compatibility
+        bankName = graphene.String()
+        accountNumber = graphene.String()
+        routingNumber = graphene.String()
+    
+    success = graphene.Boolean()
+    message = graphene.String()
+    bank_account = graphene.Field(BankAccountType)
+    bankAccount = graphene.Field(LinkBankAccountResultType)
+    
+    @staticmethod
+    def mutate(root, info, bank_name=None, account_number=None, routing_number=None, 
+               bankName=None, accountNumber=None, routingNumber=None):
+        user = info.context.user
+        if not user.is_authenticated:
+            return LinkBankAccount(
+                success=False,
+                message="Authentication required"
+            )
+        
+        # Support both snake_case and camelCase
+        bank_name = bank_name or bankName
+        account_number = account_number or accountNumber
+        routing_number = routing_number or routingNumber
+        
+        if not bank_name or not account_number or not routing_number:
+            return LinkBankAccount(
+                success=False,
+                message="Missing required fields: bankName, accountNumber, routingNumber"
+            )
+        
+        try:
+            # For manual linking, we create a basic bank account record
+            # In production, this would integrate with ACH verification (micro-deposits)
+            mask = account_number[-4:] if len(account_number) >= 4 else account_number
+            
+            # Check if account already exists
+            existing = BankAccount.objects.filter(
+                user=user,
+                provider=bank_name,
+                mask=mask
+            ).first()
+            
+            if existing:
+                return LinkBankAccount(
+                    success=False,
+                    message="This bank account is already linked",
+                    bank_account=existing,
+                    bankAccount=LinkBankAccountResultType(
+                        id=str(existing.id),
+                        bankName=existing.provider,
+                        accountType=existing.account_type,
+                        status='VERIFIED' if existing.is_verified else 'PENDING'
+                    )
+                )
+            
+            # Create new bank account (unverified until micro-deposits are confirmed)
+            bank_account = BankAccount.objects.create(
+                user=user,
+                provider=bank_name,
+                name=f"{bank_name} Account",
+                mask=mask,
+                account_type='CHECKING',  # Default, could be determined from account number
+                account_subtype='checking',
+                currency='USD',
+                is_verified=False,  # Will be verified after micro-deposits
+                is_primary=False,
+            )
+            
+            logger.info(f"Manually linked bank account {bank_account.id} for user {user.id}")
+            
+            return LinkBankAccount(
+                success=True,
+                message="Bank account linked successfully. Please verify with micro-deposits.",
+                bank_account=bank_account,
+                bankAccount=LinkBankAccountResultType(
+                    id=str(bank_account.id),
+                    bankName=bank_account.provider,
+                    accountType=bank_account.account_type,
+                    status='PENDING'
+                )
+            )
+        
+        except Exception as e:
+            logger.error(f"Error linking bank account: {e}", exc_info=True)
+            return LinkBankAccount(
+                success=False,
+                message=f"Error linking account: {str(e)}"
+            )
+
+
+class InitiateFunding(graphene.Mutation):
+    """Initiate funding transfer from bank account to broker account"""
+    
+    class Arguments:
+        amount = graphene.Float(required=True)
+        bank_account_id = graphene.String(required=True)
+    
+    success = graphene.Boolean()
+    message = graphene.String()
+    funding = graphene.Field(FundingType)
+    
+    @staticmethod
+    def mutate(root, info, amount, bank_account_id):
+        user = info.context.user
+        if not user.is_authenticated:
+            return InitiateFunding(
+                success=False,
+                message="Authentication required"
+            )
+        
+        try:
+            from .broker_models import BrokerAccount, BrokerFunding
+            from datetime import timedelta
+            
+            # Validate amount
+            if amount <= 0:
+                return InitiateFunding(
+                    success=False,
+                    message="Amount must be greater than zero"
+                )
+            
+            # Get user's broker account
+            try:
+                broker_account = BrokerAccount.objects.get(user=user)
+            except BrokerAccount.DoesNotExist:
+                return InitiateFunding(
+                    success=False,
+                    message="Broker account not found. Please complete KYC first."
+                )
+            
+            # Get bank account
+            try:
+                bank_account = BankAccount.objects.get(id=bank_account_id, user=user)
+            except (BankAccount.DoesNotExist, ValueError):
+                return InitiateFunding(
+                    success=False,
+                    message="Bank account not found"
+                )
+            
+            # Check if bank account is verified
+            if not bank_account.is_verified:
+                return InitiateFunding(
+                    success=False,
+                    message="Bank account must be verified before funding"
+                )
+            
+            # Create funding record
+            funding_record = BrokerFunding.objects.create(
+                broker_account=broker_account,
+                bank_link_id=bank_account_id,
+                transfer_type='DEPOSIT',
+                amount=amount,
+                status='PENDING',
+            )
+            
+            # In production, this would:
+            # 1. Call Alpaca API to initiate ACH transfer
+            # 2. Store the transfer ID
+            # 3. Set estimated settlement date (typically 3-5 business days)
+            
+            estimated_completion = timezone.now() + timedelta(days=3)
+            
+            logger.info(f"Initiated funding ${amount} from bank account {bank_account_id} for user {user.id}")
+            
+            from .banking_types import FundingType
+            
+            return InitiateFunding(
+                success=True,
+                message=f"Funding of ${amount:,.2f} initiated successfully",
+                funding=FundingType(
+                    id=str(funding_record.id),
+                    amount=float(amount),
+                    status='PENDING',
+                    estimatedCompletion=estimated_completion.isoformat(),
+                )
+            )
+        
+        except Exception as e:
+            logger.error(f"Error initiating funding: {e}", exc_info=True)
+            return InitiateFunding(
+                success=False,
+                message=f"Error initiating funding: {str(e)}"
+            )
+
+
 class BankingMutations(graphene.ObjectType):
     """GraphQL mutations for banking operations"""
     refresh_bank_account = RefreshBankAccount.Field()
     set_primary_bank_account = SetPrimaryBankAccount.Field()
     sync_bank_transactions = SyncBankTransactions.Field()
+    link_bank_account = LinkBankAccount.Field()
+    # CamelCase alias for frontend compatibility
+    linkBankAccount = LinkBankAccount.Field()
+    initiate_funding = InitiateFunding.Field()
+    # CamelCase alias for frontend compatibility
+    initiateFunding = InitiateFunding.Field()
 

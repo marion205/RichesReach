@@ -177,9 +177,14 @@ class CustomWakeWordService {
       return data.transcript?.toLowerCase() || null;
 
     } catch (error) {
-      logger.error('Transcription error:', error);
-      // Return null on network errors - don't spam the console
+      // Silently handle network errors - Whisper API may not be running
       // The calling code should handle null gracefully
+      // Only log if it's not a network error (unexpected errors)
+      if (error instanceof TypeError && error.message === 'Network request failed') {
+        // Expected - Whisper API not available, don't log
+        return null;
+      }
+      logger.error('Transcription error:', error);
       return null;
     }
   }

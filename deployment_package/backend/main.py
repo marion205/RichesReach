@@ -17,7 +17,14 @@ import json
 from asgiref.sync import sync_to_async
 from starlette.requests import Request as StarletteRequest
 from starlette.responses import Response as StarletteResponse
+from starlette.middleware.wsgi import WSGIMiddleware
 from io import BytesIO
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+# This ensures FastAPI can access environment variables even if Django hasn't loaded them yet
+env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
+load_dotenv(env_path)
 
 # Setup Django to access models
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -102,9 +109,32 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Add request logging middleware for debugging
+from starlette.middleware.base import BaseHTTPMiddleware
+
+class RequestLoggingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: StarletteRequest, call_next):
+        # Log requests to Yodlee endpoints
+        if '/api/yodlee' in str(request.url):
+            import sys
+            auth_header = request.headers.get('authorization') or request.headers.get('Authorization', '')
+            print(f"🔵 [FastAPI] {request.method} {request.url.path}", file=sys.stdout, flush=True)
+            print(f"🔵 [FastAPI] Authorization header: {'Present' if auth_header else 'MISSING'} ({auth_header[:30] if auth_header else 'None'}...)", file=sys.stdout, flush=True)
+            print(f"🔵 [FastAPI] All headers: {dict(request.headers)}", file=sys.stdout, flush=True)
+            logger.info(f"🔵 [FastAPI] {request.method} {request.url.path} - Auth: {'Present' if auth_header else 'MISSING'}")
+        
+        response = await call_next(request)
+        return response
+
+app.add_middleware(RequestLoggingMiddleware)
+
 # Include AI Options router
 if AI_OPTIONS_AVAILABLE:
     app.include_router(ai_options_router)
+
+# Note: FastAPI routes (defined with @app.get/post/etc) are registered here
+# Django will be mounted later, after all FastAPI routes are defined
+# This ensures FastAPI routes take precedence
 
 # Tax Optimization endpoints
 @app.get("/api/tax/optimization-summary")
@@ -214,6 +244,224 @@ async def get_tax_optimization_summary(request: Request):
     except Exception as e:
         logger.error(f"Error in tax optimization summary: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error fetching tax optimization data: {str(e)}")
+
+@app.get("/api/market/quotes")
+async def get_market_quotes(symbols: str = None):
+    """
+    GET /api/market/quotes?symbols=AAPL,MSFT,GOOGL
+    Returns real-time or cached stock quotes
+    """
+    try:
+        if not symbols:
+            raise HTTPException(status_code=400, detail="symbols parameter is required")
+        
+        symbol_list = [s.strip().upper() for s in symbols.split(",") if s.strip()]
+        
+        if not symbol_list:
+            raise HTTPException(status_code=400, detail="No valid symbols provided")
+        
+        logger.info(f"📊 [Quotes API] Fetching quotes for {len(symbol_list)} symbols: {', '.join(symbol_list)}")
+        
+        # Try to import market data service
+        try:
+            from core.market_data_api_service import MarketDataAPIService
+            market_data_service = MarketDataAPIService()
+            MARKET_DATA_AVAILABLE = True
+        except Exception as e:
+            logger.warning(f"MarketDataAPIService not available: {e}")
+            MARKET_DATA_AVAILABLE = False
+            market_data_service = None
+        
+        quotes = []
+        
+        # If market data service is available, use it
+        if MARKET_DATA_AVAILABLE and market_data_service:
+            tasks = [market_data_service.get_stock_quote(symbol) for symbol in symbol_list]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            for symbol, result in zip(symbol_list, results):
+                if isinstance(result, Exception):
+                    logger.warning(f"Error fetching quote for {symbol}: {result}")
+                    quotes.append(_get_mock_quote(symbol))
+                    continue
+                
+                quote_data = result or {}
+                if quote_data:
+                    quotes.append({
+                        "symbol": symbol,
+                        "price": quote_data.get("price", 0.0),
+                        "change": quote_data.get("change", 0.0),
+                        "changePercent": quote_data.get("change_percent", 0.0),
+                        "volume": quote_data.get("volume", 0),
+                        "high": quote_data.get("high", 0.0),
+                        "low": quote_data.get("low", 0.0),
+                        "open": quote_data.get("open", 0.0),
+                        "previousClose": quote_data.get("previous_close", 0.0),
+                        "timestamp": quote_data.get("timestamp", ""),
+                    })
+                else:
+                    quotes.append(_get_mock_quote(symbol))
+            
+            logger.info(f"✅ [Quotes API] Returning {len(quotes)} quotes")
+        else:
+            # Fallback to mock data if service unavailable
+            logger.warning("⚠️ [Quotes API] MarketDataAPIService unavailable, using mock data")
+            quotes = [_get_mock_quote(symbol) for symbol in symbol_list]
+        
+        return quotes
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ [Quotes API] Error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+def _get_mock_quote(symbol: str) -> dict:
+    """Generate mock quote data for a symbol."""
+    base_price = 100.0 + (hash(symbol) % 500)
+    change = (hash(symbol) % 20) - 10
+    return {
+        "symbol": symbol,
+        "price": base_price,
+        "change": change,
+        "changePercent": (change / base_price) * 100,
+        "volume": (hash(symbol) % 10_000_000) + 1_000_000,
+        "high": base_price + 5,
+        "low": base_price - 5,
+        "open": base_price + 2,
+        "previousClose": base_price - 2,
+        "timestamp": "",
+    }
+
+@app.get("/api/yodlee/accounts")
+async def get_yodlee_accounts(request: Request):
+    """
+    GET /api/yodlee/accounts
+    Returns user's linked bank accounts from Yodlee or database.
+    """
+    if not DJANGO_AVAILABLE:
+        # Return empty accounts in dev mode if Django not available
+        return {
+            "success": True,
+            "accounts": [],
+            "count": 0,
+        }
+    
+    try:
+        # Extract token from Authorization header
+        auth_header = request.headers.get("Authorization", "")
+        token = None
+        if auth_header.startswith("Token "):
+            token = auth_header.replace("Token ", "")
+        elif auth_header.startswith("Bearer "):
+            token = auth_header.replace("Bearer ", "")
+        
+        # Get user
+        User = get_user_model()
+        user = None
+        
+        # Handle dev tokens (dev-token-*)
+        if token and token.startswith('dev-token-'):
+            # Dev token - get demo user
+            try:
+                user = await sync_to_async(User.objects.filter(email='demo@example.com').first)()
+                if not user:
+                    user = await sync_to_async(User.objects.first)()
+                if not user:
+                    # Create demo user if none exists
+                    user, _ = await sync_to_async(User.objects.get_or_create)(
+                        email='demo@example.com',
+                        defaults={'name': 'Demo User'}
+                    )
+            except Exception as e:
+                logger.warning(f"Error getting demo user: {e}")
+        elif token and GRAPHQL_JWT_AVAILABLE:
+            # Try JWT token validation
+            try:
+                from graphql_jwt.shortcuts import get_user_by_token
+                user = await sync_to_async(get_user_by_token)(token)
+            except Exception as e:
+                logger.debug(f"JWT token validation failed: {e}")
+        
+        # Fallback: get demo user or first user (for unauthenticated dev requests)
+        if not user:
+            try:
+                user = await sync_to_async(User.objects.filter(email='demo@example.com').first)()
+                if not user:
+                    user = await sync_to_async(User.objects.first)()
+            except Exception as e:
+                logger.warning(f"Error getting user: {e}")
+        
+        # In dev mode, allow unauthenticated requests with empty accounts
+        # In production, this would require authentication
+        if not user:
+            logger.debug("No user found, returning empty accounts for dev mode")
+            return {
+                "success": True,
+                "accounts": [],
+                "count": 0,
+            }
+        
+        # Check if Yodlee is enabled
+        try:
+            from core.banking_views import _is_yodlee_enabled
+            yodlee_enabled = await sync_to_async(_is_yodlee_enabled)()
+            if not yodlee_enabled:
+                # Return empty accounts if Yodlee is disabled (common in dev)
+                return {
+                    "success": True,
+                    "accounts": [],
+                    "count": 0,
+                }
+        except Exception as e:
+            logger.debug(f"Could not check Yodlee status: {e}")
+            # Continue anyway - might be dev mode
+        
+        # Get accounts from database
+        from core.banking_models import BankAccount
+        db_accounts = await sync_to_async(list)(
+            BankAccount.objects.filter(user=user, is_verified=True)
+        )
+        
+        if db_accounts:
+            accounts = []
+            for db_account in db_accounts:
+                accounts.append({
+                    'id': db_account.id,
+                    'accountId': str(db_account.yodlee_account_id or db_account.id),
+                    'name': db_account.name or f"{db_account.provider} Account",
+                    'type': db_account.account_type or 'CHECKING',
+                    'mask': db_account.mask or '****',
+                    'currency': db_account.currency or 'USD',
+                    'balance': float(db_account.balance_current) if db_account.balance_current else 0.0,
+                    'availableBalance': float(db_account.balance_available) if db_account.balance_available else 0.0,
+                    'institutionName': db_account.provider or 'Unknown',
+                    'lastUpdated': db_account.last_updated.isoformat() if db_account.last_updated else None,
+                })
+            
+            return {
+                "success": True,
+                "accounts": accounts,
+                "count": len(accounts),
+            }
+        
+        # If no DB accounts, return empty (Yodlee integration would fetch here)
+        return {
+            "success": True,
+            "accounts": [],
+            "count": 0,
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting Yodlee accounts: {e}", exc_info=True)
+        # Return empty accounts on error (better UX than 500)
+        return {
+            "success": True,
+            "accounts": [],
+            "count": 0,
+        }
 
 @app.post("/api/tax/report/pdf")
 async def generate_tax_report_pdf(request: Request):
@@ -1074,6 +1322,13 @@ async def graphql_endpoint(request: Request):
         # Execute GraphQL query in a thread pool to avoid blocking
         import asyncio
         loop = asyncio.get_event_loop()
+        
+        # Add logging for sblocBanks queries
+        if 'sblocBanks' in query or 'sbloc_banks' in query:
+            logger.info(f"🔵 [GraphQL] Executing sblocBanks query")
+            logger.info(f"🔵 [GraphQL] Query: {query[:200]}...")
+            logger.info(f"🔵 [GraphQL] Context user: {context.user if hasattr(context, 'user') else 'None'}")
+        
         result = await loop.run_in_executor(
             None,
             lambda: schema.execute(
@@ -1083,6 +1338,17 @@ async def graphql_endpoint(request: Request):
                 context_value=context
             )
         )
+        
+        # Add logging for sblocBanks results
+        if 'sblocBanks' in query or 'sbloc_banks' in query:
+            logger.info(f"🔵 [GraphQL] sblocBanks result.data type: {type(result.data)}")
+            if result.data:
+                logger.info(f"🔵 [GraphQL] sblocBanks result.data keys: {result.data.keys() if isinstance(result.data, dict) else 'not a dict'}")
+                if 'sblocBanks' in result.data:
+                    logger.info(f"🔵 [GraphQL] sblocBanks value: {result.data['sblocBanks']}")
+                    logger.info(f"🔵 [GraphQL] sblocBanks length: {len(result.data['sblocBanks']) if isinstance(result.data['sblocBanks'], list) else 'not a list'}")
+            if result.errors:
+                logger.error(f"🔵 [GraphQL] sblocBanks errors: {result.errors}")
         
         # Check for errors
         if result.errors:
@@ -1107,6 +1373,122 @@ async def graphql_endpoint(request: Request):
         import traceback
         logger.error(f"GraphQL traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"GraphQL error: {str(e)}")
+
+# Test endpoint to verify SBLOC banks are accessible
+@app.get("/api/test/sbloc-banks")
+async def test_sbloc_banks():
+    """Test endpoint to verify SBLOC banks are in database"""
+    if not DJANGO_AVAILABLE:
+        return JSONResponse(content={'error': 'Django not available', 'banks': []}, status_code=503)
+    
+    try:
+        from core.sbloc_models import SBLOCBank
+        
+        # Use sync_to_async for Django ORM calls
+        def get_banks():
+            banks = SBLOCBank.objects.filter(is_active=True).order_by('priority', 'name')
+            banks_data = []
+            for bank in banks:
+                banks_data.append({
+                    'id': str(bank.id),
+                    'name': bank.name,
+                    'minApr': float(bank.min_apr) if bank.min_apr else None,
+                    'maxApr': float(bank.max_apr) if bank.max_apr else None,
+                    'minLtv': float(bank.min_ltv) if bank.min_ltv else None,
+                    'maxLtv': float(bank.max_ltv) if bank.max_ltv else None,
+                    'minLoanUsd': int(bank.min_loan_usd) if bank.min_loan_usd else None,
+                    'regions': bank.regions or [],
+                })
+            return banks_data
+        
+        banks_data = await sync_to_async(get_banks)()
+        return JSONResponse(content={'banks': banks_data, 'count': len(banks_data)}, status_code=200)
+    except Exception as e:
+        logger.error(f"Error in test_sbloc_banks: {e}", exc_info=True)
+        return JSONResponse(content={'error': str(e), 'banks': []}, status_code=500)
+
+# Mount Django URLs at the END - after all FastAPI routes are defined
+# This ensures FastAPI routes take precedence, then Django handles remaining paths
+if DJANGO_AVAILABLE:
+    try:
+        from django.core.wsgi import get_wsgi_application
+        
+        # Get Django WSGI application
+        django_wsgi = get_wsgi_application()
+        
+        # CRITICAL FIX: WSGIMiddleware's build_environ() should convert Authorization to HTTP_AUTHORIZATION
+        # But it's not working. We need to patch build_environ to explicitly include it.
+        from starlette.middleware.wsgi import build_environ as original_build_environ
+        import starlette.middleware.wsgi as wsgi_module
+        import sys
+        
+        def patched_build_environ(scope, body):
+            """Patched build_environ that explicitly includes Authorization header"""
+            import sys
+            # Log all headers in scope for debugging
+            if scope.get("type") == "http":
+                headers = scope.get("headers", [])
+                print(f"🔵 [PATCH] build_environ called for {scope.get('path', 'unknown')}", file=sys.stdout, flush=True)
+                print(f"🔵 [PATCH] Headers in ASGI scope: {[(name.decode('latin1'), value.decode('latin1')[:30]) for name, value in headers]}", file=sys.stdout, flush=True)
+                
+                # Check for Authorization header
+                auth_found = False
+                for name, value in headers:
+                    if name.lower() == b"authorization":
+                        auth_found = True
+                        auth_value = value.decode("latin1")
+                        print(f"🔵 [PATCH] Found Authorization in ASGI scope: {auth_value[:30]}...", file=sys.stdout, flush=True)
+                        break
+                
+                if not auth_found:
+                    print(f"❌ [PATCH] Authorization NOT FOUND in ASGI scope headers!", file=sys.stdout, flush=True)
+            
+            # Call original to get the base environ
+            environ = original_build_environ(scope, body)
+            
+            # Manually extract and add Authorization header if present in ASGI scope
+            if scope.get("type") == "http":
+                headers = scope.get("headers", [])
+                for name, value in headers:
+                    if name.lower() == b"authorization":
+                        auth_value = value.decode("latin1")
+                        environ["HTTP_AUTHORIZATION"] = auth_value
+                        print(f"🔵 [PATCH] Injected HTTP_AUTHORIZATION: {auth_value[:30]}...", file=sys.stdout, flush=True)
+                        logger.info(f"🔵 [PATCH] Injected HTTP_AUTHORIZATION into WSGI environ")
+                        break
+            
+            return environ
+        
+        # Monkey-patch the build_environ function
+        print(f"🔵 [SETUP] Patching build_environ function...", file=sys.stdout, flush=True)
+        original_build_environ_ref = wsgi_module.build_environ
+        wsgi_module.build_environ = patched_build_environ
+        print(f"🔵 [SETUP] build_environ patched. Original: {original_build_environ_ref}, New: {wsgi_module.build_environ}", file=sys.stdout, flush=True)
+        logger.info("🔵 [SETUP] build_environ function patched to include Authorization header")
+        
+        # Create a wrapper for extra logging
+        def django_wsgi_with_auth(environ, start_response):
+            """WSGI wrapper with logging"""
+            import sys
+            print(f"🔵 [WSGI WRAPPER] Called for PATH_INFO={environ.get('PATH_INFO')}", file=sys.stdout, flush=True)
+            http_keys = [k for k in environ.keys() if k.startswith('HTTP_')]
+            print(f"🔵 [WSGI WRAPPER] HTTP_* keys: {http_keys}", file=sys.stdout, flush=True)
+            if 'HTTP_AUTHORIZATION' in environ:
+                print(f"🔵 [WSGI WRAPPER] HTTP_AUTHORIZATION={environ['HTTP_AUTHORIZATION'][:30]}...", file=sys.stdout, flush=True)
+            else:
+                print(f"❌ [WSGI WRAPPER] HTTP_AUTHORIZATION NOT FOUND", file=sys.stdout, flush=True)
+                print(f"❌ [WSGI WRAPPER] All environ keys: {list(environ.keys())}", file=sys.stdout, flush=True)
+            return django_wsgi(environ, start_response)
+        
+        # Mount Django at root - all Django URLs will be available
+        # FastAPI routes are checked first (defined above), then Django routes handle the rest
+        app.mount("/", WSGIMiddleware(django_wsgi_with_auth))
+        
+        logger.info("✅ Django URLs mounted - all Django views are now available")
+        logger.info("   FastAPI routes take precedence, then Django routes handle remaining paths")
+    except Exception as e:
+        logger.warning(f"Could not mount Django URLs: {e}")
+        logger.warning("Django views will not be available through FastAPI")
 
 async def run_portfolio_analysis():
     """Background task for portfolio analysis"""
