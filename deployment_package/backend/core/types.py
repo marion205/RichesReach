@@ -1051,11 +1051,31 @@ class MacroType(graphene.ObjectType):
     riskAppetite = graphene.Float()
 
 
-class MarketRegimeType(graphene.ObjectType):
-    """Market regime analysis"""
+class ResearchMarketRegimeType(graphene.ObjectType):
+    """Market regime analysis for research hub"""
     market_regime = graphene.String()
+    marketRegime = graphene.String(name='marketRegime')  # Explicit GraphQL field name
     confidence = graphene.Float()
     recommended_strategy = graphene.String()
+    recommendedStrategy = graphene.String(name='recommendedStrategy')  # Explicit GraphQL field name
+    
+    def resolve_market_regime(self, info):
+        """Resolve snake_case field"""
+        return getattr(self, 'market_regime', None) or getattr(self, 'marketRegime', None)
+    
+    def resolve_marketRegime(self, info):
+        """Resolve camelCase alias for market_regime"""
+        # Access the underlying snake_case attribute (set when object is instantiated)
+        return getattr(self, 'market_regime', None) or getattr(self, 'marketRegime', None)
+    
+    def resolve_recommended_strategy(self, info):
+        """Resolve snake_case field"""
+        return getattr(self, 'recommended_strategy', None) or getattr(self, 'recommendedStrategy', None)
+    
+    def resolve_recommendedStrategy(self, info):
+        """Resolve camelCase alias for recommended_strategy"""
+        # Access the underlying snake_case attribute (set when object is instantiated)
+        return getattr(self, 'recommended_strategy', None) or getattr(self, 'recommendedStrategy', None)
 
 
 class ResearchHubType(graphene.ObjectType):
@@ -1066,6 +1086,6 @@ class ResearchHubType(graphene.ObjectType):
     technical = graphene.Field(TechnicalType)
     sentiment = graphene.Field(SentimentType)
     macro = graphene.Field(MacroType)
-    marketRegime = graphene.Field(MarketRegimeType)
+    marketRegime = graphene.Field(ResearchMarketRegimeType)
     peers = graphene.List(graphene.String)
     updatedAt = graphene.String()

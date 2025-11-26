@@ -12,8 +12,8 @@ import {
 import Icon from 'react-native-vector-icons/Feather';
 import { OrderForm } from './OrderForm';
 import { OrderFormState, OrderFormActions } from '../hooks/useOrderForm';
-import { PreExecutionRiskCheckModal } from '../../components/common/PreExecutionRiskCheckModal';
-import { LearnWhileTradingModal } from '../../components/common/LearnWhileTradingModal';
+import { PreExecutionRiskCheckModal } from '../../../components/common/PreExecutionRiskCheckModal';
+import { LearnWhileTradingModal } from '../../../components/common/LearnWhileTradingModal';
 
 const C = {
   bg: '#F5F6FA',

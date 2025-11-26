@@ -18,6 +18,7 @@ children: React.ReactNode;
 position?: 'top' | 'bottom' | 'left' | 'right';
 maxWidth?: number;
 style?: any;
+hideExternalIcon?: boolean;
 }
 const EducationalTooltip: React.FC<EducationalTooltipProps> = ({
 term,
@@ -26,6 +27,7 @@ children,
 position = 'top',
 maxWidth = 280,
 style,
+hideExternalIcon = false,
 }) => {
 const [showTooltip, setShowTooltip] = useState(false);
 const [tooltipAnimation] = useState(new Animated.Value(0));
@@ -49,7 +51,15 @@ setShowTooltip(false);
 };
 return (
 <View style={[styles.container, style]}>
+<TouchableOpacity
+onPress={showTooltipWithAnimation}
+onLongPress={showTooltipWithAnimation}
+activeOpacity={0.7}
+style={styles.touchableContent}
+>
 {children}
+</TouchableOpacity>
+{!hideExternalIcon && (
 <TouchableOpacity
 onPress={showTooltipWithAnimation}
 onLongPress={showTooltipWithAnimation}
@@ -58,6 +68,7 @@ style={styles.infoIcon}
 >
 <Icon name="info" size={12} color="#007AFF" />
 </TouchableOpacity>
+)}
 <Modal
 visible={showTooltip}
 transparent={true}
@@ -104,6 +115,9 @@ style={styles.closeButton}
 const styles = StyleSheet.create({
 container: {
 position: 'relative',
+},
+touchableContent: {
+width: '100%',
 },
 infoIcon: {
 position: 'absolute',

@@ -83,7 +83,6 @@ export const WhyThisTradeModal: React.FC<WhyThisTradeModalProps> = ({
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerContent}>
-            <Icon name="lightbulb" size={24} color="#007AFF" />
             <Text style={styles.title}>Why This Trade?</Text>
           </View>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>

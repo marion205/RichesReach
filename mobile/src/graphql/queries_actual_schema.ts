@@ -586,9 +586,9 @@ export const RESEARCH_HUB = gql`
         riskAppetite
       }
       marketRegime {
-        market_regime
+        marketRegime
         confidence
-        recommended_strategy
+        recommendedStrategy
       }
       peers
       updatedAt

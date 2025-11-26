@@ -344,7 +344,7 @@ const RESEARCH_QUERY = gql`
       sentiment {
         sentiment_label: label
         sentiment_score: score
-        article_count
+        articleCount
         confidence
       }
       macro {
@@ -353,9 +353,9 @@ const RESEARCH_QUERY = gql`
         risk_appetite: riskAppetite
       }
       marketRegime {
-        market_regime
+        marketRegime
         confidence
-        recommended_strategy
+        recommendedStrategy
       }
       peers
       updatedAt
@@ -366,47 +366,13 @@ const RESEARCH_QUERY = gql`
 const CHART_QUERY = gql`
   query Chart(
     $symbol: String!,
-    $tf: String = "1D",
-    $iv: String = "1D",
-    $limit: Int = 180,
-    $inds: [String!] = ["SMA20","SMA50","EMA12","EMA26","RSI","MACD","MACDHist","BB"]
+    $tf: String = "1D"
   ) {
     stockChartData(
       symbol: $symbol,
-      timeframe: $tf,
-      interval: $iv,
-      limit: $limit,
-      indicators: $inds
-    ) {
-      symbol
-      interval
-      limit
-      currentPrice
-      change
-      changePercent
-      data {
-        timestamp
-        open
-        high
-        low
-        close
-        volume
-      }
-      indicators {
-        SMA20
-        SMA50
-        EMA12
-        EMA26
-        BBUpper
-        BBMiddle
-        BBLower
-        RSI14
-        MACD
-        MACDSignal
-        MACDHist
-      }
-}
-}
+      timeframe: $tf
+    )
+  }
 `;
 
 // Helper functions to get market data for symbols
@@ -804,6 +770,14 @@ interface OptionOrder {
           supportLevel: basePrice * 0.92,
           resistanceLevel: basePrice * 1.08,
         },
+        technicals: {  // Add plural alias for compatibility
+          rsi: 55.5,
+          macd: 2.3,
+          movingAverage50: basePrice * 0.98,
+          movingAverage200: basePrice * 0.95,
+          supportLevel: basePrice * 0.92,
+          resistanceLevel: basePrice * 1.08,
+        },
         sentiment: {
           label: 'BULLISH',
           score: 65.5,
@@ -816,9 +790,9 @@ interface OptionOrder {
           riskAppetite: 0.65,
         },
         marketRegime: {
-          market_regime: 'Bull Market',
+          marketRegime: 'Bull Market',
           confidence: 0.72,
-          recommended_strategy: 'Momentum',
+          recommendedStrategy: 'Momentum',
         },
       },
     };
@@ -2160,24 +2134,42 @@ placeholderTextColor="#999"
               <View style={styles.metricsGrid}>
                 <View style={styles.metricCard}>
                   <Text style={styles.metricTitle}>Technicals</Text>
-                  <View style={styles.metricItem}>
-                    <Text style={styles.metricLabel}>RSI (14)</Text>
-                    <Text style={styles.metricValue}>
-                      {safeFixed(effectiveResearchData.researchHub.technicals?.rsi, 1)}
-                    </Text>
-                  </View>
-                  <View style={styles.metricItem}>
-                    <Text style={styles.metricLabel}>MACD</Text>
-                    <Text style={styles.metricValue}>
-                      {safeFixed(effectiveResearchData.researchHub?.technicals?.macd, 3)}
-                    </Text>
-                  </View>
-                  <View style={styles.metricItem}>
-                    <Text style={styles.metricLabel}>MA 50</Text>
-                    <Text style={styles.metricValue}>
-                      {safeMoney(effectiveResearchData.researchHub?.technicals?.movingAverage50)}
-                    </Text>
-                  </View>
+                  <EducationalTooltip
+                    term="RSI (Relative Strength Index)"
+                    explanation="RSI measures momentum on a scale of 0-100. Values above 70 indicate overbought conditions (potential sell signal), while values below 30 indicate oversold conditions (potential buy signal). Use with price action confirmation for stronger signals."
+                    position="top"
+                  >
+                    <View style={styles.metricItem}>
+                      <Text style={styles.metricLabel}>RSI (14)</Text>
+                      <Text style={styles.metricValue}>
+                        {safeFixed(effectiveResearchData.researchHub.technicals?.rsi, 1)}
+                      </Text>
+                    </View>
+                  </EducationalTooltip>
+                  <EducationalTooltip
+                    term="MACD (Moving Average Convergence Divergence)"
+                    explanation="MACD shows momentum and trend changes. When MACD crosses above signal line, it's a bullish signal (buy). When it crosses below, it's bearish (sell). Use MACD with price action confirmation - stronger signals occur when MACD crosses in the direction of the overall trend."
+                    position="top"
+                  >
+                    <View style={styles.metricItem}>
+                      <Text style={styles.metricLabel}>MACD</Text>
+                      <Text style={styles.metricValue}>
+                        {safeFixed(effectiveResearchData.researchHub?.technicals?.macd, 3)}
+                      </Text>
+                    </View>
+                  </EducationalTooltip>
+                  <EducationalTooltip
+                    term="Moving Average 50"
+                    explanation="The 50-day moving average shows the average price over 50 days. When price is above MA 50, it indicates an uptrend (buy signal). When price is below, it's a downtrend (sell signal). MA 50 is a medium-term trend indicator."
+                    position="top"
+                  >
+                    <View style={styles.metricItem}>
+                      <Text style={styles.metricLabel}>MA 50</Text>
+                      <Text style={styles.metricValue}>
+                        {safeMoney(effectiveResearchData.researchHub?.technicals?.movingAverage50)}
+                      </Text>
+                    </View>
+                  </EducationalTooltip>
                 </View>
 
                 <View style={styles.metricCard}>

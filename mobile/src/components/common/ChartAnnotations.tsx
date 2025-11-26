@@ -72,7 +72,11 @@ export const ChartAnnotations: React.FC<ChartAnnotationsProps> = ({
               size={14} 
               color={annotation.color} 
             />
-            <Text style={[styles.annotationLabel, { color: annotation.color }]}>
+            <Text 
+              style={[styles.annotationLabel, { color: annotation.color }]}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
               {annotation.label}
             </Text>
             <Text style={styles.annotationPrice}>
@@ -131,12 +135,13 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1.5,
     gap: 6,
-    minWidth: 100,
+    minWidth: 120,
+    maxWidth: 200,
   },
   annotationLabel: {
     fontSize: 11,
     fontWeight: '700',
-    flex: 1,
+    flexShrink: 0,
   },
   annotationPrice: {
     fontSize: 10,

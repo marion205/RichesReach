@@ -190,7 +190,7 @@ function ExecutionSuggestionCardComponent({ suggestion, isRefreshing = false }: 
         {/* Rationale - Always show prominently since it contains the main info */}
         {suggestion.rationale && (
           <View style={styles.rationaleRow}>
-            <Icon name="lightbulb" size={14} color={C.warning} />
+            <Icon name="info" size={14} color={C.primary} />
             <Text style={styles.rationaleText}>{suggestion.rationale}</Text>
           </View>
         )}
