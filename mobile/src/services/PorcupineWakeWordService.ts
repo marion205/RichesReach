@@ -7,6 +7,7 @@ import logger from '../utils/logger';
  * Handles "Hey Riches" wake word detection using Picovoice Porcupine
  * 
  * NOTE: This requires a development build - does NOT work in Expo Go
+ * NOTE: Requires @picovoice/react-native-voice-processor to be installed
  */
 class PorcupineWakeWordService {
   private porcupineManager: any = null;
@@ -28,8 +29,30 @@ class PorcupineWakeWordService {
     }
 
     try {
-      // Dynamically import Porcupine (only works in dev builds)
-      const { PorcupineManager } = require('@picovoice/porcupine-react-native');
+      // Import Porcupine - dependency is now installed
+      let PorcupineManager: any;
+      
+      try {
+        // Try to require Porcupine - should work now that dependencies are installed
+        const porcupineModule = require('@picovoice/porcupine-react-native');
+        PorcupineManager = porcupineModule?.PorcupineManager;
+      } catch (importError: any) {
+        // Handle any import errors gracefully
+        const errorMsg = importError?.message || String(importError);
+        if (errorMsg.includes('@picovoice/react-native-voice-processor') || 
+            errorMsg.includes('MODULE_NOT_FOUND') ||
+            errorMsg.includes('Unable to resolve')) {
+          logger.log('ℹ️ Porcupine dependencies not available (using fallback services)');
+          return false;
+        }
+        logger.error('❌ Unexpected error loading Porcupine:', importError);
+        return false;
+      }
+      
+      if (!PorcupineManager) {
+        logger.warn('⚠️ PorcupineManager not found in package');
+        return false;
+      }
       
       logger.log('🎤 Initializing Porcupine wake word detection...');
       

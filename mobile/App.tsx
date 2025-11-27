@@ -1,6 +1,5 @@
-// This file was temporarily used as a backend health checker
-// The real app is in src/App.tsx
-// To use the health checker, import it as a screen in src/App.tsx instead
-// For now, we'll just re-export the real app
+// This file re-exports the main App component from src/App.tsx
+// This ensures Expo's AppEntry.js can find the App component
 
-export { default } from './src/App';
+import App from './src/App';
+export default App;

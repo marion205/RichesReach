@@ -11,7 +11,7 @@
       },
       "ios": {
         "simulator": false,
-        "image": "macos-sonoma-14.6-xcode-16.1"
+        "resourceClass": "m1-medium"
       }
     },
     "simulator": {

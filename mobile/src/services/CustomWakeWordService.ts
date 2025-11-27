@@ -289,18 +289,26 @@ class CustomWakeWordService {
 
       if (this.recording) {
         try {
-          const status = await this.recording.getStatusAsync();
-          if (status.isRecording) {
-            await this.recording.stopAndUnloadAsync();
-          } else {
+          // Check if recording object has the required methods
+          if (typeof this.recording.getStatusAsync === 'function') {
+            const status = await this.recording.getStatusAsync();
+            if (status.isRecording && typeof this.recording.stopAndUnloadAsync === 'function') {
+              await this.recording.stopAndUnloadAsync();
+            } else if (typeof this.recording.unloadAsync === 'function') {
+              await this.recording.unloadAsync();
+            }
+          } else if (typeof this.recording.unloadAsync === 'function') {
+            // If getStatusAsync doesn't exist, try to unload directly
             await this.recording.unloadAsync();
           }
         } catch (e) {
           // Try to unload even if stop failed
-          try {
-            await this.recording.unloadAsync();
-          } catch (e2) {
-            logger.warn('Could not unload recording:', e2);
+          if (this.recording && typeof this.recording.unloadAsync === 'function') {
+            try {
+              await this.recording.unloadAsync();
+            } catch (e2) {
+              logger.warn('Could not unload recording:', e2);
+            }
           }
         }
         this.recording = null;

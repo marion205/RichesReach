@@ -1,178 +1,35 @@
 // LiveStreamCamera.tsx
-import React, { useEffect, useRef, useState, useCallback, useMemo, memo } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet, Alert, Platform } from 'react-native';
+import React, {
+  useEffect,
+  useRef,
+  useState,
+  useCallback,
+  useMemo,
+  memo,
+} from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ActivityIndicator,
+  StyleSheet,
+  Alert,
+} from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
+import {
+  CameraView,
+  useCameraPermissions,
+  useMicrophonePermissions,
+} from 'expo-camera';
+import * as MediaLibrary from 'expo-media-library';
+import * as Battery from 'expo-battery';
+import loggerBase from '../utils/logger';
 
-// Conditionally import expo-camera (may not be available in all environments)
-// Provide stub hooks that are always available to satisfy React's rules of hooks
-let CameraView: any = null;
-let useCameraPermissions: any = null;
-let useMicrophonePermissions: any = null;
-let CameraType: any = null;
-let MediaLibrary: any = null;
-let Battery: any = null;
-let cameraModuleLoaded = false;
-
-// Stub hooks will be created inside the component where React is available
-
-// Try to load camera module (but handle errors gracefully - expo-camera may not be installed)
-// This is wrapped in a function that only runs when needed, not at module load time
-// IMPORTANT: Never require expo-camera at module load time - it will crash if native module isn't linked
-const loadCameraModule = () => {
-  if (cameraModuleLoaded) return;
-  
-  try {
-    // Check if require is available
-    if (typeof require === 'undefined') {
-      return;
-    }
-    
-    // Use dynamic import with error handling
-    // This prevents the error from propagating if the module doesn't exist
-    const expoCameraModule = (() => {
-      try {
-        return require('expo-camera');
-      } catch (e) {
-        // Native module not available - this is OK
-        return null;
-      }
-    })();
-    
-    if (expoCameraModule && expoCameraModule.CameraView) {
-      CameraView = expoCameraModule.CameraView;
-      useCameraPermissions = expoCameraModule.useCameraPermissions;
-      useMicrophonePermissions = expoCameraModule.useMicrophonePermissions;
-      CameraType = expoCameraModule.CameraType;
-      cameraModuleLoaded = true;
-    }
-  } catch (e: any) {
-    // Silently handle - module not available
-    cameraModuleLoaded = false;
-  }
-};
-
-// Try to load media library (optional)
-const loadMediaLibrary = () => {
-  if (MediaLibrary) return;
-  try {
-    if (typeof require !== 'undefined') {
-      MediaLibrary = (() => {
-        try {
-          return require('expo-media-library');
-        } catch (e) {
-          return null;
-        }
-      })();
-    }
-  } catch (e: any) {
-    // Silently handle - module not installed
-  }
-};
-
-// Try to load battery (optional)
-const loadBattery = () => {
-  if (Battery) return;
-  try {
-    if (typeof require !== 'undefined') {
-      Battery = (() => {
-        try {
-          return require('expo-battery');
-        } catch (e) {
-          return null;
-        }
-      })();
-    }
-  } catch (e: any) {
-    // Silently handle - module not installed
-  }
-};
-
-// Fallback hooks will be created inside the component
-
-// Create a safe logger that always works
-const createSafeLogger = () => {
-  let loggerBase: any = null;
-  
-  try {
-    const loggerModule = require('../utils/logger');
-    loggerBase = loggerModule?.default || loggerModule?.logger || loggerModule;
-  } catch (e) {
-    // Import failed, use console fallback
-  }
-  
-  const safeConsole = typeof console !== 'undefined' ? console : {
-    log: () => {},
-    warn: () => {},
-    error: () => {},
-    info: () => {},
-    debug: () => {},
-  };
-  
-  return {
-    log: (...args: any[]) => {
-      try {
-        if (loggerBase && typeof loggerBase.log === 'function') {
-          loggerBase.log(...args);
-        } else {
-          safeConsole.log(...args);
-        }
-      } catch (e) {
-        safeConsole.log(...args);
-      }
-    },
-    warn: (...args: any[]) => {
-      try {
-        if (loggerBase && typeof loggerBase.warn === 'function') {
-          loggerBase.warn(...args);
-        } else {
-          safeConsole.warn(...args);
-        }
-      } catch (e) {
-        safeConsole.warn(...args);
-      }
-    },
-    error: (...args: any[]) => {
-      try {
-        if (loggerBase && typeof loggerBase.error === 'function') {
-          loggerBase.error(...args);
-        } else {
-          safeConsole.error(...args);
-        }
-      } catch (e) {
-        safeConsole.error(...args);
-      }
-    },
-    info: (...args: any[]) => {
-      try {
-        if (loggerBase && typeof loggerBase.info === 'function') {
-          loggerBase.info(...args);
-        } else {
-          safeConsole.info(...args);
-        }
-      } catch (e) {
-        safeConsole.info(...args);
-      }
-    },
-    debug: (...args: any[]) => {
-      try {
-        if (loggerBase && typeof loggerBase.debug === 'function') {
-          loggerBase.debug(...args);
-        } else {
-          safeConsole.debug(...args);
-        }
-      } catch (e) {
-        safeConsole.debug(...args);
-      }
-    },
-  };
-};
-
-const logger = createSafeLogger();
+const logger = loggerBase || console;
 
 type LiveStreamCameraProps = {
   circleId: string;
   circleName?: string;
-  // Your existing livestream logic hooks go here:
   onStartLiveStream?: (params: { circleId: string; camera: any }) => Promise<void> | void;
   onStopLiveStream?: (params: { circleId: string; camera: any }) => Promise<void> | void;
   onClose?: () => void;
@@ -187,60 +44,28 @@ export const LiveStreamCamera: React.FC<LiveStreamCameraProps> = ({
   onClose,
   visible = true,
 }) => {
-  // Try to load camera module on mount (in case it wasn't loaded earlier)
-  const [modulesLoaded, setModulesLoaded] = useState(false);
-  
-  // Create stub hooks if real ones aren't available (must be defined before use)
-  const stubCameraHook = useCallback(() => {
-    const [permission] = useState<any>(null);
-    const requestPermission = useCallback(async () => null, []);
-    return [permission, requestPermission] as const;
-  }, []);
-  
-  const stubMicHook = useCallback(() => {
-    const [permission] = useState<any>(null);
-    const requestPermission = useCallback(async () => null, []);
-    return [permission, requestPermission] as const;
-  }, []);
-  
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      try {
-        // Try to load camera module
-        loadCameraModule();
-        loadMediaLibrary();
-        loadBattery();
-        setModulesLoaded(true);
-      } catch (e: any) {
-        // Silently handle - modules may not be installed
-        setModulesLoaded(true); // Mark as loaded to show error state
-      }
-    }, 200); // Give runtime a moment to be ready
-    
-    return () => clearTimeout(timer);
-  }, []);
-  
-  // Check if expo-camera is available
-  const isCameraAvailable = modulesLoaded && !!CameraView;
-  
-  // Always call hooks (React requirement) - use real hooks if available, stubs otherwise
-  const actualCameraHook = useCameraPermissions || stubCameraHook;
-  const actualMicHook = useMicrophonePermissions || stubMicHook;
-  
-  const [permission, requestPermission] = actualCameraHook();
-  const [micPermission, requestMicPermission] = actualMicHook();
+  // 🔹 1. ALL HOOKS – fixed order, no conditionals
+
+  // Permissions (expo-camera hook)
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const [micPermission, requestMicPermission] = useMicrophonePermissions();
+
+  // Module availability (in case something fails at runtime)
+  const [modulesLoaded, setModulesLoaded] = useState(true); // assume true; change to false if you want a loading state
+
+  const isCameraAvailable = !!CameraView && modulesLoaded;
+
+  // Local state
   const [isCameraReady, setIsCameraReady] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isWorking, setIsWorking] = useState(false);
-  
-  // New features state
+
   const [cameraFacing, setCameraFacing] = useState<'front' | 'back'>('front');
   const [streamQuality, setStreamQuality] = useState<'auto' | '720p' | '480p' | '360p'>('auto');
-  const [streamDuration, setStreamDuration] = useState(0); // in seconds
+  const [streamDuration, setStreamDuration] = useState(0);
   const [connectionQuality, setConnectionQuality] = useState<'excellent' | 'good' | 'fair' | 'poor'>('good');
   const [connectionType, setConnectionType] = useState<string | null>(null);
-  
-  // Additional features state
+
   const [viewerCount, setViewerCount] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
   const [batteryLevel, setBatteryLevel] = useState<number | null>(null);
@@ -248,25 +73,27 @@ export const LiveStreamCamera: React.FC<LiveStreamCameraProps> = ({
   const [mediaLibraryPermission, setMediaLibraryPermission] = useState<boolean>(false);
   const [effectiveQuality, setEffectiveQuality] = useState<'720p' | '480p' | '360p'>('720p');
 
+  // Refs
   const cameraRef = useRef<any>(null);
   const streamStartTimeRef = useRef<number | null>(null);
   const durationIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const viewerCountIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const recordingRef = useRef<{ stop: () => Promise<void> } | null>(null);
+
+  // 🔹 2. Effects
 
   // Ask for camera permission on mount if not granted
   useEffect(() => {
-    if (!permission) return;
+    if (!cameraPermission) return;
 
-    if (!permission.granted && !permission.canAskAgain) {
+    if (!cameraPermission.granted && !cameraPermission.canAskAgain) {
       logger.warn('📵 Camera permission denied and cannot ask again');
-    } else if (!permission.granted) {
+    } else if (!cameraPermission.granted) {
       logger.log('🎥 [DEBUG] Requesting camera permission...');
-      requestPermission();
+      requestCameraPermission();
     } else {
       logger.log('✅ [DEBUG] Camera permission already granted');
     }
-  }, [permission, requestPermission]);
+  }, [cameraPermission, requestCameraPermission]);
 
   // Ask for microphone permission on mount if not granted
   useEffect(() => {
@@ -282,11 +109,9 @@ export const LiveStreamCamera: React.FC<LiveStreamCameraProps> = ({
     }
   }, [micPermission, requestMicPermission]);
 
-  // Request media library permission for saving recordings
+  // Request media library permission
   useEffect(() => {
-    if (!MediaLibrary) return;
-    
-    const requestMediaLibraryPermission = async () => {
+    const requestPermission = async () => {
       try {
         const { status } = await MediaLibrary.requestPermissionsAsync();
         setMediaLibraryPermission(status === 'granted');
@@ -295,16 +120,16 @@ export const LiveStreamCamera: React.FC<LiveStreamCameraProps> = ({
         logger.error('❌ Error requesting media library permission:', error);
       }
     };
-    requestMediaLibraryPermission();
+
+    requestPermission();
   }, []);
 
   // Monitor battery level and state
   useEffect(() => {
-    if (!Battery) return;
-    
-    let batterySubscription: any = null;
+    let batteryLevelSub: Battery.Subscription | null = null;
+    let batteryStateSub: Battery.Subscription | null = null;
 
-    const updateBatteryInfo = async () => {
+    const updateBattery = async () => {
       try {
         const level = await Battery.getBatteryLevelAsync();
         const state = await Battery.getBatteryStateAsync();
@@ -315,24 +140,19 @@ export const LiveStreamCamera: React.FC<LiveStreamCameraProps> = ({
       }
     };
 
-    updateBatteryInfo();
+    updateBattery();
 
-    if (Battery.addBatteryLevelListener) {
-      batterySubscription = Battery.addBatteryLevelListener(({ batteryLevel }: any) => {
-        setBatteryLevel(batteryLevel);
-      });
-    }
+    batteryLevelSub = Battery.addBatteryLevelListener(({ batteryLevel }) => {
+      setBatteryLevel(batteryLevel);
+    });
 
-    if (Battery.addBatteryStateListener) {
-      Battery.addBatteryStateListener(({ batteryState }: any) => {
-        setBatteryState(batteryState);
-      });
-    }
+    batteryStateSub = Battery.addBatteryStateListener(({ batteryState }) => {
+      setBatteryState(batteryState);
+    });
 
     return () => {
-      if (batterySubscription && batterySubscription.remove) {
-        batterySubscription.remove();
-      }
+      batteryLevelSub?.remove();
+      batteryStateSub?.remove();
     };
   }, []);
 
@@ -341,19 +161,17 @@ export const LiveStreamCamera: React.FC<LiveStreamCameraProps> = ({
     const unsubscribe = NetInfo.addEventListener((state) => {
       const type = state.type;
       const isConnected = state.isConnected;
-      const isExpensive = state.isConnectionExpensive;
-      
+
       setConnectionType(type);
-      
+
       if (!isConnected) {
         setConnectionQuality('poor');
       } else if (type === 'wifi') {
         setConnectionQuality('excellent');
       } else if (type === 'cellular') {
-        // Determine quality based on cellular details if available
         const details = state.details as any;
         if (details?.cellularGeneration === '4g' || details?.cellularGeneration === '5g') {
-          setConnectionQuality(isExpensive ? 'fair' : 'good');
+          setConnectionQuality('good');
         } else {
           setConnectionQuality('fair');
         }
@@ -365,60 +183,54 @@ export const LiveStreamCamera: React.FC<LiveStreamCameraProps> = ({
     return () => unsubscribe();
   }, []);
 
-  // Auto-adjust quality based on connection and battery (Network-aware + Battery-aware)
+  // Auto-adjust quality based on network + battery
   useEffect(() => {
     if (streamQuality === 'auto') {
-      let targetQuality: '720p' | '480p' | '360p' = '720p';
+      let target: '720p' | '480p' | '360p' = '720p';
 
-      // Network-aware adjustment
       if (connectionType === 'wifi' && connectionQuality === 'excellent') {
-        targetQuality = '720p';
+        target = '720p';
       } else if (connectionType === 'wifi' && connectionQuality === 'good') {
-        targetQuality = '480p';
+        target = '480p';
       } else if (connectionType === 'cellular') {
-        if (connectionQuality === 'good') {
-          targetQuality = '480p';
-        } else {
-          targetQuality = '360p';
-        }
+        target = connectionQuality === 'good' ? '480p' : '360p';
       } else if (connectionQuality === 'fair' || connectionQuality === 'poor') {
-        targetQuality = '360p';
+        target = '360p';
       }
 
-      // Battery-aware adjustment (reduce quality if battery is low)
       if (batteryLevel !== null) {
         if (batteryLevel < 0.2) {
-          // Battery < 20% - force 360p
-          targetQuality = '360p';
-        } else if (batteryLevel < 0.4 && targetQuality === '720p') {
-          // Battery < 40% - downgrade from 720p to 480p
-          targetQuality = '480p';
+          target = '360p';
+        } else if (batteryLevel < 0.4 && target === '720p') {
+          target = '480p';
         }
       }
 
-      // Battery state adjustment (charging = can use higher quality)
-      if (Battery && (batteryState === Battery.BatteryState?.CHARGING || batteryState === Battery.BatteryState?.FULL)) {
-        // Allow higher quality when charging
-      } else if (Battery && batteryState === Battery.BatteryState?.UNPLUGGED && batteryLevel !== null && batteryLevel < 0.3) {
-        // Unplugged and low battery - reduce quality
-        if (targetQuality === '720p') targetQuality = '480p';
-        if (targetQuality === '480p') targetQuality = '360p';
+      if (
+        batteryState === Battery.BatteryState.UNPLUGGED &&
+        batteryLevel !== null &&
+        batteryLevel < 0.3
+      ) {
+        if (target === '720p') target = '480p';
+        else if (target === '480p') target = '360p';
       }
 
-      setEffectiveQuality(targetQuality);
-      logger.log(`📊 Auto quality adjusted: ${targetQuality} (network: ${connectionType}/${connectionQuality}, battery: ${batteryLevel ? Math.round(batteryLevel * 100) : '?'}%)`);
+      setEffectiveQuality(target);
+      logger.log(
+        `📊 Auto quality adjusted: ${target} (network: ${connectionType}/${connectionQuality}, battery: ${
+          batteryLevel !== null ? Math.round(batteryLevel * 100) : '?'
+        }%)`,
+      );
     } else {
-      // Manual quality selection
       setEffectiveQuality(streamQuality as '720p' | '480p' | '360p');
     }
   }, [connectionQuality, connectionType, streamQuality, batteryLevel, batteryState]);
 
-  // Stream duration timer and viewer count simulation
+  // Stream duration timer + viewer count simulation
   useEffect(() => {
     if (isStreaming) {
       streamStartTimeRef.current = Date.now();
-      
-      // Duration timer
+
       durationIntervalRef.current = setInterval(() => {
         if (streamStartTimeRef.current) {
           const elapsed = Math.floor((Date.now() - streamStartTimeRef.current) / 1000);
@@ -426,18 +238,15 @@ export const LiveStreamCamera: React.FC<LiveStreamCameraProps> = ({
         }
       }, 1000);
 
-      // Simulate viewer count (in real app, this would come from backend/WebSocket)
       const initialViewers = Math.floor(Math.random() * 10) + 1;
       setViewerCount(initialViewers);
-      
+
       viewerCountIntervalRef.current = setInterval(() => {
         setViewerCount((prev) => {
-          // Simulate viewers joining/leaving
           const change = Math.random() > 0.5 ? 1 : -1;
-          const newCount = Math.max(0, prev + change);
-          return newCount;
+          return Math.max(0, prev + change);
         });
-      }, 3000); // Update every 3 seconds
+      }, 3000);
     } else {
       if (durationIntervalRef.current) {
         clearInterval(durationIntervalRef.current);
@@ -462,20 +271,19 @@ export const LiveStreamCamera: React.FC<LiveStreamCameraProps> = ({
     };
   }, [isStreaming]);
 
-  // Toggle camera facing direction
+  // 🔹 3. Callbacks
+
   const toggleCamera = useCallback(() => {
     setCameraFacing((prev) => (prev === 'front' ? 'back' : 'front'));
     logger.log(`🔄 Switching to ${cameraFacing === 'front' ? 'back' : 'front'} camera`);
   }, [cameraFacing]);
 
-  // Format duration as MM:SS
   const formatDuration = useCallback((seconds: number): string => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   }, []);
 
-  // Get quality label
   const getQualityLabel = useCallback((): string => {
     if (streamQuality === 'auto') {
       return `Auto (${effectiveQuality.toUpperCase()})`;
@@ -483,27 +291,23 @@ export const LiveStreamCamera: React.FC<LiveStreamCameraProps> = ({
     return streamQuality.toUpperCase();
   }, [streamQuality, effectiveQuality]);
 
-  // Start/Stop recording
   const handleStartRecording = useCallback(async () => {
     if (!cameraRef.current || !mediaLibraryPermission) {
       Alert.alert(
         'Permission Required',
         'Please grant media library access to save recordings.',
-        [{ text: 'OK' }]
+        [{ text: 'OK' }],
       );
       return;
     }
 
     try {
       setIsRecording(true);
-      logger.log('📹 Starting video recording...');
-      
-      // Note: expo-camera's CameraView doesn't have direct recording methods in the current API
-      // This is a placeholder - in production, you'd use the camera's recording capabilities
-      // or integrate with a recording service
-      
-      // For now, we'll simulate recording
-      Alert.alert('Recording Started', 'Recording is now active. The video will be saved when you stop streaming.');
+      logger.log('📹 Starting video recording (simulated)...');
+      Alert.alert(
+        'Recording Started',
+        'Recording is now active. The video will be saved when you stop streaming.',
+      );
     } catch (error: any) {
       logger.error('❌ Failed to start recording:', error);
       Alert.alert('Recording Error', error.message || 'Failed to start recording');
@@ -514,15 +318,12 @@ export const LiveStreamCamera: React.FC<LiveStreamCameraProps> = ({
   const handleStopRecording = useCallback(async () => {
     try {
       setIsRecording(false);
-      logger.log('📹 Stopping video recording...');
-      
-      // In production, save the recording here
+      logger.log('📹 Stopping video recording (simulated)...');
       if (mediaLibraryPermission) {
-        // Simulate saving to gallery
         Alert.alert(
           'Recording Saved',
           'Your stream recording has been saved to your device gallery.',
-          [{ text: 'OK' }]
+          [{ text: 'OK' }],
         );
       }
     } catch (error: any) {
@@ -533,13 +334,19 @@ export const LiveStreamCamera: React.FC<LiveStreamCameraProps> = ({
 
   const handleStart = useCallback(async () => {
     logger.log('🎥 [DEBUG] ========== handleStart() called ==========');
-    logger.log('🎥 [DEBUG] Permission granted:', permission?.granted);
+    logger.log('🎥 [DEBUG] Camera permission granted:', cameraPermission?.granted);
     logger.log('🎥 [DEBUG] Camera ready:', isCameraReady);
     logger.log('🎥 [DEBUG] Camera ref:', !!cameraRef.current);
 
-    if (!permission?.granted) {
+    if (!cameraPermission?.granted) {
       logger.warn('📵 Cannot start livestream, camera permission not granted');
-      await requestPermission();
+      await requestCameraPermission();
+      return;
+    }
+
+    if (!micPermission?.granted) {
+      logger.warn('📵 Cannot start livestream, microphone permission not granted');
+      await requestMicPermission();
       return;
     }
 
@@ -560,13 +367,19 @@ export const LiveStreamCamera: React.FC<LiveStreamCameraProps> = ({
       setIsStreaming(true);
       logger.log('✅ [DEBUG] Live stream started successfully');
     } catch (error: any) {
-      logger.error('❌ [DEBUG] Failed to start livestream');
-      logger.error('❌ [DEBUG] Error:', error?.message || error);
-      logger.error('❌ Failed to start livestream', error);
+      logger.error('❌ [DEBUG] Failed to start livestream', error);
     } finally {
       setIsWorking(false);
     }
-  }, [circleId, isCameraReady, onStartLiveStream, permission, requestPermission]);
+  }, [
+    circleId,
+    cameraPermission,
+    micPermission,
+    isCameraReady,
+    onStartLiveStream,
+    requestCameraPermission,
+    requestMicPermission,
+  ]);
 
   const handleStop = useCallback(async () => {
     logger.log('🛑 [DEBUG] ========== handleStop() called ==========');
@@ -582,31 +395,37 @@ export const LiveStreamCamera: React.FC<LiveStreamCameraProps> = ({
       setIsStreaming(false);
       logger.log('✅ [DEBUG] Live stream stopped successfully');
     } catch (error: any) {
-      logger.error('❌ [DEBUG] Failed to stop livestream');
-      logger.error('❌ [DEBUG] Error:', error?.message || error);
-      logger.error('❌ Failed to stop livestream', error);
+      logger.error('❌ [DEBUG] Failed to stop livestream', error);
     } finally {
       setIsWorking(false);
     }
   }, [circleId, onStopLiveStream]);
 
-  // Don't render if not visible
+  // 🔹 4. Conditional rendering AFTER hooks
+
   if (!visible) {
     return null;
   }
 
-  // Check if camera module is available
   if (!isCameraAvailable) {
     return (
       <View style={styles.centered}>
         <Text style={styles.text}>📷 Camera Preview Unavailable</Text>
-        <Text style={[styles.text, { fontSize: 14, marginTop: 8, textAlign: 'center', paddingHorizontal: 24 }]}>
+        <Text
+          style={[
+            styles.text,
+            { fontSize: 14, marginTop: 8, textAlign: 'center', paddingHorizontal: 24 },
+          ]}
+        >
           The camera module is not available in this environment.{'\n\n'}
           This feature requires a development build (not Expo Go).{'\n\n'}
           Live streaming functionality will still work, but camera preview is disabled.
         </Text>
         {onClose && (
-          <TouchableOpacity style={[styles.button, styles.closeButton, { marginTop: 24 }]} onPress={onClose}>
+          <TouchableOpacity
+            style={[styles.button, styles.closeButton, { marginTop: 24 }]}
+            onPress={onClose}
+          >
             <Text style={styles.buttonText}>Close</Text>
           </TouchableOpacity>
         )}
@@ -614,8 +433,7 @@ export const LiveStreamCamera: React.FC<LiveStreamCameraProps> = ({
     );
   }
 
-  // Handle loading / permission states
-  if (!permission) {
+  if (!cameraPermission) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color="#007AFF" />
@@ -624,11 +442,13 @@ export const LiveStreamCamera: React.FC<LiveStreamCameraProps> = ({
     );
   }
 
-  if (!permission.granted) {
+  if (!cameraPermission.granted) {
     return (
       <View style={styles.centered}>
-        <Text style={styles.text}>We need access to your camera to start the livestream.</Text>
-        <TouchableOpacity style={styles.button} onPress={requestPermission}>
+        <Text style={styles.text}>
+          We need access to your camera to start the livestream.
+        </Text>
+        <TouchableOpacity style={styles.button} onPress={requestCameraPermission}>
           <Text style={styles.buttonText}>Grant Camera Access</Text>
         </TouchableOpacity>
         {onClose && (
@@ -640,10 +460,11 @@ export const LiveStreamCamera: React.FC<LiveStreamCameraProps> = ({
     );
   }
 
+  // 🔹 5. Main UI
+
   return (
     <View style={styles.container}>
-      {/* Camera view with dynamic facing direction - Memoized to prevent re-renders */}
-      {permission?.granted ? (
+      {cameraPermission?.granted ? (
         <MemoizedCameraView
           cameraRef={cameraRef}
           cameraFacing={cameraFacing}
@@ -660,23 +481,32 @@ export const LiveStreamCamera: React.FC<LiveStreamCameraProps> = ({
       <View style={styles.topStatusBar}>
         {isStreaming && (
           <View style={styles.statusRow}>
-            <View style={[styles.statusIndicator, styles[`status${connectionQuality.charAt(0).toUpperCase() + connectionQuality.slice(1)}`]]} />
-            <Text style={styles.statusText}>
-              {formatDuration(streamDuration)}
-            </Text>
-            <Text style={styles.statusText}>
-              {getQualityLabel()}
-            </Text>
+            <View
+              style={[
+                styles.statusIndicator,
+                (styles as any)[
+                  `status${
+                    connectionQuality.charAt(0).toUpperCase() + connectionQuality.slice(1)
+                  }`
+                ],
+              ]}
+            />
+            <Text style={styles.statusText}>{formatDuration(streamDuration)}</Text>
+            <Text style={styles.statusText}>{getQualityLabel()}</Text>
             {connectionType && (
               <Text style={styles.statusText}>
-                {connectionType === 'wifi' ? 'WiFi' : connectionType === 'cellular' ? '4G/5G' : connectionType}
+                {connectionType === 'wifi'
+                  ? 'WiFi'
+                  : connectionType === 'cellular'
+                  ? '4G/5G'
+                  : connectionType}
               </Text>
             )}
           </View>
         )}
       </View>
 
-      {/* Side controls (camera switch, quality, recording) */}
+      {/* Side controls */}
       <View style={styles.sideControls}>
         <TouchableOpacity
           style={styles.controlButton}
@@ -692,7 +522,12 @@ export const LiveStreamCamera: React.FC<LiveStreamCameraProps> = ({
         <TouchableOpacity
           style={[styles.controlButton, { marginTop: 16 }]}
           onPress={() => {
-            const qualities: Array<'auto' | '720p' | '480p' | '360p'> = ['auto', '720p', '480p', '360p'];
+            const qualities: Array<'auto' | '720p' | '480p' | '360p'> = [
+              'auto',
+              '720p',
+              '480p',
+              '360p',
+            ];
             const currentIndex = qualities.indexOf(streamQuality);
             const nextIndex = (currentIndex + 1) % qualities.length;
             setStreamQuality(qualities[nextIndex]);
@@ -705,16 +540,23 @@ export const LiveStreamCamera: React.FC<LiveStreamCameraProps> = ({
 
         {isStreaming && (
           <TouchableOpacity
-            style={[styles.controlButton, styles.recordButton, isRecording && styles.recordButtonActive, { marginTop: 16 }]}
+            style={[
+              styles.controlButton,
+              styles.recordButton,
+              isRecording && styles.recordButtonActive,
+              { marginTop: 16 },
+            ]}
             onPress={isRecording ? handleStopRecording : handleStartRecording}
           >
             <Text style={styles.controlButtonText}>{isRecording ? '⏹️' : '🔴'}</Text>
-            <Text style={styles.controlButtonLabel}>{isRecording ? 'Stop' : 'Record'}</Text>
+            <Text style={styles.controlButtonLabel}>
+              {isRecording ? 'Stop' : 'Record'}
+            </Text>
           </TouchableOpacity>
         )}
       </View>
 
-      {/* Overlay controls */}
+      {/* Bottom overlay */}
       <View style={styles.overlay}>
         {circleName && (
           <Text style={styles.circleLabel}>Circle: {circleName}</Text>
@@ -749,8 +591,8 @@ export const LiveStreamCamera: React.FC<LiveStreamCameraProps> = ({
 };
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
+  container: {
+    flex: 1,
     backgroundColor: 'black',
     position: 'relative',
   },
@@ -776,16 +618,16 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   statusExcellent: {
-    backgroundColor: '#34C759', // green
+    backgroundColor: '#34C759',
   },
   statusGood: {
-    backgroundColor: '#FF9500', // orange
+    backgroundColor: '#FF9500',
   },
   statusFair: {
-    backgroundColor: '#FFCC00', // yellow
+    backgroundColor: '#FFCC00',
   },
   statusPoor: {
-    backgroundColor: '#FF3B30', // red
+    backgroundColor: '#FF3B30',
   },
   statusText: {
     color: 'white',
@@ -794,18 +636,6 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0, 0, 0, 0.75)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
-  },
-  viewerCountContainer: {
-    marginTop: 8,
-    alignItems: 'center',
-  },
-  viewerCountText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '700',
-    textShadowColor: 'rgba(0, 0, 0, 0.75)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
   },
   sideControls: {
     position: 'absolute',
@@ -864,10 +694,10 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   startButton: {
-    backgroundColor: '#34C759', // green-ish
+    backgroundColor: '#34C759',
   },
   stopButton: {
-    backgroundColor: '#FF3B30', // red-ish
+    backgroundColor: '#FF3B30',
   },
   disabledButton: {
     opacity: 0.6,
@@ -903,39 +733,30 @@ const styles = StyleSheet.create({
   },
 });
 
-// Memoized CameraView component to prevent unnecessary re-renders
+// Memoized CameraView component
 const MemoizedCameraView = memo<{
   cameraRef: React.RefObject<any>;
   cameraFacing: 'front' | 'back';
   onCameraReady: () => void;
 }>(({ cameraRef, cameraFacing, onCameraReady }) => {
-  if (!CameraView) {
-    return (
-      <View style={StyleSheet.absoluteFillObject}>
-        <Text style={{ color: 'white', textAlign: 'center', marginTop: 100 }}>
-          Camera not available
-        </Text>
-      </View>
-    );
-  }
-  const handleRef = useCallback((ref: any) => {
-    cameraRef.current = ref;
-    logger.log('🎥 [DEBUG] Camera ref set:', !!ref);
-    if (ref) {
-      // Force camera to be ready after ref is set
-      setTimeout(() => {
-        onCameraReady();
-        logger.log('✅ [DEBUG] Camera marked as ready after ref set');
-      }, 100);
-    }
-  }, [cameraRef, onCameraReady]);
+  const handleRef = useCallback(
+    (ref: any) => {
+      cameraRef.current = ref;
+      logger.log('🎥 [DEBUG] Camera ref set:', !!ref);
+      if (ref) {
+        setTimeout(() => {
+          onCameraReady();
+          logger.log('✅ [DEBUG] Camera marked as ready after ref set');
+        }, 100);
+      }
+    },
+    [cameraRef, onCameraReady],
+  );
 
   const handleMountError = useCallback((error: any) => {
     logger.error('❌ [DEBUG] Camera mount error:', error);
-    logger.error('❌ [DEBUG] Error details:', JSON.stringify(error, null, 2));
   }, []);
 
-  // Memoize style to prevent recreation
   const cameraStyle = useMemo(() => StyleSheet.absoluteFillObject, []);
 
   return (
@@ -948,13 +769,8 @@ const MemoizedCameraView = memo<{
       onMountError={handleMountError}
     />
   );
-}, (prevProps, nextProps) => {
-  // Only re-render if cameraFacing changes
-  return prevProps.cameraFacing === nextProps.cameraFacing;
-});
+}, (prev, next) => prev.cameraFacing === next.cameraFacing);
 
 MemoizedCameraView.displayName = 'MemoizedCameraView';
 
-// Default export for easier importing
 export default LiveStreamCamera;
-

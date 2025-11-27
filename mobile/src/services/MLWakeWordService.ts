@@ -49,8 +49,10 @@ class MLWakeWordService {
           logger.log('✅ ML wake word model loaded');
         } else {
           // Fallback: try loading from URL
-          const modelUrl2 = 'http://localhost:8000/media/models/wake_word_model/model.json';
           try {
+            // Use centralized API config for model URL
+            const { API_BASE } = await import('../config/api');
+            const modelUrl2 = `${API_BASE}/media/models/wake_word_model/model.json`;
             this.model = await tf.loadLayersModel(modelUrl2);
             logger.log('✅ ML wake word model loaded from server');
           } catch (e) {
@@ -78,7 +80,9 @@ class MLWakeWordService {
    */
   async loadNormalizationParams(): Promise<void> {
     try {
-      const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+      // Use centralized API config which handles device detection
+      const { API_BASE } = await import('../config/api');
+      const API_BASE_URL = API_BASE;
       const response = await fetch(`${API_BASE_URL}/api/wake-word/normalization/`);
       
       if (response.ok) {
@@ -333,18 +337,26 @@ class MLWakeWordService {
 
       if (this.recording) {
         try {
-          const status = await this.recording.getStatusAsync();
-          if (status.isRecording) {
-            await this.recording.stopAndUnloadAsync();
-          } else {
+          // Check if recording object has the required methods
+          if (typeof this.recording.getStatusAsync === 'function') {
+            const status = await this.recording.getStatusAsync();
+            if (status.isRecording && typeof this.recording.stopAndUnloadAsync === 'function') {
+              await this.recording.stopAndUnloadAsync();
+            } else if (typeof this.recording.unloadAsync === 'function') {
+              await this.recording.unloadAsync();
+            }
+          } else if (typeof this.recording.unloadAsync === 'function') {
+            // If getStatusAsync doesn't exist, try to unload directly
             await this.recording.unloadAsync();
           }
         } catch (e) {
           // Try to unload even if stop failed
-          try {
-            await this.recording.unloadAsync();
-          } catch (e2) {
-            logger.warn('Could not unload recording:', e2);
+          if (this.recording && typeof this.recording.unloadAsync === 'function') {
+            try {
+              await this.recording.unloadAsync();
+            } catch (e2) {
+              logger.warn('Could not unload recording:', e2);
+            }
           }
         }
         this.recording = null;

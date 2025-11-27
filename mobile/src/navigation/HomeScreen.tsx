@@ -582,9 +582,25 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
           logger.log('ℹ️ Whisper wake word not available, trying Porcupine...');
         }
 
-        // Priority 3: Porcupine (requires API key)
+        // Priority 3: Porcupine (requires API key and dependencies)
+        // Wrap in try-catch to handle bundling errors gracefully
         try {
-          const { porcupineWakeWordService } = await import('../services/PorcupineWakeWordService');
+          // Use dynamic import with error handling
+          let porcupineModule;
+          try {
+            porcupineModule = await import('../services/PorcupineWakeWordService');
+          } catch (importError: any) {
+            // If the module itself fails to load (bundling error), skip it
+            const errorMsg = importError?.message || String(importError);
+            if (errorMsg.includes('@picovoice/react-native-voice-processor') || 
+                errorMsg.includes('Unable to resolve')) {
+              logger.log('ℹ️ Porcupine not available (missing dependencies - using fallback services)');
+              return; // Skip Porcupine, continue with other services
+            }
+            throw importError; // Re-throw unexpected errors
+          }
+          
+          const { porcupineWakeWordService } = porcupineModule;
           const started = await porcupineWakeWordService.start();
           if (started) {
             logger.log('✅ "Hey Riches" wake word detection active (Porcupine)');
@@ -593,11 +609,17 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
               await porcupineWakeWordService.release();
             };
           } else {
-            logger.log('ℹ️ Wake word detection not available');
+            logger.log('ℹ️ Porcupine wake word not available (missing dependencies or API key)');
           }
         } catch (error: unknown) {
+          // Silently handle - Porcupine requires additional dependencies that may not be installed
           const errorMessage = error instanceof Error ? error.message : String(error);
-          logger.log('ℹ️ Wake word detection not available:', errorMessage);
+          if (errorMessage.includes('@picovoice/react-native-voice-processor') || 
+              errorMessage.includes('Unable to resolve')) {
+            logger.log('ℹ️ Porcupine not available (missing dependencies - using fallback services)');
+          } else {
+            logger.log('ℹ️ Porcupine wake word not available:', errorMessage);
+          }
         }
       };
 

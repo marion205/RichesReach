@@ -31,6 +31,9 @@ target 'RichesReach' do
 
   config = use_native_modules!(config_command)
 
+  # ✅ Explicit RCT-Folly so react-native-voice-processor can find it
+  pod 'RCT-Folly', :podspec => '../node_modules/react-native/third-party-podspecs/RCT-Folly.podspec'
+
   use_frameworks! :linkage => podfile_properties['ios.useFrameworks'].to_sym if podfile_properties['ios.useFrameworks']
   use_frameworks! :linkage => ENV['USE_FRAMEWORKS'].to_sym if ENV['USE_FRAMEWORKS']
 
