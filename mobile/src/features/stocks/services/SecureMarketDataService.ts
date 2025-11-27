@@ -112,12 +112,21 @@ export class SecureMarketDataService {
    */
   private async _fetchQuotesFromBackend(symbols: string[]): Promise<Quote[]> {
     const symbolsParam = symbols.join(',');
-    const url = `${API_BASE}/api/market/quotes?symbols=${encodeURIComponent(symbolsParam)}`;
+    
+    // Final safety check: if API_BASE is still localhost, force LAN IP
+    let apiBase = API_BASE;
+    if (/localhost|127\.0\.0\.1/.test(apiBase)) {
+      logger.warn('⚠️ SecureMarketDataService: API_BASE is localhost, FORCING LAN IP override');
+      apiBase = 'http://10.0.0.54:8000';
+      logger.log('✅ SecureMarketDataService: Overridden to:', apiBase);
+    }
+    
+    const url = `${apiBase}/api/market/quotes?symbols=${encodeURIComponent(symbolsParam)}`;
     
     logger.log(`📡 [DEBUG] Fetching quotes from backend`);
     logger.log(`📡 [DEBUG] URL: ${url}`);
     logger.log(`📡 [DEBUG] Symbols: ${symbolsParam}`);
-    logger.log(`📡 [DEBUG] API_BASE: ${API_BASE}`);
+    logger.log(`📡 [DEBUG] API_BASE: ${apiBase}`);
     
     try {
       // Use AbortController for proper timeout handling

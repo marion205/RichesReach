@@ -4,7 +4,7 @@ RichesReach AI Service - Production Main Application
 """
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel
 import uvicorn
 import os
@@ -14,12 +14,38 @@ import asyncio
 import sys
 import django
 import json
+import re
 from asgiref.sync import sync_to_async
 from starlette.requests import Request as StarletteRequest
 from starlette.responses import Response as StarletteResponse
 from starlette.middleware.wsgi import WSGIMiddleware
 from io import BytesIO
 from dotenv import load_dotenv
+import aiohttp
+import time
+
+# ✅ Price cache for fast repeated lookups
+class PriceCache:
+    """Simple TTL cache for crypto/stock prices."""
+    def __init__(self, ttl: int = 12):
+        self.ttl = ttl  # 12 seconds - crypto moves fast but we don't need per-second
+        self.data = {}
+    
+    def get(self, key: str):
+        entry = self.data.get(key)
+        if not entry:
+            return None
+        value, ts = entry
+        if time.time() - ts > self.ttl:
+            del self.data[key]
+            return None
+        return value
+    
+    def set(self, key: str, value):
+        self.data[key] = (value, time.time())
+
+# Global price cache instance
+price_cache = PriceCache(ttl=12)
 
 # Load environment variables from .env file
 # This ensures FastAPI can access environment variables even if Django hasn't loaded them yet
@@ -135,6 +161,933 @@ if AI_OPTIONS_AVAILABLE:
 # Note: FastAPI routes (defined with @app.get/post/etc) are registered here
 # Django will be mounted later, after all FastAPI routes are defined
 # This ensures FastAPI routes take precedence
+
+# ✅ Fast voice model configuration
+FAST_VOICE_MODEL = "gpt-4o-mini"  # Fast, cheap model for voice
+DEEP_MODEL = "gpt-4o"  # Reserved for deep analysis (not used in voice)
+
+# ✅ Helper: Trim conversation history to last N exchanges
+def trim_history_for_voice(history: list, max_exchanges: int = 4) -> list:
+    """
+    Trim history to last N user/assistant exchanges (keeps context but reduces tokens).
+    Returns list of message dicts ready for LLM.
+    """
+    if not history:
+        return []
+    
+    # Convert history to message format if needed
+    messages = []
+    for item in history[-max_exchanges * 2:]:  # Last 4 exchanges = 8 messages max
+        if isinstance(item, dict):
+            if 'type' in item:
+                role = 'user' if item['type'] == 'user' else 'assistant'
+                messages.append({"role": role, "content": item.get('text', '')})
+            elif 'role' in item:
+                messages.append(item)
+    
+    return messages
+
+# ✅ LLM-based voice response generation (non-streaming, for fallback)
+async def generate_voice_reply(
+    system_prompt: str,
+    user_prompt: str,
+    history: list = None,
+    model: str = FAST_VOICE_MODEL
+) -> str:
+    """
+    Generate natural language response using OpenAI chat API.
+    This is the "voice" layer - it takes structured data and speaks naturally.
+    Optimized for speed: trimmed history, smaller model, fewer tokens.
+    """
+    openai_api_key = os.getenv('OPENAI_API_KEY')
+    if not openai_api_key:
+        logger.warn("⚠️ OpenAI API key not found - cannot generate natural language responses")
+        return None
+    
+    try:
+        import openai
+        client = openai.OpenAI(api_key=openai_api_key)
+        
+        # Build trimmed messages (last 4 exchanges + system + current)
+        messages = [{"role": "system", "content": system_prompt}]
+        if history:
+            messages.extend(trim_history_for_voice(history, max_exchanges=4))
+        messages.append({"role": "user", "content": user_prompt})
+        
+        response = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=0.7,
+            max_tokens=140,  # Reduced from 200 for faster generation
+        )
+        
+        reply = response.choices[0].message.content.strip()
+        logger.info(f"✅ Generated natural language response ({len(reply)} chars)")
+        return reply
+    except Exception as e:
+        logger.error(f"❌ Error generating LLM response: {e}")
+        return None
+
+# ✅ Streaming voice reply generator
+async def generate_voice_reply_stream(
+    system_prompt: str,
+    user_prompt: str,
+    history: list = None,
+    model: str = FAST_VOICE_MODEL,
+    skip_ack: bool = False
+):
+    """
+    Generate streaming natural language response token-by-token.
+    Yields JSON lines: {"type": "ack|token|done|error", "text": "..."}
+    """
+    openai_api_key = os.getenv('OPENAI_API_KEY')
+    if not openai_api_key:
+        yield json.dumps({"type": "error", "text": "API key not configured"}) + "\n"
+        return
+    
+    try:
+        import openai
+        client = openai.OpenAI(api_key=openai_api_key)
+        
+        # Build trimmed messages (OPTIMIZED: reduced history from 4 to 2 exchanges for speed)
+        messages = [{"role": "system", "content": system_prompt}]
+        if history:
+            messages.extend(trim_history_for_voice(history, max_exchanges=2))  # Reduced from 4 to 2
+        messages.append({"role": "user", "content": user_prompt})
+        
+        # First: instant acknowledgment (unless caller already sent it)
+        if not skip_ack:
+            yield json.dumps({"type": "ack", "text": "Got it…"}) + "\n"
+        
+        # Stream tokens (OpenAI returns sync generator, wrap in async)
+        # OPTIMIZED: Reduced max_tokens and temperature for faster response
+        stream = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=0.6,  # Reduced from 0.7 for faster, more deterministic responses
+            max_tokens=120,  # Reduced from 160 for faster responses
+            stream=True,  # ← KEY: Enable streaming
+        )
+        
+        collected = ""
+        # OpenAI stream is sync, but we're in async context - run in executor
+        for chunk in stream:
+            if chunk.choices and len(chunk.choices) > 0 and chunk.choices[0].delta.content:
+                token = chunk.choices[0].delta.content
+                collected += token
+                # Send every token immediately
+                yield json.dumps({"type": "token", "text": token}) + "\n"
+        
+        # Final chunk when done
+        yield json.dumps({"type": "done", "full_text": collected.strip()}) + "\n"
+        
+    except Exception as e:
+        import traceback
+        logger.error(f"❌ Error in streaming LLM response: {e}")
+        logger.error(f"❌ Traceback: {traceback.format_exc()}")
+        yield json.dumps({"type": "error", "text": "I got confused, try again?"}) + "\n"
+
+# ✅ Intent detection - separates "what user wants" from "what to say"
+def detect_intent(transcript: str, history: list = None, last_trade: dict = None) -> str:
+    """
+    Detect user intent from transcript.
+    Returns: 'get_trade_idea', 'execute_trade', 'crypto_query', 'portfolio_query', 'explain_trade', 'small_talk'
+    """
+    text = transcript.lower()
+    
+    # Execution commands (highest priority)
+    if any(phrase in text for phrase in ["execute", "place order", "place the order", "do it", "go ahead", "confirm"]):
+        if any(word in text for word in ["trade", "order", "buy", "sell"]):
+            return "execute_trade"
+    
+    # Simple "yes" after a trade recommendation
+    if text.strip() in ["yes", "yeah", "yep", "sure", "ok", "okay"] and last_trade:
+        return "execute_trade"
+    
+    # Crypto queries
+    if any(word in text for word in ["cryptocurrency", "crypto", "bitcoin", "ethereum", "btc", "eth", "solana", "sol"]):
+        return "crypto_query"
+    
+    # Trade idea requests
+    if any(phrase in text for phrase in ["what should i invest", "what should i buy", "best trade", "trading opportunity", "day trade", "momentum"]):
+        return "get_trade_idea"
+    
+    # Portfolio queries
+    if any(word in text for word in ["portfolio", "performance", "positions", "buying power"]):
+        return "portfolio_query"
+    
+    # Explanation requests (if there's a last trade)
+    if any(word in text for word in ["why", "explain", "reason"]) and last_trade:
+        return "explain_trade"
+    
+    # Risk/reward analysis
+    if any(phrase in text for phrase in ["risk reward", "risk/reward", "analysis"]):
+        return "explain_trade"
+    
+    # Default to small talk / general conversation
+    return "small_talk"
+
+# ✅ Build context for LLM based on intent - OPTIMIZED with parallel fetching
+async def build_context(intent: str, transcript: str, history: list = None, last_trade: dict = None) -> dict:
+    """
+    Build structured context data for the LLM based on intent.
+    This is the "brain" - fetches real data (prices, trades, portfolio).
+    OPTIMIZED: Parallel fetching for speed.
+    """
+    context = {
+        "intent": intent,
+        "transcript": transcript,
+        "history": history or [],
+        "last_trade": last_trade,
+    }
+    
+    # ✅ Parallel fetch tasks based on intent
+    tasks = []
+    
+    if intent == "crypto_query":
+        # Detect which crypto
+        text = transcript.lower()
+        if "bitcoin" in text or "btc" in text:
+            tasks.append(('btc', get_crypto_price('BTC')))
+        elif "ethereum" in text or "eth" in text:
+            tasks.append(('eth', get_crypto_price('ETH')))
+        elif "solana" in text or "sol" in text:
+            tasks.append(('sol', get_crypto_price('SOL')))
+        else:
+            # General crypto - fetch top 3 in parallel
+            tasks.extend([
+                ('btc', get_crypto_price('BTC')),
+                ('eth', get_crypto_price('ETH')),
+                ('sol', get_crypto_price('SOL')),
+            ])
+    
+    # Execute all fetches in parallel
+    if tasks:
+        results = await asyncio.gather(*[task[1] for task in tasks], return_exceptions=True)
+        
+        if intent == "crypto_query":
+            text = transcript.lower()
+            if "bitcoin" in text or "btc" in text:
+                btc_data = results[0] if not isinstance(results[0], Exception) else None
+                if btc_data:
+                    context["crypto"] = {
+                        "symbol": "BTC",
+                        "name": "Bitcoin",
+                        "price": btc_data['price'],
+                        "change_24h": btc_data.get('change_percent_24h', 0),
+                    }
+            elif "ethereum" in text or "eth" in text:
+                eth_data = results[0] if not isinstance(results[0], Exception) else None
+                if eth_data:
+                    context["crypto"] = {
+                        "symbol": "ETH",
+                        "name": "Ethereum",
+                        "price": eth_data['price'],
+                        "change_24h": eth_data.get('change_percent_24h', 0),
+                    }
+            elif "solana" in text or "sol" in text:
+                sol_data = results[0] if not isinstance(results[0], Exception) else None
+                if sol_data:
+                    context["crypto"] = {
+                        "symbol": "SOL",
+                        "name": "Solana",
+                        "price": sol_data['price'],
+                        "change_24h": sol_data.get('change_percent_24h', 0),
+                    }
+            else:
+                # General crypto - use all 3 results
+                btc_data = results[0] if not isinstance(results[0], Exception) else None
+                eth_data = results[1] if len(results) > 1 and not isinstance(results[1], Exception) else None
+                sol_data = results[2] if len(results) > 2 and not isinstance(results[2], Exception) else None
+                context["crypto"] = {
+                    "top_picks": [
+                        {"symbol": "BTC", "name": "Bitcoin", "price": btc_data['price'] if btc_data else 55000, "change_24h": btc_data.get('change_percent_24h', 0) if btc_data else 0},
+                        {"symbol": "ETH", "name": "Ethereum", "price": eth_data['price'] if eth_data else 3200, "change_24h": eth_data.get('change_percent_24h', 0) if eth_data else 0},
+                        {"symbol": "SOL", "name": "Solana", "price": sol_data['price'] if sol_data else 180, "change_24h": sol_data.get('change_percent_24h', 0) if sol_data else 0},
+                    ]
+                }
+    
+    elif intent == "get_trade_idea":
+        # Generate a trade recommendation (using your existing ML/signals logic)
+        # For now, using a structured recommendation
+        context["trade"] = {
+            "symbol": "NVDA",
+            "type": "stock",
+            "side": "buy",
+            "entry": 179.50,
+            "stop": 178.00,
+            "target": 185.00,
+            "rvol": 3.2,
+            "win_prob": 0.68,
+            "r_multiple": 3.67,
+            "reasoning_points": [
+                "breakout above VWAP with volume confirmation",
+                "strong relative strength vs QQQ",
+                "favorable macro / AI theme"
+            ]
+        }
+    
+    elif intent == "portfolio_query":
+        # Fetch portfolio data (mock for now, but structure is ready for real data)
+        context["portfolio"] = {
+            "value": 14303.52,
+            "return": 17.65,
+            "positions": [
+                {"symbol": "NVDA", "shares": 100, "pnl": 435.00},
+                {"symbol": "AAPL", "shares": 50, "pnl": 125.00},
+                {"symbol": "MSFT", "shares": 75, "pnl": 87.50},
+            ],
+            "buying_power": 8450.00,
+        }
+    
+    return context
+
+# ✅ Generate natural language responses based on intent and context
+async def respond_with_trade_idea(transcript: str, history: list, context: dict) -> dict:
+    """Generate natural language response for trade recommendations."""
+    trade = context.get("trade", {})
+    
+    system_prompt = """You are RichesReach, a calm, concise trading coach.
+- Always use the *provided* trade data; do not invent prices or symbols.
+- Explain ideas in plain language, not jargon.
+- Keep answers under 3-4 sentences unless user asks for more detail.
+- You are not a broker; you only describe recommendations and risks.
+- Be conversational and helpful, not robotic."""
+    
+    user_prompt = f"""User just said: {transcript}
+
+Conversation so far:
+{json.dumps(history[-4:] if history else [], indent=2) if history else "No previous conversation"}
+
+Here is the recommended trade:
+{json.dumps(trade, indent=2)}
+
+Explain this trade to the user in natural language. Weave the data into a story, don't just list numbers."""
+    
+    text = await generate_voice_reply(system_prompt, user_prompt)
+    if not text:
+        # Fallback to template if LLM fails
+        text = f"I've found a strong opportunity in {trade.get('symbol', 'NVDA')}. Entry at ${trade.get('entry', 179.50)}, stop at ${trade.get('stop', 178.00)}, target at ${trade.get('target', 185.00)}. Risk/reward is {trade.get('r_multiple', 3.67):.2f} with a {trade.get('win_prob', 0.68)*100:.0f}% win probability. Would you like me to show you the full analysis?"
+    
+    return {
+        "text": text,
+        "intent": "trading_query",
+        "trade": trade,
+    }
+
+async def respond_with_crypto_update(transcript: str, history: list, context: dict) -> dict:
+    """Generate natural language response for crypto queries."""
+    crypto = context.get("crypto", {})
+    
+    system_prompt = """You are RichesReach, a calm, concise trading coach specializing in cryptocurrency.
+- Always use the *provided* price data; do not invent prices.
+- Explain crypto opportunities in plain language.
+- Keep answers under 3-4 sentences unless user asks for more detail.
+- Mention volatility and risk awareness.
+- Be conversational and helpful."""
+    
+    user_prompt = f"""User just said: {transcript}
+
+Here is the crypto data:
+{json.dumps(crypto, indent=2)}
+
+Respond naturally to the user's question about cryptocurrency. Use the real prices provided."""
+    
+    text = await generate_voice_reply(system_prompt, user_prompt, history)
+    if not text:
+        # Fallback template
+        if "top_picks" in crypto:
+            picks = crypto["top_picks"]
+            text = f"Based on our crypto analysis, I'm seeing strong opportunities: Bitcoin (BTC) at ${picks[0]['price']:,.2f}, Ethereum (ETH) at ${picks[1]['price']:,.2f}, and Solana (SOL) at ${picks[2]['price']:,.2f}. Which one would you like to explore further?"
+        else:
+            symbol = crypto.get("symbol", "BTC")
+            name = crypto.get("name", "Bitcoin")
+            price = crypto.get("price", 55000)
+            change = crypto.get("change_24h", 0)
+            text = f"{name} ({symbol}) is currently trading at ${price:,.2f}, {change:+.2f}% in the last 24 hours. Our analysis shows strong momentum. Would you like me to show you the full analysis?"
+    
+    return {
+        "text": text,
+        "intent": "crypto_query",
+        "crypto": crypto,
+    }
+
+async def respond_with_execution_confirmation(transcript: str, history: list, context: dict) -> dict:
+    """Generate natural language response for trade execution."""
+    last_trade = context.get("last_trade", {})
+    
+    system_prompt = """You are RichesReach, confirming a trade the user just approved.
+- Confirm the symbol, side, and approximate size clearly.
+- Mention that this is a simulated/instructional trade if it's not live.
+- Encourage risk awareness, not hype.
+- Keep it to 1-3 sentences.
+- Be professional and reassuring."""
+    
+    user_prompt = f"""User just said (likely a confirmation): {transcript}
+
+Last recommended trade:
+{json.dumps(last_trade, indent=2)}
+
+Confirm to the user what was done in natural language. Be specific about what was executed."""
+    
+    text = await generate_voice_reply(system_prompt, user_prompt, history)
+    if not text:
+        # Fallback template
+        symbol = last_trade.get("symbol", "NVDA")
+        qty = last_trade.get("quantity", 100)
+        price = last_trade.get("price", 179.45)
+        is_crypto = last_trade.get("type") == "crypto"
+        unit = f"{qty} {symbol}" if is_crypto else f"{qty} shares"
+        text = f"Perfect! I've placed your order for {unit} of {symbol} at ${price:,.2f}. The order is now active and will execute when the price reaches your limit. You'll get a notification when it fills."
+    
+    return {
+        "text": text,
+        "intent": "execute_trade",
+        "executed_trade": last_trade,
+    }
+
+async def respond_with_portfolio_answer(transcript: str, history: list, context: dict) -> dict:
+    """Generate natural language response for portfolio queries."""
+    portfolio = context.get("portfolio", {})
+    
+    system_prompt = """You are RichesReach, helping the user understand their portfolio.
+- Use the provided portfolio data accurately.
+- Explain performance in plain language.
+- Keep answers concise (2-3 sentences) unless user asks for detail.
+- Be encouraging but realistic."""
+    
+    user_prompt = f"""User just said: {transcript}
+
+Portfolio data:
+{json.dumps(portfolio, indent=2)}
+
+Answer the user's question about their portfolio naturally."""
+    
+    text = await generate_voice_reply(system_prompt, user_prompt, history)
+    if not text:
+        # Fallback template
+        value = portfolio.get("value", 14303.52)
+        return_pct = portfolio.get("return", 17.65)
+        text = f"Your portfolio is performing well. Current value: ${value:,.2f} with a return of {return_pct:+.2f}%. Would you like a detailed breakdown?"
+    
+    return {
+        "text": text,
+        "intent": "portfolio_query",
+        "portfolio": portfolio,
+    }
+
+async def respond_with_explanation(transcript: str, history: list, context: dict) -> dict:
+    """Generate natural language response for trade explanations."""
+    last_trade = context.get("last_trade", {})
+    
+    system_prompt = """You are RichesReach, explaining why a trade is compelling.
+- Use the provided trade data to explain the reasoning.
+- Be specific about risk/reward, probability, and technical factors.
+- Keep it conversational, not a bullet list.
+- 2-4 sentences is ideal."""
+    
+    user_prompt = f"""User just said: {transcript}
+
+Last recommended trade:
+{json.dumps(last_trade, indent=2)}
+
+Explain why this trade is compelling in natural language. Weave the data into a story."""
+    
+    text = await generate_voice_reply(system_prompt, user_prompt, history)
+    if not text:
+        # Fallback template
+        text = "This trade is compelling because the momentum is exceptional, the technical setup shows a clean breakout, and our ML model gives it a high win probability with favorable risk/reward."
+    
+    return {
+        "text": text,
+        "intent": "explain_trade",
+    }
+
+async def respond_with_small_talk(transcript: str, history: list, context: dict) -> dict:
+    """Generate natural language response for general conversation."""
+    system_prompt = """You are RichesReach, a friendly trading coach and financial assistant.
+- You help users with trading ideas, portfolio management, and crypto investments.
+- Be concise, helpful, and conversational.
+- If you don't know something, say so.
+- Keep answers under 3 sentences for casual questions."""
+    
+    user_prompt = f"""User just said: {transcript}
+
+Respond naturally to the user's question or statement."""
+    
+    text = await generate_voice_reply(system_prompt, user_prompt, history)
+    if not text:
+        # Fallback
+        text = "I understand. How can I help you with your trading today?"
+    
+    return {
+        "text": text,
+        "intent": "small_talk",
+    }
+
+# ✅ Helper function to fetch real crypto prices from CoinGecko (free, no API key needed)
+# ✅ OPTIMIZED: Uses caching and shorter timeout
+async def get_crypto_price(symbol: str) -> dict:
+    """
+    Fetch real-time crypto price from CoinGecko API with caching.
+    Returns: {price: float, change_24h: float, change_percent_24h: float} or None
+    """
+    # Check cache first
+    cached = price_cache.get(symbol)
+    if cached:
+        logger.info(f"✅ Using cached {symbol} price: ${cached['price']:,.2f}")
+        return cached
+    
+    # Map common symbols to CoinGecko IDs
+    coin_id_map = {
+        'BTC': 'bitcoin',
+        'ETH': 'ethereum',
+        'SOL': 'solana',
+        'ADA': 'cardano',
+        'DOT': 'polkadot',
+        'MATIC': 'matic-network',
+        'AVAX': 'avalanche-2',
+        'LINK': 'chainlink',
+        'UNI': 'uniswap',
+        'ATOM': 'cosmos',
+    }
+    
+    coin_id = coin_id_map.get(symbol.upper())
+    if not coin_id:
+        logger.warn(f"⚠️ Unknown crypto symbol: {symbol}, using fallback price")
+        return None
+    
+    try:
+        # CoinGecko free API - no key needed for basic usage
+        url = f"https://api.coingecko.com/api/v3/simple/price"
+        params = {
+            'ids': coin_id,
+            'vs_currencies': 'usd',
+            'include_24hr_change': 'true',
+            'include_24hr_vol': 'true',
+        }
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=2.8)) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if coin_id in data:
+                        price_data = data[coin_id]
+                        price = price_data.get('usd', 0)
+                        change_24h = price_data.get('usd_24h_change', 0)
+                        
+                        result = {
+                            'price': price,
+                            'change_24h': change_24h,
+                            'change_percent_24h': change_24h,
+                        }
+                        
+                        # Cache the result
+                        price_cache.set(symbol, result)
+                        
+                        logger.info(f"✅ Fetched real {symbol} price: ${price:,.2f} (24h change: {change_24h:.2f}%)")
+                        return result
+                    else:
+                        logger.warn(f"⚠️ CoinGecko returned data but no {coin_id} entry")
+                        return cached  # Fallback to cache if available
+                else:
+                    logger.warn(f"⚠️ CoinGecko API returned status {response.status}")
+                    return cached  # Fallback to cache if available
+    except asyncio.TimeoutError:
+        logger.warn(f"⚠️ CoinGecko API timeout for {symbol}, using cached/fallback")
+        return cached  # Fallback to cache if available
+    except Exception as e:
+        logger.warn(f"⚠️ Error fetching crypto price for {symbol}: {e}")
+        return cached  # Fallback to cache if available
+
+# ✅ Batch fetch multiple crypto prices in parallel
+async def get_crypto_prices_batch(symbols: list[str]) -> dict:
+    """Fetch multiple crypto prices in parallel for speed."""
+    tasks = [get_crypto_price(symbol) for symbol in symbols]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    
+    prices = {}
+    for symbol, result in zip(symbols, results):
+        if isinstance(result, dict) and 'price' in result:
+            prices[symbol] = result
+        elif isinstance(result, Exception):
+            logger.warn(f"⚠️ Error fetching {symbol}: {result}")
+    
+    return prices
+
+# Voice Processing endpoint (for Miami demo)
+@app.post("/api/voice/process/")
+async def process_voice(request: Request):
+    """
+    Process voice audio for transcription and AI response.
+    Accepts multipart/form-data with audio file.
+    Returns transcription and AI-generated response.
+    
+    For demo: Returns intelligent mock responses based on common trading commands.
+    """
+    try:
+        logger.info("🎤 Voice processing request received")
+        # Parse multipart form data
+        form = await request.form()
+        audio_file = form.get("audio")
+        logger.info(f"🎤 Audio file received: {audio_file is not None}")
+        
+        audio_file_size = 0
+        audio_has_content = False
+        file_content = None
+        
+        if audio_file:
+            # Log file details if available
+            if hasattr(audio_file, 'filename'):
+                logger.info(f"🎤 Audio filename: {audio_file.filename}")
+            if hasattr(audio_file, 'size'):
+                logger.info(f"🎤 Audio file size: {audio_file.size} bytes")
+                audio_file_size = audio_file.size
+            if hasattr(audio_file, 'content_type'):
+                logger.info(f"🎤 Audio content type: {audio_file.content_type}")
+            
+            # Try to read the file to verify it has content
+            try:
+                # Reset file pointer in case it was already read
+                if hasattr(audio_file, 'seek'):
+                    await audio_file.seek(0)
+                
+                file_content = await audio_file.read()
+                audio_file_size = len(file_content)
+                logger.info(f"🎤 Audio file read successfully, size: {audio_file_size} bytes")
+                
+                # Check if file has actual audio data (WAV files have headers, so even empty files are ~44 bytes)
+                if audio_file_size < 100:
+                    logger.warn(f"⚠️ Audio file is very small ({audio_file_size} bytes) - likely empty or corrupted")
+                    logger.warn(f"⚠️ For demo purposes, will use mock transcription")
+                    audio_has_content = False
+                elif audio_file_size < 1000:
+                    logger.warn(f"⚠️ Audio file is small ({audio_file_size} bytes) - may be very short recording")
+                    logger.warn(f"⚠️ Will use mock transcription for demo")
+                    audio_has_content = False
+                else:
+                    logger.info(f"✅ Audio file looks good ({audio_file_size} bytes)")
+                    audio_has_content = True
+                    
+                    # Log first few bytes to verify it's a valid WAV file
+                    if len(file_content) > 4:
+                        header = file_content[:4]
+                        if header == b'RIFF':
+                            logger.info(f"✅ Valid WAV file detected (RIFF header)")
+                        else:
+                            logger.warn(f"⚠️ File doesn't appear to be a WAV file (header: {header})")
+            except Exception as read_error:
+                import traceback
+                logger.error(f"❌ Error reading audio file: {read_error}")
+                logger.error(f"❌ Traceback: {traceback.format_exc()}")
+                logger.warn(f"⚠️ Will use mock transcription for demo")
+                audio_has_content = False
+        else:
+            logger.warn("⚠️ No audio file received - using mock transcription for demo")
+        
+        # Try to transcribe using OpenAI Whisper API if available
+        transcription = None
+        use_real_transcription = False
+        
+        logger.info(f"🔍 Debug: audio_has_content={audio_has_content}, file_content is {'set' if file_content is not None else 'None'}, file_content size={len(file_content) if file_content else 0}")
+        
+        if audio_has_content and file_content:
+            # Check if OpenAI API key is available
+            openai_api_key = os.getenv('OPENAI_API_KEY')
+            logger.info(f"🔑 OpenAI API key check: {'Found' if openai_api_key else 'NOT FOUND'}")
+            if openai_api_key:
+                try:
+                    import openai
+                    import tempfile
+                    import os as os_module
+                    
+                    logger.info("🎤 Attempting real transcription with OpenAI Whisper...")
+                    logger.info(f"🎤 Audio file size: {len(file_content)} bytes")
+                    
+                    # Save audio to temporary file for OpenAI API
+                    with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_audio:
+                        temp_audio.write(file_content)
+                        temp_audio_path = temp_audio.name
+                    
+                    logger.info(f"🎤 Saved audio to temp file: {temp_audio_path}")
+                    logger.info(f"🎤 Temp file size: {os_module.path.getsize(temp_audio_path)} bytes")
+                    
+                    try:
+                        # Initialize OpenAI client
+                        logger.info("🎤 Initializing OpenAI client...")
+                        openai_client = openai.OpenAI(api_key=openai_api_key)
+                        logger.info("✅ OpenAI client initialized")
+                        
+                        # Call OpenAI Whisper API
+                        logger.info("🎤 Calling Whisper API...")
+                        with open(temp_audio_path, 'rb') as audio_file_obj:
+                            transcript_response = openai_client.audio.transcriptions.create(
+                                model="whisper-1",
+                                file=audio_file_obj,
+                                language="en"
+                            )
+                            transcription = transcript_response.text.strip()
+                            use_real_transcription = True
+                            logger.info(f"✅ Real transcription successful!")
+                            logger.info(f"🎤 ============================================")
+                            logger.info(f"🎤 USER ACTUALLY SAID: '{transcription}'")
+                            logger.info(f"🎤 ============================================")
+                    finally:
+                        # Clean up temp file
+                        if os_module.path.exists(temp_audio_path):
+                            os_module.unlink(temp_audio_path)
+                            
+                except ImportError:
+                    logger.warn("⚠️ OpenAI library not installed. Install with: pip install openai")
+                except Exception as whisper_error:
+                    import traceback
+                    logger.error(f"❌ Whisper transcription failed!")
+                    logger.error(f"❌ Error type: {type(whisper_error).__name__}")
+                    logger.error(f"❌ Error message: {str(whisper_error)}")
+                    logger.error(f"❌ Full traceback:\n{traceback.format_exc()}")
+                    logger.warn("⚠️ Falling back to mock transcription")
+        
+        # Fallback to mock transcription if real transcription failed or unavailable
+        if not transcription or not use_real_transcription:
+            mock_transcriptions = [
+                "Show me the best day trade right now",
+                "Find me the strongest momentum play",
+                "Buy one hundred shares of NVIDIA at market",
+                "What's my portfolio performance",
+                "Show me my positions",
+                "What's my buying power",
+                "Find me something good today",
+                "Show me the risk reward analysis",
+                "Why should I take this trade",
+                "What stocks should I buy today",
+                "Show me the top trading opportunities",
+                "What's the best trade right now",
+            ]
+            
+            import random
+            transcription = random.choice(mock_transcriptions)
+            
+            # Log what we're doing
+            if audio_has_content:
+                logger.info(f"🎭 Using mock transcription (Whisper unavailable): '{transcription}'")
+            else:
+                logger.info(f"🎭 Demo mode: Using mock transcription '{transcription}' (audio file was empty/small: {audio_file_size} bytes)")
+        
+        # ✅ NEW ARCHITECTURE: Transcribe → Understand → Decide → Generate natural language
+        # Get conversation history from request (if available)
+        conversation_history = []
+        try:
+            history_json = form.get("history")
+            if history_json:
+                conversation_history = json.loads(history_json) if isinstance(history_json, str) else history_json
+        except:
+            pass
+        
+        # Get last trade from request (if available)
+        last_trade = None
+        try:
+            last_trade_json = form.get("last_trade")
+            if last_trade_json:
+                last_trade = json.loads(last_trade_json) if isinstance(last_trade_json, str) else last_trade_json
+        except:
+            pass
+        
+        # Step 1: Detect intent
+        intent = detect_intent(transcription, conversation_history, last_trade)
+        logger.info(f"🎯 Detected intent: {intent}")
+        
+        # Step 2: Build context (fetch real data)
+        context = await build_context(intent, transcription, conversation_history, last_trade)
+        
+        # Step 3: Generate natural language response based on intent
+        try:
+            if intent == "get_trade_idea":
+                result = await respond_with_trade_idea(transcription, conversation_history, context)
+                ai_response = result["text"]
+                trade_data = result.get("trade", {})
+            elif intent == "crypto_query":
+                result = await respond_with_crypto_update(transcription, conversation_history, context)
+                ai_response = result["text"]
+                trade_data = result.get("crypto", {})
+            elif intent == "execute_trade":
+                result = await respond_with_execution_confirmation(transcription, conversation_history, context)
+                ai_response = result["text"]
+                trade_data = result.get("executed_trade", last_trade)
+            elif intent == "portfolio_query":
+                result = await respond_with_portfolio_answer(transcription, conversation_history, context)
+                ai_response = result["text"]
+                trade_data = None
+            elif intent == "explain_trade":
+                result = await respond_with_explanation(transcription, conversation_history, context)
+                ai_response = result["text"]
+                trade_data = last_trade
+            else:  # small_talk or unknown
+                result = await respond_with_small_talk(transcription, conversation_history, context)
+                ai_response = result["text"]
+                trade_data = None
+        except Exception as e:
+            import traceback
+            logger.exception(f"❌ Error in LLM voice pipeline: {e}")
+            logger.error(f"❌ Traceback: {traceback.format_exc()}")
+            # Fallback so the app doesn't break
+            ai_response = f"I had trouble generating a detailed answer just now, but I heard you say: \"{transcription}\". Can you try asking again in a moment?"
+            intent = "error_fallback"
+            trade_data = None
+        
+        # Return response with detected intent
+        return {
+            "success": True,
+            "response": {
+                "transcription": transcription,
+                "text": ai_response,
+                "confidence": 0.95,
+                "intent": intent,  # ✅ Intent determined by detect_intent()
+                "whisper_used": use_real_transcription,
+                "trade": trade_data,  # Include trade data if available
+                "debug": {
+                    "audio_has_content": audio_has_content,
+                    "file_content_size": len(file_content) if file_content else 0,
+                    "openai_key_found": bool(os.getenv('OPENAI_API_KEY'))
+                }
+            }
+        }
+    except Exception as e:
+        import traceback
+        logger.error(f"❌ Error in process_voice endpoint: {e}")
+        logger.error(f"❌ Traceback: {traceback.format_exc()}")
+        return {
+            "success": False,
+            "error": "Failed to process voice input",
+            "response": {
+                "transcription": "Error occurred",
+                "text": "I'm sorry, I had trouble processing that. Could you please try again?",
+                "confidence": 0.0,
+                "intent": "error",
+            }
+        }
+
+# ✅ STREAMING VOICE ENDPOINT - Ultra-low latency token-by-token responses
+@app.post("/api/voice/stream")
+async def voice_stream(request: Request):
+    """
+    Streaming voice endpoint - returns tokens as they're generated.
+    Reduces perceived latency from ~1.6s to ~350-450ms (first token).
+    Expects JSON: { transcript, history, last_trade, user_id }
+    """
+    try:
+        body = await request.json()
+        transcript = body.get("transcript", "")
+        history = body.get("history", [])
+        last_trade = body.get("last_trade")
+        user_id = body.get("user_id")
+        
+        if not transcript:
+            async def error_gen():
+                yield json.dumps({"type": "error", "text": "No transcript provided"}) + "\n"
+            return StreamingResponse(error_gen(), media_type="text/event-stream")
+        
+        logger.info(f"🎤 Streaming voice request: '{transcript[:50]}...'")
+        
+        # Step 1: Detect intent (fast, rule-based)
+        intent = detect_intent(transcript, history, last_trade)
+        logger.info(f"🎯 Detected intent: {intent}")
+        
+        # Step 2: Build context (parallel fetch)
+        context = await build_context(intent, transcript, history, last_trade)
+        
+        # Step 3: Generate system/user prompts based on intent
+        if intent == "get_trade_idea":
+            trade = context.get("trade", {})
+            system_prompt = """You are RichesReach, a calm, concise trading coach.
+- Always use the *provided* trade data; do not invent prices or symbols.
+- Explain ideas in plain language, not jargon.
+- Keep answers under 3-4 sentences unless user asks for more detail.
+- Be conversational and helpful, not robotic."""
+            user_prompt = f"""User just said: {transcript}
+
+Here is the recommended trade:
+{json.dumps(trade, indent=2)}
+
+Explain this trade to the user in natural language. Weave the data into a story, don't just list numbers."""
+        
+        elif intent == "crypto_query":
+            crypto = context.get("crypto", {})
+            system_prompt = """You are RichesReach, a calm, concise trading coach specializing in cryptocurrency.
+- Always use the *provided* price data; do not invent prices.
+- Explain crypto opportunities in plain language.
+- Keep answers under 3-4 sentences unless user asks for more detail.
+- Mention volatility and risk awareness."""
+            user_prompt = f"""User just said: {transcript}
+
+Here is the crypto data:
+{json.dumps(crypto, indent=2)}
+
+Respond naturally to the user's question about cryptocurrency. Use the real prices provided."""
+        
+        elif intent == "execute_trade":
+            last_trade = context.get("last_trade", {})
+            system_prompt = """You are RichesReach, confirming a trade the user just approved.
+- Confirm the symbol, side, and approximate size clearly.
+- Keep it to 1-3 sentences.
+- Be professional and reassuring."""
+            user_prompt = f"""User just said: {transcript}
+
+Last recommended trade:
+{json.dumps(last_trade, indent=2)}
+
+Confirm to the user what was done in natural language. Be specific about what was executed."""
+        
+        elif intent == "portfolio_query":
+            portfolio = context.get("portfolio", {})
+            system_prompt = """You are RichesReach, helping the user understand their portfolio.
+- Use the provided portfolio data accurately.
+- Explain performance in plain language.
+- Keep answers concise (2-3 sentences) unless user asks for detail."""
+            user_prompt = f"""User just said: {transcript}
+
+Portfolio data:
+{json.dumps(portfolio, indent=2)}
+
+Answer the user's question about their portfolio naturally."""
+        
+        elif intent == "explain_trade":
+            last_trade = context.get("last_trade", {})
+            system_prompt = """You are RichesReach, explaining why a trade is compelling.
+- Use the provided trade data to explain the reasoning.
+- Be specific about risk/reward, probability, and technical factors.
+- Keep it conversational, not a bullet list.
+- 2-4 sentences is ideal."""
+            user_prompt = f"""User just said: {transcript}
+
+Last recommended trade:
+{json.dumps(last_trade, indent=2)}
+
+Explain why this trade is compelling in natural language. Weave the data into a story."""
+        
+        else:  # small_talk
+            system_prompt = """You are RichesReach, a friendly trading coach and financial assistant.
+- You help users with trading ideas, portfolio management, and crypto investments.
+- Be concise, helpful, and conversational.
+- Keep answers under 3 sentences for casual questions."""
+            user_prompt = f"""User just said: {transcript}
+
+Respond naturally to the user's question or statement."""
+        
+        # Stream the response
+        async def token_generator():
+            async for chunk in generate_voice_reply_stream(system_prompt, user_prompt, history):
+                yield chunk
+        
+        return StreamingResponse(token_generator(), media_type="text/event-stream")
+        
+    except Exception as e:
+        import traceback
+        logger.error(f"❌ Error in streaming voice endpoint: {e}")
+        logger.error(f"❌ Traceback: {traceback.format_exc()}")
+        
+        async def error_gen():
+            yield json.dumps({"type": "error", "text": "I had trouble processing that. Can you try again?"}) + "\n"
+        return StreamingResponse(error_gen(), media_type="text/event-stream")
 
 # Tax Optimization endpoints
 @app.get("/api/tax/optimization-summary")

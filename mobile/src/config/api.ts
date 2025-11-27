@@ -8,41 +8,79 @@ import { Platform } from 'react-native';
 
 // Check environment variable first, then fallback to hardcoded values
 // Try multiple sources for the API base URL
-const ENV_API_BASE_URL = 
+// BUT: If it's localhost and we're on a physical device, ignore it and use device detection
+let ENV_API_BASE_URL = 
   process.env.EXPO_PUBLIC_API_BASE_URL || 
   Constants.expoConfig?.extra?.API_BASE_URL ||
   Constants.expoConfig?.extra?.API_BASE;
 
+// Force override: If env var has localhost, check if we're on a physical device
+// Use multiple checks since Constants.isDevice might not be reliable in all cases
+const isPhysicalDeviceCheck = Platform.OS === 'ios' && Constants.isDevice;
+const isLikelyPhysicalDevice = Platform.OS === 'ios' && (
+  Constants.isDevice || 
+  !Constants.executionEnvironment || 
+  Constants.executionEnvironment !== 'storeClient'
+);
+
+if (ENV_API_BASE_URL && /localhost|127\.0\.0\.1/.test(ENV_API_BASE_URL)) {
+  // If we're likely on a physical device, ignore localhost
+  if (isPhysicalDeviceCheck || (Platform.OS === 'ios' && !isSimulator)) {
+    console.warn('⚠️ [API Config] Ignoring localhost env var - likely physical device, will use device detection');
+    ENV_API_BASE_URL = undefined; // Force device detection to run
+  }
+}
+
 const prodHost = "http://api.richesreach.com:8000";
 // Default to LAN IP instead of localhost (localhost doesn't work on physical devices)
 // For physical devices, use your Mac's LAN IP (update this to match your current IP)
-const LAN_IP = "192.168.1.240"; // Update this to match your Mac's current LAN IP
+const LAN_IP = "10.0.0.54"; // Update this to match your Mac's current LAN IP (was 192.168.1.240)
 
-// CRITICAL: In development mode, ALWAYS use localhost for iOS
-// This prevents connection issues in the simulator
+// Use localhost for iOS Simulator, LAN IP for physical devices
+// Check if we're on a real device vs simulator
+const isSimulator = Platform.OS === 'ios' && (
+  !Constants.isDevice || 
+  Constants.executionEnvironment === 'storeClient'
+);
+
 let apiBase: string;
 
-if (__DEV__ && Platform.OS === 'ios') {
-  console.log('🔧 [API Config] DEV MODE + iOS: FORCING localhost');
-  apiBase = ENV_API_BASE_URL || "http://localhost:8000";
+// Debug logging
+console.log('🔍 [API Config] ENV_API_BASE_URL:', ENV_API_BASE_URL);
+console.log('🔍 [API Config] Platform.OS:', Platform.OS);
+console.log('🔍 [API Config] Constants.isDevice:', Constants.isDevice);
+console.log('🔍 [API Config] isSimulator:', isSimulator);
+
+if (ENV_API_BASE_URL) {
+  // Environment variable takes precedence, BUT override localhost on physical devices
+  const isPhysicalDevice = Platform.OS === 'ios' && Constants.isDevice;
+  const hasLocalhost = /localhost|127\.0\.0\.1/.test(ENV_API_BASE_URL);
+  
+  console.log('🔍 [API Config] isPhysicalDevice:', isPhysicalDevice);
+  console.log('🔍 [API Config] hasLocalhost:', hasLocalhost);
+  
+  if (isPhysicalDevice && hasLocalhost) {
+    // Override localhost on physical devices - use LAN IP instead
+    console.warn('⚠️ [API Config] Overriding localhost in env var for physical device');
+    apiBase = `http://${LAN_IP}:8000`;
+    console.log('🔧 [API Config] Using LAN IP for physical device:', apiBase);
+  } else {
+    apiBase = ENV_API_BASE_URL;
+    console.log('🔧 [API Config] Using EXPO_PUBLIC_API_BASE_URL:', apiBase);
+  }
+} else if (isSimulator) {
+  // iOS Simulator - use localhost
+  apiBase = "http://localhost:8000";
+  console.log('🔧 [API Config] iOS Simulator detected: using localhost');
+} else if (Platform.OS === 'ios' && Constants.isDevice) {
+  // Real iOS device - use LAN IP
+  apiBase = `http://${LAN_IP}:8000`;
+  console.log('🔧 [API Config] Real iOS device detected: using LAN IP', apiBase);
 } else {
-  // Use localhost for iOS Simulator, LAN IP for physical devices
-  const isSimulator = Platform.OS === 'ios' && (
-    !Constants.isDevice || 
-    Constants.executionEnvironment === 'storeClient'
-  );
-  const localHost = isSimulator ? "http://localhost:8000" : `http://${LAN_IP}:8000`;
-  
-  // Log detection for debugging
-  console.log('[API Config] Platform:', Platform.OS);
-  console.log('[API Config] Constants.isDevice:', Constants.isDevice);
-  console.log('[API Config] Constants.executionEnvironment:', Constants.executionEnvironment);
-  console.log('[API Config] __DEV__:', __DEV__);
-  console.log('[API Config] isSimulator:', isSimulator);
-  console.log('[API Config] localHost:', localHost);
-  
-  // Use environment variable if available, otherwise use localHost
-  apiBase = ENV_API_BASE_URL || localHost;
+  // Android or other - use LAN IP for real devices, localhost for emulator
+  const isAndroidEmulator = Platform.OS === 'android' && !Constants.isDevice;
+  apiBase = isAndroidEmulator ? "http://localhost:8000" : `http://${LAN_IP}:8000`;
+  console.log('🔧 [API Config] Platform:', Platform.OS, 'Device:', Constants.isDevice, 'Using:', apiBase);
 }
 
 export const API_BASE = apiBase;

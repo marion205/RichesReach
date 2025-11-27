@@ -120,12 +120,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const restLoginFlexible = async (emailOrUsername: string, password: string): Promise<string | null> => {
-    // Use environment variable or fallback to localhost
-    const baseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000";
+    // Use the centralized API config which handles device detection (localhost for simulator, LAN IP for real device)
+    const { API_BASE } = await import('../config/api');
+    let baseUrl = API_BASE;
     const identifier = emailOrUsername.trim();
     
-    logger.log('🔍 AuthContext: Using baseUrl:', baseUrl);
+    // Final safety check: if baseUrl is still localhost, force LAN IP
+    // This is a hard override - don't trust device detection, just force it
+    if (/localhost|127\.0\.0\.1/.test(baseUrl)) {
+      logger.warn('⚠️ AuthContext: baseUrl is localhost, FORCING LAN IP override');
+      baseUrl = 'http://10.0.0.54:8000';
+      logger.log('✅ AuthContext: Overridden to:', baseUrl);
+    }
+    
+    logger.log('🔍 AuthContext: Final baseUrl being used:', baseUrl);
+    logger.log('🔍 AuthContext: API_BASE imported was:', API_BASE);
+    logger.log('🔍 AuthContext: API_BASE imported:', API_BASE);
     logger.log('🔍 AuthContext: Environment variable:', process.env.EXPO_PUBLIC_API_BASE_URL);
+    logger.log('🔍 AuthContext: Platform.OS:', require('react-native').Platform.OS);
+    logger.log('🔍 AuthContext: Constants.isDevice:', require('expo-constants').default.isDevice);
     
     const attempt = async (payload: any) => {
       const loginUrl = `${baseUrl}/api/auth/login/`;
@@ -143,13 +156,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           if (fetchError.message?.includes('Network request failed') || 
               fetchError.message?.includes('Failed to fetch') ||
               fetchError.message?.includes('ECONNREFUSED')) {
-            throw new Error(
-              `Cannot connect to server at ${baseUrl}. ` +
+            // Use the actual baseUrl that was attempted, not a hardcoded message
+            const errorMsg = `Cannot connect to server at ${baseUrl}. ` +
               `Please check:\n` +
               `1. Backend is running on port 8000\n` +
               `2. Using correct IP address (not localhost on physical device)\n` +
-              `3. Firewall allows connections`
-            );
+              `3. Firewall allows connections`;
+            logger.error('❌ AuthContext: Connection failed to:', baseUrl);
+            throw new Error(errorMsg);
           }
           throw fetchError;
         });
