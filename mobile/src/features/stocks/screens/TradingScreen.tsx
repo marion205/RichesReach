@@ -647,6 +647,14 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
               );
             }}
           />
+          
+          {/* Alpaca Integration Disclosure Footer */}
+          <View style={styles.disclosureFooter}>
+            <Text style={styles.disclosureFooterText}>
+              Securities trading provided through Alpaca Securities LLC, member FINRA/SIPC. 
+              RichesReach is not affiliated with Alpaca Securities LLC.
+            </Text>
+          </View>
         </SafeAreaView>
       </OnboardingGuard>
     </>
@@ -741,6 +749,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#9CA3AF',
     fontWeight: '500',
+  },
+  disclosureFooter: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#F9FAFB',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: C.line,
+  },
+  disclosureFooterText: {
+    fontSize: 11,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 16,
   },
 });
 

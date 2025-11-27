@@ -194,7 +194,11 @@ export default function BrokerConfirmOrderModal({
               {/* Brokerage Services Disclosure */}
               <View style={styles.disclosureBox}>
                 <Text style={styles.disclosureTextBold}>
-                  Brokerage services provided by Alpaca Securities LLC, member FINRA/SIPC.
+                  Securities trading is provided through Alpaca Securities LLC, member FINRA/SIPC.
+                </Text>
+                <Text style={styles.disclosureText}>
+                  RichesReach is not affiliated with Alpaca Securities LLC. Alpaca does not endorse 
+                  or recommend any particular investment strategy.
                 </Text>
               </View>
               
