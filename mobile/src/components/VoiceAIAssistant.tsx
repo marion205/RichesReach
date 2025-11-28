@@ -802,15 +802,9 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
       await speakText("One sec…", { immediate: true });
       
       const { API_BASE } = await import('../config/api');
-      let API_BASE_URL = API_BASE;
+      const API_BASE_URL = API_BASE; // Config should already handle device detection correctly
       
-      // Final safety check: if API_BASE is still localhost, force LAN IP
-      if (/localhost|127\.0\.0\.1/.test(API_BASE_URL)) {
-        logger.warn('⚠️ VoiceAIAssistant: API_BASE is localhost, FORCING LAN IP override');
-        API_BASE_URL = 'http://10.0.0.54:8000';
-        logger.log('✅ VoiceAIAssistant: Overridden to:', API_BASE_URL);
-      }
-      
+      logger.log('🎤 [VoiceAIAssistant] Using API_BASE:', API_BASE_URL);
       logger.log('🎤 Sending to streaming API:', `${API_BASE_URL}/api/voice/stream`);
       
       // Add timeout for streaming endpoint (10 seconds max - optimized for speed)
@@ -1062,17 +1056,10 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
       // Send to backend for Whisper transcription and AI processing
       // Use the configured API_BASE which handles device detection (localhost for simulator, LAN IP for real device)
       const { API_BASE } = await import('../config/api');
-      let API_BASE_URL = API_BASE;
+      const API_BASE_URL = API_BASE; // Config should already handle device detection correctly
       
-      // Final safety check: if API_BASE is still localhost, force LAN IP
-      if (/localhost|127\.0\.0\.1/.test(API_BASE_URL)) {
-        logger.warn('⚠️ VoiceAIAssistant: API_BASE is localhost, FORCING LAN IP override');
-        API_BASE_URL = 'http://10.0.0.54:8000';
-        logger.log('✅ VoiceAIAssistant: Overridden to:', API_BASE_URL);
-      }
-      
+      logger.log('🎤 [VoiceAIAssistant] Using API_BASE:', API_BASE_URL);
       logger.log('🎤 Sending to API:', `${API_BASE_URL}/api/voice/process/`);
-      logger.log('🎤 API_BASE_URL resolved to:', API_BASE_URL);
       
       let response: Response;
       try {
@@ -1180,194 +1167,247 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
       logger.log('🎤 Voice API raw response:', JSON.stringify(data, null, 2));
       logger.log('🎤 ============================================');
       
-      if (data.success && data.response) {
-        logger.log('✅ Voice processed successfully!');
-        const transcribedText = data.response.transcription || '';
-        const aiResponse = data.response.text || '';
-        const intent = data.response.intent || '';
+      // ✅ FIX: Check if response exists first (robust handling)
+      if (!data || !data.response) {
+        logger.error('❌ Response format invalid (no response field):', data);
+        throw new Error(data?.error || 'Failed to process voice input');
+      }
+      
+      const transcribedText = data.response.transcription || '';
+      const aiResponse = data.response.text || '';
+      const intent = data.response.intent || '';
+      
+      // ✅ FIX: Detect error responses (intent === 'error' or success === false or data.error exists)
+      const isErrorIntent =
+        intent === 'error' ||
+        data.success === false ||
+        !!data.error; // backend signaled an error
+      
+      if (isErrorIntent) {
+        logger.warn('⚠️ Voice API reported error, using friendly fallback:', {
+          error: data.error,
+          intent,
+          confidence: data.response.confidence,
+        });
         
-        // Update live transcription immediately so user can see what they said
-        setLiveTranscription(transcribedText);
+        // Use the error message from backend (your "I'm sorry..." message) or fallback
+        const safeText =
+          aiResponse ||
+          "I'm sorry, I had trouble processing that. Could you please try again?";
         
-        // Log the ACTUAL transcription prominently so you can see what was captured
-        logger.log('🎤 ============================================');
-        logger.log('🎤 ACTUAL TRANSCRIPTION FROM BACKEND:');
-        logger.log('🎤', transcribedText);
-        logger.log('🎤 INTENT FROM BACKEND:', intent);
-        if (data.response.debug) {
-          logger.log('🎤 DEBUG INFO:', JSON.stringify(data.response.debug, null, 2));
-          logger.log('🎤 Whisper was used:', data.response.whisper_used ? 'YES ✅' : 'NO ❌ (using mock)');
+        // Update live transcription if available
+        if (transcribedText) {
+          setLiveTranscription(transcribedText);
         }
-        logger.log('🎤 ============================================');
-        logger.log('🎤 AI Response:', aiResponse);
-        logger.log('🎤 Current conversation length:', conversation.length);
-        
-        // ✅ FIX: Detect execution commands (either via intent or phrase matching)
-        const transcriptionLower = transcribedText.toLowerCase();
-        const isExecuteCommand = 
-          intent === 'execute_trade' ||
-          /execute (the )?trade|place (the )?order|confirm|go ahead|do it|yes,? (place|execute|buy)/i.test(transcriptionLower);
-        
-        // ✅ FIX: Extract and store trade details from trade suggestions (stocks AND crypto)
-        if (intent === 'trading_query' || intent === 'crypto_query' || aiResponse.includes('NVDA') || aiResponse.includes('NVIDIA') || aiResponse.includes('Bitcoin') || aiResponse.includes('BTC') || aiResponse.includes('Ethereum') || aiResponse.includes('ETH') || aiResponse.includes('Solana') || aiResponse.includes('SOL')) {
-          // Try to extract trade details from the response
-          const nvdaMatch = aiResponse.match(/NVIDIA \(NVDA\)|NVDA/);
-          const btcMatch = aiResponse.match(/Bitcoin \(BTC\)|BTC/);
-          const ethMatch = aiResponse.match(/Ethereum \(ETH\)|ETH/);
-          const solMatch = aiResponse.match(/Solana \(SOL\)|SOL/);
-          
-          const entryMatch = aiResponse.match(/Entry (?:at|around) \$?([\d,]+\.?\d*)/i);
-          const stopMatch = aiResponse.match(/stop at \$?([\d,]+\.?\d*)/i);
-          const targetMatch = aiResponse.match(/target at \$?([\d,]+\.?\d*)/i);
-          const qtyMatch = aiResponse.match(/(\d+)\s*(?:shares?|bitcoin|btc|ethereum|eth|solana|sol)/i);
-          const priceMatch = aiResponse.match(/trading (?:at|around) \$?([\d,]+\.?\d*)/i) || aiResponse.match(/currently trading at \$?([\d,]+\.?\d*)/i);
-          
-          // Store stock trade
-          if (nvdaMatch) {
-            lastTradeRef.current = {
-              symbol: 'NVDA',
-              quantity: qtyMatch ? parseInt(qtyMatch[1]) : 100,
-              side: 'buy' as const,
-              price: entryMatch ? parseFloat(entryMatch[1].replace(/,/g, '')) : (priceMatch ? parseFloat(priceMatch[1].replace(/,/g, '')) : 179.50),
-              entry: entryMatch ? parseFloat(entryMatch[1].replace(/,/g, '')) : (priceMatch ? parseFloat(priceMatch[1].replace(/,/g, '')) : 179.50),
-              stop: stopMatch ? parseFloat(stopMatch[1].replace(/,/g, '')) : 178.00,
-              target: targetMatch ? parseFloat(targetMatch[1].replace(/,/g, '')) : 185.00,
-              type: 'stock' as const,
-            };
-            logger.log('🎤 Stored last stock trade recommendation:', lastTradeRef.current);
-          }
-          // Store crypto trades
-          else if (btcMatch) {
-            lastTradeRef.current = {
-              symbol: 'BTC',
-              quantity: qtyMatch ? parseInt(qtyMatch[1]) : 1,
-              side: 'buy' as const,
-              price: entryMatch ? parseFloat(entryMatch[1].replace(/,/g, '')) : (priceMatch ? parseFloat(priceMatch[1].replace(/,/g, '')) : 55000),
-              entry: entryMatch ? parseFloat(entryMatch[1].replace(/,/g, '')) : (priceMatch ? parseFloat(priceMatch[1].replace(/,/g, '')) : 55000),
-              stop: stopMatch ? parseFloat(stopMatch[1].replace(/,/g, '')) : 53500,
-              target: targetMatch ? parseFloat(targetMatch[1].replace(/,/g, '')) : 57500,
-              type: 'crypto' as const,
-            };
-            logger.log('🎤 Stored last crypto trade recommendation (BTC):', lastTradeRef.current);
-          }
-          else if (ethMatch) {
-            lastTradeRef.current = {
-              symbol: 'ETH',
-              quantity: qtyMatch ? parseInt(qtyMatch[1]) : 1,
-              side: 'buy' as const,
-              price: entryMatch ? parseFloat(entryMatch[1].replace(/,/g, '')) : (priceMatch ? parseFloat(priceMatch[1].replace(/,/g, '')) : 3200),
-              entry: entryMatch ? parseFloat(entryMatch[1].replace(/,/g, '')) : (priceMatch ? parseFloat(priceMatch[1].replace(/,/g, '')) : 3200),
-              stop: stopMatch ? parseFloat(stopMatch[1].replace(/,/g, '')) : 3050,
-              target: targetMatch ? parseFloat(targetMatch[1].replace(/,/g, '')) : 3450,
-              type: 'crypto' as const,
-            };
-            logger.log('🎤 Stored last crypto trade recommendation (ETH):', lastTradeRef.current);
-          }
-          else if (solMatch) {
-            lastTradeRef.current = {
-              symbol: 'SOL',
-              quantity: qtyMatch ? parseInt(qtyMatch[1]) : 1,
-              side: 'buy' as const,
-              price: entryMatch ? parseFloat(entryMatch[1].replace(/,/g, '')) : (priceMatch ? parseFloat(priceMatch[1].replace(/,/g, '')) : 180),
-              entry: entryMatch ? parseFloat(entryMatch[1].replace(/,/g, '')) : (priceMatch ? parseFloat(priceMatch[1].replace(/,/g, '')) : 180),
-              stop: stopMatch ? parseFloat(stopMatch[1].replace(/,/g, '')) : 170,
-              target: targetMatch ? parseFloat(targetMatch[1].replace(/,/g, '')) : 195,
-              type: 'crypto' as const,
-            };
-            logger.log('🎤 Stored last crypto trade recommendation (SOL):', lastTradeRef.current);
-          }
-        }
-        
-        // ✅ FIX: Handle execution commands differently
-        let finalResponseText = aiResponse;
-        let shouldExecute = false;
-        
-        if (isExecuteCommand) {
-          if (!lastTradeRef.current) {
-            finalResponseText = "I don't have a trade queued yet. Ask me for a trading idea first, then I can execute it.";
-            logger.warn('⚠️ Execute command received but no trade recommendation stored');
-          } else {
-            // Execute the trade
-            shouldExecute = true;
-            const trade = lastTradeRef.current;
-            const isCrypto = trade.type === 'crypto';
-            const unit = isCrypto ? (trade.quantity === 1 ? trade.symbol : `${trade.quantity} ${trade.symbol}`) : `${trade.quantity || 100} shares`;
-            const assetType = isCrypto ? trade.symbol : `${trade.symbol} stock`;
-            
-            finalResponseText = `Got it. I'm executing that trade now. Placing a limit buy order for ${unit} of ${assetType} at $${trade.price?.toLocaleString() || (isCrypto ? 'market' : '179.45')}. You'll receive a confirmation when the order fills.`;
-            logger.log('🎤 Executing trade:', trade);
-            
-            // TODO: Actually call your trade execution API here
-            // For now, we'll just log it and speak the confirmation
-            // Example:
-            // try {
-            //   const { API_BASE } = await import('../config/api');
-            //   const executeResponse = await fetch(`${API_BASE}/api/broker/orders/`, {
-            //     method: 'POST',
-            //     headers: { 'Content-Type': 'application/json' },
-            //     body: JSON.stringify({
-            //       symbol: trade.symbol,
-            //       side: trade.side.toUpperCase(),
-            //       quantity: trade.quantity,
-            //       order_type: 'LIMIT',
-            //       limit_price: trade.price,
-            //     }),
-            //   });
-            //   const executeData = await executeResponse.json();
-            //   logger.log('✅ Trade executed:', executeData);
-            // } catch (executeError) {
-            //   logger.error('❌ Trade execution failed:', executeError);
-            //   finalResponseText = "I encountered an error executing the trade. Please try again or check your account status.";
-            // }
-          }
-        }
-        
-        // ✅ FIX: Always use the NEW response text (not reusing old values)
-        const assistantText = finalResponseText; // Use the processed response
         
         // Add to conversation
-        const newConversation = [
+        const errorConversation = [
           ...conversation,
           {
             id: Date.now(),
             type: 'user',
-            text: transcribedText,
+            text: transcribedText || 'Voice command',
             timestamp: new Date(),
           },
           {
             id: Date.now() + 1,
             type: 'assistant',
-            text: assistantText, // ✅ Use the new text, not old aiResponse
+            text: safeText,
             timestamp: new Date(),
           }
         ];
-
-        logger.log('🎤 Setting conversation with', newConversation.length, 'messages');
-        logger.log('🎤 New conversation:', JSON.stringify(newConversation, null, 2));
-        setConversation(newConversation);
-        setCurrentQuestion(transcribedText);
-        logger.log('🎤 Conversation state updated, current question set to:', transcribedText);
         
-        // Force a small delay to ensure state updates
-        await new Promise(resolve => setTimeout(resolve, 100));
-        logger.log('🎤 State update complete');
-
-        // Speak the response
-        logger.log('🎤 Speaking response...');
-        try {
-          await speakText(assistantText); // ✅ Use the processed response
-          logger.log('✅ Response spoken successfully');
-        } catch (speakError) {
-          logger.error('❌ Error speaking response:', speakError);
+        setConversation(errorConversation);
+        setCurrentQuestion(transcribedText || '');
+        
+        // Speak the error message
+        await speakText(safeText);
+        
+        // Return early - don't process as a successful response
+        return;
+      }
+      
+      // ✅ Happy path – real semantic response
+      logger.log('✅ Voice processed successfully!');
+      
+      // Update live transcription immediately so user can see what they said
+      setLiveTranscription(transcribedText);
+      
+      // Log the ACTUAL transcription prominently so you can see what was captured
+      logger.log('🎤 ============================================');
+      logger.log('🎤 ACTUAL TRANSCRIPTION FROM BACKEND:');
+      logger.log('🎤', transcribedText);
+      logger.log('🎤 INTENT FROM BACKEND:', intent);
+      if (data.response.debug) {
+        logger.log('🎤 DEBUG INFO:', JSON.stringify(data.response.debug, null, 2));
+        logger.log('🎤 Whisper was used:', data.response.whisper_used ? 'YES ✅' : 'NO ❌ (using mock)');
+      }
+      logger.log('🎤 ============================================');
+      logger.log('🎤 AI Response:', aiResponse);
+      logger.log('🎤 Current conversation length:', conversation.length);
+      
+      // ✅ FIX: Detect execution commands (either via intent or phrase matching)
+      const transcriptionLower = transcribedText.toLowerCase();
+      const isExecuteCommand = 
+        intent === 'execute_trade' ||
+        /execute (the )?trade|place (the )?order|confirm|go ahead|do it|yes,? (place|execute|buy)/i.test(transcriptionLower);
+      
+      // ✅ FIX: Extract and store trade details from trade suggestions (stocks AND crypto)
+      if (intent === 'trading_query' || intent === 'crypto_query' || aiResponse.includes('NVDA') || aiResponse.includes('NVIDIA') || aiResponse.includes('Bitcoin') || aiResponse.includes('BTC') || aiResponse.includes('Ethereum') || aiResponse.includes('ETH') || aiResponse.includes('Solana') || aiResponse.includes('SOL')) {
+        // Try to extract trade details from the response
+        const nvdaMatch = aiResponse.match(/NVIDIA \(NVDA\)|NVDA/);
+        const btcMatch = aiResponse.match(/Bitcoin \(BTC\)|BTC/);
+        const ethMatch = aiResponse.match(/Ethereum \(ETH\)|ETH/);
+        const solMatch = aiResponse.match(/Solana \(SOL\)|SOL/);
+        
+        const entryMatch = aiResponse.match(/Entry (?:at|around) \$?([\d,]+\.?\d*)/i);
+        const stopMatch = aiResponse.match(/stop at \$?([\d,]+\.?\d*)/i);
+        const targetMatch = aiResponse.match(/target at \$?([\d,]+\.?\d*)/i);
+        const qtyMatch = aiResponse.match(/(\d+)\s*(?:shares?|bitcoin|btc|ethereum|eth|solana|sol)/i);
+        const priceMatch = aiResponse.match(/trading (?:at|around) \$?([\d,]+\.?\d*)/i) || aiResponse.match(/currently trading at \$?([\d,]+\.?\d*)/i);
+        
+        // Store stock trade
+        if (nvdaMatch) {
+          lastTradeRef.current = {
+            symbol: 'NVDA',
+            quantity: qtyMatch ? parseInt(qtyMatch[1]) : 100,
+            side: 'buy' as const,
+            price: entryMatch ? parseFloat(entryMatch[1].replace(/,/g, '')) : (priceMatch ? parseFloat(priceMatch[1].replace(/,/g, '')) : 179.50),
+            entry: entryMatch ? parseFloat(entryMatch[1].replace(/,/g, '')) : (priceMatch ? parseFloat(priceMatch[1].replace(/,/g, '')) : 179.50),
+            stop: stopMatch ? parseFloat(stopMatch[1].replace(/,/g, '')) : 178.00,
+            target: targetMatch ? parseFloat(targetMatch[1].replace(/,/g, '')) : 185.00,
+            type: 'stock' as const,
+          };
+          logger.log('🎤 Stored last stock trade recommendation:', lastTradeRef.current);
         }
-
-        // Generate insight if applicable
-        if (data.response.insights && data.response.insights.length > 0 && onInsightGenerated) {
-          onInsightGenerated(data.response.insights[0]);
+        // Store crypto trades
+        else if (btcMatch) {
+          lastTradeRef.current = {
+            symbol: 'BTC',
+            quantity: qtyMatch ? parseInt(qtyMatch[1]) : 1,
+            side: 'buy' as const,
+            price: entryMatch ? parseFloat(entryMatch[1].replace(/,/g, '')) : (priceMatch ? parseFloat(priceMatch[1].replace(/,/g, '')) : 55000),
+            entry: entryMatch ? parseFloat(entryMatch[1].replace(/,/g, '')) : (priceMatch ? parseFloat(priceMatch[1].replace(/,/g, '')) : 55000),
+            stop: stopMatch ? parseFloat(stopMatch[1].replace(/,/g, '')) : 53500,
+            target: targetMatch ? parseFloat(targetMatch[1].replace(/,/g, '')) : 57500,
+            type: 'crypto' as const,
+          };
+          logger.log('🎤 Stored last crypto trade recommendation (BTC):', lastTradeRef.current);
         }
-      } else {
-        logger.error('❌ Response format invalid:', data);
-        throw new Error(data.error || 'Failed to process voice input');
+        else if (ethMatch) {
+          lastTradeRef.current = {
+            symbol: 'ETH',
+            quantity: qtyMatch ? parseInt(qtyMatch[1]) : 1,
+            side: 'buy' as const,
+            price: entryMatch ? parseFloat(entryMatch[1].replace(/,/g, '')) : (priceMatch ? parseFloat(priceMatch[1].replace(/,/g, '')) : 3200),
+            entry: entryMatch ? parseFloat(entryMatch[1].replace(/,/g, '')) : (priceMatch ? parseFloat(priceMatch[1].replace(/,/g, '')) : 3200),
+            stop: stopMatch ? parseFloat(stopMatch[1].replace(/,/g, '')) : 3050,
+            target: targetMatch ? parseFloat(targetMatch[1].replace(/,/g, '')) : 3450,
+            type: 'crypto' as const,
+          };
+          logger.log('🎤 Stored last crypto trade recommendation (ETH):', lastTradeRef.current);
+        }
+        else if (solMatch) {
+          lastTradeRef.current = {
+            symbol: 'SOL',
+            quantity: qtyMatch ? parseInt(qtyMatch[1]) : 1,
+            side: 'buy' as const,
+            price: entryMatch ? parseFloat(entryMatch[1].replace(/,/g, '')) : (priceMatch ? parseFloat(priceMatch[1].replace(/,/g, '')) : 180),
+            entry: entryMatch ? parseFloat(entryMatch[1].replace(/,/g, '')) : (priceMatch ? parseFloat(priceMatch[1].replace(/,/g, '')) : 180),
+            stop: stopMatch ? parseFloat(stopMatch[1].replace(/,/g, '')) : 170,
+            target: targetMatch ? parseFloat(targetMatch[1].replace(/,/g, '')) : 195,
+            type: 'crypto' as const,
+          };
+          logger.log('🎤 Stored last crypto trade recommendation (SOL):', lastTradeRef.current);
+        }
+      }
+      
+      // ✅ FIX: Handle execution commands differently
+      let finalResponseText = aiResponse;
+      let shouldExecute = false;
+      
+      if (isExecuteCommand) {
+        if (!lastTradeRef.current) {
+          finalResponseText = "I don't have a trade queued yet. Ask me for a trading idea first, then I can execute it.";
+          logger.warn('⚠️ Execute command received but no trade recommendation stored');
+        } else {
+          // Execute the trade
+          shouldExecute = true;
+          const trade = lastTradeRef.current;
+          const isCrypto = trade.type === 'crypto';
+          const unit = isCrypto ? (trade.quantity === 1 ? trade.symbol : `${trade.quantity} ${trade.symbol}`) : `${trade.quantity || 100} shares`;
+          const assetType = isCrypto ? trade.symbol : `${trade.symbol} stock`;
+          
+          finalResponseText = `Got it. I'm executing that trade now. Placing a limit buy order for ${unit} of ${assetType} at $${trade.price?.toLocaleString() || (isCrypto ? 'market' : '179.45')}. You'll receive a confirmation when the order fills.`;
+          logger.log('🎤 Executing trade:', trade);
+          
+          // TODO: Actually call your trade execution API here
+          // For now, we'll just log it and speak the confirmation
+          // Example:
+          // try {
+          //   const { API_BASE } = await import('../config/api');
+          //   const executeResponse = await fetch(`${API_BASE}/api/broker/orders/`, {
+          //     method: 'POST',
+          //     headers: { 'Content-Type': 'application/json' },
+          //     body: JSON.stringify({
+          //       symbol: trade.symbol,
+          //       side: trade.side.toUpperCase(),
+          //       quantity: trade.quantity,
+          //       order_type: 'LIMIT',
+          //       limit_price: trade.price,
+          //     }),
+          //   });
+          //   const executeData = await executeResponse.json();
+          //   logger.log('✅ Trade executed:', executeData);
+          // } catch (executeError) {
+          //   logger.error('❌ Trade execution failed:', executeError);
+          //   finalResponseText = "I encountered an error executing the trade. Please try again or check your account status.";
+          // }
+        }
+      }
+      
+      // ✅ FIX: Always use the NEW response text (not reusing old values)
+      const assistantText = finalResponseText; // Use the processed response
+      
+      // Add to conversation
+      const newConversation = [
+        ...conversation,
+        {
+          id: Date.now(),
+          type: 'user',
+          text: transcribedText,
+          timestamp: new Date(),
+        },
+        {
+          id: Date.now() + 1,
+          type: 'assistant',
+          text: assistantText, // ✅ Use the new text, not old aiResponse
+          timestamp: new Date(),
+        }
+      ];
+
+      logger.log('🎤 Setting conversation with', newConversation.length, 'messages');
+      logger.log('🎤 New conversation:', JSON.stringify(newConversation, null, 2));
+      setConversation(newConversation);
+      setCurrentQuestion(transcribedText);
+      logger.log('🎤 Conversation state updated, current question set to:', transcribedText);
+      
+      // Force a small delay to ensure state updates
+      await new Promise(resolve => setTimeout(resolve, 100));
+      logger.log('🎤 State update complete');
+
+      // Speak the response
+      logger.log('🎤 Speaking response...');
+      try {
+        await speakText(assistantText); // ✅ Use the processed response
+        logger.log('✅ Response spoken successfully');
+      } catch (speakError) {
+        logger.error('❌ Error speaking response:', speakError);
+      }
+
+      // Generate insight if applicable
+      if (data.response.insights && data.response.insights.length > 0 && onInsightGenerated) {
+        onInsightGenerated(data.response.insights[0]);
       }
     } catch (error) {
       logger.error('❌ Error processing audio:', error);

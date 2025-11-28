@@ -153,8 +153,21 @@ const SignalsScreen: React.FC<SignalsScreenProps> = ({ navigateTo: navigateToPro
       navigation.navigate(screen as never);
     } catch (error) {
       console.warn('Navigation error:', error);
+      // Fallback to globalNavigate if available
+      try {
+        if (typeof window !== 'undefined' && (window as any).__navigateToGlobal) {
+          (window as any).__navigateToGlobal(screen);
+        }
+      } catch (fallbackError) {
+        console.error('All navigation methods failed:', fallbackError);
+      }
     }
   });
+  
+  // Ensure navigateTo is always a function
+  if (typeof navigateTo !== 'function') {
+    console.error('navigateTo is not a function:', typeof navigateTo, navigateTo);
+  }
 
   const { data, loading, error, refetch } = useQuery(GET_SWING_SIGNALS, {
     variables: {

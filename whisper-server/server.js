@@ -194,6 +194,48 @@ io.on('connection', (socket) => {
     console.log(`👥 User ${socket.id} joined circle ${circleId}`);
   });
   
+  // Fireside Room handlers (WebRTC signaling)
+  socket.on('join-room', ({ room }) => {
+    socket.join(room);
+    console.log(`🔥 [Fireside] User ${socket.id} joined room ${room}`);
+    // Notify others in the room
+    socket.to(room).emit('user-joined', { userId: socket.id, room });
+  });
+  
+  socket.on('leave-room', ({ room }) => {
+    socket.leave(room);
+    console.log(`🔥 [Fireside] User ${socket.id} left room ${room}`);
+    socket.to(room).emit('user-left', { userId: socket.id, room });
+  });
+  
+  // WebRTC signaling for Fireside Room
+  socket.on('offer', ({ from, offer, to }) => {
+    console.log(`📞 [Fireside] Offer from ${from} to ${to || 'all'}`);
+    if (to) {
+      socket.to(to).emit('offer', { from, offer });
+    } else {
+      // Broadcast to room if no specific target
+      socket.broadcast.emit('offer', { from, offer });
+    }
+  });
+  
+  socket.on('answer', ({ from, answer, to }) => {
+    console.log(`📞 [Fireside] Answer from ${from} to ${to || 'all'}`);
+    if (to) {
+      socket.to(to).emit('answer', { from, answer });
+    } else {
+      socket.broadcast.emit('answer', { from, answer });
+    }
+  });
+  
+  socket.on('ice-candidate', ({ candidate, to }) => {
+    if (to) {
+      socket.to(to).emit('ice-candidate', { candidate, from: socket.id });
+    } else {
+      socket.broadcast.emit('ice-candidate', { candidate, from: socket.id });
+    }
+  });
+  
   socket.on('start_live_stream', ({ circleId, host }) => {
     socket.to(circleId).emit('live_stream_started', { host, channelId: circleId });
     console.log(`📺 Live stream started in circle ${circleId} by ${host}`);

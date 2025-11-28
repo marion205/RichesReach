@@ -648,11 +648,15 @@ class PremiumAnalyticsService:
             profile: Optional user profile dict with age, income_bracket, investment_goals, investment_horizon_years
         """
         # Layer 1: Check cache first
-        cache_key = self._profile_cache_key(user_id, risk_tolerance, profile)
+        # Add version to cache key to invalidate when code changes
+        cache_version = "v2"  # Increment this when reasoning logic changes
+        cache_key = f"{self._profile_cache_key(user_id, risk_tolerance, profile)}:{cache_version}"
         cached = cache.get(cache_key)
         if cached:
             logger.info("[AI RECS] ✅ Returning cached recommendations for user=%s (cache_key=%s)", user_id, cache_key[:50])
             return cached
+        else:
+            logger.info("[AI RECS] 🔄 Cache miss or new version, generating fresh recommendations for user=%s", user_id)
 
         try:
             # Get spending habits analysis
@@ -765,8 +769,9 @@ class PremiumAnalyticsService:
             }
 
             # Layer 1: Cache the result
+            # Use the same versioned cache key
             cache.set(cache_key, result, RECS_CACHE_TTL)
-            logger.info("[AI RECS] 💾 Cached recommendations for user=%s (TTL=%ss)", user_id, RECS_CACHE_TTL)
+            logger.info("[AI RECS] 💾 Cached recommendations for user=%s (TTL=%ss, version=%s)", user_id, RECS_CACHE_TTL, cache_version)
             return result
 
         except Exception as e:
@@ -1005,22 +1010,154 @@ class PremiumAnalyticsService:
             # Calculate confidence based on ML score
             confidence = min(95, max(60, ml_score))  # 60-95% confidence
             
-            # Build personalized reasoning
+            # Build personalized reasoning with stock-specific details (fully dynamic)
             reasoning_parts = []
-            if ml_score > 70:
-                reasoning_parts.append("Strong ML/AI signals")
-            if risk_tolerance.lower() in ['conservative', 'low'] and item['volatility'] < 20:
-                reasoning_parts.append("low volatility aligns with your risk profile")
-            elif risk_tolerance.lower() in ['aggressive', 'high']:
-                reasoning_parts.append("growth potential matches your risk tolerance")
-            if sector_weights and sector in sector_weights and sector_weights[sector] > 0.1:
-                reasoning_parts.append(f"aligned with your spending in {sector}")
-            if investment_horizon_years is not None and investment_horizon_years >= 10 and item['pe_ratio'] > 0 and item['pe_ratio'] < 20:
-                reasoning_parts.append("value characteristics for long-term holding")
             
-            reasoning = "Attractive fundamentals and risk profile for your settings."
+            # Start with company name or symbol for personalization
+            company_display = name if name and name != symbol else symbol
+            if company_display:
+                reasoning_parts.append(f"{company_display} demonstrates")
+            
+            # Add market cap context (dynamic)
+            market_cap = item.get('market_cap', 0)
+            if market_cap > 200_000_000_000:  # > $200B
+                cap_context = "mega-cap"
+            elif market_cap > 10_000_000_000:  # > $10B
+                cap_context = "large-cap"
+            elif market_cap > 2_000_000_000:  # > $2B
+                cap_context = "mid-cap"
+            else:
+                cap_context = "small-cap"
+            
+            # Add ML/AI signal strength with more granular ranges (dynamic)
+            if ml_score > 85:
+                ml_signal = "exceptional ML/AI signals"
+            elif ml_score > 75:
+                ml_signal = "very strong ML/AI signals"
+            elif ml_score > 70:
+                ml_signal = "strong ML/AI signals"
+            elif ml_score > 65:
+                ml_signal = "positive ML/AI signals"
+            elif ml_score > 60:
+                ml_signal = "moderate ML/AI signals"
+            else:
+                ml_signal = "emerging ML/AI signals"
+            reasoning_parts.append(ml_signal)
+            
+            # Add sector-specific context with more detail (dynamic)
+            if sector:
+                sector_lower = sector.lower()
+                if sector_lower in ['technology', 'information technology']:
+                    sector_desc = "technology sector leadership"
+                elif sector_lower in ['healthcare', 'health care']:
+                    sector_desc = "healthcare sector stability"
+                elif sector_lower in ['financial', 'financial services']:
+                    sector_desc = "financial sector strength"
+                elif sector_lower in ['consumer discretionary']:
+                    sector_desc = "consumer spending trends"
+                elif sector_lower in ['consumer staples']:
+                    sector_desc = "defensive consumer positioning"
+                elif sector_lower in ['energy']:
+                    sector_desc = "energy sector momentum"
+                elif sector_lower in ['industrials']:
+                    sector_desc = "industrial sector growth"
+                elif sector_lower in ['communication services']:
+                    sector_desc = "communication sector innovation"
+                elif sector_lower in ['materials']:
+                    sector_desc = "materials sector fundamentals"
+                elif sector_lower in ['utilities']:
+                    sector_desc = "utilities sector stability"
+                elif sector_lower in ['real estate']:
+                    sector_desc = "real estate sector value"
+                else:
+                    sector_desc = f"{sector} sector opportunities"
+                reasoning_parts.append(sector_desc)
+            
+            # Add market cap context
+            reasoning_parts.append(f"{cap_context} positioning")
+            
+            # Add valuation context with more granular ranges (dynamic)
+            pe_ratio = item.get('pe_ratio', 0)
+            if pe_ratio > 0:
+                if pe_ratio < 10:
+                    valuation = "deep value valuation"
+                elif pe_ratio < 15:
+                    valuation = "attractive valuation"
+                elif pe_ratio < 20:
+                    valuation = "reasonable valuation"
+                elif pe_ratio < 30:
+                    valuation = "moderate premium pricing"
+                elif pe_ratio < 40:
+                    valuation = "growth premium pricing"
+                else:
+                    valuation = "high growth premium"
+                reasoning_parts.append(valuation)
+            
+            # Add volatility context with more detail (dynamic)
+            volatility = item.get('volatility', 20)
+            if risk_tolerance.lower() in ['conservative', 'low']:
+                if volatility < 12:
+                    vol_desc = "very low volatility aligns with your conservative risk profile"
+                elif volatility < 18:
+                    vol_desc = "low volatility aligns with your conservative risk profile"
+                elif volatility < 25:
+                    vol_desc = "moderate volatility suitable for your risk tolerance"
+                else:
+                    vol_desc = "higher volatility may exceed your risk comfort"
+            elif risk_tolerance.lower() in ['aggressive', 'high']:
+                if volatility > 35:
+                    vol_desc = "high volatility matches your aggressive risk tolerance"
+                elif volatility > 25:
+                    vol_desc = "elevated volatility aligns with your risk appetite"
+                else:
+                    vol_desc = "growth potential matches your risk tolerance"
+            else:  # medium risk
+                if volatility < 15:
+                    vol_desc = "balanced risk-return profile"
+                elif volatility < 25:
+                    vol_desc = "moderate risk-return balance"
+                else:
+                    vol_desc = "higher risk with growth potential"
+            reasoning_parts.append(vol_desc)
+            
+            # Add expected return context with more detail (dynamic)
+            if expected_return > 30:
+                return_desc = f"exceptional return potential ({expected_return:.1f}%)"
+            elif expected_return > 25:
+                return_desc = f"high return potential ({expected_return:.1f}%)"
+            elif expected_return > 20:
+                return_desc = f"strong return potential ({expected_return:.1f}%)"
+            elif expected_return > 15:
+                return_desc = f"solid return potential ({expected_return:.1f}%)"
+            elif expected_return > 10:
+                return_desc = f"moderate return potential ({expected_return:.1f}%)"
+            else:
+                return_desc = f"conservative return potential ({expected_return:.1f}%)"
+            reasoning_parts.append(return_desc)
+            
+            # Add spending alignment if applicable (dynamic)
+            if sector_weights and sector in sector_weights and sector_weights[sector] > 0.1:
+                spending_pct = sector_weights[sector] * 100
+                reasoning_parts.append(f"aligned with your spending patterns ({spending_pct:.0f}% in {sector})")
+            
+            # Add long-term value if applicable (dynamic)
+            if investment_horizon_years is not None and investment_horizon_years >= 10:
+                if pe_ratio > 0 and pe_ratio < 20:
+                    reasoning_parts.append("value characteristics for long-term holding")
+                elif pe_ratio > 0 and pe_ratio < 15:
+                    reasoning_parts.append("strong value proposition for long-term investors")
+            
+            # Build final reasoning string (dynamic composition)
             if reasoning_parts:
-                reasoning += " " + ". ".join(reasoning_parts) + "."
+                # Capitalize first letter and join with proper punctuation
+                reasoning = reasoning_parts[0].capitalize()
+                if len(reasoning_parts) > 1:
+                    reasoning += ". " + ". ".join(reasoning_parts[1:]) + "."
+                else:
+                    reasoning += "."
+            else:
+                # Fallback if no parts were added
+                reasoning = f"{company_display} shows attractive fundamentals and risk profile for your settings."
             
             # Calculate signal contribution scores based on available data
             # These are derived from ML score and fundamentals, not expensive API calls

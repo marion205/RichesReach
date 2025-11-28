@@ -27,6 +27,8 @@ export default function TutorQuizScreen() {
     try {
       let res: QuizResponse;
       
+      console.log('📚 [Quiz] Loading quiz...', { isRegimeAdaptive, topic });
+      
       if (isRegimeAdaptive) {
         // Generate regime-adaptive quiz
         res = await tutorRegimeAdaptiveQuiz({ 
@@ -39,9 +41,18 @@ export default function TutorQuizScreen() {
         res = await tutorQuiz({ user_id: userId, topic, difficulty: 'beginner', num_questions: 4 });
       }
       
-      // Fallback: If quiz is incomplete or has no options, use mock quiz
-      if (!res.questions || res.questions.length === 0 || 
-          res.questions.some(q => !q.options || q.options.length === 0)) {
+      console.log('📚 [Quiz] Received response:', JSON.stringify(res, null, 2));
+      
+      // Validate response structure
+      if (!res) {
+        console.error('❌ [Quiz] No response received');
+        Alert.alert('Error', 'No response from server. Please try again.');
+        return;
+      }
+      
+      // Check if questions exist and are valid
+      if (!res.questions || res.questions.length === 0) {
+        console.warn('⚠️ [Quiz] No questions in response, using fallback');
         const mockQuiz = {
           topic: topic,
           difficulty: 'beginner',
@@ -106,9 +117,37 @@ export default function TutorQuizScreen() {
           generated_at: new Date().toISOString()
         };
         setQuiz(mockQuiz);
-      } else {
-        setQuiz(res);
+        return;
       }
+      
+      // Validate that all questions have options
+      const invalidQuestions = res.questions.filter(q => !q.options || q.options.length === 0);
+      if (invalidQuestions.length > 0) {
+        console.warn('⚠️ [Quiz] Some questions missing options:', invalidQuestions.length);
+        // Filter out invalid questions
+        res.questions = res.questions.filter(q => q.options && q.options.length > 0);
+        if (res.questions.length === 0) {
+          console.error('❌ [Quiz] All questions invalid, using fallback');
+          Alert.alert('Error', 'Received invalid quiz data. Please try again.');
+          return;
+        }
+      }
+      
+      console.log('✅ [Quiz] Setting quiz with', res.questions.length, 'questions');
+      setQuiz(res);
+      
+    } catch (error: any) {
+      console.error('❌ [Quiz] Error loading quiz:', error);
+      console.error('❌ [Quiz] Error details:', {
+        message: error?.message,
+        status: error?.status,
+        detail: error?.detail
+      });
+      Alert.alert(
+        'Error Loading Quiz',
+        error?.message || error?.detail || 'Failed to load quiz. Please try again.',
+        [{ text: 'OK' }]
+      );
     } finally {
       setLoading(false);
     }

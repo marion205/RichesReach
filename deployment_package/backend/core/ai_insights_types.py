@@ -3,10 +3,21 @@ GraphQL Types for AI Insights
 """
 import graphene
 from django.utils import timezone
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import logging
+import os
+import json
+import re
 
 logger = logging.getLogger(__name__)
+
+# Try to import OpenAI
+try:
+    import openai
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+    logger.warning("OpenAI package not installed. Oracle insights will use fallback responses.")
 
 
 # ===================
@@ -242,17 +253,198 @@ class AIInsightsQueries(graphene.ObjectType):
         )
     
     def resolve_oracle_insights(self, info, query):
-        """Get oracle insights for a query"""
-        # TODO: Replace with real AI service when available
-        # For now, return mock data
+        """Get oracle insights for a query using real AI analysis"""
+        from .graphql_utils import get_user_from_context
+        from .premium_analytics import PremiumAnalyticsService
+        
+        # Get user from context
+        user = get_user_from_context(info.context)
+        
+        # Build context for AI
+        context_parts = []
+        
+        # Add portfolio data if user is authenticated
+        portfolio_summary = None
+        if user and not getattr(user, 'is_anonymous', True):
+            try:
+                analytics_service = PremiumAnalyticsService()
+                portfolio_metrics = analytics_service.get_portfolio_performance_metrics(user.id)
+                
+                if portfolio_metrics:
+                    holdings = portfolio_metrics.get('holdings', [])
+                    total_value = portfolio_metrics.get('total_value', 0)
+                    total_return_percent = portfolio_metrics.get('total_return_percent', 0)
+                    sector_allocation = portfolio_metrics.get('sector_allocation', {})
+                    
+                    # Build portfolio summary
+                    portfolio_summary = {
+                        'total_value': total_value,
+                        'total_return_percent': total_return_percent,
+                        'holdings_count': len(holdings),
+                        'top_holdings': [
+                            {
+                                'symbol': h.get('symbol', ''),
+                                'shares': h.get('shares', 0),
+                                'value': h.get('total_value', 0),
+                                'return_percent': h.get('return_percent', 0)
+                            }
+                            for h in holdings[:10]  # Top 10 holdings
+                        ],
+                        'sector_allocation': sector_allocation
+                    }
+                    
+                    context_parts.append(f"User Portfolio:\n{json.dumps(portfolio_summary, indent=2)}")
+            except Exception as e:
+                logger.warning(f"Failed to get portfolio data for Oracle insights: {e}")
+        
+        # Add market context
+        try:
+            from .ai_service import AIService
+            ai_service = AIService()
+            
+            # Get market analysis if available
+            if ai_service.market_data_service:
+                try:
+                    market_overview = ai_service.market_data_service.get_market_overview()
+                    if market_overview:
+                        context_parts.append(f"Market Overview:\n{json.dumps(market_overview, indent=2, default=str)}")
+                except Exception as e:
+                    logger.debug(f"Could not get market overview: {e}")
+        except Exception as e:
+            logger.debug(f"Could not initialize AI service for market data: {e}")
+        
+        # Build the AI prompt
+        system_prompt = """You are RichesReach Oracle, an advanced AI financial advisor. Your role is to provide insightful, actionable financial analysis based on real portfolio and market data.
+
+Guidelines:
+- Be specific and data-driven in your responses
+- Reference actual portfolio holdings, market conditions, and metrics when available
+- Provide actionable recommendations, not generic advice
+- If portfolio data is available, tailor your response to the user's specific situation
+- Use clear, professional language suitable for investors
+- Include confidence levels and reasoning for your insights
+- Keep responses concise but comprehensive (2-4 paragraphs)"""
+
+        user_prompt = f"User Question: {query}\n\n"
+        
+        if context_parts:
+            user_prompt += "\n".join(context_parts)
+            user_prompt += "\n\nPlease provide a comprehensive, data-driven answer to the user's question based on the portfolio and market data provided above."
+        else:
+            user_prompt += "Please provide market insights and recommendations based on current market conditions."
+        
+        # Call OpenAI API
+        openai_api_key = os.getenv('OPENAI_API_KEY')
+        
+        if not openai_api_key or not OPENAI_AVAILABLE:
+            logger.warning("⚠️ [Oracle] OpenAI API key not found - using fallback response")
+            return self._get_fallback_oracle_insight(query, portfolio_summary)
+        
+        try:
+            logger.info(f"🤖 [Oracle] Calling OpenAI API for query: {query[:100]}...")
+            logger.info(f"📊 [Oracle] Context available: portfolio={portfolio_summary is not None}, market_data={len(context_parts) > (1 if portfolio_summary else 0)}")
+            
+            client = openai.OpenAI(api_key=openai_api_key)
+            
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ]
+            
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",  # Fast and cost-effective
+                messages=messages,
+                temperature=0.7,
+                max_tokens=500
+            )
+            
+            ai_answer = response.choices[0].message.content.strip()
+            
+            logger.info(f"✅ [Oracle] OpenAI API call successful. Response length: {len(ai_answer)} chars, Tokens used: {response.usage.total_tokens if hasattr(response, 'usage') else 'N/A'}")
+            
+            # Extract confidence from response if mentioned, otherwise default
+            # Default to high confidence for AI-generated insights
+            confidence = 0.85
+            
+            # Only extract confidence if it's explicitly mentioned near the word "confidence"
+            # This prevents picking up random percentages from the response
+            confidence_patterns = [
+                r'confidence[:\s]+(\d+)%',  # "confidence: 85%"
+                r'(\d+)%\s+confidence',      # "85% confidence"
+                r'(\d+)%\s+certain',         # "85% certain"
+                r'(\d+)%\s+confident',       # "85% confident"
+            ]
+            
+            for pattern in confidence_patterns:
+                conf_match = re.search(pattern, ai_answer, re.IGNORECASE)
+                if conf_match:
+                    extracted = float(conf_match.group(1)) / 100.0
+                    # Only use if it's a reasonable confidence value (0.5-1.0)
+                    if 0.5 <= extracted <= 1.0:
+                        confidence = extracted
+                        break
+            
+            # Determine sources based on available data
+            sources = []
+            if portfolio_summary:
+                sources.append('Portfolio analysis')
+            sources.extend(['AI analysis', 'Market data', 'Technical indicators'])
+            
+            # Extract related insights from the response
+            related_insights = []
+            if 'rebalancing' in ai_answer.lower() or 'rebalance' in ai_answer.lower():
+                related_insights.append('Portfolio rebalancing')
+            if 'diversification' in ai_answer.lower() or 'diversify' in ai_answer.lower():
+                related_insights.append('Diversification strategy')
+            if 'risk' in ai_answer.lower():
+                related_insights.append('Risk management')
+            if not related_insights:
+                related_insights = ['Market trends', 'Sector analysis', 'Portfolio optimization']
+            
+            logger.info(f"✅ [Oracle] Generated Oracle insight using OpenAI for query: {query[:50]}...")
+            
+            return OracleInsightType(
+                id=f"oracle-{timezone.now().timestamp()}",
+                question=query,
+                answer=ai_answer,
+                confidence=confidence,
+                sources=sources,
+                timestamp=timezone.now(),
+                relatedInsights=related_insights
+            )
+            
+        except Exception as e:
+            logger.error(f"❌ [Oracle] Error calling OpenAI API for Oracle insights: {e}", exc_info=True)
+            logger.warning("⚠️ [Oracle] Falling back to template response")
+            return self._get_fallback_oracle_insight(query, portfolio_summary)
+    
+    def _get_fallback_oracle_insight(self, query: str, portfolio_summary: Optional[Dict] = None):
+        """Fallback response when OpenAI is not available"""
+        logger.warning("📝 [Oracle] Using fallback template response (OpenAI not available)")
+        
+        if portfolio_summary:
+            holdings_count = portfolio_summary.get('holdings_count', 0)
+            total_value = portfolio_summary.get('total_value', 0)
+            total_return = portfolio_summary.get('total_return_percent', 0)
+            
+            answer = f"Based on your portfolio analysis:\n\n"
+            answer += f"Your portfolio contains {holdings_count} holdings with a total value of ${total_value:,.2f} "
+            answer += f"and a return of {total_return:+.2f}%.\n\n"
+            answer += f"Regarding '{query}': While I cannot provide real-time AI analysis at the moment, "
+            answer += "I recommend reviewing your portfolio allocation, considering diversification, "
+            answer += "and monitoring market trends. For personalized insights, please ensure OpenAI API is configured."
+        else:
+            answer = f"Based on current market analysis, {query.lower()} requires consideration of multiple factors including market conditions, sector performance, and economic indicators. "
+            answer += "For personalized AI-powered insights, please ensure OpenAI API is configured and you have portfolio data available."
+        
         return OracleInsightType(
-            id='1',
+            id=f"oracle-fallback-{timezone.now().timestamp()}",
             question=query,
-            answer=f"Based on current market analysis, {query.lower()} shows positive momentum with strong fundamentals supporting continued growth.",
-            confidence=0.80,
-            sources=['Market data', 'AI analysis', 'Technical indicators'],
+            answer=answer,
+            confidence=0.60,
+            sources=['Portfolio data', 'Market analysis'],
             timestamp=timezone.now(),
-            relatedInsights=['Market trends', 'Sector analysis', 'Economic indicators']
+            relatedInsights=['Market trends', 'Portfolio optimization', 'Risk management']
         )
 
 

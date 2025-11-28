@@ -16,6 +16,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 // import LottieView from 'lottie-react-native'; // Removed for Expo Go compatibility
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../theme/PersonalizedThemes';
+import { useQuery, gql } from '@apollo/client';
+import { API_GRAPHQL } from '../config/api';
 
 const { width } = Dimensions.get('window');
 
@@ -39,6 +41,21 @@ interface OracleInsightsProps {
   onInsightPress?: (insight: OracleEvent) => void;
   onGenerateInsight?: () => void;
 }
+
+// GraphQL query for Oracle insights
+const GET_ORACLE_INSIGHTS = gql`
+  query GetOracleInsights($query: String!) {
+    oracleInsights(query: $query) {
+      id
+      question
+      answer
+      confidence
+      sources
+      timestamp
+      relatedInsights
+    }
+  }
+`;
 
 // Mock insights function - extracted for reuse
 const getMockInsights = (): OracleEvent[] => [
@@ -142,65 +159,78 @@ export default function OracleInsights({ onInsightPress, onGenerateInsight }: Or
     ).start();
   };
 
-  const loadInsights = async () => {
-    // Don't set loading to true - we already have mock data showing
-    // This runs in the background to update with real data if available
-    
-    try {
-      // Reduced timeout to 3 seconds for faster failure
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Request timeout')), 3000); // 3 second timeout
-      });
-
-      // Use real API endpoint with timeout
-      const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000";
-      const token = await AsyncStorage.getItem('authToken');
-      
-      const fetchPromise = fetch(`${API_BASE_URL}/api/oracle/insights/`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      }).then(async (res) => {
-        if (!res.ok) {
-          throw new Error(`HTTP error! status: ${res.status}`);
-        }
-        return res.json();
-      });
-      
-      // Race between fetch and timeout
-      let apiData;
-      try {
-        apiData = await Promise.race([fetchPromise, timeoutPromise]);
-      } catch (error: any) {
-        // Silently fail - we already have mock data showing
-        console.log('ℹ️ Oracle insights API not available, using mock data');
+  // Track if this is a manual generation to prevent onCompleted from adding duplicates
+  const isManualGeneration = useRef(false);
+  
+  // GraphQL query for loading insights
+  // Use a general query to get portfolio/market insights
+  const { data: oracleData, loading: oracleLoading, refetch: refetchOracle } = useQuery(GET_ORACLE_INSIGHTS, {
+    variables: { query: 'What are the current market insights and portfolio recommendations?' },
+    errorPolicy: 'all',
+    fetchPolicy: 'cache-first',
+    skip: false, // Always try to fetch
+    notifyOnNetworkStatusChange: true,
+    onCompleted: (data) => {
+      // Skip adding insights if this is from a manual generation (handleGenerateInsight will handle it)
+      if (isManualGeneration.current) {
+        isManualGeneration.current = false; // Reset flag
         return;
       }
-      
-      if (apiData && apiData.insights && apiData.insights.length > 0) {
-        // Transform API data to match component interface
-        const transformedInsights: OracleEvent[] = apiData.insights.map((insight: any) => ({
-          id: insight.id || insight.type || 'unknown',
-          event_type: insight.event_type || insight.type || 'market_trend',
-          priority: insight.priority || (insight.impact === 'high' ? 'high' : 'medium'),
-          confidence: insight.confidence || 'high',
-          title: insight.title || 'Market Insight',
-          description: insight.description || 'AI-powered market analysis',
-          recommendation: insight.recommendation || 'Consider reviewing your portfolio',
-          expected_impact: insight.expected_impact || insight.impact || 'moderate',
-          time_sensitivity: insight.time_sensitivity || '1-3 months',
-          created_at: insight.created_at || new Date().toISOString(),
-          expires_at: insight.expires_at,
-          acknowledged: insight.acknowledged || false,
-          acted_upon: insight.acted_upon || false,
-        }));
+      if (data?.oracleInsights) {
+        // Create a unique ID using the GraphQL ID and timestamp
+        const uniqueId = data.oracleInsights.id 
+          ? `oracle-${data.oracleInsights.id}-${Date.now()}`
+          : `oracle-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         
-        // Update with real data when available
-        setInsights(transformedInsights);
-        console.log('✅ Updated insights with real API data');
+        // Transform GraphQL response to OracleEvent format
+        const transformedInsight: OracleEvent = {
+          id: uniqueId,
+          event_type: 'market_analysis',
+          priority: data.oracleInsights.confidence > 0.8 ? 'high' : 'medium',
+          confidence: data.oracleInsights.confidence > 0.8 ? 'high' : data.oracleInsights.confidence > 0.6 ? 'medium' : 'low',
+          title: data.oracleInsights.question || 'Oracle Insight',
+          description: data.oracleInsights.answer || 'AI-powered market analysis',
+          recommendation: data.oracleInsights.answer || 'Review your portfolio allocation',
+          expected_impact: `Confidence: ${(data.oracleInsights.confidence * 100).toFixed(0)}%`,
+          time_sensitivity: 'Action recommended within 1 week',
+          created_at: data.oracleInsights.timestamp || new Date().toISOString(),
+          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+          acknowledged: false,
+          acted_upon: false,
+        };
+        
+        // Add to existing insights (prepend to show latest first)
+        // Check if this exact insight already exists to prevent duplicates
+        setInsights(prev => {
+          // Check if we already have an insight with the same GraphQL ID
+          const existingOracleId = data.oracleInsights.id 
+            ? prev.find(i => i.id.includes(`oracle-${data.oracleInsights.id}`))
+            : null;
+          
+          if (existingOracleId) {
+            // Update existing insight instead of adding duplicate
+            return prev.map(i => 
+              i.id === existingOracleId.id ? transformedInsight : i
+            );
+          }
+          
+          // Remove any other oracle insights (keep only the latest) and add the new one
+          const filtered = prev.filter(i => !i.id.startsWith('oracle-'));
+          return [transformedInsight, ...filtered];
+        });
+        console.log('✅ Updated insights with GraphQL Oracle data');
       }
+    },
+    onError: (error) => {
+      // Silently fail - we already have mock data showing
+      console.log('ℹ️ Oracle insights GraphQL not available, using mock data');
+    },
+  });
+
+  const loadInsights = async () => {
+    // Trigger GraphQL refetch
+    try {
+      await refetchOracle();
     } catch (error: any) {
       // Silently fail - we already have mock data showing
       console.log('ℹ️ Error loading insights, using existing mock data');
@@ -225,57 +255,63 @@ export default function OracleInsights({ onInsightPress, onGenerateInsight }: Or
         onGenerateInsight();
       }
 
-      // Create timeout promise
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Request timeout')), 15000); // 15 second timeout for generation
-      });
-
-      // Try to generate insight via API
-      const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000";
-      const token = await AsyncStorage.getItem('authToken');
-      
-      const fetchPromise = fetch(`${API_BASE_URL}/api/oracle/generate-insight/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          portfolio_context: true,
-          market_context: true,
-        }),
-      }).then(async (res) => {
-        if (!res.ok) {
-          throw new Error(`HTTP error! status: ${res.status}`);
-        }
-        return res.json();
-      });
-
-      let generatedInsight;
+      // Try to generate insight via GraphQL with unique query to ensure different responses
+      let generatedInsight = null;
+      let usingRealAI = false;
       try {
-        generatedInsight = await Promise.race([fetchPromise, timeoutPromise]);
+        // Make query unique with timestamp to ensure different responses
+        const uniqueQuery = `Generate a new market insight based on current portfolio and market conditions. Focus on actionable recommendations. (${Date.now()})`;
+        
+        console.log('🤖 Calling GraphQL Oracle API with query:', uniqueQuery.substring(0, 80) + '...');
+        
+        // Set flag to prevent onCompleted from adding this insight (we'll handle it manually)
+        isManualGeneration.current = true;
+        
+        const result = await refetchOracle({
+          variables: {
+            query: uniqueQuery,
+          },
+        });
+        
+        if (result?.data?.oracleInsights) {
+          generatedInsight = result.data.oracleInsights;
+          usingRealAI = true;
+          console.log('✅ Received AI-generated insight from backend:', {
+            id: generatedInsight.id,
+            question: generatedInsight.question?.substring(0, 50),
+            answerLength: generatedInsight.answer?.length,
+            confidence: generatedInsight.confidence,
+            sources: generatedInsight.sources,
+          });
+        }
       } catch (error: any) {
-        console.warn('⚠️ Insight generation API failed, using mock insight:', error.message);
+        console.warn('⚠️ Insight generation GraphQL failed, using mock insight:', error.message);
         // Fall through to generate mock insight
         generatedInsight = null;
+        usingRealAI = false;
       }
 
-      // Use API response or generate mock insight
+      // Use GraphQL response or generate mock insight
       let newInsight: OracleEvent;
-      if (generatedInsight && generatedInsight.insight) {
-        const apiInsight = generatedInsight.insight;
+      if (generatedInsight) {
+        // Create a unique ID for the generated insight
+        const uniqueId = generatedInsight.id 
+          ? `generated-${generatedInsight.id}-${Date.now()}`
+          : `generated-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        
+        // Transform GraphQL response to OracleEvent format
         newInsight = {
-          id: `generated-${Date.now()}`,
-          event_type: apiInsight.event_type || 'market_trend',
-          priority: apiInsight.priority || 'medium',
-          confidence: apiInsight.confidence || 'high',
-          title: apiInsight.title || 'New Market Insight',
-          description: apiInsight.description || 'AI-powered analysis of current market conditions',
-          recommendation: apiInsight.recommendation || 'Review your portfolio allocation',
-          expected_impact: apiInsight.expected_impact || 'Moderate impact expected',
-          time_sensitivity: apiInsight.time_sensitivity || 'Action recommended within 1 week',
-          created_at: new Date().toISOString(),
-          expires_at: apiInsight.expires_at || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+          id: uniqueId,
+          event_type: 'market_analysis',
+          priority: generatedInsight.confidence > 0.8 ? 'high' : 'medium',
+          confidence: generatedInsight.confidence > 0.8 ? 'high' : generatedInsight.confidence > 0.6 ? 'medium' : 'low',
+          title: generatedInsight.question || 'New Market Insight',
+          description: generatedInsight.answer || 'AI-powered analysis of current market conditions',
+          recommendation: generatedInsight.answer || 'Review your portfolio allocation',
+          expected_impact: `Confidence: ${(generatedInsight.confidence * 100).toFixed(0)}% | 🤖 AI-Powered`,
+          time_sensitivity: 'Action recommended within 1 week',
+          created_at: generatedInsight.timestamp || new Date().toISOString(),
+          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
           acknowledged: false,
           acted_upon: false,
         };
@@ -321,15 +357,17 @@ export default function OracleInsights({ onInsightPress, onGenerateInsight }: Or
         ];
 
         const randomInsight = insightTypes[Math.floor(Math.random() * insightTypes.length)];
+        // Generate unique ID with timestamp and random string
+        const uniqueId = `generated-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         newInsight = {
-          id: `generated-${Date.now()}`,
+          id: uniqueId,
           event_type: randomInsight.event_type,
           priority: randomInsight.priority,
           confidence: 'high',
           title: randomInsight.title,
           description: randomInsight.description,
           recommendation: randomInsight.recommendation,
-          expected_impact: randomInsight.expected_impact,
+          expected_impact: `${randomInsight.expected_impact} | 📝 Mock Data`,
           time_sensitivity: randomInsight.time_sensitivity,
           created_at: new Date().toISOString(),
           expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
@@ -338,10 +376,33 @@ export default function OracleInsights({ onInsightPress, onGenerateInsight }: Or
         };
       }
 
-      // Add new insight to the beginning of the list
-      setInsights(prev => [newInsight, ...prev]);
+      // Add new insight to the beginning of the list, but check for duplicates first
+      setInsights(prev => {
+        // Check for duplicates by ID
+        const existsById = prev.some(i => i.id === newInsight.id);
+        if (existsById) {
+          // Update existing insight instead of adding duplicate
+          return prev.map(i => i.id === newInsight.id ? newInsight : i);
+        }
+        
+        // Also check for duplicates by title/description (in case backend returns same content with different ID)
+        const existsByContent = prev.some(i => 
+          i.title === newInsight.title && 
+          i.description === newInsight.description &&
+          Math.abs(new Date(i.created_at).getTime() - new Date(newInsight.created_at).getTime()) < 60000 // Within 1 minute
+        );
+        
+        if (existsByContent) {
+          console.warn('⚠️ Duplicate insight detected by content, skipping:', newInsight.title);
+          return prev; // Don't add duplicate
+        }
+        
+        // Add new insight at the beginning
+        return [newInsight, ...prev];
+      });
       
-      console.log('✅ Insight generated successfully:', newInsight.title);
+      const sourceType = usingRealAI ? '🤖 Real AI' : '📝 Mock';
+      console.log(`✅ Insight generated successfully (${sourceType}):`, newInsight.title);
     } catch (error: any) {
       console.error('Error generating insight:', error);
       Alert.alert('Generation Error', 'Failed to generate insight. Please try again.');

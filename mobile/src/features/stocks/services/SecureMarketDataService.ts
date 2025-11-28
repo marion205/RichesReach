@@ -113,20 +113,14 @@ export class SecureMarketDataService {
   private async _fetchQuotesFromBackend(symbols: string[]): Promise<Quote[]> {
     const symbolsParam = symbols.join(',');
     
-    // Final safety check: if API_BASE is still localhost, force LAN IP
-    let apiBase = API_BASE;
-    if (/localhost|127\.0\.0\.1/.test(apiBase)) {
-      logger.warn('⚠️ SecureMarketDataService: API_BASE is localhost, FORCING LAN IP override');
-      apiBase = 'http://10.0.0.54:8000';
-      logger.log('✅ SecureMarketDataService: Overridden to:', apiBase);
-    }
-    
+    // Use API_BASE directly - config should already handle device detection
+    const apiBase = API_BASE;
     const url = `${apiBase}/api/market/quotes?symbols=${encodeURIComponent(symbolsParam)}`;
     
-    logger.log(`📡 [DEBUG] Fetching quotes from backend`);
-    logger.log(`📡 [DEBUG] URL: ${url}`);
-    logger.log(`📡 [DEBUG] Symbols: ${symbolsParam}`);
-    logger.log(`📡 [DEBUG] API_BASE: ${apiBase}`);
+    logger.log(`📡 [SecureMarketDataService] Fetching quotes from backend`);
+    logger.log(`📡 [SecureMarketDataService] URL: ${url}`);
+    logger.log(`📡 [SecureMarketDataService] API_BASE: ${apiBase}`);
+    logger.log(`📡 [SecureMarketDataService] Symbols: ${symbolsParam}`);
     
     try {
       // Use AbortController for proper timeout handling

@@ -98,6 +98,12 @@ except (ImportError, SyntaxError):
     class AIInsightsMutations(graphene.ObjectType):
         pass
 
+try:
+    from .ai_scans_types import AIScansQueries
+except (ImportError, SyntaxError):
+    class AIScansQueries(graphene.ObjectType):
+        pass
+
 logger = logging.getLogger(__name__)
 User = get_user_model()
 
@@ -105,7 +111,7 @@ User = get_user_model()
 # Base Query has resolve_me which will be available in ExtendedQuery
 # The resolve_me in queries.py should work, but let's ensure it uses proper context
 
-class ExtendedQuery(PremiumQueries, BrokerQueries, BankingQueries, SBLOCQueries, PaperTradingQueries, SocialQueries, PrivacyQueries, AIInsightsQueries, Query, graphene.ObjectType):
+class ExtendedQuery(PremiumQueries, BrokerQueries, BankingQueries, SBLOCQueries, PaperTradingQueries, SocialQueries, PrivacyQueries, AIInsightsQueries, AIScansQueries, Query, graphene.ObjectType):
     """
     Final Query type exposed by the schema.
 

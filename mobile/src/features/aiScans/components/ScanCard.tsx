@@ -67,7 +67,13 @@ const ScanCard: React.FC<ScanCardProps> = React.memo(({ scan, onPress, onRun }) 
     return days > 0 ? `${days}d ago` : hours > 0 ? `${hours}h ago` : 'Just now';
   };
 
-  const sparkData = scan.results?.slice(0, 5).map((r) => r.score) || [];
+  const sparkData = (scan.results?.slice(0, 5)
+    .map((r) => r.score)
+    .filter((score): score is number => 
+      typeof score === 'number' && 
+      !isNaN(score) && 
+      isFinite(score)
+    ) || []) as number[];
 
   return (
     <TouchableOpacity style={styles.container} activeOpacity={0.9} onPress={onPress}>
@@ -87,7 +93,7 @@ const ScanCard: React.FC<ScanCardProps> = React.memo(({ scan, onPress, onRun }) 
       </Text>
 
       {/* Sparkline (if available) */}
-      {sparkData.length >= 3 && (
+      {sparkData.length >= 3 && sparkData.every(v => typeof v === 'number' && !isNaN(v) && isFinite(v)) && (
         <LineChart
           data={{
             labels: Array(sparkData.length).fill(''),

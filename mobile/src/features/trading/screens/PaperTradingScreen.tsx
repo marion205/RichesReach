@@ -256,6 +256,24 @@ export default function PaperTradingScreen({ navigation: propNavigation }: Paper
   const openOrders = data?.paperAccountSummary?.openOrders || [];
   const recentTrades = data?.paperAccountSummary?.recentTrades || [];
   const statistics = data?.paperAccountSummary?.statistics;
+  
+  // If no account data, create a default account for display
+  const defaultAccount = {
+    id: '1',
+    initialBalance: 100000,
+    currentBalance: 100000,
+    totalValue: 100000,
+    realizedPnl: 0,
+    unrealizedPnl: 0,
+    totalPnl: 0,
+    totalPnlPercent: 0,
+    totalTrades: 0,
+    winningTrades: 0,
+    losingTrades: 0,
+    winRate: 0,
+  };
+  
+  const displayAccount = account || defaultAccount;
 
   const styles = createStyles(isDark);
 
@@ -349,31 +367,31 @@ export default function PaperTradingScreen({ navigation: propNavigation }: Paper
       </View>
 
       {/* Account Summary */}
-      {account && (
+      {displayAccount && (
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Account Balance</Text>
           <View style={styles.balanceRow}>
             <View>
               <Text style={styles.balanceLabel}>Cash</Text>
               <Text style={styles.balanceValue}>
-                ${parseFloat(account.currentBalance).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                ${parseFloat(displayAccount.currentBalance || 100000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </Text>
             </View>
             <View>
               <Text style={styles.balanceLabel}>Total Value</Text>
               <Text style={styles.balanceValue}>
-                ${parseFloat(account.totalValue).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                ${parseFloat(displayAccount.totalValue || 100000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </Text>
             </View>
           </View>
           <View style={styles.pnlRow}>
             <View>
               <Text style={styles.pnlLabel}>Total P&L</Text>
-              <Text style={[styles.pnlValue, parseFloat(account.totalPnl) >= 0 ? styles.profit : styles.loss]}>
-                {parseFloat(account.totalPnl) >= 0 ? '+' : ''}
-                ${parseFloat(account.totalPnl).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              <Text style={[styles.pnlValue, parseFloat(displayAccount.totalPnl || 0) >= 0 ? styles.profit : styles.loss]}>
+                {parseFloat(displayAccount.totalPnl || 0) >= 0 ? '+' : ''}
+                ${parseFloat(displayAccount.totalPnl || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 {' '}
-                ({parseFloat(account.totalPnlPercent).toFixed(2)}%)
+                ({parseFloat(displayAccount.totalPnlPercent || 0).toFixed(2)}%)
               </Text>
             </View>
           </View>
@@ -381,26 +399,26 @@ export default function PaperTradingScreen({ navigation: propNavigation }: Paper
       )}
 
       {/* Statistics */}
-      {statistics && (
+      {(statistics || displayAccount) && (
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Statistics</Text>
           <View style={styles.statsGrid}>
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>{statistics.totalTrades}</Text>
+              <Text style={styles.statValue}>{statistics?.totalTrades || displayAccount.totalTrades || 0}</Text>
               <Text style={styles.statLabel}>Total Trades</Text>
             </View>
             <View style={styles.statItem}>
               <Text style={[styles.statValue, styles.winRate]}>
-                {parseFloat(statistics.winRate).toFixed(1)}%
+                {parseFloat(statistics?.winRate || displayAccount.winRate || 0).toFixed(1)}%
               </Text>
               <Text style={styles.statLabel}>Win Rate</Text>
             </View>
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>{statistics.winningTrades}</Text>
+              <Text style={styles.statValue}>{statistics?.winningTrades || displayAccount.winningTrades || 0}</Text>
               <Text style={styles.statLabel}>Wins</Text>
             </View>
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>{statistics.losingTrades}</Text>
+              <Text style={styles.statValue}>{statistics?.losingTrades || displayAccount.losingTrades || 0}</Text>
               <Text style={styles.statLabel}>Losses</Text>
             </View>
           </View>

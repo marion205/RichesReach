@@ -122,23 +122,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const restLoginFlexible = async (emailOrUsername: string, password: string): Promise<string | null> => {
     // Use the centralized API config which handles device detection (localhost for simulator, LAN IP for real device)
     const { API_BASE } = await import('../config/api');
-    let baseUrl = API_BASE;
+    const baseUrl = API_BASE; // Config should already handle device detection correctly
     const identifier = emailOrUsername.trim();
     
-    // Final safety check: if baseUrl is still localhost, force LAN IP
-    // This is a hard override - don't trust device detection, just force it
-    if (/localhost|127\.0\.0\.1/.test(baseUrl)) {
-      logger.warn('⚠️ AuthContext: baseUrl is localhost, FORCING LAN IP override');
-      baseUrl = 'http://10.0.0.54:8000';
-      logger.log('✅ AuthContext: Overridden to:', baseUrl);
-    }
-    
-    logger.log('🔍 AuthContext: Final baseUrl being used:', baseUrl);
-    logger.log('🔍 AuthContext: API_BASE imported was:', API_BASE);
-    logger.log('🔍 AuthContext: API_BASE imported:', API_BASE);
-    logger.log('🔍 AuthContext: Environment variable:', process.env.EXPO_PUBLIC_API_BASE_URL);
-    logger.log('🔍 AuthContext: Platform.OS:', require('react-native').Platform.OS);
-    logger.log('🔍 AuthContext: Constants.isDevice:', require('expo-constants').default.isDevice);
+    logger.log('🔍 [AuthContext] Using API_BASE:', baseUrl);
+    logger.log('🔍 [AuthContext] Platform.OS:', require('react-native').Platform.OS);
     
     const attempt = async (payload: any) => {
       const loginUrl = `${baseUrl}/api/auth/login/`;

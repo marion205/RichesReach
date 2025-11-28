@@ -9,6 +9,7 @@ import { createPeer, isWebRTCAvailable } from '../../../webrtc/peer';
 let RTCPeerConnection: any = null;
 let RTCIceCandidate: any = null;
 let RTCSessionDescription: any = null;
+let RTCView: any = null;
 let mediaDevices: any = null;
 let MediaStream: any = null;
 
@@ -18,6 +19,7 @@ try {
     RTCPeerConnection = webrtc.RTCPeerConnection;
     RTCIceCandidate = webrtc.RTCIceCandidate;
     RTCSessionDescription = webrtc.RTCSessionDescription;
+    RTCView = webrtc.RTCView;
     mediaDevices = webrtc.mediaDevices;
     MediaStream = webrtc.MediaStream;
   }
@@ -29,33 +31,163 @@ import { getJwt } from '../../../auth/token';
 import { useRoute } from '@react-navigation/native';
 
 export default function FiresideRoomScreen() {
-  const [recording, setRecording] = useState<Audio.Recording | null>(null);
-  const [status, setStatus] = useState<string>('Tap and hold to speak');
+  const [micEnabled, setMicEnabled] = useState(false);
+  const [status, setStatus] = useState<string>('Connecting...');
   const [connected, setConnected] = useState(false);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
-  const pcRef = useRef<RTCPeerConnection | null>(null);
+  const [remoteStreams, setRemoteStreams] = useState<Map<string, MediaStream>>(new Map());
+  const [usersInRoom, setUsersInRoom] = useState<string[]>([]);
+  const [currentSpeaker, setCurrentSpeaker] = useState<string | null>(null);
+  const localStreamRef = useRef<MediaStream | null>(null);
+  const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
+  const remoteStreamsRef = useRef<Map<string, MediaStream>>(new Map());
   const socketRef = useRef<any>(null);
+  const mySocketIdRef = useRef<string | null>(null);
   const route = useRoute<any>();
   const circleId = route?.params?.circleId || 'demo';
 
-  const startRecording = async () => {
-    try {
-      await Audio.requestPermissionsAsync();
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      setRecording(recording);
-      setStatus('Listening...');
-    } catch (e) {
-      setStatus('Mic unavailable');
+  // Compute mic availability based on actual conditions
+  // Mic should be available as long as we have a local stream, even if alone
+  const micAvailable = React.useMemo(() => {
+    const available = 
+      connected &&
+      !!localStream &&
+      localStream.getAudioTracks().length > 0 &&
+      localStream.getAudioTracks()[0].kind === 'audio';
+    
+    return available;
+  }, [connected, localStream]);
+
+  // Compute button label based on availability and state
+  const micLabel = React.useMemo(() => {
+    if (!micAvailable) {
+      return 'Mic unavailable';
     }
+    return micEnabled ? 'Mute' : 'Unmute';
+  }, [micAvailable, micEnabled]);
+
+  // Sync micEnabled state with actual track state
+  React.useEffect(() => {
+    if (localStream) {
+      const audioTrack = localStream.getAudioTracks()[0];
+      if (audioTrack) {
+        setMicEnabled(audioTrack.enabled);
+      }
+    }
+  }, [localStream]);
+
+  const handleMicToggle = () => {
+    console.log('[Fireside] Mic button pressed. available=', micAvailable);
+    
+    const stateSnapshot = {
+      socketConnected: connected,
+      hasPeerConnections: peerConnectionsRef.current.size > 0,
+      hasLocalStream: !!localStream,
+      localTracks: localStream ? localStream.getTracks().map(t => ({
+        kind: t.kind,
+        enabled: t.enabled,
+        readyState: t.readyState,
+      })) : null,
+    };
+    
+    console.log('[Fireside] State snapshot:', stateSnapshot);
+
+    if (!micAvailable) {
+      // Optionally remove this once confident - but keep for debugging
+      console.warn('[Fireside] Mic unavailable – conditions failed:', {
+        connected,
+        hasLocalStream: !!localStream,
+        audioTracks: localStream?.getAudioTracks().length ?? 0,
+      });
+      return;
+    }
+
+    // Toggle track, which you're already doing correctly
+    const audioTrack = localStream!.getAudioTracks()[0];
+    const nextEnabled = !audioTrack.enabled;
+    audioTrack.enabled = nextEnabled;
+    setMicEnabled(nextEnabled);
+    console.log('[Fireside] Mic toggled. enabled =', nextEnabled);
+    
+    // Update status to reflect mic state
+    setStatus(nextEnabled ? 'Listening...' : 'Muted');
   };
-  const stopRecording = async () => {
+
+  // Helper function to attach peer connection listeners
+  const attachPeerConnectionListeners = (pc: RTCPeerConnection, peerId: string) => {
+    pc.ontrack = (event: any) => {
+      const [stream] = event.streams;
+      if (!stream) {
+        console.log('[Fireside] ontrack fired, but no streams');
+        return;
+      }
+
+      console.log(
+        '[Fireside] Remote track received',
+        peerId,
+        stream.id,
+        event.track.kind,
+      );
+
+      remoteStreamsRef.current.set(peerId, stream);
+      setRemoteStreams(new Map(remoteStreamsRef.current));
+      setCurrentSpeaker(peerId);
+      
+      // Clear speaker after 2 seconds of silence (simple approach)
+      setTimeout(() => {
+        setCurrentSpeaker(prev => prev === peerId ? null : prev);
+      }, 2000);
+    };
+
+    pc.onconnectionstatechange = () => {
+      console.log('[Fireside] pc.connectionState for', peerId, pc.connectionState);
+      if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+        remoteStreamsRef.current.delete(peerId);
+        setRemoteStreams(new Map(remoteStreamsRef.current));
+        peerConnectionsRef.current.delete(peerId);
+        if (currentSpeaker === peerId) {
+          setCurrentSpeaker(null);
+        }
+      }
+    };
+  };
+
+  // Helper function to create a peer connection for a specific peer
+  const createPeerConnection = async (peerId: string): Promise<RTCPeerConnection | null> => {
+    if (peerConnectionsRef.current.has(peerId)) {
+      console.log('[Fireside] Peer connection already exists for', peerId);
+      return peerConnectionsRef.current.get(peerId)!;
+    }
+
     try {
-      if (!recording) return;
-      await recording.stopAndUnloadAsync();
-    } catch {}
-    setRecording(null);
-    setStatus('Tap and hold to speak');
+      const pc = createPeer();
+      attachPeerConnectionListeners(pc, peerId);
+      
+      // Set up ICE candidate handler for this specific peer
+      pc.onicecandidate = (event: any) => {
+        if (event.candidate && socketRef.current) {
+          socketRef.current.emit('ice-candidate', {
+            candidate: event.candidate,
+            from: mySocketIdRef.current,
+            to: peerId,
+          });
+        }
+      };
+      
+      // Add local stream tracks to this peer connection
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach(track => {
+          pc.addTrack(track, localStreamRef.current!);
+        });
+      }
+
+      peerConnectionsRef.current.set(peerId, pc);
+      console.log('[Fireside] Created peer connection for', peerId);
+      return pc;
+    } catch (e) {
+      console.warn('[Fireside] Failed to create peer connection for', peerId, e);
+      return null;
+    }
   };
 
   // Boot signaling + WebRTC
@@ -67,76 +199,271 @@ export default function FiresideRoomScreen() {
     }
 
     (async () => {
-      let pc;
-      try {
-        pc = createPeer();
-        pcRef.current = pc;
-      } catch (e) {
-        console.warn('Failed to create peer:', e);
-        setStatus('WebRTC unavailable');
-        return;
-      }
-
-      // Local mic
+      // Local mic - create stream and store it in state
       try {
         const stream = await mediaDevices.getUserMedia({ audio: true, video: false });
-        stream.getTracks().forEach(t => pc.addTrack(t, stream));
+        console.log('[Fireside] Local audio stream created, tracks:', stream.getAudioTracks().length);
+        stream.getTracks().forEach(t => {
+          console.log('[Fireside] Adding track:', { kind: t.kind, enabled: t.enabled, id: t.id });
+        });
         setLocalStream(stream);
+        localStreamRef.current = stream;
+        console.log('[Fireside] Local stream stored in state');
+        // Update status if socket is already connected
+        if (connected) {
+          setStatus('Ready');
+        }
       } catch (e) {
-        console.warn('Mic permission denied', e);
+        console.warn('[Fireside] Mic permission denied or getUserMedia failed:', e);
+        setStatus('Mic unavailable: permission denied');
       }
 
       // Signaling
       const socket = connectSignal(getJwt);
       socketRef.current = socket;
+      
+      // Connection handlers with better error feedback
       socket.on('connect', () => {
+        console.log('✅ [Fireside] WebSocket connected', socket.id);
+        mySocketIdRef.current = socket.id;
         setConnected(true);
         socket.emit('join-room', { room: `circle-${circleId}` });
+        // Update status based on whether we have localStream (use ref to avoid closure issue)
+        if (localStreamRef.current) {
+          setStatus('Ready');
+        } else {
+          setStatus('Connected - waiting for audio...');
+        }
       });
-      socket.on('disconnect', () => setConnected(false));
+      
+      socket.on('user-joined', async (data: any) => {
+        console.log('[Fireside] User joined room:', data);
+        const newUserId = data.userId || data.from;
+        
+        if (!newUserId || newUserId === mySocketIdRef.current) {
+          return; // Skip self
+        }
+        
+        // Add user to room list
+        setUsersInRoom(prev => {
+          if (!prev.includes(newUserId)) {
+            return [...prev, newUserId];
+          }
+          return prev;
+        });
+        
+        // Create peer connection for this new user
+        const pc = await createPeerConnection(newUserId);
+        if (pc && localStreamRef.current) {
+          try {
+            console.log('[Fireside] Creating offer for new user:', newUserId);
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            socket.emit('offer', {
+              from: mySocketIdRef.current,
+              to: newUserId,
+              offer: {
+                type: offer.type,
+                sdp: offer.sdp,
+              },
+            });
+            console.log('[Fireside] Offer sent to:', newUserId);
+          } catch (e) {
+            console.warn('[Fireside] Failed to create offer:', e);
+          }
+        }
+        
+        // Room is ready, mic should be available if we have localStream
+        if (localStreamRef.current) {
+          setStatus('Ready');
+        }
+      });
+      
+      socket.on('user-left', (data: any) => {
+        console.log('[Fireside] User left room:', data);
+        const leftUserId = data.userId || data.from;
+        setUsersInRoom(prev => prev.filter(id => id !== leftUserId));
+        
+        // Clean up peer connection
+        const pc = peerConnectionsRef.current.get(leftUserId);
+        if (pc) {
+          pc.close();
+          peerConnectionsRef.current.delete(leftUserId);
+        }
+        
+        // Remove their remote stream
+        remoteStreamsRef.current.delete(leftUserId);
+        setRemoteStreams(new Map(remoteStreamsRef.current));
+        if (currentSpeaker === leftUserId) {
+          setCurrentSpeaker(null);
+        }
+      });
+      
+      socket.on('disconnect', (reason) => {
+        console.log('❌ [Fireside] WebSocket disconnected:', reason);
+        setConnected(false);
+        setStatus('Disconnected');
+      });
+      
+      socket.on('connect_error', (error) => {
+        console.error('❌ [Fireside] WebSocket connection error:', error);
+        setConnected(false);
+        setStatus(`Connection failed: ${error.message || 'Unknown error'}`);
+      });
+      
+      // Timeout handler - if not connected after 10 seconds, show error
+      const connectionTimeout = setTimeout(() => {
+        if (!connected) {
+          console.warn('⏱️ [Fireside] Connection timeout after 10s');
+          setStatus('Connection timeout - check your network');
+        }
+      }, 10000);
+      
+      // Clear timeout on successful connection
+      socket.on('connect', () => {
+        clearTimeout(connectionTimeout);
+      });
 
-      // Offers
+      // WebRTC signaling handlers
       socket.on('offer', async (data: { from: string; offer: RTCSessionDescriptionInit }) => {
-        if (!pcRef.current) return;
-        await pcRef.current.setRemoteDescription(new RTCSessionDescription(data.offer));
-        const answer = await pcRef.current.createAnswer();
-        await pcRef.current.setLocalDescription(answer);
-        socket.emit('answer', { answer, to: data.from });
+        const fromId = data.from;
+        if (!fromId || fromId === mySocketIdRef.current) return;
+        
+        console.log('[Fireside] Received offer from:', fromId);
+        
+        // Create or get peer connection for this user
+        let pc = peerConnectionsRef.current.get(fromId);
+        if (!pc) {
+          pc = await createPeerConnection(fromId);
+        }
+        
+        if (!pc) {
+          console.warn('[Fireside] Failed to create peer connection for offer from', fromId);
+          return;
+        }
+        
+        try {
+          await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          socket.emit('answer', {
+            from: mySocketIdRef.current,
+            to: fromId,
+            answer: {
+              type: answer.type,
+              sdp: answer.sdp,
+            },
+          });
+          console.log('[Fireside] Answer sent to:', fromId);
+        } catch (e) {
+          console.warn('[Fireside] Failed to handle offer:', e);
+        }
       });
+      
       socket.on('answer', async (data: { from: string; answer: RTCSessionDescriptionInit }) => {
-        if (!pcRef.current) return;
-        await pcRef.current.setRemoteDescription(new RTCSessionDescription(data.answer));
+        const fromId = data.from;
+        if (!fromId || fromId === mySocketIdRef.current) return;
+        
+        console.log('[Fireside] Received answer from:', fromId);
+        const pc = peerConnectionsRef.current.get(fromId);
+        if (!pc) {
+          console.warn('[Fireside] No peer connection for answer from', fromId);
+          return;
+        }
+        
+        try {
+          await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+        } catch (e) {
+          console.warn('[Fireside] Failed to set remote description from answer:', e);
+        }
       });
-      socket.on('ice-candidate', async (data: { candidate: RTCIceCandidateInit }) => {
-        if (!pcRef.current) return;
-        try { await pcRef.current.addIceCandidate(new RTCIceCandidate(data.candidate)); } catch {}
+      
+      socket.on('ice-candidate', async (data: { candidate: RTCIceCandidateInit; from: string }) => {
+        const fromId = data.from;
+        if (!fromId || fromId === mySocketIdRef.current || !data.candidate) return;
+        
+        const pc = peerConnectionsRef.current.get(fromId);
+        if (!pc) {
+          console.warn('[Fireside] No peer connection for ICE candidate from', fromId);
+          return;
+        }
+        
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+        } catch (e) {
+          console.warn('[Fireside] Failed to add ICE candidate:', e);
+        }
       });
 
-      // Emit ICE candidates
-      pc.onicecandidate = (event) => {
-        if (event.candidate) socket.emit('ice-candidate', { candidate: event.candidate, to: 'all' });
-      };
+      // Note: ICE candidate handlers are set up in createPeerConnection for each peer
     })();
 
     return () => {
       try { socketRef.current?.emit?.('leave-room', { room: `circle-${circleId}` }); } catch {}
       try { socketRef.current?.disconnect?.(); } catch {}
-      try { pcRef.current?.close(); } catch {}
+      try { 
+        localStreamRef.current?.getTracks().forEach(track => track.stop());
+        localStreamRef.current = null;
+      } catch {}
+      // Close all peer connections
+      peerConnectionsRef.current.forEach((pc, peerId) => {
+        try {
+          pc.close();
+        } catch (e) {
+          console.warn('[Fireside] Error closing peer connection for', peerId, e);
+        }
+      });
+      peerConnectionsRef.current.clear();
+      remoteStreamsRef.current.clear();
     };
   }, [circleId]);
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Fireside Room</Text>
-      <Text style={styles.subtitle}>{connected ? 'Connected' : 'Connecting…'}</Text>
+      <Text style={styles.subtitle}>{connected ? `Connected • ${usersInRoom.length} user${usersInRoom.length !== 1 ? 's' : ''}` : 'Connecting…'}</Text>
+      
+      {/* User list */}
+      {usersInRoom.length > 0 && (
+        <View style={styles.userList}>
+          <Text style={styles.userListTitle}>In room ({usersInRoom.length}):</Text>
+          {usersInRoom.map((userId, index) => {
+            const isSpeaking = currentSpeaker === userId;
+            const hasStream = remoteStreams.has(userId);
+            return (
+              <View key={userId} style={[styles.userItem, isSpeaking && styles.userItemSpeaking]}>
+                <View style={[styles.userIndicator, isSpeaking && styles.userIndicatorActive]} />
+                <Text style={styles.userText}>
+                  {userId === mySocketIdRef.current ? 'You' : `User ${index + 1}`}
+                </Text>
+                {hasStream && (
+                  <Text style={styles.userStatus}>{isSpeaking ? '🎙️' : '🔊'}</Text>
+                )}
+              </View>
+            );
+          })}
+        </View>
+      )}
+      
+      {/* Remote audio playback – one RTCView per remote stream (invisible, just for audio) */}
+      {RTCView && Array.from(remoteStreams.entries()).map(([peerId, stream]) => (
+        <RTCView
+          key={peerId}
+          streamURL={stream.toURL()}
+          // Tiny & transparent; just to drive audio
+          style={{ width: 1, height: 1, opacity: 0, position: 'absolute' }}
+          objectFit="cover"
+        />
+      ))}
+      
       <View style={{ flex: 1 }} />
       <TouchableOpacity
-        onPressIn={startRecording}
-        onPressOut={stopRecording}
-        style={[styles.ptt, recording ? styles.pttActive : null]}
+        onPress={handleMicToggle}
+        style={[styles.ptt, micEnabled ? styles.pttActive : null]}
+        disabled={!micAvailable}
       >
-        <Icon name="mic" size={24} color="#fff" />
-        <Text style={styles.pttText}>{status}</Text>
+        <Icon name={micEnabled ? "mic" : "mic-off"} size={24} color="#fff" />
+        <Text style={styles.pttText}>{micLabel}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -146,6 +473,14 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8f9fa', padding: 16 },
   title: { fontSize: 20, fontWeight: '700', color: '#1C1C1E' },
   subtitle: { fontSize: 13, color: '#6B7280', marginTop: 4 },
+  userList: { marginTop: 16, padding: 12, backgroundColor: '#fff', borderRadius: 8 },
+  userListTitle: { fontSize: 14, fontWeight: '600', color: '#1C1C1E', marginBottom: 8 },
+  userItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, paddingHorizontal: 8, borderRadius: 6 },
+  userItemSpeaking: { backgroundColor: '#E8F5E9' },
+  userIndicator: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#34C759', marginRight: 8 },
+  userIndicatorActive: { backgroundColor: '#16A34A', width: 10, height: 10 },
+  userText: { fontSize: 14, color: '#1C1C1E', flex: 1 },
+  userStatus: { fontSize: 16, marginLeft: 4 },
   ptt: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#34C759', borderRadius: 24, paddingVertical: 14, position: 'absolute', left: 16, right: 16, bottom: 24 },
   pttActive: { backgroundColor: '#16A34A' },
   pttText: { color: '#fff', fontWeight: '700' },

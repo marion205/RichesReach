@@ -174,7 +174,7 @@ export function tutorExplain(req: { user_id: string; concept: string; extra_cont
   return postJSON<ExplainResponse>('/tutor/explain', req);
 }
 export function tutorQuiz(req: { user_id: string; topic: string; difficulty?: string; num_questions?: number }) {
-  return postJSON<QuizResponse>('/tutor/quiz', req);
+  return postJSON<QuizResponse>('/tutor/quiz', req, { timeoutMs: 30000 }); // 30s timeout for quiz generation
 }
 
 export function tutorRegimeAdaptiveQuiz(req: { 
@@ -183,7 +183,7 @@ export function tutorRegimeAdaptiveQuiz(req: {
   difficulty?: string; 
   num_questions?: number 
 }) {
-  return postJSON<QuizResponse>('/tutor/quiz/regime-adaptive', req);
+  return postJSON<QuizResponse>('/tutor/quiz/regime-adaptive', req, { timeoutMs: 30000 }); // 30s timeout for quiz generation
 }
 
 // ---------- Daily Voice Digest ----------
@@ -325,7 +325,7 @@ export function tutorModule(req: { user_id: string; topic: string; difficulty?: 
   return postJSON<DynamicContentResponse>('/tutor/module', req);
 }
 export function tutorMarketCommentary(req: { user_id?: string; horizon?: string; tone?: string; market_context?: any }) {
-  return postJSON<DynamicContentResponse>('/tutor/market-commentary', req);
+  return postJSON<DynamicContentResponse>('/tutor/market-commentary', req, { timeoutMs: 30000 }); // 30s timeout for commentary generation
 }
 
 // ---------- Assistant ----------

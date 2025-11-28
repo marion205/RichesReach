@@ -259,9 +259,40 @@ function HomeStack() {
       {/* Convenience: allow Home to open these without switching tabs */}
       <Stack.Screen name="ai-options" component={AIOptionsScreen} />
       <Stack.Screen name="ai-scans" component={AIScansScreen} />
+      <Stack.Screen name="scan-playbook" component={ScanPlaybookScreen} options={{ headerShown: true, title: 'Scan Playbook' }} />
+      <Stack.Screen name="paper-trading" component={PaperTradingScreen} options={{ headerShown: true, title: 'Paper Trading' }} />
+      <Stack.Screen name="PaperTrading" component={PaperTradingScreen} options={{ headerShown: true, title: 'Paper Trading' }} />
       {/* Allow navigation to Options Copilot from HomeStack */}
       <Stack.Screen name="options-copilot" component={OptionsCopilotScreen} options={{ headerShown: true, title: 'Options Copilot' }} />
     </Stack.Navigator>
+  );
+}
+
+function SignalsScreenWrapper(props: any) {
+  return (
+    <SignalsScreen
+      navigateTo={(screen) => {
+        try {
+          props.navigation.navigate(screen as never);
+        } catch (error) {
+          logger.error('Navigation error:', error);
+        }
+      }}
+    />
+  );
+}
+
+function BacktestingScreenWrapper(props: any) {
+  return (
+    <BacktestingScreen
+      navigateTo={(screen) => {
+        try {
+          props.navigation.navigate(screen as never);
+        } catch (error) {
+          logger.error('Navigation error:', error);
+        }
+      }}
+    />
   );
 }
 
@@ -302,9 +333,9 @@ function InvestStack() {
       
       {/* Swing Trading screens */}
       <Stack.Screen name="swing-trading-test" component={SwingTradingDashboard} options={{ headerShown: true, title: 'Swing Trading' }} />
-      <Stack.Screen name="swing-signals" component={SignalsScreen} options={{ headerShown: true, title: 'Swing Signals' }} />
+      <Stack.Screen name="swing-signals" component={SignalsScreenWrapper} options={{ headerShown: true, title: 'Swing Signals' }} />
       <Stack.Screen name="swing-risk-coach" component={RiskCoachScreen} options={{ headerShown: true, title: 'Guardrails' }} />
-      <Stack.Screen name="swing-backtesting" component={BacktestingScreen} options={{ headerShown: true, title: 'Backtesting' }} />
+      <Stack.Screen name="swing-backtesting" component={BacktestingScreenWrapper} options={{ headerShown: true, title: 'Backtesting' }} />
       <Stack.Screen name="swing-leaderboard" component={LeaderboardScreen} options={{ headerShown: true, title: 'Leaderboard' }} />
       <Stack.Screen
         name="InvestAdvanced"

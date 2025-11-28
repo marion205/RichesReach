@@ -231,16 +231,25 @@ class PaperTradingQueries(graphene.ObjectType):
         if not user or user.is_anonymous:
             return None
         
-        service = PaperTradingService()
-        summary = service.get_account_summary(user)
-        
-        return PaperTradingAccountSummaryType(
-            account=summary['account'],
-            positions=summary['positions'],
-            open_orders=summary['open_orders'],
-            recent_trades=summary['recent_trades'],
-            statistics=PaperTradingStatisticsType(**summary['statistics'])
-        )
+        try:
+            service = PaperTradingService()
+            summary = service.get_account_summary(user)
+            
+            return PaperTradingAccountSummaryType(
+                account=summary['account'],
+                positions=summary['positions'],
+                open_orders=summary['open_orders'],
+                recent_trades=summary['recent_trades'],
+                statistics=PaperTradingStatisticsType(**summary['statistics'])
+            )
+        except Exception as e:
+            # If database table doesn't exist, return mock data
+            logger.warning(f"⚠️ [Paper Trading] Database error (table may not exist): {e}")
+            logger.warning(f"⚠️ [Paper Trading] Returning mock data for user {user.id}")
+            
+            # Return None instead of mock data - GraphQL will handle it gracefully
+            # The frontend should handle None and show appropriate UI
+            return None
 
 
 # ===================

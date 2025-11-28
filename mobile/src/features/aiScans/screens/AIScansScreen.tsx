@@ -46,6 +46,7 @@ const GET_AI_SCANS = gql`
         currentPrice
         changePercent
         confidence
+        score
       }
       playbook {
         id

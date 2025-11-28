@@ -4,133 +4,94 @@ import { Platform } from 'react-native';
 /**
  * API Configuration
  * Single source of truth for all API endpoints
+ * 
+ * SIMPLIFIED: Always use LAN IP in dev mode to avoid localhost issues
+ * No device detection - just use LAN IP for all dev builds
  */
 
-// Check environment variable first, then fallback to hardcoded values
-// Try multiple sources for the API base URL
-// BUT: If it's localhost and we're on a physical device, ignore it and use device detection
-let ENV_API_BASE_URL = 
+// Your Mac's LAN IP - update this if your IP changes
+const DEV_BACKEND = 'http://192.168.1.240:8000';
+
+// Production host
+const PROD_HOST = 'https://api.richesreach.com:8000';
+
+// Check if we're in development mode
+const isDev = __DEV__;
+
+// Determine API base URL - SIMPLE: dev = LAN IP, prod = production
+let apiBase: string;
+
+if (isDev) {
+  // Dev mode: ALWAYS use LAN IP (no localhost, no device detection)
+  apiBase = DEV_BACKEND;
+  console.log('🔧 [API Config] Dev mode: using LAN IP', apiBase);
+} else {
+  // Production mode
+  apiBase = PROD_HOST;
+  console.log('🔧 [API Config] Production mode:', apiBase);
+}
+
+// Check for environment variable override
+const ENV_API_BASE_URL = 
   process.env.EXPO_PUBLIC_API_BASE_URL || 
   Constants.expoConfig?.extra?.API_BASE_URL ||
   Constants.expoConfig?.extra?.API_BASE;
 
-// Force override: If env var has localhost, check if we're on a physical device
-// Use multiple checks since Constants.isDevice might not be reliable in all cases
-const isPhysicalDeviceCheck = Platform.OS === 'ios' && Constants.isDevice;
-const isLikelyPhysicalDevice = Platform.OS === 'ios' && (
-  Constants.isDevice || 
-  !Constants.executionEnvironment || 
-  Constants.executionEnvironment !== 'storeClient'
-);
-
-if (ENV_API_BASE_URL && /localhost|127\.0\.0\.1/.test(ENV_API_BASE_URL)) {
-  // If we're likely on a physical device, ignore localhost
-  if (isPhysicalDeviceCheck || (Platform.OS === 'ios' && !isSimulator)) {
-    console.warn('⚠️ [API Config] Ignoring localhost env var - likely physical device, will use device detection');
-    ENV_API_BASE_URL = undefined; // Force device detection to run
+if (ENV_API_BASE_URL) {
+  // If env var has localhost in dev mode, warn and ignore it
+  const hasLocalhost = /localhost|127\.0\.0\.1/.test(ENV_API_BASE_URL);
+  
+  if (isDev && hasLocalhost) {
+    console.warn('⚠️ [API Config] ENV var has localhost in dev mode!');
+    console.warn('⚠️ [API Config] Ignoring ENV var, using LAN IP instead:', apiBase);
+    // Don't use the env var - keep using LAN IP
+  } else {
+    apiBase = ENV_API_BASE_URL;
+    console.log('🔧 [API Config] Using ENV var:', apiBase);
   }
 }
 
-const prodHost = "http://api.richesreach.com:8000";
-// Default to LAN IP instead of localhost (localhost doesn't work on physical devices)
-// For physical devices, use your Mac's LAN IP (update this to match your current IP)
-const LAN_IP = "10.0.0.54"; // Update this to match your Mac's current LAN IP (was 192.168.1.240)
-
-// Use localhost for iOS Simulator, LAN IP for physical devices
-// Check if we're on a real device vs simulator
-const isSimulator = Platform.OS === 'ios' && (
-  !Constants.isDevice || 
-  Constants.executionEnvironment === 'storeClient'
-);
-
-let apiBase: string;
-
-// Debug logging
-console.log('🔍 [API Config] ENV_API_BASE_URL:', ENV_API_BASE_URL);
-console.log('🔍 [API Config] Platform.OS:', Platform.OS);
-console.log('🔍 [API Config] Constants.isDevice:', Constants.isDevice);
-console.log('🔍 [API Config] isSimulator:', isSimulator);
-
-if (ENV_API_BASE_URL) {
-  // Environment variable takes precedence, BUT override localhost on physical devices
-  const isPhysicalDevice = Platform.OS === 'ios' && Constants.isDevice;
-  const hasLocalhost = /localhost|127\.0\.0\.1/.test(ENV_API_BASE_URL);
-  
-  console.log('🔍 [API Config] isPhysicalDevice:', isPhysicalDevice);
-  console.log('🔍 [API Config] hasLocalhost:', hasLocalhost);
-  
-  if (isPhysicalDevice && hasLocalhost) {
-    // Override localhost on physical devices - use LAN IP instead
-    console.warn('⚠️ [API Config] Overriding localhost in env var for physical device');
-    apiBase = `http://${LAN_IP}:8000`;
-    console.log('🔧 [API Config] Using LAN IP for physical device:', apiBase);
-  } else {
-    apiBase = ENV_API_BASE_URL;
-    console.log('🔧 [API Config] Using EXPO_PUBLIC_API_BASE_URL:', apiBase);
-  }
-} else if (isSimulator) {
-  // iOS Simulator - use localhost
-  apiBase = "http://localhost:8000";
-  console.log('🔧 [API Config] iOS Simulator detected: using localhost');
-} else if (Platform.OS === 'ios' && Constants.isDevice) {
-  // Real iOS device - use LAN IP
-  apiBase = `http://${LAN_IP}:8000`;
-  console.log('🔧 [API Config] Real iOS device detected: using LAN IP', apiBase);
-} else {
-  // Android or other - use LAN IP for real devices, localhost for emulator
-  const isAndroidEmulator = Platform.OS === 'android' && !Constants.isDevice;
-  apiBase = isAndroidEmulator ? "http://localhost:8000" : `http://${LAN_IP}:8000`;
-  console.log('🔧 [API Config] Platform:', Platform.OS, 'Device:', Constants.isDevice, 'Using:', apiBase);
+// Final safety check: if somehow we still have localhost in dev, force LAN IP
+if (isDev && /localhost|127\.0\.0\.1/.test(apiBase)) {
+  console.error('❌ [API Config] CRITICAL: Still have localhost in dev mode!');
+  console.error('❌ [API Config] Forcing override to LAN IP');
+  apiBase = DEV_BACKEND;
 }
 
 export const API_BASE = apiBase;
 
-// TTS API base URL (can be same as API_BASE or separate service)
-// TTS service runs on port 8001 by default
+// TTS API base URL
 const TTS_PORT = process.env.EXPO_PUBLIC_TTS_PORT || "8001";
-const TTS_HOST = process.env.EXPO_PUBLIC_TTS_HOST || LAN_IP; // Use LAN IP instead of localhost
+const TTS_HOST = isDev ? DEV_BACKEND.replace(/^https?:\/\//, '').split(':')[0] : PROD_HOST.replace(/^https?:\/\//, '').split(':')[0];
 const defaultTTSUrl = `http://${TTS_HOST}:${TTS_PORT}`;
 
 export const TTS_API_BASE_URL = 
   process.env.EXPO_PUBLIC_TTS_API_BASE_URL || 
   Constants.expoConfig?.extra?.TTS_API_BASE_URL ||
-  defaultTTSUrl; // Default to port 8001
+  defaultTTSUrl;
 
-// Runtime guardrails to prevent bad hosts
-console.log("[API_BASE at runtime]", API_BASE);
+// Derived endpoints - normalize trailing slashes
+const normalizeUrl = (url: string) => url.replace(/\/+$/, '');
 
-// Prevent bad hosts on real devices or release builds
-const badHost = /localhost:8001|127\.0\.0\.1:8001/i.test(API_BASE);
-if (!__DEV__ && badHost) {
-  throw new Error(`Invalid API_BASE in release: ${API_BASE}`);
-}
-
-// iOS Simulator can use localhost, physical devices need LAN IP
-// Auto-detect if we're on a physical device and using localhost
-const isPhysicalDevice = Platform.OS !== 'web' && !__DEV__ || (Platform.OS === 'ios' && !Constants.isDevice);
-if (isPhysicalDevice && /localhost|127\.0\.0\.1/.test(API_BASE)) {
-  console.warn("⚠️ API_BASE points to localhost on a physical device. Use LAN IP instead.");
-  // Try to auto-detect Mac IP from device IP (if device is on same network)
-  // For now, user must set EXPO_PUBLIC_API_BASE_URL
-}
-
-// Fail fast if no API base URL is configured
-if (!API_BASE) {
-  throw new Error('EXPO_PUBLIC_API_BASE_URL is required in Expo Go');
-}
-
-// Debug logging to see what URL is actually being used
-console.log('[API_BASE]', ENV_API_BASE_URL, '-> resolved to:', API_BASE);
-console.log('[API_BASE] graphql ->', `${API_BASE}/graphql`);
-
-export const API_HTTP    = API_BASE;
-export const API_GRAPHQL = `${API_BASE}/graphql/`;
-export const API_AUTH    = `${API_BASE}/api/auth/login/`;
+export const API_HTTP    = normalizeUrl(API_BASE);
+export const API_GRAPHQL = `${normalizeUrl(API_BASE)}/graphql/`;
+export const API_AUTH    = `${normalizeUrl(API_BASE)}/api/auth/login/`;
 export const API_WS      = API_BASE.startsWith("https")
-  ? API_BASE.replace("https","wss") + "/ws/"
-  : API_BASE.replace("http","ws")   + "/ws/";
+  ? API_BASE.replace("https","wss").replace(/\/+$/, '') + "/ws/"
+  : API_BASE.replace("http","ws").replace(/\/+$/, '') + "/ws/";
 
-console.log("🔧 API Configuration:", { API_HTTP: API_BASE, API_GRAPHQL, API_AUTH, API_WS });
+// Debug logging - CRITICAL for debugging
+console.log('📡 [API Config] ========================================');
+console.log('📡 [API Config] Final configuration:');
+console.log('📡 [API Config]   API_BASE:', API_BASE);
+console.log('📡 [API Config]   API_HTTP:', API_HTTP);
+console.log('📡 [API Config]   API_GRAPHQL:', API_GRAPHQL);
+console.log('📡 [API Config]   API_AUTH:', API_AUTH);
+console.log('📡 [API Config]   TTS_API_BASE_URL:', TTS_API_BASE_URL);
+console.log('📡 [API Config]   Platform:', Platform.OS);
+console.log('📡 [API Config]   isDev:', isDev);
+console.log('📡 [API Config]   ENV_API_BASE_URL:', ENV_API_BASE_URL);
+console.log('📡 [API Config] ========================================');
 
 // Legacy exports for backward compatibility
 export const API_BASE_URL = API_HTTP;

@@ -833,7 +833,9 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
         'trading',
         'stock',
         'StockDetail',
-        'premium-analytics'
+        'premium-analytics',
+        'paper-trading',
+        'PaperTrading'
       ];
       
       if (investStackScreens.includes(screen)) {

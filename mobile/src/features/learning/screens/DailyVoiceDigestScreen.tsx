@@ -9,7 +9,22 @@ import {
   Alert,
   Vibration
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { useQuery } from '@apollo/client';
 import { generateDailyDigest, createRegimeAlert, VoiceDigestResponse } from '../../../services/aiClient';
+import { gql } from '@apollo/client';
+
+const ME_QUERY = gql`
+  query Me {
+    me {
+      id
+      email
+      name
+      hasPremiumAccess
+      subscriptionTier
+    }
+  }
+`;
 import * as Speech from 'expo-speech';
 
 // Map regime types to simple labels
@@ -22,11 +37,22 @@ function getRegimeLabel(regime: string): string {
 }
 
 export default function DailyVoiceDigestScreen() {
+  const navigation = useNavigation<any>();
   const [userId] = useState('demo-user');
   const [digest, setDigest] = useState<VoiceDigestResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
+  const [completedTodos, setCompletedTodos] = useState<Set<number>>(new Set());
+  
+  // Check user's premium status
+  const { data: userData } = useQuery(ME_QUERY, {
+    errorPolicy: 'all',
+    fetchPolicy: 'cache-first'
+  });
+  
+  const hasPremium = userData?.me?.hasPremiumAccess || false;
+  const subscriptionTier = userData?.me?.subscriptionTier || 'free';
 
   // Debug Speech module availability
   useEffect(() => {
@@ -53,6 +79,8 @@ export default function DailyVoiceDigestScreen() {
       
       const res = await Promise.race([digestPromise, timeoutPromise]) as VoiceDigestResponse;
       setDigest(res);
+      // Reset completed todos when new digest is generated
+      setCompletedTodos(new Set());
     } catch (error: any) {
       // Suppress timeout errors for demo - show user-friendly message instead
       if (error?.message?.includes('timeout') || error?.message?.includes('Request timeout')) {
@@ -162,6 +190,7 @@ export default function DailyVoiceDigestScreen() {
 
   const testRegimeAlert = async () => {
     try {
+      console.log('🚨 Testing regime alert...');
       const alert = await createRegimeAlert({
         user_id: userId,
         regime_change: {
@@ -172,13 +201,40 @@ export default function DailyVoiceDigestScreen() {
         urgency: 'medium'
       });
       
+      console.log('✅ Regime alert created:', alert);
       Alert.alert(
-        alert.title,
-        alert.body,
+        alert.title || 'Regime Alert',
+        alert.body || 'Market regime has changed. Consider reviewing your portfolio strategy.',
         [{ text: 'OK' }]
       );
-    } catch (error) {
-      console.error('Error creating regime alert:', error);
+    } catch (error: any) {
+      console.error('❌ Error creating regime alert:', error);
+      Alert.alert(
+        'Regime Alert Test',
+        error?.message || 'Failed to create regime alert. Please try again.',
+        [{ text: 'OK' }]
+      );
+    }
+  };
+  
+  const handleUpgradeToPro = () => {
+    if (hasPremium || subscriptionTier === 'premium') {
+      Alert.alert(
+        'Already Premium',
+        'You already have premium access! Enjoy all the advanced features.',
+        [{ text: 'OK' }]
+      );
+    } else {
+      try {
+        navigation.navigate('subscription');
+      } catch (error) {
+        console.error('Navigation error:', error);
+        Alert.alert(
+          'Navigation Error',
+          'Could not open subscription screen. Please try from the Profile menu.',
+          [{ text: 'OK' }]
+        );
+      }
     }
   };
 
@@ -240,15 +296,38 @@ export default function DailyVoiceDigestScreen() {
             ))}
           </View>
 
-          {/* Actionable Tips */}
+          {/* Actionable Tips / Todos */}
           <View style={styles.tipsContainer}>
             <Text style={styles.tipsTitle}>🎯 Actionable Tips</Text>
-            {digest.actionable_tips.map((tip, index) => (
-              <View key={index} style={styles.tipItem}>
-                <Text style={styles.tipNumber}>{index + 1}</Text>
-                <Text style={styles.tipText}>{tip}</Text>
-              </View>
-            ))}
+            {digest.actionable_tips.map((tip, index) => {
+              const isCompleted = completedTodos.has(index);
+              return (
+                <TouchableOpacity
+                  key={index}
+                  style={[styles.tipItem, isCompleted && styles.tipItemCompleted]}
+                  onPress={() => {
+                    const newCompleted = new Set(completedTodos);
+                    if (isCompleted) {
+                      newCompleted.delete(index);
+                    } else {
+                      newCompleted.add(index);
+                    }
+                    setCompletedTodos(newCompleted);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.tipCheckbox}>
+                    {isCompleted && <Text style={styles.checkmark}>✓</Text>}
+                  </View>
+                  <Text style={[styles.tipNumber, isCompleted && styles.tipNumberCompleted]}>
+                    {index + 1}
+                  </Text>
+                  <Text style={[styles.tipText, isCompleted && styles.tipTextCompleted]}>
+                    {tip}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
 
           {/* Pro Teaser */}
@@ -256,8 +335,14 @@ export default function DailyVoiceDigestScreen() {
             <View style={styles.proTeaser}>
               <Text style={styles.proTeaserTitle}>⭐ Pro Feature</Text>
               <Text style={styles.proTeaserText}>{digest.pro_teaser}</Text>
-              <TouchableOpacity style={styles.upgradeButton}>
-                <Text style={styles.upgradeButtonText}>Upgrade to Pro</Text>
+              <TouchableOpacity 
+                style={[styles.upgradeButton, hasPremium && styles.upgradeButtonDisabled]}
+                onPress={handleUpgradeToPro}
+                disabled={hasPremium}
+              >
+                <Text style={styles.upgradeButtonText}>
+                  {hasPremium ? '✓ Premium Active' : 'Upgrade to Pro'}
+                </Text>
               </TouchableOpacity>
             </View>
           )}
@@ -445,7 +530,32 @@ const styles = StyleSheet.create({
   tipItem: {
     flexDirection: 'row',
     marginBottom: 12,
-    alignItems: 'flex-start'
+    alignItems: 'flex-start',
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    borderRadius: 8,
+    backgroundColor: '#ffffff'
+  },
+  tipItemCompleted: {
+    backgroundColor: '#f0f9ff',
+    opacity: 0.8
+  },
+  tipCheckbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#3b82f6',
+    marginRight: 12,
+    marginTop: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff'
+  },
+  checkmark: {
+    color: '#10b981',
+    fontSize: 16,
+    fontWeight: 'bold'
   },
   tipNumber: {
     backgroundColor: '#3b82f6',
@@ -460,11 +570,19 @@ const styles = StyleSheet.create({
     marginRight: 12,
     marginTop: 2
   },
+  tipNumberCompleted: {
+    backgroundColor: '#9ca3af',
+    textDecorationLine: 'line-through'
+  },
   tipText: {
     color: '#374151',
     fontSize: 14,
     lineHeight: 20,
     flex: 1
+  },
+  tipTextCompleted: {
+    color: '#9ca3af',
+    textDecorationLine: 'line-through'
   },
   
   // Pro Teaser
@@ -494,6 +612,10 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 8,
     alignSelf: 'flex-start'
+  },
+  upgradeButtonDisabled: {
+    backgroundColor: '#10b981',
+    opacity: 0.8
   },
   upgradeButtonText: {
     color: '#ffffff',

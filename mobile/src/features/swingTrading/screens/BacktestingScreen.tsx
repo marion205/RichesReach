@@ -11,6 +11,7 @@ import {
   RefreshControl,
   Dimensions,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Icon from 'react-native-vector-icons/Feather';
 import { useQuery } from '@apollo/client';
@@ -19,7 +20,7 @@ import { GET_SWING_SIGNALS } from '../../../graphql/swingTrading';
 const { width } = Dimensions.get('window');
 
 interface BacktestingScreenProps {
-  navigateTo: (screen: string) => void;
+  navigateTo?: (screen: string) => void;
 }
 
 interface BacktestResult {
@@ -37,7 +38,30 @@ interface BacktestResult {
   status: 'completed' | 'running' | 'failed';
 }
 
-const BacktestingScreen: React.FC<BacktestingScreenProps> = ({ navigateTo }) => {
+const BacktestingScreen: React.FC<BacktestingScreenProps> = ({ navigateTo: navigateToProp }) => {
+  const navigation = useNavigation<any>();
+  
+  // Use React Navigation if navigateTo prop not provided
+  const navigateTo = navigateToProp || ((screen: string) => {
+    try {
+      navigation.navigate(screen as never);
+    } catch (error) {
+      console.warn('Navigation error:', error);
+      // Fallback to globalNavigate if available
+      try {
+        if (typeof window !== 'undefined' && (window as any).__navigateToGlobal) {
+          (window as any).__navigateToGlobal(screen);
+        }
+      } catch (fallbackError) {
+        console.error('All navigation methods failed:', fallbackError);
+      }
+    }
+  });
+  
+  // Ensure navigateTo is always a function
+  if (typeof navigateTo !== 'function') {
+    console.error('navigateTo is not a function:', typeof navigateTo, navigateTo);
+  }
   const [refreshing, setRefreshing] = useState(false);
   const [selectedStrategy, setSelectedStrategy] = useState('momentum');
   const [selectedTimeframe, setSelectedTimeframe] = useState('1Y');

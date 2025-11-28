@@ -108,87 +108,110 @@ const ScanPlaybookScreen: React.FC<ScanPlaybookScreenProps> = ({ navigation, rou
     }
   }, [scan.id, refetch]);
 
-  const renderResultItem = (result: ScanResult) => (
-    <View key={result.id} style={styles.resultCard}>
-      <View style={styles.resultHeader}>
-        <Text style={styles.resultSymbol}>{result.symbol}</Text>
-        <View style={styles.scoreBadge}>
-          <Text style={styles.scoreText}>{result.score.toFixed(1)}</Text>
+  const renderResultItem = (result: ScanResult) => {
+    const score = typeof result.score === 'number' && !isNaN(result.score) ? result.score : 0;
+    const currentPrice = typeof result.currentPrice === 'number' && !isNaN(result.currentPrice) ? result.currentPrice : 0;
+    const changePercent = typeof result.changePercent === 'number' && !isNaN(result.changePercent) ? result.changePercent : 0;
+    const change = typeof result.change === 'number' && !isNaN(result.change) ? result.change : 0;
+    const confidence = typeof result.confidence === 'number' && !isNaN(result.confidence) ? result.confidence : 0;
+    const opportunityFactors = result.opportunityFactors || [];
+    const riskFactors = result.riskFactors || [];
+
+    return (
+      <View key={result.id} style={styles.resultCard}>
+        <View style={styles.resultHeader}>
+          <Text style={styles.resultSymbol}>{result.symbol || 'N/A'}</Text>
+          <View style={styles.scoreBadge}>
+            <Text style={styles.scoreText}>{score.toFixed(1)}</Text>
+          </View>
         </View>
+        
+        <Text style={styles.resultName}>{result.name || 'Unknown'}</Text>
+        
+        <View style={styles.resultMetrics}>
+          <View style={styles.metric}>
+            <Text style={styles.metricLabel}>Price</Text>
+            <Text style={styles.metricValue}>${currentPrice.toFixed(2)}</Text>
+          </View>
+          <View style={styles.metric}>
+            <Text style={styles.metricLabel}>Change</Text>
+            <Text style={[
+              styles.metricValue,
+              { color: change >= 0 ? '#00cc99' : '#FF3B30' }
+            ]}>
+              {change >= 0 ? '+' : ''}{changePercent.toFixed(2)}%
+            </Text>
+          </View>
+          <View style={styles.metric}>
+            <Text style={styles.metricLabel}>Confidence</Text>
+            <Text style={styles.metricValue}>
+              {Math.round(confidence * 100)}%
+            </Text>
+          </View>
+        </View>
+
+        {result.reasoning && (
+          <Text style={styles.reasoning}>{result.reasoning}</Text>
+        )}
+
+        {opportunityFactors.length > 0 && (
+          <View style={styles.factorsContainer}>
+            <Text style={styles.factorsTitle}>Opportunity Factors:</Text>
+            {opportunityFactors.map((factor, index) => (
+              <Text key={index} style={styles.factorText}>• {factor}</Text>
+            ))}
+          </View>
+        )}
+
+        {riskFactors.length > 0 && (
+          <View style={styles.factorsContainer}>
+            <Text style={styles.factorsTitle}>Risk Factors:</Text>
+            {riskFactors.map((factor, index) => (
+              <Text key={index} style={[styles.factorText, { color: '#FF3B30' }]}>• {factor}</Text>
+            ))}
+          </View>
+        )}
       </View>
-      
-      <Text style={styles.resultName}>{result.name}</Text>
-      
-      <View style={styles.resultMetrics}>
-        <View style={styles.metric}>
-          <Text style={styles.metricLabel}>Price</Text>
-          <Text style={styles.metricValue}>${result.currentPrice.toFixed(2)}</Text>
-        </View>
-        <View style={styles.metric}>
-          <Text style={styles.metricLabel}>Change</Text>
-          <Text style={[
-            styles.metricValue,
-            { color: result.change >= 0 ? '#00cc99' : '#FF3B30' }
-          ]}>
-            {result.change >= 0 ? '+' : ''}{result.changePercent.toFixed(2)}%
-          </Text>
-        </View>
-        <View style={styles.metric}>
-          <Text style={styles.metricLabel}>Confidence</Text>
-          <Text style={styles.metricValue}>
-            {Math.round(result.confidence * 100)}%
-          </Text>
-        </View>
-      </View>
-
-      <Text style={styles.reasoning}>{result.reasoning}</Text>
-
-      {result.opportunityFactors.length > 0 && (
-        <View style={styles.factorsContainer}>
-          <Text style={styles.factorsTitle}>Opportunity Factors:</Text>
-          {result.opportunityFactors.map((factor, index) => (
-            <Text key={index} style={styles.factorText}>• {factor}</Text>
-          ))}
-        </View>
-      )}
-
-      {result.riskFactors.length > 0 && (
-        <View style={styles.factorsContainer}>
-          <Text style={styles.factorsTitle}>Risk Factors:</Text>
-          {result.riskFactors.map((factor, index) => (
-            <Text key={index} style={[styles.factorText, { color: '#FF3B30' }]}>• {factor}</Text>
-          ))}
-        </View>
-      )}
-    </View>
-  );
+    );
+  };
 
   const renderPlaybookInfo = () => {
-    if (!scan.playbook) return null;
+    if (!scan.playbook || !scan.playbook.performance) return null;
+
+    const performance = scan.playbook.performance;
+    const successRate = performance?.successRate ?? 0;
+    const averageReturn = performance?.averageReturn ?? 0;
+    const sharpeRatio = performance?.sharpeRatio ?? 0;
 
     return (
       <View style={styles.playbookCard}>
         <Text style={styles.playbookTitle}>Based on Playbook</Text>
-        <Text style={styles.playbookName}>{scan.playbook.name}</Text>
-        <Text style={styles.playbookDescription}>{scan.playbook.description}</Text>
+        <Text style={styles.playbookName}>{scan.playbook.name || 'Untitled Playbook'}</Text>
+        <Text style={styles.playbookDescription}>{scan.playbook.description || 'No description available'}</Text>
         
         <View style={styles.playbookMetrics}>
           <View style={styles.metric}>
             <Text style={styles.metricLabel}>Success Rate</Text>
             <Text style={styles.metricValue}>
-              {Math.round(scan.playbook.performance.successRate * 100)}%
+              {typeof successRate === 'number' && !isNaN(successRate) 
+                ? `${Math.round(successRate * 100)}%` 
+                : 'N/A'}
             </Text>
           </View>
           <View style={styles.metric}>
             <Text style={styles.metricLabel}>Avg Return</Text>
             <Text style={styles.metricValue}>
-              {(scan.playbook.performance.averageReturn * 100).toFixed(1)}%
+              {typeof averageReturn === 'number' && !isNaN(averageReturn)
+                ? `${(averageReturn * 100).toFixed(1)}%`
+                : 'N/A'}
             </Text>
           </View>
           <View style={styles.metric}>
             <Text style={styles.metricLabel}>Sharpe Ratio</Text>
             <Text style={styles.metricValue}>
-              {scan.playbook.performance.sharpeRatio.toFixed(2)}
+              {typeof sharpeRatio === 'number' && !isNaN(sharpeRatio)
+                ? sharpeRatio.toFixed(2)
+                : 'N/A'}
             </Text>
           </View>
         </View>

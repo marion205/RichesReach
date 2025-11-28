@@ -17,6 +17,10 @@ const GET_AI_RECOMMENDATIONS = gql`
     aiRecommendations(profile: $profile, usingDefaults: $usingDefaults) {
       portfolioAnalysis {
         totalValue
+        numHoldings
+        sectorBreakdown
+        riskScore
+        diversificationScore
       }
       buyRecommendations {
         symbol
@@ -24,8 +28,9 @@ const GET_AI_RECOMMENDATIONS = gql`
         recommendation
         confidence
         reasoning
-        allocation
         expectedReturn
+        targetPrice
+        currentPrice
       }
       sellRecommendations {
         symbol
@@ -37,6 +42,16 @@ const GET_AI_RECOMMENDATIONS = gql`
         suggestedAllocation
         reasoning
         priority
+      }
+      riskAssessment {
+        overallRisk
+        volatilityEstimate
+        recommendations
+      }
+      marketOutlook {
+        overallSentiment
+        confidence
+        keyFactors
       }
     }
   }
@@ -99,6 +114,7 @@ export default function NextMoveModal({ visible, onClose, portfolioValue = 10000
     try {
       logger.log(`🔄 NextMoveModal: Performing direct fetch (attempt ${attempt}/${maxRetries})...`);
       
+      // GraphQL query body - explicitly set operationName to match query name
       const queryBody = {
         query: `
           query GetAIRecommendations($usingDefaults: Boolean) {
@@ -109,20 +125,6 @@ export default function NextMoveModal({ visible, onClose, portfolioValue = 10000
                 sectorBreakdown
                 riskScore
                 diversificationScore
-                expectedImpact {
-                  evPct
-                  evAbs
-                  per10k
-                }
-                risk {
-                  volatilityEstimate
-                  maxDrawdownPct
-                }
-                assetAllocation {
-                  stocks
-                  bonds
-                  cash
-                }
               }
               buyRecommendations {
                 symbol
@@ -130,7 +132,6 @@ export default function NextMoveModal({ visible, onClose, portfolioValue = 10000
                 recommendation
                 confidence
                 reasoning
-                allocation
                 expectedReturn
                 targetPrice
                 currentPrice
@@ -160,37 +161,133 @@ export default function NextMoveModal({ visible, onClose, portfolioValue = 10000
           }
         `,
         variables: { usingDefaults: true },
+        operationName: 'GetAIRecommendations', // Explicitly set to match query name
       };
       
-      logger.log('📤 Sending query with variables:', JSON.stringify(queryBody.variables));
+      // Use the centralized API config - CRITICAL: no hardcoded URLs
+      const apiConfig = await import('../config/api');
+      const { API_GRAPHQL, API_BASE } = apiConfig;
       
-      const response = await fetch('http://localhost:8000/graphql/', {
+      // Ensure URL is clean and properly formatted
+      let url = API_GRAPHQL;
+      if (!url || url.includes('localhost') || url.includes('127.0.0.1')) {
+        // Safety check: if somehow we got localhost, force LAN IP
+        logger.error('❌ [NextMoveModal] CRITICAL: API_GRAPHQL contains localhost!');
+        logger.error('❌ [NextMoveModal] API_GRAPHQL was:', url);
+        logger.error('❌ [NextMoveModal] API_BASE was:', API_BASE);
+        // Force LAN IP
+        url = 'http://192.168.1.240:8000/graphql/';
+        logger.error('❌ [NextMoveModal] Forcing override to:', url);
+      }
+      
+      // Normalize URL (ensure single trailing slash for graphql endpoint)
+      url = url.replace(/\/+$/, '') + '/';
+      
+      // Comprehensive logging BEFORE the fetch
+      logger.log('🌐 [NextMoveModal] ========================================');
+      logger.log('🌐 [NextMoveModal] Direct fetch URL:', url);
+      logger.log('🌐 [NextMoveModal] API_BASE from config:', API_BASE);
+      logger.log('🌐 [NextMoveModal] API_GRAPHQL from config:', API_GRAPHQL);
+      logger.log('🌐 [NextMoveModal] Final URL being used:', url);
+      logger.log('🌐 [NextMoveModal] ========================================');
+      logger.log('🌐 [NextMoveModal] Variables:', JSON.stringify(queryBody.variables));
+      logger.log('🌐 [NextMoveModal] Fetch config:', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer dev-token-1762831885',
-        },
-        body: JSON.stringify(queryBody),
+        url: url,
+        hasAuth: true,
+        contentType: 'application/json',
       });
+      
+      // Perform the fetch with timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+      
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer dev-token-1762831885',
+          },
+          body: JSON.stringify(queryBody),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+      } catch (fetchError: any) {
+        clearTimeout(timeoutId);
+        
+        // Enhanced error logging
+        if (fetchError.name === 'AbortError') {
+          logger.error('❌ [NextMoveModal] Request timeout after 30s');
+          throw new Error('Request timeout - server did not respond');
+        }
+        
+        logger.error('❌ [NextMoveModal] Network error in fetch:', {
+          name: fetchError?.name,
+          message: fetchError?.message,
+          stack: fetchError?.stack,
+          url: url,
+        });
+        throw fetchError;
+      }
+      
+      // Log response status BEFORE trying to read body
+      logger.log('🌐 [NextMoveModal] HTTP status:', response.status, response.statusText);
+      logger.log('🌐 [NextMoveModal] Response headers:', Object.fromEntries(response.headers.entries()));
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        // Try to read error body for more context
+        let errorText = '';
+        try {
+          errorText = await response.text();
+          logger.error('❌ [NextMoveModal] HTTP error response body (first 500 chars):', errorText.slice(0, 500));
+        } catch (e) {
+          logger.error('❌ [NextMoveModal] Could not read error response body');
+        }
+        throw new Error(`HTTP ${response.status}: ${response.statusText}${errorText ? ` - ${errorText.slice(0, 200)}` : ''}`);
       }
 
-      const json = await response.json();
+      // Read response as text first, then parse (helps with debugging)
+      const responseText = await response.text();
+      logger.log('🌐 [NextMoveModal] Raw response (first 500 chars):', responseText.slice(0, 500));
       
-      // Log FULL response (no truncation) for debugging
-      logger.log('📥 FULL Response Body:', JSON.stringify(json, null, 2));
+      let json: any;
+      try {
+        json = JSON.parse(responseText);
+      } catch (parseError) {
+        logger.error('❌ [NextMoveModal] Failed to parse JSON response:', parseError);
+        logger.error('❌ [NextMoveModal] Response text:', responseText);
+        throw new Error(`Invalid JSON response: ${parseError}`);
+      }
       
-      if (json.errors) {
-        logger.error('❌ GraphQL errors in response:', json.errors);
-        throw new Error(`GraphQL errors: ${JSON.stringify(json.errors)}`);
+      // Log parsed response structure
+      logger.log('📥 [NextMoveModal] Parsed response keys:', Object.keys(json));
+      if (json.data) {
+        logger.log('📥 [NextMoveModal] Response has data, keys:', Object.keys(json.data));
+      }
+      
+      // Handle GraphQL errors gracefully - warn but don't throw if we have partial data
+      if (json.errors?.length) {
+        logger.warn('⚠️ [NextMoveModal] GraphQL errors in response:', JSON.stringify(json.errors, null, 2));
+        // Don't throw immediately - check if we have usable data first
       }
 
       // Check response structure
       if (!json.data) {
         logger.error('❌ No "data" key in response. Full response:', json);
         throw new Error(`Invalid response: missing "data" key. Response keys: ${Object.keys(json).join(', ')}`);
+      }
+      
+      // If we have errors but also have data, log warning but continue
+      if (json.errors?.length && json.data && Object.keys(json.data).length > 0) {
+        logger.warn('⚠️ [NextMoveModal] GraphQL errors present but continuing with partial data');
+      }
+      
+      // Only throw if we have errors AND no usable data
+      if (json.errors?.length && (!json.data || Object.keys(json.data).length === 0)) {
+        logger.error('❌ [NextMoveModal] GraphQL errors and no usable data');
+        throw new Error(`GraphQL errors: ${JSON.stringify(json.errors)}`);
       }
 
       // Log what keys are in data
@@ -300,7 +397,11 @@ export default function NextMoveModal({ visible, onClose, portfolioValue = 10000
       const timeoutId = setTimeout(async () => {
         logger.log('🧪 NextMoveModal: Testing direct fetch...');
         try {
-          const response = await fetch('http://localhost:8000/graphql/', {
+          // Use the centralized API config instead of hardcoded localhost
+          const { API_GRAPHQL } = await import('../config/api');
+          logger.log('🧪 [NextMoveModal] Test fetch using URL:', API_GRAPHQL);
+          
+          const response = await fetch(API_GRAPHQL, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -321,6 +422,7 @@ export default function NextMoveModal({ visible, onClose, portfolioValue = 10000
                 }
               `,
               variables: { usingDefaults: true },
+              operationName: 'GetAIRecommendations', // Explicitly set to match query name
             }),
           });
           logger.log('🧪 Direct fetch response:', {
