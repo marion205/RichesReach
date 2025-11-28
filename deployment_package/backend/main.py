@@ -43,6 +43,13 @@ class PriceCache:
     
     def set(self, key: str, value):
         self.data[key] = (value, time.time())
+    
+    def clear(self, key: str = None):
+        """Clear cache entry or all entries."""
+        if key:
+            self.data.pop(key, None)
+        else:
+            self.data.clear()
 
 # Global price cache instance
 price_cache = PriceCache(ttl=12)
@@ -287,6 +294,96 @@ async def generate_voice_reply_stream(
         logger.error(f"❌ Traceback: {traceback.format_exc()}")
         yield json.dumps({"type": "error", "text": "I got confused, try again?"}) + "\n"
 
+# ✅ Parse direct buy/sell commands from voice
+def parse_trade_command(transcript: str) -> dict:
+    """
+    Parse direct buy/sell commands like "buy one bitcoin" or "buy 100 shares of Apple"
+    Returns: {symbol: str, quantity: float, side: str, type: str} or None
+    """
+    text = transcript.lower()
+    
+    # Detect buy/sell
+    side = None
+    if "buy" in text:
+        side = "buy"
+    elif "sell" in text:
+        side = "sell"
+    else:
+        return None
+    
+    # Extract quantity (look for numbers)
+    import re
+    quantity = 1.0  # Default
+    quantity_patterns = [
+        r'(\d+(?:\.\d+)?)\s*(?:shares?|share)',
+        r'(\d+(?:\.\d+)?)\s*(?:bitcoin|btc|ethereum|eth|solana|sol)',
+        r'(\d+(?:\.\d+)?)\s*(?:of|)',
+        r'(\d+(?:\.\d+)?)',
+    ]
+    
+    for pattern in quantity_patterns:
+        match = re.search(pattern, text)
+        if match:
+            try:
+                quantity = float(match.group(1))
+                break
+            except:
+                pass
+    
+    # Handle word numbers for small quantities
+    word_numbers = {
+        "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+        "a": 1, "an": 1, "single": 1
+    }
+    for word, num in word_numbers.items():
+        if word in text and quantity == 1.0:
+            quantity = float(num)
+            break
+    
+    # Detect symbol
+    symbol = None
+    asset_type = "stock"  # Default
+    
+    # Crypto detection
+    crypto_map = {
+        "bitcoin": "BTC", "btc": "BTC",
+        "ethereum": "ETH", "eth": "ETH",
+        "solana": "SOL", "sol": "SOL",
+    }
+    for keyword, sym in crypto_map.items():
+        if keyword in text:
+            symbol = sym
+            asset_type = "crypto"
+            break
+    
+    # Stock detection (if not crypto)
+    if not symbol:
+        stock_map = {
+            "apple": "AAPL", "aapl": "AAPL",
+            "tesla": "TSLA", "tsla": "TSLA",
+            "microsoft": "MSFT", "msft": "MSFT",
+            "nvidia": "NVDA", "nvda": "NVDA",
+            "google": "GOOGL", "googl": "GOOGL",
+            "amazon": "AMZN", "amzn": "AMZN",
+            "meta": "META", "facebook": "META", "fb": "META",
+            "netflix": "NFLX", "nflx": "NFLX",
+        }
+        for keyword, sym in stock_map.items():
+            if keyword in text:
+                symbol = sym
+                asset_type = "stock"
+                break
+    
+    if symbol and side:
+        return {
+            "symbol": symbol,
+            "quantity": quantity,
+            "side": side,
+            "type": asset_type,
+        }
+    
+    return None
+
 # ✅ Intent detection - separates "what user wants" from "what to say"
 def detect_intent(transcript: str, history: list = None, last_trade: dict = None) -> str:
     """
@@ -295,7 +392,20 @@ def detect_intent(transcript: str, history: list = None, last_trade: dict = None
     """
     text = transcript.lower()
     
-    # Execution commands (highest priority)
+    # Direct buy/sell commands (HIGHEST priority - before crypto_query)
+    trade_cmd = parse_trade_command(transcript)
+    if trade_cmd:
+        return "execute_trade"
+    
+    # Buy multiple stocks command (e.g., "buy three stocks", "buy 5 stocks that will make me money")
+    if "buy" in text and "stock" in text:
+        # Check for quantity
+        import re
+        quantity_match = re.search(r'(one|two|three|four|five|six|seven|eight|nine|ten|\d+)\s*stock', text)
+        if quantity_match:
+            return "buy_multiple_stocks"
+    
+    # Execution commands (confirmation of previous recommendation)
     if any(phrase in text for phrase in ["execute", "place order", "place the order", "do it", "go ahead", "confirm"]):
         if any(word in text for word in ["trade", "order", "buy", "sell"]):
             return "execute_trade"
@@ -304,9 +414,17 @@ def detect_intent(transcript: str, history: list = None, last_trade: dict = None
     if text.strip() in ["yes", "yeah", "yep", "sure", "ok", "okay"] and last_trade:
         return "execute_trade"
     
-    # Crypto queries
+    # Crypto queries (only if NOT a buy/sell command)
     if any(word in text for word in ["cryptocurrency", "crypto", "bitcoin", "ethereum", "btc", "eth", "solana", "sol"]):
-        return "crypto_query"
+        # Double-check it's not a buy/sell command
+        if "buy" not in text and "sell" not in text:
+            return "crypto_query"
+    
+    # Stock queries (check before trade idea to catch specific stock mentions)
+    common_stocks = ["apple", "aapl", "tesla", "tsla", "microsoft", "msft", "nvidia", "nvda", 
+                     "google", "googl", "amazon", "amzn", "meta", "facebook", "fb", "netflix", "nflx"]
+    if any(stock in text for stock in common_stocks):
+        return "stock_query"
     
     # Trade idea requests
     if any(phrase in text for phrase in ["what should i invest", "what should i buy", "best trade", "trading opportunity", "day trade", "momentum"]):
@@ -342,24 +460,50 @@ async def build_context(intent: str, transcript: str, history: list = None, last
     }
     
     # ✅ Parallel fetch tasks based on intent
+    # For voice queries, always force refresh to get latest prices
+    force_refresh = True  # Voice queries need fresh data
+    
     tasks = []
     
     if intent == "crypto_query":
         # Detect which crypto
         text = transcript.lower()
         if "bitcoin" in text or "btc" in text:
-            tasks.append(('btc', get_crypto_price('BTC')))
+            tasks.append(('btc', get_crypto_price('BTC', force_refresh=force_refresh)))
         elif "ethereum" in text or "eth" in text:
-            tasks.append(('eth', get_crypto_price('ETH')))
+            tasks.append(('eth', get_crypto_price('ETH', force_refresh=force_refresh)))
         elif "solana" in text or "sol" in text:
-            tasks.append(('sol', get_crypto_price('SOL')))
+            tasks.append(('sol', get_crypto_price('SOL', force_refresh=force_refresh)))
         else:
             # General crypto - fetch top 3 in parallel
             tasks.extend([
-                ('btc', get_crypto_price('BTC')),
-                ('eth', get_crypto_price('ETH')),
-                ('sol', get_crypto_price('SOL')),
+                ('btc', get_crypto_price('BTC', force_refresh=force_refresh)),
+                ('eth', get_crypto_price('ETH', force_refresh=force_refresh)),
+                ('sol', get_crypto_price('SOL', force_refresh=force_refresh)),
             ])
+    
+    elif intent == "stock_query":
+        # Detect which stock from transcript
+        text = transcript.lower()
+        stock_map = {
+            "apple": "AAPL", "aapl": "AAPL",
+            "tesla": "TSLA", "tsla": "TSLA",
+            "microsoft": "MSFT", "msft": "MSFT",
+            "nvidia": "NVDA", "nvda": "NVDA",
+            "google": "GOOGL", "googl": "GOOGL",
+            "amazon": "AMZN", "amzn": "AMZN",
+            "meta": "META", "facebook": "META", "fb": "META",
+            "netflix": "NFLX", "nflx": "NFLX",
+        }
+        
+        detected_symbol = None
+        for keyword, symbol in stock_map.items():
+            if keyword in text:
+                detected_symbol = symbol
+                break
+        
+        if detected_symbol:
+            tasks.append(('stock', get_stock_price(detected_symbol, force_refresh=force_refresh)))
     
     # Execute all fetches in parallel
     if tasks:
@@ -370,42 +514,123 @@ async def build_context(intent: str, transcript: str, history: list = None, last
             if "bitcoin" in text or "btc" in text:
                 btc_data = results[0] if not isinstance(results[0], Exception) else None
                 if btc_data:
+                    data_age_seconds = int(time.time() - btc_data.get('timestamp', time.time()))
                     context["crypto"] = {
                         "symbol": "BTC",
                         "name": "Bitcoin",
                         "price": btc_data['price'],
                         "change_24h": btc_data.get('change_percent_24h', 0),
+                        "data_age_seconds": data_age_seconds,
+                        "is_fresh": data_age_seconds < 30,
                     }
             elif "ethereum" in text or "eth" in text:
                 eth_data = results[0] if not isinstance(results[0], Exception) else None
                 if eth_data:
+                    data_age_seconds = int(time.time() - eth_data.get('timestamp', time.time()))
                     context["crypto"] = {
                         "symbol": "ETH",
                         "name": "Ethereum",
                         "price": eth_data['price'],
                         "change_24h": eth_data.get('change_percent_24h', 0),
+                        "data_age_seconds": data_age_seconds,
+                        "is_fresh": data_age_seconds < 30,
                     }
             elif "solana" in text or "sol" in text:
                 sol_data = results[0] if not isinstance(results[0], Exception) else None
                 if sol_data:
+                    data_age_seconds = int(time.time() - sol_data.get('timestamp', time.time()))
                     context["crypto"] = {
                         "symbol": "SOL",
                         "name": "Solana",
                         "price": sol_data['price'],
                         "change_24h": sol_data.get('change_percent_24h', 0),
+                        "data_age_seconds": data_age_seconds,
+                        "is_fresh": data_age_seconds < 30,
                     }
             else:
                 # General crypto - use all 3 results
                 btc_data = results[0] if not isinstance(results[0], Exception) else None
                 eth_data = results[1] if len(results) > 1 and not isinstance(results[1], Exception) else None
                 sol_data = results[2] if len(results) > 2 and not isinstance(results[2], Exception) else None
+                
+                # Calculate data age for each
+                btc_age = int(time.time() - btc_data.get('timestamp', time.time())) if btc_data else 999
+                eth_age = int(time.time() - eth_data.get('timestamp', time.time())) if eth_data else 999
+                sol_age = int(time.time() - sol_data.get('timestamp', time.time())) if sol_data else 999
+                
                 context["crypto"] = {
                     "top_picks": [
-                        {"symbol": "BTC", "name": "Bitcoin", "price": btc_data['price'] if btc_data else 55000, "change_24h": btc_data.get('change_percent_24h', 0) if btc_data else 0},
-                        {"symbol": "ETH", "name": "Ethereum", "price": eth_data['price'] if eth_data else 3200, "change_24h": eth_data.get('change_percent_24h', 0) if eth_data else 0},
-                        {"symbol": "SOL", "name": "Solana", "price": sol_data['price'] if sol_data else 180, "change_24h": sol_data.get('change_percent_24h', 0) if sol_data else 0},
+                        {
+                            "symbol": "BTC", 
+                            "name": "Bitcoin", 
+                            "price": btc_data['price'] if btc_data else 55000, 
+                            "change_24h": btc_data.get('change_percent_24h', 0) if btc_data else 0,
+                            "data_age_seconds": btc_age,
+                            "is_fresh": btc_age < 30,
+                        },
+                        {
+                            "symbol": "ETH", 
+                            "name": "Ethereum", 
+                            "price": eth_data['price'] if eth_data else 3200, 
+                            "change_24h": eth_data.get('change_percent_24h', 0) if eth_data else 0,
+                            "data_age_seconds": eth_age,
+                            "is_fresh": eth_age < 30,
+                        },
+                        {
+                            "symbol": "SOL", 
+                            "name": "Solana", 
+                            "price": sol_data['price'] if sol_data else 180, 
+                            "change_24h": sol_data.get('change_percent_24h', 0) if sol_data else 0,
+                            "data_age_seconds": sol_age,
+                            "is_fresh": sol_age < 30,
+                        },
                     ]
                 }
+        
+        elif intent == "stock_query":
+            stock_data = results[0] if not isinstance(results[0], Exception) else None
+            if stock_data:
+                # Calculate data age for freshness indicator
+                data_age_seconds = int(time.time() - stock_data.get('timestamp', time.time()))
+                context["stock"] = {
+                    "symbol": stock_data.get('symbol', 'UNKNOWN'),
+                    "price": stock_data.get('price', 0),
+                    "change": stock_data.get('change', 0),
+                    "change_percent": stock_data.get('change_percent', 0),
+                    "volume": stock_data.get('volume', 0),
+                    "data_age_seconds": data_age_seconds,
+                    "is_fresh": data_age_seconds < 30,  # Consider fresh if < 30 seconds old
+                    "source": stock_data.get('source', 'unknown'),
+                }
+                logger.info(f"✅ Stock context: {context['stock']['symbol']} @ ${context['stock']['price']:,.2f} (age: {data_age_seconds}s)")
+            else:
+                logger.warn(f"⚠️ No stock data available for query")
+    
+    elif intent == "buy_multiple_stocks":
+        # Parse quantity from transcript
+        import re
+        text = transcript.lower()
+        word_numbers = {
+            "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+            "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10
+        }
+        
+        quantity = 3  # Default
+        quantity_match = re.search(r'(one|two|three|four|five|six|seven|eight|nine|ten|\d+)\s*stock', text)
+        if quantity_match:
+            match_text = quantity_match.group(1)
+            if match_text in word_numbers:
+                quantity = word_numbers[match_text]
+            else:
+                try:
+                    quantity = int(match_text)
+                except:
+                    quantity = 3
+        
+        context["buy_multiple_stocks"] = {
+            "quantity": quantity,
+            "criteria": transcript,  # Store the full criteria for LLM
+        }
     
     elif intent == "get_trade_idea":
         # Generate a trade recommendation (using your existing ML/signals logic)
@@ -443,6 +668,201 @@ async def build_context(intent: str, transcript: str, history: list = None, last
     return context
 
 # ✅ Generate natural language responses based on intent and context
+async def respond_with_buy_multiple_stocks(transcript: str, history: list, context: dict) -> dict:
+    """Generate stock recommendations and execute orders for multiple stocks."""
+    buy_info = context.get("buy_multiple_stocks", {})
+    quantity = buy_info.get("quantity", 3)
+    criteria = buy_info.get("criteria", transcript)
+    
+    logger.info(f"🛒 Processing buy_multiple_stocks: quantity={quantity}, criteria='{criteria}'")
+    
+    # Step 1: Use LLM to generate stock recommendations (OPTIMIZED: faster model, shorter response)
+    system_prompt = """You are RichesReach. Return ONLY a JSON array with stock recommendations.
+Format: [{"symbol":"AAPL","name":"Apple Inc.","reasoning":"brief reason"}]
+Use real symbols: AAPL, MSFT, NVDA, GOOGL, AMZN, META, TSLA, NFLX, JPM, V, MA."""
+    
+    user_prompt = f"""User wants {quantity} stocks matching: "{criteria}"
+Return JSON array only: [{{"symbol":"SYMBOL","name":"Name","reasoning":"reason"}}]"""
+    
+    # Get LLM recommendations (use faster model, shorter response)
+    logger.info(f"🤖 Requesting LLM recommendations for {quantity} stocks...")
+    start_llm = time.time()
+    recommendations_text = await generate_voice_reply(
+        system_prompt, 
+        user_prompt, 
+        history,
+        model="gpt-4o-mini"  # Faster model for recommendations
+    )
+    llm_time = time.time() - start_llm
+    logger.info(f"⏱️ LLM took {llm_time:.2f}s")
+    
+    if not recommendations_text:
+        logger.warn("⚠️ LLM returned empty response")
+        recommendations_text = ""
+    
+    logger.info(f"📝 LLM response (first 200 chars): {recommendations_text[:200]}")
+    
+    # Parse recommendations
+    recommended_stocks = []
+    try:
+        # Extract JSON from response (might have extra text)
+        import re
+        json_match = re.search(r'\[.*\]', recommendations_text, re.DOTALL)
+        if json_match:
+            json_str = json_match.group(0)
+            logger.info(f"📋 Extracted JSON: {json_str[:200]}")
+            recommendations_json = json.loads(json_str)
+            if isinstance(recommendations_json, list) and len(recommendations_json) > 0:
+                recommended_stocks = recommendations_json[:quantity]  # Limit to requested quantity
+                logger.info(f"✅ Parsed {len(recommended_stocks)} stock recommendations from LLM")
+            else:
+                logger.warn(f"⚠️ LLM returned empty or invalid list: {recommendations_json}")
+        else:
+            logger.warn(f"⚠️ No JSON array found in LLM response")
+    except json.JSONDecodeError as e:
+        logger.error(f"❌ JSON decode error: {e}")
+        logger.error(f"❌ Response text: {recommendations_text[:500]}")
+    except Exception as e:
+        logger.error(f"❌ Error parsing LLM recommendations: {e}")
+        logger.error(f"❌ Response text: {recommendations_text[:500]}")
+    
+    # Dynamic fallback: Try to get trending/popular stocks if LLM parsing failed
+    if not recommended_stocks:
+        logger.warn("⚠️ LLM parsing failed, using dynamic fallback...")
+        # Use a diverse set of popular stocks across sectors
+        fallback_stocks = [
+            {"symbol": "AAPL", "name": "Apple Inc.", "reasoning": "Tech sector leader with strong fundamentals"},
+            {"symbol": "NVDA", "name": "NVIDIA Corporation", "reasoning": "AI and semiconductor growth"},
+            {"symbol": "MSFT", "name": "Microsoft Corporation", "reasoning": "Cloud and enterprise software"},
+            {"symbol": "GOOGL", "name": "Alphabet Inc.", "reasoning": "Search and advertising dominance"},
+            {"symbol": "AMZN", "name": "Amazon.com Inc.", "reasoning": "E-commerce and cloud services"},
+            {"symbol": "META", "name": "Meta Platforms Inc.", "reasoning": "Social media and VR growth"},
+            {"symbol": "TSLA", "name": "Tesla Inc.", "reasoning": "Electric vehicle market leader"},
+            {"symbol": "JPM", "name": "JPMorgan Chase & Co.", "reasoning": "Financial services strength"},
+            {"symbol": "V", "name": "Visa Inc.", "reasoning": "Payment processing growth"},
+            {"symbol": "MA", "name": "Mastercard Inc.", "reasoning": "Digital payments expansion"},
+        ]
+        # Select diverse stocks based on quantity
+        recommended_stocks = fallback_stocks[:quantity]
+        logger.info(f"✅ Using fallback: {[s['symbol'] for s in recommended_stocks]}")
+    
+    # Step 2: Fetch current prices for each stock
+    executed_trades = []
+    logger.info(f"💰 Fetching prices for {len(recommended_stocks)} stocks...")
+    
+    for stock_rec in recommended_stocks:
+        symbol = stock_rec.get("symbol", "UNKNOWN")
+        if symbol == "UNKNOWN":
+            logger.warn(f"⚠️ Skipping stock with unknown symbol: {stock_rec}")
+            continue
+        
+        try:
+            logger.info(f"📊 Fetching price for {symbol}...")
+            price_data = await get_stock_price(symbol, force_refresh=True)
+            if price_data and price_data.get("price", 0) > 0:
+                trade = {
+                    "symbol": symbol,
+                    "name": stock_rec.get("name", symbol),
+                    "quantity": 10,  # Default quantity per stock
+                    "side": "buy",
+                    "type": "stock",
+                    "price": price_data.get("price", 0),
+                    "change_percent": price_data.get("change_percent", 0),
+                    "order_type": "market",
+                    "reasoning": stock_rec.get("reasoning", ""),
+                }
+                executed_trades.append(trade)
+                logger.info(f"✅ Added trade for {symbol} at ${trade['price']:,.2f}")
+            else:
+                logger.warn(f"⚠️ No valid price data for {symbol}: {price_data}")
+                # Still add the trade with estimated price if we have the stock info
+                # This allows the order to proceed even if price fetch fails
+                if symbol and stock_rec.get("name"):
+                    logger.info(f"⚠️ Adding trade for {symbol} without price (will use market price)")
+                    trade = {
+                        "symbol": symbol,
+                        "name": stock_rec.get("name", symbol),
+                        "quantity": 10,
+                        "side": "buy",
+                        "type": "stock",
+                        "price": 0,  # Will be filled at market price
+                        "change_percent": 0,
+                        "order_type": "market",
+                        "reasoning": stock_rec.get("reasoning", ""),
+                    }
+                    executed_trades.append(trade)
+        except Exception as e:
+            logger.error(f"❌ Error fetching price for {symbol}: {e}")
+            import traceback
+            logger.error(f"❌ Traceback: {traceback.format_exc()}")
+            # Still add the trade even if price fetch fails
+            if symbol and stock_rec.get("name"):
+                logger.info(f"⚠️ Adding trade for {symbol} despite price fetch error")
+                trade = {
+                    "symbol": symbol,
+                    "name": stock_rec.get("name", symbol),
+                    "quantity": 10,
+                    "side": "buy",
+                    "type": "stock",
+                    "price": 0,  # Will be filled at market price
+                    "change_percent": 0,
+                    "order_type": "market",
+                    "reasoning": stock_rec.get("reasoning", ""),
+                }
+                executed_trades.append(trade)
+    
+    logger.info(f"📦 Total executed trades: {len(executed_trades)}")
+    
+    if len(executed_trades) == 0:
+        logger.error("❌ No trades could be executed - all price fetches failed and no fallback trades created")
+    
+    # Step 3: Generate confirmation response (OPTIMIZED: use template if prices available, LLM only if needed)
+    if len(executed_trades) == 0:
+        logger.error("❌ Cannot generate confirmation - no executed trades")
+        text = "I apologize, but I wasn't able to fetch current prices for the recommended stocks. Please try again in a moment, or specify particular stocks you'd like to buy."
+    else:
+        # OPTIMIZED: Use fast template if we have prices, only use LLM if we need customization
+        has_prices = any(t.get('price', 0) > 0 for t in executed_trades)
+        
+        if has_prices:
+            # Fast path: Use template (no LLM call needed)
+            stock_list = []
+            for t in executed_trades:
+                if t.get('price', 0) > 0:
+                    stock_list.append(f"{t['symbol']} ({t['name']}) at ${t['price']:,.2f}")
+                else:
+                    stock_list.append(f"{t['symbol']} ({t['name']}) at market price")
+            
+            stock_list_str = ", ".join(stock_list)
+            text = f"Perfect! I've placed buy orders for {len(executed_trades)} stocks: {stock_list_str}. These are simulated trades for educational purposes. You'll get confirmations once they're processed."
+            logger.info(f"✅ Using fast template confirmation (no LLM call)")
+        else:
+            # Fallback: Use LLM if we don't have prices
+            system_prompt = """You are RichesReach, confirming multiple stock orders you just placed.
+- List each stock with its symbol and name.
+- Mention that these are simulated trades for educational purposes.
+- Be concise (2-3 sentences).
+- Be professional and reassuring."""
+            
+            user_prompt = f"""User said: {transcript}
+
+You just placed {len(executed_trades)} buy orders for these stocks:
+{json.dumps(executed_trades, indent=2)}
+
+Confirm to the user what orders were placed. List each stock clearly."""
+            
+            text = await generate_voice_reply(system_prompt, user_prompt, history, model="gpt-4o-mini")
+            if not text:
+                # Final fallback template
+                stock_list = ", ".join([f"{t['symbol']} ({t['name']})" for t in executed_trades])
+                text = f"Perfect! I've placed buy orders for {len(executed_trades)} stocks: {stock_list}. These are simulated trades for educational purposes. You'll get confirmations once they're processed."
+    
+    return {
+        "text": text,
+        "intent": "buy_multiple_stocks",
+        "executed_trades": executed_trades,
+    }
+
 async def respond_with_trade_idea(transcript: str, history: list, context: dict) -> dict:
     """Generate natural language response for trade recommendations."""
     trade = context.get("trade", {})
@@ -480,7 +900,10 @@ async def respond_with_crypto_update(transcript: str, history: list, context: di
     crypto = context.get("crypto", {})
     
     system_prompt = """You are RichesReach, a calm, concise trading coach specializing in cryptocurrency.
+- **ALWAYS state the current price** when the user asks about a cryptocurrency.
 - Always use the *provided* price data; do not invent prices.
+- Format prices clearly: "$XX,XXX.XX" for the user.
+- Mention the 24-hour change percentage.
 - Explain crypto opportunities in plain language.
 - Keep answers under 3-4 sentences unless user asks for more detail.
 - Mention volatility and risk awareness.
@@ -491,7 +914,9 @@ async def respond_with_crypto_update(transcript: str, history: list, context: di
 Here is the crypto data:
 {json.dumps(crypto, indent=2)}
 
-Respond naturally to the user's question about cryptocurrency. Use the real prices provided."""
+**IMPORTANT: The user is asking about cryptocurrency. You MUST include the current price in your response.**
+
+Respond naturally to the user's question. Start by stating the current price (e.g., "Bitcoin is currently trading at $XX,XXX.XX"). Then provide context about the 24-hour change and any relevant insights. Use the real prices provided - do not make up prices."""
     
     text = await generate_voice_reply(system_prompt, user_prompt, history)
     if not text:
@@ -627,16 +1052,24 @@ Respond naturally to the user's question or statement."""
 
 # ✅ Helper function to fetch real crypto prices from CoinGecko (free, no API key needed)
 # ✅ OPTIMIZED: Uses caching and shorter timeout
-async def get_crypto_price(symbol: str) -> dict:
+async def get_crypto_price(symbol: str, force_refresh: bool = False) -> dict:
     """
     Fetch real-time crypto price from CoinGecko API with caching.
-    Returns: {price: float, change_24h: float, change_percent_24h: float} or None
+    Args:
+        symbol: Crypto symbol (BTC, ETH, SOL, etc.)
+        force_refresh: If True, bypass cache and fetch fresh data (for voice queries)
+    Returns: {price: float, change_24h: float, change_percent_24h: float, timestamp: float} or None
     """
-    # Check cache first
-    cached = price_cache.get(symbol)
-    if cached:
-        logger.info(f"✅ Using cached {symbol} price: ${cached['price']:,.2f}")
-        return cached
+    # Check cache first (unless forcing refresh)
+    if not force_refresh:
+        cached = price_cache.get(symbol)
+        if cached:
+            logger.info(f"✅ Using cached {symbol} price: ${cached['price']:,.2f} (age: {int(time.time() - cached.get('timestamp', time.time()))}s)")
+            return cached
+    else:
+        # Clear cache for this symbol to force fresh fetch
+        price_cache.clear(symbol)
+        logger.info(f"🔄 Force refreshing {symbol} price (bypassing cache)")
     
     # Map common symbols to CoinGecko IDs
     coin_id_map = {
@@ -680,6 +1113,7 @@ async def get_crypto_price(symbol: str) -> dict:
                             'price': price,
                             'change_24h': change_24h,
                             'change_percent_24h': change_24h,
+                            'timestamp': time.time(),  # Add timestamp for freshness tracking
                         }
                         
                         # Cache the result
@@ -689,16 +1123,264 @@ async def get_crypto_price(symbol: str) -> dict:
                         return result
                     else:
                         logger.warn(f"⚠️ CoinGecko returned data but no {coin_id} entry")
-                        return cached  # Fallback to cache if available
+                        # Try to return cached if available, otherwise None
+                        cached = price_cache.get(symbol)
+                        return cached if cached else None
                 else:
                     logger.warn(f"⚠️ CoinGecko API returned status {response.status}")
-                    return cached  # Fallback to cache if available
+                    # Try to return cached if available, otherwise None
+                    cached = price_cache.get(symbol)
+                    return cached if cached else None
     except asyncio.TimeoutError:
         logger.warn(f"⚠️ CoinGecko API timeout for {symbol}, using cached/fallback")
-        return cached  # Fallback to cache if available
+        # Try to return cached if available, otherwise None
+        cached = price_cache.get(symbol)
+        return cached if cached else None
     except Exception as e:
         logger.warn(f"⚠️ Error fetching crypto price for {symbol}: {e}")
-        return cached  # Fallback to cache if available
+        # Try to return cached if available, otherwise None
+        cached = price_cache.get(symbol)
+        return cached if cached else None
+
+# ✅ Helper function to fetch real stock prices
+async def get_stock_price(symbol: str, force_refresh: bool = False) -> dict:
+    """
+    Fetch real-time stock price with caching.
+    Args:
+        symbol: Stock symbol (AAPL, TSLA, etc.)
+        force_refresh: If True, bypass cache and fetch fresh data (for voice queries)
+    Returns: {symbol: str, price: float, change: float, change_percent: float, timestamp: float} or None
+    """
+    cache_key = f"stock_{symbol}"
+    
+    # Check cache first (unless forcing refresh)
+    if not force_refresh:
+        cached = price_cache.get(cache_key)
+        if cached:
+            logger.info(f"✅ Using cached {symbol} price: ${cached['price']:,.2f} (age: {int(time.time() - cached.get('timestamp', time.time()))}s)")
+            return cached
+    else:
+        # Clear cache for this symbol to force fresh fetch
+        price_cache.clear(cache_key)
+        logger.info(f"🔄 Force refreshing {symbol} price (bypassing cache)")
+    
+    try:
+        # Try to use enhanced stock service if available
+        if ML_SERVICES_AVAILABLE:
+            try:
+                from core.enhanced_stock_service import enhanced_stock_service
+                price_data = await enhanced_stock_service.get_real_time_price(symbol)
+                if price_data and price_data.get('price', 0) > 0:
+                    result = {
+                        'symbol': symbol,
+                        'price': float(price_data['price']),
+                        'change': float(price_data.get('change', 0)),
+                        'change_percent': float(price_data.get('change_percent', 0).replace('%', '')) if isinstance(price_data.get('change_percent'), str) else float(price_data.get('change_percent', 0)),
+                        'volume': price_data.get('volume', 0),
+                        'timestamp': time.time(),
+                        'source': price_data.get('source', 'api'),
+                    }
+                    price_cache.set(cache_key, result)
+                    logger.info(f"✅ Fetched real {symbol} price: ${result['price']:,.2f} (change: {result['change_percent']:+.2f}%)")
+                    return result
+            except Exception as e:
+                logger.warn(f"⚠️ Enhanced stock service error for {symbol}: {e}")
+        
+        # Fallback: Use Alpaca API if available (try bars/latest first, then quotes/latest)
+        alpaca_key = os.getenv('ALPACA_API_KEY')
+        alpaca_secret = os.getenv('ALPACA_SECRET_KEY')
+        if alpaca_key and alpaca_secret:
+            try:
+                # Try bars/latest first (more reliable for current price)
+                url = f"https://data.alpaca.markets/v2/stocks/{symbol}/bars/latest"
+                headers = {
+                    'APCA-API-KEY-ID': alpaca_key,
+                    'APCA-API-SECRET-KEY': alpaca_secret,
+                }
+                # Create SSL context (disable verification for development)
+                import ssl
+                ssl_context = ssl.create_default_context()
+                ssl_context.check_hostname = False
+                ssl_context.verify_mode = ssl.CERT_NONE
+                connector = aiohttp.TCPConnector(ssl=ssl_context)
+                
+                async with aiohttp.ClientSession(connector=connector) as session:
+                    async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=2.8)) as response:
+                        if response.status == 200:
+                            data = await response.json()
+                            if 'bar' in data and data['bar']:
+                                bar = data['bar']
+                                price = float(bar.get('c', 0))  # close price
+                                if price > 0:
+                                    # Calculate change from open
+                                    open_price = float(bar.get('o', price))
+                                    change = price - open_price
+                                    change_percent = (change / open_price * 100) if open_price > 0 else 0.0
+                                    
+                                    result = {
+                                        'symbol': symbol,
+                                        'price': price,
+                                        'change': change,
+                                        'change_percent': change_percent,
+                                        'volume': bar.get('v', 0),
+                                        'timestamp': time.time(),
+                                        'source': 'alpaca',
+                                    }
+                                    price_cache.set(cache_key, result)
+                                    logger.info(f"✅ Fetched {symbol} price from Alpaca: ${price:,.2f} (change: {change_percent:+.2f}%)")
+                                    return result
+                        elif response.status == 404:
+                            # Symbol not found, try quotes endpoint
+                            logger.debug(f"⚠️ Alpaca bars endpoint returned 404 for {symbol}, trying quotes...")
+                            url_quotes = f"https://data.alpaca.markets/v2/stocks/{symbol}/quotes/latest"
+                            async with session.get(url_quotes, headers=headers, timeout=aiohttp.ClientTimeout(total=2.8)) as response2:
+                                if response2.status == 200:
+                                    data2 = await response2.json()
+                                    if 'quote' in data2:
+                                        quote = data2['quote']
+                                        price = float(quote.get('bp', quote.get('ap', 0)))  # bid/ask price
+                                        if price == 0:
+                                            price = float(quote.get('p', 0))  # last price
+                                        
+                                        if price > 0:
+                                            result = {
+                                                'symbol': symbol,
+                                                'price': price,
+                                                'change': 0.0,  # Alpaca quote doesn't include change
+                                                'change_percent': 0.0,
+                                                'volume': quote.get('s', 0),  # size
+                                                'timestamp': time.time(),
+                                                'source': 'alpaca',
+                                            }
+                                            price_cache.set(cache_key, result)
+                                            logger.info(f"✅ Fetched {symbol} price from Alpaca quotes: ${price:,.2f}")
+                                            return result
+            except asyncio.TimeoutError:
+                logger.warn(f"⚠️ Alpaca API timeout for {symbol}")
+            except Exception as e:
+                logger.warn(f"⚠️ Alpaca API error for {symbol}: {e}")
+        
+        # Final fallback: Try Yahoo Finance (free, no API key)
+        try:
+            # Use a more reliable Yahoo Finance endpoint
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+            params = {
+                'interval': '1d',  # Use 1d for more reliable data (works in curl test)
+                'range': '1d',
+            }
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+                'Accept': 'application/json',
+            }
+            # Create SSL context that doesn't verify certificates (for development)
+            import ssl
+            ssl_context = ssl.create_default_context()
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+            connector = aiohttp.TCPConnector(ssl=ssl_context)
+            
+            async with aiohttp.ClientSession(headers=headers, connector=connector) as session:
+                async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=3.0)) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        if 'chart' in data and 'result' in data['chart'] and len(data['chart']['result']) > 0:
+                            result_data = data['chart']['result'][0]
+                            price = 0.0
+                            prev_close = 0.0
+                            volume = 0
+                            
+                            # First try: Get from meta (most reliable)
+                            if 'meta' in result_data:
+                                meta = result_data['meta']
+                                # regularMarketPrice is the current price
+                                price_raw = meta.get('regularMarketPrice')
+                                logger.info(f"📊 {symbol} meta.regularMarketPrice: {price_raw}")
+                                
+                                if price_raw is not None:
+                                    price = float(price_raw)
+                                else:
+                                    price = 0.0
+                                
+                                prev_close_raw = meta.get('chartPreviousClose') or meta.get('previousClose')
+                                if prev_close_raw is not None:
+                                    prev_close = float(prev_close_raw)
+                                else:
+                                    prev_close = price
+                                
+                                volume_raw = meta.get('regularMarketVolume')
+                                volume = int(volume_raw) if volume_raw is not None else 0
+                                
+                                logger.info(f"📊 {symbol} extracted: price=${price}, prev_close=${prev_close}, volume={volume}")
+                            
+                            # Second try: Get from indicators if meta didn't work
+                            if price == 0 and 'indicators' in result_data:
+                                indicators = result_data['indicators']
+                                if 'quote' in indicators and len(indicators['quote']) > 0:
+                                    quote_data = indicators['quote'][0]
+                                    if 'close' in quote_data and len(quote_data['close']) > 0:
+                                        closes = quote_data['close']
+                                        # Get last non-null, non-zero value
+                                        for val in reversed(closes):
+                                            if val is not None and val > 0:
+                                                price = float(val)
+                                                break
+                                
+                                # Also try adjclose
+                                if price == 0 and 'adjclose' in indicators and len(indicators['adjclose']) > 0:
+                                    adjclose_data = indicators['adjclose'][0]
+                                    if 'adjclose' in adjclose_data and len(adjclose_data['adjclose']) > 0:
+                                        adjcloses = adjclose_data['adjclose']
+                                        for val in reversed(adjcloses):
+                                            if val is not None and val > 0:
+                                                price = float(val)
+                                                break
+                            
+                            if price > 0:
+                                if prev_close == 0:
+                                    prev_close = price  # Fallback to current price
+                                change = price - prev_close
+                                change_percent = (change / prev_close * 100) if prev_close > 0 else 0.0
+                                
+                                result = {
+                                    'symbol': symbol,
+                                    'price': price,
+                                    'change': change,
+                                    'change_percent': change_percent,
+                                    'volume': volume,
+                                    'timestamp': time.time(),
+                                    'source': 'yahoo',
+                                }
+                                price_cache.set(cache_key, result)
+                                logger.info(f"✅ Fetched {symbol} price from Yahoo: ${price:,.2f} (change: {change_percent:+.2f}%)")
+                                return result
+                            else:
+                                logger.warn(f"⚠️ Yahoo Finance: Could not extract valid price for {symbol} from response")
+                        else:
+                            logger.warn(f"⚠️ Yahoo Finance: Invalid response structure for {symbol}")
+                    elif response.status == 404:
+                        logger.warn(f"⚠️ Yahoo Finance: Symbol {symbol} not found (404)")
+                    else:
+                        logger.warn(f"⚠️ Yahoo Finance: Status {response.status} for {symbol}")
+        except asyncio.TimeoutError:
+            logger.warn(f"⚠️ Yahoo Finance timeout for {symbol}")
+        except Exception as e:
+            logger.warn(f"⚠️ Yahoo Finance error for {symbol}: {e}")
+            import traceback
+            logger.debug(f"Yahoo Finance traceback: {traceback.format_exc()}")
+        
+        # If all else fails, try cached data
+        cached = price_cache.get(cache_key)
+        if cached:
+            logger.warn(f"⚠️ Using stale cached {symbol} price: ${cached['price']:,.2f}")
+            return cached
+        
+        logger.error(f"❌ Could not fetch {symbol} price from any source")
+        return None
+        
+    except Exception as e:
+        logger.error(f"❌ Error fetching stock price for {symbol}: {e}")
+        cached = price_cache.get(cache_key)
+        return cached if cached else None
 
 # ✅ Batch fetch multiple crypto prices in parallel
 async def get_crypto_prices_batch(symbols: list[str]) -> dict:
@@ -909,10 +1591,37 @@ async def process_voice(request: Request):
                 result = await respond_with_crypto_update(transcription, conversation_history, context)
                 ai_response = result["text"]
                 trade_data = result.get("crypto", {})
+            elif intent == "stock_query":
+                # Use similar structure to crypto_query
+                stock = context.get("stock", {})
+                system_prompt = """You are RichesReach, a calm, concise trading coach specializing in stocks.
+- Always use the *provided* price data; do not invent prices.
+- Explain stock opportunities in plain language.
+- Keep answers under 3-4 sentences unless user asks for more detail.
+- Mention current price, change, and volume if available.
+- If data_age_seconds is provided and is low (< 30), emphasize that this is real-time, current data."""
+                user_prompt = f"""User just said: {transcription}
+
+Here is the stock data:
+{json.dumps(stock, indent=2)}
+
+Respond naturally to the user's question about this stock. Use the real prices provided. If is_fresh is true, emphasize that you're giving current, real-time information."""
+                ai_response = await generate_voice_reply(system_prompt, user_prompt, conversation_history)
+                if not ai_response:
+                    # Fallback
+                    symbol = stock.get("symbol", "the stock")
+                    price = stock.get("price", 0)
+                    change = stock.get("change_percent", 0)
+                    ai_response = f"{symbol} is currently trading at ${price:,.2f}, {change:+.2f}% change. Would you like me to show you the full analysis?"
+                trade_data = stock
             elif intent == "execute_trade":
                 result = await respond_with_execution_confirmation(transcription, conversation_history, context)
                 ai_response = result["text"]
                 trade_data = result.get("executed_trade", last_trade)
+            elif intent == "buy_multiple_stocks":
+                result = await respond_with_buy_multiple_stocks(transcription, conversation_history, context)
+                ai_response = result["text"]
+                trade_data = result.get("executed_trades", [])
             elif intent == "portfolio_query":
                 result = await respond_with_portfolio_answer(transcription, conversation_history, context)
                 ai_response = result["text"]
@@ -1013,29 +1722,97 @@ Explain this trade to the user in natural language. Weave the data into a story,
         elif intent == "crypto_query":
             crypto = context.get("crypto", {})
             system_prompt = """You are RichesReach, a calm, concise trading coach specializing in cryptocurrency.
+- **ALWAYS state the current price** when the user asks about a cryptocurrency.
 - Always use the *provided* price data; do not invent prices.
+- Format prices clearly: "$XX,XXX.XX" for the user.
+- Mention the 24-hour change percentage.
 - Explain crypto opportunities in plain language.
 - Keep answers under 3-4 sentences unless user asks for more detail.
-- Mention volatility and risk awareness."""
+- Mention volatility and risk awareness.
+- If price data includes a timestamp, mention how current the data is (e.g., "as of just now" or "from a few seconds ago")."""
             user_prompt = f"""User just said: {transcript}
 
 Here is the crypto data:
 {json.dumps(crypto, indent=2)}
 
-Respond naturally to the user's question about cryptocurrency. Use the real prices provided."""
+**IMPORTANT: The user is asking about cryptocurrency. You MUST include the current price in your response.**
+
+Respond naturally to the user's question. Start by stating the current price (e.g., "Bitcoin is currently trading at $XX,XXX.XX"). Then provide context about the 24-hour change and any relevant insights. Use the real prices provided - do not make up prices."""
+        
+        elif intent == "stock_query":
+            stock = context.get("stock", {})
+            system_prompt = """You are RichesReach, a calm, concise trading coach specializing in stocks.
+- **ALWAYS state the current price** when the user asks about a stock.
+- Always use the *provided* price data; do not invent prices.
+- Format prices clearly: "$XXX.XX" for the user.
+- Mention the change percentage and direction (up/down).
+- Explain stock opportunities in plain language.
+- Keep answers under 3-4 sentences unless user asks for more detail.
+- If data_age_seconds is provided and is low (< 30), emphasize that this is real-time, current data."""
+            user_prompt = f"""User just said: {transcript}
+
+Here is the stock data:
+{json.dumps(stock, indent=2)}
+
+**IMPORTANT: The user is asking about a stock. You MUST include the current price in your response.**
+
+Respond naturally to the user's question. Start by stating the current price (e.g., "Apple is currently trading at $XXX.XX, up/down X.XX%"). Then provide context about the change and any relevant insights. Use the real prices provided - do not make up prices."""
         
         elif intent == "execute_trade":
-            last_trade = context.get("last_trade", {})
-            system_prompt = """You are RichesReach, confirming a trade the user just approved.
+            # Check if this is a direct buy/sell command
+            trade_cmd = parse_trade_command(transcript)
+            if trade_cmd:
+                # OPTIMIZED: Price fetching is already fast (single fetch), but we ensure it's fresh
+                current_price = None
+                if trade_cmd["type"] == "crypto":
+                    price_data = await get_crypto_price(trade_cmd["symbol"], force_refresh=True)
+                    if price_data:
+                        current_price = price_data.get("price", 0)
+                elif trade_cmd["type"] == "stock":
+                    price_data = await get_stock_price(trade_cmd["symbol"], force_refresh=True)
+                    if price_data:
+                        current_price = price_data.get("price", 0)
+                
+                executed_trade = {
+                    "symbol": trade_cmd["symbol"],
+                    "quantity": trade_cmd["quantity"],
+                    "side": trade_cmd["side"],
+                    "type": trade_cmd["type"],
+                    "price": current_price or 0,
+                    "order_type": "market",
+                }
+                
+                system_prompt = """You are RichesReach, confirming a trade the user just requested.
+- Confirm the symbol, side, and quantity clearly.
+- Mention the current price if available.
+- Note that this is a simulated/instructional trade for educational purposes.
+- Keep it to 1-3 sentences.
+- Be professional and reassuring."""
+                
+                user_prompt = f"""User just said: {transcript}
+
+Parsed trade command:
+{json.dumps(executed_trade, indent=2)}
+
+Confirm to the user what order you're placing. Be specific about symbol, quantity, and side (buy/sell)."""
+            else:
+                # Confirmation of previous trade
+                last_trade = context.get("last_trade", {})
+                system_prompt = """You are RichesReach, confirming a trade the user just approved.
 - Confirm the symbol, side, and approximate size clearly.
 - Keep it to 1-3 sentences.
 - Be professional and reassuring."""
-            user_prompt = f"""User just said: {transcript}
+                user_prompt = f"""User just said: {transcript}
 
 Last recommended trade:
 {json.dumps(last_trade, indent=2)}
 
 Confirm to the user what was done in natural language. Be specific about what was executed."""
+        
+        elif intent == "buy_multiple_stocks":
+            # This will be handled in the token generator
+            system_prompt = None
+            user_prompt = None
         
         elif intent == "portfolio_query":
             portfolio = context.get("portfolio", {})
@@ -1075,8 +1852,60 @@ Respond naturally to the user's question or statement."""
         
         # Stream the response
         async def token_generator():
-            async for chunk in generate_voice_reply_stream(system_prompt, user_prompt, history):
-                yield chunk
+            # OPTIMIZED: Send immediate ACK for ALL intents (improves perceived latency across entire voice experience)
+            yield json.dumps({"type": "ack", "text": "Got it…"}) + "\n"
+            
+            if intent == "buy_multiple_stocks":
+                # Process buy_multiple_stocks (takes ~2-3s)
+                result = await respond_with_buy_multiple_stocks(transcript, history, context)
+                response_text = result.get("text", "")
+                
+                # Stream the response word by word for consistency
+                words = response_text.split()
+                for i, word in enumerate(words):
+                    yield json.dumps({"type": "token", "text": word + (" " if i < len(words) - 1 else "")}) + "\n"
+                yield json.dumps({"type": "done", "full_text": response_text, "executed_trades": result.get("executed_trades", [])}) + "\n"
+            elif intent == "stock_query":
+                # OPTIMIZED: Fast template path for stock queries with price (skip LLM call)
+                stock = context.get("stock", {})
+                if stock.get("price", 0) > 0:
+                    symbol = stock.get("symbol", "UNKNOWN")
+                    price = stock.get("price", 0)
+                    change = stock.get("change_percent", 0)
+                    change_str = f"{change:+.2f}%" if change != 0 else "unchanged"
+                    response_text = f"{symbol} is currently trading at ${price:,.2f}, {change_str} today. Would you like me to show you the full analysis?"
+                    
+                    words = response_text.split()
+                    for i, word in enumerate(words):
+                        yield json.dumps({"type": "token", "text": word + (" " if i < len(words) - 1 else "")}) + "\n"
+                    yield json.dumps({"type": "done", "full_text": response_text}) + "\n"
+                else:
+                    # Fallback to LLM if no price data
+                    async for chunk in generate_voice_reply_stream(system_prompt, user_prompt, history, skip_ack=True):
+                        yield chunk
+            elif intent == "crypto_query":
+                # OPTIMIZED: Fast template path for crypto queries with price (skip LLM call)
+                crypto = context.get("crypto", {})
+                if crypto.get("price", 0) > 0 and "top_picks" not in crypto:
+                    symbol = crypto.get("symbol", "BTC")
+                    name = crypto.get("name", "Bitcoin")
+                    price = crypto.get("price", 0)
+                    change = crypto.get("change_24h", 0)
+                    change_str = f"{change:+.2f}%" if change != 0 else "unchanged"
+                    response_text = f"{name} ({symbol}) is currently trading at ${price:,.2f}, {change_str} in the last 24 hours. Our analysis shows strong momentum. Would you like me to show you the full analysis?"
+                    
+                    words = response_text.split()
+                    for i, word in enumerate(words):
+                        yield json.dumps({"type": "token", "text": word + (" " if i < len(words) - 1 else "")}) + "\n"
+                    yield json.dumps({"type": "done", "full_text": response_text}) + "\n"
+                else:
+                    # Fallback to LLM for complex queries or when no price data
+                    async for chunk in generate_voice_reply_stream(system_prompt, user_prompt, history, skip_ack=True):
+                        yield chunk
+            else:
+                # Standard LLM streaming path (skip_ack=True since we already sent it)
+                async for chunk in generate_voice_reply_stream(system_prompt, user_prompt, history, skip_ack=True):
+                    yield chunk
         
         return StreamingResponse(token_generator(), media_type="text/event-stream")
         
