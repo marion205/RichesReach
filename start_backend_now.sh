@@ -31,6 +31,16 @@ python3 -c "import fastapi, uvicorn" 2>/dev/null || {
     python3 -m pip install --user fastapi uvicorn
 }
 
+# Load OpenAI API key if available
+if [ -f ".env.openai" ]; then
+    export OPENAI_API_KEY=$(cat .env.openai)
+    echo "✅ OpenAI API key loaded from .env.openai"
+elif [ -n "$OPENAI_API_KEY" ]; then
+    echo "✅ OpenAI API key found in environment"
+else
+    echo "⚠️  OpenAI API key not found - voice features may use fallback"
+fi
+
 echo ""
 echo "📡 Starting server on http://0.0.0.0:8000"
 echo "📡 Accessible at http://192.168.1.240:8000 (for mobile devices)"

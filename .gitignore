@@ -116,3 +116,4 @@ backend/train_wake_word_model.py
 setup_ml_wake_word.sh
 free_mac_space.sh
 .env.example
+.env.openai

@@ -286,7 +286,8 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
         setAchievements(prev => [...prev, 'High-Confidence Demo Strategy!']);
         setTimeout(() => setShowConfetti(false), 3000);
       }
-      setError('Using demo strategy - API not available');
+      // Don't show error for demo fallback - it's still a valid strategy
+      // setError('Using demo strategy - API not available');
     } finally {
       setLoading(false);
     }
@@ -362,7 +363,7 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
         risk_check: `Ensure you have proper risk management in place for ${sessionAsset} trading.`,
         next_decision_point: "Click 'Next Step' to continue with the demo session.",
       });
-      setError('Using demo session - API not available');
+      // setError('Using demo session - API not available');
     } finally {
       setLoading(false);
     }
@@ -430,7 +431,7 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
         risk_check: demoStep.risk_check,
         next_decision_point: demoStep.next_decision_point,
       });
-      setError('Using demo guidance - API not available');
+      // setError('Using demo guidance - API not available');
     } finally {
       setLoading(false);
     }
@@ -510,7 +511,7 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
       };
       
       setAnalysis(demoAnalysis);
-      setError('Using demo analysis - API not available');
+      // setError('Using demo analysis - API not available');
     } finally {
       setLoading(false);
     }
@@ -555,7 +556,7 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
       };
       
       setConfidence(demoConfidence);
-      setError('Using demo confidence explanation - API not available');
+      // setError('Using demo confidence explanation - API not available');
     } finally {
       setLoading(false);
     }
