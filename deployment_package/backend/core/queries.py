@@ -613,6 +613,54 @@ class Query(graphene.ObjectType):
             except Exception as e:
                 logger.warning(f"⚠️ Could not log signals to database: {e}")
             
+            # Trigger ML retraining if enough data accumulated (background task)
+            # Only retrain once per day to avoid excessive computation
+            try:
+                from django.core.cache import cache
+                from .day_trading_ml_learner import get_day_trading_ml_learner
+                
+                retrain_cache_key = f"day_trading_ml_retrain_today"
+                if not cache.get(retrain_cache_key):
+                    # Check if we have enough signals to retrain
+                    from .signal_performance_models import DayTradingSignal, SignalPerformance
+                    from django.utils import timezone
+                    from datetime import timedelta
+                    
+                    # Count signals with performance data from last 7 days
+                    cutoff = timezone.now() - timedelta(days=7)
+                    signals_with_perf = DayTradingSignal.objects.filter(
+                        generated_at__gte=cutoff
+                    ).exclude(
+                        performance__isnull=True
+                    ).count()
+                    
+                    if signals_with_perf >= 50:  # Enough data to retrain
+                        logger.info(f"🔄 Triggering ML retraining ({signals_with_perf} signals with performance data)")
+                        # Run in background (non-blocking)
+                        try:
+                            learner = get_day_trading_ml_learner()
+                            # Use threading to avoid blocking
+                            import threading
+                            def retrain_async():
+                                try:
+                                    result = learner.train_model(days_back=30, force_retrain=False)
+                                    if 'error' not in result:
+                                        logger.info(f"✅ Background ML retraining completed: {result.get('records_used', 0)} records, test_score={result.get('test_score', 0):.3f}")
+                                    else:
+                                        logger.warning(f"⚠️ Background ML retraining failed: {result.get('error')}")
+                                except Exception as e:
+                                    logger.error(f"Background retraining failed: {e}")
+                            
+                            thread = threading.Thread(target=retrain_async, daemon=True)
+                            thread.start()
+                            
+                            # Mark as retrained today
+                            cache.set(retrain_cache_key, True, timeout=86400)  # 24 hours
+                        except Exception as e:
+                            logger.warning(f"Could not trigger background retraining: {e}")
+            except Exception as e:
+                logger.debug(f"ML retraining check failed: {e}")
+            
             # Log summary for monitoring
             if picks:
                 logger.info(f"📊 Day Trading Picks ({mode}): {len(picks)} picks generated at {now.strftime('%H:%M:%S')}")
@@ -2579,8 +2627,12 @@ def _generate_picks_for_symbols(
                 ohlcv_1m, ohlcv_5m, symbol
             )
 
-            # Score with ML
-            score = ml_scorer.score(features)
+            # Determine side first (needed for ML scoring)
+            momentum = features.get('momentum_15m', 0.0)
+            side = 'LONG' if momentum > 0 else 'SHORT'
+
+            # Score with ML (pass mode and side for ML learner)
+            score = ml_scorer.score(features, mode=mode, side=side)
 
             # Filter by quality threshold
             if score < quality_threshold:
@@ -2591,10 +2643,6 @@ def _generate_picks_for_symbols(
             risk_metrics = feature_service.calculate_risk_metrics(
                 features, mode, current_price
             )
-
-            # Determine side
-            momentum = features.get('momentum_15m', 0.0)
-            side = 'LONG' if momentum > 0 else 'SHORT'
 
             # Calculate catalyst score
             catalyst_score = ml_scorer.calculate_catalyst_score(features)

@@ -25,12 +25,23 @@ class DayTradingMLScorer:
         self.scaler = None
         self.feature_names = None
         self.model_version = "v1.0"
+        self.ml_learner = None
         self._initialize_model()
     
     def _initialize_model(self):
         """Initialize or load the ML model"""
+        # Try to use ML learner first (learns from past performance)
         try:
-            # Try to load pre-trained model
+            from .day_trading_ml_learner import get_day_trading_ml_learner
+            self.ml_learner = get_day_trading_ml_learner()
+            if self.ml_learner.model is not None:
+                logger.info("✅ Using ML learner model (learns from past performance)")
+                return
+        except Exception as e:
+            logger.debug(f"ML learner not available: {e}")
+        
+        # Fallback: Try to load pre-trained model
+        try:
             model_path = os.path.join(os.path.dirname(__file__), 'models', 'day_trading_model.pkl')
             if os.path.exists(model_path):
                 with open(model_path, 'rb') as f:
@@ -48,20 +59,44 @@ class DayTradingMLScorer:
         self.model = None
         self.scaler = None
     
-    def score(self, features: Dict[str, float]) -> float:
+    def score(self, features: Dict[str, float], mode: str = 'SAFE', side: str = 'LONG') -> float:
         """
         Score a trading opportunity based on features.
+        Uses ML learner if available (learns from past performance).
         
         Args:
             features: Dictionary of extracted features
+            mode: 'SAFE' or 'AGGRESSIVE' (for ML learner)
+            side: 'LONG' or 'SHORT' (for ML learner)
         
         Returns:
             Score from 0.0 to 10.0 (higher = better opportunity)
         """
+        # First, get base score from rule-based or static ML
         if self.model is not None and self.scaler is not None:
-            return self._ml_score(features)
+            base_score = self._ml_score(features)
         else:
-            return self._rule_based_score(features)
+            base_score = self._rule_based_score(features)
+        
+        # Enhance with ML learner if available (learns from past performance)
+        if self.ml_learner and self.ml_learner.model is not None:
+            try:
+                # Add mode and side to features for ML learner
+                features_with_meta = features.copy()
+                features_with_meta['mode'] = mode
+                features_with_meta['side'] = side
+                features_with_meta['score'] = base_score
+                
+                # Enhance score using learned patterns
+                enhanced_score = self.ml_learner.enhance_score_with_ml(base_score, features_with_meta)
+                ml_prob = self.ml_learner.predict_success_probability(features_with_meta)
+                logger.debug(f"🎯 ML-enhanced: base={base_score:.2f} → enhanced={enhanced_score:.2f} (ML prob={ml_prob:.2%})")
+                return enhanced_score
+            except Exception as e:
+                logger.debug(f"ML learner enhancement failed: {e}, using base score")
+                return base_score
+        
+        return base_score
     
     def _ml_score(self, features: Dict[str, float]) -> float:
         """Score using trained ML model"""
