@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, FlatList, TextInput, Alert, Modal, ScrollView, Dimensions, ActivityIndicator,
 } from 'react-native';
@@ -54,6 +54,12 @@ import { UI } from '../../../shared/constants';
 import logger from '../../../utils/logger';
 import EducationalTooltip from '../../../components/common/EducationalTooltip';
 import RustOptionsAnalysisWidget from '../../../components/rust/RustOptionsAnalysisWidget';
+import OptionsNextMoveCard from '../../../components/options/OptionsNextMoveCard';
+import OptionsReviewModal from '../../../components/options/OptionsReviewModal';
+import OptionsPositionCard from '../../../components/options/OptionsPositionCard';
+import MultiLegStrategyBuilder from '../../../components/options/MultiLegStrategyBuilder';
+import { useOptionsPositions } from '../../../hooks/useOptionsPositions';
+import { useAlpacaAccount } from '../hooks/useAlpacaAccount';
 
 // Chart data adapter utilities
 const toMs = (t: string | number | Date) =>
@@ -624,7 +630,26 @@ interface RustAnalysis {
   
   // Options trading state
   const [optionsSymbol, setOptionsSymbol] = useState('AAPL');
+  const [showOptionsReviewModal, setShowOptionsReviewModal] = useState(false);
+  const [selectedRecommendation, setSelectedRecommendation] = useState<any>(null);
   const [selectedExpiration, setSelectedExpiration] = useState<string | null>(null);
+  const [optionsProMode, setOptionsProMode] = useState(false);
+  const [showMultiLegBuilder, setShowMultiLegBuilder] = useState(false);
+  const optionsScrollViewRef = useRef<any>(null);
+  const optionsChainRef = useRef<View>(null);
+  
+  // Fetch Rust options analysis for recommendations
+  // Fetch Rust options analysis for recommendations
+  const { data: rustOptionsData } = useQuery(GET_RUST_OPTIONS_ANALYSIS, {
+    variables: { symbol: optionsSymbol },
+    skip: !optionsSymbol || optionsSymbol.length === 0,
+    fetchPolicy: 'cache-and-network',
+    errorPolicy: 'all',
+  });
+
+  // Fetch options positions
+  const { alpacaAccount } = useAlpacaAccount(1);
+  const { positions: optionsPositions, refetch: refetchOptionsPositions } = useOptionsPositions(alpacaAccount?.id || null);
   
   // Fetch options analysis
   const { data: optionsData, loading: optionsLoading, error: optionsError, refetch: refetchOptions } = useQuery(GET_OPTIONS_ANALYSIS, {
@@ -1601,6 +1626,260 @@ interface OptionOrder {
     }
   }, [cancelOptionOrder, refetchOptionsOrders]);
 
+  // Helper function to show why this trade
+  const showWhyThisAlert = useCallback((recommendation: any) => {
+    const msg = `Recommended ${recommendation.optionType} because: ${recommendation.expectedReturn ? `${(recommendation.expectedReturn * 100).toFixed(0)}% expected return` : 'high conviction'}, strike $${recommendation.strike.toFixed(2)}, risk score ${(recommendation.riskScore * 100).toFixed(0)}`;
+    Alert.alert('Why This Trade?', msg);
+  }, []);
+
+  // Render options chain helper
+  const renderOptionsChain = useCallback(() => {
+    if (optionsLoading) {
+      return (
+        <View
+          style={styles.loadingContainer}
+          accessibilityLiveRegion="polite"
+          accessibilityLabel="Loading options data"
+        >
+          <ActivityIndicator size="large" color={UI?.colors?.accent ?? '#00cc99'} />
+          <Text style={styles.loadingText}>Analyzing options chain...</Text>
+        </View>
+      );
+    }
+
+    if (optionsError) {
+      return (
+        <View
+          style={styles.errorContainer}
+          accessibilityLiveRegion="assertive"
+          accessibilityLabel="Error loading options data"
+        >
+          <Icon name="alert-circle" size={24} color="#ef4444" />
+          <Text style={styles.errorText}>Failed to load options</Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() => refetchOptions()}
+            accessibilityLabel="Retry loading options"
+            accessibilityRole="button"
+          >
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    if (!transformedOptionsData.expiration) {
+      return (
+        <View style={styles.emptyContainer}>
+          <Icon name="info" size={24} color="#6b7280" />
+          <Text style={styles.emptyText}>Enter a symbol to view options chain</Text>
+        </View>
+      );
+    }
+
+    return (
+      <>
+        {transformedOptionsData.expirationDates && transformedOptionsData.expirationDates.length > 1 && (
+          <View style={styles.expirationSelector}>
+            <Text style={styles.expirationLabel}>Expiration:</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              {transformedOptionsData.expirationDates.map((exp: string) => (
+                <TouchableOpacity
+                  key={exp}
+                  style={[
+                    styles.expirationChip,
+                    selectedExpiration === exp && styles.expirationChipSelected,
+                  ]}
+                  onPress={() => setSelectedExpiration(exp)}
+                  accessibilityLabel={`Select expiration ${exp}`}
+                  accessibilityRole="button"
+                >
+                  <Text
+                    style={[
+                      styles.expirationChipText,
+                      selectedExpiration === exp && styles.expirationChipTextSelected,
+                    ]}
+                  >
+                    {exp}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+        <OptionChainCard
+          symbol={optionsSymbol}
+          expiration={transformedOptionsData.expiration}
+          underlyingPrice={transformedOptionsData.underlyingPrice || undefined}
+          calls={transformedOptionsData.calls}
+          puts={transformedOptionsData.puts}
+          selected={selectedOption}
+          onSelect={(opt) => setSelectedOption(opt)}
+          fullBleed
+          gutter={20}
+        />
+      </>
+    );
+  }, [optionsLoading, optionsError, transformedOptionsData, selectedExpiration, optionsSymbol, selectedOption, refetchOptions]);
+
+  // Render order form helper
+  const renderOrderForm = useCallback(() => {
+    if (!selectedOption) return null;
+
+    return (
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle} accessibilityRole="header">Place Order</Text>
+        <View style={styles.orderForm}>
+          <View style={styles.orderInfo}>
+            <Text style={styles.orderInfoText}>
+              {selectedOption.optionType} {optionsSymbol} ${selectedOption.strike} {selectedOption.expiration}
+            </Text>
+            <Text style={styles.orderInfoSubtext}>
+              Bid: ${selectedOption.bid} | Ask: ${selectedOption.ask}
+            </Text>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Quantity</Text>
+            <TextInput
+              style={styles.input}
+              value={orderQuantity}
+              onChangeText={setOrderQuantity}
+              keyboardType="numeric"
+              placeholder="1"
+              accessibilityLabel="Order quantity"
+              accessibilityHint="Enter the number of contracts to trade"
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Order Type</Text>
+            <View style={styles.segmentedControl}>
+              {['MARKET', 'LIMIT'].map((type) => (
+                <TouchableOpacity
+                  key={type}
+                  style={[styles.segment, orderType === type && styles.activeSegment]}
+                  onPress={() => setOrderType(type)}
+                  accessibilityLabel={`${type} order type`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: orderType === type }}
+                >
+                  <Text style={[styles.segmentText, orderType === type && styles.activeSegmentText]}>
+                    {type}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {orderType === 'LIMIT' && (
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Limit Price</Text>
+              <TextInput
+                style={styles.input}
+                value={limitPrice}
+                onChangeText={setLimitPrice}
+                keyboardType="numeric"
+                placeholder="0.00"
+                accessibilityLabel="Limit price"
+                accessibilityHint="Enter the maximum price you're willing to pay"
+              />
+            </View>
+          )}
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Time in Force</Text>
+            <View style={styles.segmentedControl}>
+              {['DAY', 'GTC'].map((tif) => (
+                <TouchableOpacity
+                  key={tif}
+                  style={[styles.segment, timeInForce === tif && styles.activeSegment]}
+                  onPress={() => setTimeInForce(tif)}
+                  accessibilityLabel={`${tif} time in force`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: timeInForce === tif }}
+                >
+                  <Text style={[styles.segmentText, timeInForce === tif && styles.activeSegmentText]}>
+                    {tif}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Notes (Optional)</Text>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              value={orderNotes}
+              onChangeText={setOrderNotes}
+              placeholder="Add notes about this trade..."
+              multiline
+              numberOfLines={3}
+              accessibilityLabel="Order notes"
+              accessibilityHint="Optional notes about this trade"
+            />
+          </View>
+
+          <TouchableOpacity
+            style={[styles.placeOrderButton, placingOrder && styles.placeOrderButtonDisabled]}
+            onPress={handlePlaceOptionOrder}
+            disabled={placingOrder}
+            accessibilityLabel={`Place ${orderType.toLowerCase()} order for ${selectedOption.optionType} ${optionsSymbol} ${selectedOption.strike} ${selectedOption.expiration}`}
+            accessibilityHint={`Quantity: ${orderQuantity || 1}, ${orderType === 'LIMIT' ? `limit price $${limitPrice}` : 'market order'}`}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: placingOrder }}
+          >
+            <Text style={styles.placeOrderButtonText}>
+              {placingOrder ? 'Placing Order...' : 'Place Order'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }, [selectedOption, optionsSymbol, orderQuantity, orderType, limitPrice, timeInForce, orderNotes, placingOrder, handlePlaceOptionOrder]);
+
+  // Render order history helper
+  const renderOrderHistory = useCallback(() => {
+    if (optionsOrdersLoading) {
+      return <Text style={styles.loadingText}>Loading orders...</Text>;
+    }
+
+    if (optionsOrdersData?.optionOrders?.length > 0) {
+      return optionsOrdersData.optionOrders.map((order: OptionOrder) => (
+        <View key={order.id} style={styles.orderRow}>
+          <View style={styles.orderInfo}>
+            <Text style={styles.orderSymbol}>
+              {order.symbol} {order.optionType} ${order.strike} {order.expiration}
+            </Text>
+            <Text style={styles.orderDetails}>
+              {order.side} {order.quantity} @ {order.orderType}
+              {order.limitPrice && ` $${order.limitPrice}`}
+            </Text>
+            <Text style={styles.orderStatus}>{order.status}</Text>
+          </View>
+          <View style={styles.orderActions}>
+            <Text style={styles.orderDate}>
+              {new Date(order.createdAt).toLocaleDateString()}
+            </Text>
+            {order.status === 'PENDING' && (
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => handleCancelOptionOrder(order.id)}
+                accessibilityLabel={`Cancel order ${order.id}`}
+                accessibilityRole="button"
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      ));
+    }
+
+    return <Text style={styles.noOrdersText}>No orders found</Text>;
+  }, [optionsOrdersLoading, optionsOrdersData, handleCancelOptionOrder]);
+
   const listData = useMemo(() => {
     logger.log('=== listData useMemo called ===');
     logger.log('activeTab:', activeTab);
@@ -2315,242 +2594,182 @@ placeholderTextColor="#999"
 
       {/* Options Tab Content */}
       {activeTab === 'options' && (
-        <View style={styles.optionsContainer}>
-          <FlatList
-            data={[]} // Empty data since we're using ListHeaderComponent and ListFooterComponent
-            keyExtractor={() => 'options-placeholder'}
-            renderItem={() => null}
-            ListHeaderComponent={() => (
-              <View style={styles.optionsContentContainer}>
-                <View style={styles.optionsHeader}>
-                  <Text style={styles.optionsTitle}>Options Trading</Text>
-                  <View style={styles.searchContainer}>
-                    <TextInput
-                      style={styles.searchInput}
-                      placeholder="Enter symbol (e.g., AAPL)"
-                      value={optionsSymbol}
-                      onChangeText={(text) => setOptionsSymbol(text.toUpperCase().trim())}
-                      autoCapitalize="characters"
-                      autoCorrect={false}
-                    />
-                    <TouchableOpacity style={styles.searchButton} onPress={() => {}}>
-                      <Icon name="search" size={20} color="#007AFF" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                {/* Rust Options Analysis - Volatility Surface & Greeks */}
-                {optionsSymbol && (
-                  <RustOptionsAnalysisWidget symbol={optionsSymbol} />
-                )}
-
-                {/* Options Chain */}
-                {optionsLoading ? (
-                  <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color={UI?.colors?.accent ?? '#00cc99'} />
-                    <Text style={styles.loadingText}>Loading options data...</Text>
-                  </View>
-                ) : optionsError ? (
-                  <View style={styles.errorContainer}>
-                    <Icon name="alert-circle" size={24} color="#ef4444" />
-                    <Text style={styles.errorText}>Error loading options data</Text>
-                    <TouchableOpacity
-                      style={styles.retryButton}
-                      onPress={() => refetchOptions()}
-                    >
-                      <Text style={styles.retryButtonText}>Retry</Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : transformedOptionsData.expiration ? (
-                  <>
-                    {/* Expiration Selector */}
-                    {transformedOptionsData.expirationDates && transformedOptionsData.expirationDates.length > 1 && (
-                      <View style={styles.expirationSelector}>
-                        <Text style={styles.expirationLabel}>Expiration:</Text>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                          {transformedOptionsData.expirationDates.map((exp: string) => (
-                            <TouchableOpacity
-                              key={exp}
-                              style={[
-                                styles.expirationChip,
-                                selectedExpiration === exp && styles.expirationChipSelected,
-                              ]}
-                              onPress={() => setSelectedExpiration(exp)}
-                            >
-                              <Text
-                                style={[
-                                  styles.expirationChipText,
-                                  selectedExpiration === exp && styles.expirationChipTextSelected,
-                                ]}
-                              >
-                                {exp}
-                              </Text>
-                            </TouchableOpacity>
-                          ))}
-                        </ScrollView>
-                      </View>
-                    )}
-                    <OptionChainCard
-                      symbol={optionsSymbol}
-                      expiration={transformedOptionsData.expiration}
-                      underlyingPrice={transformedOptionsData.underlyingPrice || undefined}
-                      calls={transformedOptionsData.calls}
-                      puts={transformedOptionsData.puts}
-                      selected={selectedOption}
-                      onSelect={(opt) => setSelectedOption(opt)}
-                      fullBleed
-                      gutter={20}
-                    />
-                  </>
-                ) : (
-                  <View style={styles.emptyContainer}>
-                    <Icon name="info" size={24} color="#6b7280" />
-                    <Text style={styles.emptyText}>Enter a symbol to view options chain</Text>
-                  </View>
-                )}
-              </View>
-            )}
-            ListFooterComponent={() => (
-              <View style={styles.optionsContentContainer}>
-                {/* Order Form */}
-                {selectedOption && (
-                  <View style={styles.card}>
-                    <Text style={styles.sectionTitle}>Place Order</Text>
-                    <View style={styles.orderForm}>
-                      <View style={styles.orderInfo}>
-                        <Text style={styles.orderInfoText}>
-                          {selectedOption.optionType} {optionsSymbol} ${selectedOption.strike} {selectedOption.expiration}
-                        </Text>
-                        <Text style={styles.orderInfoSubtext}>
-                          Bid: ${selectedOption.bid} | Ask: ${selectedOption.ask}
-                        </Text>
-                      </View>
-
-                      <View style={styles.inputGroup}>
-                        <Text style={styles.inputLabel}>Quantity</Text>
-                        <TextInput
-                          style={styles.input}
-                          value={orderQuantity}
-                          onChangeText={setOrderQuantity}
-                          keyboardType="numeric"
-                          placeholder="1"
-                        />
-                      </View>
-
-                      <View style={styles.inputGroup}>
-                        <Text style={styles.inputLabel}>Order Type</Text>
-                        <View style={styles.segmentedControl}>
-                          {['MARKET', 'LIMIT'].map((type) => (
-                            <TouchableOpacity
-                              key={type}
-                              style={[styles.segment, orderType === type && styles.activeSegment]}
-                              onPress={() => setOrderType(type)}
-                            >
-                              <Text style={[styles.segmentText, orderType === type && styles.activeSegmentText]}>
-                                {type}
-                              </Text>
-                            </TouchableOpacity>
-                          ))}
-                        </View>
-                      </View>
-
-                      {orderType === 'LIMIT' && (
-                        <View style={styles.inputGroup}>
-                          <Text style={styles.inputLabel}>Limit Price</Text>
-                          <TextInput
-                            style={styles.input}
-                            value={limitPrice}
-                            onChangeText={setLimitPrice}
-                            keyboardType="numeric"
-                            placeholder="0.00"
-                          />
-                        </View>
-                      )}
-
-                      <View style={styles.inputGroup}>
-                        <Text style={styles.inputLabel}>Time in Force</Text>
-                        <View style={styles.segmentedControl}>
-                          {['DAY', 'GTC'].map((tif) => (
-                            <TouchableOpacity
-                              key={tif}
-                              style={[styles.segment, timeInForce === tif && styles.activeSegment]}
-                              onPress={() => setTimeInForce(tif)}
-                            >
-                              <Text style={[styles.segmentText, timeInForce === tif && styles.activeSegmentText]}>
-                                {tif}
-                              </Text>
-                            </TouchableOpacity>
-                          ))}
-                        </View>
-                      </View>
-
-                      <View style={styles.inputGroup}>
-                        <Text style={styles.inputLabel}>Notes (Optional)</Text>
-                        <TextInput
-                          style={[styles.input, styles.textArea]}
-                          value={orderNotes}
-                          onChangeText={setOrderNotes}
-                          placeholder="Add notes about this trade..."
-                          multiline
-                          numberOfLines={3}
-                        />
-                      </View>
-
-                      <TouchableOpacity
-                        style={[styles.placeOrderButton, placingOrder && styles.placeOrderButtonDisabled]}
-                        onPress={handlePlaceOptionOrder}
-                        disabled={placingOrder}
-                      >
-                        <Text style={styles.placeOrderButtonText}>
-                          {placingOrder ? 'Placing Order...' : 'Place Order'}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                )}
-
-                {/* Order History */}
-                <View style={styles.card}>
-                  <Text style={styles.sectionTitle}>Order History</Text>
-                  {optionsOrdersLoading ? (
-                    <Text style={styles.loadingText}>Loading orders...</Text>
-                  ) : optionsOrdersData?.optionOrders?.length > 0 ? (
-                    optionsOrdersData.optionOrders.map((order: OptionOrder) => (
-                      <View key={order.id} style={styles.orderRow}>
-                        <View style={styles.orderInfo}>
-                          <Text style={styles.orderSymbol}>
-                            {order.symbol} {order.optionType} ${order.strike} {order.expiration}
-                          </Text>
-                          <Text style={styles.orderDetails}>
-                            {order.side} {order.quantity} @ {order.orderType}
-                            {order.limitPrice && ` $${order.limitPrice}`}
-                          </Text>
-                          <Text style={styles.orderStatus}>{order.status}</Text>
-                        </View>
-                        <View style={styles.orderActions}>
-                          <Text style={styles.orderDate}>
-                            {new Date(order.createdAt).toLocaleDateString()}
-                          </Text>
-                          {order.status === 'PENDING' && (
-                            <TouchableOpacity
-                              style={styles.cancelButton}
-                              onPress={() => handleCancelOptionOrder(order.id)}
-                            >
-                              <Text style={styles.cancelButtonText}>Cancel</Text>
-                            </TouchableOpacity>
-                          )}
-                        </View>
-                      </View>
-                    ))
-                  ) : (
-                    <Text style={styles.noOrdersText}>No orders found</Text>
-                  )}
-                </View>
-              </View>
-            )}
-            contentContainerStyle={{ flexGrow: 1 }}
+        <View style={styles.optionsContainer} accessible={false}>
+          <ScrollView
+            ref={optionsScrollViewRef}
             showsVerticalScrollIndicator={false}
-          />
+            contentContainerStyle={styles.optionsContentContainer}
+            keyboardShouldPersistTaps="handled"
+            accessibilityLabel="Options trading screen"
+          >
+            {/* Header */}
+            <View
+              style={styles.optionsHeader}
+              accessibilityRole="header"
+              accessibilityLabel="Options Intelligence"
+            >
+              <View style={styles.optionsHeaderTop}>
+                <Text style={styles.optionsTitle} accessibilityRole="header">
+                  Options Intelligence
+                </Text>
+
+                {/* Pro Mode Toggle - Fully Accessible */}
+                  <View
+                    style={styles.proModeToggle}
+                    accessible={true}
+                    accessibilityRole="switch"
+                    accessibilityState={{ checked: optionsProMode }}
+                    accessibilityLabel={`Pro Mode ${optionsProMode ? 'enabled' : 'disabled'}`}
+                    accessibilityHint="Toggle advanced options tools including multi-leg builder"
+                  >
+                    <Text style={styles.proModeLabel}>Pro Mode</Text>
+                    <TouchableOpacity
+                      style={[styles.toggleSwitch, optionsProMode && styles.toggleSwitchActive]}
+                      onPress={() => setOptionsProMode(prev => !prev)}
+                      accessible={false}
+                    >
+                      <View style={[styles.toggleThumb, optionsProMode && styles.toggleThumbActive]} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Search Bar */}
+                <View style={styles.searchContainer}>
+                  <TextInput
+                    style={styles.searchInput}
+                    placeholder="Enter symbol (e.g., AAPL)"
+                    value={optionsSymbol}
+                    onChangeText={(t) => setOptionsSymbol(t.toUpperCase().trim())}
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                    placeholderTextColor="#9CA3AF"
+                    accessibilityLabel="Options symbol search"
+                    accessibilityHint="Enter a stock symbol to analyze its options chain"
+                  />
+                  <TouchableOpacity
+                    style={styles.searchButton}
+                    onPress={() => {}}
+                    accessibilityLabel="Search options"
+                    accessibilityHint="Load options chain for the entered symbol"
+                    accessibilityRole="button"
+                  >
+                    <Icon name="search" size={22} color="#007AFF" />
+                  </TouchableOpacity>
+                </View>
+            </View>
+
+                {/* Next Move Card - Steve Jobs Style */}
+            {optionsSymbol && rustOptionsData?.rustOptionsAnalysis?.recommendedStrikes?.[0] && (
+              <OptionsNextMoveCard
+                symbol={optionsSymbol}
+                underlyingPrice={rustOptionsData.rustOptionsAnalysis.underlyingPrice || 0}
+                recommendation={rustOptionsData.rustOptionsAnalysis.recommendedStrikes[0]}
+                onReview={() => {
+                  setSelectedRecommendation(rustOptionsData.rustOptionsAnalysis.recommendedStrikes[0]);
+                  setShowOptionsReviewModal(true);
+                  Alert.alert("Review Trade", "Opening options trade review modal");
+                }}
+                onWhyThis={() => {
+                  const rec = rustOptionsData.rustOptionsAnalysis.recommendedStrikes[0];
+                  const msg = `Recommended ${rec.optionType} because: ${rec.expectedReturn ? `${(rec.expectedReturn * 100).toFixed(0)}% expected return` : 'high conviction'}, strike $${rec.strike.toFixed(2)}, risk score ${(rec.riskScore * 100).toFixed(0)}`;
+                  Alert.alert('Why This Trade?', msg);
+                }}
+                onViewFullChain={() => {
+                  // Scroll to options chain section (approximately where it appears)
+                  // The chain appears after NextMoveCard, RustWidget, MultiLeg button, and Positions
+                  // Rough estimate: ~600-800px down
+                  optionsScrollViewRef.current?.scrollTo({ y: 600, animated: true });
+                }}
+              />
+            )}
+
+            {/* Rust Options Brain */}
+            {optionsSymbol && (
+              <RustOptionsAnalysisWidget
+                symbol={optionsSymbol}
+              />
+            )}
+
+            {/* Multi-Leg Builder */}
+            {optionsProMode && optionsSymbol && (
+              <TouchableOpacity
+                style={styles.multiLegButton}
+                onPress={() => setShowMultiLegBuilder(true)}
+                accessibilityLabel="Build multi-leg options strategy"
+                accessibilityHint="Create complex options strategies like spreads and straddles"
+                accessibilityRole="button"
+              >
+                <Icon name="layers" size={22} color="#007AFF" />
+                <Text style={styles.multiLegButtonText}>Build Multi-Leg Strategy</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Active Positions */}
+            {optionsPositions.length > 0 && (
+              <View style={styles.positionsSection}>
+                <Text style={styles.sectionTitle} accessibilityRole="header">Active Options Positions</Text>
+                {optionsPositions
+                  .filter(p => !optionsSymbol || p.underlyingSymbol === optionsSymbol.toUpperCase())
+                  .map((pos, index) => (
+                    <OptionsPositionCard
+                      key={pos.symbol || index}
+                      position={pos as any}
+                      onPositionUpdated={refetchOptionsPositions}
+                    />
+                  ))}
+              </View>
+            )}
+
+            {/* Options Chain */}
+            <View ref={optionsChainRef}>
+              {renderOptionsChain()}
+            </View>
+
+            {/* Place Order Form */}
+            {selectedOption && renderOrderForm()}
+
+            {/* Order History */}
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle} accessibilityRole="header">Recent Orders</Text>
+              {renderOrderHistory()}
+            </View>
+
+            <View style={{ height: 100 }} />
+          </ScrollView>
+          
+          {/* Options Review Modal */}
+          {selectedRecommendation && (
+            <OptionsReviewModal
+              visible={showOptionsReviewModal}
+              onClose={() => {
+                setShowOptionsReviewModal(false);
+                setSelectedRecommendation(null);
+              }}
+              symbol={optionsSymbol}
+              underlyingPrice={rustOptionsData?.rustOptionsAnalysis?.underlyingPrice || 0}
+              recommendation={selectedRecommendation}
+            />
+          )}
+
+          {/* Multi-Leg Strategy Builder Modal */}
+          {showMultiLegBuilder && rustOptionsData?.rustOptionsAnalysis && (
+            <Modal
+              visible={showMultiLegBuilder}
+              animationType="slide"
+              presentationStyle="pageSheet"
+              onRequestClose={() => setShowMultiLegBuilder(false)}
+            >
+              <MultiLegStrategyBuilder
+                symbol={optionsSymbol}
+                underlyingPrice={rustOptionsData.rustOptionsAnalysis.underlyingPrice || 0}
+                onBuildStrategy={(strategy) => {
+                  // Strategy already executed in builder
+                  setShowMultiLegBuilder(false);
+                }}
+                onClose={() => setShowMultiLegBuilder(false)}
+              />
+            </Modal>
+          )}
         </View>
       )}
 
@@ -3175,6 +3394,47 @@ searchContainer: {
     padding: 16,
     paddingBottom: 100,
   },
+  optionsHeaderTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  proModeToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  proModeLabel: {
+    fontSize: 13,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  toggleSwitch: {
+    width: 44,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#E5E7EB',
+    padding: 2,
+    justifyContent: 'center',
+  },
+  toggleSwitchActive: {
+    backgroundColor: '#007AFF',
+  },
+  toggleThumb: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  toggleThumbActive: {
+    transform: [{ translateX: 20 }],
+  },
   optionsHeader: {
     marginBottom: 20,
   },
@@ -3207,6 +3467,34 @@ searchContainer: {
     fontWeight: '600',
     color: '#666',
     textAlign: 'center',
+  },
+  multiLegButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#007AFF',
+    backgroundColor: '#EFF6FF',
+    marginBottom: 16,
+  },
+  multiLegButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#007AFF',
+  },
+  positionsSection: {
+    marginTop: 20,
+    marginBottom: 16,
+  },
+  noPositionsText: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    paddingVertical: 20,
   },
   optionsRow: {
     flexDirection: 'row',

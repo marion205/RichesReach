@@ -133,8 +133,43 @@ class AlpacaBrokerService:
     
     # Orders
     def create_order(self, account_id: str, order_data: Dict) -> Optional[Dict]:
-        """Place an order"""
+        """Place an order (stocks or options)"""
         return self._make_request('POST', f'/v1/trading/accounts/{account_id}/orders', data=order_data)
+    
+    def create_options_order(
+        self,
+        account_id: str,
+        contract_symbol: str,
+        side: str,
+        quantity: int,
+        order_type: str = 'market',
+        limit_price: Optional[float] = None,
+        time_in_force: str = 'day'
+    ) -> Optional[Dict]:
+        """
+        Place an options order
+        
+        Args:
+            account_id: Alpaca account ID
+            contract_symbol: OCC format contract symbol (e.g., "AAPL240119C00150000")
+            side: 'buy' or 'sell'
+            quantity: Number of contracts
+            order_type: 'market' or 'limit'
+            limit_price: Required for limit orders
+            time_in_force: 'day', 'gtc', 'ioc', 'fok'
+        """
+        order_data = {
+            'symbol': contract_symbol,
+            'qty': str(quantity),
+            'side': side.lower(),
+            'type': order_type.lower(),
+            'time_in_force': time_in_force.lower(),
+        }
+        
+        if limit_price is not None:
+            order_data['limit_price'] = str(limit_price)
+        
+        return self.create_order(account_id, order_data)
     
     def get_order(self, account_id: str, order_id: str) -> Optional[Dict]:
         """Get order details"""
