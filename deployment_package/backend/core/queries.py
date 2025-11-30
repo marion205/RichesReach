@@ -437,6 +437,8 @@ class Query(graphene.ObjectType):
     
     # New Rust service queries
     rust_options_analysis = graphene.Field(RustOptionsAnalysisType, symbol=graphene.String(required=True))
+    options_flow = graphene.Field('core.options_flow_types.OptionsFlowType', symbol=graphene.String(required=True))
+    scan_options = graphene.List('core.options_flow_types.ScannedOptionType', filters=graphene.String(required=False))
     rust_forex_analysis = graphene.Field('core.types.ForexAnalysisType', pair=graphene.String(required=True))
     rust_sentiment_analysis = graphene.Field('core.types.SentimentAnalysisType', symbol=graphene.String(required=True))
     rust_correlation_analysis = graphene.Field(
@@ -729,6 +731,144 @@ class Query(graphene.ObjectType):
         logger.info(f"✅ Returning RustStockAnalysisType for {symbol_upper} with {len(fallback_spending_data)} spending and {len(fallback_options_flow_data)} options data points")
         return result
     
+    def resolve_options_flow(self, info, symbol):
+        """Resolve options flow and unusual activity data"""
+        from .options_flow_types import OptionsFlowType, UnusualActivityType, LargestTradeType
+        from .real_options_service import RealOptionsService
+        
+        try:
+            symbol_upper = symbol.upper()
+            
+            # Generate options flow data (would integrate with real API in production)
+            options_service = RealOptionsService()
+            options_data = options_service.get_real_options_chain(symbol_upper)
+            flow_data = options_data.get('unusual_flow', [])
+            
+            # Calculate put/call ratio
+            call_volume = sum(item.get('volume', 0) for item in flow_data if item.get('option_type', '').lower() == 'call')
+            put_volume = sum(item.get('volume', 0) for item in flow_data if item.get('option_type', '').lower() == 'put')
+            put_call_ratio = put_volume / call_volume if call_volume > 0 else 0.0
+            
+            # Build unusual activity list
+            unusual_activity = []
+            for item in flow_data[:20]:  # Top 20 unusual activities
+                volume = item.get('volume', 0)
+                open_interest = item.get('open_interest', 10000)
+                unusual_volume_percent = (volume / max(open_interest * 0.1, 1)) * 100 if open_interest > 0 else 150
+                
+                unusual_activity.append({
+                    'contractSymbol': item.get('contract_symbol', ''),
+                    'strike': item.get('strike', 0),
+                    'expiration': item.get('expiration_date', ''),
+                    'optionType': item.get('option_type', '').lower(),
+                    'volume': volume,
+                    'openInterest': open_interest,
+                    'volumeVsOI': volume / max(open_interest, 1),
+                    'lastPrice': item.get('premium', 0),
+                    'bid': item.get('premium', 0) * 0.98,
+                    'ask': item.get('premium', 0) * 1.02,
+                    'impliedVolatility': item.get('implied_volatility', 0.25),
+                    'unusualVolumePercent': unusual_volume_percent,
+                    'sweepCount': 1 if 'Sweep' in item.get('activity_type', '') else 0,
+                    'blockSize': volume if 'Block' in item.get('activity_type', '') else 0,
+                    'isDarkPool': item.get('is_dark_pool', False),
+                })
+            
+            # Build largest trades
+            largest_trades = []
+            for item in sorted(flow_data, key=lambda x: x.get('volume', 0), reverse=True)[:10]:
+                largest_trades.append({
+                    'contractSymbol': item.get('contract_symbol', ''),
+                    'size': item.get('volume', 0),
+                    'price': item.get('premium', 0),
+                    'time': item.get('timestamp', datetime.now().isoformat()),
+                    'isCall': item.get('option_type', '').lower() == 'call',
+                    'isSweep': item.get('sweep_count', 0) > 0,
+                    'isBlock': item.get('block_size', 0) > 0,
+                })
+            
+            return {
+                'symbol': symbol_upper,
+                'timestamp': datetime.now().isoformat(),
+                'unusualActivity': unusual_activity,
+                'putCallRatio': put_call_ratio,
+                'totalCallVolume': call_volume,
+                'totalPutVolume': put_volume,
+                'largestTrades': largest_trades,
+            }
+        except Exception as e:
+            logger.error(f"Error resolving options flow: {e}", exc_info=True)
+            return {
+                'symbol': symbol.upper(),
+                'timestamp': datetime.now().isoformat(),
+                'unusualActivity': [],
+                'putCallRatio': 0.0,
+                'totalCallVolume': 0,
+                'totalPutVolume': 0,
+                'largestTrades': [],
+            }
+
+    def resolve_scan_options(self, info, filters=None):
+        """Resolve options scanner results"""
+        from .options_flow_types import ScannedOptionType
+        from .real_options_service import RealOptionsService
+        import json
+        
+        try:
+            filter_dict = json.loads(filters) if filters else {}
+            
+            # Get options chain data
+            options_service = RealOptionsService()
+            options_data = options_service.get_real_options_chain('AAPL')  # Would use filter symbol
+            
+            # Filter and score options based on criteria
+            all_options = []
+            chain = options_data.get('options_chain', {})
+            
+            for call in chain.get('calls', [])[:20]:  # Limit to top 20
+                score = 75  # Base score
+                
+                # Score based on filters
+                if filter_dict.get('minIV') and call.get('implied_volatility', 0) < filter_dict['minIV']:
+                    continue
+                if filter_dict.get('maxIV') and call.get('implied_volatility', 0) > filter_dict['maxIV']:
+                    continue
+                if filter_dict.get('minDelta') and call.get('delta', 0) < filter_dict['minDelta']:
+                    continue
+                if call.get('volume', 0) < filter_dict.get('minVolume', 100):
+                    continue
+                
+                # Calculate opportunity
+                opportunity = 'High liquidity trade'
+                if call.get('implied_volatility', 0) > 0.3:
+                    opportunity = 'High volatility play'
+                elif call.get('delta', 0) > 0.6:
+                    opportunity = 'Strong directional move'
+                
+                all_options.append({
+                    'symbol': call.get('symbol', 'AAPL'),
+                    'contractSymbol': call.get('contract_symbol', ''),
+                    'strike': call.get('strike', 0),
+                    'expiration': call.get('expiration_date', ''),
+                    'optionType': 'call',
+                    'bid': call.get('bid', 0),
+                    'ask': call.get('ask', 0),
+                    'volume': call.get('volume', 0),
+                    'impliedVolatility': call.get('implied_volatility', 0),
+                    'delta': call.get('delta', 0),
+                    'theta': call.get('theta', 0),
+                    'score': score,
+                    'opportunity': opportunity,
+                })
+            
+            # Sort by score
+            all_options.sort(key=lambda x: x['score'], reverse=True)
+            
+            return all_options[:10]  # Return top 10
+        except Exception as e:
+            logger.error(f"Error scanning options: {e}", exc_info=True)
+            return []
+
     def resolve_rust_options_analysis(self, info, symbol):
         """Get Rust engine options analysis"""
         from .types import (

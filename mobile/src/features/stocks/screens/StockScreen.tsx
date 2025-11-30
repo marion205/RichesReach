@@ -58,6 +58,16 @@ import OptionsNextMoveCard from '../../../components/options/OptionsNextMoveCard
 import OptionsReviewModal from '../../../components/options/OptionsReviewModal';
 import OptionsPositionCard from '../../../components/options/OptionsPositionCard';
 import MultiLegStrategyBuilder from '../../../components/options/MultiLegStrategyBuilder';
+import OptionsFlowWidget from '../../../components/options/OptionsFlowWidget';
+import OptionsRiskCalculator from '../../../components/options/OptionsRiskCalculator';
+import OptionsBacktester from '../../../components/options/OptionsBacktester';
+import PortfolioRiskManager from '../../../components/options/PortfolioRiskManager';
+import OptionsRealtimeStream from '../../../components/options/OptionsRealtimeStream';
+import OptionsScanner from '../../../components/options/OptionsScanner';
+import BracketOrderModal from '../../../components/options/BracketOrderModal';
+import OptionsEducationTooltip from '../../../components/options/OptionsEducationTooltip';
+import OptionsAlertButton from '../../../components/options/OptionsAlertButton';
+import { PLACE_BRACKET_OPTIONS_ORDER } from '../../../graphql/optionsMutations';
 import { useOptionsPositions } from '../../../hooks/useOptionsPositions';
 import { useAlpacaAccount } from '../hooks/useAlpacaAccount';
 
@@ -635,8 +645,14 @@ interface RustAnalysis {
   const [selectedExpiration, setSelectedExpiration] = useState<string | null>(null);
   const [optionsProMode, setOptionsProMode] = useState(false);
   const [showMultiLegBuilder, setShowMultiLegBuilder] = useState(false);
+  const [isPaperTrading, setIsPaperTrading] = useState(false);
+  const [showBracketOrder, setShowBracketOrder] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
+  const [showEducation, setShowEducation] = useState<string | null>(null);
   const optionsScrollViewRef = useRef<any>(null);
   const optionsChainRef = useRef<View>(null);
+  
+  const [placeBracketOrderMutation] = useMutation(PLACE_BRACKET_OPTIONS_ORDER);
   
   // Fetch Rust options analysis for recommendations
   // Fetch Rust options analysis for recommendations
@@ -1707,17 +1723,29 @@ interface OptionOrder {
             </ScrollView>
           </View>
         )}
-        <OptionChainCard
-          symbol={optionsSymbol}
-          expiration={transformedOptionsData.expiration}
-          underlyingPrice={transformedOptionsData.underlyingPrice || undefined}
-          calls={transformedOptionsData.calls}
-          puts={transformedOptionsData.puts}
-          selected={selectedOption}
-          onSelect={(opt) => setSelectedOption(opt)}
-          fullBleed
-          gutter={20}
-        />
+        <View>
+          <OptionChainCard
+            symbol={optionsSymbol}
+            expiration={transformedOptionsData.expiration}
+            underlyingPrice={transformedOptionsData.underlyingPrice || undefined}
+            calls={transformedOptionsData.calls}
+            puts={transformedOptionsData.puts}
+            selected={selectedOption}
+            onSelect={(opt) => setSelectedOption(opt)}
+            fullBleed
+            gutter={20}
+          />
+          {/* Contextual Help - Jobs Style: Show when option selected */}
+          {selectedOption && (
+            <TouchableOpacity
+              style={styles.helpButton}
+              onPress={() => setShowEducation('delta')}
+            >
+              <Icon name="help-circle" size={16} color="#6B7280" />
+              <Text style={styles.helpText}>What does Delta mean?</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </>
     );
   }, [optionsLoading, optionsError, transformedOptionsData, selectedExpiration, optionsSymbol, selectedOption, refetchOptions]);
@@ -1821,19 +1849,41 @@ interface OptionOrder {
             />
           </View>
 
-          <TouchableOpacity
-            style={[styles.placeOrderButton, placingOrder && styles.placeOrderButtonDisabled]}
-            onPress={handlePlaceOptionOrder}
-            disabled={placingOrder}
-            accessibilityLabel={`Place ${orderType.toLowerCase()} order for ${selectedOption.optionType} ${optionsSymbol} ${selectedOption.strike} ${selectedOption.expiration}`}
-            accessibilityHint={`Quantity: ${orderQuantity || 1}, ${orderType === 'LIMIT' ? `limit price $${limitPrice}` : 'market order'}`}
-            accessibilityRole="button"
-            accessibilityState={{ disabled: placingOrder }}
-          >
-            <Text style={styles.placeOrderButtonText}>
-              {placingOrder ? 'Placing Order...' : 'Place Order'}
-            </Text>
-          </TouchableOpacity>
+          {/* Jobs Style: Simple Actions Row */}
+          <View style={styles.orderActionsRow}>
+            <TouchableOpacity
+              style={[styles.placeOrderButton, placingOrder && styles.placeOrderButtonDisabled]}
+              onPress={handlePlaceOptionOrder}
+              disabled={placingOrder}
+              accessibilityLabel={`Place ${orderType.toLowerCase()} order for ${selectedOption.optionType} ${optionsSymbol} ${selectedOption.strike} ${selectedOption.expiration}`}
+              accessibilityHint={`Quantity: ${orderQuantity || 1}, ${orderType === 'LIMIT' ? `limit price $${limitPrice}` : 'market order'}`}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: placingOrder }}
+            >
+              <Text style={styles.placeOrderButtonText}>
+                {placingOrder ? 'Placing Order...' : isPaperTrading ? 'Place Paper Order' : 'Place Order'}
+              </Text>
+            </TouchableOpacity>
+            
+            {/* Bracket Order Button - Jobs Style: Simple, Elegant */}
+            <TouchableOpacity
+              style={styles.bracketOrderButton}
+              onPress={() => setShowBracketOrder(true)}
+            >
+              <Icon name="target" size={16} color="#007AFF" />
+              <Text style={styles.bracketOrderText}>Bracket</Text>
+            </TouchableOpacity>
+
+            {/* Alert Button */}
+            <OptionsAlertButton
+              symbol={optionsSymbol}
+              strike={(selectedOption as any).strike}
+              expiration={(selectedOption as any).expiration}
+              optionType={(selectedOption as any).optionType}
+              currentPrice={(((selectedOption as any).bid || 0) + ((selectedOption as any).ask || 0)) / 2}
+              currentIV={(selectedOption as any).impliedVolatility || 0}
+            />
+          </View>
         </View>
       </View>
     );
@@ -2633,6 +2683,18 @@ placeholderTextColor="#999"
                   </View>
                 </View>
 
+                {/* Paper Trading Toggle - Jobs Style: Simple, Elegant */}
+                <View style={styles.paperTradingToggle}>
+                  <Icon name="file-text" size={16} color="#6B7280" />
+                  <Text style={styles.paperTradingLabel}>Paper Trading</Text>
+                  <TouchableOpacity
+                    style={[styles.toggleSwitch, isPaperTrading && styles.toggleSwitchActive]}
+                    onPress={() => setIsPaperTrading(prev => !prev)}
+                  >
+                    <View style={[styles.toggleThumb, isPaperTrading && styles.toggleThumbActive]} />
+                  </TouchableOpacity>
+                </View>
+
                 {/* Search Bar */}
                 <View style={styles.searchContainer}>
                   <TextInput
@@ -2685,23 +2747,88 @@ placeholderTextColor="#999"
 
             {/* Rust Options Brain */}
             {optionsSymbol && (
-              <RustOptionsAnalysisWidget
+              <>
+                <RustOptionsAnalysisWidget
+                  symbol={optionsSymbol}
+                />
+                {/* Contextual Education - Jobs Style: Show when needed */}
+                <TouchableOpacity
+                  style={styles.helpButton}
+                  onPress={() => setShowEducation('greeks')}
+                >
+                  <Icon name="help-circle" size={16} color="#6B7280" />
+                  <Text style={styles.helpText}>What are the Greeks?</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            {/* Real-Time Options Data Stream */}
+            {optionsSymbol && optionsProMode && selectedOption && (
+              <OptionsRealtimeStream
                 symbol={optionsSymbol}
+                contractSymbol={(() => {
+                  const exp = (selectedOption as any).expiration || '';
+                  const strike = (selectedOption as any).strike || 0;
+                  const optType = (selectedOption as any).optionType || 'call';
+                  return `${optionsSymbol}${exp.replace(/-/g, '')}${optType === 'call' ? 'C' : 'P'}${(strike * 1000).toFixed(0).padStart(8, '0')}`;
+                })()}
               />
             )}
 
-            {/* Multi-Leg Builder */}
-            {optionsProMode && optionsSymbol && (
-              <TouchableOpacity
-                style={styles.multiLegButton}
-                onPress={() => setShowMultiLegBuilder(true)}
-                accessibilityLabel="Build multi-leg options strategy"
-                accessibilityHint="Create complex options strategies like spreads and straddles"
-                accessibilityRole="button"
-              >
-                <Icon name="layers" size={22} color="#007AFF" />
-                <Text style={styles.multiLegButtonText}>Build Multi-Leg Strategy</Text>
-              </TouchableOpacity>
+            {/* Options Flow & Unusual Activity */}
+            {optionsSymbol && optionsProMode && (
+              <OptionsFlowWidget symbol={optionsSymbol} />
+            )}
+
+            {/* Options Risk Calculator */}
+            {optionsSymbol && rustOptionsData?.rustOptionsAnalysis?.underlyingPrice && (
+              <OptionsRiskCalculator
+                symbol={optionsSymbol}
+                underlyingPrice={rustOptionsData.rustOptionsAnalysis.underlyingPrice || 0}
+              />
+            )}
+
+            {/* Options Backtester (Pro Mode) */}
+            {optionsProMode && optionsSymbol && rustOptionsData?.rustOptionsAnalysis?.underlyingPrice && (
+              <OptionsBacktester
+                symbol={optionsSymbol}
+                underlyingPrice={rustOptionsData.rustOptionsAnalysis.underlyingPrice || 0}
+              />
+            )}
+
+            {/* Portfolio Risk Manager */}
+            <PortfolioRiskManager />
+
+            {/* Quick Actions - Jobs Style: Simple, Beautiful */}
+            <View style={styles.quickActions}>
+              {optionsProMode && optionsSymbol && (
+                <TouchableOpacity
+                  style={styles.quickActionButton}
+                  onPress={() => setShowScanner(true)}
+                >
+                  <Icon name="search" size={18} color="#007AFF" />
+                  <Text style={styles.quickActionText}>Find Opportunities</Text>
+                </TouchableOpacity>
+              )}
+              {optionsSymbol && (
+                <TouchableOpacity
+                  style={styles.quickActionButton}
+                  onPress={() => setShowMultiLegBuilder(true)}
+                >
+                  <Icon name="layers" size={18} color="#007AFF" />
+                  <Text style={styles.quickActionText}>Multi-Leg</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Options Scanner */}
+            {showScanner && optionsSymbol && (
+              <OptionsScanner
+                onSelect={(option) => {
+                  setSelectedOption(option);
+                  setShowScanner(false);
+                }}
+              />
             )}
 
             {/* Active Positions */}
@@ -2769,6 +2896,59 @@ placeholderTextColor="#999"
                 onClose={() => setShowMultiLegBuilder(false)}
               />
             </Modal>
+          )}
+
+          {/* Bracket Order Modal */}
+          {showBracketOrder && selectedOption && rustOptionsData?.rustOptionsAnalysis && (
+            <BracketOrderModal
+              visible={showBracketOrder}
+              onClose={() => setShowBracketOrder(false)}
+              symbol={optionsSymbol}
+              optionType={(selectedOption as any).optionType || 'call'}
+              strike={(selectedOption as any).strike || 0}
+              expiration={(selectedOption as any).expiration || ''}
+              currentPrice={(((selectedOption as any).bid || 0) + ((selectedOption as any).ask || 0)) / 2}
+              onPlaceOrder={async (order) => {
+                try {
+                  const { data } = await placeBracketOrderMutation({
+                    variables: {
+                      symbol: optionsSymbol,
+                      strike: (selectedOption as any).strike,
+                      expiration: (selectedOption as any).expiration,
+                      optionType: (selectedOption as any).optionType?.toUpperCase() || 'CALL',
+                      side: 'BUY',
+                      quantity: order.quantity,
+                      takeProfit: order.takeProfit,
+                      stopLoss: order.stopLoss,
+                      orderType: 'LIMIT',
+                      limitPrice: (((selectedOption as any).bid || 0) + ((selectedOption as any).ask || 0)) / 2,
+                      timeInForce: 'DAY',
+                      usePaperTrading: isPaperTrading || false,
+                    },
+                  });
+
+                  if (data?.placeBracketOptionsOrder?.success) {
+                    Alert.alert(
+                      'Bracket Order Created',
+                      `Take profit: $${order.takeProfit.toFixed(2)}\nStop loss: $${order.stopLoss.toFixed(2)}\nQuantity: ${order.quantity}`
+                    );
+                    setShowBracketOrder(false);
+                  } else {
+                    Alert.alert('Error', data?.placeBracketOptionsOrder?.error || 'Failed to place bracket order');
+                  }
+                } catch (error: any) {
+                  Alert.alert('Error', error.message || 'Failed to place bracket order');
+                }
+              }}
+            />
+          )}
+
+          {/* Education Tooltip - Contextual */}
+          {showEducation && (
+            <OptionsEducationTooltip
+              topic={showEducation as any}
+              onDismiss={() => setShowEducation(null)}
+            />
           )}
         </View>
       )}
@@ -3434,6 +3614,76 @@ searchContainer: {
   },
   toggleThumbActive: {
     transform: [{ translateX: 20 }],
+  },
+  paperTradingToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 16,
+    paddingVertical: 8,
+  },
+  paperTradingLabel: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
+    flex: 1,
+  },
+  quickActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 20,
+  },
+  quickActionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F0F7FF',
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+  },
+  quickActionText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#007AFF',
+  },
+  orderActionsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+  },
+  bracketOrderButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#F0F7FF',
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+    gap: 6,
+  },
+  bracketOrderText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#007AFF',
+  },
+  helpButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    gap: 8,
+    marginTop: 8,
+  },
+  helpText: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
   },
   optionsHeader: {
     marginBottom: 20,

@@ -221,6 +221,44 @@ export const GET_ALPACA_POSITIONS = gql`
   }
 `;
 
+export const GET_OPTIONS_FLOW = gql`
+  query GetOptionsFlow($symbol: String!) {
+    optionsFlow(symbol: $symbol) {
+      symbol
+      timestamp
+      unusualActivity {
+        contractSymbol
+        strike
+        expiration
+        optionType
+        volume
+        openInterest
+        volumeVsOI
+        lastPrice
+        bid
+        ask
+        impliedVolatility
+        unusualVolumePercent
+        sweepCount
+        blockSize
+        isDarkPool
+      }
+      putCallRatio
+      totalCallVolume
+      totalPutVolume
+      largestTrades {
+        contractSymbol
+        size
+        price
+        time
+        isCall
+        isSweep
+        isBlock
+      }
+    }
+  }
+`;
+
 export const CANCEL_ORDER = gql`
   mutation CancelOrder($orderId: String!) {
     cancelOrder(orderId: $orderId) { 

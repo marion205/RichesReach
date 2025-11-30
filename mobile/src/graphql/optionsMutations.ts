@@ -86,3 +86,42 @@ export const TAKE_OPTIONS_PROFITS = gql`
   }
 `;
 
+export const PLACE_BRACKET_OPTIONS_ORDER = gql`
+  mutation PlaceBracketOptionsOrder(
+    $symbol: String!
+    $strike: Float!
+    $expiration: String!
+    $optionType: String!
+    $side: String!
+    $quantity: Int!
+    $takeProfit: Float!
+    $stopLoss: Float!
+    $orderType: String
+    $limitPrice: Float
+    $timeInForce: String
+    $usePaperTrading: Boolean
+  ) {
+    placeBracketOptionsOrder(
+      symbol: $symbol
+      strike: $strike
+      expiration: $expiration
+      optionType: $optionType
+      side: $side
+      quantity: $quantity
+      takeProfit: $takeProfit
+      stopLoss: $stopLoss
+      orderType: $orderType
+      limitPrice: $limitPrice
+      timeInForce: $timeInForce
+      usePaperTrading: $usePaperTrading
+    ) {
+      success
+      orderId
+      parentOrderId
+      takeProfitOrderId
+      stopLossOrderId
+      error
+    }
+  }
+`;
+

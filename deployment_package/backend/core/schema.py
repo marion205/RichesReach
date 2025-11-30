@@ -117,7 +117,13 @@ except (ImportError, SyntaxError):
     class RiskManagementQueries(graphene.ObjectType):
         pass
 
-class ExtendedQuery(PremiumQueries, BrokerQueries, BankingQueries, SBLOCQueries, PaperTradingQueries, SocialQueries, PrivacyQueries, AIInsightsQueries, AIScansQueries, RiskManagementQueries, Query, graphene.ObjectType):
+try:
+    from .options_alert_queries import OptionsAlertQueries
+except (ImportError, SyntaxError):
+    class OptionsAlertQueries(graphene.ObjectType):
+        pass
+
+class ExtendedQuery(PremiumQueries, BrokerQueries, BankingQueries, SBLOCQueries, PaperTradingQueries, SocialQueries, PrivacyQueries, AIInsightsQueries, AIScansQueries, RiskManagementQueries, OptionsAlertQueries, Query, graphene.ObjectType):
     """
     Final Query type exposed by the schema.
 
@@ -197,7 +203,13 @@ class ExtendedQuery(PremiumQueries, BrokerQueries, BankingQueries, SBLOCQueries,
 
 # ------------------- MUTATION ------------------
 
-class ExtendedMutation(PremiumMutations, BrokerMutations, BankingMutations, SBLOCMutations, PaperTradingMutations, SocialMutations, PrivacyMutations, AIInsightsMutations, Mutation, graphene.ObjectType):
+try:
+    from .options_alert_mutations import OptionsAlertMutations
+except (ImportError, SyntaxError):
+    class OptionsAlertMutations(graphene.ObjectType):
+        pass
+
+class ExtendedMutation(PremiumMutations, BrokerMutations, BankingMutations, SBLOCMutations, PaperTradingMutations, SocialMutations, PrivacyMutations, AIInsightsMutations, OptionsAlertMutations, Mutation, graphene.ObjectType):
     """
     Final Mutation type exposed by the schema.
 
@@ -248,6 +260,26 @@ if RUST_TYPES_AVAILABLE and RustOptionsAnalysisType:
         schema_types.append(SentimentAnalysisType)
     if CorrelationAnalysisType:
         schema_types.append(CorrelationAnalysisType)
+
+# Add Options Flow Type
+try:
+    from .options_flow_types import OptionsFlowType, UnusualActivityType, LargestTradeType, ScannedOptionType
+    if OptionsFlowType:
+        schema_types.append(OptionsFlowType)
+        schema_types.append(UnusualActivityType)
+        schema_types.append(LargestTradeType)
+        schema_types.append(ScannedOptionType)
+except ImportError:
+    pass
+
+# Add Options Alert Types
+try:
+    from .options_alert_types import OptionsAlertType, OptionsAlertNotificationType
+    if OptionsAlertType:
+        schema_types.append(OptionsAlertType)
+        schema_types.append(OptionsAlertNotificationType)
+except ImportError:
+    pass
 
 schema = graphene.Schema(
     query=ExtendedQuery,

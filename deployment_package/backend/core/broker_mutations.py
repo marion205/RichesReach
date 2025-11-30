@@ -3,6 +3,7 @@ GraphQL Mutations for Broker Operations
 """
 import graphene
 import logging
+from decimal import Decimal
 from django.contrib.auth import get_user_model
 from .broker_types import BrokerAccountType, BrokerOrderType
 from .broker_models import BrokerAccount, BrokerOrder
@@ -279,6 +280,7 @@ class PlaceOptionsOrder(graphene.Mutation):
         limit_price = graphene.Float()  # Required for LIMIT orders
         time_in_force = graphene.String(default_value='DAY')
         estimated_premium = graphene.Float()  # For notional calculation
+        use_paper_trading = graphene.Boolean(default_value=False)
     
     success = graphene.Boolean()
     order_id = graphene.String()
@@ -321,10 +323,52 @@ class PlaceOptionsOrder(graphene.Mutation):
         return contract_symbol
     
     @staticmethod
-    def mutate(root, info, symbol, strike, expiration, option_type, side, quantity, **kwargs):
+    def mutate(root, info, symbol, strike, expiration, option_type, side, quantity, use_paper_trading=False, **kwargs):
         user = info.context.user
         if not user.is_authenticated:
             return PlaceOptionsOrder(success=False, error="Authentication required")
+        
+        # Check if paper trading is enabled
+        if use_paper_trading:
+            try:
+                # Build contract symbol for paper trading
+                try:
+                    contract_symbol = PlaceOptionsOrder._build_contract_symbol(
+                        symbol, expiration, option_type, strike
+                    )
+                except ValueError as e:
+                    return PlaceOptionsOrder(success=False, error=str(e))
+                
+                # Create a mock order record for paper trading
+                # In production, you'd want to properly track options positions in paper trading
+                from .broker_models import BrokerOrder
+                broker_account, _ = BrokerAccount.objects.get_or_create(user=user)
+                
+                estimated_premium = kwargs.get('limit_price', 0) or kwargs.get('estimated_premium', 0) or 2.0
+                
+                mock_order = BrokerOrder.objects.create(
+                    broker_account=broker_account,
+                    client_order_id=str(uuid.uuid4()),
+                    symbol=symbol.upper()[:10],  # Use underlying symbol, truncate if needed (max_length=10)
+                    side=side.upper(),
+                    order_type=kwargs.get('order_type', 'MARKET').upper(),
+                    time_in_force=kwargs.get('time_in_force', 'DAY'),
+                    quantity=quantity,
+                    notional=float(estimated_premium) * float(quantity) * 100.0,
+                    limit_price=kwargs.get('limit_price'),
+                    status='FILLED',  # Paper trading fills immediately
+                    guardrail_checks_passed=True,
+                )
+                
+                return PlaceOptionsOrder(
+                    success=True,
+                    order_id=str(mock_order.id),
+                    alpaca_order_id=f"paper_{mock_order.id}",
+                    status='FILLED'
+                )
+            except Exception as e:
+                logger.error(f"Error placing paper options order: {e}", exc_info=True)
+                return PlaceOptionsOrder(success=False, error=str(e))
         
         try:
             broker_account = BrokerAccount.objects.get(user=user)
@@ -362,7 +406,7 @@ class PlaceOptionsOrder(graphene.Mutation):
             BrokerGuardrailLog.objects.create(
                 broker_account=broker_account,
                 action='PLACE_OPTIONS_ORDER',
-                symbol=contract_symbol,
+                symbol=contract_symbol[:50] if len(contract_symbol) > 50 else contract_symbol,  # Truncate if too long
                 notional=notional,
                 allowed=can_place,
                 reason=reason,
@@ -376,7 +420,7 @@ class PlaceOptionsOrder(graphene.Mutation):
             broker_order = BrokerOrder.objects.create(
                 broker_account=broker_account,
                 client_order_id=client_order_id,
-                symbol=contract_symbol,  # Store contract symbol
+                symbol=symbol.upper()[:10],  # Use underlying symbol (max_length=10), store contract_symbol elsewhere if needed
                 side=side.upper(),
                 order_type=kwargs.get('order_type', 'MARKET').upper(),
                 time_in_force=kwargs.get('time_in_force', 'DAY'),
@@ -625,6 +669,243 @@ class CloseOptionsPosition(graphene.Mutation):
             return CloseOptionsPosition(success=False, error=str(e))
 
 
+class PlaceBracketOptionsOrder(graphene.Mutation):
+    """Place a bracket options order (parent + take profit + stop loss)"""
+    
+    class Arguments:
+        symbol = graphene.String(required=True)
+        strike = graphene.Float(required=True)
+        expiration = graphene.String(required=True)
+        option_type = graphene.String(required=True)  # CALL or PUT
+        side = graphene.String(required=True)  # BUY or SELL
+        quantity = graphene.Int(required=True)
+        take_profit = graphene.Float(required=True)
+        stop_loss = graphene.Float(required=True)
+        order_type = graphene.String(default_value='MARKET')
+        limit_price = graphene.Float()
+        time_in_force = graphene.String(default_value='DAY')
+        use_paper_trading = graphene.Boolean(default_value=False)
+    
+    success = graphene.Boolean()
+    order_id = graphene.String()
+    parent_order_id = graphene.String()
+    take_profit_order_id = graphene.String()
+    stop_loss_order_id = graphene.String()
+    error = graphene.String()
+    
+    @staticmethod
+    def mutate(root, info, symbol, strike, expiration, option_type, side, quantity, 
+               take_profit, stop_loss, order_type='MARKET', limit_price=None, 
+               time_in_force='DAY', use_paper_trading=False, **kwargs):
+        user = info.context.user
+        if not user.is_authenticated:
+            return PlaceBracketOptionsOrder(success=False, error="Authentication required")
+        
+        try:
+            # If paper trading, route to paper trading service
+            if use_paper_trading:
+                # For paper trading bracket orders, create simplified mock orders
+                # In production, you'd want to properly track parent/child orders
+                from .broker_models import BrokerOrder
+                broker_account, _ = BrokerAccount.objects.get_or_create(user=user)
+                
+                try:
+                    contract_symbol = PlaceOptionsOrder._build_contract_symbol(
+                        symbol, expiration, option_type, strike
+                    )
+                    
+                    # Create parent order
+                    # Note: contract_symbol is 17 chars (e.g., "AAPL240119C00150000")
+                    # BrokerOrder.symbol field may be limited, so use underlying symbol for paper trading
+                    parent_order = BrokerOrder.objects.create(
+                        broker_account=broker_account,
+                        client_order_id=str(uuid.uuid4()),
+                        symbol=symbol.upper()[:10],  # Use underlying symbol, truncate if needed
+                        side=side.upper(),
+                        order_type=order_type.upper(),
+                        time_in_force=time_in_force,
+                        quantity=quantity,
+                        notional=float(limit_price or take_profit) * float(quantity) * 100.0,
+                        limit_price=limit_price,
+                        status='FILLED',  # Paper trading fills immediately
+                        guardrail_checks_passed=True,
+                    )
+                    
+                    # Create child orders (take profit and stop loss) as separate records
+                    tp_order = BrokerOrder.objects.create(
+                        broker_account=broker_account,
+                        client_order_id=str(uuid.uuid4()),
+                        symbol=symbol.upper()[:10],  # Use underlying symbol
+                        side='SELL' if side.upper() == 'BUY' else 'BUY',
+                        order_type='LIMIT',
+                        time_in_force='GTC',
+                        quantity=quantity,
+                        notional=float(take_profit) * float(quantity) * 100.0,
+                        limit_price=take_profit,
+                        status='NEW',  # Child orders pending
+                        guardrail_checks_passed=True,
+                    )
+                    
+                    sl_order = BrokerOrder.objects.create(
+                        broker_account=broker_account,
+                        client_order_id=str(uuid.uuid4()),
+                        symbol=symbol.upper()[:10],  # Use underlying symbol
+                        side='SELL' if side.upper() == 'BUY' else 'BUY',
+                        order_type='STOP',
+                        time_in_force='GTC',
+                        quantity=quantity,
+                        notional=float(stop_loss) * float(quantity) * 100.0,
+                        limit_price=stop_loss,
+                        status='NEW',  # Child orders pending
+                        guardrail_checks_passed=True,
+                    )
+                    
+                    return PlaceBracketOptionsOrder(
+                        success=True,
+                        order_id=str(parent_order.id),
+                        parent_order_id=str(parent_order.id),
+                        take_profit_order_id=str(tp_order.id),
+                        stop_loss_order_id=str(sl_order.id),
+                    )
+                except Exception as e:
+                    logger.error(f"Error placing paper bracket order: {e}", exc_info=True)
+                    return PlaceBracketOptionsOrder(success=False, error=str(e))
+            
+            # Real trading - get broker account
+            broker_account = BrokerAccount.objects.get(user=user)
+            
+            if not broker_account.alpaca_account_id:
+                return PlaceBracketOptionsOrder(success=False, error="Account not created yet")
+            
+            if broker_account.kyc_status != 'APPROVED':
+                return PlaceBracketOptionsOrder(
+                    success=False,
+                    error=f"Account not approved. Status: {broker_account.kyc_status}"
+                )
+            
+            # Build contract symbol
+            try:
+                contract_symbol = PlaceOptionsOrder._build_contract_symbol(
+                    symbol, expiration, option_type, strike
+                )
+            except ValueError as e:
+                return PlaceBracketOptionsOrder(success=False, error=str(e))
+            
+            # Calculate notional for guardrails
+            estimated_premium = limit_price or take_profit  # Use limit price or take profit as estimate
+            notional = float(estimated_premium) * float(quantity) * 100.0
+            
+            # Run guardrail checks
+            daily_notional_used = BrokerGuardrails.get_daily_notional_used(user)
+            can_place, reason = BrokerGuardrails.can_place_order(
+                user, symbol.upper(), notional, order_type.upper(), daily_notional_used
+            )
+            
+            if not can_place:
+                return PlaceBracketOptionsOrder(success=False, error=reason)
+            
+            # Create parent order
+            parent_order_data = {
+                'symbol': contract_symbol,
+                'qty': str(quantity),
+                'side': side.lower(),
+                'type': order_type.lower(),
+                'time_in_force': time_in_force.lower(),
+            }
+            
+            if limit_price is not None:
+                parent_order_data['limit_price'] = str(limit_price)
+            
+            # Place parent order
+            parent_result = alpaca_service.create_order(
+                broker_account.alpaca_account_id,
+                parent_order_data
+            )
+            
+            if not parent_result or 'id' not in parent_result:
+                return PlaceBracketOptionsOrder(
+                    success=False,
+                    error="Failed to place parent order"
+                )
+            
+            parent_order_id = parent_result['id']
+            
+            # Create take profit order (OCO with stop loss)
+            # Alpaca supports bracket orders natively, but we'll create separate orders
+            # In production, you'd use Alpaca's bracket order API
+            
+            # Take profit order (sell if we bought, buy if we sold)
+            tp_side = 'sell' if side.upper() == 'BUY' else 'buy'
+            tp_order_data = {
+                'symbol': contract_symbol,
+                'qty': str(quantity),
+                'side': tp_side,
+                'type': 'limit',
+                'limit_price': str(take_profit),
+                'time_in_force': 'gtc',  # Good until cancelled
+                'parent_id': parent_order_id,  # Link to parent
+            }
+            
+            tp_result = alpaca_service.create_order(
+                broker_account.alpaca_account_id,
+                tp_order_data
+            )
+            
+            tp_order_id = tp_result.get('id') if tp_result else None
+            
+            # Stop loss order
+            sl_order_data = {
+                'symbol': contract_symbol,
+                'qty': str(quantity),
+                'side': tp_side,
+                'type': 'stop',
+                'stop_price': str(stop_loss),
+                'time_in_force': 'gtc',
+                'parent_id': parent_order_id,
+            }
+            
+            sl_result = alpaca_service.create_order(
+                broker_account.alpaca_account_id,
+                sl_order_data
+            )
+            
+            sl_order_id = sl_result.get('id') if sl_result else None
+            
+            # Store bracket order relationship in database
+            from .broker_models import BrokerOrder
+            try:
+                parent_broker_order = BrokerOrder.objects.create(
+                    broker_account=broker_account,
+                    client_order_id=str(uuid.uuid4()),
+                    symbol=contract_symbol,
+                    side=side.upper(),
+                    order_type=order_type.upper(),
+                    time_in_force=time_in_force,
+                    quantity=quantity,
+                    notional=notional,
+                    limit_price=limit_price,
+                    status='NEW',
+                    alpaca_order_id=parent_order_id,
+                    guardrail_checks_passed=True,
+                )
+            except Exception as e:
+                logger.warning(f"Could not create broker order record: {e}")
+            
+            return PlaceBracketOptionsOrder(
+                success=True,
+                order_id=parent_order_id,
+                parent_order_id=parent_order_id,
+                take_profit_order_id=tp_order_id or "pending",
+                stop_loss_order_id=sl_order_id or "pending",
+            )
+            
+        except BrokerAccount.DoesNotExist:
+            return PlaceBracketOptionsOrder(success=False, error="Broker account not found")
+        except Exception as e:
+            logger.error(f"Error placing bracket options order: {e}", exc_info=True)
+            return PlaceBracketOptionsOrder(success=False, error=str(e))
+
+
 class TakeOptionsProfits(graphene.Mutation):
     """Take profits on an options position (limit sell)"""
     
@@ -709,6 +990,7 @@ class BrokerMutations(graphene.ObjectType):
     place_order = PlaceOrder.Field()
     place_options_order = PlaceOptionsOrder.Field()
     place_multi_leg_options_order = PlaceMultiLegOptionsOrder.Field()
+    place_bracket_options_order = PlaceBracketOptionsOrder.Field()
     close_options_position = CloseOptionsPosition.Field()
     take_options_profits = TakeOptionsProfits.Field()
 
