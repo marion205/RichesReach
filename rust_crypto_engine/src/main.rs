@@ -50,6 +50,23 @@ pub struct OptionsAnalysisRequest {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct EdgePredictionRequest {
+    pub symbol: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct OneTapTradeRequest {
+    pub symbol: String,
+    pub account_size: Option<f64>,
+    pub risk_tolerance: Option<f64>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct IVForecastRequest {
+    pub symbol: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ForexAnalysisRequest {
     pub pair: String,
 }
@@ -227,6 +244,9 @@ async fn main() -> Result<()> {
     info!("🔍 Analyze:        POST /v1/analyze (auto-detects crypto/stock)");
     info!("💡 Recos:          GET  /v1/recommendations");
     info!("📈 Options:        POST /v1/options/analyze");
+    info!("⚡ Edge Predict:   POST /v1/options/edge-predict");
+    info!("🎯 One-Tap Trades: POST /v1/options/one-tap-trades");
+    info!("📊 IV Forecast:    POST /v1/options/iv-forecast");
     info!("💱 Forex:          POST /v1/forex/analyze");
     info!("📰 Sentiment:      POST /v1/sentiment/analyze");
     info!("🔗 Correlation:    POST /v1/correlation/analyze");
@@ -325,6 +345,39 @@ fn build_routes(state: AppState) -> impl Filter<Extract = impl warp::Reply, Erro
         .and_then(options_analyze_handler)
         .with(sec_headers.clone());
 
+    // Edge prediction endpoint
+    let edge_predict = v1
+        .and(warp::path("options"))
+        .and(warp::path("edge-predict"))
+        .and(warp::post())
+        .and(with_req_meta.clone())
+        .and(warp::body::json())
+        .and(with_state.clone())
+        .and_then(edge_predict_handler)
+        .with(sec_headers.clone());
+
+    // One-tap trades endpoint
+    let one_tap_trades = v1
+        .and(warp::path("options"))
+        .and(warp::path("one-tap-trades"))
+        .and(warp::post())
+        .and(with_req_meta.clone())
+        .and(warp::body::json())
+        .and(with_state.clone())
+        .and_then(one_tap_trades_handler)
+        .with(sec_headers.clone());
+
+    // IV surface forecast endpoint
+    let iv_forecast = v1
+        .and(warp::path("options"))
+        .and(warp::path("iv-forecast"))
+        .and(warp::post())
+        .and(with_req_meta.clone())
+        .and(warp::body::json())
+        .and(with_state.clone())
+        .and_then(iv_forecast_handler)
+        .with(sec_headers.clone());
+
     // Forex analysis endpoint
     let forex_analyze = v1
         .and(warp::path("forex"))
@@ -372,6 +425,9 @@ fn build_routes(state: AppState) -> impl Filter<Extract = impl warp::Reply, Erro
         .or(analyze)
         .or(recommendations)
         .or(options_analyze)
+        .or(edge_predict)
+        .or(one_tap_trades)
+        .or(iv_forecast)
         .or(forex_analyze)
         .or(sentiment_analyze)
         .or(correlation_analyze)
@@ -596,6 +652,144 @@ async fn options_analyze_handler(
     tracing::info!(%req_id, symbol=%body.symbol, ms = start.elapsed().as_millis() as u64, "options_analysis_ok");
 
     Ok(warp::reply::with_status(warp::reply::json(&analysis), StatusCode::OK))
+}
+
+#[instrument(skip(state, body, headers), fields(req_id=%request_id(&headers)))]
+async fn edge_predict_handler(
+    (ip, req_id, headers): (String, String, HeaderMap),
+    mut body: EdgePredictionRequest,
+    state: AppState,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    // Rate limit
+    let key = bearer_from_headers(&headers).unwrap_or_else(|| ip.clone());
+    if state.limiter.check_key(&key).is_err() {
+        return Ok(warp::reply::with_status(
+            warp::reply::json(&json_error("rate_limited", "Too many requests")),
+            StatusCode::TOO_MANY_REQUESTS,
+        ));
+    }
+
+    // Validate
+    body.symbol = body.symbol.trim().to_uppercase();
+    if !validate_symbol(&body.symbol) {
+        return Ok(warp::reply::with_status(
+            warp::reply::json(&json_error("bad_request", "Invalid symbol")),
+            StatusCode::BAD_REQUEST,
+        ));
+    }
+
+    let start = std::time::Instant::now();
+
+    // Generate mock chain (in production, fetch from real_options_service)
+    let chain = state.options_engine
+        .generate_mock_chain(&body.symbol)
+        .await
+        .map_err(|e| warp::reject::custom(AnalysisError(e)))?;
+
+    // Predict edges for all contracts
+    let predictions = state.options_engine
+        .predict_chain_edges(&body.symbol, &chain)
+        .await
+        .map_err(|e| warp::reject::custom(AnalysisError(e)))?;
+
+    tracing::info!(
+        %req_id,
+        symbol=%body.symbol,
+        predictions=%predictions.len(),
+        ms = start.elapsed().as_millis() as u64,
+        "edge_prediction_ok"
+    );
+
+    Ok(warp::reply::with_status(warp::reply::json(&predictions), StatusCode::OK))
+}
+
+#[instrument(skip(state, body, headers), fields(req_id=%request_id(&headers)))]
+async fn one_tap_trades_handler(
+    (ip, req_id, headers): (String, String, HeaderMap),
+    mut body: OneTapTradeRequest,
+    state: AppState,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    // Rate limit
+    let key = bearer_from_headers(&headers).unwrap_or_else(|| ip.clone());
+    if state.limiter.check_key(&key).is_err() {
+        return Ok(warp::reply::with_status(
+            warp::reply::json(&json_error("rate_limited", "Too many requests")),
+            StatusCode::TOO_MANY_REQUESTS,
+        ));
+    }
+
+    // Validate
+    body.symbol = body.symbol.trim().to_uppercase();
+    if !validate_symbol(&body.symbol) {
+        return Ok(warp::reply::with_status(
+            warp::reply::json(&json_error("bad_request", "Invalid symbol")),
+            StatusCode::BAD_REQUEST,
+        ));
+    }
+
+    let account_size = body.account_size.unwrap_or(10000.0);
+    let risk_tolerance = body.risk_tolerance.unwrap_or(0.1).max(0.01).min(1.0);
+
+    let start = std::time::Instant::now();
+
+    // Generate one-tap trades
+    let trades = state.options_engine
+        .generate_one_tap_trades(&body.symbol, account_size, risk_tolerance)
+        .await
+        .map_err(|e| warp::reject::custom(AnalysisError(e)))?;
+
+    tracing::info!(
+        %req_id,
+        symbol=%body.symbol,
+        trades=%trades.len(),
+        ms = start.elapsed().as_millis() as u64,
+        "one_tap_trades_ok"
+    );
+
+    Ok(warp::reply::with_status(warp::reply::json(&trades), StatusCode::OK))
+}
+
+#[instrument(skip(state, body, headers), fields(req_id=%request_id(&headers)))]
+async fn iv_forecast_handler(
+    (ip, req_id, headers): (String, String, HeaderMap),
+    mut body: IVForecastRequest,
+    state: AppState,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    // Rate limit
+    let key = bearer_from_headers(&headers).unwrap_or_else(|| ip.clone());
+    if state.limiter.check_key(&key).is_err() {
+        return Ok(warp::reply::with_status(
+            warp::reply::json(&json_error("rate_limited", "Too many requests")),
+            StatusCode::TOO_MANY_REQUESTS,
+        ));
+    }
+
+    // Validate
+    body.symbol = body.symbol.trim().to_uppercase();
+    if !validate_symbol(&body.symbol) {
+        return Ok(warp::reply::with_status(
+            warp::reply::json(&json_error("bad_request", "Invalid symbol")),
+            StatusCode::BAD_REQUEST,
+        ));
+    }
+
+    let start = std::time::Instant::now();
+
+    // Forecast IV surface
+    let forecast = state.options_engine
+        .forecast_iv_surface(&body.symbol)
+        .await
+        .map_err(|e| warp::reject::custom(AnalysisError(e)))?;
+
+    tracing::info!(
+        %req_id,
+        symbol=%body.symbol,
+        heatmap_points=%forecast.iv_change_heatmap.len(),
+        ms = start.elapsed().as_millis() as u64,
+        "iv_forecast_ok"
+    );
+
+    Ok(warp::reply::with_status(warp::reply::json(&forecast), StatusCode::OK))
 }
 
 #[instrument(skip(state, body, headers), fields(req_id=%request_id(&headers)))]

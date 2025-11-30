@@ -127,6 +127,40 @@ class RustStockService:
         if secondary:
             data["secondary"] = secondary.upper()
         return self._make_request("/v1/correlation/analyze", method="POST", data=data)
+    
+    def predict_edge(self, symbol: str) -> Dict[str, Any]:
+        """
+        Predict edge (mispricing) for options chain using the Rust ML engine
+        """
+        data = {
+            "symbol": symbol.upper(),
+        }
+        return self._make_request("/v1/options/edge-predict", method="POST", data=data)
+    
+    def get_one_tap_trades(
+        self,
+        symbol: str,
+        account_size: float = 10000.0,
+        risk_tolerance: float = 0.1
+    ) -> Dict[str, Any]:
+        """
+        Get one-tap trade recommendations (ML-optimized strategies with brackets)
+        """
+        data = {
+            "symbol": symbol.upper(),
+            "account_size": account_size,
+            "risk_tolerance": risk_tolerance,
+        }
+        return self._make_request("/v1/options/one-tap-trades", method="POST", data=data)
+    
+    def forecast_iv_surface(self, symbol: str) -> Dict[str, Any]:
+        """
+        Forecast IV surface 1-24 hours forward using sentiment and macro signals
+        """
+        data = {
+            "symbol": symbol.upper(),
+        }
+        return self._make_request("/v1/options/iv-forecast", method="POST", data=data)
 
 # Global instance
 rust_stock_service = RustStockService()

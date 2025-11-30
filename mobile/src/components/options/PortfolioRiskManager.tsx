@@ -92,8 +92,29 @@ export default function PortfolioRiskManager() {
           <Text style={styles.title}>Portfolio Risk Management</Text>
         </View>
         <View style={styles.emptyState}>
-          <Icon name="info" size={24} color="#9CA3AF" />
-          <Text style={styles.emptyText}>No options positions to analyze</Text>
+          <Icon name="shield" size={32} color="#D1D5DB" />
+          <Text style={styles.emptyTitle}>No Active Positions</Text>
+          <Text style={styles.emptyText}>
+            Once you have options positions, this section will show:
+          </Text>
+          <View style={styles.emptyFeatures}>
+            <View style={styles.emptyFeatureItem}>
+              <Icon name="check" size={14} color="#10B981" />
+              <Text style={styles.emptyFeatureText}>Portfolio Greeks (Delta, Gamma, Theta, Vega)</Text>
+            </View>
+            <View style={styles.emptyFeatureItem}>
+              <Icon name="check" size={14} color="#10B981" />
+              <Text style={styles.emptyFeatureText}>Risk level assessment</Text>
+            </View>
+            <View style={styles.emptyFeatureItem}>
+              <Icon name="check" size={14} color="#10B981" />
+              <Text style={styles.emptyFeatureText}>Time decay warnings</Text>
+            </View>
+            <View style={styles.emptyFeatureItem}>
+              <Icon name="check" size={14} color="#10B981" />
+              <Text style={styles.emptyFeatureText}>Unrealized P&L tracking</Text>
+            </View>
+          </View>
         </View>
       </View>
     );
@@ -241,12 +262,37 @@ const styles = StyleSheet.create({
   },
   emptyState: {
     alignItems: 'center',
-    paddingVertical: 40,
+    paddingVertical: 32,
+    paddingHorizontal: 16,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+    marginTop: 12,
+    marginBottom: 8,
   },
   emptyText: {
     fontSize: 14,
-    color: '#9CA3AF',
-    marginTop: 8,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  emptyFeatures: {
+    width: '100%',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  emptyFeatureItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  emptyFeatureText: {
+    fontSize: 13,
+    color: '#6B7280',
+    flex: 1,
   },
   section: {
     marginBottom: 20,

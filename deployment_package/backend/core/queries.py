@@ -439,6 +439,17 @@ class Query(graphene.ObjectType):
     rust_options_analysis = graphene.Field(RustOptionsAnalysisType, symbol=graphene.String(required=True))
     options_flow = graphene.Field('core.options_flow_types.OptionsFlowType', symbol=graphene.String(required=True))
     scan_options = graphene.List('core.options_flow_types.ScannedOptionType', filters=graphene.String(required=False))
+    edge_predictions = graphene.List('core.edge_prediction_types.EdgePredictionType', symbol=graphene.String(required=True))
+    one_tap_trades = graphene.List(
+        'core.one_tap_trade_types.OneTapTradeType',
+        symbol=graphene.String(required=True),
+        account_size=graphene.Float(required=False),
+        risk_tolerance=graphene.Float(required=False)
+    )
+    iv_surface_forecast = graphene.Field(
+        'core.iv_forecast_types.IVSurfaceForecastType',
+        symbol=graphene.String(required=True)
+    )
     rust_forex_analysis = graphene.Field('core.types.ForexAnalysisType', pair=graphene.String(required=True))
     rust_sentiment_analysis = graphene.Field('core.types.SentimentAnalysisType', symbol=graphene.String(required=True))
     rust_correlation_analysis = graphene.Field(
@@ -868,6 +879,170 @@ class Query(graphene.ObjectType):
         except Exception as e:
             logger.error(f"Error scanning options: {e}", exc_info=True)
             return []
+
+    def resolve_edge_predictions(self, info, symbol):
+        """Get edge predictions (mispricing forecasts) for options chain"""
+        from .edge_prediction_types import EdgePredictionType
+        from .rust_stock_service import rust_stock_service
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        symbol_upper = symbol.upper()
+        
+        try:
+            rust_response = rust_stock_service.predict_edge(symbol_upper)
+            
+            # Rust returns a list of EdgePrediction objects
+            predictions = rust_response if isinstance(rust_response, list) else []
+            
+            # Map to GraphQL types
+            result = []
+            for pred in predictions:
+                result.append(EdgePredictionType(
+                    strike=float(pred.get('strike', 0.0)),
+                    expiration=str(pred.get('expiration', '')),
+                    option_type=str(pred.get('option_type', 'call')),
+                    current_edge=float(pred.get('current_edge', 0.0)),
+                    predicted_edge_15min=float(pred.get('predicted_edge_15min', 0.0)),
+                    predicted_edge_1hr=float(pred.get('predicted_edge_1hr', 0.0)),
+                    predicted_edge_1day=float(pred.get('predicted_edge_1day', 0.0)),
+                    confidence=float(pred.get('confidence', 0.0)),
+                    explanation=str(pred.get('explanation', '')),
+                    edge_change_dollars=float(pred.get('edge_change_dollars', 0.0)),
+                    current_premium=float(pred.get('current_premium', 0.0)),
+                    predicted_premium_15min=float(pred.get('predicted_premium_15min', 0.0)),
+                    predicted_premium_1hr=float(pred.get('predicted_premium_1hr', 0.0)),
+                ))
+            
+            logger.info(f"Edge predictions for {symbol_upper}: {len(result)} predictions")
+            return result
+            
+        except Exception as e:
+            logger.warning(f"Error getting edge predictions for {symbol_upper}: {e}")
+            return []
+
+    def resolve_one_tap_trades(self, info, symbol, account_size=None, risk_tolerance=None):
+        """Get one-tap trade recommendations (ML-optimized strategies)"""
+        from .one_tap_trade_types import OneTapTradeType, OneTapLegType
+        from .rust_stock_service import rust_stock_service
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        symbol_upper = symbol.upper()
+        account_size_val = account_size if account_size is not None else 10000.0
+        risk_tolerance_val = risk_tolerance if risk_tolerance is not None else 0.1
+        
+        try:
+            rust_response = rust_stock_service.get_one_tap_trades(
+                symbol_upper,
+                account_size_val,
+                risk_tolerance_val
+            )
+            
+            # Rust returns a list of OneTapTrade objects
+            trades = rust_response if isinstance(rust_response, list) else []
+            
+            # Map to GraphQL types
+            result = []
+            for trade in trades:
+                legs = [
+                    OneTapLegType(
+                        action=str(leg.get('action', 'buy')),
+                        option_type=str(leg.get('option_type', 'call')),
+                        strike=float(leg.get('strike', 0.0)),
+                        expiration=str(leg.get('expiration', '')),
+                        quantity=int(leg.get('quantity', 1)),
+                        premium=float(leg.get('premium', 0.0)),
+                    )
+                    for leg in trade.get('legs', [])
+                ]
+                
+                result.append(OneTapTradeType(
+                    strategy=str(trade.get('strategy', '')),
+                    entry_price=float(trade.get('entry_price', 0.0)),
+                    expected_edge=float(trade.get('expected_edge', 0.0)),
+                    confidence=float(trade.get('confidence', 0.0)),
+                    take_profit=float(trade.get('take_profit', 0.0)),
+                    stop_loss=float(trade.get('stop_loss', 0.0)),
+                    reasoning=str(trade.get('reasoning', '')),
+                    max_loss=float(trade.get('max_loss', 0.0)),
+                    max_profit=float(trade.get('max_profit', 0.0)),
+                    probability_of_profit=float(trade.get('probability_of_profit', 0.0)),
+                    symbol=str(trade.get('symbol', symbol_upper)),
+                    legs=legs,
+                    strategy_type=str(trade.get('strategy_type', '')),
+                    days_to_expiration=int(trade.get('days_to_expiration', 30)),
+                    total_cost=float(trade.get('total_cost', 0.0)),
+                    total_credit=float(trade.get('total_credit', 0.0)),
+                ))
+            
+            logger.info(f"One-tap trades for {symbol_upper}: {len(result)} trades")
+            return result
+            
+        except Exception as e:
+            logger.warning(f"Error getting one-tap trades for {symbol_upper}: {e}")
+            return []
+
+    def resolve_iv_surface_forecast(self, info, symbol):
+        """Get IV surface forecast (1-24 hours forward)"""
+        from .iv_forecast_types import IVSurfaceForecastType, IVChangePointType
+        from .rust_stock_service import rust_stock_service
+        import logging
+        import json
+        logger = logging.getLogger(__name__)
+        
+        symbol_upper = symbol.upper()
+        
+        try:
+            rust_response = rust_stock_service.forecast_iv_surface(symbol_upper)
+            
+            if not rust_response:
+                return None
+            
+            # Map IV maps (HashMap<String, f64> -> JSON)
+            current_iv = rust_response.get('current_iv', {})
+            predicted_iv_1hr = rust_response.get('predicted_iv_1hr', {})
+            predicted_iv_24hr = rust_response.get('predicted_iv_24hr', {})
+            
+            # Convert to JSON strings
+            current_iv_json = json.dumps({k: float(v) for k, v in current_iv.items()})
+            predicted_iv_1hr_json = json.dumps({k: float(v) for k, v in predicted_iv_1hr.items()})
+            predicted_iv_24hr_json = json.dumps({k: float(v) for k, v in predicted_iv_24hr.items()})
+            
+            # Map heatmap points
+            heatmap = [
+                IVChangePointType(
+                    strike=float(point.get('strike', 0.0)),
+                    expiration=str(point.get('expiration', '')),
+                    current_iv=float(point.get('current_iv', 0.0)),
+                    predicted_iv_1hr=float(point.get('predicted_iv_1hr', 0.0)),
+                    predicted_iv_24hr=float(point.get('predicted_iv_24hr', 0.0)),
+                    iv_change_1hr_pct=float(point.get('iv_change_1hr_pct', 0.0)),
+                    iv_change_24hr_pct=float(point.get('iv_change_24hr_pct', 0.0)),
+                    confidence=float(point.get('confidence', 0.0)),
+                )
+                for point in rust_response.get('iv_change_heatmap', [])
+            ]
+            
+            # Get timestamp
+            timestamp = rust_response.get('timestamp', '')
+            if isinstance(timestamp, dict):
+                timestamp = timestamp.get('$date', '') or str(timestamp)
+            
+            return IVSurfaceForecastType(
+                symbol=str(rust_response.get('symbol', symbol_upper)),
+                current_iv=current_iv_json,
+                predicted_iv_1hr=predicted_iv_1hr_json,
+                predicted_iv_24hr=predicted_iv_24hr_json,
+                confidence=float(rust_response.get('confidence', 0.0)),
+                regime=str(rust_response.get('regime', 'normal')),
+                iv_change_heatmap=heatmap,
+                timestamp=str(timestamp),
+            )
+            
+        except Exception as e:
+            logger.warning(f"Error getting IV surface forecast for {symbol_upper}: {e}")
+            return None
 
     def resolve_rust_options_analysis(self, info, symbol):
         """Get Rust engine options analysis"""

@@ -266,6 +266,20 @@ try:
     from .options_flow_types import OptionsFlowType, UnusualActivityType, LargestTradeType, ScannedOptionType
     if OptionsFlowType:
         schema_types.append(OptionsFlowType)
+    
+    from .edge_prediction_types import EdgePredictionType
+    if EdgePredictionType:
+        schema_types.append(EdgePredictionType)
+    
+    from .one_tap_trade_types import OneTapTradeType, OneTapLegType
+    if OneTapTradeType:
+        schema_types.append(OneTapTradeType)
+        schema_types.append(OneTapLegType)
+    
+    from .iv_forecast_types import IVSurfaceForecastType, IVChangePointType
+    if IVSurfaceForecastType:
+        schema_types.append(IVSurfaceForecastType)
+        schema_types.append(IVChangePointType)
         schema_types.append(UnusualActivityType)
         schema_types.append(LargestTradeType)
         schema_types.append(ScannedOptionType)

@@ -85,12 +85,14 @@ export default function OptionsNextMoveCard({
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.cardTitle}>RichesReach Options Idea</Text>
+        <View style={styles.headerLeft}>
+          <View style={styles.titleRow}>
+            <Text style={styles.cardTitle}>Top Trade</Text>
+            <View style={[styles.confidenceBadge, confidence === 'High' && styles.confidenceHigh]}>
+              <Text style={styles.confidenceText}>AI Confidence: {confidence}</Text>
+            </View>
+          </View>
           <Text style={styles.cardSubtitle}>Based on your risk and this market</Text>
-        </View>
-        <View style={[styles.confidenceBadge, confidence === 'High' && styles.confidenceHigh]}>
-          <Text style={styles.confidenceText}>AI Confidence: {confidence}</Text>
         </View>
       </View>
 
@@ -159,16 +161,21 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
     marginBottom: 16,
+  },
+  headerLeft: {
+    flex: 1,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+    gap: 8,
   },
   cardTitle: {
     fontSize: 18,
     fontWeight: '700',
     color: '#111827',
-    marginBottom: 4,
   },
   cardSubtitle: {
     fontSize: 13,

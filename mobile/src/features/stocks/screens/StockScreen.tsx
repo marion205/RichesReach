@@ -67,6 +67,9 @@ import OptionsScanner from '../../../components/options/OptionsScanner';
 import BracketOrderModal from '../../../components/options/BracketOrderModal';
 import OptionsEducationTooltip from '../../../components/options/OptionsEducationTooltip';
 import OptionsAlertButton from '../../../components/options/OptionsAlertButton';
+import { EdgePredictorHeatmap } from '../../../components/options/EdgePredictorHeatmap';
+import { OneTapTradeButton } from '../../../components/options/OneTapTradeButton';
+import { IVSurfaceForecast } from '../../../components/options/IVSurfaceForecast';
 import { PLACE_BRACKET_OPTIONS_ORDER } from '../../../graphql/optionsMutations';
 import { useOptionsPositions } from '../../../hooks/useOptionsPositions';
 import { useAlpacaAccount } from '../hooks/useAlpacaAccount';
@@ -2720,7 +2723,20 @@ placeholderTextColor="#999"
                 </View>
             </View>
 
-                {/* Next Move Card - Steve Jobs Style */}
+            {/* One-Tap Trade - ML-Optimized, Pre-Bracketed */}
+            {optionsSymbol && (
+              <OneTapTradeButton
+                symbol={optionsSymbol}
+                accountSize={alpacaAccount?.buying_power || 10000}
+                riskTolerance={0.1}
+                onTradeExecuted={(tradeId) => {
+                  Alert.alert('Trade Executed', `Order ${tradeId} placed successfully`);
+                  refetchOptionsPositions();
+                }}
+              />
+            )}
+
+            {/* Next Move Card - Steve Jobs Style */}
             {optionsSymbol && rustOptionsData?.rustOptionsAnalysis?.recommendedStrikes?.[0] && (
               <OptionsNextMoveCard
                 symbol={optionsSymbol}
@@ -2773,6 +2789,16 @@ placeholderTextColor="#999"
                   return `${optionsSymbol}${exp.replace(/-/g, '')}${optType === 'call' ? 'C' : 'P'}${(strike * 1000).toFixed(0).padStart(8, '0')}`;
                 })()}
               />
+            )}
+
+            {/* IV Surface Forecast - Predict IV Changes 1-24hrs Ahead */}
+            {optionsSymbol && optionsProMode && (
+              <IVSurfaceForecast symbol={optionsSymbol} />
+            )}
+
+            {/* Edge Predictor - ML-Powered Mispricing Forecast */}
+            {optionsSymbol && optionsProMode && (
+              <EdgePredictorHeatmap symbol={optionsSymbol} />
             )}
 
             {/* Options Flow & Unusual Activity */}
