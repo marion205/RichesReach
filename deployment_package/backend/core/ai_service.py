@@ -13,7 +13,7 @@ except ImportError:
     logger.warning("OpenAI package not installed. AI features will use fallback responses.")
 # Import ML service
 try:
-    from .optimized_ml_service import OptimizedMLService
+    from .ml_service import MLService
     from .market_data_service import MarketDataService
     ML_AVAILABLE = True
 except ImportError as e:
@@ -31,9 +31,9 @@ class AIService:
             logger.warning("OpenAI API key not found or package not available. AI features will use fallback responses.")
         # Initialize ML services
         if ML_AVAILABLE:
-            self.ml_service = OptimizedMLService()
+            self.ml_service = MLService()
             self.market_data_service = MarketDataService()
-            logger.info("Optimized ML services initialized successfully")
+            logger.info("ML services initialized successfully")
         else:
             self.ml_service = None
             self.market_data_service = None

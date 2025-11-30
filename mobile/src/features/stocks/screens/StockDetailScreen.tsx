@@ -37,6 +37,7 @@ import ConsumerSpendingSurgeChart from '../../../components/charts/ConsumerSpend
 import SmartMoneyFlowChart from '../../../components/charts/SmartMoneyFlowChart';
 import { useQuery, gql } from '@apollo/client';
 import { ChartAnnotations } from '../../../components/common/ChartAnnotations';
+import RustSentimentWidget from '../../../components/rust/RustSentimentWidget';
 
 const { width } = Dimensions.get('window');
 
@@ -1487,6 +1488,9 @@ export default function StockDetailScreen({ navigation, route }: StockDetailScre
               </Text>
             </View>
           )}
+          
+          {/* Rust Sentiment Analysis */}
+          <RustSentimentWidget symbol={symbol} />
           
           <ConsumerSpendingSurgeChart
             symbol={symbol}

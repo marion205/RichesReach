@@ -67,6 +67,8 @@ export const GET_TRADING_ORDERS = gql`
 
 /* ------------------------------- Trading Quote ------------------------------- */
 
+/* ------------------------------- Trading Quote ------------------------------- */
+
 export const GET_TRADING_QUOTE = gql`
   query GetTradingQuote($symbol: String!) {
     tradingQuote(symbol: $symbol) {
@@ -96,9 +98,6 @@ export const GET_STOCK_CHART_DATA = gql`
         close
         volume
       }
-      currentPrice
-      change
-      changePercent
     }
   }
 `;

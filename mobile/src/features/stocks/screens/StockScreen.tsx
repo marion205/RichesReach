@@ -53,6 +53,7 @@ import { useWatchlist, GET_MY_WATCHLIST } from '../../../shared/hooks/useWatchli
 import { UI } from '../../../shared/constants';
 import logger from '../../../utils/logger';
 import EducationalTooltip from '../../../components/common/EducationalTooltip';
+import RustOptionsAnalysisWidget from '../../../components/rust/RustOptionsAnalysisWidget';
 
 // Chart data adapter utilities
 const toMs = (t: string | number | Date) =>
@@ -309,6 +310,91 @@ recommendation
 reasoning
 }
 }
+`;
+
+// Rust options analysis
+const GET_RUST_OPTIONS_ANALYSIS = gql`
+  query GetRustOptionsAnalysis($symbol: String!) {
+    rustOptionsAnalysis(symbol: $symbol) {
+      symbol
+      underlyingPrice
+      volatilitySurface {
+        atmVol
+        skew
+        termStructure
+      }
+      greeks {
+        delta
+        gamma
+        theta
+        vega
+        rho
+      }
+      recommendedStrikes {
+        strike
+        expiration
+        optionType
+        greeks {
+          delta
+          gamma
+          theta
+          vega
+          rho
+        }
+        expectedReturn
+        riskScore
+      }
+      putCallRatio
+      impliedVolatilityRank
+      timestamp
+    }
+  }
+`;
+
+// Rust sentiment analysis
+const GET_RUST_SENTIMENT_ANALYSIS = gql`
+  query GetRustSentimentAnalysis($symbol: String!) {
+    rustSentimentAnalysis(symbol: $symbol) {
+      symbol
+      overallSentiment
+      sentimentScore
+      newsSentiment {
+        score
+        articleCount
+        positiveArticles
+        negativeArticles
+        neutralArticles
+        topHeadlines
+      }
+      socialSentiment {
+        score
+        mentions24h
+        positiveMentions
+        negativeMentions
+        engagementScore
+        trending
+      }
+      confidence
+      timestamp
+    }
+  }
+`;
+
+// Rust correlation analysis
+const GET_RUST_CORRELATION_ANALYSIS = gql`
+  query GetRustCorrelationAnalysis($primary: String!, $secondary: String) {
+    rustCorrelationAnalysis(primary: $primary, secondary: $secondary) {
+      primarySymbol
+      secondarySymbol
+      correlation1d
+      correlation7d
+      correlation30d
+      btcDominance
+      spyCorrelation
+      regime
+      timestamp
+    }
+  }
 `;
 
 // Research queries
@@ -1987,6 +2073,11 @@ placeholderTextColor="#999"
           contentContainerStyle={styles.researchContentContainer}
           showsVerticalScrollIndicator={true}
         >
+          {/* Forex Widget - More appropriate in Research tab */}
+          <View style={{ marginBottom: 16, paddingHorizontal: 16, paddingTop: 16 }}>
+            <RustForexWidget defaultPair="EURUSD" />
+          </View>
+          
           <View style={styles.researchHeader}>
             <Text style={styles.researchTitle}>Stock Research</Text>
             <View style={styles.searchContainer}>
@@ -2247,6 +2338,11 @@ placeholderTextColor="#999"
                     </TouchableOpacity>
                   </View>
                 </View>
+
+                {/* Rust Options Analysis - Volatility Surface & Greeks */}
+                {optionsSymbol && (
+                  <RustOptionsAnalysisWidget symbol={optionsSymbol} />
+                )}
 
                 {/* Options Chain */}
                 {optionsLoading ? (

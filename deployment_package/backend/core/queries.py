@@ -4,7 +4,7 @@ import graphene
 from django.contrib.auth import get_user_model
 
 
-from .types import UserType, PostType, ChatSessionType, ChatMessageType, CommentType, StockType, StockDataType, WatchlistType, AIPortfolioRecommendationType, StockMomentType, ChartRangeEnum, DayTradingDataType, DayTradingStatsType, ProfileInput, AIRecommendationsType, SwingTradingDataType, SwingTradingStatsType, ExecutionSuggestionType, EntryTimingSuggestionType, ExecutionQualityStatsType, PreMarketDataType
+from .types import UserType, PostType, ChatSessionType, ChatMessageType, CommentType, StockType, StockDataType, WatchlistType, AIPortfolioRecommendationType, StockMomentType, ChartRangeEnum, DayTradingDataType, DayTradingStatsType, ProfileInput, AIRecommendationsType, SwingTradingDataType, SwingTradingStatsType, ExecutionSuggestionType, EntryTimingSuggestionType, ExecutionQualityStatsType, PreMarketDataType, RustOptionsAnalysisType
 
 
 from .models import Post, ChatSession, ChatMessage, Comment, User, Stock, StockData, Watchlist, AIPortfolioRecommendation, StockDiscussion, DiscussionComment, Portfolio, StockMoment
@@ -103,11 +103,18 @@ class Query(graphene.ObjectType):
         """
         Resolver for:
           aiRecommendations(profile: ProfileInput, usingDefaults: Boolean): AIRecommendationsType
+        
+        Dynamically generates AI-powered stock recommendations using ML scoring.
         """
         from django.contrib.auth.models import AnonymousUser
-        from .models import IncomeProfile, AIPortfolioRecommendation
+        from .models import IncomeProfile, Stock
+        from .ai_service import AIService
+        from .premium_types import AIRecommendationsType
         
-        user = self._get_user_from_context(info)
+        user = info.context.user if hasattr(info, 'context') and hasattr(info.context, 'user') else None
+        if not user or user.is_anonymous:
+            user = AnonymousUser()
+        user_id = user.id if hasattr(user, 'id') and not user.is_anonymous else 1
         
         logger.info(
             "[AIRecs] resolve_ai_recommendations user=%s email=%s using_defaults=%s profile=%s",
@@ -123,33 +130,55 @@ class Query(graphene.ObjectType):
         ):
             logger.info("[AI] resolve_ai_recommendations: unauthenticated")
             return AIRecommendationsType(
-                buyRecsCount=0,
-                usingDefaults=True,
-                recommendations=[],
+                buy_recommendations=[],
+                sell_recommendations=[],
+                spending_insights=None,
             )
         
-        # Build a plain dict from the input or use saved profile
+        # Build user profile dict from input or saved profile
         profile_dict = None
         if profile is not None:
             # Profile is a ProfileInput object, extract values
+            # Handle investmentGoals - could be List type from GraphQL or regular list
+            investment_goals_raw = getattr(profile, "investmentGoals", None) or getattr(profile, "investment_goals", None)
+            if investment_goals_raw:
+                try:
+                    investment_goals = list(investment_goals_raw)
+                except (TypeError, ValueError):
+                    investment_goals = []
+            else:
+                investment_goals = []
+            
             profile_dict = {
-                "age": getattr(profile, "age", None),
-                "income_bracket": getattr(profile, "incomeBracket", None) or getattr(profile, "income_bracket", None),
-                "investment_goals": list(getattr(profile, "investmentGoals", []) or getattr(profile, "investment_goals", []) or []),
-                "investment_horizon_years": getattr(profile, "investmentHorizonYears", None) or getattr(profile, "investment_horizon_years", None),
-                "risk_tolerance": getattr(profile, "riskTolerance", None) or getattr(profile, "risk_tolerance", None),
+                "age": getattr(profile, "age", None) or 30,
+                "income_bracket": getattr(profile, "incomeBracket", None) or getattr(profile, "income_bracket", None) or "Unknown",
+                "investment_goals": investment_goals,
+                "investment_horizon_years": getattr(profile, "investmentHorizonYears", None) or getattr(profile, "investment_horizon_years", None) or 5,
+                "risk_tolerance": getattr(profile, "riskTolerance", None) or getattr(profile, "risk_tolerance", None) or "Moderate",
             }
             logger.info("[AI] Using profile from input: %s", profile_dict)
         elif not using_defaults:
             # If client wants to use the saved profile instead of the passed input
             try:
                 income_profile = IncomeProfile.objects.get(user=user)
+                # Map investment_horizon string to years
+                horizon_str = income_profile.investment_horizon or "5-10 years"
+                horizon_years = 5
+                if "10+" in horizon_str:
+                    horizon_years = 12
+                elif "5-10" in horizon_str:
+                    horizon_years = 8
+                elif "3-5" in horizon_str:
+                    horizon_years = 4
+                elif "1-3" in horizon_str:
+                    horizon_years = 2
+                
                 profile_dict = {
-                    "age": income_profile.age,
-                    "income_bracket": income_profile.income_bracket,
+                    "age": income_profile.age or 30,
+                    "income_bracket": income_profile.income_bracket or "Unknown",
                     "investment_goals": list(income_profile.investment_goals or []),
-                    "investment_horizon_years": income_profile.investment_horizon,
-                    "risk_tolerance": income_profile.risk_tolerance,
+                    "investment_horizon_years": horizon_years,
+                    "risk_tolerance": income_profile.risk_tolerance or "Moderate",
                 }
                 logger.info(
                     "[AI] Using saved profile for user=%s bracket=%s age=%s",
@@ -159,28 +188,121 @@ class Query(graphene.ObjectType):
                 )
             except IncomeProfile.DoesNotExist:
                 logger.info("[AI] No saved profile, falling back to defaults")
+                profile_dict = {
+                    "age": 30,
+                    "income_bracket": "Unknown",
+                    "investment_goals": [],
+                    "investment_horizon_years": 5,
+                    "risk_tolerance": "Moderate",
+                }
         else:
-            logger.info("[AI] using_defaults=True – skipping saved profile")
+            logger.info("[AI] using_defaults=True – using default profile")
+            profile_dict = {
+                "age": 30,
+                "income_bracket": "Unknown",
+                "investment_goals": [],
+                "investment_horizon_years": 5,
+                "risk_tolerance": "Moderate",
+            }
         
-        # For now, just return the latest recommendations for the user
-        recs_qs = (
-            AIPortfolioRecommendation.objects.filter(user=user)
-            .order_by("-id")[:10]
-        )
-        recs = list(recs_qs)
-        buy_recs_count = len(recs)
+        # Get spending habits analysis for personalization (optional)
+        spending_analysis = None
+        try:
+            from .spending_habits_service import SpendingHabitsService
+            spending_service = SpendingHabitsService()
+            spending_analysis = spending_service.analyze_spending_habits(user_id, months=3)
+        except Exception as e:
+            logger.warning(f"Could not get spending analysis for AI recommendations: {e}")
+        
+        # Fetch stocks from database (limit to 100 for performance)
+        try:
+            stocks_qs = Stock.objects.filter(
+                current_price__isnull=False,
+                current_price__gt=0
+            )[:100]
+            
+            # Convert to list of dicts for ML service
+            stocks_list = []
+            for stock in stocks_qs:
+                stocks_list.append({
+                    "symbol": stock.symbol,
+                    "company_name": stock.company_name or stock.symbol,
+                    "sector": stock.sector or "Unknown",
+                    "market_cap": float(stock.market_cap) if stock.market_cap else 0.0,
+                    "pe_ratio": float(stock.pe_ratio) if stock.pe_ratio else None,
+                    "dividend_yield": float(stock.dividend_yield) if stock.dividend_yield else 0.0,
+                    "current_price": float(stock.current_price) if stock.current_price else 0.0,
+                    "beginner_friendly_score": stock.beginner_friendly_score or 50,
+                })
+            
+            logger.info(f"[AI] Fetched {len(stocks_list)} stocks for ML scoring")
+            
+        except Exception as e:
+            logger.error(f"Error fetching stocks: {e}")
+            stocks_list = []
+        
+        # Score stocks using ML service
+        buy_recommendations = []
+        if stocks_list:
+            try:
+                ai_service = AIService()
+                scored_stocks = ai_service.score_stocks_ml(
+                    stocks_list,
+                    profile_dict,
+                    spending_analysis
+                )
+                
+                # Filter by ML score >= 0.6 and sort by score
+                filtered_stocks = [
+                    s for s in scored_stocks 
+                    if s.get('ml_score', 0) >= 0.6
+                ]
+                filtered_stocks.sort(key=lambda x: x.get('ml_score', 0), reverse=True)
+                
+                # Take top 10
+                top_stocks = filtered_stocks[:10]
+                
+                logger.info(f"[AI] ML scored {len(scored_stocks)} stocks, {len(filtered_stocks)} passed filter, returning top {len(top_stocks)}")
+                
+                # Convert to dict format for AIRecommendationType (Graphene will handle conversion)
+                for stock in top_stocks:
+                    ml_score = stock.get('ml_score', 0.7)
+                    current_price = stock.get('current_price', 0.0)
+                    target_price = current_price * 1.15  # Default 15% target
+                    
+                    # Get target price from ML if available
+                    if 'target_price' in stock and stock['target_price']:
+                        target_price = float(stock['target_price'])
+                    
+                    buy_recommendations.append({
+                        'symbol': stock.get('symbol', ''),
+                        'company_name': stock.get('company_name', ''),
+                        'recommendation': 'BUY',
+                        'confidence': ml_score,
+                        'reasoning': stock.get('ml_reasoning', f'ML score: {ml_score:.2%} - Recommended based on your profile'),
+                        'target_price': target_price,
+                        'current_price': current_price,
+                        'expected_return': 0.12,  # Default 12% expected return
+                        'sector': stock.get('sector', 'Unknown'),
+                        'risk_level': profile_dict.get('risk_tolerance', 'Moderate'),
+                        'ml_score': ml_score,
+                    })
+                
+            except Exception as e:
+                logger.error(f"Error scoring stocks with ML: {e}", exc_info=True)
+                # Fallback: return empty recommendations
         
         logger.info(
             "[AI] resolve_ai_recommendations user=%s using_defaults=%s count=%s",
             user.id,
             using_defaults,
-            buy_recs_count,
+            len(buy_recommendations),
         )
         
         return AIRecommendationsType(
-            buyRecsCount=buy_recs_count,
-            usingDefaults=using_defaults,
-            recommendations=recs,
+            buy_recommendations=buy_recommendations,
+            sell_recommendations=[],  # Not implemented yet
+            spending_insights=None,  # Could be enhanced later
         )
 
     wall_posts = graphene.List(PostType)
@@ -312,6 +434,16 @@ class Query(graphene.ObjectType):
         return Watchlist.objects.filter(user=user).select_related('stock').order_by('-added_at')
 
     rust_stock_analysis = graphene.Field('core.types.RustStockAnalysisType', symbol=graphene.String(required=True))
+    
+    # New Rust service queries
+    rust_options_analysis = graphene.Field(RustOptionsAnalysisType, symbol=graphene.String(required=True))
+    rust_forex_analysis = graphene.Field('core.types.ForexAnalysisType', pair=graphene.String(required=True))
+    rust_sentiment_analysis = graphene.Field('core.types.SentimentAnalysisType', symbol=graphene.String(required=True))
+    rust_correlation_analysis = graphene.Field(
+        'core.types.CorrelationAnalysisType',
+        primary=graphene.String(required=True),
+        secondary=graphene.String()
+    )
 
     def resolve_rust_stock_analysis(self, info, symbol):
         """Get Rust engine stock analysis - calls the actual Rust service"""
@@ -434,6 +566,211 @@ class Query(graphene.ObjectType):
         # Store performance metrics in result (if we add a performance field later)
         logger.info(f"✅ Returning RustStockAnalysisType for {symbol_upper} with {len(fallback_spending_data)} spending and {len(fallback_options_flow_data)} options data points")
         return result
+    
+    def resolve_rust_options_analysis(self, info, symbol):
+        """Get Rust engine options analysis"""
+        from .types import (
+            RustOptionsAnalysisType,
+            VolatilitySurfaceType,
+            GreeksType,
+            StrikeRecommendationType,
+        )
+        from .rust_stock_service import rust_stock_service
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        symbol_upper = symbol.upper()
+        
+        try:
+            rust_response = rust_stock_service.analyze_options(symbol_upper)
+            
+            # Map Rust response to GraphQL types
+            vol_surface = rust_response.get('volatility_surface', {})
+            greeks_data = rust_response.get('greeks', {})
+            recommended_strikes = rust_response.get('recommended_strikes', [])
+            
+            return RustOptionsAnalysisType(
+                symbol=rust_response.get('symbol', symbol_upper),
+                underlyingPrice=float(rust_response.get('underlying_price', 0)),
+                volatilitySurface=VolatilitySurfaceType(
+                    atmVol=vol_surface.get('atm_vol', 0.0),
+                    skew=vol_surface.get('skew', 0.0),
+                    termStructure=vol_surface.get('term_structure', {})
+                ),
+                greeks=GreeksType(
+                    delta=greeks_data.get('delta', 0.0),
+                    gamma=greeks_data.get('gamma', 0.0),
+                    theta=greeks_data.get('theta', 0.0),
+                    vega=greeks_data.get('vega', 0.0),
+                    rho=greeks_data.get('rho', 0.0)
+                ),
+                recommendedStrikes=[
+                    StrikeRecommendationType(
+                        strike=strike.get('strike', 0.0),
+                        expiration=strike.get('expiration', ''),
+                        optionType=strike.get('option_type', 'call'),
+                        greeks=GreeksType(
+                            delta=strike.get('greeks', {}).get('delta', 0.0),
+                            gamma=strike.get('greeks', {}).get('gamma', 0.0),
+                            theta=strike.get('greeks', {}).get('theta', 0.0),
+                            vega=strike.get('greeks', {}).get('vega', 0.0),
+                            rho=strike.get('greeks', {}).get('rho', 0.0)
+                        ),
+                        expectedReturn=strike.get('expected_return', 0.0),
+                        riskScore=strike.get('risk_score', 0.0)
+                    ) for strike in recommended_strikes
+                ],
+                putCallRatio=rust_response.get('put_call_ratio', 0.0),
+                impliedVolatilityRank=rust_response.get('implied_volatility_rank', 0.0),
+                timestamp=rust_response.get('timestamp', '')
+            )
+        except Exception as e:
+            logger.error(f"Error getting Rust options analysis: {e}")
+            # Return empty/default analysis
+            return RustOptionsAnalysisType(
+                symbol=symbol_upper,
+                underlyingPrice=0.0,
+                volatilitySurface=VolatilitySurfaceType(atmVol=0.0, skew=0.0, termStructure={}),
+                greeks=GreeksType(delta=0.0, gamma=0.0, theta=0.0, vega=0.0, rho=0.0),
+                recommendedStrikes=[],
+                putCallRatio=0.0,
+                impliedVolatilityRank=0.0,
+                timestamp=''
+            )
+    
+    def resolve_rust_forex_analysis(self, info, pair):
+        """Get Rust engine forex analysis"""
+        from .types import ForexAnalysisType
+        from .rust_stock_service import rust_stock_service
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        pair_upper = pair.upper()
+        
+        try:
+            rust_response = rust_stock_service.analyze_forex(pair_upper)
+            
+            return ForexAnalysisType(
+                pair=rust_response.get('pair', pair_upper),
+                bid=float(rust_response.get('bid', 0)),
+                ask=float(rust_response.get('ask', 0)),
+                spread=rust_response.get('spread', 0.0),
+                pipValue=rust_response.get('pip_value', 0.0),
+                volatility=rust_response.get('volatility', 0.0),
+                trend=rust_response.get('trend', 'NEUTRAL'),
+                supportLevel=float(rust_response.get('support_level', 0)),
+                resistanceLevel=float(rust_response.get('resistance_level', 0)),
+                correlation24h=rust_response.get('correlation_24h', 0.0),
+                timestamp=rust_response.get('timestamp', '')
+            )
+        except Exception as e:
+            logger.error(f"Error getting Rust forex analysis: {e}")
+            return ForexAnalysisType(
+                pair=pair_upper,
+                bid=0.0,
+                ask=0.0,
+                spread=0.0,
+                pipValue=0.0,
+                volatility=0.0,
+                trend='NEUTRAL',
+                supportLevel=0.0,
+                resistanceLevel=0.0,
+                correlation24h=0.0,
+                timestamp=''
+            )
+    
+    def resolve_rust_sentiment_analysis(self, info, symbol):
+        """Get Rust engine sentiment analysis"""
+        from .types import SentimentAnalysisType, NewsSentimentType, SocialSentimentType
+        from .rust_stock_service import rust_stock_service
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        symbol_upper = symbol.upper()
+        
+        try:
+            rust_response = rust_stock_service.analyze_sentiment(symbol_upper)
+            
+            news_sentiment = rust_response.get('news_sentiment', {})
+            social_sentiment = rust_response.get('social_sentiment', {})
+            
+            return SentimentAnalysisType(
+                symbol=rust_response.get('symbol', symbol_upper),
+                overallSentiment=rust_response.get('overall_sentiment', 'NEUTRAL'),
+                sentimentScore=rust_response.get('sentiment_score', 0.0),
+                newsSentiment=NewsSentimentType(
+                    score=news_sentiment.get('score', 0.0),
+                    articleCount=news_sentiment.get('article_count', 0),
+                    positiveArticles=news_sentiment.get('positive_articles', 0),
+                    negativeArticles=news_sentiment.get('negative_articles', 0),
+                    neutralArticles=news_sentiment.get('neutral_articles', 0),
+                    topHeadlines=news_sentiment.get('top_headlines', [])
+                ),
+                socialSentiment=SocialSentimentType(
+                    score=social_sentiment.get('score', 0.0),
+                    mentions24h=social_sentiment.get('mentions_24h', 0),
+                    positiveMentions=social_sentiment.get('positive_mentions', 0),
+                    negativeMentions=social_sentiment.get('negative_mentions', 0),
+                    engagementScore=social_sentiment.get('engagement_score', 0.0),
+                    trending=social_sentiment.get('trending', False)
+                ),
+                confidence=rust_response.get('confidence', 0.0),
+                timestamp=rust_response.get('timestamp', '')
+            )
+        except Exception as e:
+            logger.error(f"Error getting Rust sentiment analysis: {e}")
+            return SentimentAnalysisType(
+                symbol=symbol_upper,
+                overallSentiment='NEUTRAL',
+                sentimentScore=0.0,
+                newsSentiment=NewsSentimentType(
+                    score=0.0, articleCount=0, positiveArticles=0,
+                    negativeArticles=0, neutralArticles=0, topHeadlines=[]
+                ),
+                socialSentiment=SocialSentimentType(
+                    score=0.0, mentions24h=0, positiveMentions=0,
+                    negativeMentions=0, engagementScore=0.0, trending=False
+                ),
+                confidence=0.0,
+                timestamp=''
+            )
+    
+    def resolve_rust_correlation_analysis(self, info, primary, secondary=None):
+        """Get Rust engine correlation analysis"""
+        from .types import CorrelationAnalysisType
+        from .rust_stock_service import rust_stock_service
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        primary_upper = primary.upper()
+        
+        try:
+            rust_response = rust_stock_service.analyze_correlation(primary_upper, secondary)
+            
+            return CorrelationAnalysisType(
+                primarySymbol=rust_response.get('primary_symbol', primary_upper),
+                secondarySymbol=rust_response.get('secondary_symbol', secondary or 'SPY'),
+                correlation1d=rust_response.get('correlation_1d', 0.0),
+                correlation7d=rust_response.get('correlation_7d', 0.0),
+                correlation30d=rust_response.get('correlation_30d', 0.0),
+                btcDominance=rust_response.get('btc_dominance'),
+                spyCorrelation=rust_response.get('spy_correlation'),
+                regime=rust_response.get('regime', 'NEUTRAL'),
+                timestamp=rust_response.get('timestamp', '')
+            )
+        except Exception as e:
+            logger.error(f"Error getting Rust correlation analysis: {e}")
+            return CorrelationAnalysisType(
+                primarySymbol=primary_upper,
+                secondarySymbol=secondary or 'SPY',
+                correlation1d=0.0,
+                correlation7d=0.0,
+                correlation30d=0.0,
+                btcDominance=None,
+                spyCorrelation=None,
+                regime='NEUTRAL',
+                timestamp=''
+            )
 
     # Discussion queries (Reddit-style)
 

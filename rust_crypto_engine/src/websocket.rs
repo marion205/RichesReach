@@ -7,6 +7,10 @@ use std::sync::Arc;
 use tokio::sync::{RwLock, broadcast};
 use tokio::time::{interval, Duration};
 use crate::{CryptoAnalysisResponse, CryptoRecommendation};
+use crate::options_analysis::OptionsAnalysisResponse;
+use crate::forex_analysis::ForexAnalysisResponse;
+use crate::sentiment_analysis::SentimentAnalysisResponse;
+use crate::correlation_analysis::CorrelationAnalysisResponse;
 use anyhow::Result;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -14,6 +18,10 @@ pub enum WebSocketMessage {
     PredictionUpdate(CryptoAnalysisResponse),
     RecommendationUpdate(Vec<CryptoRecommendation>),
     PriceUpdate { symbol: String, price: f64, change_24h: f64 },
+    OptionsUpdate { symbol: String, analysis: OptionsAnalysisResponse },
+    ForexUpdate { pair: String, analysis: ForexAnalysisResponse },
+    SentimentUpdate { symbol: String, analysis: SentimentAnalysisResponse },
+    CorrelationUpdate { primary: String, secondary: String, analysis: CorrelationAnalysisResponse },
     Heartbeat,
 }
 
@@ -151,10 +159,54 @@ impl WebSocketManager {
 
     pub async fn broadcast_price_update(&self, symbol: String, price: f64, change_24h: f64) -> Result<()> {
         let msg = WebSocketMessage::PriceUpdate { symbol, price, change_24h };
-        let json = msg.to_json()?;
         
         if let Err(e) = self.broadcast_tx.send(msg) {
             tracing::warn!("Failed to broadcast price update: {}", e);
+        }
+        
+        Ok(())
+    }
+
+    pub async fn broadcast_options_update(&self, symbol: String, analysis: OptionsAnalysisResponse) -> Result<()> {
+        let msg = WebSocketMessage::OptionsUpdate { symbol, analysis };
+        
+        if let Err(e) = self.broadcast_tx.send(msg) {
+            tracing::warn!("Failed to broadcast options update: {}", e);
+        }
+        
+        Ok(())
+    }
+
+    pub async fn broadcast_forex_update(&self, pair: String, analysis: ForexAnalysisResponse) -> Result<()> {
+        let msg = WebSocketMessage::ForexUpdate { pair, analysis };
+        
+        if let Err(e) = self.broadcast_tx.send(msg) {
+            tracing::warn!("Failed to broadcast forex update: {}", e);
+        }
+        
+        Ok(())
+    }
+
+    pub async fn broadcast_sentiment_update(&self, symbol: String, analysis: SentimentAnalysisResponse) -> Result<()> {
+        let msg = WebSocketMessage::SentimentUpdate { symbol, analysis };
+        
+        if let Err(e) = self.broadcast_tx.send(msg) {
+            tracing::warn!("Failed to broadcast sentiment update: {}", e);
+        }
+        
+        Ok(())
+    }
+
+    pub async fn broadcast_correlation_update(
+        &self,
+        primary: String,
+        secondary: String,
+        analysis: CorrelationAnalysisResponse,
+    ) -> Result<()> {
+        let msg = WebSocketMessage::CorrelationUpdate { primary, secondary, analysis };
+        
+        if let Err(e) = self.broadcast_tx.send(msg) {
+            tracing::warn!("Failed to broadcast correlation update: {}", e);
         }
         
         Ok(())

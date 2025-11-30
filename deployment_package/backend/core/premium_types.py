@@ -971,54 +971,66 @@ class PremiumQueries(graphene.ObjectType):
 
 def _get_mock_options_analysis(symbol):
     """Return mock options analysis data for testing"""
-
-    call_options = [
-        {
-            "symbol": symbol,
-            "contract_symbol": f"{symbol}240115C00150000",
-            "strike": 150.0,
-            "expiration_date": "2024-01-15",
-            "option_type": "call",
-            "bid": 2.50,
-            "ask": 2.75,
-            "last_price": 2.60,
-            "volume": 1250,
-            "open_interest": 5000,
-            "implied_volatility": 0.25,
-            "delta": 0.65,
-            "gamma": 0.02,
-            "theta": -0.15,
-            "vega": 0.30,
-            "rho": 0.05,
-            "intrinsic_value": 5.0,
-            "time_value": 2.60,
-            "days_to_expiration": 30,
-        }
-    ]
-
-    put_options = [
-        {
-            "symbol": symbol,
-            "contract_symbol": f"{symbol}240115P00150000",
-            "strike": 150.0,
-            "expiration_date": "2024-01-15",
-            "option_type": "put",
-            "bid": 1.20,
-            "ask": 1.40,
-            "last_price": 1.30,
-            "volume": 800,
-            "open_interest": 3000,
-            "implied_volatility": 0.28,
-            "delta": -0.35,
-            "gamma": 0.02,
-            "theta": -0.12,
-            "vega": 0.25,
-            "rho": -0.03,
-            "intrinsic_value": 0.0,
-            "time_value": 1.30,
-            "days_to_expiration": 30,
-        }
-    ]
+    import random
+    
+    # Generate multiple strikes around current price (assuming ~155)
+    base_price = 155.0
+    strikes = [base_price - 10, base_price - 5, base_price, base_price + 5, base_price + 10]
+    expiration_dates = ["2024-02-16", "2024-03-15", "2024-04-19"]
+    
+    call_options = []
+    put_options = []
+    
+    for exp_date in expiration_dates:
+        for strike in strikes:
+            # Generate realistic option prices
+            strike_diff = abs(strike - base_price)
+            call_price = max(0.5, strike_diff * 0.1 + random.uniform(0.5, 2.0))
+            put_price = max(0.5, strike_diff * 0.1 + random.uniform(0.5, 2.0))
+            
+            call_options.append({
+                "symbol": symbol,
+                "contract_symbol": f"{symbol}240216C{int(strike*1000):08d}",
+                "strike": strike,
+                "expiration_date": exp_date,
+                "option_type": "call",
+                "bid": round(call_price - 0.1, 2),
+                "ask": round(call_price + 0.1, 2),
+                "last_price": round(call_price, 2),
+                "volume": random.randint(100, 2000),
+                "open_interest": random.randint(500, 5000),
+                "implied_volatility": round(random.uniform(0.20, 0.35), 3),
+                "delta": round(random.uniform(0.3, 0.8), 2),
+                "gamma": round(random.uniform(0.01, 0.03), 3),
+                "theta": round(random.uniform(-0.20, -0.10), 2),
+                "vega": round(random.uniform(0.20, 0.40), 2),
+                "rho": round(random.uniform(0.02, 0.08), 3),
+                "intrinsic_value": max(0, base_price - strike),
+                "time_value": round(call_price - max(0, base_price - strike), 2),
+                "days_to_expiration": 30,
+            })
+            
+            put_options.append({
+                "symbol": symbol,
+                "contract_symbol": f"{symbol}240216P{int(strike*1000):08d}",
+                "strike": strike,
+                "expiration_date": exp_date,
+                "option_type": "put",
+                "bid": round(put_price - 0.1, 2),
+                "ask": round(put_price + 0.1, 2),
+                "last_price": round(put_price, 2),
+                "volume": random.randint(100, 2000),
+                "open_interest": random.randint(500, 5000),
+                "implied_volatility": round(random.uniform(0.22, 0.38), 3),
+                "delta": round(random.uniform(-0.8, -0.2), 2),
+                "gamma": round(random.uniform(0.01, 0.03), 3),
+                "theta": round(random.uniform(-0.20, -0.10), 2),
+                "vega": round(random.uniform(0.20, 0.40), 2),
+                "rho": round(random.uniform(-0.08, -0.02), 3),
+                "intrinsic_value": max(0, strike - base_price),
+                "time_value": round(put_price - max(0, strike - base_price), 2),
+                "days_to_expiration": 30,
+            })
 
     unusual_flow = [
         {
@@ -1061,13 +1073,9 @@ def _get_mock_options_analysis(symbol):
 
     return {
         "underlying_symbol": symbol,
-        "underlying_price": 155.0,
+        "underlying_price": base_price,
         "options_chain": {
-            "expiration_dates": [
-                "2024-01-15",
-                "2024-02-16",
-                "2024-03-15",
-            ],
+            "expiration_dates": expiration_dates,
             "calls": call_options,
             "puts": put_options,
             "greeks": {
@@ -1082,32 +1090,6 @@ def _get_mock_options_analysis(symbol):
         "recommended_strategies": recommended_strategies,
         "market_sentiment": market_sentiment,
     }
-
-    def resolve_stock_screening(self, info, filters):
-        try:
-            user = getattr(info.context, "user", None)
-            logger.info(
-                "Stock screening request - User: %s, Filters: %s", user, filters
-            )
-
-            if user and not user.is_anonymous and not _has_premium_access(user):
-                logger.warning(
-                    "User %s does not have premium access", user.id
-                )
-                raise Exception("Premium subscription required")
-
-            if isinstance(filters, str):
-                filters = json.loads(filters)
-
-            analytics_service = PremiumAnalyticsService()
-            results = analytics_service.get_advanced_stock_screening(filters)
-            logger.info(
-                "Stock screening results: %s stocks found", len(results)
-            )
-            return results
-        except Exception as e:
-            logger.error("Error in stock screening resolver: %s", e)
-            raise Exception(f"Stock screening failed: {str(e)}")
 
 
 def _has_premium_access(user):
@@ -1305,12 +1287,20 @@ class OptionsChainType(graphene.ObjectType):
     """Options chain for a symbol"""
 
     expiration_dates = graphene.List(graphene.String)
+    expirationDates = graphene.List(graphene.String)  # camelCase alias
     calls = graphene.List(OptionsContractType)
     puts = graphene.List(OptionsContractType)
     greeks = graphene.Field(GreeksType)
 
     def resolve_expiration_dates(self, info):
         return self.get("expiration_dates", [])
+    
+    def resolve_expirationDates(self, info):
+        """camelCase alias for expiration_dates"""
+        # Handle both dict and object - don't call other resolver methods on dicts
+        if isinstance(self, dict):
+            return self.get("expiration_dates", [])
+        return self.resolve_expiration_dates(info)
 
     def resolve_calls(self, info):
         return self.get("calls", [])

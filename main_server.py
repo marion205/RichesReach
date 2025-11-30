@@ -4,6 +4,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel
 import uvicorn
 import os
 import sys
@@ -3003,6 +3004,130 @@ Format as JSON:
         traceback.print_exc()
         # Return a valid error response instead of raising
         raise HTTPException(status_code=500, detail=f"Failed to generate daily digest: {str(e)}")
+
+# Authentication models
+class LoginRequest(BaseModel):
+    email: str = None
+    username: str = None
+    password: str
+    
+    class Config:
+        # Allow both email and username fields
+        extra = "allow"
+
+def _authenticate_user_sync(email: str, password: str):
+    """Synchronous Django authentication helper - uses manual auth to avoid graphql_jwt dependency"""
+    try:
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        
+        # Skip Django's authenticate() to avoid graphql_jwt backend loading issues
+        # Go straight to manual authentication
+        try:
+            # Try case-insensitive email lookup
+            user = User.objects.filter(email__iexact=email).first()
+            if user and user.check_password(password):
+                logger.info(f"✅ Manual authentication successful for {email}")
+                return user
+            else:
+                logger.warning(f"❌ Invalid password for {email}")
+                return None
+        except Exception as e:
+            logger.warning(f"Error during manual auth lookup: {e}")
+            return None
+        
+    except Exception as e:
+        logger.error(f"Authentication error: {e}", exc_info=True)
+        return None
+
+@app.post("/api/auth/login/")
+async def login(request: LoginRequest):
+    """REST API Login Endpoint
+    
+    Accepts either email or username in the request body:
+    {
+        "email": "user@example.com",
+        "password": "password123"
+    }
+    or
+    {
+        "username": "user@example.com",
+        "password": "password123"
+    }
+    """
+    try:
+        _setup_django_once()
+        from asgiref.sync import sync_to_async
+        
+        # Try to import graphql_jwt for token generation (optional)
+        GRAPHQL_JWT_AVAILABLE = False
+        get_token = None
+        try:
+            from graphql_jwt.shortcuts import get_token
+            GRAPHQL_JWT_AVAILABLE = True
+        except ImportError:
+            # graphql_jwt is optional - we'll use dev tokens
+            pass
+        
+        # Handle both email and username fields
+        email = (request.email or request.username or "").strip()
+        password = request.password
+        
+        if not email or not password:
+            raise HTTPException(status_code=400, detail="Email/username and password are required")
+        
+        logger.info(f"Login attempt for email: {email}")
+        
+        # Run Django operations in sync context
+        user = await sync_to_async(_authenticate_user_sync)(email, password)
+        
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+        
+        # Generate token (also needs to be sync)
+        def _generate_token_sync(user):
+            token = None
+            if GRAPHQL_JWT_AVAILABLE and get_token:
+                try:
+                    token = get_token(user)
+                    logger.info(f"Generated JWT token for {email}")
+                except Exception as e:
+                    logger.warning(f"Failed to generate JWT token: {e}")
+            
+            # Fallback to dev token if JWT not available
+            if not token:
+                import time
+                token = f"dev-token-{int(time.time())}"
+                logger.info(f"Using dev token for {email}")
+            return token
+        
+        token = await sync_to_async(_generate_token_sync)(user)
+        
+        # Prepare user data
+        user_data = {
+            'id': str(user.id),
+            'email': user.email,
+            'name': getattr(user, 'name', ''),
+        }
+        
+        # Add optional fields if they exist
+        if hasattr(user, 'profile_pic') and user.profile_pic:
+            user_data['profile_pic'] = user.profile_pic
+        
+        response_data = {
+            'access_token': token,
+            'token': token,  # Alias for compatibility
+            'user': user_data,
+        }
+        
+        logger.info(f"✅ Login successful for {email}")
+        return response_data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in login: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @app.post("/digest/regime-alert")
 async def create_regime_alert(request: Request):

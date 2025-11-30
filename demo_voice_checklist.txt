@@ -1,0 +1,46 @@
+VOICE ASSISTANT DEMO CHECKLIST
+==============================
+
+CRITICAL: OpenAI API Key
+[ ] Set OPENAI_API_KEY environment variable
+   → export OPENAI_API_KEY="your-key-here"
+   → Or add to .env file: OPENAI_API_KEY=your-key-here
+
+Speed Optimizations (DONE):
+✅ Reduced API timeouts: 2.8s → 1.5s (crypto), 3.0s → 1.5s (stocks)
+✅ Reduced LLM max_tokens: 120 → 80 (faster generation)
+✅ Reduced LLM temperature: 0.6 → 0.5 (more deterministic)
+✅ Real data fetching: get_trade_idea now uses real stock prices
+✅ Parallel data fetching: Multiple prices fetched simultaneously
+✅ Streaming responses: Token-by-token for instant feedback
+
+Real Data Usage (DONE):
+✅ Stock prices: Yahoo Finance API (real-time)
+✅ Crypto prices: CoinGecko API (real-time)
+✅ Trade ideas: Now use real current prices (not hardcoded)
+✅ Force refresh: Voice queries bypass cache for fresh data
+
+Test Before Demo:
+[ ] Test voice query: "What should I buy for the next few weeks with $500?"
+[ ] Verify response includes real stock price
+[ ] Check response time (should be < 1 second for first token)
+[ ] Test stock query: "What's Apple trading at?"
+[ ] Verify real-time price is shown
+
+Demo Queries to Practice:
+1. "What should I buy for the next few weeks with about five hundred dollars?"
+2. "What's Apple trading at?"
+3. "What's Bitcoin's current price?"
+4. "Show me a good swing trade"
+
+Expected Response Times:
+- First token (ACK): < 100ms
+- First real token: < 500ms
+- Full response: < 2 seconds
+
+If OPENAI_API_KEY is not set:
+- Voice transcription will use mock data
+- AI responses will be generic/fallback
+- Demo will still work but less impressive
+
+SET THE API KEY BEFORE YOUR DEMO!

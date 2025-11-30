@@ -83,11 +83,11 @@ const GET_TRADING_QUOTE = gql`
   query GetTradingQuote($symbol: String!) {
     tradingQuote(symbol: $symbol) {
       symbol
-      currentPrice
-      change
-      changePercent
       bid
       ask
+      bidSize
+      askSize
+      timestamp
     }
   }
 `;
@@ -105,20 +105,21 @@ const GET_STOCK_CHART_DATA = gql`
         close
         volume
       }
-      currentPrice
-      change
-      changePercent
     }
   }
 `;
 
 interface TradingQuote {
   symbol: string;
-  currentPrice?: number;
-  change?: number;
-  changePercent?: number;
   bid?: number;
   ask?: number;
+  bidSize?: number;
+  askSize?: number;
+  timestamp?: string;
+  // Computed fields for display
+  currentPrice?: number; // Computed from (bid + ask) / 2
+  change?: number; // Not available from quote, will be undefined
+  changePercent?: number; // Not available from quote, will be undefined
   [key: string]: unknown;
 }
 
@@ -590,7 +591,12 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
       const results = await Promise.all(quotePromises);
       const newQuotes = results.reduce((acc: Record<string, TradingQuote>, res, i) => {
         if (res.data?.tradingQuote) {
-          acc[symbols[i]] = res.data.tradingQuote as TradingQuote;
+          const quote = res.data.tradingQuote as TradingQuote;
+          // Compute currentPrice from bid/ask if not provided
+          if (!quote.currentPrice && quote.bid && quote.ask) {
+            quote.currentPrice = (quote.bid + quote.ask) / 2;
+          }
+          acc[symbols[i]] = quote;
         } else if (mockQuotes[symbols[i]]) {
           // Use mock quote if real quote failed
           acc[symbols[i]] = mockQuotes[symbols[i]];
@@ -624,7 +630,10 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
     try {
       const newCharts = missingCharts.reduce((acc, symbol) => {
         // Generate mock chart data (30 data points with some variation)
-        const basePrice = quotes[symbol]?.currentPrice || 100;
+        // Compute currentPrice from bid/ask if not available
+        const quote = quotes[symbol];
+        const basePrice = quote?.currentPrice || 
+                         (quote?.bid && quote?.ask ? (quote.bid + quote.ask) / 2 : 100);
         const mockData = Array.from({ length: 30 }, (_, i) => {
           const variation = (Math.random() - 0.5) * 0.1; // ±5% variation
           return basePrice * (1 + variation);
@@ -1031,7 +1040,7 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
         </View>
       )}
     </View>
-  ), [navigateTo, mode, handleModeChange, effectiveDayTradingData, handleBackPress]);
+  ), [navigateTo, mode, handleModeChange, effectiveDayTradingData, handleBackPress, handlePaperTradingPress, HeaderTopBar, C, getModeColor]);
 
   // Only show real data - empty state is handled by ListEmptyComponent
 
@@ -1346,6 +1355,7 @@ const MemoizedPick = React.memo(function MemoizedPick({
   const target = item.risk?.targets?.[0] ?? entry;
   const quote = quotes[item.symbol];
   const chartData = charts[item.symbol] || [];
+  // changePercent not available from trading quote (only bid/ask), default to 0
   const changePercent = quote?.changePercent ?? 0;
   const isSelected = selectedPick?.symbol === item.symbol;
 
@@ -1695,10 +1705,41 @@ const styles = StyleSheet.create({
     paddingVertical: 16, 
     borderBottomWidth: 1,
     shadowColor: '#000', 
-    shadowOpacity: 0.1, 
-    shadowRadius: 12, 
-    shadowOffset: { width: 0, height: 4 }, 
-    elevation: 3,
+    shadowOpacity: 0.1,
+  },
+  paperTradingBanner: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    marginTop: 0,
+  },
+  paperTradingContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  paperTradingLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  paperTradingText: {
+    fontSize: 13,
+    fontWeight: '500',
+    marginLeft: 8,
+  },
+  paperTradingButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    gap: 6,
+  },
+  paperTradingButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
   },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },

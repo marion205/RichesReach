@@ -19,6 +19,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import RebalancingStorageService from '../features/portfolio/services/RebalancingStorageService';
 import RebalancingResultsDisplay from '../features/portfolio/components/RebalancingResultsDisplay';
 import TaxOptimizationScreen from '../screens/TaxOptimizationScreen';
+import RustCorrelationWidget from '../components/rust/RustCorrelationWidget';
 
 // Custom Slider Component
 const CustomSlider = ({ value, onValueChange, minimumValue = 0, maximumValue = 100, step = 1, style, ...props }) => {
@@ -639,6 +640,16 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
             </View>
           </View>
         </View>
+
+        {/* Cross-Asset Correlation Analysis */}
+        {displayMetrics.holdings && displayMetrics.holdings.length > 0 && (
+          <View style={styles.section}>
+            <RustCorrelationWidget 
+              primarySymbol={displayMetrics.holdings[0]?.symbol || 'AAPL'} 
+              defaultSecondary="SPY"
+            />
+          </View>
+        )}
       </ScrollView>
     );
   };

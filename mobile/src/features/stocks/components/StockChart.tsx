@@ -19,9 +19,6 @@ const GET_STOCK_CHART_DATA = gql`
   query GetStockChartData($symbol: String!, $timeframe: String!) {
     stockChartData(symbol: $symbol, timeframe: $timeframe) {
       symbol
-      currentPrice
-      change
-      changePercent
       data {
         timestamp
         open
@@ -178,16 +175,32 @@ const StockChart: React.FC<StockChartProps> = ({
       <View style={styles.chartHeader}>
         <Text style={styles.symbolText}>{symbol}</Text>
         <View style={styles.priceInfo}>
-          <Text style={styles.currentPrice}>
-            ${data?.stockChartData?.currentPrice?.toFixed(2) || '0.00'}
-          </Text>
-          <Text style={[
-            styles.changeText,
-            { color: (data?.stockChartData?.change || 0) >= 0 ? '#34C759' : '#FF3B30' }
-          ]}>
-            {data?.stockChartData?.change >= 0 ? '+' : ''}{data?.stockChartData?.change?.toFixed(2) || '0.00'} 
-            ({data?.stockChartData?.changePercent?.toFixed(2) || '0.00'}%)
-          </Text>
+          {(() => {
+            // Compute currentPrice from last close price if available
+            const chartData = data?.stockChartData?.data;
+            const lastClose = chartData && chartData.length > 0 ? chartData[chartData.length - 1]?.close : null;
+            const currentPrice = lastClose || 0;
+            
+            // Compute change from first and last close prices
+            const firstClose = chartData && chartData.length > 0 ? chartData[0]?.close : null;
+            const change = firstClose && lastClose ? lastClose - firstClose : 0;
+            const changePercent = firstClose && firstClose !== 0 ? (change / firstClose) * 100 : 0;
+            
+            return (
+              <>
+                <Text style={styles.currentPrice}>
+                  ${currentPrice.toFixed(2)}
+                </Text>
+                <Text style={[
+                  styles.changeText,
+                  { color: change >= 0 ? '#34C759' : '#FF3B30' }
+                ]}>
+                  {change >= 0 ? '+' : ''}{change.toFixed(2)} 
+                  ({changePercent.toFixed(2)}%)
+                </Text>
+              </>
+            );
+          })()}
         </View>
       </View>
 

@@ -311,6 +311,104 @@ class RustStockAnalysisType(graphene.ObjectType):
     shapExplanation = graphene.String()
 
 
+# New Rust service types
+class GreeksType(graphene.ObjectType):
+    """Options Greeks"""
+    delta = graphene.Float()
+    gamma = graphene.Float()
+    theta = graphene.Float()
+    vega = graphene.Float()
+    rho = graphene.Float()
+
+
+class VolatilitySurfaceType(graphene.ObjectType):
+    """Volatility surface data"""
+    atmVol = graphene.Float()
+    skew = graphene.Float()
+    termStructure = graphene.JSONString()
+
+
+class StrikeRecommendationType(graphene.ObjectType):
+    """Recommended option strike"""
+    strike = graphene.Float()
+    expiration = graphene.String()
+    optionType = graphene.String()
+    greeks = graphene.Field(GreeksType)
+    expectedReturn = graphene.Float()
+    riskScore = graphene.Float()
+
+
+class RustOptionsAnalysisType(graphene.ObjectType):
+    """Rust engine options analysis"""
+    symbol = graphene.String()
+    underlyingPrice = graphene.Float()
+    volatilitySurface = graphene.Field(VolatilitySurfaceType)
+    greeks = graphene.Field(GreeksType)
+    recommendedStrikes = graphene.List(StrikeRecommendationType)
+    putCallRatio = graphene.Float()
+    impliedVolatilityRank = graphene.Float()
+    timestamp = graphene.String()
+
+
+class ForexAnalysisType(graphene.ObjectType):
+    """Rust engine forex analysis"""
+    pair = graphene.String()
+    bid = graphene.Float()
+    ask = graphene.Float()
+    spread = graphene.Float()
+    pipValue = graphene.Float()
+    volatility = graphene.Float()
+    trend = graphene.String()
+    supportLevel = graphene.Float()
+    resistanceLevel = graphene.Float()
+    correlation24h = graphene.Float()
+    timestamp = graphene.String()
+
+
+class NewsSentimentType(graphene.ObjectType):
+    """News sentiment data"""
+    score = graphene.Float()
+    articleCount = graphene.Int()
+    positiveArticles = graphene.Int()
+    negativeArticles = graphene.Int()
+    neutralArticles = graphene.Int()
+    topHeadlines = graphene.List(graphene.String)
+
+
+class SocialSentimentType(graphene.ObjectType):
+    """Social sentiment data"""
+    score = graphene.Float()
+    mentions24h = graphene.Int()
+    positiveMentions = graphene.Int()
+    negativeMentions = graphene.Int()
+    engagementScore = graphene.Float()
+    trending = graphene.Boolean()
+
+
+class SentimentAnalysisType(graphene.ObjectType):
+    """Rust engine sentiment analysis"""
+    symbol = graphene.String()
+    overallSentiment = graphene.String()
+    sentimentScore = graphene.Float()
+    newsSentiment = graphene.Field(NewsSentimentType)
+    socialSentiment = graphene.Field(SocialSentimentType)
+    confidence = graphene.Float()
+    timestamp = graphene.String()
+
+
+class CorrelationAnalysisType(graphene.ObjectType):
+    """Rust engine correlation analysis"""
+    primarySymbol = graphene.String()
+    secondarySymbol = graphene.String()
+    correlation1d = graphene.Float()
+    correlation7d = graphene.Float()
+    correlation30d = graphene.Float()
+    btcDominance = graphene.Float()
+    spyCorrelation = graphene.Float()
+    regime = graphene.String()
+    timestamp = graphene.String()
+
+
 class PostType(DjangoObjectType):
     class Meta:
         model = Post

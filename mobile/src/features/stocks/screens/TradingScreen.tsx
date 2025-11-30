@@ -583,6 +583,33 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
             </View>
           </View>
 
+          {/* Paper Trading Link */}
+          <View style={styles.paperTradingBanner}>
+            <View style={styles.paperTradingContent}>
+              <View style={styles.paperTradingLeft}>
+                <Icon name="edit-3" size={16} color="#0369A1" />
+                <Text style={styles.paperTradingText}>
+                  Practice without risk
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.paperTradingButton}
+                onPress={() => {
+                  if (navigateTo) {
+                    navigateTo('paper-trading');
+                  } else {
+                    navigation.navigate('paper-trading' as never);
+                  }
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Open Paper Trading"
+              >
+                <Text style={styles.paperTradingButtonText}>Paper Trading</Text>
+                <Icon name="arrow-right" size={14} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
           {/* Tabs */}
           <View style={styles.tabs}>
             {(['overview', 'orders'] as const).map((t) => (
@@ -599,11 +626,15 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
             <TouchableOpacity
               style={styles.helpTabButton}
               onPress={() => {
-                // Navigate to learn modal or risk coach
+                // Navigate to risk coach for trading education
                 if (navigateTo) {
-                  navigateTo('RiskCoach');
+                  navigateTo('swing-risk-coach');
+                } else {
+                  navigation.navigate('Invest' as never, { screen: 'swing-risk-coach' } as never);
                 }
               }}
+              accessibilityRole="button"
+              accessibilityLabel="Trading Education"
             >
               <Icon name="book-open" size={16} color="#007AFF" />
             </TouchableOpacity>
@@ -670,16 +701,43 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+  },
+  paperTradingBanner: {
+    backgroundColor: '#F0F9FF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#BAE6FD',
+    paddingHorizontal: 20,
     paddingVertical: 12,
-    backgroundColor: C.card,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: C.line,
-    shadowColor: 'rgba(16,24,40,0.08)',
-    shadowOpacity: 1,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+  },
+  paperTradingContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  paperTradingLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  paperTradingText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#0369A1',
+    marginLeft: 8,
+  },
+  paperTradingButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0369A1',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    gap: 6,
+  },
+  paperTradingButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
   },
   headerTitle: { fontSize: 18, fontWeight: '700', color: C.text },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },

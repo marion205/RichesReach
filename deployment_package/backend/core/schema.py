@@ -111,7 +111,13 @@ User = get_user_model()
 # Base Query has resolve_me which will be available in ExtendedQuery
 # The resolve_me in queries.py should work, but let's ensure it uses proper context
 
-class ExtendedQuery(PremiumQueries, BrokerQueries, BankingQueries, SBLOCQueries, PaperTradingQueries, SocialQueries, PrivacyQueries, AIInsightsQueries, AIScansQueries, Query, graphene.ObjectType):
+try:
+    from .risk_management_types import RiskManagementQueries
+except (ImportError, SyntaxError):
+    class RiskManagementQueries(graphene.ObjectType):
+        pass
+
+class ExtendedQuery(PremiumQueries, BrokerQueries, BankingQueries, SBLOCQueries, PaperTradingQueries, SocialQueries, PrivacyQueries, AIInsightsQueries, AIScansQueries, RiskManagementQueries, Query, graphene.ObjectType):
     """
     Final Query type exposed by the schema.
 
@@ -213,6 +219,17 @@ except ImportError:
     SBLOCBankType = None
     SBLOCSessionType = None
 
+# Import Rust types explicitly to ensure they're registered
+try:
+    from .types import RustOptionsAnalysisType, ForexAnalysisType, SentimentAnalysisType, CorrelationAnalysisType
+    RUST_TYPES_AVAILABLE = True
+except ImportError:
+    RUST_TYPES_AVAILABLE = False
+    RustOptionsAnalysisType = None
+    ForexAnalysisType = None
+    SentimentAnalysisType = None
+    CorrelationAnalysisType = None
+
 schema_types = [BenchmarkSeriesType, BenchmarkDataPointType]
 if ProfileInput:
     # InputObjectType doesn't need to be in types, but ensure it's imported
@@ -223,9 +240,17 @@ if SBLOC_TYPES_AVAILABLE and SBLOCBankType:
     schema_types.append(SBLOCBankType)
     if SBLOCSessionType:
         schema_types.append(SBLOCSessionType)
+if RUST_TYPES_AVAILABLE and RustOptionsAnalysisType:
+    schema_types.append(RustOptionsAnalysisType)
+    if ForexAnalysisType:
+        schema_types.append(ForexAnalysisType)
+    if SentimentAnalysisType:
+        schema_types.append(SentimentAnalysisType)
+    if CorrelationAnalysisType:
+        schema_types.append(CorrelationAnalysisType)
 
 schema = graphene.Schema(
     query=ExtendedQuery,
     mutation=ExtendedMutation,
-    types=schema_types  # Explicitly register types that need it
+    types=schema_types
 )

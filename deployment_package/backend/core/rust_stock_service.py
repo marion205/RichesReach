@@ -35,11 +35,17 @@ class RustStockService:
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to communicate with Rust service: {e}")
-            raise Exception(f"Rust service communication failed: {str(e)}")
+            logger.warning(f"Rust service unavailable at {url}: {e}")
+            # Return empty response instead of raising exception
+            return {}
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse JSON response from Rust service: {e}")
-            raise Exception(f"Invalid JSON response from Rust service: {str(e)}")
+            logger.warning(f"Failed to parse JSON response from Rust service: {e}")
+            # Return empty response instead of raising exception
+            return {}
+        except Exception as e:
+            logger.warning(f"Unexpected error communicating with Rust service: {e}")
+            # Return empty response instead of raising exception
+            return {}
     def analyze_stock(self, symbol: str, include_technical: bool = True, include_fundamental: bool = True) -> Dict[str, Any]:
         """
         Analyze a stock using the Rust engine
@@ -80,11 +86,47 @@ class RustStockService:
         """
         try:
             health = self.health_check()
-            return health.get('status') == 'healthy'
+            return health.get('status') == 'healthy' or health.get('status') == 'live'
         except Exception:
             return False
+    
+    def analyze_options(self, symbol: str) -> Dict[str, Any]:
+        """
+        Analyze options for a stock symbol using the Rust engine
+        """
+        data = {
+            "symbol": symbol.upper(),
+        }
+        return self._make_request("/v1/options/analyze", method="POST", data=data)
+    
+    def analyze_forex(self, pair: str) -> Dict[str, Any]:
+        """
+        Analyze a forex pair using the Rust engine
+        """
+        data = {
+            "pair": pair.upper(),
+        }
+        return self._make_request("/v1/forex/analyze", method="POST", data=data)
+    
+    def analyze_sentiment(self, symbol: str) -> Dict[str, Any]:
+        """
+        Analyze sentiment for a symbol using the Rust engine
+        """
+        data = {
+            "symbol": symbol.upper(),
+        }
+        return self._make_request("/v1/sentiment/analyze", method="POST", data=data)
+    
+    def analyze_correlation(self, primary: str, secondary: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Analyze correlation between two symbols using the Rust engine
+        """
+        data = {
+            "primary": primary.upper(),
+        }
+        if secondary:
+            data["secondary"] = secondary.upper()
+        return self._make_request("/v1/correlation/analyze", method="POST", data=data)
 
-# Global instance
-rust_stock_service = RustStockService()
 # Global instance
 rust_stock_service = RustStockService()

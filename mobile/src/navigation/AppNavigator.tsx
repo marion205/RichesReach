@@ -117,6 +117,7 @@ import TomorrowScreen from '../features/futures/screens/TomorrowScreen';
 import DayTradingScreen from '../features/trading/screens/DayTradingScreen';
 import TradingScreenWrapper from './TradingScreenWrapper';
 import PaperTradingScreen from '../features/trading/screens/PaperTradingScreen';
+import ForexScreen from '../features/forex/ForexScreen';
 import MLSystemScreen from '../features/ml/screens/MLSystemScreen';
 import RiskManagementScreen from '../features/risk/screens/RiskManagementScreen';
 import PremiumAnalyticsScreen from './PremiumAnalyticsScreen';
@@ -318,6 +319,7 @@ function InvestStack() {
       <Stack.Screen name="options-copilot" component={OptionsCopilotScreen} options={{ headerShown: true, title: 'Advanced' }} />
       <Stack.Screen name="Tomorrow" component={TomorrowScreen} options={{ headerShown: true, title: 'Tomorrow' }} />
       <Stack.Screen name="DayTrading" component={TradingScreenWrapper} options={{ headerShown: false }} />
+      <Stack.Screen name="Forex" component={ForexScreen} options={{ headerShown: true, title: 'Forex' }} />
       <Stack.Screen name="PaperTrading" component={PaperTradingScreen} options={{ headerShown: true, title: 'Paper Trading' }} />
       <Stack.Screen name="paper-trading" component={PaperTradingScreen} options={{ headerShown: true, title: 'Paper Trading' }} />
       <Stack.Screen name="ResearchReport" component={ResearchReportScreen} options={{ headerShown: true, title: 'Research Report' }} />
