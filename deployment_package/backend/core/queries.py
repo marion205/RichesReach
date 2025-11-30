@@ -445,6 +445,92 @@ class Query(graphene.ObjectType):
         secondary=graphene.String()
     )
 
+    @staticmethod
+    def _calculate_fundamental_scores(features: dict, has_rust_data: bool) -> 'FundamentalAnalysisType':
+        """Calculate fundamental analysis scores from Rust features or use defaults"""
+        from .types import FundamentalAnalysisType
+        
+        if not has_rust_data or not features:
+            # Default fallback scores
+            return FundamentalAnalysisType(
+                valuationScore=70.0, growthScore=65.0, stabilityScore=80.0,
+                dividendScore=60.0, debtScore=75.0
+            )
+        
+        # Extract fundamental data from features
+        pe_ratio = features.get('pe_ratio', 0.0) or 0.0
+        dividend_yield = features.get('dividend_yield', 0.0) or 0.0
+        volatility = features.get('volatility', 0.0) or 0.0
+        risk_score = features.get('risk_score', 0.0) or 0.0
+        
+        # Calculate Valuation Score (0-100) based on P/E ratio
+        # Lower P/E = better valuation (higher score)
+        # P/E < 15 = excellent (90-100), 15-25 = good (70-89), 25-35 = fair (50-69), >35 = poor (0-49)
+        if pe_ratio > 0:
+            if pe_ratio < 15:
+                valuation_score = 90.0 + (15 - pe_ratio) * 0.67  # 90-100
+            elif pe_ratio < 25:
+                valuation_score = 70.0 + (25 - pe_ratio) * 1.9  # 70-89
+            elif pe_ratio < 35:
+                valuation_score = 50.0 + (35 - pe_ratio) * 1.9  # 50-69
+            else:
+                valuation_score = max(0.0, 50.0 - (pe_ratio - 35) * 2.0)  # 0-49
+        else:
+            valuation_score = 70.0
+        
+        # Calculate Growth Score (0-100) based on volatility and risk
+        # Higher volatility can indicate growth potential, but too high = risky
+        # Moderate volatility (0.015-0.025) = good growth potential
+        if volatility > 0:
+            if 0.015 <= volatility <= 0.025:
+                growth_score = 75.0 + (0.025 - volatility) * 1000  # 75-85
+            elif volatility < 0.015:
+                growth_score = 60.0 + volatility * 1000  # 60-75
+            elif volatility <= 0.035:
+                growth_score = 70.0 - (volatility - 0.025) * 1000  # 50-70
+            else:
+                growth_score = max(30.0, 50.0 - (volatility - 0.035) * 500)  # 30-50
+        else:
+            growth_score = 65.0
+        
+        # Calculate Stability Score (0-100) - inverse of volatility and risk
+        # Lower volatility and risk = higher stability
+        if volatility > 0 and risk_score > 0:
+            # Stability = 100 - (volatility * 2000 + risk_score * 20)
+            stability_score = max(0.0, min(100.0, 100.0 - (volatility * 2000 + risk_score * 20)))
+        else:
+            stability_score = 80.0
+        
+        # Calculate Dividend Score (0-100) based on dividend yield
+        # Dividend yield > 3% = excellent (80-100), 1-3% = good (60-79), 0.5-1% = fair (40-59), <0.5% = poor (0-39)
+        if dividend_yield > 0:
+            if dividend_yield >= 0.03:
+                dividend_score = 80.0 + min(20.0, (dividend_yield - 0.03) * 1000)  # 80-100
+            elif dividend_yield >= 0.01:
+                dividend_score = 60.0 + (dividend_yield - 0.01) * 1000  # 60-79
+            elif dividend_yield >= 0.005:
+                dividend_score = 40.0 + (dividend_yield - 0.005) * 4000  # 40-59
+            else:
+                dividend_score = dividend_yield * 8000  # 0-39
+        else:
+            dividend_score = 0.0
+        
+        # Calculate Debt Score (0-100) - using risk_score as proxy
+        # Lower risk = better debt management (higher score)
+        if risk_score > 0:
+            # Risk score typically 0.1-0.5, map to 50-100
+            debt_score = max(50.0, min(100.0, 100.0 - (risk_score - 0.1) * 125))
+        else:
+            debt_score = 75.0
+        
+        return FundamentalAnalysisType(
+            valuationScore=round(valuation_score, 1),
+            growthScore=round(growth_score, 1),
+            stabilityScore=round(stability_score, 1),
+            dividendScore=round(dividend_score, 1),
+            debtScore=round(debt_score, 1)
+        )
+    
     def resolve_rust_stock_analysis(self, info, symbol):
         """Get Rust engine stock analysis - calls the actual Rust service"""
         import time
@@ -527,21 +613,97 @@ class Query(graphene.ObjectType):
         
         # Build result
         phase_start = time.time()
+        
+        # Extract technical indicators from Rust response if available
+        features = rust_response.get('features', {}) if rust_response else {}
+        price_usd = rust_response.get('price_usd') if rust_response else None
+        
+        # Handle price_usd - can be string (Decimal), dict, or float
+        if price_usd:
+            if isinstance(price_usd, dict):
+                price_value = price_usd.get('value', 100.0)
+            elif isinstance(price_usd, str):
+                try:
+                    price_value = float(price_usd)
+                except (ValueError, TypeError):
+                    price_value = 100.0
+            else:
+                price_value = float(price_usd)
+        else:
+            # Try to get price from features
+            price_value = features.get('price_usd', 100.0)
+        
+        # Calculate Bollinger Bands if we have SMA values
+        sma20_val = features.get('sma_20', 0.0) or features.get('sma20', 0.0)
+        sma50_val = features.get('sma_50', 0.0) or features.get('sma50', 0.0)
+        rsi_val = features.get('rsi', 50.0) or 50.0
+        macd_val = features.get('macd', 0.0) or 0.0
+        
+        # Calculate Bollinger Bands (upper = SMA + 2*std, lower = SMA - 2*std)
+        # Using SMA20 as middle, with 2% standard deviation approximation
+        if sma20_val > 0:
+            bollinger_middle = sma20_val
+            bollinger_upper = sma20_val * 1.04  # Approximate 2 std dev
+            bollinger_lower = sma20_val * 0.96   # Approximate 2 std dev
+        else:
+            # Fallback: use price if available
+            bollinger_middle = price_value
+            bollinger_upper = price_value * 1.04
+            bollinger_lower = price_value * 0.96
+        
+        # Determine if we have real Rust data or using fallback
+        has_rust_data = rust_response and rust_response.get('features') and len(features) > 0
+        
+        # Get recommendation and risk from Rust if available
+        if has_rust_data:
+            prediction_type = rust_response.get('prediction_type', 'NEUTRAL')
+            confidence = rust_response.get('confidence_level', 'MEDIUM')
+            probability = rust_response.get('probability', 0.5)
+            
+            # Map prediction to recommendation
+            if prediction_type == 'BULLISH' and probability > 0.6:
+                recommendation = "BUY"
+            elif prediction_type == 'BEARISH' and probability > 0.6:
+                recommendation = "SELL"
+            else:
+                recommendation = "HOLD"
+            
+            # Map confidence to risk level
+            if confidence == 'HIGH':
+                risk_level = "Low" if probability > 0.6 else "Medium"
+            elif confidence == 'MEDIUM':
+                risk_level = "Medium"
+            else:
+                risk_level = "High"
+            
+            # Use Rust explanation if available
+            rust_explanation = rust_response.get('explanation', '')
+            reasoning = [rust_explanation] if rust_explanation else [f"Rust analysis for {symbol_upper}"]
+        else:
+            recommendation = "HOLD"
+            risk_level = "Medium"
+            reasoning = [f"Fallback analysis for {symbol_upper}"]
+        
         result = RustStockAnalysisType(
             symbol=symbol_upper,
             beginnerFriendlyScore=75.0,
-            riskLevel="Medium",
-            recommendation="HOLD",
+            riskLevel=risk_level,
+            recommendation=recommendation,
             technicalIndicators=TechnicalIndicatorsType(
-                rsi=50.0, macd=0.0, macdSignal=0.0, macdHistogram=0.0,
-                sma20=0.0, sma50=0.0, ema12=0.0, ema26=0.0,
-                bollingerUpper=0.0, bollingerLower=0.0, bollingerMiddle=0.0
+                rsi=rsi_val,
+                macd=macd_val,
+                macdSignal=0.0,  # Not calculated in Rust yet
+                macdHistogram=0.0,  # Not calculated in Rust yet
+                sma20=sma20_val if sma20_val > 0 else price_value * 0.98,
+                sma50=sma50_val if sma50_val > 0 else price_value * 0.95,
+                ema12=0.0,  # Not calculated in Rust yet
+                ema26=0.0,  # Not calculated in Rust yet
+                bollingerUpper=bollinger_upper if sma20_val > 0 else 0.0,
+                bollingerLower=bollinger_lower if sma20_val > 0 else 0.0,
+                bollingerMiddle=bollinger_middle if sma20_val > 0 else 0.0
             ),
-            fundamentalAnalysis=FundamentalAnalysisType(
-                valuationScore=70.0, growthScore=65.0, stabilityScore=80.0,
-                dividendScore=60.0, debtScore=75.0
-            ),
-            reasoning=[f"Fallback analysis for {symbol_upper}"],
+            fundamentalAnalysis=Query._calculate_fundamental_scores(features, has_rust_data),
+            reasoning=reasoning,
             spendingData=fallback_spending_data,
             optionsFlowData=fallback_options_flow_data,
             signalContributions=[],
