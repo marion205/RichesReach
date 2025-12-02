@@ -377,11 +377,26 @@ export function makeApolloClient() {
       }
       
       // Add timeout to fetch requests for better performance
+      // Use longer timeout for slow queries (like Oracle Insights, AI Recommendations)
+      const operationName = options?.body ? (() => {
+        try {
+          const body = typeof options.body === 'string' ? JSON.parse(options.body) : options.body;
+          return body.operationName || '';
+        } catch {
+          return '';
+        }
+      })() : '';
+      
+      // Slow operations that need more time
+      const slowOperations = ['GetOracleInsights', 'GetAIRecommendations', 'GenerateAIRecommendations'];
+      const isSlowOperation = slowOperations.some(op => operationName.includes(op));
+      const timeoutMs = isSlowOperation ? 30000 : 15000; // 30s for slow, 15s for normal
+      
       const controller = new AbortController();
       const timeoutId = setTimeout(() => {
-        logger.error(`⏱️ [FETCH] TIMEOUT after 10s: ${urlString}`);
+        logger.error(`⏱️ [FETCH] TIMEOUT after ${timeoutMs/1000}s: ${urlString}`);
         controller.abort();
-      }, 10000); // 10 second timeout
+      }, timeoutMs);
       
       // Chain existing signal if present
       if (options?.signal) {

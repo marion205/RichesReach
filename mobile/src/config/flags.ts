@@ -20,7 +20,8 @@ export const FEATURE_TAX_OPTIMIZATION =
 
 // Performance and reliability flags
 export const ENABLE_GRAPHQL_TIMEOUTS = true;
-export const GRAPHQL_TIMEOUT_MS = 6000; // 6 seconds
+export const GRAPHQL_TIMEOUT_MS = 15000; // 15 seconds (increased for slow queries)
+export const GRAPHQL_SLOW_QUERY_TIMEOUT_MS = 30000; // 30 seconds for slow operations
 export const MARKET_DATA_HEALTH_CHECK_TIMEOUT = 3000; // 3 seconds
 
 // Development flags

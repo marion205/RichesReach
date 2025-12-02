@@ -38,6 +38,15 @@ class FuturesRecommendation(BaseModel):
     max_gain: float
     probability: int
     action: str  # 'Buy' or 'Sell'
+    # Real-time price data (Phase 1)
+    current_price: Optional[float] = None
+    price_change: Optional[float] = None
+    price_change_percent: Optional[float] = None
+    price_history: Optional[List[float]] = None
+    # Volume data (Phase 2)
+    current_volume: Optional[int] = None
+    average_volume: Optional[int] = None
+    volume_ratio: Optional[float] = None  # current_volume / average_volume
 
 class FuturesRecommendationsResponse(BaseModel):
     recommendations: List[FuturesRecommendation]
@@ -180,54 +189,75 @@ def generate_why_now(
     current_price: float,
     price_change: float,
     price_change_pct: float,
-    volatility: float
+    volatility: float,
+    volume_ratio: Optional[float] = None
 ) -> str:
-    """Generate a 'why_now' explanation based on market conditions"""
+    """Generate enhanced 'why_now' explanation based on market conditions (Phase 2)"""
     
     # Determine market sentiment
     if price_change_pct > 0.5:
         sentiment = "strong upward momentum"
         trend = "bullish"
+        momentum_desc = "Strong buying pressure"
     elif price_change_pct > 0:
         sentiment = "positive momentum"
         trend = "bullish"
+        momentum_desc = "Moderate buying interest"
     elif price_change_pct < -0.5:
         sentiment = "downward pressure"
         trend = "bearish"
+        momentum_desc = "Selling pressure building"
     else:
         sentiment = "consolidation"
         trend = "neutral"
+        momentum_desc = "Sideways consolidation"
     
     # Volatility assessment
     if volatility > 2.0:
         vol_desc = "elevated volatility"
+        vol_insight = "Higher volatility increases profit potential but also risk"
     elif volatility < 0.5:
         vol_desc = "low volatility"
+        vol_insight = "Low volatility suggests stability, good for range trading"
     else:
         vol_desc = "moderate volatility"
+        vol_insight = "Moderate volatility provides balanced risk/reward"
     
-    # Generate context-specific explanations
-    if 'S&P 500' in contract_name or 'SPX' in symbol:
+    # Volume insight
+    volume_insight = ""
+    if volume_ratio:
+        if volume_ratio > 1.5:
+            volume_insight = " Unusual volume spike indicates strong institutional interest."
+        elif volume_ratio > 1.2:
+            volume_insight = " Above-average volume confirms price movement."
+        elif volume_ratio < 0.7:
+            volume_insight = " Below-average volume suggests potential reversal."
+    
+    # Generate context-specific explanations with more detail
+    if 'S&P 500' in contract_name or 'SPX' in symbol or 'MES' in symbol:
         if trend == "bullish":
-            return f"Strong earnings season momentum and positive macro indicators suggest continued upward trend. {vol_desc.capitalize()} provides entry opportunities."
+            return f"{momentum_desc} in equity markets. Strong earnings season momentum and positive macro indicators suggest continued upward trend. {vol_desc.capitalize()} provides entry opportunities.{volume_insight} Support levels holding, making this a favorable risk/reward setup."
         else:
-            return f"Market showing {sentiment}. {vol_desc.capitalize()} may present reversal opportunities for contrarian traders."
+            return f"Equity markets showing {sentiment}. {vol_desc.capitalize()} may present reversal opportunities for contrarian traders.{volume_insight} Monitor key support levels for potential bounce or breakdown."
     
-    elif 'NASDAQ' in contract_name or 'NQ' in symbol:
+    elif 'NASDAQ' in contract_name or 'NQ' in symbol or 'MNQ' in symbol:
         if trend == "bullish":
-            return f"Tech sector showing resilience with AI-driven growth. Support level holding strong. {vol_desc.capitalize()} creates favorable risk/reward."
+            return f"{momentum_desc} in tech sector. AI-driven growth and strong fundamentals support continued strength. {vol_desc.capitalize()} creates favorable risk/reward.{volume_insight} Tech leadership suggests broader market strength."
         else:
-            return f"Tech sector experiencing {sentiment}. {vol_desc.capitalize()} suggests potential for mean reversion."
+            return f"Tech sector experiencing {sentiment}. {vol_desc.capitalize()} suggests potential for mean reversion.{volume_insight} Watch for support at key technical levels."
     
-    elif 'Euro' in contract_name or 'EUR' in symbol:
-        return f"ECB policy pivot expected. Dollar strength may be reaching peak. {vol_desc.capitalize()} indicates potential for directional moves."
+    elif 'Euro' in contract_name or 'EUR' in symbol or 'M6E' in symbol:
+        return f"{momentum_desc} in currency markets. ECB policy pivot expected, dollar strength may be reaching peak. {vol_desc.capitalize()} indicates potential for directional moves.{volume_insight} Central bank policy shifts create trading opportunities."
     
-    elif 'Gold' in contract_name or 'GC' in symbol:
-        return f"Inflation concerns and geopolitical tensions supporting safe-haven demand. {vol_desc.capitalize()} provides trading opportunities."
+    elif 'Gold' in contract_name or 'GC' in symbol or 'MGC' in symbol:
+        return f"{momentum_desc} in precious metals. Inflation concerns and geopolitical tensions supporting safe-haven demand. {vol_desc.capitalize()} provides trading opportunities.{volume_insight} Gold often acts as portfolio hedge during uncertainty."
+    
+    elif 'Dow' in contract_name or 'MYM' in symbol:
+        return f"{momentum_desc} in blue-chip indices. Industrial sector dynamics and economic indicators driving movement. {vol_desc.capitalize()} creates entry opportunities.{volume_insight} Dow components reflect broader economic health."
     
     else:
-        # Generic explanation
-        return f"Market showing {sentiment} with {vol_desc}. Current price action suggests favorable risk/reward setup."
+        # Generic enhanced explanation
+        return f"{momentum_desc} with {vol_desc}. Current price action suggests favorable risk/reward setup.{volume_insight} Monitor key technical levels for confirmation."
 
 # ============================================================================
 # Multi-Provider API Integration (Polygon -> Finnhub -> Alpaca)
@@ -293,7 +323,7 @@ async def _fetch_price_from_polygon(symbol: str) -> Optional[Dict[str, Any]]:
         params = {'apiKey': api_key}
         
         async with aiohttp.ClientSession() as session:
-            async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=3.0)) as response:
+            async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=10.0)) as response:
                 if response.status == 200:
                     data = await response.json()
                     result = data.get('results', {})
@@ -612,21 +642,39 @@ async def get_futures_recommendations():
             symbol = f"{contract_root}{month_code}{year_code}"
             
             # Fetch current price (tries Polygon -> Finnhub -> Alpaca)
+            # Try contract-specific symbol first (e.g., MESZ5)
             price_data = await fetch_futures_price(symbol)
+            data_symbol = symbol  # Symbol to use for historical data
             if not price_data or price_data.get('price', 0) == 0:
-                # Try alternative symbol format
-                symbol_alt = f"{contract_root}{month_code}{year_code}"
-                price_data = await fetch_futures_price(symbol_alt)
+                # Try base symbol (Polygon often uses base symbols like "MES" instead of "MESZ5")
+                logger.info(f"Contract symbol {symbol} failed, trying base symbol {contract_root}")
+                price_data = await fetch_futures_price(contract_root)
                 if not price_data or price_data.get('price', 0) == 0:
+                    logger.warning(f"Could not fetch price for {symbol} or base {contract_root}")
                     continue
+                else:
+                    # Use base symbol for both price and historical data
+                    data_symbol = contract_root
+                    logger.info(f"Using base symbol {contract_root} for price and historical data (contract: {symbol})")
             
             current_price = price_data['price']
             provider_used = price_data.get('provider', 'unknown')
-            logger.debug(f"Using {provider_used} for {symbol} price: ${current_price}")
+            logger.info(f"✅ Got price for {symbol} (using {data_symbol}): ${current_price} from {provider_used}")
             
-            # Fetch historical data for volatility (tries multiple providers)
-            historical = await fetch_futures_historical(symbol, days=20)
+            # Fetch historical data for volatility (use the symbol that worked for price)
+            historical = await fetch_futures_historical(data_symbol, days=20)
             volatility = calculate_volatility(historical) if historical else 1.5
+            
+            # Calculate volume metrics (Phase 2)
+            current_volume = price_data.get('volume', 0)
+            average_volume = None
+            volume_ratio = None
+            if historical and len(historical) >= 10:
+                volumes = [float(bar.get('v', 0)) for bar in historical if bar.get('v')]
+                if volumes:
+                    average_volume = int(sum(volumes) / len(volumes))
+                    if average_volume > 0:
+                        volume_ratio = current_volume / average_volume
             
             # Calculate price change
             price_change = 0.0
@@ -654,11 +702,23 @@ async def get_futures_recommendations():
                 current_price, contract_spec, volatility, direction
             )
             
-            # Generate explanation
+            # Generate enhanced explanation (Phase 2)
             why_now = generate_why_now(
                 symbol, contract_spec['name'], current_price,
-                price_change, price_change_pct, volatility
+                price_change, price_change_pct, volatility, volume_ratio
             )
+            
+            # Generate price history for sparkline (24 points)
+            price_history: List[float] = []
+            if historical and len(historical) >= 2:
+                # Use last 24 data points if available
+                for point in historical[-24:]:
+                    price_history.append(float(point.get('c', current_price)))
+            else:
+                # Generate mock history if no historical data
+                for i in range(24):
+                    variation = (i / 24) * (price_change_pct / 100) * current_price
+                    price_history.append(current_price - variation)
             
             recommendations.append(FuturesRecommendation(
                 symbol=symbol,
@@ -667,7 +727,14 @@ async def get_futures_recommendations():
                 max_loss=round(max_loss, 2),
                 max_gain=round(max_gain, 2),
                 probability=probability,
-                action=action
+                action=action,
+                current_price=round(current_price, 2),
+                price_change=round(price_change, 2),
+                price_change_percent=round(price_change_pct, 2),
+                price_history=price_history,
+                current_volume=current_volume if current_volume > 0 else None,
+                average_volume=average_volume,
+                volume_ratio=round(volume_ratio, 2) if volume_ratio else None
             ))
             
             # Limit to 4-6 recommendations
@@ -714,6 +781,48 @@ async def place_futures_order(order: FuturesOrderRequest):
         message=f"Order submitted for {order.quantity} {order.symbol} {order.side}",
         client_order_id=order_id
     )
+
+@router.get("/price/{symbol}")
+async def get_futures_price(symbol: str):
+    """
+    Get current price and price history for a futures contract.
+    Used for real-time price polling (Phase 1).
+    """
+    try:
+        price_data = await fetch_futures_price(symbol)
+        if not price_data:
+            raise HTTPException(status_code=404, detail=f"Price data not available for {symbol}")
+        
+        current_price = price_data.get('price', 0)
+        
+        # Fetch historical for price history
+        historical = await fetch_futures_historical(symbol, days=1)
+        price_history: List[float] = []
+        
+        if historical:
+            for point in historical[-24:]:  # Last 24 points
+                price_history.append(float(point.get('c', current_price)))
+        
+        # Calculate change
+        price_change = 0.0
+        price_change_percent = 0.0
+        if historical and len(historical) >= 2:
+            prev_price = float(historical[-2].get('c', current_price))
+            price_change = current_price - prev_price
+            if prev_price > 0:
+                price_change_percent = (price_change / prev_price) * 100
+        
+        return {
+            "symbol": symbol,
+            "price": round(current_price, 2),
+            "change": round(price_change, 2),
+            "changePercent": round(price_change_percent, 2),
+            "priceHistory": price_history,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error fetching price for {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/positions", response_model=FuturesPositionsResponse)
 async def get_futures_positions():

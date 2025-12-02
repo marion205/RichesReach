@@ -5,12 +5,21 @@ import { Platform } from 'react-native';
  * API Configuration
  * Single source of truth for all API endpoints
  * 
- * SIMPLIFIED: Always use LAN IP in dev mode to avoid localhost issues
- * No device detection - just use LAN IP for all dev builds
+ * For iOS Simulator: Use localhost (127.0.0.1)
+ * For Android Emulator: Use 10.0.2.2
+ * For Physical Devices: Use LAN IP (192.168.1.246)
  */
 
-// Your Mac's LAN IP - update this if your IP changes
-const DEV_BACKEND = 'http://192.168.1.240:8000';
+// Determine localhost address based on platform
+const LOCALHOST = Platform.OS === 'android' ? '10.0.2.2' : '127.0.0.1';
+
+// Your Mac's LAN IP - for physical devices only
+// Current IP: 192.168.1.246
+const LAN_IP = '192.168.1.246';
+
+// For simulator/emulator, use localhost; for physical devices, use LAN IP
+// In dev mode, prefer localhost for simulator (faster, more reliable)
+const DEV_BACKEND = `http://${LOCALHOST}:8000`;  // Simulator/Emulator use localhost
 
 // Production host
 const PROD_HOST = 'https://api.richesreach.com:8000';
@@ -38,24 +47,30 @@ const ENV_API_BASE_URL =
   Constants.expoConfig?.extra?.API_BASE;
 
 if (ENV_API_BASE_URL) {
-  // If env var has localhost in dev mode, warn and ignore it
+  // Check for old/stale IP addresses - ALWAYS ignore them in dev mode for simulator
+  const hasOldIP = /10\.0\.0\.54|192\.168\.1\.240/.test(ENV_API_BASE_URL);
   const hasLocalhost = /localhost|127\.0\.0\.1/.test(ENV_API_BASE_URL);
   
-  if (isDev && hasLocalhost) {
-    console.warn('⚠️ [API Config] ENV var has localhost in dev mode!');
-    console.warn('⚠️ [API Config] Ignoring ENV var, using LAN IP instead:', apiBase);
-    // Don't use the env var - keep using LAN IP
+  if (isDev) {
+    if (hasOldIP) {
+      console.warn('⚠️ [API Config] ENV var has old/stale IP in dev mode!');
+      console.warn('⚠️ [API Config] ENV var value:', ENV_API_BASE_URL);
+      console.warn('⚠️ [API Config] Ignoring ENV var, using localhost for simulator:', apiBase);
+      // Don't use the env var - keep using localhost for simulator
+    } else if (hasLocalhost) {
+      // Allow localhost override (correct for simulator)
+      apiBase = ENV_API_BASE_URL;
+      console.log('🔧 [API Config] Using ENV var (localhost):', apiBase);
+    } else {
+      // For physical devices, allow LAN IP override
+      apiBase = ENV_API_BASE_URL;
+      console.log('🔧 [API Config] Using ENV var (LAN IP for physical device):', apiBase);
+    }
   } else {
+    // Production: use env var as-is
     apiBase = ENV_API_BASE_URL;
-    console.log('🔧 [API Config] Using ENV var:', apiBase);
+    console.log('🔧 [API Config] Using ENV var (production):', apiBase);
   }
-}
-
-// Final safety check: if somehow we still have localhost in dev, force LAN IP
-if (isDev && /localhost|127\.0\.0\.1/.test(apiBase)) {
-  console.error('❌ [API Config] CRITICAL: Still have localhost in dev mode!');
-  console.error('❌ [API Config] Forcing override to LAN IP');
-  apiBase = DEV_BACKEND;
 }
 
 export const API_BASE = apiBase;

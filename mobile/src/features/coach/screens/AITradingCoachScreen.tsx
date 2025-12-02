@@ -351,7 +351,18 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
       await getNextGuidance(result.session_id);
     } catch (e: unknown) {
       const errorMessage = e instanceof Error ? e.message : String(e);
-      logger.log('Session start error:', errorMessage);
+      logger.error('❌ [Coach] Session start error:', errorMessage);
+      logger.error('❌ [Coach] Error details:', e);
+      
+      // Check if it's a timeout or network error
+      if (errorMessage.includes('timeout') || errorMessage.includes('network') || errorMessage.includes('fetch')) {
+        Alert.alert(
+          'Connection Error',
+          'Unable to connect to the trading coach. Please check your network connection and try again.',
+          [{ text: 'OK' }]
+        );
+      }
+      
       // Use fallback session for demo purposes
       const fallbackSessionId = `demo-session-${Date.now()}`;
       setSessionId(fallbackSessionId);
@@ -363,7 +374,7 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
         risk_check: `Ensure you have proper risk management in place for ${sessionAsset} trading.`,
         next_decision_point: "Click 'Next Step' to continue with the demo session.",
       });
-      // setError('Using demo session - API not available');
+      setError(`Demo mode: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -382,9 +393,16 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
       setGuidance(result);
     } catch (e: unknown) {
       const errorMessage = e instanceof Error ? e.message : String(e);
-      logger.log('Guidance error:', errorMessage);
+      logger.error('❌ [Coach] Guidance error:', errorMessage);
+      logger.error('❌ [Coach] Error details:', e);
+      
+      // Only use demo guidance if we have a valid session ID (from startSession)
+      // If this is a real session that failed, show error instead of silently falling back
+      if (id && !id.startsWith('demo-session-')) {
+        logger.warn('⚠️ [Coach] Real session guidance failed, using demo fallback');
+      }
+      
       // Provide demo guidance steps
-      const currentStep = (guidance?.current_step || 0) + 1;
       const demoSteps = [
         {
           action: `Research ${sessionAsset} fundamentals and technical indicators`,
@@ -418,19 +436,27 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
         },
       ];
       
-      const stepIndex = Math.min(currentStep - 1, demoSteps.length - 1);
-      const demoStep = demoSteps[stepIndex];
+      // Calculate next step, but don't exceed total steps
+      const currentStep = guidance?.current_step || 0;
+      const totalSteps = demoSteps.length;
+      const nextStep = Math.min(currentStep + 1, totalSteps);
       
-      setGuidance({
-        ...FALLBACK_GUIDANCE,
-        session_id: id,
-        current_step: currentStep,
-        total_steps: demoSteps.length,
-        action: demoStep.action,
-        rationale: demoStep.rationale,
-        risk_check: demoStep.risk_check,
-        next_decision_point: demoStep.next_decision_point,
-      });
+      // Only update if we haven't reached the final step
+      if (nextStep <= totalSteps) {
+        const stepIndex = nextStep - 1; // Convert to 0-based index
+        const demoStep = demoSteps[stepIndex];
+        
+        setGuidance({
+          ...FALLBACK_GUIDANCE,
+          session_id: id,
+          current_step: nextStep,
+          total_steps: totalSteps,
+          action: demoStep.action,
+          rationale: demoStep.rationale,
+          risk_check: demoStep.risk_check,
+          next_decision_point: demoStep.next_decision_point,
+        });
+      }
       // setError('Using demo guidance - API not available');
     } finally {
       setLoading(false);
@@ -841,7 +867,29 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
           </View>
         </View>
 
-        {!sessionId ? (
+        {loading && !sessionId ? (
+          <View style={styles.loadingSessionCard}>
+            <ActivityIndicator size="large" color="#10b981" />
+            <Text style={styles.loadingSessionTitle}>Starting Your Session</Text>
+            <Text style={styles.loadingSessionSubtitle}>
+              Analyzing market conditions for {sessionAsset}...
+            </Text>
+            <View style={styles.loadingSteps}>
+              <View style={styles.loadingStep}>
+                <Ionicons name="checkmark-circle" size={20} color="#10b981" />
+                <Text style={styles.loadingStepText}>Connecting to AI coach</Text>
+              </View>
+              <View style={styles.loadingStep}>
+                <ActivityIndicator size="small" color="#10b981" />
+                <Text style={styles.loadingStepText}>Fetching market data</Text>
+              </View>
+              <View style={styles.loadingStep}>
+                <Ionicons name="time-outline" size={20} color="#9ca3af" />
+                <Text style={[styles.loadingStepText, { color: '#9ca3af' }]}>Preparing guidance</Text>
+              </View>
+            </View>
+          </View>
+        ) : !sessionId ? (
           <View style={styles.formSection}>
             <View style={styles.inputGroup}>
               <Text style={styles.floatingLabel}>Asset</Text>
@@ -902,7 +950,15 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
               </Text>
             </View>
 
-            {guidance && (
+            {loading && !guidance ? (
+              <View style={styles.loadingGuidanceCard}>
+                <ActivityIndicator size="large" color="#10b981" />
+                <Text style={styles.loadingGuidanceTitle}>Preparing Your Guidance</Text>
+                <Text style={styles.loadingGuidanceSubtitle}>
+                  AI is analyzing {sessionAsset} and preparing personalized steps for your {sessionStrategy} strategy...
+                </Text>
+              </View>
+            ) : guidance && (
               <View style={styles.guidanceCard}>
                 <View style={styles.guidanceActionContainer}>
                   <Ionicons name="arrow-forward-circle" size={48} color="#10b981" />
@@ -926,12 +982,25 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
 
             <View style={styles.actionButtonsRow}>
               <TouchableOpacity
-                style={[styles.secondaryButton, styles.wideButton]}
+                style={[
+                  styles.secondaryButton, 
+                  styles.wideButton,
+                  (guidance?.current_step || 0) >= (guidance?.total_steps || 1) && styles.secondaryButtonDisabled
+                ]}
                 onPress={() => getNextGuidance()}
-                disabled={loading}
+                disabled={loading || (guidance?.current_step || 0) >= (guidance?.total_steps || 1)}
               >
-                <Ionicons name="arrow-forward" size={20} color="#3b82f6" />
-                <Text style={styles.secondaryButtonText}>Next Step</Text>
+                <Ionicons 
+                  name="arrow-forward" 
+                  size={20} 
+                  color={(guidance?.current_step || 0) >= (guidance?.total_steps || 1) ? "#9ca3af" : "#3b82f6"} 
+                />
+                <Text style={[
+                  styles.secondaryButtonText,
+                  (guidance?.current_step || 0) >= (guidance?.total_steps || 1) && styles.secondaryButtonTextDisabled
+                ]}>
+                  {(guidance?.current_step || 0) >= (guidance?.total_steps || 1) ? 'Completed' : 'Next Step'}
+                </Text>
               </TouchableOpacity>
               
               <TouchableOpacity
@@ -1696,6 +1765,49 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     textAlign: 'center',
   },
+  loadingSessionCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 32,
+    marginBottom: 20,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#e0f2fe',
+  },
+  loadingSessionTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#111827',
+    marginTop: 20,
+    marginBottom: 8,
+  },
+  loadingSessionSubtitle: {
+    fontSize: 16,
+    color: '#6b7280',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  loadingSteps: {
+    width: '100%',
+    gap: 16,
+    marginTop: 8,
+  },
+  loadingStep: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 8,
+  },
+  loadingStepText: {
+    fontSize: 15,
+    color: '#374151',
+    fontWeight: '500',
+  },
   sessionStatusCard: {
     backgroundColor: '#ffffff',
     borderRadius: 16,
@@ -1751,6 +1863,29 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
   },
+  loadingGuidanceCard: {
+    backgroundColor: '#f0f9ff',
+    borderRadius: 16,
+    padding: 32,
+    marginBottom: 20,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#bae6fd',
+  },
+  loadingGuidanceTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#111827',
+    marginTop: 20,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  loadingGuidanceSubtitle: {
+    fontSize: 15,
+    color: '#6b7280',
+    textAlign: 'center',
+    lineHeight: 22,
+  },
   guidanceCard: {
     backgroundColor: '#f0fdf4',
     borderRadius: 16,
@@ -1796,6 +1931,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
   },
+  secondaryButtonDisabled: {
+    opacity: 0.5,
+    backgroundColor: '#f3f4f6',
+  },
   secondaryButton: {
     flexDirection: 'row',
     backgroundColor: '#ffffff',
@@ -1807,6 +1946,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
+  },
+  secondaryButtonTextDisabled: {
+    color: '#9ca3af',
   },
   secondaryButtonText: {
     color: '#3b82f6',

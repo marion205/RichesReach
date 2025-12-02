@@ -760,64 +760,64 @@ class Query(graphene.ObjectType):
             put_volume = sum(item.get('volume', 0) for item in flow_data if item.get('option_type', '').lower() == 'put')
             put_call_ratio = put_volume / call_volume if call_volume > 0 else 0.0
             
-            # Build unusual activity list
+            # Build unusual activity list - return as UnusualActivityType instances
             unusual_activity = []
             for item in flow_data[:20]:  # Top 20 unusual activities
                 volume = item.get('volume', 0)
                 open_interest = item.get('open_interest', 10000)
                 unusual_volume_percent = (volume / max(open_interest * 0.1, 1)) * 100 if open_interest > 0 else 150
                 
-                unusual_activity.append({
-                    'contractSymbol': item.get('contract_symbol', ''),
-                    'strike': item.get('strike', 0),
-                    'expiration': item.get('expiration_date', ''),
-                    'optionType': item.get('option_type', '').lower(),
-                    'volume': volume,
-                    'openInterest': open_interest,
-                    'volumeVsOI': volume / max(open_interest, 1),
-                    'lastPrice': item.get('premium', 0),
-                    'bid': item.get('premium', 0) * 0.98,
-                    'ask': item.get('premium', 0) * 1.02,
-                    'impliedVolatility': item.get('implied_volatility', 0.25),
-                    'unusualVolumePercent': unusual_volume_percent,
-                    'sweepCount': 1 if 'Sweep' in item.get('activity_type', '') else 0,
-                    'blockSize': volume if 'Block' in item.get('activity_type', '') else 0,
-                    'isDarkPool': item.get('is_dark_pool', False),
-                })
+                unusual_activity.append(UnusualActivityType(
+                    contractSymbol=item.get('contract_symbol', ''),
+                    strike=float(item.get('strike', 0)),
+                    expiration=item.get('expiration_date', ''),
+                    optionType=item.get('option_type', '').lower(),
+                    volume=int(volume),
+                    openInterest=int(open_interest),
+                    volumeVsOI=float(volume / max(open_interest, 1)),
+                    lastPrice=float(item.get('premium', 0)),
+                    bid=float(item.get('premium', 0) * 0.98),
+                    ask=float(item.get('premium', 0) * 1.02),
+                    impliedVolatility=float(item.get('implied_volatility', 0.25)),
+                    unusualVolumePercent=float(unusual_volume_percent),
+                    sweepCount=int(1 if 'Sweep' in item.get('activity_type', '') else 0),
+                    blockSize=int(volume if 'Block' in item.get('activity_type', '') else 0),
+                    isDarkPool=bool(item.get('is_dark_pool', False)),
+                ))
             
-            # Build largest trades
+            # Build largest trades - return as LargestTradeType instances
             largest_trades = []
             for item in sorted(flow_data, key=lambda x: x.get('volume', 0), reverse=True)[:10]:
-                largest_trades.append({
-                    'contractSymbol': item.get('contract_symbol', ''),
-                    'size': item.get('volume', 0),
-                    'price': item.get('premium', 0),
-                    'time': item.get('timestamp', datetime.now().isoformat()),
-                    'isCall': item.get('option_type', '').lower() == 'call',
-                    'isSweep': item.get('sweep_count', 0) > 0,
-                    'isBlock': item.get('block_size', 0) > 0,
-                })
+                largest_trades.append(LargestTradeType(
+                    contractSymbol=item.get('contract_symbol', ''),
+                    size=int(item.get('volume', 0)),
+                    price=float(item.get('premium', 0)),
+                    time=item.get('timestamp', datetime.now().isoformat()),
+                    isCall=bool(item.get('option_type', '').lower() == 'call'),
+                    isSweep=bool(item.get('sweep_count', 0) > 0),
+                    isBlock=bool(item.get('block_size', 0) > 0),
+                ))
             
-            return {
-                'symbol': symbol_upper,
-                'timestamp': datetime.now().isoformat(),
-                'unusualActivity': unusual_activity,
-                'putCallRatio': put_call_ratio,
-                'totalCallVolume': call_volume,
-                'totalPutVolume': put_volume,
-                'largestTrades': largest_trades,
-            }
+            return OptionsFlowType(
+                symbol=symbol_upper,
+                timestamp=datetime.now().isoformat(),
+                unusualActivity=unusual_activity,
+                putCallRatio=float(put_call_ratio),
+                totalCallVolume=int(call_volume),
+                totalPutVolume=int(put_volume),
+                largestTrades=largest_trades,
+            )
         except Exception as e:
             logger.error(f"Error resolving options flow: {e}", exc_info=True)
-            return {
-                'symbol': symbol.upper(),
-                'timestamp': datetime.now().isoformat(),
-                'unusualActivity': [],
-                'putCallRatio': 0.0,
-                'totalCallVolume': 0,
-                'totalPutVolume': 0,
-                'largestTrades': [],
-            }
+            return OptionsFlowType(
+                symbol=symbol.upper(),
+                timestamp=datetime.now().isoformat(),
+                unusualActivity=[],
+                putCallRatio=0.0,
+                totalCallVolume=0,
+                totalPutVolume=0,
+                largestTrades=[],
+            )
 
     def resolve_scan_options(self, info, filters=None):
         """Resolve options scanner results"""
@@ -1342,7 +1342,8 @@ class Query(graphene.ObjectType):
         ExecutionSuggestionType,
         signal=graphene.JSONString(required=True),
         signalType=graphene.String(required=False, default_value="day_trading"),
-        description="Get smart order suggestion for a trading signal"
+        description="Get smart order suggestion for a trading signal",
+        name='executionSuggestion'  # Explicit camelCase name for GraphQL
     )
     
     entry_timing_suggestion = graphene.Field(
@@ -1773,15 +1774,84 @@ class Query(graphene.ObjectType):
             return []
     
     def resolve_execution_suggestion(self, info, signal, signalType="day_trading"):
-        """Resolve execution order suggestion for a signal"""
+        """Resolve execution order suggestion for a signal - optimized for speed"""
+        import json
+        import time
+        import hashlib
         from .execution_advisor import ExecutionAdvisor
         
+        start_time = time.time()
+        logger.info(f"🔵 [ExecutionSuggestion] Resolver called with signalType={signalType}, signal type={type(signal)}")
+        
         try:
-            advisor = ExecutionAdvisor()
-            suggestion = advisor.suggest_order(signal, signalType)
+            # Parse JSON string if needed (Graphene JSONString might already be parsed)
+            if isinstance(signal, str):
+                try:
+                    signal = json.loads(signal)
+                except (json.JSONDecodeError, TypeError) as e:
+                    logger.error(f"❌ Failed to parse signal JSON: {e}")
+                    return None
+            
+            # Validate signal has required fields
+            if not signal or not isinstance(signal, dict):
+                logger.error(f"❌ Invalid signal format: {type(signal)}")
+                return None
+            
+            symbol = signal.get('symbol')
+            if not symbol:
+                logger.error(f"❌ Signal missing symbol: {signal}")
+                return None
+            
+            # Use a singleton ExecutionAdvisor instance (no state, so safe to reuse)
+            # Store on the Query class itself (module-level cache)
+            if not hasattr(Query, '_execution_advisor'):
+                Query._execution_advisor = ExecutionAdvisor()
+            advisor = Query._execution_advisor
+            
+            # Generate suggestion (this should be very fast - no I/O, just calculations)
+            suggestion_dict = advisor.suggest_order(signal, signalType)
+            
+            if not suggestion_dict:
+                logger.warning(f"⚠️ ExecutionAdvisor returned None for {symbol}")
+                return None
+            
+            # Convert snake_case keys to camelCase to match GraphQL schema
+            # The ExecutionSuggestionType expects: orderType, priceBand, timeInForce, etc.
+            from .types import ExecutionSuggestionType, BracketLegsType
+            
+            # Convert bracket_legs to bracketLegs with proper structure
+            bracket_legs_dict = suggestion_dict.get('bracket_legs', {})
+            bracket_legs = None
+            if bracket_legs_dict:
+                bracket_legs = BracketLegsType(
+                    stop=bracket_legs_dict.get('stop'),
+                    target1=bracket_legs_dict.get('target1'),
+                    target2=bracket_legs_dict.get('target2'),
+                    orderStructure=bracket_legs_dict.get('order_structure') or bracket_legs_dict.get('orderStructure')
+                )
+            
+            # Create ExecutionSuggestionType instance with camelCase fields
+            suggestion = ExecutionSuggestionType(
+                orderType=suggestion_dict.get('order_type'),
+                priceBand=suggestion_dict.get('price_band', []),
+                timeInForce=suggestion_dict.get('time_in_force'),
+                entryStrategy=suggestion_dict.get('entry_strategy'),
+                bracketLegs=bracket_legs,
+                suggestedSize=suggestion_dict.get('suggested_size'),
+                rationale=suggestion_dict.get('rationale'),
+                microstructureSummary=suggestion_dict.get('microstructure_summary')
+            )
+            
+            elapsed = (time.time() - start_time) * 1000  # Convert to ms
+            if elapsed > 50:  # Log if it takes more than 50ms (should be < 10ms normally)
+                logger.warning(f"⚠️ Execution suggestion took {elapsed:.1f}ms for {symbol}")
+            else:
+                logger.info(f"✅ Execution suggestion generated in {elapsed:.1f}ms for {symbol}")
+            
             return suggestion
         except Exception as e:
-            logger.error(f"❌ Error generating execution suggestion: {e}", exc_info=True)
+            elapsed = (time.time() - start_time) * 1000
+            logger.error(f"❌ Error generating execution suggestion after {elapsed:.1f}ms for {signal.get('symbol', 'unknown') if isinstance(signal, dict) else 'unknown'}: {e}", exc_info=True)
             return None
     
     def resolve_entry_timing_suggestion(self, info, signal, currentPrice):

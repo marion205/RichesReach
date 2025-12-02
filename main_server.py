@@ -6130,6 +6130,554 @@ Create a specific, actionable strategy that the user can execute. Make it person
             status_code=500
         )
 
+# In-memory session store (can be upgraded to Redis/DB later)
+_trading_sessions = {}
+
+@app.get("/coach/health")
+async def coach_health():
+    """Quick health check for coach service"""
+    return {"status": "ok", "service": "trading-coach", "timestamp": datetime.now().isoformat()}
+
+@app.post("/coach/start-session")
+async def start_trading_session(request: Request):
+    """
+    Start a new AI-guided trading session.
+    Creates a session with real market data and AI-generated guidance.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        body = await request.json()
+        user_id = body.get("user_id", "demo-user")
+        asset = body.get("asset", "AAPL")
+        strategy = body.get("strategy", "Covered Call")
+        risk_tolerance = body.get("risk_tolerance", "moderate")
+        goals = body.get("goals", [])
+        
+        logger.info(f"🎯 [Coach] Starting session for {user_id}: {asset} - {strategy}")
+        
+        # Extract symbol from asset
+        symbol = asset.split()[0].upper() if asset else "AAPL"
+        
+        # Fetch real market data (with timeout to avoid hanging)
+        # Use cached data first for faster response, then refresh in background
+        current_price = 0
+        change_percent = 0
+        
+        try:
+            # Try to get cached price first (fast, usually < 100ms)
+            stock_data = await asyncio.wait_for(
+                get_stock_price(symbol, force_refresh=False),
+                timeout=2.0  # 2 second timeout for cached data
+            )
+            if stock_data:
+                current_price = stock_data.get("price", 0)
+                change_percent = stock_data.get("change_percent", 0)
+                logger.info(f"✅ [Coach] Using cached price for {symbol}: ${current_price:,.2f}")
+            
+            # Refresh in background (don't wait for it)
+            asyncio.create_task(get_stock_price(symbol, force_refresh=True))
+        except asyncio.TimeoutError:
+            logger.warning(f"⚠️ [Coach] Market data fetch timed out for {symbol}, using defaults")
+        except Exception as e:
+            logger.warning(f"⚠️ [Coach] Market data fetch error for {symbol}: {e}, using defaults")
+        
+        # Generate session ID
+        session_id = f"session-{user_id}-{int(time.time())}"
+        
+        # Initialize session
+        _trading_sessions[session_id] = {
+            "session_id": session_id,
+            "user_id": user_id,
+            "asset": asset,
+            "symbol": symbol,
+            "strategy": strategy,
+            "risk_tolerance": risk_tolerance,
+            "goals": goals,
+            "current_step": 0,
+            "total_steps": 5,
+            "started_at": datetime.now().isoformat(),
+            "current_price": current_price,
+            "change_percent": change_percent,
+        }
+        
+        logger.info(f"✅ [Coach] Session started: {session_id}")
+        
+        return {
+            "session_id": session_id,
+            "message": f"Trading session started for {asset} using {strategy} strategy"
+        }
+        
+    except Exception as e:
+        import traceback
+        logger.error(f"❌ [Coach] Error starting session: {e}")
+        logger.error(f"❌ [Coach] Traceback: {traceback.format_exc()}")
+        return JSONResponse(
+            {"detail": "Failed to start trading session"},
+            status_code=500
+        )
+
+@app.post("/coach/guidance")
+async def get_trading_guidance(request: Request):
+    """
+    Get next step guidance for an active trading session.
+    Uses AI to generate personalized, context-aware guidance based on real market data.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        body = await request.json()
+        session_id = body.get("session_id")
+        market_update = body.get("market_update", {})
+        
+        if not session_id:
+            return JSONResponse(
+                {"detail": "session_id is required"},
+                status_code=400
+            )
+        
+        # Get session
+        session = _trading_sessions.get(session_id)
+        if not session:
+            return JSONResponse(
+                {"detail": "Session not found"},
+                status_code=404
+            )
+        
+        # Update market data if provided
+        if market_update:
+            if "price" in market_update:
+                session["current_price"] = market_update["price"]
+            if "volume" in market_update:
+                session["volume"] = market_update["volume"]
+        
+        # Fetch latest market data
+        symbol = session["symbol"]
+        stock_data = await get_stock_price(symbol, force_refresh=False)
+        if stock_data:
+            session["current_price"] = stock_data.get("price", session.get("current_price", 0))
+            session["change_percent"] = stock_data.get("change_percent", 0)
+        
+        # Increment step
+        current_step = session["current_step"] + 1
+        total_steps = session["total_steps"]
+        
+        if current_step > total_steps:
+            current_step = total_steps  # Don't exceed total steps
+        
+        session["current_step"] = current_step
+        
+        # Generate AI guidance
+        openai_api_key = os.getenv('OPENAI_API_KEY')
+        
+        # Build context for guidance
+        strategy_steps = {
+            1: "Research and analysis",
+            2: "Position setup and entry",
+            3: "Active monitoring and risk management",
+            4: "Position adjustment or exit planning",
+            5: "Review and learning"
+        }
+        
+        step_description = strategy_steps.get(current_step, "Continue with strategy")
+        
+        if openai_api_key:
+            try:
+                import openai
+                client = openai.OpenAI(api_key=openai_api_key)
+                
+                system_prompt = f"""You are RichesReach AI Trading Coach, providing step-by-step guidance for trading sessions.
+- Give specific, actionable advice based on real market conditions
+- Reference the current asset price and market data
+- Provide clear rationale for each step
+- Include risk management reminders
+- Be encouraging and educational
+- Return JSON with this exact structure:
+{{
+  "action": "Specific action to take (1-2 sentences)",
+  "rationale": "Why this step is important (2-3 sentences)",
+  "risk_check": "Risk management reminder (1 sentence)",
+  "next_decision_point": "What to consider next (1 sentence)"
+}}"""
+                
+                user_prompt = f"""Generate guidance for step {current_step} of {total_steps}:
+- Asset: {session['asset']} ({symbol})
+- Current Price: ${session['current_price']:,.2f} ({session.get('change_percent', 0):+.2f}%)
+- Strategy: {session['strategy']}
+- Risk Tolerance: {session['risk_tolerance']}
+- Goals: {', '.join(session['goals']) if session['goals'] else 'General trading'}
+- Step Focus: {step_description}
+- Previous Steps: User has completed steps 1-{current_step-1}
+
+Provide specific, actionable guidance for this step that considers the current market conditions."""
+                
+                response = client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    max_tokens=400,
+                    temperature=0.7,
+                    response_format={"type": "json_object"}
+                )
+                
+                try:
+                    ai_response = json.loads(response.choices[0].message.content.strip())
+                    
+                    result = {
+                        "current_step": current_step,
+                        "total_steps": total_steps,
+                        "action": ai_response.get("action", f"Continue with {step_description}"),
+                        "rationale": ai_response.get("rationale", f"This step focuses on {step_description}."),
+                        "risk_check": ai_response.get("risk_check", "Always manage your risk appropriately."),
+                        "next_decision_point": ai_response.get("next_decision_point", "Proceed to the next step when ready."),
+                        "session_id": session_id,
+                        "updated_at": datetime.now().isoformat()
+                    }
+                    
+                    logger.info(f"✅ [Coach] Generated AI guidance for step {current_step}/{total_steps}")
+                    return result
+                    
+                except json.JSONDecodeError as e:
+                    logger.error(f"❌ [Coach] Failed to parse OpenAI JSON: {e}")
+                    # Fall through to fallback
+                    
+            except Exception as e:
+                logger.error(f"❌ [Coach] OpenAI error: {e}")
+                # Fall through to fallback
+        
+        # Fallback guidance (no OpenAI or error)
+        fallback_guidance = {
+            1: {
+                "action": f"Research {symbol} fundamentals, technical indicators, and current market conditions",
+                "rationale": f"Understanding {symbol}'s fundamentals, recent earnings, news, and chart patterns is crucial before entering any {session['strategy']} position. Current price: ${session['current_price']:,.2f}.",
+                "risk_check": f"Verify you have sufficient capital and understand the maximum loss potential for {session['strategy']}.",
+                "next_decision_point": "Proceed once you've completed your research and feel confident about the setup."
+            },
+            2: {
+                "action": f"Set up your {session['strategy']} position with proper position sizing (1-2% of portfolio)",
+                "rationale": f"Position sizing is critical for risk management. For {session['risk_tolerance']} risk tolerance, allocate 1-2% of your portfolio to this trade. Current {symbol} price: ${session['current_price']:,.2f}.",
+                "risk_check": f"Ensure you can handle the maximum loss if the trade goes against you. Set stop-losses based on your {session['risk_tolerance']} risk tolerance.",
+                "next_decision_point": "Execute the trade when market conditions are favorable and your setup is confirmed."
+            },
+            3: {
+                "action": f"Monitor your {session['strategy']} position and manage risk actively",
+                "rationale": f"Active monitoring helps you adjust to changing market conditions. {symbol} is currently at ${session['current_price']:,.2f} ({session.get('change_percent', 0):+.2f}%). Watch for significant price movements.",
+                "risk_check": "Review your stop-losses and profit targets daily. Adjust if market conditions change significantly.",
+                "next_decision_point": "Review daily and adjust your position as needed based on market movements."
+            },
+            4: {
+                "action": f"Consider closing or rolling your {session['strategy']} position as expiration approaches",
+                "rationale": f"As expiration nears, decide whether to close, roll to a new expiration, or let the position expire. Current {symbol} price: ${session['current_price']:,.2f}.",
+                "risk_check": "Avoid assignment if you don't want to sell/buy the underlying asset. Close or roll before expiration if needed.",
+                "next_decision_point": "Make your final decision before expiration based on current market conditions."
+            },
+            5: {
+                "action": f"Review and learn from this {session['strategy']} trade with {symbol}",
+                "rationale": f"Every trade is a learning opportunity. Analyze what worked well, what didn't, and how you can improve your {session['strategy']} strategy for future trades.",
+                "risk_check": "Document your risk management decisions and their outcomes for future reference.",
+                "next_decision_point": "End session and analyze your performance to build confidence for future trades."
+            }
+        }
+        
+        step_guidance = fallback_guidance.get(current_step, fallback_guidance[1])
+        
+        result = {
+            "current_step": current_step,
+            "total_steps": total_steps,
+            "action": step_guidance["action"],
+            "rationale": step_guidance["rationale"],
+            "risk_check": step_guidance["risk_check"],
+            "next_decision_point": step_guidance["next_decision_point"],
+            "session_id": session_id,
+            "updated_at": datetime.now().isoformat()
+        }
+        
+        logger.info(f"✅ [Coach] Generated fallback guidance for step {current_step}/{total_steps}")
+        return result
+        
+    except Exception as e:
+        import traceback
+        logger.error(f"❌ [Coach] Error getting guidance: {e}")
+        logger.error(f"❌ [Coach] Traceback: {traceback.format_exc()}")
+        return JSONResponse(
+            {"detail": "Failed to get trading guidance"},
+            status_code=500
+        )
+
+@app.post("/coach/end-session")
+async def end_trading_session(request: Request):
+    """
+    End a trading session and return summary.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        body = await request.json()
+        session_id = body.get("session_id")
+        
+        if not session_id:
+            return JSONResponse(
+                {"detail": "session_id is required"},
+                status_code=400
+            )
+        
+        session = _trading_sessions.get(session_id)
+        if not session:
+            return JSONResponse(
+                {"detail": "Session not found"},
+                status_code=404
+            )
+        
+        # Calculate session summary
+        total_steps = session.get("total_steps", 5)
+        completed_steps = session.get("current_step", 0)
+        
+        # Remove session
+        del _trading_sessions[session_id]
+        
+        result = {
+            "session_id": session_id,
+            "total_steps": total_steps,
+            "final_confidence": min(1.0, completed_steps / total_steps),
+            "history_length": completed_steps,
+            "ended_at": datetime.now().isoformat()
+        }
+        
+        logger.info(f"✅ [Coach] Session ended: {session_id} ({completed_steps}/{total_steps} steps)")
+        return result
+        
+    except Exception as e:
+        import traceback
+        logger.error(f"❌ [Coach] Error ending session: {e}")
+        logger.error(f"❌ [Coach] Traceback: {traceback.format_exc()}")
+        return JSONResponse(
+            {"detail": "Failed to end trading session"},
+            status_code=500
+        )
+
+@app.post("/coach/analyze-trade")
+async def analyze_trade(request: Request):
+    """
+    Analyze a completed trade for insights and learning.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        body = await request.json()
+        user_id = body.get("user_id", "demo-user")
+        trade_data = body.get("trade_data", {})
+        
+        entry = trade_data.get("entry", {})
+        exit_data = trade_data.get("exit", {})
+        pnl = trade_data.get("pnl", 0)
+        
+        # Generate AI analysis if OpenAI is available
+        openai_api_key = os.getenv('OPENAI_API_KEY')
+        
+        if openai_api_key:
+            try:
+                import openai
+                client = openai.OpenAI(api_key=openai_api_key)
+                
+                system_prompt = """You are RichesReach AI Trading Coach, analyzing completed trades.
+- Provide constructive feedback on what went well and what could be improved
+- Be encouraging and educational
+- Focus on actionable lessons learned
+- Return JSON with this structure:
+{
+  "strengths": ["strength 1", "strength 2"],
+  "mistakes": ["mistake 1", "mistake 2"],
+  "lessons_learned": ["lesson 1", "lesson 2"],
+  "improved_strategy": "How to improve next time",
+  "confidence_boost": "Encouraging message"
+}"""
+                
+                user_prompt = f"""Analyze this completed trade:
+- Entry: {json.dumps(entry)}
+- Exit: {json.dumps(exit_data)}
+- P&L: ${pnl:,.2f}
+
+Provide constructive analysis focusing on strengths, areas for improvement, and lessons learned."""
+                
+                response = client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    max_tokens=500,
+                    temperature=0.7,
+                    response_format={"type": "json_object"}
+                )
+                
+                try:
+                    ai_response = json.loads(response.choices[0].message.content.strip())
+                    
+                    result = {
+                        "trade_id": trade_data.get("trade_id", f"trade-{int(time.time())}"),
+                        "entry": entry,
+                        "exit": exit_data,
+                        "pnl": pnl,
+                        "strengths": ai_response.get("strengths", []),
+                        "mistakes": ai_response.get("mistakes", []),
+                        "lessons_learned": ai_response.get("lessons_learned", []),
+                        "improved_strategy": ai_response.get("improved_strategy", "Continue practicing and learning from each trade."),
+                        "confidence_boost": ai_response.get("confidence_boost", "Great job completing this trade! Every trade is a learning opportunity."),
+                        "analyzed_at": datetime.now().isoformat()
+                    }
+                    
+                    logger.info(f"✅ [Coach] Generated AI trade analysis")
+                    return result
+                    
+                except json.JSONDecodeError:
+                    pass  # Fall through to fallback
+                    
+            except Exception as e:
+                logger.error(f"❌ [Coach] OpenAI error in trade analysis: {e}")
+                # Fall through to fallback
+        
+        # Fallback analysis
+        result = {
+            "trade_id": trade_data.get("trade_id", f"trade-{int(time.time())}"),
+            "entry": entry,
+            "exit": exit_data,
+            "pnl": pnl,
+            "strengths": [
+                "Completed the trade successfully",
+                "Followed your trading plan"
+            ] if pnl >= 0 else [
+                "Managed risk appropriately",
+                "Learned valuable lessons"
+            ],
+            "mistakes": [] if pnl >= 0 else [
+                "Consider reviewing entry timing",
+                "May need to adjust stop-loss strategy"
+            ],
+            "lessons_learned": [
+                "Every trade provides learning opportunities",
+                "Risk management is crucial"
+            ],
+            "improved_strategy": "Continue practicing and refining your strategy based on market conditions.",
+            "confidence_boost": "Great job completing this trade! Keep learning and improving.",
+            "analyzed_at": datetime.now().isoformat()
+        }
+        
+        return result
+        
+    except Exception as e:
+        import traceback
+        logger.error(f"❌ [Coach] Error analyzing trade: {e}")
+        logger.error(f"❌ [Coach] Traceback: {traceback.format_exc()}")
+        return JSONResponse(
+            {"detail": "Failed to analyze trade"},
+            status_code=500
+        )
+
+@app.post("/coach/build-confidence")
+async def build_confidence(request: Request):
+    """
+    Build confidence with explanations and motivation.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        body = await request.json()
+        user_id = body.get("user_id", "demo-user")
+        context = body.get("context", "")
+        trade_simulation = body.get("trade_simulation", {})
+        
+        # Generate AI confidence explanation if OpenAI is available
+        openai_api_key = os.getenv('OPENAI_API_KEY')
+        
+        if openai_api_key:
+            try:
+                import openai
+                client = openai.OpenAI(api_key=openai_api_key)
+                
+                system_prompt = """You are RichesReach AI Trading Coach, building trader confidence.
+- Provide clear, encouraging explanations
+- Explain the rationale behind trading decisions
+- Offer practical tips
+- Be motivational and supportive
+- Return JSON with this structure:
+{
+  "explanation": "Clear explanation of the concept",
+  "rationale": "Why this makes sense",
+  "tips": ["tip 1", "tip 2"],
+  "motivation": "Encouraging message"
+}"""
+                
+                user_prompt = f"""Build confidence for this context:
+- Context: {context}
+- Trade Simulation: {json.dumps(trade_simulation) if trade_simulation else 'None'}
+
+Provide a clear explanation, rationale, tips, and motivation."""
+                
+                response = client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    max_tokens=400,
+                    temperature=0.7,
+                    response_format={"type": "json_object"}
+                )
+                
+                try:
+                    ai_response = json.loads(response.choices[0].message.content.strip())
+                    
+                    result = {
+                        "context": context,
+                        "explanation": ai_response.get("explanation", "This is a good trading opportunity."),
+                        "rationale": ai_response.get("rationale", "The setup aligns with your risk profile."),
+                        "tips": ai_response.get("tips", ["Start with small positions", "Always use stop-losses"]),
+                        "motivation": ai_response.get("motivation", "You're making progress! Keep learning and practicing."),
+                        "generated_at": datetime.now().isoformat()
+                    }
+                    
+                    logger.info(f"✅ [Coach] Generated AI confidence explanation")
+                    return result
+                    
+                except json.JSONDecodeError:
+                    pass  # Fall through to fallback
+                    
+            except Exception as e:
+                logger.error(f"❌ [Coach] OpenAI error in confidence building: {e}")
+                # Fall through to fallback
+        
+        # Fallback confidence explanation
+        result = {
+            "context": context,
+            "explanation": "This trading opportunity aligns with your risk profile and current market conditions.",
+            "rationale": "Based on your risk tolerance and goals, this strategy makes sense for your portfolio.",
+            "tips": [
+                "Start with small position sizes to build confidence",
+                "Always set stop-losses to manage risk",
+                "Review your trades regularly to learn and improve"
+            ],
+            "motivation": "You're taking the right steps to become a better trader. Keep learning and practicing!",
+            "generated_at": datetime.now().isoformat()
+        }
+        
+        return result
+        
+    except Exception as e:
+        import traceback
+        logger.error(f"❌ [Coach] Error building confidence: {e}")
+        logger.error(f"❌ [Coach] Traceback: {traceback.format_exc()}")
+        return JSONResponse(
+            {"detail": "Failed to build confidence"},
+            status_code=500
+        )
+
 # ============================================================================
 # Socket.io setup (at module level so it can be imported by uvicorn)
 # ============================================================================
@@ -6152,8 +6700,19 @@ try:
     # Socket.io event handlers for Fireside Room
     @_sio.event
     async def connect(sid, environ, auth):
-        print(f"✅ [Socket.IO] Client connected: {sid}")
-        return True
+        # Allow all connections for now (auth can be added later)
+        # Check for auth token if provided
+        auth_token = None
+        if auth and isinstance(auth, dict):
+            auth_token = auth.get('token')
+        elif environ.get('HTTP_AUTHORIZATION'):
+            # Extract token from Authorization header
+            auth_header = environ.get('HTTP_AUTHORIZATION', '')
+            if auth_header.startswith('Bearer '):
+                auth_token = auth_header[7:]
+        
+        print(f"✅ [Socket.IO] Client connected: {sid} (auth: {'yes' if auth_token else 'no'})")
+        return True  # Always allow connection
     
     @_sio.event
     async def disconnect(sid):

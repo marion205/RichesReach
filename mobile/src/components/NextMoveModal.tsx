@@ -171,12 +171,12 @@ export default function NextMoveModal({ visible, onClose, portfolioValue = 10000
       // Ensure URL is clean and properly formatted
       let url = API_GRAPHQL;
       if (!url || url.includes('localhost') || url.includes('127.0.0.1')) {
-        // Safety check: if somehow we got localhost, force LAN IP
+        // Safety check: if somehow we got localhost, use API_BASE to construct correct URL
         logger.error('❌ [NextMoveModal] CRITICAL: API_GRAPHQL contains localhost!');
         logger.error('❌ [NextMoveModal] API_GRAPHQL was:', url);
         logger.error('❌ [NextMoveModal] API_BASE was:', API_BASE);
-        // Force LAN IP
-        url = 'http://192.168.1.240:8000/graphql/';
+        // Use API_BASE from config instead of hardcoded IP
+        url = `${API_BASE}/graphql/`;
         logger.error('❌ [NextMoveModal] Forcing override to:', url);
       }
       

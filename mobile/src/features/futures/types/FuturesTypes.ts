@@ -10,6 +10,16 @@ export interface FuturesRecommendation {
   max_gain: number; // Dollar amount
   probability: number; // Percentage (0-100)
   action: 'Buy' | 'Sell'; // Simple action
+  // Real-time price data (added for Phase 1)
+  current_price?: number;
+  price_change?: number; // Dollar change
+  price_change_percent?: number; // Percentage change
+  price_history?: number[]; // For sparklines (24h or since midnight)
+  last_updated?: string; // ISO timestamp
+  // Volume data (added for Phase 2)
+  current_volume?: number;
+  average_volume?: number;
+  volume_ratio?: number; // current_volume / average_volume (unusual if > 1.5)
 }
 
 export interface FuturesOrderRequest {

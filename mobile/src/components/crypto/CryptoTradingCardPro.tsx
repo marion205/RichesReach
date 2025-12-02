@@ -5,7 +5,7 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity, Alert,
-  ActivityIndicator, ScrollView, Modal, FlatList, Platform, Image, Switch
+  ActivityIndicator, ScrollView, Modal, FlatList, Platform, Image
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import CryptoIcon from './CryptoIcon';
@@ -56,9 +56,6 @@ const CryptoTradingCardPro: React.FC<CryptoTradingCardProps> = ({
 
   // Picker state
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [symbolQuery, setSymbolQuery] = useState('');
-  const [favorites, setFavorites] = useState<string[]>(['BTC','ETH']);
-  const [favoritesOnly, setFavoritesOnly] = useState(false);
 
   // Help tooltips
   const [showOrderTypeHelp, setShowOrderTypeHelp] = useState(false);
@@ -120,8 +117,38 @@ const CryptoTradingCardPro: React.FC<CryptoTradingCardProps> = ({
 
   // Enhanced symbol handling with sorting and icons
   type CurrencyMeta = { symbol: string; name?: string; iconUrl?: string; qtyDecimals?: number; priceDecimals?: number };
+  
+  // Fallback list of common cryptocurrencies
+  const FALLBACK_CRYPTOS: CurrencyMeta[] = [
+    { symbol: 'BTC', name: 'Bitcoin', qtyDecimals: 8, priceDecimals: 2 },
+    { symbol: 'ETH', name: 'Ethereum', qtyDecimals: 8, priceDecimals: 2 },
+    { symbol: 'SOL', name: 'Solana', qtyDecimals: 8, priceDecimals: 2 },
+    { symbol: 'USDT', name: 'Tether', qtyDecimals: 2, priceDecimals: 2 },
+    { symbol: 'USDC', name: 'USD Coin', qtyDecimals: 2, priceDecimals: 2 },
+    { symbol: 'XRP', name: 'Ripple', qtyDecimals: 6, priceDecimals: 4 },
+    { symbol: 'ADA', name: 'Cardano', qtyDecimals: 6, priceDecimals: 4 },
+    { symbol: 'DOGE', name: 'Dogecoin', qtyDecimals: 8, priceDecimals: 4 },
+    { symbol: 'AVAX', name: 'Avalanche', qtyDecimals: 8, priceDecimals: 2 },
+    { symbol: 'BNB', name: 'Binance Coin', qtyDecimals: 8, priceDecimals: 2 },
+    { symbol: 'MATIC', name: 'Polygon', qtyDecimals: 8, priceDecimals: 4 },
+    { symbol: 'LTC', name: 'Litecoin', qtyDecimals: 8, priceDecimals: 2 },
+    { symbol: 'DOT', name: 'Polkadot', qtyDecimals: 8, priceDecimals: 4 },
+    { symbol: 'LINK', name: 'Chainlink', qtyDecimals: 8, priceDecimals: 4 },
+    { symbol: 'UNI', name: 'Uniswap', qtyDecimals: 8, priceDecimals: 4 },
+    { symbol: 'ATOM', name: 'Cosmos', qtyDecimals: 8, priceDecimals: 4 },
+    { symbol: 'ALGO', name: 'Algorand', qtyDecimals: 8, priceDecimals: 4 },
+    { symbol: 'FIL', name: 'Filecoin', qtyDecimals: 8, priceDecimals: 4 },
+    { symbol: 'ETC', name: 'Ethereum Classic', qtyDecimals: 8, priceDecimals: 2 },
+    { symbol: 'XLM', name: 'Stellar', qtyDecimals: 6, priceDecimals: 4 },
+  ];
+  
   const allSymbolsRaw: CurrencyMeta[] = useMemo(() => {
     const list: any[] = currenciesData?.supportedCurrencies ?? [];
+    if (list.length === 0) {
+      // Use fallback if query returns empty
+      console.log('[Crypto Trading] No currencies from query, using fallback list');
+      return FALLBACK_CRYPTOS;
+    }
     return list.map(s => ({
       symbol: s.symbol,
       name: s.name,
@@ -134,12 +161,14 @@ const CryptoTradingCardPro: React.FC<CryptoTradingCardProps> = ({
   // Sort common majors first, then alphabetical
   const allSymbols = useMemo(() => {
     const majors = new Set(['BTC','ETH','SOL','USDT','USDC','XRP','ADA','DOGE','AVAX','BNB','MATIC','LTC']);
-    return [...allSymbolsRaw].sort((a, b) => {
+    const sorted = [...allSymbolsRaw].sort((a, b) => {
       const aMajor = majors.has(a.symbol) ? 0 : 1;
       const bMajor = majors.has(b.symbol) ? 0 : 1;
       if (aMajor !== bMajor) return aMajor - bMajor;
       return a.symbol.localeCompare(b.symbol);
     });
+    console.log('[Crypto Trading] All symbols:', sorted.length, sorted.map(s => s.symbol).join(', '));
+    return sorted;
   }, [allSymbolsRaw]);
 
   const symbolMeta = useMemo(() => {
@@ -360,25 +389,6 @@ const CryptoTradingCardPro: React.FC<CryptoTradingCardProps> = ({
     }
   };
 
-  // Picker data
-  const queryFiltered = useMemo(() => {
-    const base = favoritesOnly ? allSymbols.filter(x => favorites.includes(x.symbol)) : allSymbols;
-    if (!symbolQuery.trim()) return base;
-    const q = symbolQuery.trim().toLowerCase();
-    return base.filter(x =>
-      x.symbol.toLowerCase().includes(q) || (x.name ?? '').toLowerCase().includes(q)
-    );
-  }, [allSymbols, favorites, favoritesOnly, symbolQuery]);
-
-  const favoriteSymbols = useMemo(
-    () => allSymbols.filter(x => favorites.includes(x.symbol)),
-    [allSymbols, favorites]
-  );
-
-  const toggleFavorite = useCallback((sym: string) => {
-    setFavorites(prev => prev.includes(sym) ? prev.filter(s => s !== sym) : [...prev, sym]);
-  }, []);
-
   // Icon helper
   const renderIcon = (sym: string, size: number, iconUrl?: string) => {
     return (
@@ -403,21 +413,74 @@ const CryptoTradingCardPro: React.FC<CryptoTradingCardProps> = ({
       {/* Symbol Picker */}
       <View style={styles.section}>
         <Text style={styles.label}>Cryptocurrency</Text>
-        <TouchableOpacity
-          style={styles.symbolBtn}
-          onPress={() => setPickerOpen(true)}
-          disabled={currenciesLoading}
-          activeOpacity={0.9}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            {renderIcon(selectedSymbol, 28, symbolMeta.iconUrl)}
-            <View>
-              <Text style={styles.symbolCode}>{selectedSymbol}</Text>
-              <Text style={styles.symbolName} numberOfLines={1}>{symbolMeta.name}</Text>
+        <View style={{ position: 'relative', zIndex: 1000 }}>
+          <TouchableOpacity
+            style={styles.symbolBtn}
+            onPress={() => setPickerOpen(!pickerOpen)}
+            disabled={currenciesLoading}
+            activeOpacity={0.9}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              {renderIcon(selectedSymbol, 28, symbolMeta.iconUrl)}
+              <View>
+                <Text style={styles.symbolCode}>{selectedSymbol}</Text>
+                <Text style={styles.symbolName} numberOfLines={1}>{symbolMeta.name}</Text>
+              </View>
             </View>
-          </View>
-          <Icon name="chevron-down" size={18} color="#111827" />
-        </TouchableOpacity>
+            <Icon name={pickerOpen ? "chevron-up" : "chevron-down"} size={18} color="#111827" />
+          </TouchableOpacity>
+          
+          {/* Dropdown List */}
+          {pickerOpen && (
+            <View style={styles.dropdownContainer}>
+              {currenciesLoading ? (
+                <View style={{ padding: 20, alignItems: 'center' }}>
+                  <ActivityIndicator size="small" color="#3b82f6" />
+                  <Text style={{ marginTop: 8, color: '#6B7280', fontSize: 12 }}>Loading cryptocurrencies...</Text>
+                </View>
+              ) : allSymbols.length === 0 ? (
+                <View style={{ padding: 20, alignItems: 'center' }}>
+                  <Text style={{ color: '#6B7280', fontSize: 14 }}>No cryptocurrencies available</Text>
+                </View>
+              ) : (
+                <FlatList
+                  data={allSymbols}
+                  keyExtractor={(item) => item.symbol}
+                  showsVerticalScrollIndicator={true}
+                  style={styles.dropdownList}
+                  nestedScrollEnabled={true}
+                  renderItem={({ item }) => {
+                    const isSelected = item.symbol === selectedSymbol;
+                    return (
+                      <TouchableOpacity
+                        style={[styles.dropdownItem, isSelected && styles.dropdownItemSelected]}
+                        onPress={() => {
+                          setSelectedSymbol(item.symbol);
+                          setPickerOpen(false);
+                        }}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                          {renderIcon(item.symbol, 20, item.iconUrl)}
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.dropdownSymbol, isSelected && styles.dropdownSymbolSelected]}>
+                              {item.symbol}
+                            </Text>
+                            {item.name && (
+                              <Text style={styles.dropdownName} numberOfLines={1}>
+                                {item.name}
+                              </Text>
+                            )}
+                          </View>
+                        </View>
+                        {isSelected && <Icon name="check" size={16} color="#3b82f6" />}
+                      </TouchableOpacity>
+                    );
+                  }}
+                />
+              )}
+            </View>
+          )}
+        </View>
       </View>
 
       {/* Order type + TIF */}
@@ -730,98 +793,6 @@ const CryptoTradingCardPro: React.FC<CryptoTradingCardProps> = ({
       </View>
     </Modal>
 
-    {/* Symbol Picker Modal */}
-    <Modal transparent animationType="slide" visible={pickerOpen} onRequestClose={() => setPickerOpen(false)}>
-      <View style={styles.sheetOverlay}>
-        <View style={styles.pickerSheet}>
-          {/* Sticky header */}
-          <View style={styles.pickerHeader}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Text style={styles.sheetTitle}>Select Asset</Text>
-            </View>
-            <TouchableOpacity onPress={() => setPickerOpen(false)}>
-              <Icon name="x" size={20} color="#111827" />
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.searchRow}>
-            <Icon name="search" size={16} color="#6B7280" />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search by symbol or name"
-              value={symbolQuery}
-              onChangeText={setSymbolQuery}
-              autoCapitalize="characters"
-            />
-          </View>
-
-          {/* Favorites toggle */}
-          <View style={styles.favToggleRow}>
-            <Text style={styles.groupLabel}>Favorites only</Text>
-            <Switch
-              value={favoritesOnly}
-              onValueChange={setFavoritesOnly}
-              thumbColor={favoritesOnly ? '#111827' : '#f4f3f4'}
-              trackColor={{ false: '#D1D5DB', true: '#9CA3AF' }}
-            />
-          </View>
-
-          {/* Quick favorites chips */}
-          {!favoritesOnly && favoriteSymbols.length > 0 && (
-            <>
-              <Text style={styles.groupLabel}>Favorites</Text>
-              <FlatList
-                data={favoriteSymbols}
-                keyExtractor={(item) => item.symbol}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ paddingVertical: 4 }}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={[styles.chip, item.symbol === selectedSymbol && styles.chipActive]}
-                    onPress={() => { setSelectedSymbol(item.symbol); setPickerOpen(false); setSymbolQuery(''); }}
-                  >
-                    <Text style={[styles.chipText, item.symbol === selectedSymbol && styles.chipTextActive]}>{item.symbol}</Text>
-                  </TouchableOpacity>
-                )}
-              />
-            </>
-          )}
-
-          {/* All / filtered list */}
-          <FlatList
-            data={queryFiltered}
-            keyExtractor={(item) => item.symbol}
-            showsVerticalScrollIndicator={false}
-            ItemSeparatorComponent={() => <View style={styles.sep} />}
-            renderItem={({ item }) => {
-              const bal = balances?.[item.symbol] ?? 0;
-              const fav = favorites.includes(item.symbol);
-              return (
-                <TouchableOpacity
-                  style={styles.assetRow}
-                  onPress={() => { setSelectedSymbol(item.symbol); setPickerOpen(false); setSymbolQuery(''); }}
-                >
-                  <View style={styles.assetLeft}>
-                    {renderIcon(item.symbol, 24, item.iconUrl)}
-                    <View>
-                      <Text style={styles.assetSymbol}>{item.symbol}</Text>
-                      {!!item.name && <Text style={styles.assetName} numberOfLines={1}>{item.name}</Text>}
-                    </View>
-                  </View>
-                  <View style={styles.assetRight}>
-                    <Text style={styles.assetBal}>{bal.toFixed(8)}</Text>
-                    <TouchableOpacity onPress={() => toggleFavorite(item.symbol)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                      <Icon name="star" size={16} color={fav ? '#F59E0B' : '#D1D5DB'} />
-                    </TouchableOpacity>
-                  </View>
-                </TouchableOpacity>
-              );
-            }}
-          />
-        </View>
-      </View>
-    </Modal>
     </>
   );
 };
@@ -948,6 +919,49 @@ const styles = StyleSheet.create({
   fallbackText: { fontWeight: '700', color: '#3730A3' },
   symbolCode: { fontWeight: '700', color: '#111827' },
   symbolName: { fontSize: 12, color: '#6B7280', maxWidth: 120 },
+
+  // Dropdown styles
+  dropdownContainer: {
+    marginTop: 4,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+    maxHeight: 300,
+  },
+  dropdownList: {
+    maxHeight: 300,
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  dropdownItemSelected: {
+    backgroundColor: '#EFF6FF',
+  },
+  dropdownSymbol: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  dropdownSymbolSelected: {
+    color: '#3b82f6',
+  },
+  dropdownName: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 2,
+  },
 
   pickerSheet: { backgroundColor: '#fff', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 16, borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: '85%' },
   pickerHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },

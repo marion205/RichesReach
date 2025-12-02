@@ -2405,11 +2405,6 @@ placeholderTextColor="#999"
           contentContainerStyle={styles.researchContentContainer}
           showsVerticalScrollIndicator={true}
         >
-          {/* Forex Widget - More appropriate in Research tab */}
-          <View style={{ marginBottom: 16, paddingHorizontal: 16, paddingTop: 16 }}>
-            <RustForexWidget defaultPair="EURUSD" />
-          </View>
-          
           <View style={styles.researchHeader}>
             <Text style={styles.researchTitle}>Stock Research</Text>
             <View style={styles.searchContainer}>
@@ -2724,7 +2719,7 @@ placeholderTextColor="#999"
             </View>
 
             {/* One-Tap Trade - ML-Optimized, Pre-Bracketed */}
-            {optionsSymbol && (
+            {optionsSymbol ? (
               <OneTapTradeButton
                 symbol={optionsSymbol}
                 accountSize={alpacaAccount?.buying_power || 10000}
@@ -2734,10 +2729,10 @@ placeholderTextColor="#999"
                   refetchOptionsPositions();
                 }}
               />
-            )}
+            ) : null}
 
             {/* Next Move Card - Steve Jobs Style */}
-            {optionsSymbol && rustOptionsData?.rustOptionsAnalysis?.recommendedStrikes?.[0] && (
+            {optionsSymbol && rustOptionsData?.rustOptionsAnalysis?.recommendedStrikes?.[0] ? (
               <OptionsNextMoveCard
                 symbol={optionsSymbol}
                 underlyingPrice={rustOptionsData.rustOptionsAnalysis.underlyingPrice || 0}
@@ -2759,10 +2754,17 @@ placeholderTextColor="#999"
                   optionsScrollViewRef.current?.scrollTo({ y: 600, animated: true });
                 }}
               />
+            ) : (
+              <View style={[styles.card, { padding: 20, alignItems: 'center' }]}>
+                <ActivityIndicator size="small" color="#007AFF" />
+                <Text style={[styles.emptyText, { marginTop: 12 }]}>
+                  {optionsSymbol ? 'Loading AI recommendations...' : 'Enter a symbol to see AI recommendations'}
+                </Text>
+              </View>
             )}
 
             {/* Rust Options Brain */}
-            {optionsSymbol && (
+            {optionsSymbol ? (
               <>
                 <RustOptionsAnalysisWidget
                   symbol={optionsSymbol}
@@ -2776,10 +2778,10 @@ placeholderTextColor="#999"
                   <Text style={styles.helpText}>What are the Greeks?</Text>
                 </TouchableOpacity>
               </>
-            )}
+            ) : null}
 
             {/* Real-Time Options Data Stream */}
-            {optionsSymbol && optionsProMode && selectedOption && (
+            {optionsProMode && optionsSymbol && selectedOption ? (
               <OptionsRealtimeStream
                 symbol={optionsSymbol}
                 contractSymbol={(() => {
@@ -2789,37 +2791,102 @@ placeholderTextColor="#999"
                   return `${optionsSymbol}${exp.replace(/-/g, '')}${optType === 'call' ? 'C' : 'P'}${(strike * 1000).toFixed(0).padStart(8, '0')}`;
                 })()}
               />
+            ) : (
+              <View style={[styles.card, { padding: 16, backgroundColor: '#F8FAFC' }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                  <Icon name="activity" size={16} color="#6B7280" />
+                  <Text style={[styles.sectionTitle, { marginLeft: 8, fontSize: 16 }]}>Real-Time Options Stream</Text>
+                </View>
+                <Text style={[styles.emptyText, { fontSize: 13 }]}>
+                  {!optionsProMode 
+                    ? 'Enable Pro Mode to see real-time options data stream'
+                    : !optionsSymbol
+                    ? 'Enter a symbol and select an option from the chain to see real-time data stream'
+                    : 'Select an option from the chain to see real-time data stream'}
+                </Text>
+              </View>
             )}
 
             {/* IV Surface Forecast - Predict IV Changes 1-24hrs Ahead */}
-            {optionsSymbol && optionsProMode && (
+            {optionsProMode && optionsSymbol ? (
               <IVSurfaceForecast symbol={optionsSymbol} />
+            ) : (
+              <View style={[styles.card, { padding: 16, backgroundColor: '#F8FAFC' }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                  <Icon name="lock" size={16} color="#6B7280" />
+                  <Text style={[styles.sectionTitle, { marginLeft: 8, fontSize: 16 }]}>IV Surface Forecast</Text>
+                </View>
+                <Text style={[styles.emptyText, { fontSize: 13 }]}>
+                  Enable Pro Mode{optionsSymbol ? '' : ' and enter a symbol'} to see predicted IV changes 1-24 hours ahead
+                </Text>
+              </View>
             )}
 
             {/* Edge Predictor - ML-Powered Mispricing Forecast */}
-            {optionsSymbol && optionsProMode && (
+            {optionsProMode && optionsSymbol ? (
               <EdgePredictorHeatmap symbol={optionsSymbol} />
+            ) : (
+              <View style={[styles.card, { padding: 16, backgroundColor: '#F8FAFC' }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                  <Icon name="lock" size={16} color="#6B7280" />
+                  <Text style={[styles.sectionTitle, { marginLeft: 8, fontSize: 16 }]}>Edge Predictor</Text>
+                </View>
+                <Text style={[styles.emptyText, { fontSize: 13 }]}>
+                  Enable Pro Mode{optionsSymbol ? '' : ' and enter a symbol'} to see ML-powered mispricing forecasts
+                </Text>
+              </View>
             )}
 
             {/* Options Flow & Unusual Activity */}
-            {optionsSymbol && optionsProMode && (
+            {optionsProMode && optionsSymbol ? (
               <OptionsFlowWidget symbol={optionsSymbol} />
+            ) : (
+              <View style={[styles.card, { padding: 16, backgroundColor: '#F8FAFC' }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                  <Icon name="lock" size={16} color="#6B7280" />
+                  <Text style={[styles.sectionTitle, { marginLeft: 8, fontSize: 16 }]}>Options Flow & Unusual Activity</Text>
+                </View>
+                <Text style={[styles.emptyText, { fontSize: 13 }]}>
+                  Enable Pro Mode{optionsSymbol ? '' : ' and enter a symbol'} to see real-time options flow and unusual activity
+                </Text>
+              </View>
             )}
 
             {/* Options Risk Calculator */}
-            {optionsSymbol && rustOptionsData?.rustOptionsAnalysis?.underlyingPrice && (
+            {optionsSymbol && rustOptionsData?.rustOptionsAnalysis?.underlyingPrice ? (
               <OptionsRiskCalculator
                 symbol={optionsSymbol}
                 underlyingPrice={rustOptionsData.rustOptionsAnalysis.underlyingPrice || 0}
               />
+            ) : (
+              <View style={[styles.card, { padding: 20, alignItems: 'center' }]}>
+                <ActivityIndicator size="small" color="#007AFF" />
+                <Text style={[styles.emptyText, { marginTop: 12 }]}>
+                  {optionsSymbol ? 'Loading risk calculator...' : 'Enter a symbol to use the risk calculator'}
+                </Text>
+              </View>
             )}
 
             {/* Options Backtester (Pro Mode) */}
-            {optionsProMode && optionsSymbol && rustOptionsData?.rustOptionsAnalysis?.underlyingPrice && (
+            {optionsProMode && optionsSymbol && rustOptionsData?.rustOptionsAnalysis?.underlyingPrice ? (
               <OptionsBacktester
                 symbol={optionsSymbol}
                 underlyingPrice={rustOptionsData.rustOptionsAnalysis.underlyingPrice || 0}
               />
+            ) : (
+              <View style={[styles.card, { padding: 16, backgroundColor: '#F8FAFC' }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                  <Icon name="lock" size={16} color="#6B7280" />
+                  <Text style={[styles.sectionTitle, { marginLeft: 8, fontSize: 16 }]}>Options Backtester</Text>
+                </View>
+                <Text style={[styles.emptyText, { fontSize: 13 }]}>
+                  {!optionsProMode 
+                    ? 'Enable Pro Mode to backtest options strategies'
+                    : !optionsSymbol
+                    ? 'Enter a symbol to backtest options strategies'
+                    : 'Loading backtester...'}
+                </Text>
+              </View>
             )}
 
             {/* Portfolio Risk Manager */}
@@ -2827,7 +2894,7 @@ placeholderTextColor="#999"
 
             {/* Quick Actions - Jobs Style: Simple, Beautiful */}
             <View style={styles.quickActions}>
-              {optionsProMode && optionsSymbol && (
+              {optionsProMode && optionsSymbol ? (
                 <TouchableOpacity
                   style={styles.quickActionButton}
                   onPress={() => setShowScanner(true)}
@@ -2835,16 +2902,24 @@ placeholderTextColor="#999"
                   <Icon name="search" size={18} color="#007AFF" />
                   <Text style={styles.quickActionText}>Find Opportunities</Text>
                 </TouchableOpacity>
-              )}
-              {optionsSymbol && (
+              ) : (
                 <TouchableOpacity
-                  style={styles.quickActionButton}
-                  onPress={() => setShowMultiLegBuilder(true)}
+                  style={[styles.quickActionButton, { opacity: 0.6 }]}
+                  onPress={() => {
+                    Alert.alert('Pro Mode Required', 'Enable Pro Mode to use the options scanner');
+                  }}
                 >
-                  <Icon name="layers" size={18} color="#007AFF" />
-                  <Text style={styles.quickActionText}>Multi-Leg</Text>
+                  <Icon name="lock" size={18} color="#6B7280" />
+                  <Text style={[styles.quickActionText, { color: '#6B7280' }]}>Find Opportunities</Text>
                 </TouchableOpacity>
               )}
+              <TouchableOpacity
+                style={styles.quickActionButton}
+                onPress={() => setShowMultiLegBuilder(true)}
+              >
+                <Icon name="layers" size={18} color="#007AFF" />
+                <Text style={styles.quickActionText}>Multi-Leg</Text>
+              </TouchableOpacity>
             </View>
 
             {/* Options Scanner */}
@@ -2858,10 +2933,10 @@ placeholderTextColor="#999"
             )}
 
             {/* Active Positions */}
-            {optionsPositions.length > 0 && (
-              <View style={styles.positionsSection}>
-                <Text style={styles.sectionTitle} accessibilityRole="header">Active Options Positions</Text>
-                {optionsPositions
+            <View style={styles.positionsSection}>
+              <Text style={styles.sectionTitle} accessibilityRole="header">Active Options Positions</Text>
+              {optionsPositions.length > 0 ? (
+                optionsPositions
                   .filter(p => !optionsSymbol || p.underlyingSymbol === optionsSymbol.toUpperCase())
                   .map((pos, index) => (
                     <OptionsPositionCard
@@ -2869,9 +2944,17 @@ placeholderTextColor="#999"
                       position={pos as any}
                       onPositionUpdated={refetchOptionsPositions}
                     />
-                  ))}
-              </View>
-            )}
+                  ))
+              ) : (
+                <View style={[styles.card, { padding: 20, alignItems: 'center' }]}>
+                  <Icon name="briefcase" size={32} color="#9CA3AF" />
+                  <Text style={[styles.emptyText, { marginTop: 12 }]}>No active options positions</Text>
+                  <Text style={[styles.emptyText, { fontSize: 12, marginTop: 4 }]}>
+                    Your options trades will appear here
+                  </Text>
+                </View>
+              )}
+            </View>
 
             {/* Options Chain */}
             <View ref={optionsChainRef}>

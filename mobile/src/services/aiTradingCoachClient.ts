@@ -16,8 +16,10 @@
  * - Fallback responses for reliability
  */
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000";
-const DEFAULT_TIMEOUT_MS = 10_000; // Reduced from 30s to 10s for faster failure handling
+import { API_BASE } from '../config/api';
+
+const BASE_URL = API_BASE;
+const DEFAULT_TIMEOUT_MS = 30_000; // Increased to 30s for AI-powered guidance generation
 
 export class ApiError extends Error {
   status: number;
@@ -120,6 +122,11 @@ async function postJSON<T>(
   const url = `${BASE_URL}${path}`;
   const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   
+  // Debug logging
+  console.log(`🌐 [Coach Client] Making request to: ${url}`);
+  console.log(`🌐 [Coach Client] BASE_URL: ${BASE_URL}`);
+  console.log(`🌐 [Coach Client] Timeout: ${opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS}ms`);
+  
   const resPromise = fetch(url, {
     method: 'POST',
     headers: {
@@ -195,7 +202,8 @@ export function startTradingSession(req: {
   risk_tolerance: 'conservative' | 'moderate' | 'aggressive';
   goals: string[];
 }): Promise<{ session_id: string; message: string }> {
-  return postJSON<{ session_id: string; message: string }>('/coach/start-session', req);
+  // Use longer timeout for session start (market data fetch can take time)
+  return postJSON<{ session_id: string; message: string }>('/coach/start-session', req, { timeoutMs: 30_000 }); // 30 seconds
 }
 
 /**
@@ -205,10 +213,11 @@ export function getTradingGuidance(req: {
   session_id: string;
   market_update?: Record<string, any>;
 }): Promise<TradingGuidance> {
+  // Use longer timeout for AI-powered guidance generation
   return postJSON<TradingGuidance>('/coach/guidance', {
     session_id: req.session_id,
     market_update: req.market_update || {},
-  });
+  }, { timeoutMs: 30_000 }); // 30 seconds for AI generation
 }
 
 /**

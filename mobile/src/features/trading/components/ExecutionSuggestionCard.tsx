@@ -65,11 +65,25 @@ function ExecutionSuggestionCardComponent({ suggestion, isRefreshing = false }: 
   // Pure presentational component - no conditional rendering that would cause blinking
   // Only hide if we truly have no suggestion at all
   // We render even if orderType is missing - the card will show whatever data is available
+  // IMPORTANT: Render even if suggestion is empty object - show a placeholder so user knows the feature exists
   if (!suggestion) {
     if (__DEV__) {
       console.log(`⚠️ ExecutionSuggestionCard: No suggestion provided, returning null`);
     }
     return null;
+  }
+
+  // Even if suggestion is an empty object, show the card header so user knows the feature exists
+  const hasAnyData = Object.keys(suggestion).length > 0;
+  
+  if (__DEV__) {
+    console.log(`📊 ExecutionSuggestionCard rendering:`, {
+      hasSuggestion: !!suggestion,
+      hasAnyData,
+      keys: Object.keys(suggestion),
+      orderType: suggestion.orderType,
+      rationale: suggestion.rationale,
+    });
   }
 
   const priceBand = suggestion.priceBand || [];
@@ -122,6 +136,15 @@ function ExecutionSuggestionCardComponent({ suggestion, isRefreshing = false }: 
           <ActivityIndicator size="small" color={C.primary} style={{ marginLeft: 8 }} />
         )}
       </View>
+
+      {/* Show message if we have no data at all */}
+      {!hasAnyData && (
+        <View style={styles.content}>
+          <Text style={[styles.rationaleText, { color: C.sub, fontStyle: 'normal' }]}>
+            Loading execution suggestion details...
+          </Text>
+        </View>
+      )}
 
       <View style={styles.content}>
         {/* Price Band */}

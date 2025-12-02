@@ -16,7 +16,6 @@ import { gql } from '@apollo/client';
 import { GET_DAY_TRADING_PICKS, LOG_DAY_TRADING_OUTCOME } from '../../../graphql/dayTrading';
 import { GET_EXECUTION_SUGGESTION } from '../../../graphql/execution';
 import Icon from 'react-native-vector-icons/Feather';
-import { ExecutionSuggestionCard } from '../components/ExecutionSuggestionCard';
 import { HeaderButtons } from '../components/HeaderButtons';
 import SparkMini from '../../../components/charts/SparkMini';
 import * as Haptics from 'expo-haptics';
@@ -1040,7 +1039,7 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
         </View>
       )}
     </View>
-  ), [navigateTo, mode, handleModeChange, effectiveDayTradingData, handleBackPress, handlePaperTradingPress, HeaderTopBar, C, getModeColor]);
+  ), [navigateTo, mode, handleModeChange, effectiveDayTradingData, handleBackPress, HeaderTopBar, C, getModeColor]);
 
   // Only show real data - empty state is handled by ListEmptyComponent
 
@@ -1384,8 +1383,19 @@ const MemoizedPick = React.memo(function MemoizedPick({
       },
     };
 
+    const signalStr = JSON.stringify(signalObj);
+    
+    // Debug log the signal being sent
+    if (__DEV__) {
+      console.log(`📤 [${item.symbol}] Building execution suggestion query:`, {
+        signalObj,
+        signalStr,
+        signalLength: signalStr.length,
+      });
+    }
+
     return {
-      signal: JSON.stringify(signalObj),
+      signal: signalStr,
       signalType: 'day_trading',
     };
   }, [
@@ -1402,6 +1412,18 @@ const MemoizedPick = React.memo(function MemoizedPick({
   ]);
 
   const [stableSuggestion, setStableSuggestion] = useState<any>(null);
+  const [queryError, setQueryError] = useState<any>(null);
+  const [hasTimedOut, setHasTimedOut] = useState(false);
+
+  // Debug: Log query variables to see if they're valid
+  if (__DEV__) {
+    console.log(`🔍 [${item.symbol}] Execution suggestion query variables:`, {
+      hasSignal: !!queryVariables.signal,
+      signalLength: queryVariables.signal?.length,
+      signalType: queryVariables.signalType,
+      willSkip: !queryVariables.signal,
+    });
+  }
 
   const { data, loading, error } = useQuery(GET_EXECUTION_SUGGESTION, {
     variables: queryVariables,
@@ -1410,26 +1432,85 @@ const MemoizedPick = React.memo(function MemoizedPick({
     nextFetchPolicy: 'cache-first',
     notifyOnNetworkStatusChange: false,
     returnPartialData: true,
+    skip: !queryVariables.signal || !queryVariables.signal.trim(), // Skip if signal is invalid or empty
+    onError: (err) => {
+      setQueryError(err);
+      setHasTimedOut(true);
+      if (__DEV__) {
+        console.log(`❌ [${item.symbol}] Execution suggestion query error:`, err);
+        console.log(`❌ [${item.symbol}] Error details:`, {
+          message: err.message,
+          graphQLErrors: err.graphQLErrors,
+          networkError: err.networkError,
+        });
+      }
+    },
+    onCompleted: (data) => {
+      setQueryError(null);
+      setHasTimedOut(false);
+      if (__DEV__) {
+        console.log(`✅ [${item.symbol}] Execution suggestion query completed:`, {
+          hasData: !!data,
+          hasExecutionSuggestion: !!data?.executionSuggestion,
+          executionSuggestion: data?.executionSuggestion,
+        });
+      }
+    },
   });
+
+  // Manual timeout: if loading for more than 15 seconds, consider it timed out
+  useEffect(() => {
+    if (loading && !stableSuggestion) {
+      const timeoutId = setTimeout(() => {
+        if (loading && !stableSuggestion) {
+          setHasTimedOut(true);
+          if (__DEV__) {
+            console.log(`⏱️ Execution suggestion query timed out for ${item.symbol} after 15s`);
+          }
+        }
+      }, 15000); // 15 second timeout
+
+      return () => clearTimeout(timeoutId);
+    } else {
+      setHasTimedOut(false);
+    }
+  }, [loading, stableSuggestion, item.symbol]);
 
   // Keep the last GOOD suggestion so the card doesn't blink during refetches
   useEffect(() => {
     const rawSuggestion = data?.executionSuggestion;
 
+    if (__DEV__) {
+      console.log(`🔍 [${item.symbol}] Execution suggestion effect:`, {
+        hasData: !!data,
+        hasExecutionSuggestion: !!rawSuggestion,
+        rawSuggestionKeys: rawSuggestion ? Object.keys(rawSuggestion) : [],
+        currentStableSuggestion: !!stableSuggestion,
+      });
+    }
+
     if (rawSuggestion) {
+      // Accept even partial data - don't require all fields
       setStableSuggestion(rawSuggestion);
 
       if (__DEV__) {
         console.log(`✅ Execution suggestion received for ${item.symbol}:`, {
           hasOrderType: 'orderType' in rawSuggestion,
           hasPriceBand: !!rawSuggestion.priceBand,
+          hasRationale: !!rawSuggestion.rationale,
+          fullData: rawSuggestion,
         });
+      }
+    } else if (data && !rawSuggestion) {
+      // Data exists but no executionSuggestion field - log this
+      if (__DEV__) {
+        console.log(`⚠️ [${item.symbol}] Query returned data but no executionSuggestion field:`, data);
       }
     }
 
     // IMPORTANT: do NOT set stableSuggestion back to null on refetch.
     // If rawSuggestion is null during a refetch, we keep the old suggestion
-  }, [data?.executionSuggestion, item.symbol]);
+  }, [data?.executionSuggestion, item.symbol, stableSuggestion]);
 
   // Debug logging (hook always runs, but only logs in dev)
   useEffect(() => {
@@ -1445,9 +1526,32 @@ const MemoizedPick = React.memo(function MemoizedPick({
 
   const effectiveSuggestion = stableSuggestion;
   const isRefreshing = loading && !!effectiveSuggestion;
+  
+  // Show loading only if actively loading and haven't timed out
+  const shouldShowLoading = loading && !effectiveSuggestion && !hasTimedOut && !error;
 
-  if (__DEV__ && !effectiveSuggestion && !loading) {
-    console.log(`⚠️ No execution suggestion for ${item.symbol} - error:`, error?.message);
+  // Debug logging for render decision
+  if (__DEV__) {
+    console.log(`🎨 [${item.symbol}] Render decision:`, {
+      loading,
+      hasEffectiveSuggestion: !!effectiveSuggestion,
+      hasTimedOut,
+      hasError: !!error,
+      shouldShowLoading,
+      willShowCard: !!effectiveSuggestion && !shouldShowLoading && !hasTimedOut && !(error && !effectiveSuggestion),
+    });
+    
+    if (!effectiveSuggestion && !loading) {
+      console.log(`⚠️ No execution suggestion for ${item.symbol} - error:`, error?.message || queryError?.message);
+    }
+    if (effectiveSuggestion) {
+      console.log(`✅ Execution suggestion available for ${item.symbol}:`, {
+        hasOrderType: !!effectiveSuggestion.orderType,
+        hasPriceBand: !!effectiveSuggestion.priceBand,
+        hasRationale: !!effectiveSuggestion.rationale,
+        suggestion: effectiveSuggestion,
+      });
+    }
   }
 
   return (
@@ -1638,48 +1742,130 @@ const MemoizedPick = React.memo(function MemoizedPick({
           <Text style={[styles.notes, { color: C.sub }]}>{item.notes}</Text>
         ) : null}
 
-        {/* Execution Suggestion */}
-        {loading && !effectiveSuggestion ? (
-          <View
-            style={[
-              styles.card,
-              {
-                padding: 12,
-                marginTop: 12,
-                backgroundColor: '#F5F5F5',
-                borderRadius: 12,
-              },
-            ]}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Icon name="zap" size={16} color={C.primary} />
-              <Text
-                style={{
-                  fontSize: 14,
-                  fontWeight: '600',
-                  color: C.text,
-                }}
-              >
-                Smart Order Suggestion
-              </Text>
-              <ActivityIndicator size="small" color={C.primary} />
-            </View>
-            <Text
-              style={{
-                fontSize: 12,
-                color: C.sub,
-                marginTop: 8,
-              }}
-            >
-              Loading execution suggestion...
+        {/* Execution Suggestion - BEAUTIFUL LIGHT MODE VERSION */}
+        {shouldShowLoading ? (
+          <View style={styles.suggestionLoading}>
+            <ActivityIndicator size="small" color="#3182CE" />
+            <Text style={styles.suggestionLoadingText}>
+              Analyzing market depth & liquidity...
             </Text>
           </View>
-        ) : (
-          <ExecutionSuggestionCard
-            suggestion={effectiveSuggestion}
-            isRefreshing={isRefreshing}
-          />
-        )}
+        ) : hasTimedOut || (error && !effectiveSuggestion) ? (
+          <View style={styles.suggestionUnavailable}>
+            <Icon name="alert-triangle" size={20} color="#DC2626" />
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <Text style={styles.suggestionUnavailableTitle}>
+                Smart Order Unavailable
+              </Text>
+              <Text style={styles.suggestionUnavailableText}>
+                Real-time execution engine timed out. Use manual entry.
+              </Text>
+            </View>
+          </View>
+        ) : effectiveSuggestion ? (
+          <View style={styles.suggestionContainer}>
+            {/* Header */}
+            <View style={styles.suggestionHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={styles.suggestionIcon}>
+                  <Icon name="zap" size={18} color="#FFF" />
+                </View>
+                <Text style={styles.suggestionTitle}>Smart Order Suggestion</Text>
+                {isRefreshing && <ActivityIndicator size={14} color="#3182CE" />}
+              </View>
+              {(() => {
+                const confidence = effectiveSuggestion.confidence;
+                const confidenceNum = confidence != null ? Number(confidence) : null;
+                const isValidConfidence = confidenceNum != null && !isNaN(confidenceNum) && confidenceNum >= 0 && confidenceNum <= 1;
+                
+                if (isValidConfidence) {
+                  return (
+                    <View style={[
+                      styles.confidenceBadge,
+                      { backgroundColor: confidenceNum >= 0.8 ? '#DCFCE7' : '#FEF3C7' }
+                    ]}>
+                      <Text style={[
+                        styles.confidenceText,
+                        { color: confidenceNum >= 0.8 ? '#166534' : '#92400E' }
+                      ]}>
+                        {(confidenceNum * 100).toFixed(0)}% Confidence
+                      </Text>
+                    </View>
+                  );
+                }
+                return null;
+              })()}
+            </View>
+
+            {/* Order Type + Price Band */}
+            <View style={styles.suggestionBody}>
+              <View style={styles.suggestionRow}>
+                <Text style={styles.suggestionLabel}>Recommended Order</Text>
+                <View style={[
+                  styles.orderTypePill,
+                  { backgroundColor: getSideColor(item.side) + '20' }
+                ]}>
+                  <Text style={[styles.orderTypeText, { color: getSideColor(item.side) }]}>
+                    {effectiveSuggestion.orderType || 'Limit'}
+                  </Text>
+                </View>
+              </View>
+
+              {(() => {
+                const priceLow = effectiveSuggestion.priceBand?.low;
+                const priceHigh = effectiveSuggestion.priceBand?.high;
+                const lowNum = priceLow != null ? Number(priceLow) : null;
+                const highNum = priceHigh != null ? Number(priceHigh) : null;
+                const hasValidPrices = lowNum != null && !isNaN(lowNum) && highNum != null && !isNaN(highNum);
+                
+                // Fallback to entry price if price band is invalid
+                const fallbackPrice = entry || quote?.currentPrice || (quote?.bid && quote?.ask ? (quote.bid + quote.ask) / 2 : null);
+                
+                if (hasValidPrices || fallbackPrice) {
+                  const displayLow = hasValidPrices ? lowNum : (fallbackPrice ? fallbackPrice * 0.9995 : null);
+                  const displayHigh = hasValidPrices ? highNum : (fallbackPrice ? fallbackPrice * 1.0005 : null);
+                  const midpoint = displayLow != null && displayHigh != null ? (displayLow + displayHigh) / 2 : null;
+                  
+                  if (displayLow != null && displayHigh != null && midpoint != null) {
+                    return (
+                      <View style={styles.priceBand}>
+                        <Text style={styles.priceBandLabel}>Optimal Fill Range</Text>
+                        <View style={styles.priceRange}>
+                          <Text style={styles.priceLow}>${displayLow.toFixed(2)}</Text>
+                          <View style={styles.priceArrow}>
+                            <Icon name="arrow-right" size={14} color="#3182CE" />
+                          </View>
+                          <Text style={styles.priceHigh}>${displayHigh.toFixed(2)}</Text>
+                        </View>
+                        <Text style={styles.priceMidpoint}>
+                          Mid: ${midpoint.toFixed(2)}
+                        </Text>
+                      </View>
+                    );
+                  }
+                }
+                return null;
+              })()}
+
+              {/* Rationale */}
+              {effectiveSuggestion.rationale && (
+                <View style={styles.rationaleBox}>
+                  <Text style={styles.rationaleTitle}>Why this order?</Text>
+                  <Text style={styles.rationaleText}>
+                    {effectiveSuggestion.rationale}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* Footer */}
+            <View style={styles.suggestionFooter}>
+              <Text style={styles.suggestionFooterText}>
+                Suggested by RichesReach Execution Engine • {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+              </Text>
+            </View>
+          </View>
+        ) : null}
 
         <TouchableOpacity
           style={[styles.executeBtn, { backgroundColor: getSideColor(item.side) }]}
@@ -2117,5 +2303,174 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#fff',
+  },
+
+  // Smart Order Suggestion Styles
+  suggestionContainer: {
+    marginTop: 20,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 18,
+    borderWidth: 1.5,
+    borderColor: '#E0E7FF',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 5,
+  },
+  suggestionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  suggestionIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#3182CE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  suggestionTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#1E293B',
+  },
+  confidenceBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+  },
+  confidenceText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  suggestionBody: {
+    gap: 12,
+  },
+  suggestionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  suggestionLabel: {
+    fontSize: 14,
+    color: '#475569',
+    fontWeight: '600',
+  },
+  orderTypePill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  orderTypeText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  priceBand: {
+    backgroundColor: '#F8FAFC',
+    padding: 14,
+    borderRadius: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  priceBandLabel: {
+    fontSize: 13,
+    color: '#64748B',
+    marginBottom: 8,
+    fontWeight: '600',
+  },
+  priceRange: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  priceLow: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#DC2626',
+  },
+  priceArrow: {
+    backgroundColor: '#E0E7FF',
+    padding: 6,
+    borderRadius: 12,
+  },
+  priceHigh: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#16A34A',
+  },
+  priceMidpoint: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 6,
+  },
+  rationaleBox: {
+    backgroundColor: '#F0F9FF',
+    padding: 12,
+    borderRadius: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: '#0EA5E9',
+  },
+  rationaleTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0369A1',
+    marginBottom: 4,
+  },
+  rationaleText: {
+    fontSize: 13.5,
+    color: '#1E40AF',
+    lineHeight: 19,
+  },
+  suggestionFooter: {
+    marginTop: 14,
+    alignItems: 'center',
+  },
+  suggestionFooterText: {
+    fontSize: 11,
+    color: '#94A3B8',
+    fontStyle: 'italic',
+  },
+  suggestionLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    backgroundColor: '#F0F9FF',
+    borderRadius: 14,
+    marginTop: 20,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    gap: 10,
+  },
+  suggestionLoadingText: {
+    fontSize: 14,
+    color: '#0369A1',
+    fontWeight: '600',
+  },
+  suggestionUnavailable: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 14,
+    marginTop: 20,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    gap: 10,
+  },
+  suggestionUnavailableTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#991B1B',
+  },
+  suggestionUnavailableText: {
+    fontSize: 13,
+    color: '#991B1B',
+    textAlign: 'left',
   },
 });
