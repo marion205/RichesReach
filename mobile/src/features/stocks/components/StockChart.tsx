@@ -10,7 +10,8 @@ import {
 import { useQuery } from '@apollo/client';
 import { gql } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
-import Svg, { Line, Polyline, Text as SvgText, G } from 'react-native-svg';
+import Svg, { Line, Polyline, Path, Text as SvgText, G, Defs, LinearGradient, Stop } from 'react-native-svg';
+import PNLRibbonOverlay from '../../raha/components/PNLRibbonOverlay';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -38,6 +39,15 @@ interface StockChartProps {
   embedded?: boolean; // New prop to indicate if it's embedded in another container
   width?: number; // Allow external width control
   height?: number; // Allow external height control
+  minimal?: boolean; // Minimal style for The Whisper screen (no header, no timeframe selector)
+  pnlOverlay?: {
+    entryPrice: number;
+    takeProfit: number;
+    stopLoss: number;
+    isLong: boolean;
+    riskAmount: number;
+    visible: boolean;
+  }; // P&L ribbon overlay data
 }
 
 const StockChart: React.FC<StockChartProps> = ({ 
@@ -46,7 +56,9 @@ const StockChart: React.FC<StockChartProps> = ({
   onTimeframeChange,
   embedded = false,
   width: propWidth,
-  height: propHeight = 220
+  height: propHeight = 220,
+  minimal = false,
+  pnlOverlay
 }) => {
   const [selectedTimeframe, setSelectedTimeframe] = useState(timeframe);
 
@@ -106,19 +118,75 @@ const StockChart: React.FC<StockChartProps> = ({
       return `${x},${y}`;
     }).join(' ');
 
+    // Determine if price is going up (green) or down (red)
+    const firstPrice = chartData[0].close;
+    const lastPrice = chartData[chartData.length - 1].close;
+    const isPositive = lastPrice >= firstPrice;
+    const lineColor = minimal ? (isPositive ? '#10B981' : '#EF4444') : '#007AFF';
+    const gradientColor = minimal ? (isPositive ? '#10B981' : '#EF4444') : '#007AFF';
+    
+    // Create smooth path for area fill
+    const pathData = chartData.map((point, index) => {
+      const x = (index / (chartData.length - 1)) * chartWidth;
+      const y = chartHeight - ((point.close - minPrice) / priceRange) * chartHeight;
+      return index === 0 ? `M ${x} ${y}` : `L ${x} ${y}`;
+    }).join(' ');
+    
+    // Close path for gradient fill
+    const areaPath = `${pathData} L ${chartWidth} ${chartHeight} L 0 ${chartHeight} Z`;
+
     return (
-      <View style={[styles.chartContainer, { height: chartHeight + 10 }]}>
+      <View style={[styles.chartContainer, { height: chartHeight + (minimal ? 0 : 10) }]}>
         <View style={[styles.chartWrapper, { width: chartWidth, height: chartHeight }]}>
+          {/* P&L Ribbon Overlay - rendered first so price chart is on top */}
+          {minimal && pnlOverlay && pnlOverlay.visible && (
+            <PNLRibbonOverlay
+              entryPrice={pnlOverlay.entryPrice}
+              takeProfit={pnlOverlay.takeProfit}
+              stopLoss={pnlOverlay.stopLoss}
+              isLong={pnlOverlay.isLong}
+              currentPrice={chartData[chartData.length - 1]?.close || 0}
+              priceData={chartData}
+              chartWidth={chartWidth}
+              chartHeight={chartHeight}
+              minPrice={minPrice}
+              maxPrice={maxPrice}
+              riskAmount={pnlOverlay.riskAmount}
+              visible={pnlOverlay.visible}
+            />
+          )}
+          
           <Svg width={chartWidth} height={chartHeight} style={styles.chart}>
-            {/* Grid lines */}
-            <Line x1={0} y1={0} x2={chartWidth} y2={0} stroke="#f0f0f0" strokeWidth={1} />
-            <Line x1={0} y1={chartHeight/2} x2={chartWidth} y2={chartHeight/2} stroke="#f0f0f0" strokeWidth={1} />
-            <Line x1={0} y1={chartHeight} x2={chartWidth} y2={chartHeight} stroke="#f0f0f0" strokeWidth={1} />
-            <Line x1={0} y1={0} x2={0} y2={chartHeight} stroke="#f0f0f0" strokeWidth={1} />
-            <Line x1={chartWidth/2} y1={0} x2={chartWidth/2} y2={chartHeight} stroke="#f0f0f0" strokeWidth={1} />
-            <Line x1={chartWidth} y1={0} x2={chartWidth} y2={chartHeight} stroke="#f0f0f0" strokeWidth={1} />
+            {!minimal && (
+              <>
+                {/* Grid lines - only show in non-minimal mode */}
+                <Line x1={0} y1={0} x2={chartWidth} y2={0} stroke="#f0f0f0" strokeWidth={1} />
+                <Line x1={0} y1={chartHeight/2} x2={chartWidth} y2={chartHeight/2} stroke="#f0f0f0" strokeWidth={1} />
+                <Line x1={0} y1={chartHeight} x2={chartWidth} y2={chartHeight} stroke="#f0f0f0" strokeWidth={1} />
+                <Line x1={0} y1={0} x2={0} y2={chartHeight} stroke="#f0f0f0" strokeWidth={1} />
+                <Line x1={chartWidth/2} y1={0} x2={chartWidth/2} y2={chartHeight} stroke="#f0f0f0" strokeWidth={1} />
+                <Line x1={chartWidth} y1={0} x2={chartWidth} y2={chartHeight} stroke="#f0f0f0" strokeWidth={1} />
+              </>
+            )}
             
-            {/* Price line */}
+            {/* Gradient area fill - only in minimal mode */}
+            {minimal && (
+              <>
+                <Defs>
+                  <LinearGradient id="chartGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <Stop offset="0%" stopColor={gradientColor} stopOpacity="0.2" />
+                    <Stop offset="100%" stopColor={gradientColor} stopOpacity="0.0" />
+                  </LinearGradient>
+                </Defs>
+                <Path
+                  d={areaPath}
+                  fill="url(#chartGradient)"
+                  stroke="none"
+                />
+              </>
+            )}
+            
+            {/* Price line - smoother and thicker in minimal mode */}
             <Polyline
               points={chartData.map((point, index) => {
                 const x = (index / (chartData.length - 1)) * chartWidth;
@@ -126,104 +194,116 @@ const StockChart: React.FC<StockChartProps> = ({
                 return `${x},${y}`;
               }).join(' ')}
               fill="none"
-              stroke="#007AFF"
-              strokeWidth={2}
+              stroke={lineColor}
+              strokeWidth={minimal ? 2.5 : 2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
             />
             
-            {/* Price labels on Y-axis */}
-            <SvgText x={5} y={15} fontSize="12" fill="#666">
-              ${maxPrice.toFixed(2)}
-            </SvgText>
-            <SvgText x={5} y={chartHeight/2 + 5} fontSize="12" fill="#666">
-              ${((maxPrice + minPrice) / 2).toFixed(2)}
-            </SvgText>
-            <SvgText x={5} y={chartHeight - 5} fontSize="12" fill="#666">
-              ${minPrice.toFixed(2)}
-            </SvgText>
-            
-            {/* Time labels on X-axis */}
-            <SvgText x={10} y={chartHeight - 5} fontSize="10" fill="#999">
-              {new Date(chartData[0].timestamp).toLocaleDateString()}
-            </SvgText>
-            <SvgText x={chartWidth/2 - 20} y={chartHeight - 5} fontSize="10" fill="#999">
-              {selectedTimeframe}
-            </SvgText>
-            <SvgText x={chartWidth - 50} y={chartHeight - 5} fontSize="10" fill="#999">
-              {new Date(chartData[chartData.length - 1].timestamp).toLocaleDateString()}
-            </SvgText>
+            {!minimal && (
+              <>
+                {/* Price labels on Y-axis */}
+                <SvgText x={5} y={15} fontSize="12" fill="#666">
+                  ${maxPrice.toFixed(2)}
+                </SvgText>
+                <SvgText x={5} y={chartHeight/2 + 5} fontSize="12" fill="#666">
+                  ${((maxPrice + minPrice) / 2).toFixed(2)}
+                </SvgText>
+                <SvgText x={5} y={chartHeight - 5} fontSize="12" fill="#666">
+                  ${minPrice.toFixed(2)}
+                </SvgText>
+                
+                {/* Time labels on X-axis */}
+                <SvgText x={10} y={chartHeight - 5} fontSize="10" fill="#999">
+                  {new Date(chartData[0].timestamp).toLocaleDateString()}
+                </SvgText>
+                <SvgText x={chartWidth/2 - 20} y={chartHeight - 5} fontSize="10" fill="#999">
+                  {selectedTimeframe}
+                </SvgText>
+                <SvgText x={chartWidth - 50} y={chartHeight - 5} fontSize="10" fill="#999">
+                  {new Date(chartData[chartData.length - 1].timestamp).toLocaleDateString()}
+                </SvgText>
+              </>
+            )}
           </Svg>
         </View>
 
-        <View style={styles.chartFooter}>
-          <View style={styles.chartLegend}>
-            <View style={styles.legendItem}>
-              <View style={styles.legendLine} />
-              <Text style={styles.legendText}>Price Movement</Text>
+        {!minimal && (
+          <View style={styles.chartFooter}>
+            <View style={styles.chartLegend}>
+              <View style={styles.legendItem}>
+                <View style={styles.legendLine} />
+                <Text style={styles.legendText}>Price Movement</Text>
+              </View>
             </View>
+            <Text style={styles.timeframeText}>
+              {selectedTimeframe} • {chartData.length} data points
+            </Text>
           </View>
-          <Text style={styles.timeframeText}>
-            {selectedTimeframe} • {chartData.length} data points
-          </Text>
-        </View>
+        )}
       </View>
     );
   };
 
   const content = (
     <>
-      {/* Chart Header */}
-      <View style={styles.chartHeader}>
-        <Text style={styles.symbolText}>{symbol}</Text>
-        <View style={styles.priceInfo}>
-          {(() => {
-            // Compute currentPrice from last close price if available
-            const chartData = data?.stockChartData?.data;
-            const lastClose = chartData && chartData.length > 0 ? chartData[chartData.length - 1]?.close : null;
-            const currentPrice = lastClose || 0;
-            
-            // Compute change from first and last close prices
-            const firstClose = chartData && chartData.length > 0 ? chartData[0]?.close : null;
-            const change = firstClose && lastClose ? lastClose - firstClose : 0;
-            const changePercent = firstClose && firstClose !== 0 ? (change / firstClose) * 100 : 0;
-            
-            return (
-              <>
-                <Text style={styles.currentPrice}>
-                  ${currentPrice.toFixed(2)}
-                </Text>
-                <Text style={[
-                  styles.changeText,
-                  { color: change >= 0 ? '#34C759' : '#FF3B30' }
-                ]}>
-                  {change >= 0 ? '+' : ''}{change.toFixed(2)} 
-                  ({changePercent.toFixed(2)}%)
-                </Text>
-              </>
-            );
-          })()}
-        </View>
-      </View>
+      {!minimal && (
+        <>
+          {/* Chart Header */}
+          <View style={styles.chartHeader}>
+            <Text style={styles.symbolText}>{symbol}</Text>
+            <View style={styles.priceInfo}>
+              {(() => {
+                // Compute currentPrice from last close price if available
+                const chartData = data?.stockChartData?.data;
+                const lastClose = chartData && chartData.length > 0 ? chartData[chartData.length - 1]?.close : null;
+                const currentPrice = lastClose || 0;
+                
+                // Compute change from first and last close prices
+                const firstClose = chartData && chartData.length > 0 ? chartData[0]?.close : null;
+                const change = firstClose && lastClose ? lastClose - firstClose : 0;
+                const changePercent = firstClose && firstClose !== 0 ? (change / firstClose) * 100 : 0;
+                
+                return (
+                  <>
+                    <Text style={styles.currentPrice}>
+                      ${currentPrice.toFixed(2)}
+                    </Text>
+                    <Text style={[
+                      styles.changeText,
+                      { color: change >= 0 ? '#34C759' : '#FF3B30' }
+                    ]}>
+                      {change >= 0 ? '+' : ''}{change.toFixed(2)} 
+                      ({changePercent.toFixed(2)}%)
+                    </Text>
+                  </>
+                );
+              })()}
+            </View>
+          </View>
 
-      {/* Timeframe Selector */}
-      <View style={styles.timeframeSelector}>
-        {timeframes.map((tf) => (
-          <TouchableOpacity
-            key={tf.key}
-            style={[
-              styles.timeframeButton,
-              selectedTimeframe === tf.key && styles.selectedTimeframeButton
-            ]}
-            onPress={() => handleTimeframeChange(tf.key)}
-          >
-            <Text style={[
-              styles.timeframeText,
-              selectedTimeframe === tf.key && styles.selectedTimeframeText
-            ]}>
-              {tf.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+          {/* Timeframe Selector */}
+          <View style={styles.timeframeSelector}>
+            {timeframes.map((tf) => (
+              <TouchableOpacity
+                key={tf.key}
+                style={[
+                  styles.timeframeButton,
+                  selectedTimeframe === tf.key && styles.selectedTimeframeButton
+                ]}
+                onPress={() => handleTimeframeChange(tf.key)}
+              >
+                <Text style={[
+                  styles.timeframeText,
+                  selectedTimeframe === tf.key && styles.selectedTimeframeText
+                ]}>
+                  {tf.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </>
+      )}
 
       {/* Chart */}
       {renderChart()}

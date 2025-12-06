@@ -843,6 +843,22 @@ class StockPriceType(graphene.ObjectType):
     api_response = graphene.JSONString()
 
 
+class ChartDataPointType(graphene.ObjectType):
+    """Type for a single chart data point (OHLCV)"""
+    timestamp = graphene.String(required=True)
+    open = graphene.Float(required=True)
+    high = graphene.Float(required=True)
+    low = graphene.Float(required=True)
+    close = graphene.Float(required=True)
+    volume = graphene.Int(required=True)
+
+
+class StockChartDataType(graphene.ObjectType):
+    """Type for stock chart data"""
+    symbol = graphene.String(required=True)
+    data = graphene.List(ChartDataPointType, required=True)
+
+
 class MomentCategoryEnum(graphene.Enum):
     """Enum for moment categories"""
     EARNINGS = "EARNINGS"
