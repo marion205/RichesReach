@@ -22,6 +22,7 @@ import { GET_SBLOC_OFFER } from '../../../sboclGql';
 import { GET_SBLOC_BANKS } from '../../../graphql/sblocQueries';
 import { useYodlee } from '../../../hooks/useYodlee';
 import FastLinkWebView from '../../../components/FastLinkWebView';
+import { useNavigation } from '@react-navigation/native';
 // Note: This app uses custom navigateTo, not React Navigation
 
 const { width } = Dimensions.get('window');
@@ -131,6 +132,8 @@ const INITIATE_FUNDING = gql`
 `;
 
 const BankAccountScreen = ({ navigateTo }: { navigateTo?: (screen: string, params?: any) => void }) => {
+  const navigation = useNavigation<any>();
+  
   // Debug: Log navigateTo prop on mount and changes
   React.useEffect(() => {
     console.log('🔵 BankAccountScreen mounted, navigateTo:', typeof navigateTo, !!navigateTo);
@@ -559,6 +562,61 @@ const BankAccountScreen = ({ navigateTo }: { navigateTo?: (screen: string, param
               </View>
             }
           />
+
+          {/* Budgeting & Spending Analysis Section */}
+          <View style={styles.section}>
+            <SectionHeader title="Budget & Spending" />
+            <View style={styles.actionRow}>
+              <TouchableOpacity 
+                style={[styles.ghostBtn, { flex: 1, marginRight: 8 }]} 
+                onPress={() => {
+                  console.log('🔵 Budget button pressed');
+                  try {
+                    if (navigateTo) {
+                      navigateTo('budgeting');
+                    } else if (navigation && navigation.navigate) {
+                      navigation.navigate('budgeting' as never);
+                    } else if (typeof window !== 'undefined' && (window as any).__navigateToGlobal) {
+                      (window as any).__navigateToGlobal('budgeting');
+                    } else {
+                      console.error('❌ No navigation method available');
+                      Alert.alert('Navigation Error', 'Unable to navigate to Budget screen');
+                    }
+                  } catch (error) {
+                    console.error('❌ Navigation error:', error);
+                    Alert.alert('Error', 'Failed to open Budget screen');
+                  }
+                }}
+              >
+                <Icon name="pie-chart" size={16} color="#2457D6" />
+                <Text style={styles.ghostBtnText}>Budget</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.ghostBtn, { flex: 1 }]} 
+                onPress={() => {
+                  console.log('🔵 Spending button pressed');
+                  try {
+                    if (navigateTo) {
+                      navigateTo('spending-analysis');
+                    } else if (navigation && navigation.navigate) {
+                      navigation.navigate('spending-analysis' as never);
+                    } else if (typeof window !== 'undefined' && (window as any).__navigateToGlobal) {
+                      (window as any).__navigateToGlobal('spending-analysis');
+                    } else {
+                      console.error('❌ No navigation method available');
+                      Alert.alert('Navigation Error', 'Unable to navigate to Spending Analysis screen');
+                    }
+                  } catch (error) {
+                    console.error('❌ Navigation error:', error);
+                    Alert.alert('Error', 'Failed to open Spending Analysis screen');
+                  }
+                }}
+              >
+                <Icon name="bar-chart-2" size={16} color="#2457D6" />
+                <Text style={styles.ghostBtnText}>Spending</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
 
           {effectiveBankLoading ? (
             <View style={styles.skeletonBlock}>

@@ -75,6 +75,8 @@ import BacktestingScreen from './features/swingTrading/screens/BacktestingScreen
 import AIScansScreen from './features/aiScans/screens/AIScansScreen';
 import ScanPlaybookScreen from './features/aiScans/screens/ScanPlaybookScreen';
 import BankAccountScreen from './features/user/screens/BankAccountScreen';
+import BudgetingScreen from './features/banking/screens/BudgetingScreen';
+import SpendingAnalysisScreen from './features/banking/screens/SpendingAnalysisScreen';
 import NotificationsScreen from './features/notifications/screens/NotificationsScreen';
 import CryptoScreen from './navigation/CryptoScreen';
 import OptionsLearningScreen from './features/options/screens/OptionsLearningScreen';
@@ -114,6 +116,12 @@ import BehavioralAnalyticsScreen from './features/personalization/screens/Behavi
 import DynamicContentScreen from './features/personalization/screens/DynamicContentScreen';
 import TradingCoachScreen from './features/coach/screens/TradingCoachScreen';
 import AITradingCoachScreen from './features/coach/screens/AITradingCoachScreen';
+// RAHA Screens
+import StrategyStoreScreen from './features/raha/screens/StrategyStoreScreen';
+import StrategyDetailScreen from './features/raha/screens/StrategyDetailScreen';
+import BacktestViewerScreen from './features/raha/screens/BacktestViewerScreen';
+import TheWhisperScreen from './features/raha/screens/TheWhisperScreen';
+import ProLabsScreen from './features/raha/screens/ProLabsScreen';
 // Components
 import { TopHeader, PersonalizedDashboard } from './components';
 // Services
@@ -139,6 +147,7 @@ const ScreenLoader = () => (
 function AppContent() {
 const { user, isAuthenticated, loading, logout: authLogout } = useAuth();
 const [currentScreen, setCurrentScreen] = useState('login');
+const [currentScreenParams, setCurrentScreenParams] = useState<any>({});
 // Version 2 State
 const [showARPreview, setShowARPreview] = useState(false);
 
@@ -378,6 +387,7 @@ const navigateTo = (screen: string, params?: any) => {
   globalNavigateToFunction = navigateTo;
   if (typeof window !== 'undefined') {
     (window as any).__navigateToGlobal = navigateTo;
+    (window as any).__setCurrentScreen = setCurrentScreen;
   }
   
   // Handle Version 2 special screens
@@ -416,8 +426,23 @@ const navigateTo = (screen: string, params?: any) => {
     const newScreen = `message-user-${params.userId}`;
     setCurrentScreen(newScreen);
   } else {
-setCurrentScreen(screen);
-}
+    logger.log('🔍 Setting current screen to:', screen);
+    setCurrentScreen(screen);
+    // Also store params if provided
+    if (params) {
+      setCurrentScreenParams(params);
+      // Also store in window for fallback access
+      if (typeof window !== 'undefined') {
+        (window as any).__currentScreenParams = params;
+      }
+    } else {
+      // Clear params if none provided
+      setCurrentScreenParams({});
+      if (typeof window !== 'undefined') {
+        (window as any).__currentScreenParams = {};
+      }
+    }
+  }
 };
 const handleLogin = async (token?: string) => {
 logger.log('🎉 App handleLogin called with token:', token);
@@ -657,7 +682,16 @@ logger.log('🔍 renderScreen called:', { currentScreen, isLoggedIn, isLoading, 
   // 3) FULL APP NAVIGATOR: Render AppNavigator for all in-app screens
   // ============================================================================
   // Once authenticated and onboarded, and not on a shell screen, render the full app
-  if (isLoggedIn && hasCompletedOnboarding && !isShellScreen) {
+  // BUT: Skip AppNavigator for screens that need direct rendering (like pro-labs, the-whisper, etc.)
+  const screensThatNeedDirectRendering = [
+    'pro-labs',
+    'the-whisper',
+    'raha-strategy-store',
+    'raha-strategy-detail',
+    'raha-backtest-viewer',
+  ];
+  
+  if (isLoggedIn && hasCompletedOnboarding && !isShellScreen && !screensThatNeedDirectRendering.includes(currentScreen)) {
     logger.log('🔍 Rendering AppNavigator (user is logged in and not on shell screen)');
     return <AppNavigator key={`app-nav-${isAuthenticated}`} />;
   }
@@ -711,6 +745,10 @@ case 'subscription':
 return <SubscriptionScreen navigateTo={navigateTo} />;
 case 'portfolio-analytics':
 return <PremiumAnalyticsScreen navigateTo={navigateTo} />;
+case 'budgeting':
+return <BudgetingScreen />;
+case 'spending-analysis':
+return <SpendingAnalysisScreen />;
 case 'stock-screening':
 return <StockScreen navigateTo={navigateTo} />;
 case 'ai-recommendations':
@@ -771,6 +809,40 @@ case 'trading':
 return <TradingScreen navigateTo={navigateTo} />;
 case 'day-trading':
 return <DayTradingScreen navigateTo={navigateTo} />;
+        case 'raha-strategy-store':
+          // Moved to Pro/Labs - redirect for backwards compatibility
+          return <ProLabsScreen navigateTo={navigateTo} />;
+        case 'raha-strategy-detail':
+          return <StrategyDetailScreen 
+            strategyId={currentScreenParams?.strategyId}
+            navigateTo={navigateTo}
+            onBack={() => {
+              if (navigateTo) {
+                navigateTo('pro-labs');
+              } else if (typeof window !== 'undefined' && (window as any).__setCurrentScreen) {
+                (window as any).__setCurrentScreen('pro-labs');
+              }
+            }}
+          />;
+        case 'raha-backtest-viewer':
+          // Moved to Pro/Labs - redirect for backwards compatibility
+          return <ProLabsScreen navigateTo={navigateTo} />;
+        case 'pro-labs':
+          // Pro/Labs - Advanced RAHA controls (Strategy Store, Backtest Viewer, etc.)
+          logger.log('🔍 Rendering ProLabsScreen');
+          return <ProLabsScreen navigateTo={navigateTo} />;
+        case 'the-whisper':
+          // The Whisper - The one magical P&L moment
+          // This is accessed from DayTradingScreen when user wants to see their likely outcome
+          // Get params from state or window fallback
+          const whisperParams = currentScreenParams || (typeof window !== 'undefined' ? (window as any).__currentScreenParams : {}) || {};
+          // Default to AAPL with realistic mock prices if no params provided
+          return <TheWhisperScreen 
+            symbol={whisperParams?.symbol || 'AAPL'}
+            currentPrice={whisperParams?.currentPrice || 175.50}
+            change={whisperParams?.change || 2.30}
+            changePercent={whisperParams?.changePercent || 1.33}
+          />;
         case 'ml-system':
           return <MLSystemScreen navigateTo={navigateTo} />;
         case 'risk-management':

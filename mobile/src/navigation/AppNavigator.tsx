@@ -216,6 +216,8 @@ function HomeStack() {
       <Stack.Screen name="Profile" component={ProfileScreen} />
       <Stack.Screen name="profile" component={ProfileScreen} />
       <Stack.Screen name="bank-accounts" component={BankAccountScreen} options={{ headerShown: true, title: 'Bank Accounts' }} />
+      <Stack.Screen name="budgeting" component={require('../features/banking/screens/BudgetingScreen').default} options={{ headerShown: true, title: 'Budget Management' }} />
+      <Stack.Screen name="spending-analysis" component={require('../features/banking/screens/SpendingAnalysisScreen').default} options={{ headerShown: true, title: 'Spending Analysis' }} />
       <Stack.Screen 
         name="subscription" 
         component={SubscriptionScreenWrapper}
@@ -574,14 +576,26 @@ export default function AppNavigator() {
                 const investRoute = state?.routes?.find((r: any) => r.name === 'Invest');
                 if (investRoute?.state) {
                   const currentRoute = investRoute.state.routes?.[investRoute.state.index || 0];
+                  logger.log('Current Invest stack route:', currentRoute?.name);
                   if (currentRoute?.name !== 'InvestMain') {
                     e.preventDefault();
                     // Navigate to InvestMain
+                    logger.log('Navigating to InvestMain from:', currentRoute?.name);
                     navigation.navigate('Invest', { 
                       screen: 'InvestMain',
                       params: undefined 
                     });
+                  } else {
+                    logger.log('Already on InvestMain, allowing default navigation');
                   }
+                } else {
+                  // If no state, navigate to InvestMain
+                  e.preventDefault();
+                  logger.log('No Invest stack state, navigating to InvestMain');
+                  navigation.navigate('Invest', { 
+                    screen: 'InvestMain',
+                    params: undefined 
+                  });
                 }
               },
             })}

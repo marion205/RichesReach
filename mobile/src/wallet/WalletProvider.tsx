@@ -1,12 +1,28 @@
 import React, { createContext, useContext, useMemo } from 'react';
-import WalletConnectProvider, { useWalletConnect } from '@walletconnect/react-native-dapp';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ethers } from 'ethers';
+
+// Optional WalletConnect - only import if available
+let WalletConnectProvider: any = null;
+let useWalletConnect: any = null;
+
+try {
+  const walletConnect = require('@walletconnect/react-native-dapp');
+  WalletConnectProvider = walletConnect.default || walletConnect.WalletConnectProvider;
+  useWalletConnect = walletConnect.useWalletConnect;
+} catch (e) {
+  console.warn('WalletConnect not available - blockchain features will be limited');
+}
 
 const Ctx = createContext<any>(null);
 export const useWallet = () => useContext(Ctx);
 
 export function WalletProvider({ children }: {children: React.ReactNode}) {
+  // If WalletConnect is not available, just render children directly
+  if (!WalletConnectProvider) {
+    return <Inner>{children}</Inner>;
+  }
+
   return (
     <WalletConnectProvider 
       redirectUrl="richesreach://"
@@ -21,20 +37,35 @@ export function WalletProvider({ children }: {children: React.ReactNode}) {
 }
 
 function Inner({ children }: {children: React.ReactNode}) {
-  const connector = useWalletConnect();
+  const connector = useWalletConnect ? useWalletConnect() : { 
+    connected: false, 
+    accounts: [], 
+    chainId: null,
+    connect: async () => { throw new Error('WalletConnect not available'); },
+    killSession: async () => {},
+    updateSession: async () => {}
+  };
   
   const evm = useMemo(() => {
-    if (!connector.connected) return null;
-    const provider = new ethers.providers.Web3Provider(connector as any);
-    return { 
-      provider, 
-      signer: provider.getSigner(),
-      address: connector.accounts[0],
-      chainId: connector.chainId
-    };
+    if (!connector.connected || !connector.accounts?.length) return null;
+    try {
+      const provider = new ethers.providers.Web3Provider(connector as any);
+      return { 
+        provider, 
+        signer: provider.getSigner(),
+        address: connector.accounts[0],
+        chainId: connector.chainId
+      };
+    } catch (error) {
+      console.warn('Failed to create EVM provider:', error);
+      return null;
+    }
   }, [connector.connected, connector.accounts, connector.chainId]);
 
   const connect = async () => {
+    if (!useWalletConnect) {
+      throw new Error('WalletConnect not available - install @walletconnect/react-native-dapp');
+    }
     try {
       await connector.connect();
     } catch (error) {
@@ -44,6 +75,7 @@ function Inner({ children }: {children: React.ReactNode}) {
   };
 
   const disconnect = async () => {
+    if (!useWalletConnect) return;
     try {
       await connector.killSession();
     } catch (error) {
@@ -52,6 +84,9 @@ function Inner({ children }: {children: React.ReactNode}) {
   };
 
   const switchChain = async (chainId: number) => {
+    if (!useWalletConnect) {
+      throw new Error('WalletConnect not available');
+    }
     try {
       await connector.updateSession({
         chainId,
@@ -82,9 +117,9 @@ function Inner({ children }: {children: React.ReactNode}) {
       switchChain,
       signMessage,
       sendTransaction,
-      isConnected: connector.connected,
-      address: evm?.address,
-      chainId: evm?.chainId
+      isConnected: connector.connected || false,
+      address: evm?.address || null,
+      chainId: evm?.chainId || null
     }}>
       {children}
     </Ctx.Provider>

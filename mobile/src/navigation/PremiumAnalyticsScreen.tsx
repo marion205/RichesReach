@@ -177,20 +177,6 @@ const GET_OPTIONS_ANALYSIS = gql`
         totalVolume
         unusualVolume
         unusualVolumePercent
-        topTrades {
-          symbol
-          contractSymbol
-          optionType
-          strike
-          expirationDate
-          volume
-          openInterest
-          premium
-          impliedVolatility
-          unusualActivityScore
-          activityType
-          type
-        }
         sweepTrades
         blockTrades
         lastUpdated
@@ -278,7 +264,38 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
   
   // Fallback navigateTo if not provided
   const safeNavigateTo = navigateTo || ((screen: string, params?: any) => {
-    navigation.navigate(screen as never, params as never);
+    // Handle cross-stack navigation for subscription screen
+    if (screen === 'subscription') {
+      try {
+        // Get parent navigator to navigate across stacks
+        const parentNav = navigation.getParent?.();
+        if (parentNav) {
+          // Navigate to Home tab, then to subscription screen
+          parentNav.navigate('Home' as never, {
+            screen: 'subscription',
+            params: params
+          } as never);
+          return;
+        }
+      } catch (error) {
+        console.error('Error navigating to subscription:', error);
+      }
+    }
+    // Default navigation
+    try {
+      navigation.navigate(screen as never, params as never);
+    } catch (error) {
+      console.error(`Error navigating to ${screen}:`, error);
+      // Fallback: try parent navigator
+      try {
+        const parentNav = navigation.getParent?.();
+        if (parentNav) {
+          parentNav.navigate(screen as never, params as never);
+        }
+      } catch (parentError) {
+        console.error('Parent navigation also failed:', parentError);
+      }
+    }
   });
   
   // Stock Screening state
@@ -481,34 +498,43 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
 
   // Function to filter strategies based on market outlook
   const getFilteredStrategies = (strategies: any[]) => {
-    if (!strategies) return [];
+    if (!strategies || strategies.length === 0) return [];
     
-    // If no specific outlook is selected, show all strategies
+    // If Neutral is selected, show all strategies
     if (marketOutlook === 'Neutral') {
       return strategies;
     }
     
-    const filtered = strategies.filter(strategy => {
-      const outlook = strategy.marketOutlook?.toLowerCase() || '';
-      const strategyType = strategy.strategyType?.toLowerCase() || '';
+    // Filter by market outlook - strict matching for real data
+    return strategies.filter((strategy) => {
+      const outlook = (strategy.marketOutlook || strategy.market_outlook || '').toLowerCase().trim();
+      
+      // If no outlook specified, don't show it (strict filtering)
+      if (!outlook || outlook === '') {
+        return false;
+      }
       
       switch (marketOutlook) {
         case 'Bullish':
           return outlook.includes('bullish') || 
-                 outlook.includes('income') || 
-                 strategyType.includes('income') ||
-                 strategy.strategyName?.toLowerCase().includes('covered call');
+                 outlook.includes('bull') || 
+                 outlook === 'bullish' ||
+                 outlook.includes('up') ||
+                 outlook.includes('positive') ||
+                 outlook.includes('rise');
         case 'Bearish':
           return outlook.includes('bearish') || 
-                 outlook.includes('protective') || 
-                 strategyType.includes('protective') ||
-                 strategy.strategyName?.toLowerCase().includes('put');
+                 outlook.includes('bear') || 
+                 outlook === 'bearish' ||
+                 outlook.includes('down') ||
+                 outlook.includes('negative') ||
+                 outlook.includes('fall') ||
+                 outlook.includes('decline') ||
+                 outlook.includes('protective');
         default:
-          return true;
+          return false;
       }
     });
-    
-    return filtered;
   };
 
   const renderMetricsTab = () => {
@@ -1314,54 +1340,68 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
                 <Icon name="loader" size={16} color="#007AFF" style={{ marginLeft: 8 }} />
               )}
             </Text>
-            {(getFilteredStrategies(options?.recommendedStrategies || []) || options?.recommendedStrategies || []).map((strategy, index) => (
-              <View key={index} style={styles.strategyCard}>
-                <View style={styles.strategyHeader}>
-                  <Text style={styles.strategyName}>{strategy.strategyName}</Text>
-                  <View style={styles.strategyBadges}>
-                    <View style={[styles.riskBadge, { 
-                      backgroundColor: strategy.riskLevel === 'Low' ? '#E8F5E8' : 
-                        strategy.riskLevel === 'Medium' ? '#FFF3CD' : '#F8D7DA'
-                    }]}>
-                      <Text style={[styles.riskBadgeText, { 
-                        color: strategy.riskLevel === 'Low' ? '#155724' : 
-                          strategy.riskLevel === 'Medium' ? '#856404' : '#721C24'
+            {(() => {
+              const filtered = getFilteredStrategies(options?.recommendedStrategies || []);
+              if (filtered.length === 0) {
+                return (
+                  <View style={styles.noSuggestionsCard}>
+                    <Icon name="filter" size={48} color="#8E8E93" />
+                    <Text style={styles.noSuggestionsTitle}>No strategies match this filter</Text>
+                    <Text style={styles.noSuggestionsText}>
+                      Try selecting a different market outlook or switch to "Neutral" to see all strategies
+                    </Text>
+                  </View>
+                );
+              }
+              return filtered.map((strategy, index) => (
+                <View key={index} style={styles.strategyCard}>
+                  <View style={styles.strategyHeader}>
+                    <Text style={styles.strategyName}>{strategy.strategyName}</Text>
+                    <View style={styles.strategyBadges}>
+                      <View style={[styles.riskBadge, { 
+                        backgroundColor: strategy.riskLevel === 'Low' ? '#E8F5E8' : 
+                          strategy.riskLevel === 'Medium' ? '#FFF3CD' : '#F8D7DA'
                       }]}>
-                        {strategy.riskLevel}
+                        <Text style={[styles.riskBadgeText, { 
+                          color: strategy.riskLevel === 'Low' ? '#155724' : 
+                            strategy.riskLevel === 'Medium' ? '#856404' : '#721C24'
+                        }]}>
+                          {strategy.riskLevel}
+                        </Text>
+                      </View>
+                      <Text style={styles.strategyType}>{strategy.strategyType}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.strategyDescription}>{strategy.description}</Text>
+                  <View style={styles.strategyMetrics}>
+                    <View style={styles.strategyMetric}>
+                      <Text style={styles.strategyMetricLabel}>Max Profit</Text>
+                      <Text style={[styles.strategyMetricValue, { color: '#34C759' }]}>
+                        {strategy.maxProfit === Infinity ? '∞' : `$${strategy.maxProfit?.toFixed(2) || '0.00'}`}
                       </Text>
                     </View>
-                    <Text style={styles.strategyType}>{strategy.strategyType}</Text>
+                    <View style={styles.strategyMetric}>
+                      <Text style={styles.strategyMetricLabel}>Max Loss</Text>
+                      <Text style={[styles.strategyMetricValue, { color: '#ef4444' }]}>
+                        {strategy.maxLoss === Infinity ? '∞' : `$${strategy.maxLoss?.toFixed(2) || '0.00'}`}
+                      </Text>
+                    </View>
+                    <View style={styles.strategyMetric}>
+                      <Text style={styles.strategyMetricLabel}>Win Rate</Text>
+                      <Text style={styles.strategyMetricValue}>
+                        {(strategy.probabilityOfProfit * 100)?.toFixed(0) || '0'}%
+                      </Text>
+                    </View>
+                    <View style={styles.strategyMetric}>
+                      <Text style={styles.strategyMetricLabel}>Risk/Reward</Text>
+                      <Text style={styles.strategyMetricValue}>
+                        {strategy.riskRewardRatio === Infinity ? '∞' : strategy.riskRewardRatio?.toFixed(2) || '0.00'}
+                      </Text>
+                    </View>
                   </View>
                 </View>
-                <Text style={styles.strategyDescription}>{strategy.description}</Text>
-                <View style={styles.strategyMetrics}>
-                  <View style={styles.strategyMetric}>
-                    <Text style={styles.strategyMetricLabel}>Max Profit</Text>
-                    <Text style={[styles.strategyMetricValue, { color: '#34C759' }]}>
-                      {strategy.maxProfit === Infinity ? '∞' : `$${strategy.maxProfit?.toFixed(2) || '0.00'}`}
-                    </Text>
-                  </View>
-                  <View style={styles.strategyMetric}>
-                    <Text style={styles.strategyMetricLabel}>Max Loss</Text>
-                    <Text style={[styles.strategyMetricValue, { color: '#ef4444' }]}>
-                      {strategy.maxLoss === Infinity ? '∞' : `$${strategy.maxLoss?.toFixed(2) || '0.00'}`}
-                    </Text>
-                  </View>
-                  <View style={styles.strategyMetric}>
-                    <Text style={styles.strategyMetricLabel}>Win Rate</Text>
-                    <Text style={styles.strategyMetricValue}>
-                      {(strategy.probabilityOfProfit * 100)?.toFixed(0) || '0'}%
-                    </Text>
-                  </View>
-                  <View style={styles.strategyMetric}>
-                    <Text style={styles.strategyMetricLabel}>Risk/Reward</Text>
-                    <Text style={styles.strategyMetricValue}>
-                      {strategy.riskRewardRatio === Infinity ? '∞' : strategy.riskRewardRatio?.toFixed(2) || '0.00'}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            ))}
+              ));
+            })()}
           </View>
         )}
 

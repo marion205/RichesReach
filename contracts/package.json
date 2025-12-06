@@ -1,0 +1,35 @@
+{
+  "name": "richesreach-contracts",
+  "version": "1.0.0",
+  "description": "RichesReach DeFi Smart Contracts",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "check-balance": "hardhat run scripts/check-balance.ts",
+    "check-balance:amoy": "hardhat run scripts/check-balance.ts --network polygonAmoy",
+    "request-matic": "hardhat run scripts/request-matic.ts --network polygonAmoy",
+    "deploy:local": "hardhat run scripts/deploy-local.ts --network localhost",
+    "deploy:amoy": "hardhat run scripts/deploy.ts --network polygonAmoy",
+    "deploy:mainnet": "hardhat run scripts/deploy.ts --network polygonMainnet",
+    "verify": "hardhat verify --network",
+    "coverage": "hardhat coverage"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "@nomicfoundation/hardhat-verify": "^2.0.0",
+    "@openzeppelin/contracts": "^5.0.0",
+    "hardhat": "^2.19.0",
+    "dotenv": "^16.3.1"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.0.0"
+  },
+  "main": "index.js",
+  "directories": {
+    "test": "test"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}

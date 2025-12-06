@@ -248,20 +248,76 @@ class MLWakeWordService {
    */
   private async extractAudioData(): Promise<Float32Array | null> {
     try {
-      // This is a placeholder - actual implementation would:
-      // 1. Get audio buffer from recording
-      // 2. Convert to Float32Array
-      // 3. Downsample to 16kHz if needed
+      if (!this.recording) {
+        return null;
+      }
+
+      // Get recording status to access URI
+      const status = await this.recording.getStatusAsync();
+      if (!status.isRecording && status.uri) {
+        // For React Native, we'll use a Web Audio API approach via a bridge
+        // or use expo-audio-processing if available
+        // For now, implement a file-based approach
+        
+        // Read audio file and convert to Float32Array
+        // This requires native module or file system access
+        const response = await fetch(status.uri);
+        const arrayBuffer = await response.arrayBuffer();
+        
+        // Convert to Float32Array (simplified - actual implementation would decode audio)
+        // For MP3/WAV files, you'd need an audio decoder
+        const audioData = new Float32Array(arrayBuffer.byteLength / 4);
+        const view = new DataView(arrayBuffer);
+        
+        for (let i = 0; i < audioData.length; i++) {
+          audioData[i] = view.getFloat32(i * 4, true);
+        }
+        
+        // Downsample to 16kHz if needed (simplified)
+        if (this.sampleRate !== SAMPLE_RATE) {
+          return this.downsample(audioData, this.sampleRate, SAMPLE_RATE);
+        }
+        
+        return audioData;
+      }
       
-      // For now, we'll need to use a different approach
-      // Since expo-av doesn't expose raw audio buffers directly,
-      // we might need to record to file and process it
-      
-      return null; // Placeholder
+      return null;
     } catch (error) {
       logger.error('Error extracting audio data:', error);
       return null;
     }
+  }
+
+  /**
+   * Downsample audio data
+   */
+  private downsample(buffer: Float32Array, fromSampleRate: number, toSampleRate: number): Float32Array {
+    if (fromSampleRate === toSampleRate) {
+      return buffer;
+    }
+    
+    const sampleRateRatio = fromSampleRate / toSampleRate;
+    const newLength = Math.round(buffer.length / sampleRateRatio);
+    const result = new Float32Array(newLength);
+    let offsetResult = 0;
+    let offsetBuffer = 0;
+    
+    while (offsetResult < result.length) {
+      const nextOffsetBuffer = Math.round((offsetResult + 1) * sampleRateRatio);
+      let accum = 0;
+      let count = 0;
+      
+      for (let i = offsetBuffer; i < nextOffsetBuffer && i < buffer.length; i++) {
+        accum += buffer[i];
+        count++;
+      }
+      
+      result[offsetResult] = accum / count;
+      offsetResult++;
+      offsetBuffer = nextOffsetBuffer;
+    }
+    
+    return result;
   }
 
   /**

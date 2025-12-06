@@ -55,6 +55,7 @@ wait_for_service() {
 
 # Stop existing services
 echo -e "${YELLOW}🔄 Stopping existing services...${NC}"
+pkill -f "main_server.py" 2>/dev/null || true
 pkill -f "manage.py runserver" 2>/dev/null || true
 pkill -f "expo start" 2>/dev/null || true
 pkill -f "rust_crypto_engine" 2>/dev/null || true
@@ -112,28 +113,49 @@ python3 manage.py migrate --settings=richesreach.settings_local 2>&1 | tail -3 |
     python3 manage.py migrate 2>&1 | tail -3 || true
 }
 
-# Start Django
+# Start Backend (using main_server.py)
 if check_port 8000; then
     echo -e "${YELLOW}⚠️  Port 8000 in use, killing existing process...${NC}"
     lsof -ti:8000 | xargs kill -9 2>/dev/null || true
     sleep 2
 fi
 
-echo "Starting Django backend..."
-if [ -f "richesreach/settings_local.py" ]; then
-    DJANGO_SETTINGS_MODULE=richesreach.settings_local python3 manage.py runserver 127.0.0.1:8000 > /tmp/django_server.log 2>&1 &
-else
-    python3 manage.py runserver 127.0.0.1:8000 > /tmp/django_server.log 2>&1 &
+echo "Starting backend with main_server.py..."
+cd "$SCRIPT_DIR/.."
+
+# Activate venv if exists
+if [ -d "venv" ]; then
+    source venv/bin/activate
+elif [ -d ".venv" ]; then
+    source .venv/bin/activate
 fi
 
-DJANGO_PID=$!
+# Check if main_server.py exists
+if [ ! -f "main_server.py" ]; then
+    echo -e "${RED}❌ main_server.py not found in project root${NC}"
+    exit 1
+fi
+
+# Load OpenAI API key if available
+if [ -f ".env.openai" ]; then
+    export OPENAI_API_KEY=$(cat .env.openai)
+    echo "✅ OpenAI API key loaded from .env.openai"
+elif [ -n "$OPENAI_API_KEY" ]; then
+    echo "✅ OpenAI API key found in environment"
+fi
+
+# Start main_server.py
+python3 main_server.py > /tmp/main_server.log 2>&1 &
+MAIN_SERVER_PID=$!
 sleep 3
 
-if wait_for_service localhost 8000 "Django Backend"; then
-    echo -e "${GREEN}✅ Django backend running at http://127.0.0.1:8000${NC}"
+if wait_for_service localhost 8000 "Main Server"; then
+    echo -e "${GREEN}✅ Main server running at http://127.0.0.1:8000${NC}"
+    echo -e "${GREEN}   GraphQL: http://127.0.0.1:8000/graphql${NC}"
+    echo -e "${GREEN}   Health: http://127.0.0.1:8000/health${NC}"
 else
-    echo -e "${RED}❌ Django failed to start. Check /tmp/django_server.log${NC}"
-    tail -20 /tmp/django_server.log
+    echo -e "${RED}❌ Main server failed to start. Check /tmp/main_server.log${NC}"
+    tail -20 /tmp/main_server.log
     exit 1
 fi
 
@@ -217,7 +239,7 @@ echo ""
 echo -e "${BLUE}Services Running:${NC}"
 echo "  📊 PostgreSQL:    localhost:5432"
 echo "  🔴 Redis:         localhost:6379"
-echo "  🐍 Django:        http://127.0.0.1:8000"
+echo "  🚀 Main Server:   http://127.0.0.1:8000 (main_server.py)"
 echo "  🔵 GraphQL:       http://127.0.0.1:8000/graphql"
 echo "  🦀 Rust Engine:   http://127.0.0.1:3002 (if started)"
 echo "  📱 Expo:          http://localhost:8081"
@@ -240,9 +262,9 @@ echo "  2. Press 'i' to open iOS simulator"
 echo "  3. Test features in the mobile app"
 echo ""
 echo -e "${YELLOW}View logs:${NC}"
-echo "  • Django:    tail -f /tmp/django_server.log"
-echo "  • Rust:      tail -f /tmp/rust_engine.log"
-echo "  • Expo:     tail -f /tmp/expo_server.log"
+echo "  • Main Server: tail -f /tmp/main_server.log"
+echo "  • Rust:        tail -f /tmp/rust_engine.log"
+echo "  • Expo:        tail -f /tmp/expo_server.log"
 echo ""
 echo -e "${GREEN}All systems operational! 🚀${NC}"
 echo ""

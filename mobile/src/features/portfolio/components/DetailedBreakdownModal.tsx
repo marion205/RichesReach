@@ -289,8 +289,10 @@ export const DetailedBreakdownModal: React.FC<DetailedBreakdownModalProps> = ({
                     <Text style={styles.recommendationActionText}>{rec.action}</Text>
                     {rec.reasoning && (
                       <View style={styles.reasoningBox}>
-                        <Icon name="lightbulb" size={12} color="#856404" />
-                        <Text style={styles.reasoningText}>{rec.reasoning}</Text>
+                        <Icon name="info" size={14} color="#856404" />
+                        <Text style={styles.reasoningText}>
+                          {rec.reasoning.replace(/^\?+\s*/, '')}
+                        </Text>
                       </View>
                     )}
                   </View>

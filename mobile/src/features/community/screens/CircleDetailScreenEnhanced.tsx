@@ -208,40 +208,81 @@ export default function CircleDetailScreenEnhanced({ route, navigation }: Circle
 
   // Setup socket connection
   const setupSocket = useCallback(() => {
-    socketRef.current = io(API_BASE_URL);
+    console.log(`🔌 [Socket] Setting up socket connection to: ${API_BASE_URL}`);
+    
+    // Disconnect existing socket if any
+    if (socketRef.current) {
+      console.log(`🔌 [Socket] Disconnecting existing socket`);
+      socketRef.current.disconnect();
+    }
+    
+    socketRef.current = io(API_BASE_URL, {
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 5,
+    });
     
     socketRef.current.on('connect', () => {
-      console.log('Connected to socket');
+      console.log(`✅ [Socket] Connected to socket server (ID: ${socketRef.current?.id})`);
+      // Join the circle to receive events
+      if (socketRef.current && circle.id) {
+        socketRef.current.emit('join_circle', { circleId: circle.id });
+        console.log(`✅ [Socket] Joined circle ${circle.id} for socket events`);
+      }
+    });
+
+    socketRef.current.on('disconnect', (reason) => {
+      console.log(`❌ [Socket] Disconnected: ${reason}`);
+    });
+
+    socketRef.current.on('connect_error', (error) => {
+      console.error(`❌ [Socket] Connection error:`, error);
     });
 
     socketRef.current.on('new_post', (post: CirclePost) => {
+      console.log(`📝 [Socket] Received new_post event`);
       setPosts(prev => [post, ...prev]);
     });
 
     socketRef.current.on('new_comment', ({ postId, comment }: { postId: string; comment: Comment }) => {
+      console.log(`💬 [Socket] Received new_comment event for post ${postId}`);
       setComments(prev => ({
         ...prev,
         [postId]: [...(prev[postId] || []), comment]
       }));
     });
 
-    socketRef.current.on('live_stream_started', ({ host, channelId }: { host: string; channelId: string }) => {
+    socketRef.current.on('live_stream_started', (data: { host: string; channelId: string; circleId?: string }) => {
+      const { host, channelId, circleId: streamCircleId } = data;
+      console.log(`📺 [Socket] ========================================`);
+      console.log(`📺 [Socket] Received live_stream_started event!`);
+      console.log(`📺 [Socket] Host: ${host}`);
+      console.log(`📺 [Socket] ChannelId: ${channelId}`);
+      console.log(`📺 [Socket] StreamCircleId: ${streamCircleId}`);
+      console.log(`📺 [Socket] Current Circle: ${circle.id}`);
+      console.log(`📺 [Socket] ========================================`);
+      
+      // Show notification if it's for this circle OR if we're in the same circle
+      // For now, show all live stream notifications (can filter by follow relationship later)
       setActiveStream({ host, channelId });
-      Alert.alert('Live Now!', `${host} started a live stream in ${circle.name}. Join?`, [
+      Alert.alert('Live Now!', `${host} started a live stream. Join?`, [
         { text: 'Dismiss' },
         { text: 'Join', onPress: joinAsViewer },
       ]);
     });
 
     socketRef.current.on('live_stream_ended', () => {
+      console.log(`📺 [Socket] Received live_stream_ended event`);
       setActiveStream(null);
       setViewerCount(0);
     });
 
     socketRef.current.on('viewer_count_update', ({ count }: { count: number }) => {
+      console.log(`👀 [Socket] Viewer count update: ${count}`);
       setViewerCount(count);
     });
-  }, [circle.id, circle.name]);
+  }, [circle.id, circle.name, joinAsViewer]);
 
   // Setup push notifications
   const setupNotifications = useCallback(async () => {
@@ -281,6 +322,19 @@ export default function CircleDetailScreenEnhanced({ route, navigation }: Circle
 
   // Start live stream as host
   const startLiveStream = useCallback(async () => {
+    // Check if there's already an active stream
+    if (activeStream && activeStream.host && activeStream.host !== (await AsyncStorage.getItem('userId') || 'me')) {
+      Alert.alert(
+        'Stream Already Active',
+        `There's already a live stream by ${activeStream.host}. Would you like to join instead?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Join Stream', onPress: joinAsViewer },
+        ]
+      );
+      return;
+    }
+    
     if (!agoraEngine.current) return;
     setIsStreaming(true);
     setIsHost(true);
@@ -306,13 +360,16 @@ export default function CircleDetailScreenEnhanced({ route, navigation }: Circle
           circleId: circle.id, 
           host: userId 
         });
+        console.log(`📺 [Live Stream] Emitted start_live_stream for circle ${circle.id}`);
+      } else {
+        console.warn('⚠️ [Live Stream] Socket not connected, cannot emit start_live_stream');
       }
     } catch (err) {
       console.error('Stream start error:', err);
       setIsStreaming(false);
       setIsHost(false);
     }
-  }, [circle.id]);
+  }, [circle.id, activeStream, joinAsViewer]);
 
   // Join as viewer
   const joinAsViewer = useCallback(async () => {

@@ -1239,6 +1239,104 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
                 </View>
                 <Icon name="chevron-right" size={16} color="#8E8E93" />
               </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.learningCard} onPress={() => {
+                logger.log('Pro/Labs pressed');
+                try {
+                  // Always use navigateTo if available (preferred method)
+                  if (navigateTo) {
+                    logger.log('Using navigateTo function');
+                    navigateTo('pro-labs');
+                  } 
+                  // Fallback to global navigate function (from window - set in App.tsx)
+                  else if (typeof window !== 'undefined' && (window as any).__navigateToGlobal) {
+                    logger.log('Using window.__navigateToGlobal');
+                    (window as any).__navigateToGlobal('pro-labs');
+                  }
+                  // Last resort: try to set screen directly via window
+                  else if (typeof window !== 'undefined' && (window as any).__setCurrentScreen) {
+                    logger.log('Using window.__setCurrentScreen');
+                    (window as any).__setCurrentScreen('pro-labs');
+                  }
+                  // Final fallback: alert user (shouldn't happen)
+                  else {
+                    logger.error('No navigation method available!');
+                    alert('Navigation not available. Please reload the app.');
+                  }
+                } catch (error) {
+                  logger.error('Navigation error:', error);
+                  // Emergency fallback: try window methods again
+                  try {
+                    if (typeof window !== 'undefined') {
+                      if ((window as any).__navigateToGlobal) {
+                        (window as any).__navigateToGlobal('pro-labs');
+                      } else if ((window as any).__setCurrentScreen) {
+                        (window as any).__setCurrentScreen('pro-labs');
+                      }
+                    }
+                  } catch (e) {
+                    logger.error('All navigation methods failed:', e);
+                  }
+                }
+              }}>
+                <View style={styles.learningCardIcon}>
+                  <Icon name="sliders" size={24} color="#3B82F6" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={styles.learningCardTitle}>Pro / Labs</Text>
+                  <Text style={styles.learningCardDescription}>Advanced RAHA controls & strategy builder</Text>
+                  <Text style={styles.learningCardMeta}>Advanced • Power Users</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.learningCard} onPress={() => {
+                logger.log('The Whisper pressed');
+                try {
+                  // Use AAPL as default (we have signals for it)
+                  // Realistic mock price data for AAPL
+                  const mockPrice = 175.50;
+                  const mockChange = 2.30;
+                  const mockChangePercent = 1.33;
+                  
+                  if (navigateTo) {
+                    navigateTo('the-whisper', {
+                      symbol: 'AAPL',
+                      currentPrice: mockPrice,
+                      change: mockChange,
+                      changePercent: mockChangePercent,
+                    });
+                  } else if (typeof window !== 'undefined' && (window as any).__navigateToGlobal) {
+                    (window as any).__navigateToGlobal('the-whisper', {
+                      symbol: 'AAPL',
+                      currentPrice: mockPrice,
+                      change: mockChange,
+                      changePercent: mockChangePercent,
+                    });
+                  } else if (typeof window !== 'undefined' && (window as any).__setCurrentScreen) {
+                    (window as any).__setCurrentScreen('the-whisper');
+                    // Also set params in window
+                    (window as any).__currentScreenParams = {
+                      symbol: 'AAPL',
+                      currentPrice: mockPrice,
+                      change: mockChange,
+                      changePercent: mockChangePercent,
+                    };
+                  }
+                } catch (error) {
+                  logger.error('Navigation error to The Whisper:', error);
+                }
+              }}>
+                <View style={styles.learningCardIcon}>
+                  <Icon name="eye" size={24} color="#10B981" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={styles.learningCardTitle}>The Whisper</Text>
+                  <Text style={styles.learningCardDescription}>See your likely P&L before you trade</Text>
+                  <Text style={styles.learningCardMeta}>Ghost Candle • RAHA</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
             </View>
           </View>
 

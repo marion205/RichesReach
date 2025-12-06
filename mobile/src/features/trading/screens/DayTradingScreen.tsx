@@ -29,6 +29,9 @@ import EducationalTooltip from '../../../components/common/EducationalTooltip';
 import { RiskRewardDiagram } from '../../../components/common/RiskRewardDiagram';
 import { WhyThisTradeModal } from '../../../components/common/WhyThisTradeModal';
 import { LearnWhileTradingModal } from '../../../components/common/LearnWhileTradingModal';
+import ExecutionQualityDashboard from '../components/ExecutionQualityDashboard';
+// RAHA Integration - The Whisper (Jobs Approach)
+import TheWhisperScreen from '../../raha/screens/TheWhisperScreen';
 
 type TradingMode = 'SAFE' | 'AGGRESSIVE';
 type Side = 'LONG' | 'SHORT';
@@ -143,6 +146,8 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
   const [isGestureActive, setIsGestureActive] = useState(false);
   const [gestureDirection, setGestureDirection] = useState<string>('');
   const [selectedPick, setSelectedPick] = useState<DayTradingPick | null>(null);
+  const [showExecutionQuality, setShowExecutionQuality] = useState(false);
+  const [showWhisper, setShowWhisper] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const chartPollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const client = useApolloClient();
@@ -323,6 +328,12 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
           cache: 'no-store',
         },
       },
+      onError: (err) => {
+        // Log error but don't block UI - we'll use mock data fallback
+        if (__DEV__) {
+          console.log('⚠️ Day Trading query error (will use mock data):', err.message);
+        }
+      },
     },
   );
 
@@ -358,6 +369,17 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
   if (__DEV__) {
     if (error) {
       console.log('❌ GraphQL Error:', JSON.stringify(error, null, 2));
+      if (error.networkError) {
+        console.log('❌ Network Error Details:', {
+          message: error.networkError.message,
+          name: error.networkError.name,
+          statusCode: error.networkError.statusCode,
+          bodyText: error.networkError.bodyText,
+        });
+      }
+      // Log the GraphQL URL being used
+      const graphqlUrl = require('../../../config/api').API_GRAPHQL;
+      console.log('🔗 GraphQL URL:', graphqlUrl);
     }
     if (data?.dayTradingPicks) {
       console.log('📊 Day Trading Data:', JSON.stringify(data.dayTradingPicks, null, 2));
@@ -373,91 +395,165 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
   
   const dayTradingData: DayTradingData | null = data?.dayTradingPicks ?? null;
 
-  // Generate mock data for testing educational features
+  // Generate mode-specific mock data (should rarely be used - backend provides mock data)
+  // This is only a last-resort fallback if backend data is completely unavailable
   const getMockPicks = useCallback((): DayTradingPick[] => {
-    const basePrice = 150.0;
-    const atr5m = 2.5;
-    const stopDistance = mode === 'SAFE' ? atr5m * 1.5 : atr5m * 2.0;
-    
-    return [
-      {
-        symbol: 'AAPL',
-        side: 'LONG',
-        score: 2.3,
-        features: {
-          momentum15m: 0.65,
-          rvol10m: 2.1,
-          vwapDist: 0.015,
-          breakoutPct: 0.035,
-          spreadBps: 3.5,
-          catalystScore: 0.8,
-          executionQualityScore: 0.85,
+    if (mode === 'SAFE') {
+      // SAFE mode: Large-cap, stable stocks
+      return [
+        {
+          symbol: 'MSFT',
+          side: 'LONG',
+          score: 2.3,
+          features: {
+            momentum15m: 0.015,
+            rvol10m: 1.8,
+            vwapDist: 0.01,
+            breakoutPct: 0.02,
+            spreadBps: 3.0,
+            catalystScore: 0.7,
+            executionQualityScore: 0.85,
+          },
+          risk: {
+            atr5m: 2.5,
+            sizeShares: 100,
+            stop: 375.0,
+            targets: [388.0, 395.0],
+            timeStopMin: 45,
+          },
+          notes: 'Large-cap momentum breakout with low volatility setup',
         },
-        risk: {
-          atr5m: atr5m,
-          sizeShares: 100,
-          stop: basePrice - stopDistance,
-          targets: [basePrice + stopDistance * 2.5, basePrice + stopDistance * 4.0],
-          timeStopMin: mode === 'SAFE' ? 45 : 25,
+        {
+          symbol: 'GOOGL',
+          side: 'LONG',
+          score: 2.1,
+          features: {
+            momentum15m: 0.012,
+            rvol10m: 1.6,
+            vwapDist: 0.008,
+            breakoutPct: 0.018,
+            spreadBps: 2.5,
+            catalystScore: 0.65,
+            executionQualityScore: 0.82,
+          },
+          risk: {
+            atr5m: 2.2,
+            sizeShares: 100,
+            stop: 137.0,
+            targets: [141.0, 144.0],
+            timeStopMin: 45,
+          },
+          notes: 'Stable large-cap with conservative risk parameters',
         },
-        notes: 'Strong momentum breakout above VWAP with high relative volume',
-      },
-      {
-        symbol: 'TSLA',
-        side: 'SHORT',
-        score: 1.8,
-        features: {
-          momentum15m: -0.45,
-          rvol10m: 1.9,
-          vwapDist: -0.022,
-          breakoutPct: 0.028,
-          spreadBps: 4.2,
-          catalystScore: 0.7,
-          executionQualityScore: 0.78,
+        {
+          symbol: 'JPM',
+          side: 'LONG',
+          score: 1.9,
+          features: {
+            momentum15m: 0.01,
+            rvol10m: 1.5,
+            vwapDist: 0.006,
+            breakoutPct: 0.015,
+            spreadBps: 3.5,
+            catalystScore: 0.6,
+            executionQualityScore: 0.8,
+          },
+          risk: {
+            atr5m: 2.0,
+            sizeShares: 100,
+            stop: 157.0,
+            targets: [161.0, 164.0],
+            timeStopMin: 45,
+          },
+          notes: 'Financial sector momentum with high liquidity',
         },
-        risk: {
-          atr5m: 3.2,
-          sizeShares: 50,
-          stop: basePrice * 1.15 + stopDistance,
-          targets: [basePrice * 1.15 - stopDistance * 2.5, basePrice * 1.15 - stopDistance * 4.0],
-          timeStopMin: mode === 'SAFE' ? 45 : 25,
+      ];
+    } else {
+      // AGGRESSIVE mode: Growth/mid-cap stocks
+      return [
+        {
+          symbol: 'TSLA',
+          side: 'LONG',
+          score: 2.8,
+          features: {
+            momentum15m: 0.045,
+            rvol10m: 2.5,
+            vwapDist: 0.025,
+            breakoutPct: 0.055,
+            spreadBps: 8.0,
+            catalystScore: 0.9,
+            executionQualityScore: 0.88,
+          },
+          risk: {
+            atr5m: 4.5,
+            sizeShares: 75,
+            stop: 240.0,
+            targets: [255.0, 265.0],
+            timeStopMin: 25,
+          },
+          notes: 'High volatility growth stock with strong momentum',
         },
-        notes: 'Reversal pattern forming below key resistance with increasing volume',
-      },
-      {
-        symbol: 'NVDA',
-        side: 'LONG',
-        score: 2.5,
-        features: {
-          momentum15m: 0.72,
-          rvol10m: 2.5,
-          vwapDist: 0.018,
-          breakoutPct: 0.042,
-          spreadBps: 2.8,
-          catalystScore: 0.9,
-          executionQualityScore: 0.92,
+        {
+          symbol: 'NVDA',
+          side: 'LONG',
+          score: 2.6,
+          features: {
+            momentum15m: 0.038,
+            rvol10m: 2.3,
+            vwapDist: 0.022,
+            breakoutPct: 0.048,
+            spreadBps: 6.5,
+            catalystScore: 0.85,
+            executionQualityScore: 0.9,
+          },
+          risk: {
+            atr5m: 5.0,
+            sizeShares: 50,
+            stop: 480.0,
+            targets: [505.0, 520.0],
+            timeStopMin: 25,
+          },
+          notes: 'Tech momentum play with higher risk/reward',
         },
-        risk: {
-          atr5m: 4.5,
-          sizeShares: 75,
-          stop: basePrice * 1.2 - stopDistance,
-          targets: [basePrice * 1.2 + stopDistance * 2.5, basePrice * 1.2 + stopDistance * 4.0],
-          timeStopMin: mode === 'SAFE' ? 45 : 25,
+        {
+          symbol: 'PLTR',
+          side: 'SHORT',
+          score: 2.2,
+          features: {
+            momentum15m: -0.032,
+            rvol10m: 2.0,
+            vwapDist: -0.018,
+            breakoutPct: 0.035,
+            spreadBps: 10.0,
+            catalystScore: 0.75,
+            executionQualityScore: 0.75,
+          },
+          risk: {
+            atr5m: 3.5,
+            sizeShares: 100,
+            stop: 18.5,
+            targets: [17.0, 16.0],
+            timeStopMin: 25,
+          },
+          notes: 'Reversal setup in volatile growth stock',
         },
-        notes: 'High-quality setup with excellent execution conditions and strong catalyst',
-      },
-    ];
+      ];
+    }
   }, [mode]);
 
   // Use real data from API, fallback to mock data for testing
   const effectiveData = dayTradingData;
 
   // Use real data from API, with mock data fallback for testing educational features
+  // Also use mock data if there's a network error (similar to Budget/Spending screens)
   const picks = useMemo(() => {
     if (__DEV__) {
       console.log('🔍 useMemo picks - effectiveData:', effectiveData);
       console.log('🔍 useMemo picks - effectiveData?.picks:', effectiveData?.picks);
       console.log('🔍 useMemo picks - effectiveData?.picks?.length:', effectiveData?.picks?.length ?? 0);
+      if (error) {
+        console.log('⚠️ Network error detected, will use mock data:', error.message);
+      }
       if (effectiveData) {
         console.log('📊 Diagnostics:', {
           scanned: effectiveData.scannedCount,
@@ -470,6 +566,15 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
         });
       }
     }
+    
+    // If there's a network error, use mock data immediately
+    if (error && !effectiveData?.picks) {
+      if (__DEV__) {
+        console.log('⚠️ Network error - using mock data for development');
+      }
+      return getMockPicks();
+    }
+    
     if (effectiveData?.picks && effectiveData.picks.length > 0) {
       // Backend now returns up to 10 picks - use all of them
       const result = effectiveData.picks;
@@ -483,7 +588,7 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
       console.log('⚠️ No picks available - returning mock data for testing');
     }
     return getMockPicks();
-  }, [dayTradingData?.picks, getMockPicks]);
+  }, [dayTradingData?.picks, getMockPicks, error]);
 
   // Use real data for metadata display
   const effectiveDayTradingData: DayTradingData | null = dayTradingData;
@@ -948,17 +1053,39 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
             <Icon name="toggle-left" size={16} color={C.sub} />
             <Text style={[styles.modeTitle, { color: C.text }]}>Trading Mode</Text>
           </View>
-          <TouchableOpacity
-            style={styles.infoDot}
-            onPress={() =>
-              Alert.alert(
-                'Trading Modes',
-                'SAFE: Conservative picks with tighter thresholds and liquidity filters.\n\nAGGRESSIVE: Higher-variance picks with looser filters and broader universe.\n\nPosition sizing/time-stop differ by mode.',
-              )
-            }
-          >
-            <Text style={{ fontWeight: '700', color: C.sub }}>i</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+            {selectedPick && (
+              <TouchableOpacity
+                style={[styles.executionQualityButton, { backgroundColor: '#3B82F6' + '20' }]}
+                onPress={() => setShowWhisper(true)}
+              >
+                <Icon name="eye" size={14} color="#3B82F6" />
+                <Text style={[styles.executionQualityButtonText, { color: '#3B82F6' }]}>
+                  See Your Likely Outcome
+                </Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={[styles.executionQualityButton, { backgroundColor: C.primary + '20' }]}
+              onPress={() => setShowExecutionQuality(!showExecutionQuality)}
+            >
+              <Icon name="activity" size={14} color={C.primary} />
+              <Text style={[styles.executionQualityButtonText, { color: C.primary }]}>
+                Execution Quality
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.infoDot}
+              onPress={() =>
+                Alert.alert(
+                  'Trading Modes',
+                  'SAFE: Conservative picks with tighter thresholds and liquidity filters.\n\nAGGRESSIVE: Higher-variance picks with looser filters and broader universe.\n\nPosition sizing/time-stop differ by mode.',
+                )
+              }
+            >
+              <Text style={{ fontWeight: '700', color: C.sub }}>i</Text>
+            </TouchableOpacity>
+          </View>
         </View>
         <View style={styles.modeGroup}>
           <TouchableOpacity
@@ -993,6 +1120,34 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
           </Text>
         )}
       </View>
+
+      {/* Execution Quality Dashboard */}
+      {showExecutionQuality && (
+        <View style={[styles.executionQualitySection, { backgroundColor: C.card }]}>
+          <View style={styles.executionQualityHeader}>
+            <Text style={[styles.executionQualityTitle, { color: C.text }]}>Execution Quality Metrics</Text>
+            <TouchableOpacity onPress={() => setShowExecutionQuality(false)}>
+              <Icon name="x" size={20} color={C.sub} />
+            </TouchableOpacity>
+          </View>
+          <ExecutionQualityDashboard signalType="day_trading" days={30} />
+        </View>
+      )}
+
+      {/* The Whisper - The One Magical P&L Moment */}
+      {showWhisper && selectedPick && (
+        <TheWhisperScreen
+          symbol={selectedPick.symbol}
+          currentPrice={quotes[selectedPick.symbol]?.currentPrice || 0}
+          change={quotes[selectedPick.symbol]?.change || 0}
+          changePercent={quotes[selectedPick.symbol]?.changePercent || 0}
+          onTakeTrade={() => {
+            setShowWhisper(false);
+            handleTradeExecution(selectedPick, selectedPick.side);
+          }}
+          onJustWatching={() => setShowWhisper(false)}
+        />
+      )}
 
       {/* Market Status */}
       {effectiveDayTradingData && (
@@ -1074,19 +1229,53 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
             </View>
           )}
 
+          {/* Error Banner (if using mock data due to network error) */}
+          {error && picks.length > 0 && (
+            <View style={[styles.errorBanner, { backgroundColor: C.warning + '20', borderLeftColor: C.warning }]}>
+              <Icon name="alert-triangle" size={16} color={C.warning} />
+              <Text style={[styles.errorBannerText, { color: C.warning }]}>
+                Using mock data - Backend connection failed. {error.networkError?.message || error.message}
+              </Text>
+              <TouchableOpacity 
+                onPress={() => refetch({ mode })}
+                style={styles.retryButtonSmall}
+              >
+                <Text style={[styles.retryButtonText, { color: C.warning, fontSize: 12 }]}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
           {/* Loading, Error, or Picks List */}
           {loading && picks.length === 0 ? (
             <View style={styles.emptyWrap}>
               <ActivityIndicator size="large" color={C.primary} />
               <Text style={[styles.emptyTitle, { color: C.sub, marginTop: 16 }]}>Loading picks...</Text>
             </View>
-          ) : error ? (
+          ) : error && picks.length === 0 ? (
             <View style={[styles.emptyWrap, { padding: 20 }]}>
-              <Icon name="alert-circle" size={48} color={C.red} />
-              <Text style={[styles.emptyTitle, { color: C.red, marginTop: 16 }]}>Error loading picks</Text>
+              <Icon name="alert-circle" size={48} color={C.short} />
+              <Text style={[styles.emptyTitle, { color: C.short, marginTop: 16 }]}>Error loading picks</Text>
               <Text style={[styles.emptySub, { color: C.sub, marginTop: 8 }]}>
-                {error.message || 'Unknown error occurred'}
+                {(() => {
+                  // Show more detailed error information
+                  if (error.networkError) {
+                    return `Network error: ${error.networkError.message || 'Unable to connect to server'}`;
+                  }
+                  if (error.graphQLErrors && error.graphQLErrors.length > 0) {
+                    return `GraphQL error: ${error.graphQLErrors[0].message}`;
+                  }
+                  return error.message || 'Unknown error occurred';
+                })()}
               </Text>
+              {__DEV__ && error && (
+                <Text style={[styles.emptySub, { color: C.sub, marginTop: 8, fontSize: 10 }]}>
+                  Debug: {JSON.stringify({
+                    message: error.message,
+                    networkError: error.networkError?.message,
+                    graphQLErrors: error.graphQLErrors?.map(e => e.message),
+                  }, null, 2)}
+                </Text>
+              )}
               <TouchableOpacity 
                 style={[styles.retryButton, { backgroundColor: C.primary, marginTop: 16 }]}
                 onPress={() => refetch({ mode })}
@@ -1972,6 +2161,81 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   modeTitle: { fontSize: 18, fontWeight: '800' },
+  executionQualityButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  executionQualityButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  executionQualitySection: {
+    marginHorizontal: 20,
+    marginTop: 12,
+    borderRadius: 12,
+    padding: 16,
+    maxHeight: 600,
+  },
+  executionQualityHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  executionQualityTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  rahaSection: {
+    marginHorizontal: 20,
+    marginTop: 12,
+    borderRadius: 12,
+    padding: 16,
+    maxHeight: 400,
+  },
+  rahaHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  rahaHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  rahaTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  rahaContent: {
+    marginTop: 8,
+  },
+  rahaEmpty: {
+    alignItems: 'center',
+    padding: 24,
+  },
+  rahaEmptyText: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginTop: 12,
+    textAlign: 'center',
+  },
+  rahaEmptySubtext: {
+    fontSize: 12,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  rahaPnlSection: {
+    marginHorizontal: 20,
+    marginTop: 12,
+    borderRadius: 12,
+    padding: 16,
+  },
   infoDot: {
     width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F7FAFC',
     borderWidth: 1, borderColor: '#E2E8F0',
@@ -2206,6 +2470,27 @@ const styles = StyleSheet.create({
   retryButtonText: {
     fontSize: 16,
     fontWeight: '700',
+  },
+  errorBanner: {
+    marginHorizontal: 20,
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderLeftWidth: 4,
+    gap: 8,
+  },
+  errorBannerText: {
+    fontSize: 12,
+    flex: 1,
+    fontWeight: '600',
+  },
+  retryButtonSmall: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
   },
 
   disclaimer: {

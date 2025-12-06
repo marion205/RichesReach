@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,9 +7,13 @@ import {
   TouchableOpacity,
   Dimensions,
   RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Feather from 'react-native-vector-icons/Feather';
+import { useQuery } from '@apollo/client';
+import { GET_PORTFOLIO_ANALYTICS, GET_EXECUTION_QUALITY_TRENDS } from '../../../graphql/analytics';
+import ExecutionQualityDashboard from '../../trading/components/ExecutionQualityDashboard';
 
 const { width } = Dimensions.get('window');
 
@@ -21,7 +25,30 @@ export default function AnalyticsScreen({ navigateTo }: AnalyticsScreenProps) {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState('1M');
 
-  // Mock analytics data
+  // Fetch real portfolio analytics data
+  const { data: analyticsData, loading: analyticsLoading, error: analyticsError, refetch: refetchAnalytics } = useQuery(
+    GET_PORTFOLIO_ANALYTICS,
+    {
+      variables: { portfolioName: null },
+      fetchPolicy: 'cache-and-network',
+      errorPolicy: 'all',
+    }
+  );
+
+  // Fetch execution quality trends
+  const { data: executionData, loading: executionLoading } = useQuery(
+    GET_EXECUTION_QUALITY_TRENDS,
+    {
+      variables: { days: selectedPeriod === '1W' ? 7 : selectedPeriod === '1M' ? 30 : selectedPeriod === '3M' ? 90 : selectedPeriod === '6M' ? 180 : 365 },
+      fetchPolicy: 'cache-and-network',
+      errorPolicy: 'all',
+    }
+  );
+
+  // Use real data if available, fallback to mock data
+  const portfolioMetrics = analyticsData?.premiumPortfolioMetrics;
+
+  // Mock analytics data (fallback)
   const mockAnalytics = {
     portfolioPerformance: {
       totalReturn: 12.5,
@@ -60,12 +87,67 @@ export default function AnalyticsScreen({ navigateTo }: AnalyticsScreenProps) {
     ],
   };
 
-  const onRefresh = () => {
+  // Combine real and mock data
+  const analytics = useMemo(() => {
+    if (portfolioMetrics) {
+      // Convert sector allocation from dict to array format
+      const sectorAlloc = portfolioMetrics.sectorAllocation ? 
+        Object.entries(portfolioMetrics.sectorAllocation).map(([sector, percentage]: [string, any]) => ({
+          sector,
+          percentage: typeof percentage === 'number' ? percentage : parseFloat(percentage) || 0,
+          value: 0, // Calculate from total value if needed
+          color: mockAnalytics.sectorAllocation.find(s => s.sector === sector)?.color || '#8E8E93',
+        })) : mockAnalytics.sectorAllocation;
+
+      // Extract top performers from holdings
+      const topPerformers = portfolioMetrics.holdings ? 
+        portfolioMetrics.holdings
+          .filter((h: any) => h.returnPercent > 0)
+          .sort((a: any, b: any) => b.returnPercent - a.returnPercent)
+          .slice(0, 4)
+          .map((h: any) => ({
+            symbol: h.symbol,
+            name: h.symbol, // Could fetch company name if available
+            return: h.returnPercent || 0,
+            value: h.currentValue || 0,
+          })) : mockAnalytics.topPerformers;
+
+      const riskMetrics = portfolioMetrics.riskMetrics || {
+        beta: portfolioMetrics.beta || 1.0,
+        alpha: portfolioMetrics.alpha || 0,
+        rSquared: 0.85, // Default if not in riskMetrics
+        trackingError: 3.2, // Default if not in riskMetrics
+      };
+
+      return {
+        portfolioPerformance: {
+          totalReturn: portfolioMetrics.totalReturn || 0,
+          totalReturnPercent: portfolioMetrics.totalReturnPercent || 0,
+          sharpeRatio: portfolioMetrics.sharpeRatio || 0,
+          maxDrawdown: portfolioMetrics.maxDrawdown || 0,
+          volatility: portfolioMetrics.volatility || 0,
+        },
+        riskMetrics: {
+          beta: riskMetrics.beta || portfolioMetrics.beta || 1.0,
+          alpha: riskMetrics.alpha || portfolioMetrics.alpha || 0,
+          rSquared: riskMetrics.rSquared || 0.85,
+          trackingError: riskMetrics.trackingError || 3.2,
+        },
+        sectorAllocation: sectorAlloc,
+        topPerformers: topPerformers,
+        monthlyReturns: mockAnalytics.monthlyReturns, // Keep mock for now, can be enhanced later
+      };
+    }
+    return mockAnalytics;
+  }, [portfolioMetrics]);
+
+  const onRefresh = async () => {
     setRefreshing(true);
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      await Promise.all([refetchAnalytics()]);
+    } finally {
       setRefreshing(false);
-    }, 1000);
+    }
   };
 
   const periods = ['1W', '1M', '3M', '6M', '1Y', 'ALL'];
@@ -111,36 +193,45 @@ export default function AnalyticsScreen({ navigateTo }: AnalyticsScreenProps) {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Performance Overview</Text>
           <View style={styles.performanceGrid}>
-            <View style={styles.performanceCard}>
-              <Text style={styles.performanceLabel}>Total Return</Text>
-              <Text style={styles.performanceValue}>
-                ${mockAnalytics.portfolioPerformance.totalReturn.toFixed(1)}K
-              </Text>
-              <Text style={styles.performancePercent}>
-                +{mockAnalytics.portfolioPerformance.totalReturnPercent}%
-              </Text>
-            </View>
-            <View style={styles.performanceCard}>
-              <Text style={styles.performanceLabel}>Sharpe Ratio</Text>
-              <Text style={styles.performanceValue}>
-                {mockAnalytics.portfolioPerformance.sharpeRatio}
-              </Text>
-              <Text style={styles.performanceSubtext}>Risk-adjusted return</Text>
-            </View>
-            <View style={styles.performanceCard}>
-              <Text style={styles.performanceLabel}>Max Drawdown</Text>
-              <Text style={styles.performanceValue}>
-                {mockAnalytics.portfolioPerformance.maxDrawdown}%
-              </Text>
-              <Text style={styles.performanceSubtext}>Worst decline</Text>
-            </View>
-            <View style={styles.performanceCard}>
-              <Text style={styles.performanceLabel}>Volatility</Text>
-              <Text style={styles.performanceValue}>
-                {mockAnalytics.portfolioPerformance.volatility}%
-              </Text>
-              <Text style={styles.performanceSubtext}>Annualized</Text>
-            </View>
+            {analyticsLoading && !analytics ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#007AFF" />
+              </View>
+            ) : (
+              <>
+                <View style={styles.performanceCard}>
+                  <Text style={styles.performanceLabel}>Total Return</Text>
+                  <Text style={styles.performanceValue}>
+                    ${(analytics.portfolioPerformance.totalReturn / 1000).toFixed(1)}K
+                  </Text>
+                  <Text style={styles.performancePercent}>
+                    {analytics.portfolioPerformance.totalReturnPercent >= 0 ? '+' : ''}
+                    {analytics.portfolioPerformance.totalReturnPercent.toFixed(2)}%
+                  </Text>
+                </View>
+                <View style={styles.performanceCard}>
+                  <Text style={styles.performanceLabel}>Sharpe Ratio</Text>
+                  <Text style={styles.performanceValue}>
+                    {analytics.portfolioPerformance.sharpeRatio.toFixed(2)}
+                  </Text>
+                  <Text style={styles.performanceSubtext}>Risk-adjusted return</Text>
+                </View>
+                <View style={styles.performanceCard}>
+                  <Text style={styles.performanceLabel}>Max Drawdown</Text>
+                  <Text style={styles.performanceValue}>
+                    {analytics.portfolioPerformance.maxDrawdown.toFixed(2)}%
+                  </Text>
+                  <Text style={styles.performanceSubtext}>Worst decline</Text>
+                </View>
+                <View style={styles.performanceCard}>
+                  <Text style={styles.performanceLabel}>Volatility</Text>
+                  <Text style={styles.performanceValue}>
+                    {analytics.portfolioPerformance.volatility.toFixed(2)}%
+                  </Text>
+                  <Text style={styles.performanceSubtext}>Annualized</Text>
+                </View>
+              </>
+            )}
           </View>
         </View>
 
@@ -148,7 +239,7 @@ export default function AnalyticsScreen({ navigateTo }: AnalyticsScreenProps) {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Sector Allocation</Text>
           <View style={styles.sectorContainer}>
-            {mockAnalytics.sectorAllocation.map((sector, index) => (
+            {analytics.sectorAllocation.map((sector, index) => (
               <View key={index} style={styles.sectorItem}>
                 <View style={styles.sectorHeader}>
                   <View
@@ -177,7 +268,7 @@ export default function AnalyticsScreen({ navigateTo }: AnalyticsScreenProps) {
         {/* Top Performers */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Top Performers</Text>
-          {mockAnalytics.topPerformers.map((stock, index) => (
+          {analytics.topPerformers.map((stock, index) => (
             <View key={index} style={styles.performerItem}>
               <View style={styles.performerInfo}>
                 <Text style={styles.performerSymbol}>{stock.symbol}</Text>
@@ -197,28 +288,34 @@ export default function AnalyticsScreen({ navigateTo }: AnalyticsScreenProps) {
           <View style={styles.riskGrid}>
             <View style={styles.riskCard}>
               <Text style={styles.riskLabel}>Beta</Text>
-              <Text style={styles.riskValue}>{mockAnalytics.riskMetrics.beta}</Text>
+              <Text style={styles.riskValue}>{analytics.riskMetrics.beta.toFixed(2)}</Text>
             </View>
             <View style={styles.riskCard}>
               <Text style={styles.riskLabel}>Alpha</Text>
-              <Text style={styles.riskValue}>{mockAnalytics.riskMetrics.alpha}%</Text>
+              <Text style={styles.riskValue}>{analytics.riskMetrics.alpha.toFixed(2)}%</Text>
             </View>
             <View style={styles.riskCard}>
               <Text style={styles.riskLabel}>R²</Text>
-              <Text style={styles.riskValue}>{mockAnalytics.riskMetrics.rSquared}</Text>
+              <Text style={styles.riskValue}>{analytics.riskMetrics.rSquared.toFixed(2)}</Text>
             </View>
             <View style={styles.riskCard}>
               <Text style={styles.riskLabel}>Tracking Error</Text>
-              <Text style={styles.riskValue}>{mockAnalytics.riskMetrics.trackingError}%</Text>
+              <Text style={styles.riskValue}>{analytics.riskMetrics.trackingError.toFixed(2)}%</Text>
             </View>
           </View>
+        </View>
+
+        {/* Execution Quality Trends */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Execution Quality</Text>
+          <ExecutionQualityDashboard signalType="day_trading" days={selectedPeriod === '1W' ? 7 : selectedPeriod === '1M' ? 30 : selectedPeriod === '3M' ? 90 : selectedPeriod === '6M' ? 180 : 365} />
         </View>
 
         {/* Monthly Returns */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Monthly Returns</Text>
           <View style={styles.monthlyContainer}>
-            {mockAnalytics.monthlyReturns.map((month, index) => (
+            {analytics.monthlyReturns.map((month, index) => (
               <View key={index} style={styles.monthlyItem}>
                 <Text style={styles.monthlyLabel}>{month.month}</Text>
                 <Text
@@ -514,5 +611,10 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#007AFF',
     marginLeft: 8,
+  },
+  loadingContainer: {
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

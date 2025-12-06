@@ -15,7 +15,9 @@ shouldShowList: true,
 }),
 });
 export interface NotificationData {
-type: 'price_alert' | 'mention' | 'discussion_update' | 'follow' | 'general';
+type: 'price_alert' | 'mention' | 'discussion_update' | 'follow' | 'general' | 
+      'transaction_confirmation' | 'governance_proposal' | 'payment_reminder' | 
+      'referral_reward' | 'order_filled' | 'order_cancelled';
 title: string;
 body: string;
 data?: any;
@@ -97,6 +99,25 @@ lightColor: '#FF231F7C',
 await Notifications.setNotificationChannelAsync('discussions', {
 name: 'Discussions',
 description: 'Notifications for discussion updates',
+importance: Notifications.AndroidImportance.DEFAULT,
+});
+await Notifications.setNotificationChannelAsync('transactions', {
+name: 'Transactions',
+description: 'Transaction confirmations and updates',
+importance: Notifications.AndroidImportance.HIGH,
+vibrationPattern: [0, 250, 250, 250],
+lightColor: '#FF231F7C',
+});
+await Notifications.setNotificationChannelAsync('governance', {
+name: 'Governance',
+description: 'Governance proposals and voting updates',
+importance: Notifications.AndroidImportance.HIGH,
+vibrationPattern: [0, 250, 250, 250],
+lightColor: '#FF231F7C',
+});
+await Notifications.setNotificationChannelAsync('payments', {
+name: 'Payments',
+description: 'Payment reminders and updates',
 importance: Notifications.AndroidImportance.DEFAULT,
 vibrationPattern: [0, 250, 250, 250],
 lightColor: '#FF231F7C',
@@ -203,6 +224,162 @@ followerName,
 },
 });
 }
+
+/**
+* Send a transaction confirmation notification
+*/
+public async sendTransactionConfirmation(
+  transactionType: 'buy' | 'sell' | 'deposit' | 'withdrawal',
+  symbol: string,
+  amount: number,
+  price?: number
+): Promise<void> {
+  const typeLabels = {
+    buy: 'Purchase',
+    sell: 'Sale',
+    deposit: 'Deposit',
+    withdrawal: 'Withdrawal',
+  };
+  const title = `${typeLabels[transactionType]} Confirmed`;
+  const body = price 
+    ? `${transactionType === 'buy' ? 'Bought' : 'Sold'} ${amount} ${symbol} at $${price.toFixed(2)}`
+    : `${typeLabels[transactionType]} of $${amount.toFixed(2)} completed`;
+  
+  await this.sendLocalNotification({
+    type: 'transaction_confirmation',
+    title,
+    body,
+    data: {
+      transactionType,
+      symbol,
+      amount,
+      price,
+    },
+  });
+}
+
+/**
+* Send a governance proposal notification
+*/
+public async sendGovernanceNotification(
+  proposalTitle: string,
+  proposalId: string,
+  action: 'created' | 'voting_started' | 'voting_ended' | 'executed'
+): Promise<void> {
+  const actionLabels = {
+    created: 'New Proposal',
+    voting_started: 'Voting Started',
+    voting_ended: 'Voting Ended',
+    executed: 'Proposal Executed',
+  };
+  const title = actionLabels[action];
+  const body = `${proposalTitle}${action === 'voting_started' ? ' - Cast your vote!' : ''}`;
+  
+  await this.sendLocalNotification({
+    type: 'governance_proposal',
+    title,
+    body,
+    data: {
+      proposalId,
+      proposalTitle,
+      action,
+    },
+  });
+}
+
+/**
+* Send a payment reminder notification
+*/
+public async sendPaymentReminder(
+  billName: string,
+  amount: number,
+  dueDate: Date,
+  daysUntilDue: number
+): Promise<void> {
+  const urgency = daysUntilDue <= 1 ? 'urgent' : daysUntilDue <= 3 ? 'soon' : 'upcoming';
+  const title = urgency === 'urgent' ? '⚠️ Payment Due Today!' : 
+                urgency === 'soon' ? 'Payment Due Soon' : 
+                'Upcoming Payment';
+  const body = `${billName}: $${amount.toFixed(2)} due ${daysUntilDue === 0 ? 'today' : `in ${daysUntilDue} day${daysUntilDue > 1 ? 's' : ''}`}`;
+  
+  await this.sendLocalNotification({
+    type: 'payment_reminder',
+    title,
+    body,
+    data: {
+      billName,
+      amount,
+      dueDate: dueDate.toISOString(),
+      daysUntilDue,
+      urgency,
+    },
+  });
+}
+
+/**
+* Schedule a payment reminder
+*/
+public async schedulePaymentReminder(
+  billName: string,
+  amount: number,
+  dueDate: Date
+): Promise<string> {
+  const now = new Date();
+  const daysUntilDue = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  
+  // Schedule reminder 1 day before, 3 days before, and on due date
+  const reminderDays = [Math.max(0, daysUntilDue - 3), Math.max(0, daysUntilDue - 1), Math.max(0, daysUntilDue)];
+  const reminderTimes = reminderDays
+    .filter(days => days >= 0)
+    .map(days => {
+      const reminderDate = new Date(dueDate);
+      reminderDate.setDate(reminderDate.getDate() - days);
+      return reminderDate;
+    });
+
+  const notificationIds: string[] = [];
+  for (const reminderTime of reminderTimes) {
+    if (reminderTime > now) {
+      const notificationId = await this.scheduleNotification(
+        {
+          type: 'payment_reminder',
+          title: daysUntilDue <= 1 ? '⚠️ Payment Due!' : 'Payment Reminder',
+          body: `${billName}: $${amount.toFixed(2)} due ${daysUntilDue <= 1 ? 'today' : `in ${daysUntilDue} day${daysUntilDue > 1 ? 's' : ''}`}`,
+          data: { billName, amount, dueDate: dueDate.toISOString(), daysUntilDue },
+        },
+        { date: reminderTime }
+      );
+      notificationIds.push(notificationId);
+    }
+  }
+  
+  return notificationIds[0] || ''; // Return first notification ID
+}
+
+/**
+* Send a referral reward notification
+*/
+public async sendReferralRewardNotification(
+  rewardAmount: number,
+  rewardType: 'token' | 'cash',
+  referrerName?: string
+): Promise<void> {
+  const title = '🎉 Referral Reward!';
+  const body = referrerName
+    ? `You earned ${rewardAmount} ${rewardType === 'token' ? '$REACH tokens' : 'USD'} from ${referrerName}'s referral!`
+    : `You earned ${rewardAmount} ${rewardType === 'token' ? '$REACH tokens' : 'USD'} from a referral!`;
+  
+  await this.sendLocalNotification({
+    type: 'referral_reward',
+    title,
+    body,
+    data: {
+      rewardAmount,
+      rewardType,
+      referrerName,
+    },
+  });
+}
 /**
 * Get channel ID for notification type
 */
@@ -216,6 +393,16 @@ case 'discussion_update':
 return 'discussions';
 case 'follow':
 return 'follows';
+case 'transaction_confirmation':
+case 'order_filled':
+case 'order_cancelled':
+return 'transactions';
+case 'governance_proposal':
+return 'governance';
+case 'payment_reminder':
+return 'payments';
+case 'referral_reward':
+return 'default';
 default:
 return 'default';
 }
@@ -296,6 +483,22 @@ const notificationListener = Notifications.addNotificationReceivedListener(notif
       // Navigate to discussion
     } else if (data.type === 'follow') {
       // Navigate to user profile
+    } else if (data.type === 'transaction_confirmation' || data.type === 'order_filled') {
+      // Navigate to portfolio or order details
+      const { DeviceEventEmitter } = require('react-native');
+      DeviceEventEmitter.emit('navigateToPortfolio');
+    } else if (data.type === 'governance_proposal') {
+      // Navigate to governance screen
+      const { DeviceEventEmitter } = require('react-native');
+      DeviceEventEmitter.emit('navigateToGovernance', { proposalId: data.proposalId });
+    } else if (data.type === 'payment_reminder') {
+      // Navigate to banking or credit screen
+      const { DeviceEventEmitter } = require('react-native');
+      DeviceEventEmitter.emit('navigateToBanking');
+    } else if (data.type === 'referral_reward') {
+      // Navigate to referral screen
+      const { DeviceEventEmitter } = require('react-native');
+      DeviceEventEmitter.emit('navigateToReferrals');
     } else if (data.type === 'dawn_ritual') {
       // Trigger Dawn Ritual - emit event that PortfolioScreen can listen to
       const { DeviceEventEmitter } = require('react-native');
