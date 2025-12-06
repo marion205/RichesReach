@@ -117,3 +117,12 @@ setup_ml_wake_word.sh
 free_mac_space.sh
 .env.example
 .env.openai
+
+# Documentation files (excluded from version control)
+*.md
+!README.md
+!mobile/README.md
+!contracts/README.md
+
+# iOS backup directory
+mobile/ios-backup/
