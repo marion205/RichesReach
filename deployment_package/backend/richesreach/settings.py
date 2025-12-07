@@ -69,6 +69,7 @@ MIDDLEWARE = [
 'django.contrib.auth.middleware.AuthenticationMiddleware',
 'django.contrib.messages.middleware.MessageMiddleware',
 'django.middleware.clickjacking.XFrameOptionsMiddleware',
+'core.performance_monitoring.PerformanceMonitoringMiddleware',  # Performance monitoring
 ]
 ROOT_URLCONF = 'richesreach.urls'
 TEMPLATES = [
