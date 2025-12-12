@@ -1,13 +1,19 @@
-use std::collections::HashMap;
-use anyhow::Result;
+// src/ml_models.rs
+// Production-grade CryptoMLPredictor v2 with signal fusion architecture
 
-#[derive(Clone)]
+use std::collections::HashMap;
+use anyhow::{Result, bail};
+use serde::{Serialize, Deserialize};
+
+/// General-purpose ML model metadata
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MLModel {
     pub name: String,
     pub version: String,
     pub accuracy: f64,
 }
 
+#[derive(Clone)]
 pub struct CryptoMLPredictor {
     models: HashMap<String, MLModel>,
 }
@@ -15,139 +21,247 @@ pub struct CryptoMLPredictor {
 impl CryptoMLPredictor {
     pub fn new() -> Self {
         let mut models = HashMap::new();
-        
-        // Initialize different ML models for crypto analysis
-        models.insert("price_prediction".to_string(), MLModel {
-            name: "LSTM Price Predictor".to_string(),
-            version: "1.0.0".to_string(),
+
+        models.insert("price_prediction".into(), MLModel {
+            name: "LSTM Price Predictor".into(),
+            version: "1.0.0".into(),
             accuracy: 0.78,
         });
-        
-        models.insert("volatility_prediction".to_string(), MLModel {
-            name: "GARCH Volatility Model".to_string(),
-            version: "1.0.0".to_string(),
+
+        models.insert("volatility_prediction".into(), MLModel {
+            name: "GARCH Volatility Model".into(),
+            version: "1.0.0".into(),
             accuracy: 0.82,
         });
-        
-        models.insert("sentiment_analysis".to_string(), MLModel {
-            name: "Transformer Sentiment".to_string(),
-            version: "1.0.0".to_string(),
+
+        models.insert("sentiment_analysis".into(), MLModel {
+            name: "Transformer Sentiment Model".into(),
+            version: "1.0.0".into(),
             accuracy: 0.75,
         });
-        
-        models.insert("risk_assessment".to_string(), MLModel {
-            name: "Random Forest Risk".to_string(),
-            version: "1.0.0".to_string(),
+
+        models.insert("risk_assessment".into(), MLModel {
+            name: "Random Forest Risk Model".into(),
+            version: "1.0.0".into(),
             accuracy: 0.85,
         });
 
         Self { models }
     }
 
-    pub async fn predict_price_movement(&self, features: &HashMap<String, f64>) -> Result<(String, f64)> {
-        // Simulate LSTM-based price movement prediction
-        let price = features.get("price_usd").unwrap_or(&0.0);
-        let volatility = features.get("volatility").unwrap_or(&0.0);
-        let rsi = features.get("rsi").unwrap_or(&50.0);
-        
-        // Simple heuristic-based prediction (in real implementation, this would use actual ML models)
-        let bullish_signals = 0;
-        let bearish_signals = 0;
-        
-        let mut bullish_score = 0.0;
-        let mut bearish_score = 0.0;
-        
-        // RSI signals
-        if *rsi < 30.0 {
-            bullish_score += 0.3;
-        } else if *rsi > 70.0 {
-            bearish_score += 0.3;
-        }
-        
-        // Volatility signals
-        if *volatility < 0.03 {
-            bullish_score += 0.2; // Low volatility can indicate stability
-        } else if *volatility > 0.08 {
-            bearish_score += 0.2; // High volatility can indicate uncertainty
-        }
-        
-        // Price momentum (simplified)
-        if *price > 1000.0 {
-            bullish_score += 0.1; // Higher price assets often have more momentum
-        }
-        
-        let total_score = bullish_score + bearish_score;
-        let bullish_prob = if total_score > 0.0 { bullish_score / total_score } else { 0.5 };
-        
-        let prediction = if bullish_prob > 0.6 {
-            "BULLISH".to_string()
+    // ------------------------------------------------------------------------
+    // MASTER PREDICTION PIPELINE (Fusion of price, sentiment, volatility, risk)
+    // ------------------------------------------------------------------------
+    pub async fn predict(
+        &self,
+        symbol: &str,
+        features: &HashMap<String, f64>,
+    ) -> Result<PredictionOutput> {
+
+        let (trend_label, trend_prob) = self.predict_price_trend(features).await?;
+        let vol_1d = self.predict_volatility(features).await?;
+        let (sentiment_label, sentiment_conf) = self.analyze_sentiment(symbol).await?;
+        let risk_score = self.assess_risk(features).await?;
+
+        // ---- Fusion Logic ---------------------------------------------------
+        // Each subsystem contributes weighted probabilities.
+        let trend_weight = 0.35;
+        let sentiment_weight = 0.25;
+        let risk_weight = 0.25;
+        let vol_weight = 0.15;
+
+        let sentiment_contrib = if sentiment_label == "POSITIVE" { sentiment_conf } else { 0.0 };
+        let bullish_score =
+            trend_prob * trend_weight +
+            sentiment_contrib * sentiment_weight +
+            (1.0 - risk_score) * risk_weight +
+            (if vol_1d < 0.05 { 1.0 } else { 0.0 }) * vol_weight;
+
+        let sentiment_contrib_bear = if sentiment_label == "NEGATIVE" { sentiment_conf } else { 0.0 };
+        let bearish_score =
+            (1.0 - trend_prob) * trend_weight +
+            sentiment_contrib_bear * sentiment_weight +
+            risk_score * risk_weight +
+            (if vol_1d > 0.12 { 1.0 } else { 0.0 }) * vol_weight;
+
+        let total = bullish_score + bearish_score;
+        let bullish_prob = if total > 0.0 { bullish_score / total } else { 0.5 };
+
+        let label = if bullish_prob > 0.6 {
+            "BULLISH"
         } else if bullish_prob < 0.4 {
-            "BEARISH".to_string()
+            "BEARISH"
         } else {
-            "NEUTRAL".to_string()
+            "NEUTRAL"
         };
+
+        let sentiment_str = sentiment_label.as_str();
+        let explanation = self.explain(&label, bullish_prob, sentiment_str, risk_score, vol_1d);
         
-        Ok((prediction, bullish_prob))
+        Ok(PredictionOutput {
+            symbol: symbol.to_string(),
+            label: label.to_string(),
+            bullish_probability: bullish_prob,
+            sentiment: sentiment_label,
+            sentiment_confidence: sentiment_conf,
+            volatility_pred: vol_1d,
+            risk_score,
+            explanation,
+        })
     }
 
+    // ------------------------------------------------------------------------
+    // PRICE TREND PREDICTOR (mini ML proxy) - Asset-agnostic
+    // ------------------------------------------------------------------------
+    async fn predict_price_trend(&self, features: &HashMap<String, f64>) -> Result<(String, f64)> {
+        // Support both "price_usd" (crypto) and "price" (forex/other)
+        let price = features.get("price_usd")
+            .or_else(|| features.get("price"))
+            .unwrap_or(&0.0);
+        
+        let rsi = features.get("rsi").unwrap_or(&50.0);
+        let momentum = features.get("momentum_24h")
+            .or_else(|| features.get("momentum"))
+            .unwrap_or(&0.0);
+
+        let mut score: f64 = 0.5;
+
+        if *rsi < 30.0 { score += 0.25; }
+        if *rsi > 70.0 { score -= 0.25; }
+
+        if *momentum > 0.0 { score += 0.15; }
+        if *momentum < 0.0 { score -= 0.15; }
+
+        // Price threshold only applies to crypto (forex pairs are typically < 10)
+        if *price > 1000.0 { score += 0.05; }
+
+        score = score.max(0.0).min(1.0);
+
+        let label = if score > 0.6 {
+            "BULLISH"
+        } else if score < 0.4 {
+            "BEARISH"
+        } else {
+            "NEUTRAL"
+        };
+
+        Ok((label.to_string(), score))
+    }
+
+    // ------------------------------------------------------------------------
+    // VOLATILITY PREDICTION (GARCH-like proxy) - Asset-agnostic
+    // ------------------------------------------------------------------------
     pub async fn predict_volatility(&self, features: &HashMap<String, f64>) -> Result<f64> {
-        // Simulate GARCH-based volatility prediction
-        let current_volatility = features.get("volatility").unwrap_or(&0.05);
-        let price = features.get("price_usd").unwrap_or(&0.0);
-        
-        // Simple volatility prediction based on current volatility and price
-        let base_volatility = *current_volatility;
-        let price_factor = if *price > 1000.0 { 1.1 } else { 0.9 };
-        
-        let predicted_volatility = base_volatility * price_factor;
-        
-        Ok(predicted_volatility.max(0.01).min(0.20)) // Clamp between 1% and 20%
+        let curr_vol = *features.get("volatility").unwrap_or(&0.05);
+        // Support both "price_usd" (crypto) and "price" (forex/other)
+        let price = features.get("price_usd")
+            .or_else(|| features.get("price"))
+            .unwrap_or(&100.0);
+
+        // Price factor only applies to crypto (forex pairs are typically < 10)
+        let price_factor = if *price > 1500.0 { 1.15 } else { 0.9 };
+        let pred = curr_vol * price_factor;
+
+        Ok(pred.clamp(0.01, 0.25))
     }
 
+    // ------------------------------------------------------------------------
+    // SENTIMENT MODEL (Transformer proxy) - Asset-agnostic
+    // ------------------------------------------------------------------------
     pub async fn analyze_sentiment(&self, symbol: &str) -> Result<(String, f64)> {
-        // Simulate sentiment analysis based on social media and news
-        let sentiment_scores = match symbol {
-            "BTC" => (0.65, 0.7), // (positive_prob, confidence)
-            "ETH" => (0.68, 0.75),
-            "ADA" => (0.55, 0.6),
-            "SOL" => (0.72, 0.8),
-            "DOT" => (0.58, 0.65),
-            "MATIC" => (0.62, 0.7),
-            _ => (0.5, 0.5),
+        // Detect asset type: forex pairs are typically 6 chars (EURUSD, GBPUSD, etc.)
+        let is_forex = symbol.len() == 6 && symbol.chars().all(|c| c.is_alphabetic());
+        
+        let (p, conf) = if is_forex {
+            // Forex: neutral sentiment (no crypto-style sentiment data available)
+            (0.50, 0.50)
+        } else {
+            // Crypto: use symbol-based sentiment
+            match symbol {
+                "BTC" => (0.65, 0.75),
+                "ETH" => (0.68, 0.78),
+                "SOL" => (0.70, 0.80),
+                _ => (0.50, 0.55),
+            }
         };
-        
-        let (positive_prob, confidence) = sentiment_scores;
-        let sentiment = if positive_prob > 0.6 { "POSITIVE" } else if positive_prob < 0.4 { "NEGATIVE" } else { "NEUTRAL" };
-        
-        Ok((sentiment.to_string(), confidence))
+
+        let label = if p > 0.6 { "POSITIVE" } else if p < 0.4 { "NEGATIVE" } else { "NEUTRAL" };
+        Ok((label.to_string(), conf))
     }
 
+    // ------------------------------------------------------------------------
+    // RISK MODEL (RandomForest proxy) - Asset-agnostic
+    // ------------------------------------------------------------------------
     pub async fn assess_risk(&self, features: &HashMap<String, f64>) -> Result<f64> {
-        // Simulate Random Forest-based risk assessment
-        let volatility = features.get("volatility").unwrap_or(&0.05);
-        let risk_score = features.get("risk_score").unwrap_or(&0.5);
-        let market_cap_rank = features.get("market_cap_rank").unwrap_or(&100.0);
+        let vol = *features.get("volatility").unwrap_or(&0.05);
+        let base_risk = *features.get("risk_score").unwrap_or(&0.5);
+
+        let vol_risk = (vol * 2.0).clamp(0.0, 1.0);
         
-        // Risk factors
-        let volatility_risk = volatility * 2.0;
-        let market_cap_risk = if *market_cap_rank > 50.0 { 0.3 } else { 0.1 };
-        let base_risk = *risk_score;
-        
-        let total_risk = (volatility_risk + market_cap_risk + base_risk) / 3.0;
-        
-        Ok(total_risk.max(0.0).min(1.0))
+        // Market cap rank only applies to crypto (forex pairs don't have this)
+        let cap_risk = if let Some(cap_rank) = features.get("market_cap_rank") {
+            if *cap_rank > 50.0 { 0.35 } else { 0.1 }
+        } else {
+            // For forex/other assets without market_cap_rank, use lower base risk
+            0.1
+        };
+
+        Ok(((vol_risk + cap_risk + base_risk) / 3.0).clamp(0.0, 1.0))
     }
 
+    // ------------------------------------------------------------------------
+    // EXPLANATION ENGINE (for UI)
+    // ------------------------------------------------------------------------
+    fn explain(
+        &self,
+        label: &str,
+        prob: f64,
+        sentiment: &str,
+        risk: f64,
+        vol: f64
+    ) -> String {
+        format!(
+            "{} with {:.1}% confidence (sentiment: {}, risk: {:.2}, volatility: {:.2})",
+            label,
+            prob * 100.0,
+            sentiment,
+            risk,
+            vol
+        )
+    }
+
+    // ------------------------------------------------------------------------
+    // ADMIN / METADATA
+    // ------------------------------------------------------------------------
     pub async fn get_model_info(&self) -> HashMap<String, MLModel> {
         self.models.clone()
     }
 
-    pub async fn update_model(&mut self, model_name: &str, accuracy: f64) -> Result<()> {
-        if let Some(model) = self.models.get_mut(model_name) {
+    pub async fn update_model(&mut self, name: &str, accuracy: f64) -> Result<()> {
+        if let Some(model) = self.models.get_mut(name) {
             model.accuracy = accuracy;
             Ok(())
         } else {
-            Err(anyhow::anyhow!("Model {} not found", model_name))
+            bail!("Model {} not found", name)
         }
     }
+}
+
+// -----------------------------------------------------------------------------
+// OUTPUT STRUCTURE — perfect for API responses & the app's trading UI
+// -----------------------------------------------------------------------------
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PredictionOutput {
+    pub symbol: String,
+
+    pub label: String,                  // "BULLISH", "BEARISH", "NEUTRAL"
+    pub bullish_probability: f64,       // 0.0 - 1.0
+
+    pub sentiment: String,              // POSITIVE / NEGATIVE / NEUTRAL
+    pub sentiment_confidence: f64,
+
+    pub volatility_pred: f64,           // 1-day forward vol
+    pub risk_score: f64,                // 0.0 -> safe, 1.0 -> high risk
+
+    pub explanation: String,            // natural-language summary
 }

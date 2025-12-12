@@ -5,17 +5,21 @@
 import React, { useMemo, useRef, useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  ActivityIndicator, Alert, Animated
+  ActivityIndicator, Alert, Animated, TextInput, LayoutAnimation,
+  Platform, UIManager
 } from 'react-native';
 import { useQuery, useMutation } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   GET_SUPPORTED_CURRENCIES,
   GET_CRYPTO_ML_SIGNAL,
   GENERATE_ML_PREDICTION,
-  GET_CRYPTO_RECOMMENDATIONS
+  GET_CRYPTO_RECOMMENDATIONS,
+  GET_CRYPTO_PRICE
 } from '../../cryptoQueries';
 import { gql } from '@apollo/client';
+import { API_RUST_BASE } from '../../config/api';
 
 // Add this lightweight holdings query
 const GET_CRYPTO_HOLDINGS = gql`
@@ -139,6 +143,67 @@ const CryptoMLSignalsCard: React.FC<Props> = ({ initialSymbol = 'BTC', pollInter
   const [ownedOnly, setOwnedOnly] = useState(false);
   const topPicked = useRef(false);
 
+  // Alpha Oracle state
+  const [showOracle, setShowOracle] = useState(false);
+  const [equity, setEquity] = useState('25000');
+  const [openPositions, setOpenPositions] = useState('0');
+  const EQUITY_STORAGE_KEY = 'rr_crypto_equity';
+  
+  // Alpha Oracle response type
+  type AlphaOracleResponse = {
+    symbol: string;
+    global_mood?: string;
+    regime_headline?: string;
+    regime_action?: string;
+    ml_label?: string;
+    ml_confidence?: number;
+    explanation?: string;
+    alpha_score?: number;
+    conviction?: string;
+    one_sentence?: string;
+    timestamp?: string;
+    position_sizing?: {
+      risk_fraction?: number;
+      dollar_risk?: number;
+      target_notional?: number;
+      quantity?: number;
+      stop_loss_pct?: number;
+      conviction?: string;
+      summary?: string;
+    };
+    risk_guard?: {
+      allow?: boolean;
+      adjusted?: any;
+      reason?: string;
+    };
+  };
+
+  type AlphaOracleState =
+    | { status: 'idle' }
+    | { status: 'loading' }
+    | { status: 'error'; message: string }
+    | { status: 'ready'; payload: AlphaOracleResponse; timestamp: number };
+
+  const [oracle, setOracle] = useState<AlphaOracleState>({ status: 'idle' });
+
+  // Load persisted equity on mount
+  useEffect(() => {
+    AsyncStorage.getItem(EQUITY_STORAGE_KEY).then((stored) => {
+      if (stored) setEquity(stored);
+    });
+  }, []);
+
+  // Enable layout animations
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      // @ts-ignore
+      if (UIManager.setLayoutAnimationEnabledExperimental) {
+        // @ts-ignore
+        UIManager.setLayoutAnimationEnabledExperimental(true);
+      }
+    }
+  }, []);
+
   // Spin animation for refresh
   const spin = useRef(new Animated.Value(0)).current;
   const spinOnce = () => {
@@ -155,6 +220,14 @@ const CryptoMLSignalsCard: React.FC<Props> = ({ initialSymbol = 'BTC', pollInter
   });
 
   const { data: holdingsData } = useQuery(GET_CRYPTO_HOLDINGS);
+
+  // Get crypto price data for Alpha Oracle features
+  const { data: priceData } = useQuery(GET_CRYPTO_PRICE, {
+    variables: { symbol: selectedSymbol },
+    skip: !selectedSymbol,
+    fetchPolicy: 'cache-first',
+    errorPolicy: 'all',
+  });
 
   const {
     data: signalData,
@@ -180,6 +253,26 @@ const CryptoMLSignalsCard: React.FC<Props> = ({ initialSymbol = 'BTC', pollInter
   const [generatePrediction] = useMutation(GENERATE_ML_PREDICTION, {
     errorPolicy: 'all',
   });
+
+  // Derive owned + top 5 cryptocurrencies (moved up for use in getMockRecommendations)
+  const ownedRows = holdingsData?.cryptoPortfolio?.holdings ?? [];
+  const ownedSymbols: string[] = ownedRows
+    .map((h: any) => h?.cryptocurrency?.symbol)
+    .filter(Boolean);
+
+  const supported = currenciesData?.supportedCurrencies ?? [];
+  const supportedSymbols = supported.map((c: any) => c.symbol);
+  
+  // Top 5 cryptocurrencies by market cap (BTC, ETH, ADA, SOL, DOT)
+  const top5Symbols = ['BTC', 'ETH', 'ADA', 'SOL', 'DOT'];
+  
+  // When ownedOnly is false, show top 5 + owned (deduped)
+  // When ownedOnly is true, show only owned
+  const mergedSymbols = ownedOnly 
+    ? ownedSymbols 
+    : Array.from(new Set([...top5Symbols, ...ownedSymbols]));
+  
+  const finalSymbols = mergedSymbols.length > 0 ? mergedSymbols : top5Symbols;
 
   // Mock recommendations data for demo
   const getMockRecommendations = () => {
@@ -231,26 +324,6 @@ const CryptoMLSignalsCard: React.FC<Props> = ({ initialSymbol = 'BTC', pollInter
     // While loading, show mock data immediately (optimistic loading)
     return getMockRecommendations();
   }, [recommendationsData?.cryptoRecommendations, recommendationsLoading, recommendationsError, finalSymbols]);
-
-  // Derive owned + top 5 cryptocurrencies
-  const ownedRows = holdingsData?.cryptoPortfolio?.holdings ?? [];
-  const ownedSymbols: string[] = ownedRows
-    .map((h: any) => h?.cryptocurrency?.symbol)
-    .filter(Boolean);
-
-  const supported = currenciesData?.supportedCurrencies ?? [];
-  const supportedSymbols = supported.map((c: any) => c.symbol);
-  
-  // Top 5 cryptocurrencies by market cap (BTC, ETH, ADA, SOL, DOT)
-  const top5Symbols = ['BTC', 'ETH', 'ADA', 'SOL', 'DOT'];
-  
-  // When ownedOnly is false, show top 5 + owned (deduped)
-  // When ownedOnly is true, show only owned
-  const mergedSymbols = ownedOnly 
-    ? ownedSymbols 
-    : Array.from(new Set([...top5Symbols, ...ownedSymbols]));
-  
-  const finalSymbols = mergedSymbols.length > 0 ? mergedSymbols : top5Symbols;
 
 
   // quick qty lookup
@@ -382,6 +455,134 @@ const CryptoMLSignalsCard: React.FC<Props> = ({ initialSymbol = 'BTC', pollInter
     await refetchSignal();
   };
 
+  // Alpha Oracle function
+  function convictionColor(conv: string) {
+    const c = (conv || '').toUpperCase();
+    if (c.includes('STRONG')) return '#10B981';
+    if (c === 'BUY' || c.includes('WEAK BUY')) return '#22C55E';
+    if (c.includes('NEUTRAL')) return '#6B7280';
+    if (c.includes('DUMP') || c.includes('SELL')) return '#EF4444';
+    return '#6B7280';
+  }
+
+  function formatTimeAgo(timestamp: number): string {
+    const now = Date.now();
+    const seconds = Math.floor((now - timestamp) / 1000);
+    if (seconds < 60) return 'just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
+  }
+
+  function clamp(n: number, min: number, max: number) {
+    return Math.max(min, Math.min(max, n));
+  }
+
+  function safeNum(n: any): number | null {
+    if (n === null || n === undefined) return null;
+    const v = Number(n);
+    return Number.isFinite(v) ? v : null;
+  }
+
+  async function askAlphaOracle() {
+    if (!API_RUST_BASE) {
+      setOracle({ status: 'error', message: 'Missing API_RUST_BASE URL' });
+      return;
+    }
+
+    const eq = safeNum(equity);
+    const openCount = Math.max(0, parseInt(openPositions || '0', 10));
+
+    if (!eq || eq <= 0) {
+      setOracle({ status: 'error', message: 'Equity must be a positive number.' });
+      return;
+    }
+
+    // Get price data for features
+    const priceUsd = priceData?.cryptoPrice?.priceUsd 
+      ? parseFloat(priceData.cryptoPrice.priceUsd) 
+      : null;
+    const volatility = priceData?.cryptoPrice?.volatility7d 
+      ? parseFloat(priceData.cryptoPrice.volatility7d) / 100 
+      : null;
+    const rsi = priceData?.cryptoPrice?.rsi14 
+      ? parseFloat(priceData.cryptoPrice.rsi14) 
+      : null;
+    const momentum = priceData?.cryptoPrice?.momentumScore 
+      ? parseFloat(priceData.cryptoPrice.momentumScore) 
+      : null;
+    const priceChange24h = priceData?.cryptoPrice?.priceChangePercentage24h 
+      ? parseFloat(priceData.cryptoPrice.priceChangePercentage24h) / 100 
+      : null;
+
+    // Use price or fallback
+    const entry = priceUsd ?? 1.0;
+
+    // Persist equity
+    AsyncStorage.setItem(EQUITY_STORAGE_KEY, equity);
+
+    setOracle({ status: 'loading' });
+
+    try {
+      // Build features for crypto (use price_usd, not price)
+      const features: Record<string, number> = {};
+      if (priceUsd !== null) features.price_usd = priceUsd;
+      if (volatility !== null) features.volatility = volatility;
+      if (rsi !== null) features.rsi = rsi;
+      if (momentum !== null) features.momentum_24h = momentum;
+      if (priceChange24h !== null) features.momentum_24h = priceChange24h; // Use 24h change as momentum proxy
+      
+      // Market cap rank (estimate based on symbol - in production, get from API)
+      const majorCoins: Record<string, number> = {
+        'BTC': 1, 'ETH': 2, 'USDT': 3, 'BNB': 4, 'SOL': 5, 'USDC': 6,
+        'XRP': 7, 'ADA': 8, 'DOGE': 9, 'AVAX': 10, 'SHIB': 11, 'DOT': 12,
+      };
+      features.market_cap_rank = majorCoins[selectedSymbol] ?? 50;
+      features.risk_score = volatility !== null ? Math.min(volatility * 2, 1.0) : 0.5;
+
+      // Defaults if missing
+      if (!features.price_usd) features.price_usd = 1.0;
+      if (!features.volatility) features.volatility = 0.05;
+      if (!features.rsi) features.rsi = 50.0;
+      if (!features.momentum_24h) features.momentum_24h = 0.0;
+
+      const requestBody: any = {
+        symbol: selectedSymbol,
+        features,
+        equity: eq,
+        entry_price: entry,
+      };
+
+      if (openCount > 0) {
+        requestBody.open_positions = [];
+      }
+
+      const res = await fetch(`${API_RUST_BASE}/v1/alpha/signal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+      });
+
+      const json: AlphaOracleResponse = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const msg =
+          (typeof (json as any)?.reason === 'string' && (json as any).reason) ||
+          (typeof json?.explanation === 'string' && json.explanation) ||
+          (typeof json?.one_sentence === 'string' && json.one_sentence) ||
+          `Request failed (${res.status})`;
+        setOracle({ status: 'error', message: msg });
+        return;
+      }
+
+      setOracle({ status: 'ready', payload: json, timestamp: Date.now() });
+    } catch (e: any) {
+      setOracle({ status: 'error', message: e?.message || 'Network error' });
+    }
+  }
+
   const onGenerate = async () => {
     try {
       setGenerating(true);
@@ -510,6 +711,211 @@ const CryptoMLSignalsCard: React.FC<Props> = ({ initialSymbol = 'BTC', pollInter
           <Text style={styles.primaryBtnText}>Generate AI Prediction</Text>
         </>}
       </TouchableOpacity>
+
+      {/* Alpha Oracle Section */}
+      <TouchableOpacity
+        activeOpacity={0.9}
+        onPress={() => {
+          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+          setShowOracle(v => !v);
+        }}
+        style={styles.oracleToggle}
+      >
+        <View style={styles.oracleToggleLeft}>
+          <Icon name="zap" size={16} color="#111827" />
+          <Text style={styles.oracleToggleText}>Alpha Oracle</Text>
+          <View style={styles.oracleMiniBadge}>
+            <Text style={styles.oracleMiniBadgeText}>1 tap</Text>
+          </View>
+        </View>
+        <Icon name={showOracle ? 'chevron-up' : 'chevron-down'} size={18} color="#111827" />
+      </TouchableOpacity>
+
+      {showOracle && (
+        <View style={styles.oracleCard}>
+          <Text style={styles.oracleHeadline}>
+            Turn the advanced system into one clear move.
+          </Text>
+
+          <View style={styles.oracleInputsRow}>
+            <View style={styles.oracleInputWrap}>
+              <Text style={styles.oracleLabel}>Equity</Text>
+              <View style={styles.oracleInputRow}>
+                <Text style={styles.oraclePrefix}>$</Text>
+                <TextInput
+                  value={equity}
+                  onChangeText={setEquity}
+                  keyboardType="numeric"
+                  style={styles.oracleInput}
+                  placeholder="25000"
+                />
+              </View>
+            </View>
+
+            <View style={styles.oracleInputWrap}>
+              <Text style={styles.oracleLabel}>Open pos</Text>
+              <TextInput
+                value={openPositions}
+                onChangeText={setOpenPositions}
+                keyboardType="numeric"
+                style={styles.oracleInputSolo}
+                placeholder="0"
+              />
+            </View>
+          </View>
+
+          <TouchableOpacity
+            onPress={askAlphaOracle}
+            activeOpacity={0.88}
+            style={[
+              styles.oracleBtn,
+              oracle.status === 'loading' && styles.oracleBtnDisabled
+            ]}
+            disabled={oracle.status === 'loading'}
+          >
+            {oracle.status === 'loading' ? (
+              <>
+                <ActivityIndicator size="small" color="#FFFFFF" />
+                <Text style={[styles.oracleBtnText, { marginLeft: 10 }]}>Asking…</Text>
+              </>
+            ) : (
+              <>
+                <Icon name="zap" size={16} color="#FFFFFF" />
+                <Text style={styles.oracleBtnText}>Ask Alpha Oracle</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          {oracle.status === 'error' && (
+            <TouchableOpacity
+              onPress={askAlphaOracle}
+              activeOpacity={0.8}
+              style={styles.oracleError}
+            >
+              <Icon name="alert-circle" size={16} color="#EF4444" />
+              <Text style={styles.oracleErrorText}>{oracle.message}</Text>
+              <Text style={styles.oracleErrorRetry}>Tap to retry</Text>
+            </TouchableOpacity>
+          )}
+
+          {oracle.status === 'ready' && (() => {
+            const resp = oracle.payload;
+            const alphaScore = resp?.alpha_score ?? null;
+            const conviction = resp?.conviction ?? '';
+            const oneSentence = resp?.one_sentence ?? '';
+            const regimeHeadline = resp?.regime_headline ?? '';
+            const mlExplanation = resp?.explanation ?? '';
+            const sizeQty = resp?.position_sizing?.quantity ?? null;
+            const stopLossPct = resp?.position_sizing?.stop_loss_pct ?? null;
+            const riskUsd = resp?.position_sizing?.dollar_risk ?? null;
+            const guardAllow = resp?.risk_guard?.allow ?? null;
+            const guardReason = resp?.risk_guard?.reason ?? '';
+            const alphaColor = convictionColor(conviction);
+            const alphaBarPct = alphaScore !== null ? clamp((alphaScore / 10) * 100, 0, 100) : 0;
+            const showSizingDetails = (conviction !== 'NEUTRAL' && conviction !== 'DUMP') && (sizeQty !== null && sizeQty > 0);
+            const currentPriceUsd = priceData?.cryptoPrice?.priceUsd 
+              ? parseFloat(priceData.cryptoPrice.priceUsd) 
+              : null;
+
+            return (
+              <View style={styles.oracleResult}>
+                <Text style={styles.oracleOneSentence}>
+                  {oneSentence || 'Oracle response received.'}
+                </Text>
+
+                <View style={styles.oracleScoreRow}>
+                  <View style={styles.oracleScoreLeft}>
+                    <Text style={styles.oracleScoreLabel}>Alpha score</Text>
+                    <Text style={styles.oracleScoreValue}>
+                      {alphaScore !== null ? alphaScore.toFixed(1) : '—'}
+                      <Text style={styles.oracleScoreOutOf}> / 10</Text>
+                    </Text>
+                  </View>
+                  <View style={[styles.oracleConvictionPill, { backgroundColor: alphaColor + '22' }]}>
+                    <Text style={[styles.oracleConvictionText, { color: alphaColor }]}>
+                      {(conviction || 'NEUTRAL').toUpperCase()}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.oracleBarTrack}>
+                  <View style={[styles.oracleBarFill, { width: `${alphaBarPct}%`, backgroundColor: alphaColor }]} />
+                </View>
+
+                {oracle.timestamp && (
+                  <Text style={styles.oracleTimestamp}>
+                    Updated {formatTimeAgo(oracle.timestamp)}
+                  </Text>
+                )}
+
+                {showSizingDetails ? (
+                  <>
+                    <View style={styles.oracleGrid}>
+                      <View style={styles.oracleCell}>
+                        <Text style={styles.oracleCellLabel}>Qty</Text>
+                        <Text style={styles.oracleCellValue}>{sizeQty !== null ? sizeQty.toFixed(4) : '—'}</Text>
+                      </View>
+                      <View style={styles.oracleCell}>
+                        <Text style={styles.oracleCellLabel}>Stop</Text>
+                        <Text style={styles.oracleCellValue}>
+                          {stopLossPct !== null && currentPriceUsd ? `${(currentPriceUsd * (1 - stopLossPct)).toFixed(2)}` : '—'}
+                        </Text>
+                      </View>
+                      <View style={styles.oracleCell}>
+                        <Text style={styles.oracleCellLabel}>Risk</Text>
+                        <Text style={styles.oracleCellValue}>{riskUsd !== null ? `$${riskUsd.toFixed(2)}` : '—'}</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.oracleGuardRow}>
+                      <View style={[styles.oracleGuardDot, { backgroundColor: guardAllow === true ? '#10B981' : guardAllow === false ? '#EF4444' : '#6B7280' }]} />
+                      <Text style={styles.oracleGuardText}>
+                        {guardAllow === true ? 'RiskGuard: approved' : guardAllow === false ? 'RiskGuard: scaled/blocked' : 'RiskGuard: —'}
+                      </Text>
+                    </View>
+                    {guardReason ? <Text style={styles.oracleGuardReason}>{guardReason}</Text> : null}
+                  </>
+                ) : (
+                  <View style={styles.oraclePassState}>
+                    <Icon name="check-circle" size={20} color="#6B7280" />
+                    <Text style={styles.oraclePassStateText}>
+                      {conviction === 'DUMP' ? 'Avoid this asset. High risk detected.' : 'No clean edge right now. Stay patient.'}
+                    </Text>
+                  </View>
+                )}
+
+                {(regimeHeadline || mlExplanation) && (
+                  <View style={styles.oracleWhy}>
+                    <Text style={styles.oracleWhyTitle}>Why?</Text>
+                    {regimeHeadline && (
+                      <View style={styles.oracleWhyItem}>
+                        <View style={styles.oracleWhyDot} />
+                        <Text style={styles.oracleWhyText}>Macro: {regimeHeadline}</Text>
+                      </View>
+                    )}
+                    {mlExplanation && (
+                      <View style={styles.oracleWhyItem}>
+                        <View style={styles.oracleWhyDot} />
+                        <Text style={styles.oracleWhyText}>Micro: {mlExplanation}</Text>
+                      </View>
+                    )}
+                    {guardReason && (
+                      <View style={styles.oracleWhyItem}>
+                        <View style={styles.oracleWhyDot} />
+                        <Text style={styles.oracleWhyText}>Risk: {guardReason}</Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+
+                <Text style={styles.disclaimer}>
+                  Educational insights — not financial advice.
+                </Text>
+              </View>
+            );
+          })()}
+        </View>
+      )}
 
       {/* Card */}
       {/* Always show signal data (real or mock) - never show error or skeleton */}
@@ -789,6 +1195,169 @@ const styles = StyleSheet.create({
   errorText: { fontSize: 14, color: '#6B7280', textAlign: 'center', marginBottom: 16 },
   retryButton: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#F3F4F6', borderRadius: 8 },
   retryText: { fontSize: 14, fontWeight: '600', color: '#007AFF' },
+
+  // Alpha Oracle styles
+  oracleToggle: {
+    marginTop: 12,
+    marginBottom: 12,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  oracleToggleLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  oracleToggleText: { fontSize: 13, fontWeight: '900', color: '#111827' },
+  oracleMiniBadge: {
+    marginLeft: 6,
+    backgroundColor: '#111827',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  oracleMiniBadgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '900' },
+  oracleCard: {
+    marginTop: 10,
+    marginBottom: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  oracleHeadline: { fontSize: 12, color: '#52525B', fontWeight: '800', lineHeight: 18 },
+  oracleInputsRow: { marginTop: 12, flexDirection: 'row', gap: 10 },
+  oracleInputWrap: { flex: 1 },
+  oracleLabel: { fontSize: 11, color: '#71717A', fontWeight: '900', marginBottom: 6 },
+  oracleInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    height: 44,
+    gap: 8,
+  },
+  oraclePrefix: { fontSize: 13, fontWeight: '900', color: '#111827' },
+  oracleInput: { flex: 1, height: 44, fontSize: 13, fontWeight: '900', color: '#111827' },
+  oracleInputSolo: {
+    height: 44,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#111827',
+  },
+  oracleBtn: {
+    marginTop: 12,
+    height: 50,
+    borderRadius: 14,
+    backgroundColor: '#111827',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  oracleBtnDisabled: {
+    backgroundColor: '#9CA3AF',
+    opacity: 0.8,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  oracleBtnText: { marginLeft: 10, color: '#FFFFFF', fontWeight: '900', fontSize: 14 },
+  oracleError: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+    padding: 10,
+    borderRadius: 14,
+  },
+  oracleErrorText: { flex: 1, color: '#B91C1C', fontWeight: '800', fontSize: 12 },
+  oracleErrorRetry: {
+    color: '#B91C1C',
+    fontWeight: '900',
+    fontSize: 12,
+    textDecorationLine: 'underline',
+  },
+  oracleResult: { marginTop: 12 },
+  oracleOneSentence: { fontSize: 14, fontWeight: '900', color: '#111827', lineHeight: 20 },
+  oracleScoreRow: { marginTop: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 },
+  oracleScoreLeft: {},
+  oracleScoreLabel: { fontSize: 11, color: '#71717A', fontWeight: '900' },
+  oracleScoreValue: { marginTop: 4, fontSize: 18, fontWeight: '900', color: '#111827' },
+  oracleScoreOutOf: { fontSize: 12, fontWeight: '900', color: '#71717A' },
+  oracleConvictionPill: { paddingHorizontal: 10, paddingVertical: 7, borderRadius: 999 },
+  oracleConvictionText: { fontSize: 11, fontWeight: '900', letterSpacing: 0.5 },
+  oracleBarTrack: {
+    marginTop: 10,
+    height: 10,
+    backgroundColor: '#F1F1F4',
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  oracleBarFill: {
+    height: 10,
+    backgroundColor: '#111827',
+    borderRadius: 999,
+  },
+  oracleTimestamp: {
+    marginTop: 8,
+    fontSize: 11,
+    color: '#A1A1AA',
+    fontWeight: '700',
+    textAlign: 'right',
+  },
+  oracleGrid: { marginTop: 12, flexDirection: 'row', gap: 10 },
+  oracleCell: {
+    flex: 1,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  oracleCellLabel: { fontSize: 10, color: '#71717A', fontWeight: '900' },
+  oracleCellValue: { marginTop: 4, fontSize: 12, color: '#111827', fontWeight: '900' },
+  oracleGuardRow: { marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  oracleGuardDot: { width: 10, height: 10, borderRadius: 5 },
+  oracleGuardText: { color: '#52525B', fontWeight: '800', fontSize: 12 },
+  oracleGuardReason: { marginTop: 6, color: '#71717A', fontWeight: '800', fontSize: 12, lineHeight: 18 },
+  oraclePassState: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#F8F9FF',
+    borderWidth: 1,
+    borderColor: '#E2E8FF',
+    padding: 12,
+    borderRadius: 14,
+  },
+  oraclePassStateText: { flex: 1, color: '#52525B', fontWeight: '800', fontSize: 12, lineHeight: 18 },
+  oracleWhy: { marginTop: 16 },
+  oracleWhyTitle: { fontSize: 13, fontWeight: '900', color: '#111827', marginBottom: 8 },
+  oracleWhyItem: { flexDirection: 'row', gap: 10, marginBottom: 8, alignItems: 'flex-start' },
+  oracleWhyDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#3B82F6', marginTop: 6 },
+  oracleWhyText: { flex: 1, fontSize: 12, color: '#52525B', fontWeight: '700', lineHeight: 18 },
+  disclaimer: { marginTop: 12, fontSize: 11, color: '#A1A1AA', fontWeight: '700', textAlign: 'center' },
 });
 
 export default CryptoMLSignalsCard;

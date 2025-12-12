@@ -20,25 +20,38 @@ const LAN_IP = '192.168.1.151';
 // For simulator/emulator, use localhost; for physical devices, use LAN IP
 // In dev mode, prefer localhost for simulator (faster, more reliable)
 const DEV_BACKEND = `http://${LOCALHOST}:8000`;  // Simulator/Emulator use localhost
+const DEV_BACKEND_RUST = `http://${LOCALHOST}:3001`; // Rust backend
 
 // Production host
 const PROD_HOST = 'https://api.richesreach.com:8000';
+const PROD_HOST_RUST = 'https://api.richesreach.com:3001';
 
 // Check if we're in development mode
 const isDev = __DEV__;
 
-// Determine API base URL - SIMPLE: dev = LAN IP, prod = production
+// Determine if we're on a simulator/emulator (for iOS/Android)
+// This is a heuristic - in production you might want a more robust check
+const isSimulator = Platform.OS === 'ios' || Platform.OS === 'android';
+
+// Determine API base URL - Use localhost for simulator, LAN IP for physical devices
 let apiBase: string;
+let apiBaseRust: string;
 
 if (isDev) {
-  // Dev mode: Use LAN IP for physical devices (not localhost)
-  // For simulator, use localhost; for physical device, use LAN IP
-  apiBase = `http://${LAN_IP}:8000`;
-  console.log('🔧 [API Config] Dev mode: using LAN IP', apiBase);
+  // Dev mode: Use localhost for simulator, LAN IP for physical devices
+  // For now, default to localhost (works for simulator)
+  // User can override with env var if on physical device
+  apiBase = `http://${LOCALHOST}:8000`;
+  apiBaseRust = `http://${LOCALHOST}:3001`;
+  console.log('🔧 [API Config] Dev mode: using localhost for Python', apiBase);
+  console.log('🔧 [API Config] Dev mode: using localhost for Rust', apiBaseRust);
+  console.log('🔧 [API Config] If on physical device, set EXPO_PUBLIC_API_BASE_URL and EXPO_PUBLIC_RUST_API_URL');
 } else {
   // Production mode
   apiBase = PROD_HOST;
-  console.log('🔧 [API Config] Production mode:', apiBase);
+  apiBaseRust = PROD_HOST_RUST;
+  console.log('🔧 [API Config] Production mode (Python):', apiBase);
+  console.log('🔧 [API Config] Production mode (Rust):', apiBaseRust);
 }
 
 // Check for environment variable override
@@ -78,6 +91,25 @@ if (ENV_API_BASE_URL) {
 }
 
 export const API_BASE = apiBase;
+export let API_RUST_BASE = apiBaseRust;
+
+// Check for environment variable override for Rust backend
+const ENV_API_BASE_URL_RUST =
+  process.env.EXPO_PUBLIC_RUST_API_URL ||
+  Constants.expoConfig?.extra?.RUST_API_URL;
+
+if (ENV_API_BASE_URL_RUST) {
+  const hasLocalhost = /localhost|127\.0\.0\.1/.test(ENV_API_BASE_URL_RUST);
+  if (isDev && hasLocalhost) {
+    // Allow localhost override in dev (for simulator)
+    API_RUST_BASE = ENV_API_BASE_URL_RUST;
+    console.log('🔧 [API Config] Using ENV var for Rust backend (localhost for simulator):', API_RUST_BASE);
+  } else if (!hasLocalhost || !isDev) {
+    // Use env var if it's not localhost (physical device) or in production
+    API_RUST_BASE = ENV_API_BASE_URL_RUST;
+    console.log('🔧 [API Config] Using ENV var for Rust backend:', API_RUST_BASE);
+  }
+}
 
 // TTS API base URL
 const TTS_PORT = process.env.EXPO_PUBLIC_TTS_PORT || "8001";
@@ -103,6 +135,7 @@ export const API_WS      = API_BASE.startsWith("https")
 console.log('📡 [API Config] ========================================');
 console.log('📡 [API Config] Final configuration:');
 console.log('📡 [API Config]   API_BASE:', API_BASE);
+console.log('📡 [API Config]   API_RUST_BASE:', API_RUST_BASE);
 console.log('📡 [API Config]   API_HTTP:', API_HTTP);
 console.log('📡 [API Config]   API_GRAPHQL:', API_GRAPHQL);
 console.log('📡 [API Config]   API_AUTH:', API_AUTH);

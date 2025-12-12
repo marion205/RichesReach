@@ -12,7 +12,6 @@ chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.0", features = ["v4", "serde"] }
 reqwest = { version = "0.11", features = ["json"] }
 anyhow = "1.0"
-thiserror = "1.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 rand = "0.8"
@@ -22,6 +21,7 @@ rust_decimal = { version = "1.0", features = ["serde"] }
 dashmap = "5.0"
 crossbeam = "0.8"
 rayon = "1.0"
+thiserror = "1.0"
 
 # WebSocket support
 futures-util = "0.3"
@@ -36,3 +36,12 @@ governor = "0.6"
 nonzero_ext = "0.3"
 base64 = "0.22"
 url = "2"
+async-trait = "0.1"
+
+# Optional: Postgres/Timescale support
+# To enable, uncomment the sqlx dependency below and add the postgres feature:
+# sqlx = { version = "0.7", features = ["runtime-tokio", "postgres", "chrono", "rust_decimal", "macros"], optional = true }
+#
+# [features]
+# default = []
+# postgres = ["sqlx"]

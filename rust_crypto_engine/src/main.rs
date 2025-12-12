@@ -8,7 +8,6 @@ use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, net::SocketAddr, str::FromStr, sync::Arc, time::Duration};
 use tokio::sync::RwLock;
 use tracing::{error, info, instrument, Level};
-use tracing_subscriber::{fmt, EnvFilter};
 use uuid::Uuid;
 use warp::{Filter, http::{HeaderMap, StatusCode}};
 
@@ -22,6 +21,13 @@ mod raha_regime_integration;
 mod ml_models;
 mod cache;
 mod websocket;
+mod market_data;
+mod utils;
+mod regime;
+mod metrics;
+mod alpha_oracle;
+mod position_sizing;
+mod risk_guard;
 
 use cache::CacheManager;
 use crypto_analysis::CryptoAnalysisEngine;
@@ -31,6 +37,12 @@ use forex_analysis::{ForexAnalysisEngine, ForexAnalysisResponse};
 use sentiment_analysis::{SentimentAnalysisEngine, SentimentAnalysisResponse};
 use correlation_analysis::{CorrelationAnalysisEngine, CorrelationAnalysisResponse};
 use websocket::WebSocketManager;
+use market_data::{ProviderBundle, build_provider_bundle, MarketDataProvider, MarketDataIngest, ProviderError};
+use regime::{MarketRegimeEngine, MarketRegimeResponse, SimpleMarketRegime};
+use metrics::Metrics;
+use alpha_oracle::{AlphaOracle, AlphaSignal};
+use position_sizing::{PositionSizingEngine, PositionSizingConfig, PositionSizingDecision};
+use risk_guard::{RiskGuard, RiskGuardConfig, RiskGuardDecision, OpenRiskPosition};
 
 /* ----------------------------- types ----------------------------- */
 
@@ -91,6 +103,15 @@ pub struct IngestPriceRequest {
     pub timestamp: String,  // ISO 8601 timestamp
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AlphaSignalRequest {
+    pub symbol: String,
+    pub features: HashMap<String, f64>,
+    pub equity: Option<f64>,
+    pub entry_price: Option<f64>,
+    pub open_positions: Option<Vec<OpenRiskPosition>>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CryptoAnalysisResponse {
     pub symbol: String,
@@ -129,6 +150,10 @@ pub struct HealthResponse {
     pub version: String,
     pub cache_stats: CacheStats,
     pub ready: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub backend: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -148,11 +173,18 @@ pub struct AppState {
     pub forex_engine: Arc<ForexAnalysisEngine>,
     pub sentiment_engine: Arc<SentimentAnalysisEngine>,
     pub correlation_engine: Arc<CorrelationAnalysisEngine>,
+    pub regime_engine: Arc<MarketRegimeEngine>,
     pub cache_manager: Arc<CacheManager>,
     pub websocket_manager: Arc<WebSocketManager>,
     pub limiter: Arc<RateLimiter<String, DefaultKeyedStateStore<String>, DefaultClock, NoOpMiddleware>>,
     pub api_token: Option<String>,
     pub ready_flag: Arc<RwLock<bool>>,
+    pub market: Arc<dyn MarketDataProvider>,
+    pub ingest: Arc<dyn MarketDataIngest>,
+    pub metrics: Arc<Metrics>,
+    pub alpha_oracle: Arc<AlphaOracle>,
+    pub position_sizing: Arc<PositionSizingEngine>,
+    pub risk_guard: Arc<RiskGuard>,
 }
 
 /* ------------------------ utilities ------------------------ */
@@ -189,24 +221,31 @@ fn is_forex_pair(pair: &str) -> bool {
 #[tokio::main]
 async fn main() -> Result<()> {
     // ---- tracing
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info,warp=info"));
-    fmt()
-        .with_env_filter(filter)
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .with_target(false)
         .with_level(true)
         .json()
         .init();
 
+    // ---- unified market data provider (shared across engines)
+    let provider_bundle = build_provider_bundle().await
+        .map_err(|e| anyhow::anyhow!("Failed to build provider bundle: {}", e))?;
+    
+    info!("Market data backend: {}", std::env::var("MARKET_DATA_BACKEND").unwrap_or_else(|_| "in_memory".to_string()));
+
     // ---- components
     let crypto_engine = Arc::new(CryptoAnalysisEngine::new());
     let stock_engine = Arc::new(StockAnalysisEngine::new());
     let options_engine = Arc::new(OptionsAnalysisEngine::new());
-    let forex_engine = Arc::new(ForexAnalysisEngine::new());
     let sentiment_engine = Arc::new(SentimentAnalysisEngine::new());
     let correlation_engine = Arc::new(CorrelationAnalysisEngine::new());
     let cache_manager = Arc::new(CacheManager::new());
     let websocket_manager = Arc::new(WebSocketManager::new());
+    
+    // ---- provider-based engines
+    let forex_engine = Arc::new(ForexAnalysisEngine::new(provider_bundle.read.clone()));
+    let regime_engine = Arc::new(MarketRegimeEngine::new(provider_bundle.read.clone()));
 
     // ---- rate limiter (100 req / 10s per key)
     let quota = Quota::with_period(Duration::from_secs(10)).unwrap().allow_burst(nonzero!(100u32));
@@ -215,6 +254,12 @@ async fn main() -> Result<()> {
     // ---- config
     let api_token = std::env::var("API_TOKEN").ok();
     let ready_flag = Arc::new(RwLock::new(false));
+    let metrics = Arc::new(Metrics::new());
+    
+    // ---- Alpha Oracle system
+    let alpha_oracle = Arc::new(AlphaOracle::new(provider_bundle.read.clone()));
+    let position_sizing = Arc::new(PositionSizingEngine::new(PositionSizingConfig::default()));
+    let risk_guard = Arc::new(RiskGuard::new(RiskGuardConfig::default()));
 
     let state = AppState {
         crypto_engine,
@@ -223,11 +268,18 @@ async fn main() -> Result<()> {
         forex_engine,
         sentiment_engine,
         correlation_engine,
+        regime_engine,
         cache_manager,
         websocket_manager,
         limiter,
         api_token,
         ready_flag: ready_flag.clone(),
+        market: provider_bundle.read,
+        ingest: provider_bundle.ingest,
+        metrics: metrics.clone(),
+        alpha_oracle: alpha_oracle.clone(),
+        position_sizing: position_sizing.clone(),
+        risk_guard: risk_guard.clone(),
     };
 
     // Start WebSocket heartbeat
@@ -259,6 +311,7 @@ async fn main() -> Result<()> {
     info!("📰 Sentiment:      POST /v1/sentiment/analyze");
     info!("🔗 Correlation:    POST /v1/correlation/analyze");
     info!("📥 Ingest Price:    POST /v1/correlation/ingest-price");
+    info!("🌍 Market Regime:   GET  /v1/regime (quant) | GET /v1/regime/simple (Jobs edition)");
     info!("📈 Metrics:        GET  /metrics");
     info!("⚡ WS:             WS   /v1/ws");
 
@@ -318,8 +371,9 @@ fn build_routes(state: AppState) -> impl Filter<Extract = impl warp::Reply, Erro
         .and_then(health_ready_handler);
 
     // ---- metrics
-    let metrics = warp::path("metrics")
+    let metrics_endpoint = warp::path("metrics")
         .and(warp::get())
+        .and(with_state.clone())
         .and_then(metrics_handler);
 
     // ---- v1 API
@@ -431,6 +485,35 @@ fn build_routes(state: AppState) -> impl Filter<Extract = impl warp::Reply, Erro
         .and_then(ingest_price_handler)
         .with(sec_headers.clone());
 
+    // Market regime endpoint (quant edition)
+    let regime_analyze = v1
+        .and(warp::path("regime"))
+        .and(warp::get())
+        .and(with_req_meta.clone())
+        .and(with_state.clone())
+        .and_then(regime_analyze_handler)
+        .with(sec_headers.clone());
+
+    // Market regime endpoint (Jobs edition - simple/human-readable)
+    let regime_simple = v1
+        .and(warp::path("regime"))
+        .and(warp::path("simple"))
+        .and(warp::get())
+        .and(with_req_meta.clone())
+        .and(with_state.clone())
+        .and_then(regime_simple_handler)
+        .with(sec_headers.clone());
+
+    // Alpha Oracle endpoint
+    let alpha_signal = v1
+        .and(warp::path!("alpha" / "signal"))
+        .and(warp::post())
+        .and(with_req_meta.clone())
+        .and(warp::body::json())
+        .and(with_state.clone())
+        .and_then(alpha_signal_handler)
+        .with(sec_headers.clone());
+
     let websocket = v1
         .and(warp::path("ws"))
         .and(warp::ws())
@@ -441,7 +524,7 @@ fn build_routes(state: AppState) -> impl Filter<Extract = impl warp::Reply, Erro
     // Compose + middlewares
     health_live
         .or(health_ready)
-        .or(metrics)
+        .or(metrics_endpoint)
         .or(analyze)
         .or(recommendations)
         .or(options_analyze)
@@ -452,6 +535,9 @@ fn build_routes(state: AppState) -> impl Filter<Extract = impl warp::Reply, Erro
         .or(sentiment_analyze)
         .or(correlation_analyze)
         .or(ingest_price)
+        .or(regime_analyze)
+        .or(regime_simple)
+        .or(alpha_signal)
         .or(websocket)
         .with(cors)
         .with(warp::log::custom(|info| {
@@ -478,6 +564,8 @@ async fn health_live_handler(state: AppState) -> Result<impl warp::Reply, warp::
         version: "2.0.0".into(),
         cache_stats,
         ready: *state.ready_flag.read().await,
+        backend: std::env::var("MARKET_DATA_BACKEND").ok(),
+        error: None,
     };
     Ok(warp::reply::json(&resp))
 }
@@ -486,17 +574,38 @@ async fn health_live_handler(state: AppState) -> Result<impl warp::Reply, warp::
 async fn health_ready_handler(state: AppState) -> Result<impl warp::Reply, warp::Rejection> {
     let ready = *state.ready_flag.read().await;
     let cache_stats = state.cache_manager.get_stats().await;
+    let backend = std::env::var("MARKET_DATA_BACKEND").unwrap_or_else(|_| "in_memory".to_string());
+    
+    // Validate provider backend (cheap, deterministic probe)
+    let (provider_healthy, error_msg) = validate_provider_health(&state.market, &backend).await;
+    
     let resp = HealthResponse {
-        status: if ready { "ready" } else { "starting" }.into(),
+        status: if ready && provider_healthy { "ready" } else { "unhealthy" }.into(),
         service: "unified-market-analysis-engine".into(),
         timestamp: Utc::now(),
         version: "2.0.0".into(),
         cache_stats,
-        ready,
+        ready: ready && provider_healthy,
+        backend: Some(backend),
+        error: error_msg,
     };
     let reply = warp::reply::json(&resp);
-    let code = if ready { StatusCode::OK } else { StatusCode::SERVICE_UNAVAILABLE };
+    let code = if ready && provider_healthy { StatusCode::OK } else { StatusCode::SERVICE_UNAVAILABLE };
     Ok(warp::reply::with_status(reply, code))
+}
+
+/// Validate provider backend health (cheap, deterministic probe)
+/// Returns (is_healthy, error_message)
+#[tracing::instrument(skip(provider))]
+async fn validate_provider_health(provider: &Arc<dyn MarketDataProvider>, backend: &str) -> (bool, Option<String>) {
+    // Use a test symbol that likely doesn't exist (we just want to check connectivity)
+    match provider.latest_quote("__HEALTH_CHECK__").await {
+        Ok(_) => (true, None), // Provider is working
+        Err(ProviderError::NotFound(_)) => (true, None), // Provider is working, just symbol not found
+        Err(ProviderError::Backend(e)) => (false, Some(format!("{} backend error: {}", backend, e))),
+        Err(ProviderError::Invalid(e)) => (false, Some(format!("{} invalid request: {}", backend, e))),
+        Err(e) => (false, Some(format!("{} error: {}", backend, e))),
+    }
 }
 
 #[instrument(skip(state, body, headers), fields(req_id=%request_id(&headers)))]
@@ -993,8 +1102,21 @@ async fn ingest_price_handler(
         ));
     }
     
-    // Ingest price
+    // Ingest price into correlation engine (legacy)
     state.correlation_engine.ingest_price(&symbol, timestamp, price).await;
+    
+    // Also ingest into shared provider for forex/regime engines (new architecture)
+    use crate::market_data::Quote;
+    use std::sync::Arc as StdArc;
+    let quote = Quote {
+        symbol: StdArc::from(symbol.as_str()),
+        ts: timestamp,
+        bid: price,
+        ask: price,
+    };
+    if let Err(e) = state.ingest.ingest_quote(quote).await {
+        tracing::warn!(%req_id, error=%e, "failed to ingest quote into provider");
+    }
     
     tracing::info!(
         %req_id,
@@ -1010,6 +1132,138 @@ async fn ingest_price_handler(
             "symbol": symbol,
             "timestamp": timestamp.to_rfc3339(),
         })),
+        StatusCode::OK,
+    ))
+}
+
+#[instrument(skip(state, headers), fields(req_id=%request_id(&headers)))]
+async fn regime_analyze_handler(
+    (ip, req_id, headers): (String, String, HeaderMap),
+    state: AppState,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    // Rate limit
+    let key = bearer_from_headers(&headers).unwrap_or_else(|| ip.clone());
+    if state.limiter.check_key(&key).is_err() {
+        return Ok(warp::reply::with_status(
+            warp::reply::json(&json_error("rate_limited", "Too many requests")),
+            StatusCode::TOO_MANY_REQUESTS,
+        ));
+    }
+
+    let start = std::time::Instant::now();
+
+    // Analyze regime (quant edition)
+    let analysis = state.regime_engine
+        .analyze()
+        .await
+        .map_err(|e| warp::reject::custom(AnalysisError(e)))?;
+
+    tracing::info!(
+        %req_id,
+        regime=?analysis.regime,
+        confidence=%analysis.confidence,
+        ms = start.elapsed().as_millis() as u64,
+        "regime_analysis_ok"
+    );
+
+    Ok(warp::reply::with_status(warp::reply::json(&analysis), StatusCode::OK))
+}
+
+#[instrument(skip(state, headers), fields(req_id=%request_id(&headers)))]
+async fn regime_simple_handler(
+    (ip, req_id, headers): (String, String, HeaderMap),
+    state: AppState,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    // Rate limit
+    let key = bearer_from_headers(&headers).unwrap_or_else(|| ip.clone());
+    if state.limiter.check_key(&key).is_err() {
+        return Ok(warp::reply::with_status(
+            warp::reply::json(&json_error("rate_limited", "Too many requests")),
+            StatusCode::TOO_MANY_REQUESTS,
+        ));
+    }
+
+    let start = std::time::Instant::now();
+
+    // Analyze regime (Jobs edition - human-readable)
+    let analysis = state.regime_engine
+        .analyze_simple()
+        .await
+        .map_err(|e| warp::reject::custom(AnalysisError(e)))?;
+
+    tracing::info!(
+        %req_id,
+        headline=%analysis.headline,
+        mood=%analysis.mood,
+        ms = start.elapsed().as_millis() as u64,
+        "regime_simple_ok"
+    );
+
+    Ok(warp::reply::with_status(warp::reply::json(&analysis), StatusCode::OK))
+}
+
+#[instrument(skip(state, headers), fields(req_id=%request_id(&headers)))]
+async fn alpha_signal_handler(
+    (ip, req_id, headers): (String, String, HeaderMap),
+    body: AlphaSignalRequest,
+    state: AppState,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    // Rate limit
+    let key = bearer_from_headers(&headers).unwrap_or_else(|| ip.clone());
+    if state.limiter.check_key(&key).is_err() {
+        return Ok(warp::reply::with_status(
+            warp::reply::json(&json_error("rate_limited", "Too many requests")),
+            StatusCode::TOO_MANY_REQUESTS,
+        ));
+    }
+
+    if !validate_symbol(&body.symbol) {
+        return Ok(warp::reply::with_status(
+            warp::reply::json(&json_error("bad_request", "Invalid symbol")),
+            StatusCode::BAD_REQUEST,
+        ));
+    }
+
+    let start = std::time::Instant::now();
+
+    // Generate alpha signal
+    let alpha = state.alpha_oracle
+        .generate_signal(&body.symbol, &body.features)
+        .await
+        .map_err(|e| warp::reject::custom(AnalysisError(e)))?;
+
+    // If equity and entry_price provided, also compute position sizing
+    let mut response: serde_json::Value = serde_json::to_value(&alpha).unwrap();
+
+    if let (Some(equity), Some(entry_price)) = (body.equity, body.entry_price) {
+        let sizing = state.position_sizing.size_position(&alpha, equity, entry_price);
+
+        // If open positions provided, run through risk guard
+        let guard_decision = if let Some(open_positions) = body.open_positions {
+            state.risk_guard.evaluate(equity, &open_positions, &sizing)
+        } else {
+            RiskGuardDecision {
+                allow: sizing.dollar_risk > 0.0,
+                adjusted: Some(sizing.clone()),
+                reason: "No open positions provided".to_string(),
+            }
+        };
+
+        response["position_sizing"] = serde_json::to_value(&sizing).unwrap();
+        response["risk_guard"] = serde_json::to_value(&guard_decision).unwrap();
+    }
+
+    tracing::info!(
+        %req_id,
+        symbol=%body.symbol,
+        alpha_score=alpha.alpha_score,
+        conviction=%alpha.conviction,
+        ms = start.elapsed().as_millis() as u64,
+        "alpha_signal_ok"
+    );
+
+    Ok(warp::reply::with_status(
+        warp::reply::json(&response),
         StatusCode::OK,
     ))
 }
@@ -1071,9 +1325,11 @@ async fn handle_rejection(err: warp::Rejection) -> Result<impl warp::Reply, warp
 
 /* ---------------------------- metrics ---------------------------- */
 
-async fn metrics_handler() -> Result<impl warp::Reply, warp::Rejection> {
+#[instrument(skip(state))]
+async fn metrics_handler(state: AppState) -> Result<impl warp::Reply, warp::Rejection> {
+    let prometheus_text = state.metrics.format_prometheus();
     Ok(warp::reply::with_header(
-        "# HELP app_up 1 if up\n# TYPE app_up gauge\napp_up 1\n",
+        prometheus_text,
         "content-type",
         "text/plain; version=0.0.4",
     ))

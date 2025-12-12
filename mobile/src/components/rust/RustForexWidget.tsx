@@ -12,6 +12,8 @@ import {
 } from 'react-native';
 import { useQuery, gql } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_BASE, API_RUST_BASE } from '../../config/api';
 
 const GET_RUST_FOREX_ANALYSIS = gql`
   query GetRustForexAnalysis($pair: String!) {
@@ -40,25 +42,62 @@ type TrendLabel = 'Up' | 'Down' | 'Sideways';
 type VolLabel = 'Calm' | 'Normal' | 'Wild';
 type ExecLabel = 'Tight' | 'Normal' | 'Wide';
 
+// Deterministic response type matching backend
+interface AlphaOracleResponse {
+  symbol?: string;
+  global_mood?: string;
+  regime_headline?: string;
+  regime_action?: string;
+  ml_label?: string;
+  ml_confidence?: number;
+  explanation?: string;
+  alpha_score?: number;
+  conviction?: string;
+  one_sentence?: string;
+  position_sizing?: {
+    quantity?: number;
+    stop_loss_pct?: number;
+    dollar_risk?: number;
+    target_notional?: number;
+  };
+  risk_guard?: {
+    allow?: boolean;
+    adjusted?: {
+      quantity?: number;
+      dollar_risk?: number;
+      target_notional?: number;
+    };
+    reason?: string;
+  };
+}
+
 function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
-}
-
-function fmt5(n?: number | null) {
-  if (n === null || n === undefined || Number.isNaN(n)) return '—';
-  if (n === 0) return '—'; // Show dash for zero values (likely no data)
-  return n.toFixed(5);
-}
-
-function fmt2(n?: number | null) {
-  if (n === null || n === undefined || Number.isNaN(n)) return '—';
-  return n.toFixed(2);
 }
 
 function safeNum(n: any): number | null {
   if (n === null || n === undefined) return null;
   const v = Number(n);
   return Number.isFinite(v) ? v : null;
+}
+
+function fmt5(n?: number | null) {
+  if (n === null || n === undefined || Number.isNaN(n)) return '—';
+  if (n === 0) return '—';
+  return n.toFixed(5);
+}
+
+function fmt2(n?: number | null) {
+  if (n === null || n === undefined || Number.isNaN(n)) return '—';
+  if (n === 0) return '—';
+  return n.toFixed(2);
+}
+
+function formatTimeAgo(timestamp: number): string {
+  const seconds = Math.floor((Date.now() - timestamp) / 1000);
+  if (seconds < 60) return 'just now';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  return `${Math.floor(seconds / 3600)}h ago`;
 }
 
 function trendToLabel(trend: string | null | undefined): TrendLabel {
@@ -75,9 +114,7 @@ function trendColor(label: TrendLabel) {
 }
 
 function volatilityLabel(volFraction: number | null): { label: VolLabel; color: string } {
-  // volatility seems like fraction (e.g., 0.01 = 1%); handle unknowns safely.
   const v = volFraction ?? 0;
-  // Conservative thresholds (can tune later with ATR once you expose it)
   if (v < 0.006) return { label: 'Calm', color: '#10B981' };
   if (v < 0.015) return { label: 'Normal', color: '#F59E0B' };
   return { label: 'Wild', color: '#EF4444' };
@@ -85,12 +122,41 @@ function volatilityLabel(volFraction: number | null): { label: VolLabel; color: 
 
 function executionLabel(spread: number | null, mid: number | null): { label: ExecLabel; color: string; bps: number | null } {
   if (!spread || !mid || mid <= 0) return { label: 'Normal', color: '#6B7280', bps: null };
-  // bps = (spread / mid) * 10000
   const bps = (spread / mid) * 10000;
-  // Conservative thresholds (tight for major FX is very low)
   if (bps <= 1.2) return { label: 'Tight', color: '#10B981', bps };
   if (bps <= 3.0) return { label: 'Normal', color: '#F59E0B', bps };
   return { label: 'Wide', color: '#EF4444', bps };
+}
+
+/** ---- Alpha Oracle (REST) ---- */
+// Rust backend runs on port 3001, Python/Django on 8000
+// Use centralized API config for proper device/IP handling
+const getRustApiUrl = () => {
+  // Check for explicit Rust API URL override
+  const rustUrl = process.env.EXPO_PUBLIC_RUST_API_URL;
+  if (rustUrl) return rustUrl;
+  
+  // Derive from API_BASE (replace port 8000 with 3001)
+  const base = API_BASE || 'http://localhost:8000';
+  return base.replace(':8000', ':3001').replace('localhost', '127.0.0.1');
+};
+
+const API_BASE_URL = getRustApiUrl();
+const EQUITY_STORAGE_KEY = 'rr_equity';
+
+type AlphaOracleState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'error'; message: string }
+  | { status: 'ready'; payload: AlphaOracleResponse; timestamp: number };
+
+function convictionColor(conv: string) {
+  const c = (conv || '').toUpperCase();
+  if (c.includes('STRONG')) return '#10B981';
+  if (c === 'BUY' || c.includes('WEAK BUY')) return '#22C55E';
+  if (c.includes('NEUTRAL')) return '#6B7280';
+  if (c.includes('DUMP') || c.includes('SELL')) return '#EF4444';
+  return '#6B7280';
 }
 
 export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large' }: RustForexWidgetProps) {
@@ -102,9 +168,23 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
   const [showExplain, setShowExplain] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
 
+  // Alpha Oracle UX: collapsed panel + single call
+  const [showOracle, setShowOracle] = useState(false);
+  const [equity, setEquity] = useState('25000');
+  const [openPositions, setOpenPositions] = useState('0');
+  const [oracle, setOracle] = useState<AlphaOracleState>({ status: 'idle' });
+
+  // Load persisted equity on mount
+  useEffect(() => {
+    AsyncStorage.getItem(EQUITY_STORAGE_KEY).then((stored) => {
+      if (stored) {
+        setEquity(stored);
+      }
+    });
+  }, []);
+
   useEffect(() => {
     if (Platform.OS === 'android') {
-      // Enable LayoutAnimation on Android
       // @ts-ignore
       if (UIManager.setLayoutAnimationEnabledExperimental) {
         // @ts-ignore
@@ -124,6 +204,7 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
     const trimmed = inputValue.trim().toUpperCase();
     if (!trimmed) return;
     setPair(trimmed);
+    setOracle({ status: 'idle' }); // reset oracle when pair changes
     refetch({ pair: trimmed });
   };
 
@@ -146,11 +227,6 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
     const v = volatilityLabel(vol);
     const ex = executionLabel(spread, mid);
 
-    // Confidence heuristic (simple + stable):
-    // - clearer trend helps
-    // - calm/normal volatility helps
-    // - tight spreads helps
-    // - correlation can reduce confidence if extreme (optional)
     let confidence = 55;
     if (tLabel !== 'Sideways') confidence += 10;
     if (v.label === 'Calm') confidence += 10;
@@ -158,75 +234,21 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
     if (ex.label === 'Tight') confidence += 10;
     if (ex.label === 'Wide') confidence -= 10;
     if (corr !== null && Math.abs(corr) > 0.8) confidence -= 6;
-
     confidence = clamp(confidence, 20, 92);
 
-    // "Next best move" zones:
-    // Use support/resistance when available, otherwise fallback to mid-based ranges.
-    const price = mid ?? bid ?? ask ?? null;
+    const pairPretty = analysis?.pair ? `${analysis.pair.slice(0, 3)}/${analysis.pair.slice(3)}` : 'This pair';
+    const trendPhrase = tLabel === 'Up' ? 'trending up' : tLabel === 'Down' ? 'trending down' : 'moving sideways';
+    const volPhrase = v.label === 'Calm' ? 'calm' : v.label === 'Normal' ? 'steady' : 'wild';
 
-    // A small adaptive "buffer" using volatility fraction if present.
-    // bufferPct is small; it just creates a range feel without pretending to be precise.
-    const bufferPct = clamp((vol ?? 0.01) * 0.35, 0.0004, 0.004); // 0.04% .. 0.40%
-    const buffer = price ? price * bufferPct : null;
-
-    const entry =
-      support && resistance
-        ? tLabel === 'Up'
-          ? { low: support - (buffer ?? 0), high: support + (buffer ?? 0) }
-          : tLabel === 'Down'
-            ? { low: resistance - (buffer ?? 0), high: resistance + (buffer ?? 0) }
-            : { low: (price ?? 0) - (buffer ?? 0), high: (price ?? 0) + (buffer ?? 0) }
-        : price && buffer
-          ? { low: price - buffer, high: price + buffer }
-          : null;
-
-    const target =
-      support && resistance
-        ? tLabel === 'Up'
-          ? { low: resistance - (buffer ?? 0), high: resistance + (buffer ?? 0) }
-          : tLabel === 'Down'
-            ? { low: support - (buffer ?? 0), high: support + (buffer ?? 0) }
-            : null
-        : null;
-
-    const stop =
-      entry && buffer
-        ? tLabel === 'Up'
-          ? { low: entry.low - buffer * 1.6, high: entry.low - buffer * 0.9 }
-          : tLabel === 'Down'
-            ? { low: entry.high + buffer * 0.9, high: entry.high + buffer * 1.6 }
-            : { low: entry.low - buffer * 1.2, high: entry.low - buffer * 0.6 }
-        : null;
-
-    const headline = (() => {
-      const pairPretty = analysis?.pair
-        ? `${analysis.pair.slice(0, 3)}/${analysis.pair.slice(3)}`
-        : 'This pair';
-
-      const trendPhrase =
-        tLabel === 'Up' ? 'trending up' : tLabel === 'Down' ? 'trending down' : 'moving sideways';
-
-      const volPhrase =
-        v.label === 'Calm' ? 'calm' : v.label === 'Normal' ? 'steady' : 'wild';
-
-      return `${pairPretty} is ${volPhrase} and ${trendPhrase}.`;
-    })();
-
+    const headline = `${pairPretty} is ${volPhrase} and ${trendPhrase}.`;
     const subline = `Volatility ${v.label} • Trend ${tLabel} • Execution ${ex.label}`;
 
-    const actionTitle = (() => {
-      if (tLabel === 'Up') return 'If you trade: wait for a pullback';
-      if (tLabel === 'Down') return 'If you trade: wait for a bounce';
-      return 'If you trade: stay patient';
-    })();
-
-    const actionNote = (() => {
-      if (ex.label === 'Wide') return 'Spreads are wide — avoid market orders.';
-      if (v.label === 'Wild') return 'Volatility is high — size smaller.';
-      if (tLabel === 'Sideways') return 'Sideways market — fewer clean setups.';
-      return 'Conditions look reasonable — stay disciplined.';
-    })();
+    const actionTitle = tLabel === 'Up' ? 'If you trade: wait for a pullback' : tLabel === 'Down' ? 'If you trade: wait for a bounce' : 'If you trade: stay patient';
+    const actionNote =
+      ex.label === 'Wide' ? 'Spreads are wide — avoid market orders.' :
+      v.label === 'Wild' ? 'Volatility is high — size smaller.' :
+      tLabel === 'Sideways' ? 'Sideways market — fewer clean setups.' :
+      'Conditions look reasonable — stay disciplined.';
 
     const explainBullets = [
       tLabel === 'Up'
@@ -267,14 +289,95 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
       subline,
       actionTitle,
       actionNote,
-      entry,
-      stop,
-      target,
       explainBullets,
+      pairPretty,
     };
   }, [analysis]);
 
-  // Loading / Error / Empty (keep it premium)
+  async function askAlphaOracle() {
+    if (!API_RUST_BASE) {
+      setOracle({ status: 'error', message: 'Missing API_RUST_BASE URL' });
+      return;
+    }
+
+    const eq = safeNum(equity);
+    const openCount = Math.max(0, parseInt(openPositions || '0', 10));
+
+    if (!eq || eq <= 0) {
+      setOracle({ status: 'error', message: 'Equity must be a positive number.' });
+      return;
+    }
+
+    // Get price from analysis - ensure we have a valid price
+    const price = computed.mid ?? computed.bid ?? computed.ask;
+    if (!price || price <= 0) {
+      setOracle({ status: 'error', message: 'No valid price data available. Please wait for analysis to complete.' });
+      return;
+    }
+
+    // Use price for entry_price
+    const entry = price;
+
+    // Persist equity
+    AsyncStorage.setItem(EQUITY_STORAGE_KEY, equity);
+
+    setOracle({ status: 'loading' });
+
+    try {
+      // Build features from current analysis (use defaults if missing)
+      // For forex pairs, use "price" instead of "price_usd"
+      const features: Record<string, number> = {};
+      features.price = price; // Forex uses "price", not "price_usd"
+      if (computed.vol !== null && computed.vol > 0) {
+        features.volatility = computed.vol;
+      } else {
+        features.volatility = 0.01; // Default 1% volatility
+      }
+
+      const requestBody: any = {
+        symbol: pair,
+        features,
+        equity: eq,
+        entry_price: entry,
+      };
+
+      // Backend expects open_positions as array of OpenRiskPosition, but we'll send count for now
+      // In production, fetch actual positions from portfolio
+      if (openCount > 0) {
+        // For now, send empty array - backend will handle it
+        requestBody.open_positions = [];
+      }
+
+      const url = `${API_RUST_BASE}/v1/alpha/signal`;
+      console.log('[RustForexWidget] Calling Alpha Oracle:', url);
+      console.log('[RustForexWidget] Request body:', JSON.stringify(requestBody, null, 2));
+      
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+      });
+      
+      console.log('[RustForexWidget] Response status:', res.status);
+      console.log('[RustForexWidget] Response URL:', res.url);
+
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const msg =
+          (typeof json?.error === 'string' && json.error) ||
+          (typeof json?.message === 'string' && json.message) ||
+          `Request failed (${res.status})`;
+        setOracle({ status: 'error', message: msg });
+        return;
+      }
+
+      setOracle({ status: 'ready', payload: json as AlphaOracleResponse, timestamp: Date.now() });
+    } catch (e: any) {
+      setOracle({ status: 'error', message: e?.message || 'Network error' });
+    }
+  }
+
+  // Loading/Error/Empty
   if (loading && !analysis) {
     return (
       <View style={[styles.container, isCompact && styles.containerCompact]}>
@@ -306,15 +409,13 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
     );
   }
 
-  // Compact mode: premium mini read (bid/ask + tiny mood dot)
+  // Compact mode
   if (isCompact) {
     return (
       <View style={styles.compactWrap}>
         <View style={styles.compactTop}>
           <View style={[styles.dot, { backgroundColor: computed.tColor }]} />
-          <Text style={styles.compactPair}>
-            {analysis.pair.slice(0, 3)}/{analysis.pair.slice(3)}
-          </Text>
+          <Text style={styles.compactPair}>{computed.pairPretty}</Text>
         </View>
 
         <View style={styles.compactPrices}>
@@ -337,7 +438,51 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
     );
   }
 
-  // Large mode: Jobs-style "story" UI
+  // Large mode - deterministic parsing from root-level response
+  const resp = oracle.status === 'ready' ? oracle.payload : null;
+
+  const alphaScore = resp?.alpha_score ?? null;
+  const conviction = resp?.conviction ?? '';
+  const oneSentence = resp?.one_sentence ?? '';
+  const regimeHeadline = resp?.regime_headline ?? '';
+  const regimeAction = resp?.regime_action ?? '';
+  const globalMood = resp?.global_mood ?? '';
+  const mlExplanation = resp?.explanation ?? '';
+  const mlConfidence = resp?.ml_confidence ?? null;
+
+  const qty = resp?.position_sizing?.quantity ?? null;
+  const stopLossPct = resp?.position_sizing?.stop_loss_pct ?? null;
+  const riskUsd = resp?.position_sizing?.dollar_risk ?? null;
+  const targetNotional = resp?.position_sizing?.target_notional ?? null;
+
+  const guardAllow = resp?.risk_guard?.allow ?? null;
+  const guardAdjusted = resp?.risk_guard?.adjusted ?? null;
+  const guardReason = resp?.risk_guard?.reason ?? '';
+
+  const alphaColor = convictionColor(conviction);
+  const alphaBarPct = alphaScore !== null ? clamp((alphaScore / 10) * 100, 0, 100) : 0;
+
+  // Jobs-grade "Why" section: 3 bullets (Macro, Micro, Risk)
+  const whyBullets: string[] = [];
+  if (regimeHeadline || globalMood) {
+    whyBullets.push(`Macro: ${regimeHeadline || `${globalMood} market conditions`}`);
+  }
+  if (mlExplanation || mlConfidence !== null) {
+    const microText = mlExplanation || `ML confidence: ${((mlConfidence ?? 0) * 100).toFixed(0)}%`;
+    whyBullets.push(`Micro: ${microText}`);
+  }
+  if (guardAllow === true) {
+    whyBullets.push('Risk: Approved full size');
+  } else if (guardAllow === false && guardReason) {
+    whyBullets.push(`Risk: ${guardReason}`);
+  } else if (riskUsd !== null) {
+    whyBullets.push(`Risk: $${riskUsd.toFixed(2)} at risk`);
+  }
+
+  // Professional messaging for neutral/dump states
+  const isNeutralOrDump = conviction.toUpperCase().includes('NEUTRAL') || conviction.toUpperCase().includes('DUMP');
+  const passMessage = isNeutralOrDump ? 'No clean edge right now. Stay patient.' : null;
+
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -348,9 +493,7 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
         </View>
 
         <TouchableOpacity
-          onPress={() => {
-            refetch({ pair });
-          }}
+          onPress={() => refetch({ pair })}
           style={styles.refreshBtn}
           activeOpacity={0.8}
         >
@@ -358,7 +501,6 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
         </TouchableOpacity>
       </View>
 
-      {/* Hero sentence */}
       <Text style={styles.heroLine}>{computed.headline}</Text>
       <Text style={styles.heroSubline}>{computed.subline}</Text>
 
@@ -403,85 +545,237 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
         <View style={styles.lightCard}>
           <Text style={styles.lightTitle}>Trend</Text>
           <View style={[styles.pill, { backgroundColor: computed.tColor + '22' }]}>
-            <Text style={[styles.pillText, { color: computed.tColor }]}>{computed.tLabel}</Text>
+            <Text 
+              style={[styles.pillText, { color: computed.tColor }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+            >
+              {computed.tLabel}
+            </Text>
           </View>
         </View>
 
         <View style={styles.lightCard}>
           <Text style={styles.lightTitle}>Volatility</Text>
           <View style={[styles.pill, { backgroundColor: computed.vColor + '22' }]}>
-            <Text style={[styles.pillText, { color: computed.vColor }]}>{computed.vLabel}</Text>
+            <Text 
+              style={[styles.pillText, { color: computed.vColor }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+            >
+              {computed.vLabel}
+            </Text>
           </View>
         </View>
 
         <View style={styles.lightCard}>
           <Text style={styles.lightTitle}>Execution</Text>
           <View style={[styles.pill, { backgroundColor: computed.exColor + '22' }]}>
-            <Text style={[styles.pillText, { color: computed.exColor }]}>{computed.exLabel}</Text>
+            <Text 
+              style={[styles.pillText, { color: computed.exColor }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+            >
+              {computed.exLabel}
+            </Text>
           </View>
         </View>
       </View>
 
-      {/* Next best move */}
-      <View style={styles.actionCard}>
-        <View style={styles.actionHeader}>
-          <Text style={styles.actionTitle}>{computed.actionTitle}</Text>
-          <View style={styles.confBadge}>
-            <Text style={styles.confLabel}>Confidence</Text>
-            <Text style={styles.confValue}>{computed.confidence}%</Text>
+      {/* Alpha Oracle (collapsed by default) */}
+      <TouchableOpacity
+        activeOpacity={0.9}
+        onPress={() => {
+          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+          setShowOracle(v => !v);
+        }}
+        style={styles.oracleToggle}
+      >
+        <View style={styles.oracleToggleLeft}>
+          <Icon name="zap" size={16} color="#0B0B0F" />
+          <Text style={styles.oracleToggleText}>Alpha Oracle</Text>
+          <View style={styles.oracleMiniBadge}>
+            <Text style={styles.oracleMiniBadgeText}>1 tap</Text>
           </View>
         </View>
+        <Icon name={showOracle ? 'chevron-up' : 'chevron-down'} size={18} color="#0B0B0F" />
+      </TouchableOpacity>
 
-        <Text style={styles.actionNote}>{computed.actionNote}</Text>
-
-        <View style={styles.zonesRow}>
-          <View style={styles.zone}>
-            <Text style={styles.zoneLabel}>Entry zone</Text>
-            <Text style={styles.zoneValue}>
-              {computed.entry ? `${computed.entry.low.toFixed(5)} – ${computed.entry.high.toFixed(5)}` : '—'}
-            </Text>
-          </View>
-          <View style={styles.zone}>
-            <Text style={styles.zoneLabel}>Stop zone</Text>
-            <Text style={styles.zoneValue}>
-              {computed.stop ? `${computed.stop.low.toFixed(5)} – ${computed.stop.high.toFixed(5)}` : '—'}
-            </Text>
-          </View>
-        </View>
-
-        <View style={[styles.zone, { marginTop: 10 }]}>
-          <Text style={styles.zoneLabel}>Target zone</Text>
-          <Text style={styles.zoneValue}>
-            {computed.target ? `${computed.target.low.toFixed(5)} – ${computed.target.high.toFixed(5)}` : '—'}
+      {showOracle && (
+        <View style={styles.oracleCard}>
+          <Text style={styles.oracleHeadline}>
+            Turn the advanced system into one clear move.
           </Text>
-        </View>
 
-        <View style={styles.microRow}>
-          <View style={styles.microItem}>
-            <Text style={styles.microLabel}>Pip value</Text>
-            <Text style={styles.microValue}>${fmt2(safeNum(analysis.pipValue))}</Text>
+          <View style={styles.oracleInputsRow}>
+            <View style={styles.oracleInputWrap}>
+              <Text style={styles.oracleLabel}>Equity</Text>
+              <View style={styles.oracleInputRow}>
+                <Text style={styles.oraclePrefix}>$</Text>
+                <TextInput
+                  value={equity}
+                  onChangeText={setEquity}
+                  keyboardType="numeric"
+                  style={styles.oracleInput}
+                  placeholder="25000"
+                />
+              </View>
+            </View>
+
+            <View style={styles.oracleInputWrap}>
+              <Text style={styles.oracleLabel}>Open pos</Text>
+              <TextInput
+                value={openPositions}
+                onChangeText={setOpenPositions}
+                keyboardType="numeric"
+                style={styles.oracleInputSolo}
+                placeholder="0"
+              />
+            </View>
           </View>
-          <View style={styles.microItem}>
-            <Text style={styles.microLabel}>Exec cost</Text>
-            <Text style={styles.microValue}>
-              {computed.exBps !== null ? `${computed.exBps.toFixed(2)} bps` : '—'}
-            </Text>
-          </View>
-          <View style={styles.microItem}>
-            <Text style={styles.microLabel}>24h corr</Text>
-            <Text style={styles.microValue}>
-              {computed.corr !== null ? computed.corr.toFixed(2) : '—'}
-            </Text>
-          </View>
+
+          <TouchableOpacity
+            onPress={askAlphaOracle}
+            activeOpacity={0.88}
+            style={styles.oracleBtn}
+            disabled={oracle.status === 'loading'}
+          >
+            {oracle.status === 'loading' ? (
+              <>
+                <ActivityIndicator size="small" color="#FFFFFF" />
+                <Text style={[styles.oracleBtnText, { marginLeft: 10 }]}>Asking…</Text>
+              </>
+            ) : (
+              <>
+                <Icon name="zap" size={16} color="#FFFFFF" />
+                <Text style={styles.oracleBtnText}>Ask Alpha Oracle</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          {oracle.status === 'error' && (
+            <View style={styles.oracleError}>
+              <Icon name="alert-circle" size={16} color="#EF4444" />
+              <Text style={styles.oracleErrorText}>{oracle.message}</Text>
+              <TouchableOpacity
+                onPress={askAlphaOracle}
+                style={styles.oracleRetryBtn}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.oracleRetryText}>Tap to retry</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {oracle.status === 'ready' && (
+            <View style={styles.oracleResult}>
+              {/* Timestamp */}
+              <Text style={styles.oracleTimestamp}>
+                Updated {formatTimeAgo(oracle.timestamp)}
+              </Text>
+
+              {/* One sentence */}
+              <Text style={styles.oracleOneSentence}>
+                {oneSentence || 'Oracle response received.'}
+              </Text>
+
+              {/* Pass message for neutral/dump */}
+              {passMessage && (
+                <View style={styles.oraclePassMessage}>
+                  <Text style={styles.oraclePassText}>{passMessage}</Text>
+                </View>
+              )}
+
+              {/* Score + conviction */}
+              <View style={styles.oracleScoreRow}>
+                <View style={styles.oracleScoreLeft}>
+                  <Text style={styles.oracleScoreLabel}>Alpha score</Text>
+                  <Text style={styles.oracleScoreValue}>
+                    {alphaScore !== null ? alphaScore.toFixed(1) : '—'}
+                    <Text style={styles.oracleScoreOutOf}> / 10</Text>
+                  </Text>
+                </View>
+
+                <View style={[styles.oracleConvictionPill, { backgroundColor: alphaColor + '22' }]}>
+                  <Text style={[styles.oracleConvictionText, { color: alphaColor }]}>
+                    {(conviction || 'NEUTRAL').toUpperCase()}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.oracleBarTrack}>
+                <View style={[styles.oracleBarFill, { width: `${alphaBarPct}%`, backgroundColor: alphaColor }]} />
+              </View>
+
+              {/* Sizing + guard */}
+              {!isNeutralOrDump && (
+                <>
+                  <View style={styles.oracleGrid}>
+                    <View style={styles.oracleCell}>
+                      <Text style={styles.oracleCellLabel}>Qty</Text>
+                      <Text style={styles.oracleCellValue}>{qty !== null ? qty.toFixed(4) : '—'}</Text>
+                    </View>
+                    <View style={styles.oracleCell}>
+                      <Text style={styles.oracleCellLabel}>Stop</Text>
+                      <Text style={styles.oracleCellValue}>
+                        {stopLossPct !== null && computed.mid ? `${(computed.mid * (1 - stopLossPct)).toFixed(5)}` : '—'}
+                      </Text>
+                    </View>
+                    <View style={styles.oracleCell}>
+                      <Text style={styles.oracleCellLabel}>Risk</Text>
+                      <Text style={styles.oracleCellValue}>{riskUsd !== null ? `$${riskUsd.toFixed(2)}` : '—'}</Text>
+                    </View>
+                  </View>
+
+                  {targetNotional !== null && (
+                    <View style={styles.oracleNotional}>
+                      <Text style={styles.oracleNotionalLabel}>Target size</Text>
+                      <Text style={styles.oracleNotionalValue}>${targetNotional.toFixed(2)}</Text>
+                    </View>
+                  )}
+
+                  <View style={styles.oracleGuardRow}>
+                    <View style={[styles.oracleGuardDot, { backgroundColor: guardAllow === true ? '#10B981' : guardAllow === false ? '#EF4444' : '#6B7280' }]} />
+                    <Text style={styles.oracleGuardText}>
+                      {guardAllow === true ? 'RiskGuard: approved' : guardAllow === false ? 'RiskGuard: scaled/blocked' : 'RiskGuard: —'}
+                    </Text>
+                  </View>
+
+                  {guardAllow === false && guardReason && (
+                    <Text style={styles.oracleGuardReason}>
+                      RiskGuard reduced size to protect your account.
+                    </Text>
+                  )}
+                </>
+              )}
+
+              {/* Why section - Jobs-grade 3 bullets */}
+              {whyBullets.length > 0 && (
+                <View style={styles.oracleWhy}>
+                  <Text style={styles.oracleWhyTitle}>Why?</Text>
+                  {whyBullets.map((bullet, idx) => (
+                    <View key={idx} style={styles.oracleWhyItem}>
+                      <View style={styles.oracleWhyDot} />
+                      <Text style={styles.oracleWhyText}>{bullet}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              <Text style={styles.disclaimer}>
+                Educational insights — not financial advice.
+              </Text>
+            </View>
+          )}
         </View>
-      </View>
+      )}
 
       {/* Explain drawer */}
       <TouchableOpacity
         activeOpacity={0.9}
         onPress={() => {
           LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-          setShowExplain((v) => !v);
+          setShowExplain(v => !v);
         }}
         style={styles.explainToggle}
       >
@@ -504,49 +798,27 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
           <TouchableOpacity
             onPress={() => {
               LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-              setShowDetails((v) => !v);
+              setShowDetails(v => !v);
             }}
             style={styles.detailsToggle}
             activeOpacity={0.85}
           >
-            <Text style={styles.detailsToggleText}>
-              {showDetails ? 'Hide details' : 'Show details'}
-            </Text>
+            <Text style={styles.detailsToggleText}>{showDetails ? 'Hide details' : 'Show details'}</Text>
             <Icon name={showDetails ? 'minus' : 'plus'} size={16} color="#111827" />
           </TouchableOpacity>
 
           {showDetails && (
             <View style={styles.detailsBox}>
-              <Text style={styles.detailLine}>
-                <Text style={styles.detailKey}>Pair: </Text>
-                {analysis.pair.slice(0, 3)}/{analysis.pair.slice(3)}
-              </Text>
-              <Text style={styles.detailLine}>
-                <Text style={styles.detailKey}>Trend raw: </Text>
-                {analysis.trend ?? '—'}
-              </Text>
-              <Text style={styles.detailLine}>
-                <Text style={styles.detailKey}>Volatility raw: </Text>
-                {computed.vol !== null ? `${(computed.vol * 100).toFixed(3)}%` : '—'}
-              </Text>
-              <Text style={styles.detailLine}>
-                <Text style={styles.detailKey}>Support: </Text>
-                {computed.support !== null ? computed.support.toFixed(5) : '—'}
-              </Text>
-              <Text style={styles.detailLine}>
-                <Text style={styles.detailKey}>Resistance: </Text>
-                {computed.resistance !== null ? computed.resistance.toFixed(5) : '—'}
-              </Text>
-              <Text style={styles.detailLine}>
-                <Text style={styles.detailKey}>Timestamp: </Text>
-                {analysis.timestamp ?? '—'}
-              </Text>
+              <Text style={styles.detailLine}><Text style={styles.detailKey}>Pair: </Text>{computed.pairPretty}</Text>
+              <Text style={styles.detailLine}><Text style={styles.detailKey}>Trend raw: </Text>{analysis.trend ?? '—'}</Text>
+              <Text style={styles.detailLine}><Text style={styles.detailKey}>Volatility raw: </Text>{computed.vol !== null ? `${(computed.vol * 100).toFixed(3)}%` : '—'}</Text>
+              <Text style={styles.detailLine}><Text style={styles.detailKey}>Support: </Text>{computed.support !== null ? computed.support.toFixed(5) : '—'}</Text>
+              <Text style={styles.detailLine}><Text style={styles.detailKey}>Resistance: </Text>{computed.resistance !== null ? computed.resistance.toFixed(5) : '—'}</Text>
+              <Text style={styles.detailLine}><Text style={styles.detailKey}>Timestamp: </Text>{analysis.timestamp ?? '—'}</Text>
             </View>
           )}
 
-          <Text style={styles.disclaimer}>
-            Educational insights — not financial advice.
-          </Text>
+          <Text style={styles.disclaimer}>Educational insights — not financial advice.</Text>
         </View>
       )}
     </View>
@@ -555,16 +827,11 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#FDFDFD',
-    borderRadius: 24,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.08,
-    shadowRadius: 32,
-    elevation: 20,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 16,
     borderWidth: 1,
-    borderColor: '#E8E8ED',
+    borderColor: '#F1F1F4',
   },
   containerCompact: {
     padding: 0,
@@ -572,446 +839,294 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
 
-  // Loading skeleton
-  skeletonRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-  },
-  skeletonText: {
-    marginLeft: 10,
-    color: '#58606E',
-    fontWeight: '600',
-  },
+  skeletonRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
+  skeletonText: { marginLeft: 10, color: '#52525B', fontWeight: '600' },
 
-  // Error
-  inlineHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  inlineHeaderText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#1F1F1F',
-  },
-  muted: {
-    marginTop: 6,
-    color: '#69707F',
-    fontWeight: '600',
-  },
+  inlineHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  inlineHeaderText: { fontSize: 14, fontWeight: '800', color: '#111827' },
+  muted: { marginTop: 6, color: '#71717A', fontWeight: '600' },
 
-  // Compact mode – premium mini card
   compactWrap: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 16,
-    elevation: 10,
+    borderRadius: 14,
+    padding: 10,
     borderWidth: 1,
-    borderColor: '#ECECF2',
+    borderColor: '#F2F2F6',
   },
-  compactTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 10,
-  },
-  dot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  compactPair: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#1F1F1F',
-    letterSpacing: -0.3,
-  },
-  compactPrices: {
-    flexDirection: 'row',
-    gap: 12,
-  },
+  compactTop: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  compactPair: { fontSize: 13, fontWeight: '900', color: '#0B0B0F' },
+  compactPrices: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
   compactPriceItem: {
     flex: 1,
-    backgroundColor: '#F8F9FF',
-    borderRadius: 16,
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: '#E2E8FF',
+    backgroundColor: '#FAFAFB',
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: '#F1F1F4',
   },
-  compactLabel: {
-    fontSize: 11,
-    color: '#69707F',
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  compactValue: {
-    marginTop: 6,
-    fontSize: 16,
-    fontWeight: '900',
-    color: '#1F1F1F',
-  },
-  compactFooter: {
-    marginTop: 12,
-    alignItems: 'center',
-  },
-  compactFooterText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#69707F',
-    textAlign: 'center',
-  },
-  compactNoData: {
-    marginTop: 8,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  compactNoDataText: {
-    fontSize: 11,
-    color: '#8B949E',
-    fontWeight: '600',
-    fontStyle: 'italic',
-  },
+  compactLabel: { fontSize: 10, color: '#71717A', fontWeight: '700' },
+  compactValue: { marginTop: 2, fontSize: 13, fontWeight: '900', color: '#0B0B0F' },
+  compactFooter: { marginTop: 8, alignItems: 'center' },
+  compactFooterText: { fontSize: 11, color: '#71717A', fontWeight: '700' },
 
-  // Header
-  topHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  topHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  topTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#1F1F2E',
-    letterSpacing: -0.4,
-  },
+  topHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  topHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  topTitle: { fontSize: 14, fontWeight: '900', color: '#0B0B0F' },
   refreshBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 6,
-    borderWidth: 1,
-    borderColor: '#ECECF2',
+    width: 36, height: 36, borderRadius: 12, backgroundColor: '#FAFAFB',
+    borderWidth: 1, borderColor: '#F1F1F4', alignItems: 'center', justifyContent: 'center',
   },
 
-  heroLine: {
-    marginTop: 16,
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#1F1F1F',
-    lineHeight: 30,
-    letterSpacing: -0.6,
-  },
-  heroSubline: {
-    marginTop: 8,
-    fontSize: 14,
-    color: '#58606E',
-    fontWeight: '600',
-    letterSpacing: -0.2,
-  },
+  dot: { width: 10, height: 10, borderRadius: 5 },
 
-  // Search
-  searchContainer: {
-    marginTop: 20,
-  },
-  searchLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#58606E',
-    marginBottom: 10,
-    letterSpacing: 0.4,
-  },
-  searchRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
+  heroLine: { marginTop: 10, fontSize: 18, fontWeight: '900', color: '#0B0B0F', letterSpacing: -0.2 },
+  heroSubline: { marginTop: 6, fontSize: 13, color: '#71717A', fontWeight: '700' },
+
+  searchContainer: { marginTop: 14 },
+  searchLabel: { fontSize: 12, color: '#71717A', fontWeight: '700', marginBottom: 8 },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   searchInput: {
-    flex: 1,
-    height: 48,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    paddingHorizontal: 18,
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1F1F1F',
-    borderWidth: 1.5,
-    borderColor: '#E2E6F0',
+    flex: 1, height: 44, backgroundColor: '#FFFFFF',
+    borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 14,
+    paddingHorizontal: 14, fontSize: 14, fontWeight: '700', color: '#0B0B0F',
   },
-  searchButton: {
-    width: 48,
-    height: 48,
-    backgroundColor: '#1F1F1F',
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  searchButton: { width: 44, height: 44, backgroundColor: '#0B0B0F', borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
 
-  // Prices Grid cards (prices, lights)
-  prices: {
-    marginTop: 20,
-    flexDirection: 'row',
-    gap: 14,
-  },
+  prices: { marginTop: 14, flexDirection: 'row', gap: 10 },
   priceCard: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    paddingVertical: 18,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 8,
-    borderWidth: 1,
-    borderColor: '#ECECF2',
+    flex: 1, backgroundColor: '#FAFAFB', borderRadius: 14,
+    paddingVertical: 12, paddingHorizontal: 12, borderWidth: 1, borderColor: '#F1F1F4',
   },
-  priceLabel: {
-    fontSize: 12,
-    color: '#69707F',
-    fontWeight: '700',
-    letterSpacing: 0.6,
-  },
-  priceValue: {
-    marginTop: 8,
-    fontSize: 18,
-    fontWeight: '900',
-    color: '#1F1F1F',
-  },
+  priceLabel: { fontSize: 11, color: '#71717A', fontWeight: '800' },
+  priceValue: { marginTop: 5, fontSize: 15, fontWeight: '900', color: '#0B0B0F' },
 
-  lightsRow: {
-    marginTop: 16,
-    flexDirection: 'row',
-    gap: 14,
-  },
-  lightCard: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 18,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 8,
-    borderWidth: 1,
-    borderColor: '#ECECF2',
-  },
-  lightTitle: {
-    fontSize: 12,
-    color: '#69707F',
-    fontWeight: '800',
-    letterSpacing: 0.6,
-  },
-  pill: {
-    marginTop: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 9,
+  lightsRow: { marginTop: 12, flexDirection: 'row', gap: 10 },
+  lightCard: { flex: 1, backgroundColor: '#FFFFFF', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: '#F1F1F4' },
+  lightTitle: { fontSize: 11, color: '#71717A', fontWeight: '900', marginBottom: 8 },
+  pill: { 
+    alignSelf: 'flex-start', 
+    paddingHorizontal: 12, 
+    paddingVertical: 6, 
     borderRadius: 999,
-    backgroundColor: '#F1F5FF', // fallback - will be overridden by inline style
-    alignSelf: 'center',
-    minWidth: 80,
+    minWidth: 70,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  pillText: {
-    fontSize: 14,
-    fontWeight: '800',
-    letterSpacing: 0.4,
+  pillText: { 
+    fontSize: 13, 
+    fontWeight: '900',
     textAlign: 'center',
   },
 
-  // Action Card – premium glass feel
-  actionCard: {
-    marginTop: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.72)',
-    borderRadius: 24,
-    padding: 22,
+  // Alpha Oracle
+  oracleToggle: {
+    marginTop: 12,
+    backgroundColor: '#FAFAFB',
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E8E8F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.08,
-    shadowRadius: 30,
-    elevation: 16,
-  },
-  actionHeader: {
+    borderColor: '#F1F1F4',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
   },
-  actionTitle: {
-    flex: 1,
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#1F1F1F',
-    lineHeight: 24,
+  oracleToggleLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  oracleToggleText: { fontSize: 13, fontWeight: '900', color: '#0B0B0F' },
+  oracleMiniBadge: {
+    marginLeft: 6,
+    backgroundColor: '#0B0B0F',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
   },
-  confBadge: {
+  oracleMiniBadgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '900' },
+
+  oracleCard: {
+    marginTop: 10,
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#F1F1F4',
+  },
+  oracleHeadline: { fontSize: 12, color: '#52525B', fontWeight: '800', lineHeight: 18 },
+
+  oracleInputsRow: { marginTop: 12, flexDirection: 'row', gap: 10 },
+  oracleInputWrap: { flex: 1 },
+  oracleLabel: { fontSize: 11, color: '#71717A', fontWeight: '900', marginBottom: 6 },
+  oracleInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FAFAFB',
+    borderWidth: 1,
+    borderColor: '#F1F1F4',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    height: 44,
+    gap: 8,
+  },
+  oraclePrefix: { fontSize: 13, fontWeight: '900', color: '#0B0B0F' },
+  oracleInput: { flex: 1, height: 44, fontSize: 13, fontWeight: '900', color: '#0B0B0F' },
+  oracleInputSolo: {
+    height: 44,
+    backgroundColor: '#FAFAFB',
+    borderWidth: 1,
+    borderColor: '#F1F1F4',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#0B0B0F',
+  },
+
+  oracleBtn: {
+    marginTop: 12,
+    height: 50,
+    borderRadius: 14,
+    backgroundColor: '#0B0B0F',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 6,
-    borderWidth: 1,
-    borderColor: '#ECECF2',
+    shadowRadius: 4,
+    elevation: 3,
   },
-  confLabel: {
-    fontSize: 11,
-    color: '#69707F',
-    fontWeight: '700',
+  oracleBtnDisabled: {
+    backgroundColor: '#9CA3AF',
+    opacity: 0.8,
   },
-  confValue: {
-    marginTop: 3,
-    fontSize: 16,
-    fontWeight: '900',
-    color: '#1F1F1F',
-  },
-  actionNote: {
-    marginTop: 14,
-    fontSize: 14,
-    color: '#555E70',
-    fontWeight: '600',
-    lineHeight: 20,
-  },
+  oracleBtnText: { marginLeft: 10, color: '#FFFFFF', fontWeight: '900', fontSize: 14 },
+  oracleBtnTextDisabled: { color: '#FFFFFF' },
 
-  zonesRow: {
-    marginTop: 18,
-    flexDirection: 'row',
-    gap: 14,
-  },
-  zone: {
-    flex: 1,
-    backgroundColor: 'rgba(240, 245, 255, 0.6)',
-    borderRadius: 18,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    borderWidth: 1.5,
-    borderColor: '#DDE5FF',
-  },
-  zoneLabel: {
-    fontSize: 12,
-    color: '#69707F',
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  zoneValue: {
-    marginTop: 8,
-    fontSize: 15,
-    fontWeight: '900',
-    color: '#1F1F1F',
-  },
-
-  microRow: {
-    marginTop: 18,
-    flexDirection: 'row',
-    gap: 12,
-  },
-  microItem: {
-    flex: 1,
-    backgroundColor: '#FAFBFF',
-    borderRadius: 16,
-    paddingVertical: 14,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E8F5',
-  },
-  microLabel: {
-    fontSize: 11,
-    color: '#69707F',
-    fontWeight: '700',
-  },
-  microValue: {
-    marginTop: 6,
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#1F1F1F',
-  },
-
-  // Explain drawer
-  explainToggle: {
-    marginTop: 20,
-    backgroundColor: '#F5F7FF',
-    borderRadius: 20,
-    paddingVertical: 16,
-    paddingHorizontal: 18,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E2E6F0',
-  },
-  explainToggleLeft: {
+  oracleError: {
+    marginTop: 12,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-  },
-  explainToggleText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#1F1F1F',
-  },
-  explainCard: {
-    marginTop: 12,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 22,
-    padding: 22,
+    backgroundColor: '#FEF2F2',
     borderWidth: 1,
-    borderColor: '#ECECF2',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.06,
-    shadowRadius: 20,
-    elevation: 12,
+    borderColor: '#FEE2E2',
+    padding: 10,
+    borderRadius: 14,
   },
-  bulletRow: {
-    flexDirection: 'row',
-    gap: 14,
-    marginBottom: 16,
-    alignItems: 'flex-start',
+  oracleErrorText: { flex: 1, color: '#B91C1C', fontWeight: '800', fontSize: 12 },
+  oracleRetryBtn: {
+    marginTop: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#EF4444',
+    borderRadius: 8,
+    alignSelf: 'flex-start',
   },
-  bulletDot: {
-    width: 9,
-    height: 9,
-    borderRadius: 4.5,
-    backgroundColor: '#3B82F6',
-    marginTop: 7,
+  oracleRetryText: { color: '#FFFFFF', fontWeight: '900', fontSize: 11 },
+
+  oracleResult: { marginTop: 12 },
+  oracleTimestamp: { fontSize: 10, color: '#A1A1AA', fontWeight: '700', marginBottom: 8 },
+  oracleOneSentence: { fontSize: 14, fontWeight: '900', color: '#0B0B0F', lineHeight: 20 },
+  oraclePassMessage: {
+    marginTop: 10,
+    padding: 12,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
-  bulletText: {
+  oraclePassText: { fontSize: 13, color: '#52525B', fontWeight: '700', lineHeight: 18 },
+
+  oracleScoreRow: { marginTop: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 },
+  oracleScoreLeft: {},
+  oracleScoreLabel: { fontSize: 11, color: '#71717A', fontWeight: '900' },
+  oracleScoreValue: { marginTop: 4, fontSize: 18, fontWeight: '900', color: '#0B0B0F' },
+  oracleScoreOutOf: { fontSize: 12, fontWeight: '900', color: '#71717A' },
+
+  oracleConvictionPill: { paddingHorizontal: 10, paddingVertical: 7, borderRadius: 999 },
+  oracleConvictionText: { fontSize: 11, fontWeight: '900', letterSpacing: 0.5 },
+
+  oracleBarTrack: {
+    marginTop: 10,
+    height: 10,
+    backgroundColor: '#F1F1F4',
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  oracleBarFill: {
+    height: 10,
+    borderRadius: 999,
+  },
+
+  oracleGrid: { marginTop: 12, flexDirection: 'row', gap: 10 },
+  oracleCell: {
     flex: 1,
-    fontSize: 14.5,
-    color: '#444C5C',
-    fontWeight: '600',
-    lineHeight: 22,
+    backgroundColor: '#FAFAFB',
+    borderWidth: 1,
+    borderColor: '#F1F1F4',
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
   },
+  oracleCellLabel: { fontSize: 10, color: '#71717A', fontWeight: '900' },
+  oracleCellValue: { marginTop: 4, fontSize: 12, color: '#0B0B0F', fontWeight: '900' },
+
+  oracleNotional: {
+    marginTop: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: '#F8F9FF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8FF',
+  },
+  oracleNotionalLabel: { fontSize: 11, color: '#69707F', fontWeight: '900' },
+  oracleNotionalValue: { marginTop: 4, fontSize: 14, fontWeight: '900', color: '#1F1F1F' },
+
+  oracleGuardRow: { marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  oracleGuardDot: { width: 10, height: 10, borderRadius: 5 },
+  oracleGuardText: { color: '#52525B', fontWeight: '800', fontSize: 12 },
+  oracleGuardReason: { marginTop: 6, color: '#71717A', fontWeight: '800', fontSize: 12, lineHeight: 18 },
+
+  oracleWhy: {
+    marginTop: 14,
+    padding: 12,
+    backgroundColor: '#FAFAFB',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#F1F1F4',
+  },
+  oracleWhyTitle: { fontSize: 12, fontWeight: '900', color: '#0B0B0F', marginBottom: 8 },
+  oracleWhyItem: { flexDirection: 'row', gap: 10, marginBottom: 8, alignItems: 'flex-start' },
+  oracleWhyDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#0B0B0F', marginTop: 6 },
+  oracleWhyText: { flex: 1, fontSize: 12, color: '#52525B', fontWeight: '700', lineHeight: 18 },
+
+  // Explain drawer
+  explainToggle: {
+    marginTop: 12,
+    backgroundColor: '#FAFAFB',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#F1F1F4',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  explainToggleLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  explainToggleText: { fontSize: 13, fontWeight: '900', color: '#0B0B0F' },
+  explainCard: {
+    marginTop: 10,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#F1F1F4',
+  },
+  bulletRow: { flexDirection: 'row', gap: 10, marginBottom: 10, alignItems: 'flex-start' },
+  bulletDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#0B0B0F', marginTop: 6 },
+  bulletText: { flex: 1, fontSize: 12, color: '#52525B', fontWeight: '700', lineHeight: 18 },
 
   detailsToggle: {
     marginTop: 2,
@@ -1025,36 +1140,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  detailsToggleText: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: '#111827',
-  },
-  detailsBox: {
-    marginTop: 10,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#F1F1F4',
-    padding: 12,
-  },
-  detailLine: {
-    fontSize: 12,
-    color: '#52525B',
-    fontWeight: '700',
-    marginBottom: 6,
-  },
-  detailKey: {
-    color: '#1F1F1F',
-    fontWeight: '900',
-  },
+  detailsToggleText: { fontSize: 12, fontWeight: '900', color: '#111827' },
+  detailsBox: { marginTop: 10, backgroundColor: '#FFFFFF', borderRadius: 12, borderWidth: 1, borderColor: '#F1F1F4', padding: 12 },
+  detailLine: { fontSize: 12, color: '#52525B', fontWeight: '700', marginBottom: 6 },
+  detailKey: { color: '#0B0B0F', fontWeight: '900' },
 
-  disclaimer: {
-    marginTop: 20,
-    fontSize: 12,
-    color: '#8B949E',
-    fontWeight: '600',
-    textAlign: 'center',
-    fontStyle: 'italic',
-  },
+  disclaimer: { marginTop: 12, fontSize: 11, color: '#A1A1AA', fontWeight: '700', textAlign: 'center' },
 });
