@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Dimensions } from 'react-native';
-import RustForexWidget from '../../components/rust/RustForexWidget';
 import { LinearGradient } from 'expo-linear-gradient';
+import RustForexWidget from '../../components/rust/RustForexWidget';
 
 const { width } = Dimensions.get('window');
 
@@ -25,31 +25,34 @@ export default function ForexScreen({ navigation }: ForexScreenProps) {
       contentContainerStyle={styles.contentContainer}
       showsVerticalScrollIndicator={false}
     >
-      {/* Hero Header */}
-      <LinearGradient
-        colors={['#FAFAFA', '#FFFFFF']}
-        style={styles.hero}
-      >
-        <Text style={styles.title}>Forex Markets</Text>
+      {/* Hero Header (Jobs-style: calm, minimal, human) */}
+      <LinearGradient colors={['#FFFFFF', '#FAFAFA']} style={styles.hero}>
+        <Text style={styles.title}>Forex</Text>
         <Text style={styles.subtitle}>
-          Real-time analysis • 24/7 liquidity • Institutional-grade edge
+          One clear read. One smart move. No jargon.
         </Text>
       </LinearGradient>
 
-      {/* Featured Pair – EURUSD dominates the top */}
-      <View style={styles.featuredCard}>
-        <View style={styles.shadowContainer}>
-          <View style={styles.featuredInner}>
-            <View style={styles.featuredHeader}>
-              <Text style={styles.featuredPair}>EUR/USD</Text>
-              <View style={styles.liveBadge}>
-                <View style={styles.liveDot} />
-                <Text style={styles.liveText}>LIVE</Text>
+      {/* Featured Pair – EURUSD */}
+      <View style={styles.featuredSection}>
+        <View style={styles.featuredCard}>
+          <View style={styles.shadowContainer}>
+            <View style={styles.featuredInner}>
+              <View style={styles.featuredHeader}>
+                <View>
+                  <Text style={styles.featuredPair}>EUR/USD</Text>
+                  <Text style={styles.featuredLabel}>The world's most traded pair</Text>
+                </View>
+
+                <View style={styles.liveBadge}>
+                  <View style={styles.liveDot} />
+                  <Text style={styles.liveText}>LIVE</Text>
+                </View>
               </View>
-            </View>
-            <Text style={styles.featuredLabel}>The World's Most Traded Pair</Text>
-            <View style={{ marginTop: 16 }}>
-              <RustForexWidget defaultPair="EURUSD" size="large" />
+
+              <View style={{ marginTop: 14 }}>
+                <RustForexWidget defaultPair="EURUSD" size="large" />
+              </View>
             </View>
           </View>
         </View>
@@ -58,15 +61,19 @@ export default function ForexScreen({ navigation }: ForexScreenProps) {
       {/* Major Pairs Grid */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Major Pairs</Text>
+
         <View style={styles.grid}>
           {majorPairs.map(({ pair, label }) => (
             <View key={pair} style={styles.cardWrapper}>
               <View style={styles.cardShadowContainer}>
                 <View style={styles.card}>
                   <View style={styles.cardHeader}>
-                    <Text style={styles.pairCode}>{pair}</Text>
+                    <Text style={styles.pairCode}>
+                      {pair.slice(0, 3)}/{pair.slice(3)}
+                    </Text>
                     <Text style={styles.pairLabel}>{label}</Text>
                   </View>
+
                   <View style={styles.widgetWrapper}>
                     <RustForexWidget defaultPair={pair} size="compact" />
                   </View>
@@ -74,6 +81,12 @@ export default function ForexScreen({ navigation }: ForexScreenProps) {
               </View>
             </View>
           ))}
+        </View>
+
+        <View style={styles.footerNote}>
+          <Text style={styles.footerNoteText}>
+            Educational insights — not financial advice.
+          </Text>
         </View>
       </View>
     </ScrollView>
@@ -91,41 +104,44 @@ const styles = StyleSheet.create({
   hero: {
     paddingTop: 60,
     paddingHorizontal: 24,
-    paddingBottom: 32,
+    paddingBottom: 28,
   },
   title: {
-    fontSize: 36,
+    fontSize: 38,
     fontWeight: '800',
-    color: '#000000',
-    letterSpacing: -0.5,
+    color: '#0B0B0F',
+    letterSpacing: -0.6,
   },
   subtitle: {
     fontSize: 16,
-    color: '#525252',
+    color: '#52525B',
     marginTop: 8,
     lineHeight: 22,
     fontWeight: '500',
   },
+
+  featuredSection: {
+    paddingHorizontal: 20,
+    marginTop: 8,
+  },
   featuredCard: {
-    marginHorizontal: 20,
-    marginTop: -20,
     borderRadius: 24,
     overflow: 'visible',
   },
   shadowContainer: {
     borderRadius: 24,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.10,
+    shadowRadius: 14,
     elevation: 12,
   },
   featuredInner: {
     backgroundColor: '#FFFFFF',
     borderRadius: 24,
-    padding: 20,
+    padding: 18,
     borderWidth: 1,
-    borderColor: '#F0F0F0',
+    borderColor: '#F1F1F4',
   },
   featuredHeader: {
     flexDirection: 'row',
@@ -135,15 +151,22 @@ const styles = StyleSheet.create({
   featuredPair: {
     fontSize: 28,
     fontWeight: '800',
-    color: '#000000',
+    color: '#0B0B0F',
+    letterSpacing: -0.3,
+  },
+  featuredLabel: {
+    fontSize: 13,
+    color: '#71717A',
+    marginTop: 4,
+    fontWeight: '600',
   },
   liveBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#10B981',
     paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
+    paddingVertical: 5,
+    borderRadius: 999,
   },
   liveDot: {
     width: 8,
@@ -155,25 +178,22 @@ const styles = StyleSheet.create({
   liveText: {
     color: '#FFFFFF',
     fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.5,
+    fontWeight: '800',
+    letterSpacing: 0.6,
   },
-  featuredLabel: {
-    fontSize: 15,
-    color: '#6B7280',
-    marginTop: 6,
-    fontWeight: '500',
-  },
+
   section: {
-    marginTop: 40,
+    marginTop: 34,
     paddingHorizontal: 20,
   },
   sectionTitle: {
     fontSize: 22,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#111111',
-    marginBottom: 20,
+    marginBottom: 18,
+    letterSpacing: -0.2,
   },
+
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -188,34 +208,45 @@ const styles = StyleSheet.create({
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.06,
-    shadowRadius: 8,
+    shadowRadius: 10,
     elevation: 8,
   },
   card: {
     backgroundColor: '#FFFFFF',
     borderRadius: 18,
-    padding: 16,
+    padding: 14,
     borderWidth: 1,
-    borderColor: '#F2F2F2',
-    height: 180,
+    borderColor: '#F2F2F6',
+    height: 168,
   },
   cardHeader: {
-    marginBottom: 12,
+    marginBottom: 10,
   },
   pairCode: {
     fontSize: 18,
-    fontWeight: '800',
-    color: '#000000',
+    fontWeight: '900',
+    color: '#0B0B0F',
+    letterSpacing: -0.2,
   },
   pairLabel: {
     fontSize: 12,
     color: '#71717A',
     marginTop: 2,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   widgetWrapper: {
     flex: 1,
     justifyContent: 'flex-end',
   },
-});
 
+  footerNote: {
+    marginTop: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  footerNoteText: {
+    fontSize: 12,
+    color: '#A1A1AA',
+    fontWeight: '600',
+  },
+});
