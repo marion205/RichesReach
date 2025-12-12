@@ -5,7 +5,7 @@ use governor::middleware::NoOpMiddleware;
 use nonzero_ext::nonzero;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, net::SocketAddr, sync::Arc, time::Duration};
+use std::{collections::HashMap, net::SocketAddr, str::FromStr, sync::Arc, time::Duration};
 use tokio::sync::RwLock;
 use tracing::{error, info, instrument, Level};
 use tracing_subscriber::{fmt, EnvFilter};
@@ -18,6 +18,7 @@ mod options_analysis;
 mod forex_analysis;
 mod sentiment_analysis;
 mod correlation_analysis;
+mod raha_regime_integration;
 mod ml_models;
 mod cache;
 mod websocket;
@@ -81,6 +82,13 @@ pub struct CorrelationAnalysisRequest {
     pub primary: String,
     #[serde(default)]
     pub secondary: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct IngestPriceRequest {
+    pub symbol: String,
+    pub price: String,  // Decimal as string
+    pub timestamp: String,  // ISO 8601 timestamp
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -250,6 +258,7 @@ async fn main() -> Result<()> {
     info!("💱 Forex:          POST /v1/forex/analyze");
     info!("📰 Sentiment:      POST /v1/sentiment/analyze");
     info!("🔗 Correlation:    POST /v1/correlation/analyze");
+    info!("📥 Ingest Price:    POST /v1/correlation/ingest-price");
     info!("📈 Metrics:        GET  /metrics");
     info!("⚡ WS:             WS   /v1/ws");
 
@@ -411,6 +420,17 @@ fn build_routes(state: AppState) -> impl Filter<Extract = impl warp::Reply, Erro
         .and_then(correlation_analyze_handler)
         .with(sec_headers.clone());
 
+    // Price ingestion endpoint for regime oracle
+    let ingest_price = v1
+        .and(warp::path("correlation"))
+        .and(warp::path("ingest-price"))
+        .and(warp::post())
+        .and(with_req_meta.clone())
+        .and(warp::body::json())
+        .and(with_state.clone())
+        .and_then(ingest_price_handler)
+        .with(sec_headers.clone());
+
     let websocket = v1
         .and(warp::path("ws"))
         .and(warp::ws())
@@ -431,6 +451,7 @@ fn build_routes(state: AppState) -> impl Filter<Extract = impl warp::Reply, Erro
         .or(forex_analyze)
         .or(sentiment_analyze)
         .or(correlation_analyze)
+        .or(ingest_price)
         .or(websocket)
         .with(cors)
         .with(warp::log::custom(|info| {
@@ -930,6 +951,67 @@ async fn correlation_analyze_handler(
     tracing::info!(%req_id, primary=%body.primary, ms = start.elapsed().as_millis() as u64, "correlation_analysis_ok");
 
     Ok(warp::reply::with_status(warp::reply::json(&analysis), StatusCode::OK))
+}
+
+#[instrument(skip(state, headers))]
+async fn ingest_price_handler(
+    (ip, req_id, headers): (String, String, HeaderMap),
+    body: IngestPriceRequest,
+    state: AppState,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let start = std::time::Instant::now();
+    
+    // Parse timestamp (ISO 8601 or RFC3339)
+    let timestamp = match DateTime::parse_from_rfc3339(&body.timestamp) {
+        Ok(dt) => dt.with_timezone(&Utc),
+        Err(_) => {
+            // Try ISO 8601 format
+            match DateTime::parse_from_str(&body.timestamp, "%+") {
+                Ok(dt) => dt.with_timezone(&Utc),
+                Err(_) => Utc::now(),
+            }
+        }
+    };
+    
+    // Parse price as Decimal
+    let price = match Decimal::from_str(&body.price) {
+        Ok(p) => p,
+        Err(_) => {
+            return Ok(warp::reply::with_status(
+                warp::reply::json(&json_error("invalid_price", "Invalid price format")),
+                StatusCode::BAD_REQUEST,
+            ));
+        }
+    };
+    
+    // Validate symbol
+    let symbol = body.symbol.trim().to_uppercase();
+    if !validate_symbol(&symbol) {
+        return Ok(warp::reply::with_status(
+            warp::reply::json(&json_error("bad_request", "Invalid symbol")),
+            StatusCode::BAD_REQUEST,
+        ));
+    }
+    
+    // Ingest price
+    state.correlation_engine.ingest_price(&symbol, timestamp, price).await;
+    
+    tracing::info!(
+        %req_id,
+        symbol=%symbol,
+        price=%body.price,
+        ms = start.elapsed().as_millis() as u64,
+        "price_ingested"
+    );
+    
+    Ok(warp::reply::with_status(
+        warp::reply::json(&serde_json::json!({
+            "success": true,
+            "symbol": symbol,
+            "timestamp": timestamp.to_rfc3339(),
+        })),
+        StatusCode::OK,
+    ))
 }
 
 #[instrument(skip(state, headers))]

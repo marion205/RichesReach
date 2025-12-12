@@ -1,0 +1,11 @@
+{
+  "timestamp": "2025-12-07T19:56:49.558632+00:00",
+  "summary": {
+    "total_queries": 0,
+    "overall_cache_hit_rate": 0.0,
+    "avg_query_time_ms": 0,
+    "query_types": 0,
+    "metrics": {}
+  },
+  "detailed_metrics": {}
+}

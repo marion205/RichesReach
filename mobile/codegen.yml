@@ -1,0 +1,34 @@
+schema:
+  # Using introspection JSON (generated from Django schema)
+  # To regenerate: python3 ../export_graphql_schema.py (from project root)
+  - './schema-introspection.json'
+  
+  # Alternative options (uncomment if needed):
+  # - 'http://localhost:8000/graphql/'  # Direct endpoint
+  # - 'http://192.168.1.151:8000/graphql/'  # For physical devices on LAN
+  # - 'https://api.richesreach.com:8000/graphql/'  # Production
+
+# Documents section commented out - generating schema types only for now
+# To generate operation types later, ensure all operations have unique names
+# documents:
+#   - 'src/**/*.{ts,tsx}'
+#   - '!src/graphql/queries_actual_schema.ts'
+#   - '!src/graphql/queries_corrected.ts'
+#   - '!src/**/__tests__/**'
+#   - '!src/**/*.test.ts'
+#   - '!src/**/*.test.tsx'
+
+generates:
+  src/generated/graphql.ts:
+    plugins:
+      - typescript  # Generate base types from schema only
+      # Note: To add typescript-operations and typescript-react-apollo later,
+      # ensure all GraphQL operations have unique names across all files
+    config:
+      skipTypename: false
+      scalars:
+        DateTime: string
+        JSON: Record<string, unknown>
+      namingConvention:
+        typeNames: 'pascal-case#pascalCase'
+        enumValues: 'keep'

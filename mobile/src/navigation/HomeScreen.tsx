@@ -1026,7 +1026,7 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
           ) : (
             <>
               {/* Aura around the portfolio card */}
-              <View style={{ marginHorizontal: 16 }}>
+              <View style={{ marginHorizontal: 0 }}>
                 <AuraHalo
                   score={Math.max(-1, Math.min(1, (resolved.totalReturnPercent ?? 0) / 20))}
                 >

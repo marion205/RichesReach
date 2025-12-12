@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
 import {
   GET_RAHA_SIGNALS,
@@ -15,6 +16,10 @@ export interface RAHASignal {
   takeProfit?: number;
   confidenceScore: number;
   meta: Record<string, any>;
+  regimeMultiplier?: number;
+  regimeNarration?: string;
+  globalRegime?: string;
+  localContext?: string;
   strategyVersion?: {
     id: string;
     strategy: {
@@ -32,6 +37,21 @@ export const useRAHASignals = (symbol: string, timeframe: string = '5m', limit?:
     fetchPolicy: 'cache-and-network',
     pollInterval: 30000, // Poll every 30 seconds for live signals
   });
+
+  // Log regime data for debugging
+  useEffect(() => {
+    if (data?.rahaSignals && data.rahaSignals.length > 0) {
+      const firstSignal = data.rahaSignals[0];
+      console.log('[RAHA] Regime payload:', {
+        symbol,
+        globalRegime: firstSignal.globalRegime,
+        localContext: firstSignal.localContext,
+        regimeMultiplier: firstSignal.regimeMultiplier,
+        regimeNarration: firstSignal.regimeNarration,
+        signalType: firstSignal.signalType,
+      });
+    }
+  }, [data, symbol]);
 
   return {
     signals: (data?.rahaSignals || []) as RAHASignal[],

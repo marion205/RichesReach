@@ -1,0 +1,30 @@
+{
+  "timestamp": "2025-12-07T14:36:19.738619",
+  "summary": {
+    "total_tests": 1,
+    "total_requests": 500,
+    "total_successful": 0,
+    "total_failed": 500,
+    "overall_success_rate": 0.0,
+    "avg_response_time_ms": 24.5489182472229
+  },
+  "test_results": [
+    {
+      "query": "raha_signals",
+      "concurrent_users": 50,
+      "requests_per_user": 10,
+      "total_requests": 500,
+      "successful_requests": 0,
+      "failed_requests": 500,
+      "success_rate": 0.0,
+      "total_time_seconds": 1.305974006652832,
+      "requests_per_second": 382.8560120285115,
+      "avg_response_time_ms": 24.5489182472229,
+      "median_response_time_ms": 16.507983207702637,
+      "min_response_time_ms": 2.6988983154296875,
+      "max_response_time_ms": 95.44992446899414,
+      "p95_response_time_ms": 92.50283241271973,
+      "p99_response_time_ms": 94.88821029663086
+    }
+  ]
+}

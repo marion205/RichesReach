@@ -283,17 +283,50 @@ export default function TheWhisperScreen({
     };
   }, [topSignal, symbol]);
 
-  // Market mood (from regime detection - simplified for now)
-  const marketMood = useMemo(() => {
-    if (!topSignal?.meta) return { label: 'Calm', color: '#10B981' };
+  // Market regime (from oracle)
+  const regimeLabel = useMemo(() => {
+    if (!topSignal?.globalRegime) return 'Calibrating regime…';
     
-    // This would come from RAHA's regime detection
-    // For now, use signal confidence as proxy
-    const confidence = topSignal.confidenceScore || 0.5;
-    if (confidence > 0.7) return { label: 'Trending', color: '#3B82F6' };
-    if (confidence > 0.5) return { label: 'Calm', color: '#10B981' };
-    if (confidence > 0.3) return { label: 'Choppy', color: '#F59E0B' };
-    return { label: 'Dangerous', color: '#EF4444' };
+    // Turn `EQUITY_RISK_ON` → `Equity Risk On`
+    const prettyGlobal = topSignal.globalRegime
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, (l) => l.toUpperCase());
+    
+    const prettyLocal = topSignal.localContext
+      ? topSignal.localContext
+          .replace(/_/g, ' ')
+          .replace(/\b\w/g, (l) => l.toUpperCase())
+      : null;
+    
+    return prettyLocal ? `${prettyGlobal} · ${prettyLocal}` : prettyGlobal;
+  }, [topSignal]);
+
+  const regimeMultiplier = topSignal?.regimeMultiplier ?? 1.0;
+  
+  const regimeColor = useMemo(() => {
+    if (regimeMultiplier > 1.05) return '#10B981'; // Green for risk-on
+    if (regimeMultiplier < 0.95) return '#EF4444'; // Red for risk-off
+    return '#6B7280'; // Gray for neutral
+  }, [regimeMultiplier]);
+
+  // Market mood (from regime detection - now using actual regime)
+  const marketMood = useMemo(() => {
+    if (!topSignal?.globalRegime) {
+      // Fallback to confidence if no regime data
+      const confidence = topSignal?.confidenceScore || 0.5;
+      if (confidence > 0.7) return { label: 'Trending', color: '#3B82F6' };
+      if (confidence > 0.5) return { label: 'Calm', color: '#10B981' };
+      if (confidence > 0.3) return { label: 'Choppy', color: '#F59E0B' };
+      return { label: 'Dangerous', color: '#EF4444' };
+    }
+    
+    // Use actual regime
+    const regime = topSignal.globalRegime;
+    if (regime === 'EQUITY_RISK_ON') return { label: 'Risk-On', color: '#10B981' };
+    if (regime === 'EQUITY_RISK_OFF') return { label: 'Risk-Off', color: '#EF4444' };
+    if (regime === 'CRYPTO_ALT_SEASON') return { label: 'Alt Season', color: '#8B5CF6' };
+    if (regime === 'CRYPTO_BTC_DOMINANCE') return { label: 'BTC Dominance', color: '#F59E0B' };
+    return { label: 'Neutral', color: '#6B7280' };
   }, [topSignal]);
 
   // Expectancy sentence (the magic line)
@@ -402,25 +435,26 @@ export default function TheWhisperScreen({
   }, []);
 
   // Edge case: No enabled strategies
-  if (!hasEnabledStrategies) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.emptyState}>
-          <Icon name="zap" size={48} color="#9CA3AF" />
-          <Text style={styles.emptyStateTitle}>Enable Strategies First</Text>
-          <Text style={styles.emptyStateText}>
-            Go to Strategy Store to enable RAHA strategies, then come back here.
-          </Text>
-          <TouchableOpacity
-            style={styles.emptyStateButton}
-            onPress={handleNavigateToStrategyStore}
-          >
-            <Text style={styles.emptyStateButtonText}>Go to Strategy Store</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  // Allow testing even without enabled strategies (signals will still load if available)
+  // if (!hasEnabledStrategies) {
+  //   return (
+  //     <SafeAreaView style={styles.container}>
+  //       <View style={styles.emptyState}>
+  //         <Icon name="zap" size={48} color="#9CA3AF" />
+  //         <Text style={styles.emptyStateTitle}>Enable Strategies First</Text>
+  //         <Text style={styles.emptyStateText}>
+  //           Go to Strategy Store to enable RAHA strategies, then come back here.
+  //         </Text>
+  //         <TouchableOpacity
+  //           style={styles.emptyStateButton}
+  //           onPress={handleNavigateToStrategyStore}
+  //         >
+  //           <Text style={styles.emptyStateButtonText}>Go to Strategy Store</Text>
+  //         </TouchableOpacity>
+  //       </View>
+  //     </SafeAreaView>
+  //   );
+  // }
 
   // Edge case: Error loading signals
   if (signalsError) {
@@ -842,6 +876,35 @@ export default function TheWhisperScreen({
         </Animated.View>
       )}
 
+      {/* Regime Badge - Shows market regime oracle output */}
+      {topSignal && topSignal.globalRegime && (
+        <View style={styles.regimeChipContainer}>
+          <View
+            style={[
+              styles.regimeChip,
+              regimeMultiplier > 1.05
+                ? styles.regimeChipPositive
+                : regimeMultiplier < 0.95
+                ? styles.regimeChipDefensive
+                : styles.regimeChipNeutral,
+            ]}
+          >
+            <Icon name="activity" size={14} color={regimeColor} />
+            <Text style={[styles.regimeChipText, { color: regimeColor }]}>
+              {regimeLabel}
+            </Text>
+            {regimeMultiplier !== 1.0 && (
+              <Text style={[styles.regimeChipMultiplier, { color: regimeColor }]}>
+                {regimeMultiplier > 1 ? '+' : ''}{((regimeMultiplier - 1) * 100).toFixed(0)}%
+              </Text>
+            )}
+          </View>
+          {topSignal.regimeNarration && (
+            <Text style={styles.regimeNarration}>{topSignal.regimeNarration}</Text>
+          )}
+        </View>
+      )}
+
       {/* Market Mood Pill - Animated */}
       {topSignal && (
         <Animated.View
@@ -857,10 +920,12 @@ export default function TheWhisperScreen({
             </Text>
           </View>
           <Text style={styles.moodSubtext}>
-            {marketMood.label === 'Trending' && 'Good for quick trades'}
-            {marketMood.label === 'Calm' && 'Good for quick trades'}
-            {marketMood.label === 'Choppy' && 'Be careful today'}
-            {marketMood.label === 'Dangerous' && 'Consider waiting'}
+            {topSignal.regimeNarration || (
+              marketMood.label === 'Risk-On' && 'Good for quick trades'
+              || marketMood.label === 'Risk-Off' && 'Be defensive today'
+              || marketMood.label === 'Neutral' && 'Standard conditions'
+              || 'Market conditions'
+            )}
           </Text>
         </Animated.View>
       )}
@@ -1448,6 +1513,46 @@ const styles = StyleSheet.create({
     color: '#111827',
     textAlign: 'center',
     lineHeight: 22,
+  },
+  regimeChipContainer: {
+    alignItems: 'center',
+    marginTop: 16,
+    marginBottom: 8,
+    paddingHorizontal: 20,
+  },
+  regimeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 6,
+  },
+  regimeChipPositive: {
+    backgroundColor: '#10B98120',
+  },
+  regimeChipDefensive: {
+    backgroundColor: '#EF444420',
+  },
+  regimeChipNeutral: {
+    backgroundColor: '#6B728020',
+  },
+  regimeChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  regimeChipMultiplier: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginLeft: 4,
+  },
+  regimeNarration: {
+    fontSize: 12,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginTop: 6,
+    paddingHorizontal: 20,
+    lineHeight: 16,
   },
   moodContainer: {
     marginHorizontal: 20,

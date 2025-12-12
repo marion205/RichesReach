@@ -76,6 +76,18 @@ class EnhancedStockService:
                     self._cache_price(symbol, formatted_data)
                     logger.info(
                         f"API service price for {symbol}: ${formatted_data['price']} from {formatted_data['source']}")
+                    
+                    # Ingest price into regime oracle (non-blocking)
+                    try:
+                        from .regime_price_feed import regime_price_feed
+                        regime_price_feed.ingest_stock_price(
+                            symbol,
+                            formatted_data['price'],
+                            timezone.now()
+                        )
+                    except Exception as e:
+                        logger.debug(f"Could not ingest price to regime oracle: {e}")
+                    
                     return formatted_data
             except Exception as e:
                 logger.warning(f"Market data API service failed for {symbol}: {e}")

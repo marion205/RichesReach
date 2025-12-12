@@ -1,0 +1,30 @@
+{
+  "timestamp": "2025-12-07T14:36:33.537137",
+  "summary": {
+    "total_tests": 1,
+    "total_requests": 2000,
+    "total_successful": 0,
+    "total_failed": 2000,
+    "overall_success_rate": 0.0,
+    "avg_response_time_ms": 83.37837481498718
+  },
+  "test_results": [
+    {
+      "query": "strategies",
+      "concurrent_users": 100,
+      "requests_per_user": 20,
+      "total_requests": 2000,
+      "successful_requests": 0,
+      "failed_requests": 2000,
+      "success_rate": 0.0,
+      "total_time_seconds": 3.7518882751464844,
+      "requests_per_second": 533.0649138058127,
+      "avg_response_time_ms": 83.37837481498718,
+      "median_response_time_ms": 27.77087688446045,
+      "min_response_time_ms": 2.997159957885742,
+      "max_response_time_ms": 928.2100200653076,
+      "p95_response_time_ms": 807.5239658355713,
+      "p99_response_time_ms": 925.9212017059326
+    }
+  ]
+}

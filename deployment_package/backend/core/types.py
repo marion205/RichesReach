@@ -397,7 +397,7 @@ class SentimentAnalysisType(graphene.ObjectType):
 
 
 class CorrelationAnalysisType(graphene.ObjectType):
-    """Rust engine correlation analysis"""
+    """Rust engine correlation analysis with market regime oracle"""
     primarySymbol = graphene.String()
     secondarySymbol = graphene.String()
     correlation1d = graphene.Float()
@@ -405,7 +405,8 @@ class CorrelationAnalysisType(graphene.ObjectType):
     correlation30d = graphene.Float()
     btcDominance = graphene.Float()
     spyCorrelation = graphene.Float()
-    regime = graphene.String()
+    globalRegime = graphene.String()  # EQUITY_RISK_ON, EQUITY_RISK_OFF, CRYPTO_ALT_SEASON, CRYPTO_BTC_DOMINANCE, NEUTRAL
+    localContext = graphene.String()  # IDIOSYNCRATIC_BREAKOUT, CHOPPY_MEAN_REVERT, NORMAL
     timestamp = graphene.String()
 
 

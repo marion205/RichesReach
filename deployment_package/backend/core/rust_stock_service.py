@@ -161,6 +161,29 @@ class RustStockService:
             "symbol": symbol.upper(),
         }
         return self._make_request("/v1/options/iv-forecast", method="POST", data=data)
+    
+    def ingest_price(self, symbol: str, price: float, timestamp: str = None) -> Dict[str, Any]:
+        """
+        Ingest a price into the correlation engine for regime analysis.
+        
+        Args:
+            symbol: Stock or crypto symbol
+            price: Current price
+            timestamp: ISO 8601 timestamp (defaults to now)
+        
+        Returns:
+            Dict with success status
+        """
+        from datetime import datetime, timezone
+        if timestamp is None:
+            timestamp = datetime.now(timezone.utc).isoformat()
+        
+        data = {
+            "symbol": symbol.upper(),
+            "price": str(price),
+            "timestamp": timestamp,
+        }
+        return self._make_request("/v1/correlation/ingest-price", method="POST", data=data)
 
 # Global instance
 rust_stock_service = RustStockService()

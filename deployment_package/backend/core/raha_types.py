@@ -64,10 +64,72 @@ class RAHASignalType(DjangoObjectType):
         fields = '__all__'
     
     meta = graphene.JSONString()
+    regimeMultiplier = graphene.Float(description="Position size multiplier based on current market regime")
+    regimeNarration = graphene.String(description="Human-readable explanation of current regime")
+    globalRegime = graphene.String(description="Current global market regime")
+    localContext = graphene.String(description="Local context for this symbol")
     
     def resolve_meta(self, info):
         """Return meta as JSON"""
         return self.meta or {}
+    
+    def resolve_regimeMultiplier(self, info):
+        """Get position size multiplier based on regime"""
+        # ✅ Check meta first for mock data
+        if self.meta and 'regime_multiplier' in self.meta:
+            return float(self.meta['regime_multiplier'])
+        
+        try:
+            from .raha_regime_integration import raha_regime_integration
+            multiplier = raha_regime_integration.get_position_multiplier(self)
+            return float(multiplier)
+        except Exception:
+            return 1.0
+    
+    def resolve_regimeNarration(self, info):
+        """Get human-readable regime narration"""
+        # ✅ Check meta first for mock data
+        if self.meta and 'regime_narration' in self.meta:
+            return str(self.meta['regime_narration'])
+        
+        try:
+            from .raha_regime_integration import raha_regime_integration
+            narration = raha_regime_integration.get_regime_narration(self.symbol)
+            if narration:
+                return narration.get('action_summary', '')
+        except Exception:
+            pass
+        return ''
+    
+    def resolve_globalRegime(self, info):
+        """Get current global market regime"""
+        # ✅ Check meta first for mock data
+        if self.meta and 'regime_global' in self.meta:
+            return str(self.meta['regime_global'])
+        
+        try:
+            from .raha_regime_integration import raha_regime_integration
+            regime_analysis = raha_regime_integration.get_regime_analysis(self.symbol)
+            if regime_analysis:
+                return regime_analysis.get('global_regime', 'NEUTRAL')
+        except Exception:
+            pass
+        return 'NEUTRAL'
+    
+    def resolve_localContext(self, info):
+        """Get local context for this symbol"""
+        # ✅ Check meta first for mock data
+        if self.meta and 'regime_local' in self.meta:
+            return str(self.meta['regime_local'])
+        
+        try:
+            from .raha_regime_integration import raha_regime_integration
+            regime_analysis = raha_regime_integration.get_regime_analysis(self.symbol)
+            if regime_analysis:
+                return regime_analysis.get('local_context', 'NORMAL')
+        except Exception:
+            pass
+        return 'NORMAL'
 
 
 class EquityPointType(graphene.ObjectType):

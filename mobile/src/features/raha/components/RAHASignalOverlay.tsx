@@ -99,6 +99,30 @@ export default function RAHASignalOverlay({
               </View>
             </View>
 
+            {/* Regime info */}
+            {signal.globalRegime && (
+              <View style={styles.regimeInfo}>
+                <View style={[
+                  styles.regimeBadge,
+                  (signal.regimeMultiplier ?? 1.0) > 1.05
+                    ? styles.regimeBadgePositive
+                    : (signal.regimeMultiplier ?? 1.0) < 0.95
+                    ? styles.regimeBadgeDefensive
+                    : styles.regimeBadgeNeutral
+                ]}>
+                  <Text style={styles.regimeBadgeText}>
+                    {signal.globalRegime.replace(/_/g, ' ')}
+                    {signal.localContext && ` · ${signal.localContext.replace(/_/g, ' ')}`}
+                  </Text>
+                  {signal.regimeMultiplier && signal.regimeMultiplier !== 1.0 && (
+                    <Text style={styles.regimeMultiplier}>
+                      {signal.regimeMultiplier > 1 ? '+' : ''}{((signal.regimeMultiplier - 1) * 100).toFixed(0)}%
+                    </Text>
+                  )}
+                </View>
+              </View>
+            )}
+
             <View style={styles.signalDetails}>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Symbol:</Text>
@@ -151,6 +175,38 @@ export default function RAHASignalOverlay({
 }
 
 const styles = StyleSheet.create({
+  regimeInfo: {
+    marginBottom: 8,
+  },
+  regimeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  regimeBadgePositive: {
+    backgroundColor: '#10B98120',
+  },
+  regimeBadgeDefensive: {
+    backgroundColor: '#EF444420',
+  },
+  regimeBadgeNeutral: {
+    backgroundColor: '#6B728020',
+  },
+  regimeBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#374151',
+    textTransform: 'capitalize',
+  },
+  regimeMultiplier: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#374151',
+  },
   container: {
     marginVertical: 8,
   },

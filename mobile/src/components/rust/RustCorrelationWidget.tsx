@@ -13,7 +13,8 @@ const GET_RUST_CORRELATION_ANALYSIS = gql`
       correlation30d
       btcDominance
       spyCorrelation
-      regime
+      globalRegime
+      localContext
       timestamp
     }
   }
@@ -62,10 +63,34 @@ export default function RustCorrelationWidget({
 
   const getRegimeColor = (regime: string) => {
     switch (regime) {
-      case 'RISK_ON': return '#10B981';
-      case 'RISK_OFF': return '#EF4444';
+      case 'EQUITY_RISK_ON': return '#10B981';
+      case 'EQUITY_RISK_OFF': return '#EF4444';
+      case 'CRYPTO_ALT_SEASON': return '#8B5CF6';
+      case 'CRYPTO_BTC_DOMINANCE': return '#F59E0B';
+      case 'NEUTRAL': return '#6B7280';
       default: return '#6B7280';
     }
+  };
+  
+  const formatRegimeLabel = (globalRegime: string, localContext: string) => {
+    const regimeMap: Record<string, string> = {
+      'EQUITY_RISK_ON': 'Risk-On',
+      'EQUITY_RISK_OFF': 'Risk-Off',
+      'CRYPTO_ALT_SEASON': 'Alt Season',
+      'CRYPTO_BTC_DOMINANCE': 'BTC Dominance',
+      'NEUTRAL': 'Neutral',
+    };
+    
+    const contextMap: Record<string, string> = {
+      'IDIOSYNCRATIC_BREAKOUT': 'Breakout',
+      'CHOPPY_MEAN_REVERT': 'Choppy',
+      'NORMAL': '',
+    };
+    
+    const regimeLabel = regimeMap[globalRegime] || globalRegime;
+    const contextLabel = contextMap[localContext] || '';
+    
+    return contextLabel ? `${regimeLabel} · ${contextLabel}` : regimeLabel;
   };
 
   const getCorrelationColor = (corr: number) => {
@@ -147,22 +172,24 @@ export default function RustCorrelationWidget({
       )}
 
       {/* Market Regime */}
-      <View style={styles.section}>
-        <View style={styles.row}>
-          <Text style={styles.sectionTitle}>Market Regime</Text>
-          <View style={[
-            styles.regimeBadge,
-            { backgroundColor: getRegimeColor(analysis.regime) + '20' }
-          ]}>
-            <Text style={[
-              styles.regimeText,
-              { color: getRegimeColor(analysis.regime) }
+      {analysis.globalRegime && (
+        <View style={styles.section}>
+          <View style={styles.row}>
+            <Text style={styles.sectionTitle}>Market Regime</Text>
+            <View style={[
+              styles.regimeBadge,
+              { backgroundColor: getRegimeColor(analysis.globalRegime) + '20' }
             ]}>
-              {analysis.regime}
-            </Text>
+              <Text style={[
+                styles.regimeText,
+                { color: getRegimeColor(analysis.globalRegime) }
+              ]}>
+                {formatRegimeLabel(analysis.globalRegime, analysis.localContext || 'NORMAL')}
+              </Text>
+            </View>
           </View>
         </View>
-      </View>
+      )}
     </View>
   );
 }

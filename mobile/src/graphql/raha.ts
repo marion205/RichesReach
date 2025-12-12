@@ -92,6 +92,10 @@ export const GET_RAHA_SIGNALS = gql`
       takeProfit
       confidenceScore
       meta
+      regimeMultiplier
+      regimeNarration
+      globalRegime
+      localContext
       strategyVersion {
         id
         strategy {

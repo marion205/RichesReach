@@ -1232,7 +1232,8 @@ class Query(graphene.ObjectType):
                 correlation30d=rust_response.get('correlation_30d', 0.0),
                 btcDominance=rust_response.get('btc_dominance'),
                 spyCorrelation=rust_response.get('spy_correlation'),
-                regime=rust_response.get('regime', 'NEUTRAL'),
+                globalRegime=rust_response.get('global_regime', 'NEUTRAL'),
+                localContext=rust_response.get('local_context', 'NORMAL'),
                 timestamp=rust_response.get('timestamp', '')
             )
         except Exception as e:
@@ -1245,7 +1246,8 @@ class Query(graphene.ObjectType):
                 correlation30d=0.0,
                 btcDominance=None,
                 spyCorrelation=None,
-                regime='NEUTRAL',
+                globalRegime='NEUTRAL',
+                localContext='NORMAL',
                 timestamp=''
             )
 
