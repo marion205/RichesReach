@@ -9,6 +9,7 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, net::SocketAddr, str::FromStr, sync::Arc, time::Duration};
 use tokio::sync::RwLock;
+use tokio::time::{interval as tokio_interval, Duration as TokioDuration};
 use tracing::{error, info, instrument, Level};
 use uuid::Uuid;
 use warp::{Filter, http::{HeaderMap, StatusCode}};
@@ -39,11 +40,15 @@ mod safety_guardrails;
 mod backtesting;
 mod cross_asset;
 mod reinforcement_learning;
+mod quant_terminal;
+mod feature_sources;
+mod options_feature_source;
+mod unified_asset_oracle;
 
 use cache::CacheManager;
 use crypto_analysis::CryptoAnalysisEngine;
 use stock_analysis::StockAnalysisEngine;
-use options_analysis::{OptionsAnalysisEngine as LegacyOptionsEngine, OptionsAnalysisResponse};
+use options_analysis::OptionsAnalysisEngine as LegacyOptionsEngine;
 use options_core::*;
 use options_engine::OptionsAnalysisEngine as ProductionOptionsEngine;
 use options_edge::{OptionsEdgeForecaster, EdgeForecastResponse};
@@ -51,8 +56,8 @@ use forex_analysis::{ForexAnalysisEngine, ForexAnalysisResponse};
 use sentiment_analysis::{SentimentAnalysisEngine, SentimentAnalysisResponse};
 use correlation_analysis::{CorrelationAnalysisEngine, CorrelationAnalysisResponse};
 use websocket::WebSocketManager;
-use market_data::{ProviderBundle, build_provider_bundle, MarketDataProvider, MarketDataIngest, ProviderError, OptionsDataProvider, InMemoryOptionsProvider};
-use regime::{MarketRegimeEngine, MarketRegimeResponse, SimpleMarketRegime};
+use market_data::{ProviderBundle, build_provider_bundle, MarketDataProvider, MarketDataIngest, ProviderError, InMemoryOptionsProvider};
+use regime::{MarketRegimeEngine, SimpleMarketRegime};
 use metrics::Metrics;
 use alpha_oracle::{AlphaOracle, AlphaSignal};
 use position_sizing::{PositionSizingEngine, PositionSizingConfig, PositionSizingDecision};
@@ -60,9 +65,13 @@ use risk_guard::{RiskGuard, RiskGuardConfig, RiskGuardDecision, OpenRiskPosition
 use portfolio_memory::{PortfolioMemoryEngine, TradeRecord, TradeOutcome, PersonalizedRecommendation};
 use execution::{ExecutionEngine, ExecutionConfig, OrderRequest, OrderReceipt};
 use safety_guardrails::{SafetyGuardrailsEngine, SafetyConfig, SafetyCheck};
-use backtesting::{BacktestingEngine, BacktestConfig, BacktestResult, StrategyScore, TradeSignal};
-use cross_asset::{CrossAssetFusionEngine, CrossAssetSignal, AssetClass};
-use reinforcement_learning::{ReinforcementLearningEngine, StrategyAction, StrategyContext, RewardSignal, StrategyRecommendation};
+use backtesting::{BacktestingEngine, BacktestConfig, TradeSignal};
+use cross_asset::{CrossAssetFusionEngine, CrossAssetSignal};
+use reinforcement_learning::{ReinforcementLearningEngine, StrategyContext, RewardSignal};
+use quant_terminal::QuantTerminal;
+use feature_sources::{FeatureSource, AssetClass};
+use options_feature_source::OptionsFeatureSource;
+use unified_asset_oracle::{UnifiedAssetOracle, UnifiedSignalRequest, UnifiedSignal};
 
 /* ----------------------------- types ----------------------------- */
 
@@ -211,6 +220,24 @@ pub struct RLUpdateRequest {
     pub reward: RewardSignal,
 }
 
+// Phase 3: Quant Terminal requests
+#[derive(Debug, Serialize, Deserialize)]
+pub struct VolSurfaceRequest {
+    pub symbol: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct EdgeDecayRequest {
+    pub strategy_name: String,
+    pub symbol: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RegimeTimelineRequest {
+    pub start_date: String, // ISO date string
+    pub end_date: String,   // ISO date string
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CryptoAnalysisResponse {
     pub symbol: String,
@@ -292,6 +319,8 @@ pub struct AppState {
     pub backtesting_engine: Arc<BacktestingEngine>,
     pub cross_asset_fusion: Arc<CrossAssetFusionEngine>,
     pub rl_engine: Arc<ReinforcementLearningEngine>,
+    pub quant_terminal: Arc<QuantTerminal>,
+    pub unified_oracle: Arc<unified_asset_oracle::UnifiedAssetOracle>,
 }
 
 /* ------------------------ utilities ------------------------ */
@@ -387,6 +416,13 @@ async fn main() -> Result<()> {
     ));
     let rl_engine = Arc::new(ReinforcementLearningEngine::new(portfolio_memory.clone()));
 
+    // ---- Phase 3: Quant Terminal
+    let quant_terminal = Arc::new(QuantTerminal::new(
+        backtesting_engine.clone(),
+        MarketRegimeEngine::new(provider_bundle.read.clone()),
+        portfolio_memory.clone(),
+    ));
+
     // ---- Production Options Engine (wired into unified brain)
     let options_provider = Arc::new(InMemoryOptionsProvider::new());
     let options_engine = Arc::new(ProductionOptionsEngine::new(
@@ -401,6 +437,25 @@ async fn main() -> Result<()> {
         options_provider.clone(),
         AlphaOracle::new(provider_bundle.read.clone()),
         MarketRegimeEngine::new(provider_bundle.read.clone()),
+    ));
+
+    // ---- Unified Asset Oracle (THE FINAL BRAIN)
+    let stock_features: Arc<dyn FeatureSource> = stock_engine.clone();
+    let crypto_features: Arc<dyn FeatureSource> = crypto_engine.clone();
+    let forex_features: Arc<dyn FeatureSource> = forex_engine.clone();
+    let options_features: Arc<dyn FeatureSource> = Arc::new(OptionsFeatureSource::new(options_edge_forecaster.clone()));
+    
+    let unified_oracle = Arc::new(UnifiedAssetOracle::new(
+        provider_bundle.read.clone(),
+        MarketRegimeEngine::new(provider_bundle.read.clone()),
+        AlphaOracle::new(provider_bundle.read.clone()),
+        PositionSizingEngine::new(PositionSizingConfig::default()),
+        RiskGuard::new(RiskGuardConfig::default()),
+        stock_features,
+        crypto_features,
+        forex_features,
+        options_features,
+        Some(options_edge_forecaster.clone()),
     ));
 
     // ---- rate limiter (100 req / 10s per key)
@@ -439,10 +494,18 @@ async fn main() -> Result<()> {
         backtesting_engine: backtesting_engine.clone(),
         cross_asset_fusion: cross_asset_fusion.clone(),
         rl_engine: rl_engine.clone(),
+        quant_terminal: quant_terminal.clone(),
+        unified_oracle: unified_oracle.clone(),
     };
 
     // Start WebSocket heartbeat
     state.websocket_manager.start_heartbeat().await;
+    
+    // Start real-time forex price updates (simulate market data feed)
+    let state_clone = state.clone();
+    tokio::spawn(async move {
+        start_forex_price_updates(state_clone).await;
+    });
 
     // mark ready after warmup
     {
@@ -784,6 +847,52 @@ fn build_routes(state: AppState) -> impl Filter<Extract = impl warp::Reply, Erro
         .and_then(rl_update_handler)
         .with(sec_headers.clone());
 
+    // Phase 3: Quant Terminal endpoints
+    let vol_surface = v1
+        .and(warp::path!("quant" / "vol-surface"))
+        .and(warp::post())
+        .and(with_req_meta.clone())
+        .and(warp::body::json())
+        .and(with_state.clone())
+        .and_then(vol_surface_handler)
+        .with(sec_headers.clone());
+
+    let edge_decay = v1
+        .and(warp::path!("quant" / "edge-decay"))
+        .and(warp::post())
+        .and(with_req_meta.clone())
+        .and(warp::body::json())
+        .and(with_state.clone())
+        .and_then(edge_decay_handler)
+        .with(sec_headers.clone());
+
+    let regime_timeline = v1
+        .and(warp::path!("quant" / "regime-timeline"))
+        .and(warp::post())
+        .and(with_req_meta.clone())
+        .and(warp::body::json())
+        .and(with_state.clone())
+        .and_then(regime_timeline_handler)
+        .with(sec_headers.clone());
+
+    let portfolio_dna = v1
+        .and(warp::path!("quant" / "portfolio-dna" / String)) // user_id
+        .and(warp::get())
+        .and(with_req_meta.clone())
+        .and(with_state.clone())
+        .and_then(portfolio_dna_handler)
+        .with(sec_headers.clone());
+
+    // Unified Asset Oracle endpoint (THE FINAL BRAIN)
+    let unified_signal = v1
+        .and(warp::path!("unified" / "signal"))
+        .and(warp::post())
+        .and(with_req_meta.clone())
+        .and(warp::body::json())
+        .and(with_state.clone())
+        .and_then(unified_signal_handler)
+        .with(sec_headers.clone());
+
     let websocket = v1
         .and(warp::path("ws"))
         .and(warp::ws())
@@ -820,6 +929,10 @@ fn build_routes(state: AppState) -> impl Filter<Extract = impl warp::Reply, Erro
         .or(cross_asset_signal)
         .or(rl_recommend)
         .or(rl_update)
+        .or(vol_surface)
+        .or(edge_decay)
+        .or(regime_timeline)
+        .or(portfolio_dna)
         .or(websocket)
         .with(cors)
         .with(warp::log::custom(|info| {
@@ -1202,6 +1315,65 @@ async fn iv_forecast_handler(
     );
 
     Ok(warp::reply::with_status(warp::reply::json(&forecast), StatusCode::OK))
+}
+
+/// Start periodic forex price updates to simulate real-time market data
+async fn start_forex_price_updates(state: AppState) {
+    use rust_decimal::prelude::*;
+    use rand::Rng;
+    
+    let mut update_interval = tokio_interval(TokioDuration::from_secs(5)); // Update every 5 seconds
+    let forex_pairs = vec![
+        "EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "USDCHF", "NZDUSD",
+        "EURGBP", "EURJPY", "GBPJPY", "AUDJPY", "EURCHF", "GBPCHF",
+        "USDCNH", "USDMXN", "USDZAR", "USDBRL", "USDTRY", "USDINR",
+        "USDSGD", "USDHKD", "USDNOK", "USDSEK",
+    ];
+    
+    tracing::info!("Starting real-time forex price updates for {} pairs", forex_pairs.len());
+    
+    loop {
+        update_interval.tick().await;
+        
+        for pair in &forex_pairs {
+            // Simulate small price movements
+            // Generate random variation BEFORE await (to avoid Send issues)
+            let variation = {
+                let mut rng = rand::thread_rng();
+                (rng.gen_range(0.0..1.0) - 0.5) * 0.0002
+            };
+            
+            if let Ok(quote) = state.market.latest_quote(pair).await {
+                let mid = quote.mid();
+                let spread = quote.ask - quote.bid;
+                let variation_decimal = Decimal::from_f64_retain(variation).unwrap_or_default();
+                let new_mid = mid * (Decimal::ONE + variation_decimal);
+                
+                let spread_half = spread / Decimal::from(2);
+                let new_bid = new_mid - spread_half;
+                let new_ask = new_mid + spread_half;
+                
+                // Update in-memory provider
+                let new_quote = crate::market_data::provider::Quote {
+                    symbol: quote.symbol.clone(),
+                    ts: Utc::now(),
+                    bid: new_bid,
+                    ask: new_ask,
+                };
+                
+                // Ingest the new quote
+                if let Ok(()) = state.ingest.ingest_quote(new_quote.clone()).await {
+                    // Re-analyze and broadcast
+                    if let Ok(analysis) = state.forex_engine.analyze(pair).await {
+                        let _ = state.websocket_manager.broadcast_forex_update(
+                            pair.to_string(),
+                            analysis
+                        ).await;
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[instrument(skip(state, body, headers), fields(req_id=%request_id(&headers)))]
@@ -1978,6 +2150,191 @@ async fn rl_update_handler(
             "success": true,
             "message": "Policy updated"
         })),
+        StatusCode::OK,
+    ))
+}
+
+/* -------------------------- Unified Asset Oracle handler -------------------------- */
+
+#[instrument(skip(state, headers), fields(req_id=%request_id(&headers)))]
+async fn unified_signal_handler(
+    (ip, req_id, headers): (String, String, HeaderMap),
+    body: UnifiedSignalRequest,
+    state: AppState,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let start = std::time::Instant::now();
+    
+    // Rate limiting
+    let key = format!("unified:{}", ip);
+    if state.limiter.check_key(&key).is_err() {
+        return Ok(warp::reply::with_status(
+            warp::reply::json(&serde_json::json!({
+                "error": "Rate limit exceeded",
+                "req_id": req_id,
+            })),
+            StatusCode::TOO_MANY_REQUESTS,
+        ));
+    }
+
+    match state.unified_oracle.signal(body).await {
+        Ok(signal) => {
+            tracing::info!(
+                "Unified signal generated for {} in {:?}",
+                signal.symbol,
+                start.elapsed()
+            );
+            Ok(warp::reply::with_status(
+                warp::reply::json(&signal),
+                StatusCode::OK,
+            ))
+        }
+        Err(e) => {
+            tracing::error!("Unified signal error: {:?}", e);
+            Ok(warp::reply::with_status(
+                warp::reply::json(&serde_json::json!({
+                    "error": format!("{}", e),
+                    "req_id": req_id,
+                })),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            ))
+        }
+    }
+}
+
+/* -------------------------- Phase 3: Quant Terminal handlers -------------------------- */
+
+#[instrument(skip(state, headers), fields(req_id=%request_id(&headers)))]
+async fn vol_surface_handler(
+    (ip, req_id, headers): (String, String, HeaderMap),
+    body: VolSurfaceRequest,
+    state: AppState,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let key = bearer_from_headers(&headers).unwrap_or_else(|| ip.clone());
+    if state.limiter.check_key(&key).is_err() {
+        return Ok(warp::reply::with_status(
+            warp::reply::json(&json_error("rate_limited", "Too many requests")),
+            StatusCode::TOO_MANY_REQUESTS,
+        ));
+    }
+
+    let heatmap = state.quant_terminal
+        .generate_vol_surface_heatmap(&body.symbol)
+        .await
+        .map_err(|e| warp::reject::custom(AnalysisError(e)))?;
+
+    tracing::info!(
+        %req_id,
+        symbol=%body.symbol,
+        strikes=%heatmap.strikes.len(),
+        expirations=%heatmap.expirations.len(),
+        "vol_surface_generated"
+    );
+
+    Ok(warp::reply::with_status(
+        warp::reply::json(&heatmap),
+        StatusCode::OK,
+    ))
+}
+
+#[instrument(skip(state, headers), fields(req_id=%request_id(&headers)))]
+async fn edge_decay_handler(
+    (ip, req_id, headers): (String, String, HeaderMap),
+    body: EdgeDecayRequest,
+    state: AppState,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let key = bearer_from_headers(&headers).unwrap_or_else(|| ip.clone());
+    if state.limiter.check_key(&key).is_err() {
+        return Ok(warp::reply::with_status(
+            warp::reply::json(&json_error("rate_limited", "Too many requests")),
+            StatusCode::TOO_MANY_REQUESTS,
+        ));
+    }
+
+    let curve = state.quant_terminal
+        .calculate_edge_decay(&body.strategy_name, &body.symbol)
+        .await
+        .map_err(|e| warp::reject::custom(AnalysisError(e)))?;
+
+    tracing::info!(
+        %req_id,
+        strategy=%body.strategy_name,
+        symbol=%body.symbol,
+        decay_rate=%curve.decay_rate,
+        "edge_decay_calculated"
+    );
+
+    Ok(warp::reply::with_status(
+        warp::reply::json(&curve),
+        StatusCode::OK,
+    ))
+}
+
+#[instrument(skip(state, headers), fields(req_id=%request_id(&headers)))]
+async fn regime_timeline_handler(
+    (ip, req_id, headers): (String, String, HeaderMap),
+    body: RegimeTimelineRequest,
+    state: AppState,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let key = bearer_from_headers(&headers).unwrap_or_else(|| ip.clone());
+    if state.limiter.check_key(&key).is_err() {
+        return Ok(warp::reply::with_status(
+            warp::reply::json(&json_error("rate_limited", "Too many requests")),
+            StatusCode::TOO_MANY_REQUESTS,
+        ));
+    }
+
+    let start_date = chrono::NaiveDate::parse_from_str(&body.start_date, "%Y-%m-%d")
+        .map_err(|e| warp::reject::custom(AnalysisError(anyhow::anyhow!("Invalid start_date: {}", e))))?;
+    let end_date = chrono::NaiveDate::parse_from_str(&body.end_date, "%Y-%m-%d")
+        .map_err(|e| warp::reject::custom(AnalysisError(anyhow::anyhow!("Invalid end_date: {}", e))))?;
+
+    let timeline = state.quant_terminal
+        .generate_regime_timeline(start_date, end_date)
+        .await
+        .map_err(|e| warp::reject::custom(AnalysisError(e)))?;
+
+    tracing::info!(
+        %req_id,
+        start_date=%body.start_date,
+        end_date=%body.end_date,
+        events=%timeline.events.len(),
+        "regime_timeline_generated"
+    );
+
+    Ok(warp::reply::with_status(
+        warp::reply::json(&timeline),
+        StatusCode::OK,
+    ))
+}
+
+#[instrument(skip(state, headers), fields(req_id=%request_id(&headers)))]
+async fn portfolio_dna_handler(
+    user_id: String,
+    (ip, req_id, headers): (String, String, HeaderMap),
+    state: AppState,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let key = bearer_from_headers(&headers).unwrap_or_else(|| ip.clone());
+    if state.limiter.check_key(&key).is_err() {
+        return Ok(warp::reply::with_status(
+            warp::reply::json(&json_error("rate_limited", "Too many requests")),
+            StatusCode::TOO_MANY_REQUESTS,
+        ));
+    }
+
+    let dna = state.quant_terminal
+        .generate_portfolio_dna(&user_id)
+        .await
+        .map_err(|e| warp::reject::custom(AnalysisError(e)))?;
+
+    tracing::info!(
+        %req_id,
+        user_id=%user_id,
+        archetype=%dna.archetype,
+        "portfolio_dna_generated"
+    );
+
+    Ok(warp::reply::with_status(
+        warp::reply::json(&dna),
         StatusCode::OK,
     ))
 }

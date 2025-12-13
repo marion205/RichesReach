@@ -1,11 +1,13 @@
 // src/analysis/forex.rs
 use crate::market_data::provider::MarketDataProvider;
+use crate::feature_sources::{AssetClass, FeatureSource};
 use crate::utils::stats::{daily_mid_prices, atr};
 use chrono::{Utc, Duration};
 use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
 use serde::{Serialize, Deserialize};
 use anyhow::Result;
+use async_trait::async_trait;
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -97,5 +99,35 @@ impl ForexAnalysisEngine {
             Decimal::from_f64_retain(s1).unwrap_or_default(),
             Decimal::from_f64_retain(r1).unwrap_or_default(),
         ))
+    }
+}
+
+#[async_trait]
+impl FeatureSource for ForexAnalysisEngine {
+    fn asset_class(&self) -> AssetClass {
+        AssetClass::Forex
+    }
+
+    async fn build_features(&self, symbol: &str) -> Result<std::collections::HashMap<String, f64>> {
+        let analysis = self.analyze(symbol).await?;
+        let mut features = std::collections::HashMap::new();
+        
+        // Extract features from forex analysis
+        features.insert("bid".to_string(), analysis.bid.to_f64().unwrap_or(0.0));
+        features.insert("ask".to_string(), analysis.ask.to_f64().unwrap_or(0.0));
+        features.insert("spread_bps".to_string(), analysis.spread_bps);
+        features.insert("atr_14".to_string(), analysis.atr_14);
+        features.insert("support".to_string(), analysis.support.to_f64().unwrap_or(0.0));
+        features.insert("resistance".to_string(), analysis.resistance.to_f64().unwrap_or(0.0));
+        
+        // Trend encoding
+        let trend_val = match analysis.trend.as_str() {
+            "BULLISH" => 1.0,
+            "BEARISH" => -1.0,
+            _ => 0.0,
+        };
+        features.insert("trend".to_string(), trend_val);
+        
+        Ok(features)
     }
 }

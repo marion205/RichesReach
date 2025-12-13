@@ -15,11 +15,84 @@ pub struct InMemoryProvider {
 
 impl InMemoryProvider {
     pub fn new() -> Self {
-        Self {
+        let provider = Self {
             latest: DashMap::new(),
             series: DashMap::new(),
             insert_counts: DashMap::new(),
+        };
+        // Initialize with mock forex data for development
+        provider.initialize_mock_forex_data();
+        provider
+    }
+
+    fn initialize_mock_forex_data(&self) {
+        use chrono::Utc;
+        use rust_decimal::Decimal;
+        
+        // Major forex pairs with realistic mock data (expanded from 7 to 20+ pairs)
+        let pairs = vec![
+            // Major pairs
+            ("EURUSD", 1.0850, 1.0852),
+            ("GBPUSD", 1.2650, 1.2653),
+            ("USDJPY", 149.50, 149.53),
+            ("AUDUSD", 0.6580, 0.6583),
+            ("USDCAD", 1.3520, 1.3523),
+            ("USDCHF", 0.8750, 0.8753),
+            ("NZDUSD", 0.6120, 0.6123),
+            // Cross pairs
+            ("EURGBP", 0.8575, 0.8578),
+            ("EURJPY", 162.25, 162.28),
+            ("GBPJPY", 189.15, 189.18),
+            ("AUDJPY", 98.45, 98.48),
+            ("EURCHF", 0.9495, 0.9498),
+            ("GBPCHF", 1.1065, 1.1068),
+            // Commodity pairs
+            ("USDCNH", 7.2450, 7.2453),
+            ("USDMXN", 17.1250, 17.1253),
+            ("USDZAR", 18.850, 18.853),
+            ("USDBRL", 4.9850, 4.9853),
+            // Exotic pairs
+            ("USDTRY", 32.150, 32.153),
+            ("USDINR", 83.125, 83.128),
+            ("USDSGD", 1.3425, 1.3428),
+            ("USDHKD", 7.8125, 7.8128),
+            ("USDNOK", 10.625, 10.628),
+            ("USDSEK", 10.325, 10.328),
+        ];
+
+        let pair_count = pairs.len();
+        let now = Utc::now();
+        
+        for (pair, bid, ask) in pairs {
+            let quote = Quote {
+                symbol: Arc::from(pair),
+                ts: now,
+                bid: rust_decimal::Decimal::from_f64_retain(bid).unwrap_or_default(),
+                ask: rust_decimal::Decimal::from_f64_retain(ask).unwrap_or_default(),
+            };
+            
+            // Store latest quote
+            self.latest.insert(Arc::from(pair), quote.clone());
+            
+            // Generate 30 days of historical data
+            let mut history = Vec::new();
+            for i in 0..30 {
+                let timestamp = now - chrono::Duration::days(30 - i);
+                // Add some variation to make it realistic
+                let variation = (i as f64 * 0.0001).sin() * 0.01;
+                let mid_price = (bid + ask) / 2.0 + variation;
+                let spread = ask - bid;
+                
+                history.push(PricePoint {
+                    ts: timestamp,
+                    mid: rust_decimal::Decimal::from_f64_retain(mid_price).unwrap_or_default(),
+                });
+            }
+            
+            self.series.insert(Arc::from(pair), history);
         }
+        
+        tracing::info!("Initialized mock forex data for {} pairs", pair_count);
     }
 
     /// Legacy compatibility: ingest price (creates a quote with bid=ask=price)

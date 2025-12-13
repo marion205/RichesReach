@@ -13,6 +13,7 @@ import {
 import { useQuery, gql } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
 import { API_RUST_BASE } from '../../config/api';
+import QuantTerminalWidget from './QuantTerminalWidget';
 
 const GET_RUST_OPTIONS_ANALYSIS = gql`
   query GetRustOptionsAnalysis($symbol: String!) {
@@ -257,7 +258,7 @@ export default function RustOptionsAnalysisWidget({ symbol }: RustOptionsAnalysi
   if (loading) {
     return (
       <View style={styles.container}>
-        <ActivityIndicator size="small" color="#0B0B0F" />
+        <ActivityIndicator size="small" color="#1F1F1F" />
         <Text style={styles.loadingText}>Loading Rust analysis...</Text>
       </View>
     );
@@ -296,10 +297,10 @@ export default function RustOptionsAnalysisWidget({ symbol }: RustOptionsAnalysi
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Icon name="zap" size={16} color="#0B0B0F" />
+        <Icon name="zap" size={18} color="#1F1F1F" />
         <Text style={styles.title}>Options Analysis</Text>
         <TouchableOpacity onPress={() => refetch({ symbol })} style={styles.refreshBtn} activeOpacity={0.8}>
-          <Icon name="refresh-ccw" size={14} color="#0B0B0F" />
+          <Icon name="refresh-ccw" size={16} color="#1F1F1F" />
         </TouchableOpacity>
       </View>
 
@@ -364,11 +365,11 @@ export default function RustOptionsAnalysisWidget({ symbol }: RustOptionsAnalysi
         style={styles.toggle}
       >
         <View style={styles.toggleLeft}>
-          <Icon name="check-circle" size={16} color="#0B0B0F" />
+          <Icon name="check-circle" size={18} color="#1F1F1F" />
           <Text style={styles.toggleText}>Prove it</Text>
           <View style={styles.miniBadgeLight}><Text style={styles.miniBadgeLightText}>backtest</Text></View>
         </View>
-        <Icon name={showBacktest ? 'chevron-up' : 'chevron-down'} size={18} color="#0B0B0F" />
+        <Icon name={showBacktest ? 'chevron-up' : 'chevron-down'} size={20} color="#1F1F1F" />
       </TouchableOpacity>
 
       {showBacktest && (
@@ -380,12 +381,12 @@ export default function RustOptionsAnalysisWidget({ symbol }: RustOptionsAnalysi
 
           <View style={styles.twoBtnRow}>
             <TouchableOpacity onPress={runBacktest} style={styles.secondaryBtn} activeOpacity={0.85}>
-              {backtest.status === 'loading' ? <ActivityIndicator size="small" color="#0B0B0F" /> : <Icon name="play" size={16} color="#0B0B0F" />}
+              {backtest.status === 'loading' ? <ActivityIndicator size="small" color="#1F1F1F" /> : <Icon name="play" size={18} color="#1F1F1F" />}
               <Text style={styles.secondaryBtnText}>Run backtest</Text>
             </TouchableOpacity>
 
             <TouchableOpacity onPress={fetchBacktestScore} style={styles.secondaryBtn} activeOpacity={0.85}>
-              {score.status === 'loading' ? <ActivityIndicator size="small" color="#0B0B0F" /> : <Icon name="bar-chart-2" size={16} color="#0B0B0F" />}
+              {score.status === 'loading' ? <ActivityIndicator size="small" color="#1F1F1F" /> : <Icon name="bar-chart-2" size={18} color="#1F1F1F" />}
               <Text style={styles.secondaryBtnText}>Get score</Text>
             </TouchableOpacity>
           </View>
@@ -421,7 +422,7 @@ export default function RustOptionsAnalysisWidget({ symbol }: RustOptionsAnalysi
                 activeOpacity={0.85}
               >
                 <Text style={styles.detailsToggleText}>{showDetails ? 'Hide raw' : 'Show raw'}</Text>
-                <Icon name={showDetails ? 'minus' : 'plus'} size={16} color="#111827" />
+                <Icon name={showDetails ? 'minus' : 'plus'} size={18} color="#1F1F1F" />
               </TouchableOpacity>
 
               {showDetails && (
@@ -450,11 +451,11 @@ export default function RustOptionsAnalysisWidget({ symbol }: RustOptionsAnalysi
         style={styles.toggle}
       >
         <View style={styles.toggleLeft}>
-          <Icon name="shuffle" size={16} color="#0B0B0F" />
+          <Icon name="shuffle" size={18} color="#1F1F1F" />
           <Text style={styles.toggleText}>Across markets</Text>
           <View style={styles.miniBadgeLight}><Text style={styles.miniBadgeLightText}>fusion</Text></View>
         </View>
-        <Icon name={showFusion ? 'chevron-up' : 'chevron-down'} size={18} color="#0B0B0F" />
+        <Icon name={showFusion ? 'chevron-up' : 'chevron-down'} size={20} color="#1F1F1F" />
       </TouchableOpacity>
 
       {showFusion && (
@@ -462,7 +463,7 @@ export default function RustOptionsAnalysisWidget({ symbol }: RustOptionsAnalysi
           <Text style={styles.panelHint}>See if the bigger world agrees.</Text>
 
           <TouchableOpacity onPress={runFusion} style={styles.secondaryBtnFull} activeOpacity={0.85}>
-            {fusion.status === 'loading' ? <ActivityIndicator size="small" color="#0B0B0F" /> : <Icon name="activity" size={16} color="#0B0B0F" />}
+            {fusion.status === 'loading' ? <ActivityIndicator size="small" color="#1F1F1F" /> : <Icon name="activity" size={18} color="#1F1F1F" />}
             <Text style={styles.secondaryBtnText}>Generate fusion signal</Text>
           </TouchableOpacity>
 
@@ -472,7 +473,7 @@ export default function RustOptionsAnalysisWidget({ symbol }: RustOptionsAnalysi
                 {fusionSentence || 'Fusion signal received.'}
               </Text>
               <View style={styles.guardRow}>
-                <View style={[styles.guardDot, { backgroundColor: '#0B0B0F' }]} />
+                <View style={[styles.guardDot, { backgroundColor: '#1F1F1F' }]} />
                 <Text style={styles.guardText}>
                   {fusionScore !== null ? `Fusion score: ${fusionScore.toFixed(2)}` : 'Fusion score: —'}
                 </Text>
@@ -498,11 +499,11 @@ export default function RustOptionsAnalysisWidget({ symbol }: RustOptionsAnalysi
         style={styles.toggle}
       >
         <View style={styles.toggleLeft}>
-          <Icon name="cpu" size={16} color="#0B0B0F" />
+          <Icon name="cpu" size={18} color="#1F1F1F" />
           <Text style={styles.toggleText}>Personalize</Text>
           <View style={styles.miniBadgeLight}><Text style={styles.miniBadgeLightText}>RL</Text></View>
         </View>
-        <Icon name={showRL ? 'chevron-up' : 'chevron-down'} size={18} color="#0B0B0F" />
+        <Icon name={showRL ? 'chevron-up' : 'chevron-down'} size={20} color="#1F1F1F" />
       </TouchableOpacity>
 
       {showRL && (
@@ -513,7 +514,7 @@ export default function RustOptionsAnalysisWidget({ symbol }: RustOptionsAnalysi
           <TextInput value={userId} onChangeText={setUserId} style={styles.input} placeholder="demo_user" />
 
           <TouchableOpacity onPress={rlRecommend} style={styles.secondaryBtnFull} activeOpacity={0.85}>
-            {rlRec.status === 'loading' ? <ActivityIndicator size="small" color="#0B0B0F" /> : <Icon name="star" size={16} color="#0B0B0F" />}
+            {rlRec.status === 'loading' ? <ActivityIndicator size="small" color="#1F1F1F" /> : <Icon name="star" size={18} color="#1F1F1F" />}
             <Text style={styles.secondaryBtnText}>Get recommendations</Text>
           </TouchableOpacity>
 
@@ -553,10 +554,10 @@ export default function RustOptionsAnalysisWidget({ symbol }: RustOptionsAnalysi
         style={styles.toggle}
       >
         <View style={styles.toggleLeft}>
-          <Icon name="info" size={16} color="#0B0B0F" />
+          <Icon name="info" size={18} color="#1F1F1F" />
           <Text style={styles.toggleText}>Explain it simply</Text>
         </View>
-        <Icon name={showExplain ? 'chevron-up' : 'chevron-down'} size={18} color="#0B0B0F" />
+        <Icon name={showExplain ? 'chevron-up' : 'chevron-down'} size={20} color="#1F1F1F" />
       </TouchableOpacity>
 
       {showExplain && (
@@ -582,369 +583,492 @@ export default function RustOptionsAnalysisWidget({ symbol }: RustOptionsAnalysi
           <Text style={styles.disclaimer}>Educational insights — not financial advice.</Text>
         </View>
       )}
+
+      {/* Phase 3: Quant Terminal */}
+      <QuantTerminalWidget
+        symbol={symbol}
+        strategyName="options_iron_condor"
+        userId="user_123" // TODO: Get from auth context
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 16,
+    backgroundColor: '#FDFDFD',
+    borderRadius: 24,
+    padding: 20,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 32,
+    elevation: 20,
     borderWidth: 1,
-    borderColor: '#F1F1F4',
+    borderColor: '#E8E8ED',
   },
+
+  // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
     justifyContent: 'space-between',
+    marginBottom: 4,
   },
   title: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: '#0B0B0F',
-    marginLeft: 8,
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#1F1F1F',
+    letterSpacing: -0.4,
+    marginLeft: 10,
     flex: 1,
   },
   refreshBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 12,
-    backgroundColor: '#FAFAFB',
-    borderWidth: 1,
-    borderColor: '#F1F1F4',
-    alignItems: 'center',
+    width: 44,
+    height: 44,
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 8,
+    borderWidth: 1.5,
+    borderColor: '#ECECF2',
   },
+
+  // Sections
   section: {
-    marginBottom: 16,
+    marginTop: 20,
   },
   sectionTitle: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#0B0B0F',
-    marginBottom: 8,
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#1F1F1F',
+    letterSpacing: -0.3,
+    marginBottom: 14,
   },
+
+  // Volatility Surface + Metrics
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    gap: 14,
   },
   metric: {
     flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    paddingVertical: 18,
+    paddingHorizontal: 16,
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: '#ECECF2',
   },
   metricLabel: {
     fontSize: 12,
-    color: '#71717A',
+    color: '#69707F',
     fontWeight: '700',
-    marginBottom: 4,
+    letterSpacing: 0.6,
   },
   metricValue: {
-    fontSize: 16,
+    marginTop: 10,
+    fontSize: 20,
     fontWeight: '900',
-    color: '#0B0B0F',
+    color: '#1F1F1F',
   },
+
+  // Greeks Grid
   greeksGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
+    gap: 12,
   },
   greekItem: {
-    width: '18%',
+    width: '30%',
+    backgroundColor: '#FAFBFF',
+    borderRadius: 18,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
     alignItems: 'center',
-    marginBottom: 8,
+    borderWidth: 1.5,
+    borderColor: '#E2E8FF',
   },
   greekLabel: {
-    fontSize: 11,
-    color: '#71717A',
-    fontWeight: '700',
-    marginBottom: 4,
+    fontSize: 11.5,
+    color: '#69707F',
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   greekValue: {
-    fontSize: 14,
+    marginTop: 8,
+    fontSize: 15,
     fontWeight: '900',
-    color: '#0B0B0F',
+    color: '#1F1F1F',
   },
+
+  // Put/Call Ratio
   pcrValue: {
-    fontSize: 18,
+    fontSize: 26,
     fontWeight: '900',
-    color: '#0B0B0F',
+    color: '#1F1F1F',
+    alignSelf: 'center',
+    marginTop: 8,
   },
+
+  // Loading
   loadingText: {
-    fontSize: 12,
-    color: '#71717A',
-    marginLeft: 8,
-    fontWeight: '700',
+    fontSize: 14,
+    color: '#69707F',
+    marginLeft: 12,
+    fontWeight: '600',
+    letterSpacing: -0.2,
   },
+
+  // Toggles (Backtest, Fusion, RL, Explain)
   toggle: {
-    marginTop: 12,
-    backgroundColor: '#FAFAFB',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#F1F1F4',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
+    marginTop: 22,
+    backgroundColor: '#F5F7FF',
+    borderRadius: 22,
+    paddingVertical: 18,
+    paddingHorizontal: 20,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#E2E6F0',
   },
   toggleLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 12,
   },
   toggleText: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: '#0B0B0F',
+    fontSize: 15.5,
+    fontWeight: '800',
+    color: '#1F1F1F',
   },
   miniBadgeLight: {
-    backgroundColor: '#EDEDF2',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    backgroundColor: '#E4E8FF',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: 999,
-    marginLeft: 6,
+    marginLeft: 8,
   },
   miniBadgeLightText: {
-    color: '#0B0B0F',
-    fontSize: 10,
-    fontWeight: '900',
+    color: '#1F1F1F',
+    fontSize: 11,
+    fontWeight: '800',
   },
+
+  // Panels (Expandable sections)
   panel: {
-    marginTop: 10,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 14,
+    marginTop: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
+    borderRadius: 24,
+    padding: 22,
     borderWidth: 1,
-    borderColor: '#F1F1F4',
+    borderColor: '#E8E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.08,
+    shadowRadius: 30,
+    elevation: 16,
   },
   panelHint: {
-    fontSize: 12,
-    color: '#52525B',
-    fontWeight: '800',
-    lineHeight: 18,
+    fontSize: 14,
+    color: '#555E70',
+    fontWeight: '600',
+    lineHeight: 20,
+    marginBottom: 12,
   },
+
+  // Inputs & Labels
   smallLabel: {
-    fontSize: 11,
-    color: '#71717A',
-    fontWeight: '900',
-    marginBottom: 6,
-    marginTop: 12,
+    fontSize: 12,
+    color: '#69707F',
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+    marginTop: 16,
   },
   input: {
-    height: 44,
-    backgroundColor: '#FAFAFB',
-    borderWidth: 1,
-    borderColor: '#F1F1F4',
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    fontSize: 13,
-    fontWeight: '900',
-    color: '#0B0B0F',
+    height: 48,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    paddingHorizontal: 18,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1F1F1F',
+    borderWidth: 1.5,
+    borderColor: '#E2E6F0',
   },
+
+  // Button Rows
   twoBtnRow: {
-    marginTop: 12,
+    marginTop: 16,
     flexDirection: 'row',
-    gap: 10,
+    gap: 14,
   },
   secondaryBtn: {
     flex: 1,
-    height: 46,
-    borderRadius: 14,
-    backgroundColor: '#FAFAFB',
-    borderWidth: 1,
-    borderColor: '#F1F1F4',
+    height: 50,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#ECECF2',
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
-    gap: 10,
+    gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 8,
   },
   secondaryBtnFull: {
-    marginTop: 12,
-    height: 46,
-    borderRadius: 14,
-    backgroundColor: '#FAFAFB',
-    borderWidth: 1,
-    borderColor: '#F1F1F4',
+    marginTop: 16,
+    height: 50,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#ECECF2',
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
-    gap: 10,
+    gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 8,
   },
   secondaryBtnText: {
-    fontWeight: '900',
-    color: '#0B0B0F',
-    fontSize: 13,
+    fontWeight: '800',
+    color: '#1F1F1F',
+    fontSize: 15,
   },
+
+  // Error Box
   errorBox: {
-    marginTop: 12,
+    marginTop: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
     backgroundColor: '#FEF2F2',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#FEE2E2',
-    padding: 10,
-    borderRadius: 14,
+    padding: 14,
+    borderRadius: 20,
   },
   errorText: {
     flex: 1,
     color: '#B91C1C',
-    fontWeight: '800',
-    fontSize: 12,
+    fontWeight: '700',
+    fontSize: 14,
   },
+
+  // Score Box
   scoreBox: {
-    marginTop: 12,
+    marginTop: 16,
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#F1F1F4',
-    padding: 12,
+    borderColor: '#ECECF2',
+    padding: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 8,
   },
   scoreBig: {
-    marginTop: 4,
-    fontSize: 22,
+    marginTop: 6,
+    fontSize: 28,
     fontWeight: '900',
-    color: '#0B0B0F',
+    color: '#1F1F1F',
   },
+
+  // Backtest Box
   btBox: {
-    marginTop: 12,
+    marginTop: 16,
   },
   grid3: {
-    marginTop: 12,
+    marginTop: 16,
     flexDirection: 'row',
-    gap: 10,
+    gap: 14,
   },
   cell: {
     flex: 1,
-    backgroundColor: '#FAFAFB',
-    borderWidth: 1,
-    borderColor: '#F1F1F4',
-    borderRadius: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    backgroundColor: '#FAFBFF',
+    borderRadius: 18,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderWidth: 1.5,
+    borderColor: '#E2E8FF',
   },
   cellLabel: {
-    fontSize: 10,
-    color: '#71717A',
-    fontWeight: '900',
+    fontSize: 12,
+    color: '#69707F',
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   cellValue: {
-    marginTop: 4,
-    fontSize: 12,
-    color: '#0B0B0F',
+    marginTop: 8,
+    fontSize: 16,
     fontWeight: '900',
+    color: '#1F1F1F',
   },
+
+  // Details Toggle
   detailsToggle: {
-    marginTop: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#F1F1F4',
+    marginTop: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 18,
+    backgroundColor: '#F5F7FF',
+    borderWidth: 1.5,
+    borderColor: '#E2E6F0',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   detailsToggleText: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: '#111827',
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#1F1F1F',
   },
+
+  // Mono Text
   mono: {
-    marginTop: 10,
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#111827',
-    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace' }),
-  },
-  mutedTiny: {
-    marginTop: 8,
-    color: '#A1A1AA',
-    fontWeight: '700',
-    fontSize: 11,
-  },
-  fusionBox: {
     marginTop: 12,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#444C5C',
+    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace' }),
+    lineHeight: 18,
+  },
+
+  // Muted Tiny
+  mutedTiny: {
+    marginTop: 12,
+    color: '#8B949E',
+    fontWeight: '600',
+    fontSize: 12,
+    textAlign: 'center',
+  },
+
+  // Fusion Box
+  fusionBox: {
+    marginTop: 16,
   },
   bigSentence: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#0B0B0F',
-    lineHeight: 20,
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#1F1F1F',
+    lineHeight: 24,
   },
   guardRow: {
-    marginTop: 12,
+    marginTop: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
   },
   guardDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
   },
   guardText: {
-    color: '#52525B',
-    fontWeight: '800',
-    fontSize: 12,
+    color: '#555E70',
+    fontWeight: '700',
+    fontSize: 14,
   },
+
+  // RL Box
   rlBox: {
-    marginTop: 12,
+    marginTop: 16,
   },
   rlRow: {
-    marginTop: 10,
-    backgroundColor: '#FAFAFB',
-    borderWidth: 1,
-    borderColor: '#F1F1F4',
-    borderRadius: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    marginTop: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
     flexDirection: 'row',
     justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#ECECF2',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 8,
   },
   rlStrategy: {
-    fontWeight: '900',
-    color: '#0B0B0F',
+    fontWeight: '800',
+    color: '#1F1F1F',
+    fontSize: 15,
   },
   rlScore: {
-    fontWeight: '900',
-    color: '#52525B',
+    fontWeight: '800',
+    color: '#555E70',
+    fontSize: 15,
   },
+
+  // Muted
   muted: {
-    marginTop: 6,
-    color: '#71717A',
+    marginTop: 10,
+    color: '#69707F',
     fontWeight: '600',
+    fontSize: 14,
+    textAlign: 'center',
   },
+
+  // Bullet Rows (Explain)
   bulletRow: {
     flexDirection: 'row',
-    gap: 10,
-    marginBottom: 10,
+    gap: 14,
+    marginBottom: 16,
     alignItems: 'flex-start',
-    marginTop: 8,
   },
   bulletDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#0B0B0F',
-    marginTop: 6,
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    backgroundColor: '#3B82F6',
+    marginTop: 7,
   },
   bulletText: {
     flex: 1,
-    fontSize: 12,
-    color: '#52525B',
-    fontWeight: '700',
-    lineHeight: 18,
+    fontSize: 14.5,
+    color: '#444C5C',
+    fontWeight: '600',
+    lineHeight: 22,
   },
+
+  // Disclaimer
   disclaimer: {
-    marginTop: 12,
-    fontSize: 11,
-    color: '#A1A1AA',
-    fontWeight: '700',
+    marginTop: 20,
+    fontSize: 12,
+    color: '#8B949E',
+    fontWeight: '600',
     textAlign: 'center',
+    fontStyle: 'italic',
   },
 });

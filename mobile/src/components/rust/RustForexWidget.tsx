@@ -10,27 +10,22 @@ import {
   Platform,
   UIManager,
 } from 'react-native';
-import { useQuery, gql } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
 import { API_RUST_BASE } from '../../config/api';
+import QuantTerminalWidget from './QuantTerminalWidget';
 
-const GET_RUST_FOREX_ANALYSIS = gql`
-  query GetRustForexAnalysis($pair: String!) {
-    rustForexAnalysis(pair: $pair) {
-      pair
-      bid
-      ask
-      spread
-      pipValue
-      volatility
-      trend
-      supportLevel
-      resistanceLevel
-      correlation24h
-      timestamp
-    }
-  }
-`;
+// REST API response type (matches Rust backend)
+interface ForexAnalysisResponse {
+  pair: string;
+  bid: number;
+  ask: number;
+  spread_bps: number;
+  atr_14: number;
+  trend: string;
+  support: number;
+  resistance: number;
+  timestamp: string;
+}
 
 interface RustForexWidgetProps {
   defaultPair?: string;
@@ -182,12 +177,66 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
     }
   }, []);
 
-  const { data, loading, error, refetch } = useQuery(GET_RUST_FOREX_ANALYSIS, {
-    variables: { pair },
-    skip: !pair,
-    fetchPolicy: 'cache-and-network',
-    errorPolicy: 'all',
-  });
+  const [analysis, setAnalysis] = useState<ForexAnalysisResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const fetchForexAnalysis = async (pairToFetch: string) => {
+    if (!pairToFetch) return;
+    
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const response = await fetch(`${API_RUST_BASE}/v1/forex/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pair: pairToFetch }),
+      });
+      
+      if (!response.ok) {
+        // Try to get error message from response
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        try {
+          const errorData = await response.text();
+          if (errorData) {
+            try {
+              const parsed = JSON.parse(errorData);
+              errorMessage = parsed.error || parsed.message || errorMessage;
+            } catch {
+              errorMessage = errorData || errorMessage;
+            }
+          }
+        } catch {
+          // Ignore parsing errors
+        }
+        
+        // Provide user-friendly error messages
+        if (response.status === 500) {
+          errorMessage = 'Forex data service unavailable. Market data provider may not have forex data configured.';
+        } else if (response.status === 400) {
+          errorMessage = `Invalid forex pair: ${pairToFetch}`;
+        }
+        
+        throw new Error(errorMessage);
+      }
+      
+      const data: ForexAnalysisResponse = await response.json();
+      setAnalysis(data);
+    } catch (err: any) {
+      console.error('Forex analysis error:', err);
+      setError(err);
+      setAnalysis(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (pair) {
+      fetchForexAnalysis(pair);
+    }
+  }, [pair]);
 
   const handleSearch = () => {
     const trimmed = inputValue.trim().toUpperCase();
@@ -201,20 +250,17 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
     setFusion({ status: 'idle' });
     setRlRec({ status: 'idle' });
     setRlUpdate({ status: 'idle' });
-
-    refetch({ pair: trimmed });
   };
-
-  const analysis = data?.rustForexAnalysis;
 
   const computed = useMemo(() => {
     const bid = safeNum(analysis?.bid);
     const ask = safeNum(analysis?.ask);
-    const spread = safeNum(analysis?.spread);
-    const vol = safeNum(analysis?.volatility);
-    const support = safeNum(analysis?.supportLevel);
-    const resistance = safeNum(analysis?.resistanceLevel);
-    const corr = safeNum(analysis?.correlation24h);
+    // Convert spread_bps to decimal spread
+    const spread = analysis?.spread_bps ? analysis.spread_bps / 10000 : null;
+    const vol = safeNum(analysis?.atr_14);
+    const support = safeNum(analysis?.support);
+    const resistance = safeNum(analysis?.resistance);
+    const corr = null; // Not available in REST response
 
     const mid = bid && ask ? (bid + ask) / 2 : null;
 
@@ -414,7 +460,14 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
           <Icon name="alert-triangle" size={16} color="#EF4444" />
           <Text style={styles.inlineHeaderText}>Can't load forex data</Text>
         </View>
-        {!isCompact && <Text style={styles.muted}>Check your connection and try again.</Text>}
+        {!isCompact && (
+          <>
+            <Text style={styles.muted}>{error?.message || 'Check your connection and try again.'}</Text>
+            <Text style={[styles.muted, { marginTop: 8, fontSize: 11 }]}>
+              Note: Forex data requires a configured market data provider with FX support.
+            </Text>
+          </>
+        )}
       </View>
     );
   }
@@ -510,7 +563,7 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
           <Text style={styles.topTitle}>Today's Read</Text>
         </View>
 
-        <TouchableOpacity onPress={() => refetch({ pair })} style={styles.refreshBtn} activeOpacity={0.8}>
+        <TouchableOpacity onPress={() => fetchForexAnalysis(pair)} style={styles.refreshBtn} activeOpacity={0.8}>
           <Icon name="refresh-ccw" size={16} color="#0B0B0F" />
         </TouchableOpacity>
       </View>
@@ -912,6 +965,13 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
           <Text style={styles.disclaimer}>Educational insights — not financial advice.</Text>
         </View>
       )}
+
+      {/* Phase 3: Quant Terminal */}
+      <QuantTerminalWidget
+        symbol={pair}
+        strategyName="forex_trend_following"
+        userId={userId}
+      />
     </View>
   );
 }

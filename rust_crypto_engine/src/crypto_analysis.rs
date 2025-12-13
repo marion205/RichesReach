@@ -1,8 +1,10 @@
 use crate::{CryptoAnalysisResponse, CryptoRecommendation};
+use crate::feature_sources::{AssetClass, FeatureSource};
 use std::collections::HashMap;
 use chrono::Utc;
 use rust_decimal::Decimal;
 use anyhow::Result;
+use async_trait::async_trait;
 use rust_decimal::prelude::ToPrimitive;
 use rand::Rng;
 
@@ -337,5 +339,17 @@ impl CryptoAnalysisEngine {
         };
         
         (Decimal::from_f64_retain(base_price).unwrap_or(Decimal::ZERO), 0.0)
+    }
+}
+
+#[async_trait]
+impl FeatureSource for CryptoAnalysisEngine {
+    fn asset_class(&self) -> AssetClass {
+        AssetClass::Crypto
+    }
+
+    async fn build_features(&self, symbol: &str) -> Result<HashMap<String, f64>> {
+        let resp = self.analyze(symbol).await?;
+        Ok(resp.features)
     }
 }
