@@ -945,6 +945,7 @@ fn build_routes(state: AppState) -> impl Filter<Extract = impl warp::Reply, Erro
                 "http_request"
             );
         }))
+        .recover(handle_rejection)
 }
 
 /* ------------------------------ handlers ------------------------------ */
@@ -974,18 +975,35 @@ async fn health_ready_handler(state: AppState) -> Result<impl warp::Reply, warp:
     // Validate provider backend (cheap, deterministic probe)
     let (provider_healthy, error_msg) = validate_provider_health(&state.market, &backend).await;
     
+    // Check for required symbols (SPY is critical for regime engine)
+    let mut missing_symbols = Vec::new();
+    let required_symbols = vec!["SPY"]; // Add more as needed: "BTC", "DXY", etc.
+    
+    for symbol in &required_symbols {
+        if state.market.latest_quote(symbol).await.is_err() {
+            missing_symbols.push(symbol.to_string());
+        }
+    }
+    
+    let is_ready = ready && provider_healthy && missing_symbols.is_empty();
+    let mut final_error_msg = error_msg;
+    
+    if !missing_symbols.is_empty() {
+        final_error_msg = Some(format!("Missing required symbols: {}. Ingest market data before using regime/alpha/unified endpoints.", missing_symbols.join(", ")));
+    }
+    
     let resp = HealthResponse {
-        status: if ready && provider_healthy { "ready" } else { "unhealthy" }.into(),
+        status: if is_ready { "ready" } else { "unhealthy" }.into(),
         service: "unified-market-analysis-engine".into(),
         timestamp: Utc::now(),
         version: "2.0.0".into(),
         cache_stats,
-        ready: ready && provider_healthy,
+        ready: is_ready,
         backend: Some(backend),
-        error: error_msg,
+        error: final_error_msg,
     };
     let reply = warp::reply::json(&resp);
-    let code = if ready && provider_healthy { StatusCode::OK } else { StatusCode::SERVICE_UNAVAILABLE };
+    let code = if is_ready { StatusCode::OK } else { StatusCode::SERVICE_UNAVAILABLE };
     Ok(warp::reply::with_status(reply, code))
 }
 
@@ -1605,6 +1623,8 @@ async fn regime_analyze_handler(
     }
 
     let start = std::time::Instant::now();
+    
+    tracing::info!(endpoint = "v1/regime", %req_id, "starting regime analysis");
 
     // Analyze regime (quant edition)
     let analysis = state.regime_engine
@@ -1679,6 +1699,8 @@ async fn alpha_signal_handler(
     }
 
     let start = std::time::Instant::now();
+    
+    tracing::info!(endpoint = "v1/alpha/signal", %req_id, symbol = %body.symbol, "starting alpha signal generation");
 
     // Generate alpha signal
     let alpha = state.alpha_oracle
@@ -2176,6 +2198,8 @@ async fn unified_signal_handler(
         ));
     }
 
+    tracing::info!(endpoint = "v1/unified/signal", %req_id, symbol = %body.symbol, "starting unified signal generation");
+    
     match state.unified_oracle.signal(body).await {
         Ok(signal) => {
             tracing::info!(
@@ -2351,9 +2375,32 @@ async fn handle_rejection(err: warp::Rejection) -> Result<impl warp::Reply, warp
         return Ok(warp::reply::with_status(reply, StatusCode::NOT_FOUND));
     }
     if let Some(e) = err.find::<AnalysisError>() {
-        error!("analysis error: {:#}", e.0);
-        let reply = warp::reply::json(&json_error("analysis_failed", "Unable to complete analysis"));
-        return Ok(warp::reply::with_status(reply, StatusCode::BAD_REQUEST));
+        let error_msg = format!("{:#}", e.0);
+        error!("analysis error: {}", error_msg);
+        
+        // Check if it's a missing data error (SPY, BTC, DXY, etc.)
+        let (status_code, error_type, hint) = if error_msg.contains("no SPY data") || 
+                                                   error_msg.contains("missing") ||
+                                                   error_msg.contains("not found") {
+            (
+                StatusCode::FAILED_DEPENDENCY,
+                "missing_market_data",
+                "Ingest SPY quotes (and required benchmarks) before calling regime/alpha/unified endpoints."
+            )
+        } else {
+            (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "analysis_failed",
+                "Unable to complete analysis"
+            )
+        };
+        
+        let reply = warp::reply::json(&serde_json::json!({
+            "error": error_type,
+            "message": error_msg,
+            "hint": hint
+        }));
+        return Ok(warp::reply::with_status(reply, status_code));
     }
     if let Some(_) = err.find::<warp::filters::body::BodyDeserializeError>() {
         let reply = warp::reply::json(&json_error("bad_request", "Invalid JSON body"));

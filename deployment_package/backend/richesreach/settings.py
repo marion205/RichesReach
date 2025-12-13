@@ -268,8 +268,18 @@ AUTHENTICATION_BACKENDS = [
 ]
 # OpenAI Configuration
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY') # Set this in environment variable OPENAI_API_KEY
-OPENAI_MODEL = "gpt-3.5-turbo" # Default model to use
+OPENAI_MODEL = "gpt-4o-mini" # Default model to use (cheaper & faster than gpt-3.5-turbo now)
 OPENAI_MAX_TOKENS = 1000 # Maximum tokens for responses
+OPENAI_TEMPERATURE = 0.7 # Temperature for responses (0.0-2.0)
+OPENAI_TIMEOUT_S = 15.0 # Request timeout in seconds
+OPENAI_MAX_RETRIES = 2 # Maximum retries on transient errors
+OPENAI_MAX_CONCURRENCY = 10 # Maximum concurrent OpenAI calls (async only)
+OPENAI_MAX_HISTORY = 20 # Maximum message history to include in prompts
+# AI rate limiting
+AI_RATE_LIMIT_PER_USER = 30 # Requests per user per minute
+AI_RATE_LIMIT_WINDOW_S = 60 # Rate limit window in seconds
+# Market data cache TTL (seconds)
+MARKET_REGIME_CACHE_TTL_S = 60 # Cache market regime indicators for 60 seconds
 # AlphaVantage API Configuration
 ALPHA_VANTAGE_API_KEY = os.getenv('ALPHA_VANTAGE_API_KEY')
 if not ALPHA_VANTAGE_API_KEY:

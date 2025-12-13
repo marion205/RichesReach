@@ -11,6 +11,7 @@ from core.wealth_circles_views import WealthCirclePostsView
 from core.voices_views import VoicesListView
 from core.ai_options_views import AIOptionsRecommendationsView
 from core.auth_views import LoginView
+from core.ai_async_views import chat_view, stream_chat_view, health_view
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -32,5 +33,10 @@ urlpatterns = [
     path('api/voices/', VoicesListView.as_view(), name='voices_list'),
     # AI Options endpoints
     path('api/ai-options/recommendations/', AIOptionsRecommendationsView.as_view(), name='ai_options_recommendations'),
+    # Async AI Chat endpoints (requires ASGI)
+    # Views are already decorated with async-aware decorators
+    path('api/ai/chat/', chat_view, name='ai_chat'),
+    path('api/ai/chat/stream/', stream_chat_view, name='ai_chat_stream'),
+    path('api/ai/health/', health_view, name='ai_health'),
 ]
 

@@ -92,7 +92,25 @@ impl MarketRegimeEngine {
     // JOBS EDITION: Human-readable regime messages
     // ──────────────────────────────────────────────────────────────────────
     pub async fn analyze_simple(&self) -> Result<SimpleMarketRegime> {
-        let full = self.analyze().await?;
+        // Try to get full regime, but degrade gracefully if SPY data is missing
+        let full = match self.analyze().await {
+            Ok(r) => r,
+            Err(e) => {
+                // If SPY data is missing, return a neutral regime instead of failing
+                if format!("{:#}", e).contains("no SPY data") {
+                    tracing::warn!("Regime analysis: missing SPY data, returning neutral regime");
+                    return Ok(SimpleMarketRegime {
+                        headline: "Market regime unavailable".to_string(),
+                        one_liner: "SPY benchmark data not available - using neutral regime".to_string(),
+                        action: "Continue with standard analysis".to_string(),
+                        mood: "Neutral".to_string(),
+                        confidence: 0.3,
+                        timestamp: Utc::now(),
+                    });
+                }
+                return Err(e); // Propagate other errors
+            }
+        };
 
         let mood = match full.regime {
             GlobalMarketRegime::RiskOn => "Greed",
@@ -330,7 +348,11 @@ impl MarketRegimeEngine {
         let start = end - Duration::days(20);
 
         let spy = self.provider.get_price_history("SPY", start, end).await?;
-        if spy.is_empty() { bail!("no SPY data"); }
+        if spy.is_empty() {
+            tracing::warn!("regime: missing SPY series, degrading to default volatility regime");
+            // Degrade gracefully instead of failing hard
+            return Ok(EquityVolRegime::Medium); // Default to medium volatility
+        }
 
         let fx_formatted: Vec<_> = spy.iter()
             .map(|(ts, p)| (*ts, *p, *p))

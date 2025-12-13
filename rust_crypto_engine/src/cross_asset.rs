@@ -151,9 +151,9 @@ impl CrossAssetFusionEngine {
     /// Generate cross-asset fusion signal
     pub async fn generate_fusion_signal(
         &self,
-        primary_asset: &str, // e.g., "SPX"
+        primary_asset: &str, // e.g., "SPX" or "EURUSD"
     ) -> anyhow::Result<CrossAssetSignal> {
-        // Get current regime
+        // Get current regime (analyze_simple now degrades gracefully if SPY missing)
         let regime = self.regime_engine.analyze_simple().await?;
 
         // Get signals for all tracked assets

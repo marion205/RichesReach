@@ -22,6 +22,8 @@ impl InMemoryProvider {
         };
         // Initialize with mock forex data for development
         provider.initialize_mock_forex_data();
+        // Initialize with SPY data for regime engine
+        provider.initialize_spy_data();
         provider
     }
 
@@ -93,6 +95,43 @@ impl InMemoryProvider {
         }
         
         tracing::info!("Initialized mock forex data for {} pairs", pair_count);
+    }
+
+    fn initialize_spy_data(&self) {
+        use chrono::Utc;
+        use rust_decimal::Decimal;
+        
+        // SPY is required for regime engine volatility calculations
+        // Initialize with realistic SPY price (~450) and 30 days of history
+        let spy_price = 450.0;
+        let now = Utc::now();
+        
+        let quote = Quote {
+            symbol: Arc::from("SPY"),
+            ts: now,
+            bid: Decimal::from_f64_retain(spy_price - 0.01).unwrap_or_default(),
+            ask: Decimal::from_f64_retain(spy_price + 0.01).unwrap_or_default(),
+        };
+        
+        // Store latest quote
+        self.latest.insert(Arc::from("SPY"), quote.clone());
+        
+        // Generate 30 days of historical data (regime engine needs at least 20 days)
+        let mut history = Vec::new();
+        for i in 0..30 {
+            let timestamp = now - chrono::Duration::days(30 - i);
+            // Add realistic price variation (SPY typically moves 0.5-2% daily)
+            let daily_return = (i as f64 * 0.1).sin() * 0.015; // ±1.5% variation
+            let price = spy_price * (1.0 + daily_return);
+            
+            history.push(PricePoint {
+                ts: timestamp,
+                mid: Decimal::from_f64_retain(price).unwrap_or_default(),
+            });
+        }
+        
+        self.series.insert(Arc::from("SPY"), history);
+        tracing::info!("Initialized SPY data for regime engine");
     }
 
     /// Legacy compatibility: ingest price (creates a quote with bid=ask=price)
