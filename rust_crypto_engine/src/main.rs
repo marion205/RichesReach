@@ -13,7 +13,10 @@ use warp::{Filter, http::{HeaderMap, StatusCode}};
 
 mod crypto_analysis;
 mod stock_analysis;
-mod options_analysis;
+mod options_analysis; // Legacy - kept for backward compatibility
+mod options_core; // New: shared types
+mod options_engine; // New: production engine
+mod options_edge; // New: edge forecaster
 mod forex_analysis;
 mod sentiment_analysis;
 mod correlation_analysis;
@@ -28,21 +31,30 @@ mod metrics;
 mod alpha_oracle;
 mod position_sizing;
 mod risk_guard;
+mod portfolio_memory;
+mod execution;
+mod safety_guardrails;
 
 use cache::CacheManager;
 use crypto_analysis::CryptoAnalysisEngine;
 use stock_analysis::StockAnalysisEngine;
-use options_analysis::{OptionsAnalysisEngine, OptionsAnalysisResponse};
+use options_analysis::{OptionsAnalysisEngine as LegacyOptionsEngine, OptionsAnalysisResponse};
+use options_core::*;
+use options_engine::OptionsAnalysisEngine as ProductionOptionsEngine;
+use options_edge::{OptionsEdgeForecaster, EdgeForecastResponse};
 use forex_analysis::{ForexAnalysisEngine, ForexAnalysisResponse};
 use sentiment_analysis::{SentimentAnalysisEngine, SentimentAnalysisResponse};
 use correlation_analysis::{CorrelationAnalysisEngine, CorrelationAnalysisResponse};
 use websocket::WebSocketManager;
-use market_data::{ProviderBundle, build_provider_bundle, MarketDataProvider, MarketDataIngest, ProviderError};
+use market_data::{ProviderBundle, build_provider_bundle, MarketDataProvider, MarketDataIngest, ProviderError, OptionsDataProvider, InMemoryOptionsProvider};
 use regime::{MarketRegimeEngine, MarketRegimeResponse, SimpleMarketRegime};
 use metrics::Metrics;
 use alpha_oracle::{AlphaOracle, AlphaSignal};
 use position_sizing::{PositionSizingEngine, PositionSizingConfig, PositionSizingDecision};
 use risk_guard::{RiskGuard, RiskGuardConfig, RiskGuardDecision, OpenRiskPosition};
+use portfolio_memory::{PortfolioMemoryEngine, TradeRecord, TradeOutcome, PersonalizedRecommendation};
+use execution::{ExecutionEngine, ExecutionConfig, OrderRequest, OrderReceipt};
+use safety_guardrails::{SafetyGuardrailsEngine, SafetyConfig, SafetyCheck};
 
 /* ----------------------------- types ----------------------------- */
 
@@ -112,6 +124,57 @@ pub struct AlphaSignalRequest {
     pub open_positions: Option<Vec<OpenRiskPosition>>,
 }
 
+// Phase 1: Portfolio Memory Engine requests
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RecordTradeRequest {
+    pub user_id: String,
+    pub symbol: String,
+    pub strategy_type: String,
+    pub entry_price: f64,
+    pub entry_iv: f64,
+    pub days_to_expiration: i32,
+    pub position_size: f64,
+    pub risk_fraction: f64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RecordExitRequest {
+    pub user_id: String,
+    pub trade_id: Option<String>,
+    pub exit_price: f64,
+    pub outcome: String, // "Win" | "Loss" | "Breakeven"
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GetRecommendationRequest {
+    pub user_id: String,
+    pub symbol: String,
+    pub proposed_strategy: String,
+    pub proposed_size: f64,
+    pub account_equity: f64,
+    pub current_iv: f64,
+    pub dte: i32,
+}
+
+// Phase 1: Execution Layer requests
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SubmitOrderRequest {
+    pub user_id: String,
+    pub trade: OneTapTrade,
+    pub account_equity: f64,
+    pub idempotency_key: Option<String>,
+}
+
+// Phase 1: Safety & Guardrails requests
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SafetyCheckRequest {
+    pub user_id: String,
+    pub trade: OneTapTrade,
+    pub account_equity: f64,
+    pub current_iv: f64,
+    pub open_positions_risk: f64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CryptoAnalysisResponse {
     pub symbol: String,
@@ -169,7 +232,9 @@ pub struct CacheStats {
 pub struct AppState {
     pub crypto_engine: Arc<CryptoAnalysisEngine>,
     pub stock_engine: Arc<StockAnalysisEngine>,
-    pub options_engine: Arc<OptionsAnalysisEngine>,
+    pub options_engine: Arc<LegacyOptionsEngine>, // Legacy - kept for backward compatibility
+    pub options_engine_v2: Arc<ProductionOptionsEngine>, // Production engine
+    pub options_edge_forecaster: Arc<OptionsEdgeForecaster>, // Edge forecaster
     pub forex_engine: Arc<ForexAnalysisEngine>,
     pub sentiment_engine: Arc<SentimentAnalysisEngine>,
     pub correlation_engine: Arc<CorrelationAnalysisEngine>,
@@ -185,6 +250,9 @@ pub struct AppState {
     pub alpha_oracle: Arc<AlphaOracle>,
     pub position_sizing: Arc<PositionSizingEngine>,
     pub risk_guard: Arc<RiskGuard>,
+    pub portfolio_memory: Arc<PortfolioMemoryEngine>,
+    pub execution_engine: Arc<ExecutionEngine>,
+    pub safety_guardrails: Arc<SafetyGuardrailsEngine>,
 }
 
 /* ------------------------ utilities ------------------------ */
@@ -237,7 +305,7 @@ async fn main() -> Result<()> {
     // ---- components
     let crypto_engine = Arc::new(CryptoAnalysisEngine::new());
     let stock_engine = Arc::new(StockAnalysisEngine::new());
-    let options_engine = Arc::new(OptionsAnalysisEngine::new());
+    let legacy_options_engine = Arc::new(LegacyOptionsEngine::new()); // Keep for backward compatibility
     let sentiment_engine = Arc::new(SentimentAnalysisEngine::new());
     let correlation_engine = Arc::new(CorrelationAnalysisEngine::new());
     let cache_manager = Arc::new(CacheManager::new());
@@ -247,6 +315,46 @@ async fn main() -> Result<()> {
     let forex_engine = Arc::new(ForexAnalysisEngine::new(provider_bundle.read.clone()));
     let regime_engine = Arc::new(MarketRegimeEngine::new(provider_bundle.read.clone()));
 
+    // ---- Alpha Oracle system
+    let alpha_oracle = Arc::new(AlphaOracle::new(provider_bundle.read.clone()));
+    let position_sizing = Arc::new(PositionSizingEngine::new(PositionSizingConfig::default()));
+    let risk_guard = Arc::new(RiskGuard::new(RiskGuardConfig::default()));
+
+    // ---- Phase 1: Portfolio Memory, Execution, Safety
+    let portfolio_memory = Arc::new(PortfolioMemoryEngine::new());
+    let execution_config = ExecutionConfig {
+        alpaca_api_key: std::env::var("ALPACA_API_KEY").ok(),
+        alpaca_secret_key: std::env::var("ALPACA_SECRET_KEY").ok(),
+        alpaca_base_url: std::env::var("ALPACA_BASE_URL")
+            .unwrap_or_else(|_| "https://paper-api.alpaca.markets".to_string()),
+        enable_live_trading: std::env::var("ENABLE_LIVE_TRADING")
+            .map(|v| v == "true")
+            .unwrap_or(false),
+        max_order_value: 100_000.0,
+        commission_per_contract: 0.65,
+    };
+    let execution_engine = Arc::new(ExecutionEngine::new(execution_config));
+    let safety_guardrails = Arc::new(SafetyGuardrailsEngine::new(
+        SafetyConfig::default(),
+        portfolio_memory.clone(),
+    ));
+
+    // ---- Production Options Engine (wired into unified brain)
+    let options_provider = Arc::new(InMemoryOptionsProvider::new());
+    let options_engine = Arc::new(ProductionOptionsEngine::new(
+        provider_bundle.read.clone(),
+        options_provider.clone(),
+        AlphaOracle::new(provider_bundle.read.clone()),
+    ));
+    
+    // ---- Options Edge Forecaster
+    let options_edge_forecaster = Arc::new(OptionsEdgeForecaster::new(
+        provider_bundle.read.clone(),
+        options_provider.clone(),
+        AlphaOracle::new(provider_bundle.read.clone()),
+        MarketRegimeEngine::new(provider_bundle.read.clone()),
+    ));
+
     // ---- rate limiter (100 req / 10s per key)
     let quota = Quota::with_period(Duration::from_secs(10)).unwrap().allow_burst(nonzero!(100u32));
     let limiter = Arc::new(RateLimiter::keyed(quota));
@@ -255,16 +363,13 @@ async fn main() -> Result<()> {
     let api_token = std::env::var("API_TOKEN").ok();
     let ready_flag = Arc::new(RwLock::new(false));
     let metrics = Arc::new(Metrics::new());
-    
-    // ---- Alpha Oracle system
-    let alpha_oracle = Arc::new(AlphaOracle::new(provider_bundle.read.clone()));
-    let position_sizing = Arc::new(PositionSizingEngine::new(PositionSizingConfig::default()));
-    let risk_guard = Arc::new(RiskGuard::new(RiskGuardConfig::default()));
 
     let state = AppState {
         crypto_engine,
         stock_engine,
-        options_engine,
+        options_engine: legacy_options_engine, // Legacy for backward compatibility
+        options_engine_v2: options_engine.clone(), // Production engine
+        options_edge_forecaster: options_edge_forecaster.clone(),
         forex_engine,
         sentiment_engine,
         correlation_engine,
@@ -274,12 +379,15 @@ async fn main() -> Result<()> {
         limiter,
         api_token,
         ready_flag: ready_flag.clone(),
-        market: provider_bundle.read,
+        market: provider_bundle.read.clone(),
         ingest: provider_bundle.ingest,
         metrics: metrics.clone(),
         alpha_oracle: alpha_oracle.clone(),
         position_sizing: position_sizing.clone(),
         risk_guard: risk_guard.clone(),
+        portfolio_memory: portfolio_memory.clone(),
+        execution_engine: execution_engine.clone(),
+        safety_guardrails: safety_guardrails.clone(),
     };
 
     // Start WebSocket heartbeat
@@ -514,6 +622,70 @@ fn build_routes(state: AppState) -> impl Filter<Extract = impl warp::Reply, Erro
         .and_then(alpha_signal_handler)
         .with(sec_headers.clone());
 
+    // Phase 1: Portfolio Memory Engine endpoints
+    let portfolio_record_trade = v1
+        .and(warp::path!("portfolio" / "record-trade"))
+        .and(warp::post())
+        .and(with_req_meta.clone())
+        .and(warp::body::json())
+        .and(with_state.clone())
+        .and_then(portfolio_record_trade_handler)
+        .with(sec_headers.clone());
+
+    let portfolio_record_exit = v1
+        .and(warp::path!("portfolio" / "record-exit"))
+        .and(warp::post())
+        .and(with_req_meta.clone())
+        .and(warp::body::json())
+        .and(with_state.clone())
+        .and_then(portfolio_record_exit_handler)
+        .with(sec_headers.clone());
+
+    let portfolio_profile = v1
+        .and(warp::path!("portfolio" / "profile" / String))
+        .and(warp::get())
+        .and(with_req_meta.clone())
+        .and(with_state.clone())
+        .and_then(portfolio_profile_handler)
+        .with(sec_headers.clone());
+
+    let portfolio_recommendation = v1
+        .and(warp::path!("portfolio" / "recommendation"))
+        .and(warp::post())
+        .and(with_req_meta.clone())
+        .and(warp::body::json())
+        .and(with_state.clone())
+        .and_then(portfolio_recommendation_handler)
+        .with(sec_headers.clone());
+
+    // Phase 1: Execution Layer endpoints
+    let execution_submit = v1
+        .and(warp::path!("execution" / "submit"))
+        .and(warp::post())
+        .and(with_req_meta.clone())
+        .and(warp::body::json())
+        .and(with_state.clone())
+        .and_then(execution_submit_handler)
+        .with(sec_headers.clone());
+
+    let execution_status = v1
+        .and(warp::path!("execution" / "status" / String))
+        .and(warp::get())
+        .and(with_req_meta.clone())
+        .and(with_state.clone())
+        .and_then(execution_status_handler)
+        .with(sec_headers.clone());
+
+    // Phase 1: Safety & Guardrails endpoint
+    let safety_check = v1
+        .and(warp::path!("safety" / "check"))
+        .and(warp::post())
+        .and(with_req_meta.clone())
+        .and(warp::body::json())
+        .and(with_state.clone())
+        .and_then(safety_check_handler)
+        .with(sec_headers.clone());
+
     let websocket = v1
         .and(warp::path("ws"))
         .and(warp::ws())
@@ -538,6 +710,13 @@ fn build_routes(state: AppState) -> impl Filter<Extract = impl warp::Reply, Erro
         .or(regime_analyze)
         .or(regime_simple)
         .or(alpha_signal)
+        .or(portfolio_record_trade)
+        .or(portfolio_record_exit)
+        .or(portfolio_profile)
+        .or(portfolio_recommendation)
+        .or(execution_submit)
+        .or(execution_status)
+        .or(safety_check)
         .or(websocket)
         .with(cors)
         .with(warp::log::custom(|info| {
@@ -1291,6 +1470,241 @@ async fn websocket_handler(
     Ok(Box::new(ws.on_upgrade(move |socket| async move {
         mgr.handle_connection(socket).await;
     })))
+}
+
+/* -------------------------- Phase 1 handlers -------------------------- */
+
+#[instrument(skip(state, headers), fields(req_id=%request_id(&headers)))]
+async fn portfolio_record_trade_handler(
+    (ip, req_id, headers): (String, String, HeaderMap),
+    body: RecordTradeRequest,
+    state: AppState,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let key = bearer_from_headers(&headers).unwrap_or_else(|| ip.clone());
+    if state.limiter.check_key(&key).is_err() {
+        return Ok(warp::reply::with_status(
+            warp::reply::json(&json_error("rate_limited", "Too many requests")),
+            StatusCode::TOO_MANY_REQUESTS,
+        ));
+    }
+
+    let trade = TradeRecord {
+        user_id: body.user_id.clone(),
+        symbol: body.symbol.clone(),
+        strategy_type: body.strategy_type.clone(),
+        entry_price: body.entry_price,
+        exit_price: None,
+        pnl: None,
+        pnl_pct: None,
+        entry_iv: body.entry_iv,
+        days_to_expiration: body.days_to_expiration,
+        position_size: body.position_size,
+        risk_fraction: body.risk_fraction,
+        timestamp: Utc::now(),
+        exit_timestamp: None,
+        outcome: None,
+    };
+
+    state.portfolio_memory.record_trade(trade).await
+        .map_err(|e| warp::reject::custom(AnalysisError(e)))?;
+
+    tracing::info!(%req_id, user_id=%body.user_id, symbol=%body.symbol, "trade_recorded");
+
+    Ok(warp::reply::with_status(
+        warp::reply::json(&serde_json::json!({
+            "success": true,
+            "message": "Trade recorded"
+        })),
+        StatusCode::OK,
+    ))
+}
+
+#[instrument(skip(state, headers), fields(req_id=%request_id(&headers)))]
+async fn portfolio_record_exit_handler(
+    (ip, req_id, headers): (String, String, HeaderMap),
+    body: RecordExitRequest,
+    state: AppState,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let key = bearer_from_headers(&headers).unwrap_or_else(|| ip.clone());
+    if state.limiter.check_key(&key).is_err() {
+        return Ok(warp::reply::with_status(
+            warp::reply::json(&json_error("rate_limited", "Too many requests")),
+            StatusCode::TOO_MANY_REQUESTS,
+        ));
+    }
+
+    let outcome = match body.outcome.as_str() {
+        "Win" => TradeOutcome::Win,
+        "Loss" => TradeOutcome::Loss,
+        "Breakeven" => TradeOutcome::Breakeven,
+        _ => TradeOutcome::Breakeven,
+    };
+
+    state.portfolio_memory.record_exit(&body.user_id, body.trade_id, body.exit_price, outcome).await
+        .map_err(|e| warp::reject::custom(AnalysisError(e)))?;
+
+    tracing::info!(%req_id, user_id=%body.user_id, "trade_exit_recorded");
+
+    Ok(warp::reply::with_status(
+        warp::reply::json(&serde_json::json!({
+            "success": true,
+            "message": "Trade exit recorded"
+        })),
+        StatusCode::OK,
+    ))
+}
+
+#[instrument(skip(state, headers), fields(req_id=%request_id(&headers)))]
+async fn portfolio_profile_handler(
+    user_id: String,
+    (ip, req_id, headers): (String, String, HeaderMap),
+    state: AppState,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let key = bearer_from_headers(&headers).unwrap_or_else(|| ip.clone());
+    if state.limiter.check_key(&key).is_err() {
+        return Ok(warp::reply::with_status(
+            warp::reply::json(&json_error("rate_limited", "Too many requests")),
+            StatusCode::TOO_MANY_REQUESTS,
+        ));
+    }
+
+    let profile = state.portfolio_memory.get_profile(&user_id).await
+        .map_err(|e| warp::reject::custom(AnalysisError(e)))?;
+
+    Ok(warp::reply::with_status(
+        warp::reply::json(&profile),
+        StatusCode::OK,
+    ))
+}
+
+#[instrument(skip(state, headers), fields(req_id=%request_id(&headers)))]
+async fn portfolio_recommendation_handler(
+    (ip, req_id, headers): (String, String, HeaderMap),
+    body: GetRecommendationRequest,
+    state: AppState,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let key = bearer_from_headers(&headers).unwrap_or_else(|| ip.clone());
+    if state.limiter.check_key(&key).is_err() {
+        return Ok(warp::reply::with_status(
+            warp::reply::json(&json_error("rate_limited", "Too many requests")),
+            StatusCode::TOO_MANY_REQUESTS,
+        ));
+    }
+
+    let recommendation = state.portfolio_memory.get_recommendation(
+        &body.user_id,
+        &body.symbol,
+        &body.proposed_strategy,
+        body.proposed_size,
+        body.account_equity,
+        body.current_iv,
+        body.dte,
+    ).await
+        .map_err(|e| warp::reject::custom(AnalysisError(e)))?;
+
+    Ok(warp::reply::with_status(
+        warp::reply::json(&recommendation),
+        StatusCode::OK,
+    ))
+}
+
+#[instrument(skip(state, headers), fields(req_id=%request_id(&headers)))]
+async fn execution_submit_handler(
+    (ip, req_id, headers): (String, String, HeaderMap),
+    body: SubmitOrderRequest,
+    state: AppState,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let key = bearer_from_headers(&headers).unwrap_or_else(|| ip.clone());
+    if state.limiter.check_key(&key).is_err() {
+        return Ok(warp::reply::with_status(
+            warp::reply::json(&json_error("rate_limited", "Too many requests")),
+            StatusCode::TOO_MANY_REQUESTS,
+        ));
+    }
+
+    let order_request = OrderRequest {
+        user_id: body.user_id,
+        trade: body.trade,
+        account_equity: body.account_equity,
+        idempotency_key: body.idempotency_key,
+    };
+
+    let receipt = state.execution_engine.submit_order(order_request).await
+        .map_err(|e| warp::reject::custom(AnalysisError(e)))?;
+
+    tracing::info!(%req_id, order_id=%receipt.order_id, "order_submitted");
+
+    Ok(warp::reply::with_status(
+        warp::reply::json(&receipt),
+        StatusCode::OK,
+    ))
+}
+
+#[instrument(skip(state, headers), fields(req_id=%request_id(&headers)))]
+async fn execution_status_handler(
+    order_id: String,
+    (ip, req_id, headers): (String, String, HeaderMap),
+    state: AppState,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let key = bearer_from_headers(&headers).unwrap_or_else(|| ip.clone());
+    if state.limiter.check_key(&key).is_err() {
+        return Ok(warp::reply::with_status(
+            warp::reply::json(&json_error("rate_limited", "Too many requests")),
+            StatusCode::TOO_MANY_REQUESTS,
+        ));
+    }
+
+    let receipt = state.execution_engine.get_order_status(&order_id).await
+        .map_err(|e| warp::reject::custom(AnalysisError(e)))?;
+
+    match receipt {
+        Some(r) => Ok(warp::reply::with_status(
+            warp::reply::json(&r),
+            StatusCode::OK,
+        )),
+        None => Ok(warp::reply::with_status(
+            warp::reply::json(&json_error("not_found", "Order not found")),
+            StatusCode::NOT_FOUND,
+        )),
+    }
+}
+
+#[instrument(skip(state, headers), fields(req_id=%request_id(&headers)))]
+async fn safety_check_handler(
+    (ip, req_id, headers): (String, String, HeaderMap),
+    body: SafetyCheckRequest,
+    state: AppState,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let key = bearer_from_headers(&headers).unwrap_or_else(|| ip.clone());
+    if state.limiter.check_key(&key).is_err() {
+        return Ok(warp::reply::with_status(
+            warp::reply::json(&json_error("rate_limited", "Too many requests")),
+            StatusCode::TOO_MANY_REQUESTS,
+        ));
+    }
+
+    let check = state.safety_guardrails.check_trade(
+        &body.user_id,
+        &body.trade,
+        body.account_equity,
+        body.current_iv,
+        body.open_positions_risk,
+    ).await
+        .map_err(|e| warp::reject::custom(AnalysisError(e)))?;
+
+    tracing::info!(
+        %req_id,
+        user_id=%body.user_id,
+        symbol=%body.trade.symbol,
+        passed=%check.passed,
+        confidence=%check.confidence,
+        "safety_check_completed"
+    );
+
+    Ok(warp::reply::with_status(
+        warp::reply::json(&check),
+        StatusCode::OK,
+    ))
 }
 
 /* -------------------------- middleware/errors -------------------------- */
