@@ -1,3 +1,5 @@
+#![recursion_limit = "256"]
+
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use governor::{clock::DefaultClock, state::keyed::DefaultKeyedStateStore, Quota, RateLimiter};
@@ -34,6 +36,9 @@ mod risk_guard;
 mod portfolio_memory;
 mod execution;
 mod safety_guardrails;
+mod backtesting;
+mod cross_asset;
+mod reinforcement_learning;
 
 use cache::CacheManager;
 use crypto_analysis::CryptoAnalysisEngine;
@@ -55,6 +60,9 @@ use risk_guard::{RiskGuard, RiskGuardConfig, RiskGuardDecision, OpenRiskPosition
 use portfolio_memory::{PortfolioMemoryEngine, TradeRecord, TradeOutcome, PersonalizedRecommendation};
 use execution::{ExecutionEngine, ExecutionConfig, OrderRequest, OrderReceipt};
 use safety_guardrails::{SafetyGuardrailsEngine, SafetyConfig, SafetyCheck};
+use backtesting::{BacktestingEngine, BacktestConfig, BacktestResult, StrategyScore, TradeSignal};
+use cross_asset::{CrossAssetFusionEngine, CrossAssetSignal, AssetClass};
+use reinforcement_learning::{ReinforcementLearningEngine, StrategyAction, StrategyContext, RewardSignal, StrategyRecommendation};
 
 /* ----------------------------- types ----------------------------- */
 
@@ -175,6 +183,34 @@ pub struct SafetyCheckRequest {
     pub open_positions_risk: f64,
 }
 
+// Phase 2: Backtesting requests
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RunBacktestRequest {
+    pub strategy_name: String,
+    pub symbol: String,
+    pub signals: Vec<TradeSignal>,
+    pub config: Option<BacktestConfig>,
+}
+
+// Phase 2: Cross-Asset Fusion requests
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CrossAssetRequest {
+    pub primary_asset: String, // e.g., "SPX"
+}
+
+// Phase 2: RL requests
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RLRecommendRequest {
+    pub user_id: String,
+    pub context: StrategyContext,
+    pub available_strategies: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RLUpdateRequest {
+    pub reward: RewardSignal,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CryptoAnalysisResponse {
     pub symbol: String,
@@ -253,6 +289,9 @@ pub struct AppState {
     pub portfolio_memory: Arc<PortfolioMemoryEngine>,
     pub execution_engine: Arc<ExecutionEngine>,
     pub safety_guardrails: Arc<SafetyGuardrailsEngine>,
+    pub backtesting_engine: Arc<BacktestingEngine>,
+    pub cross_asset_fusion: Arc<CrossAssetFusionEngine>,
+    pub rl_engine: Arc<ReinforcementLearningEngine>,
 }
 
 /* ------------------------ utilities ------------------------ */
@@ -339,6 +378,15 @@ async fn main() -> Result<()> {
         portfolio_memory.clone(),
     ));
 
+    // ---- Phase 2: Backtesting + Cross-Asset Fusion + RL
+    let backtesting_engine = Arc::new(BacktestingEngine::new());
+    let cross_asset_fusion = Arc::new(CrossAssetFusionEngine::new(
+        provider_bundle.read.clone(),
+        MarketRegimeEngine::new(provider_bundle.read.clone()),
+        AlphaOracle::new(provider_bundle.read.clone()),
+    ));
+    let rl_engine = Arc::new(ReinforcementLearningEngine::new(portfolio_memory.clone()));
+
     // ---- Production Options Engine (wired into unified brain)
     let options_provider = Arc::new(InMemoryOptionsProvider::new());
     let options_engine = Arc::new(ProductionOptionsEngine::new(
@@ -388,6 +436,9 @@ async fn main() -> Result<()> {
         portfolio_memory: portfolio_memory.clone(),
         execution_engine: execution_engine.clone(),
         safety_guardrails: safety_guardrails.clone(),
+        backtesting_engine: backtesting_engine.clone(),
+        cross_asset_fusion: cross_asset_fusion.clone(),
+        rl_engine: rl_engine.clone(),
     };
 
     // Start WebSocket heartbeat
@@ -686,6 +737,53 @@ fn build_routes(state: AppState) -> impl Filter<Extract = impl warp::Reply, Erro
         .and_then(safety_check_handler)
         .with(sec_headers.clone());
 
+    // Phase 2: Backtesting endpoints
+    let backtest_run = v1
+        .and(warp::path!("backtest" / "run"))
+        .and(warp::post())
+        .and(with_req_meta.clone())
+        .and(warp::body::json())
+        .and(with_state.clone())
+        .and_then(backtest_run_handler)
+        .with(sec_headers.clone());
+
+    let backtest_score = v1
+        .and(warp::path!("backtest" / "score" / String / String)) // strategy_name / symbol
+        .and(warp::get())
+        .and(with_req_meta.clone())
+        .and(with_state.clone())
+        .and_then(backtest_score_handler)
+        .with(sec_headers.clone());
+
+    // Phase 2: Cross-Asset Fusion endpoint
+    let cross_asset_signal = v1
+        .and(warp::path!("cross-asset" / "signal"))
+        .and(warp::post())
+        .and(with_req_meta.clone())
+        .and(warp::body::json())
+        .and(with_state.clone())
+        .and_then(cross_asset_signal_handler)
+        .with(sec_headers.clone());
+
+    // Phase 2: RL endpoints
+    let rl_recommend = v1
+        .and(warp::path!("rl" / "recommend"))
+        .and(warp::post())
+        .and(with_req_meta.clone())
+        .and(warp::body::json())
+        .and(with_state.clone())
+        .and_then(rl_recommend_handler)
+        .with(sec_headers.clone());
+
+    let rl_update = v1
+        .and(warp::path!("rl" / "update"))
+        .and(warp::post())
+        .and(with_req_meta.clone())
+        .and(warp::body::json())
+        .and(with_state.clone())
+        .and_then(rl_update_handler)
+        .with(sec_headers.clone());
+
     let websocket = v1
         .and(warp::path("ws"))
         .and(warp::ws())
@@ -717,6 +815,11 @@ fn build_routes(state: AppState) -> impl Filter<Extract = impl warp::Reply, Erro
         .or(execution_submit)
         .or(execution_status)
         .or(safety_check)
+        .or(backtest_run)
+        .or(backtest_score)
+        .or(cross_asset_signal)
+        .or(rl_recommend)
+        .or(rl_update)
         .or(websocket)
         .with(cors)
         .with(warp::log::custom(|info| {
@@ -1703,6 +1806,178 @@ async fn safety_check_handler(
 
     Ok(warp::reply::with_status(
         warp::reply::json(&check),
+        StatusCode::OK,
+    ))
+}
+
+/* -------------------------- Phase 2 handlers -------------------------- */
+
+#[instrument(skip(state, headers), fields(req_id=%request_id(&headers)))]
+async fn backtest_run_handler(
+    (ip, req_id, headers): (String, String, HeaderMap),
+    body: RunBacktestRequest,
+    state: AppState,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let key = bearer_from_headers(&headers).unwrap_or_else(|| ip.clone());
+    if state.limiter.check_key(&key).is_err() {
+        return Ok(warp::reply::with_status(
+            warp::reply::json(&json_error("rate_limited", "Too many requests")),
+            StatusCode::TOO_MANY_REQUESTS,
+        ));
+    }
+
+    let config = body.config.unwrap_or_default();
+    let result = state.backtesting_engine
+        .run_backtest(&body.strategy_name, &body.symbol, body.signals, config)
+        .await
+        .map_err(|e| warp::reject::custom(AnalysisError(e)))?;
+
+    tracing::info!(
+        %req_id,
+        strategy=%body.strategy_name,
+        symbol=%body.symbol,
+        total_return=%result.total_return_pct,
+        "backtest_completed"
+    );
+
+    Ok(warp::reply::with_status(
+        warp::reply::json(&result),
+        StatusCode::OK,
+    ))
+}
+
+#[instrument(skip(state, headers), fields(req_id=%request_id(&headers)))]
+async fn backtest_score_handler(
+    strategy_name: String,
+    symbol: String,
+    (ip, req_id, headers): (String, String, HeaderMap),
+    state: AppState,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let key = bearer_from_headers(&headers).unwrap_or_else(|| ip.clone());
+    if state.limiter.check_key(&key).is_err() {
+        return Ok(warp::reply::with_status(
+            warp::reply::json(&json_error("rate_limited", "Too many requests")),
+            StatusCode::TOO_MANY_REQUESTS,
+        ));
+    }
+
+    let score = state.backtesting_engine
+        .get_strategy_score(&strategy_name, &symbol)
+        .await
+        .map_err(|e| warp::reject::custom(AnalysisError(e)))?;
+
+    match score {
+        Some(s) => Ok(warp::reply::with_status(
+            warp::reply::json(&s),
+            StatusCode::OK,
+        )),
+        None => Ok(warp::reply::with_status(
+            warp::reply::json(&json_error("not_found", "No backtest results found")),
+            StatusCode::NOT_FOUND,
+        )),
+    }
+}
+
+#[instrument(skip(state, headers), fields(req_id=%request_id(&headers)))]
+async fn cross_asset_signal_handler(
+    (ip, req_id, headers): (String, String, HeaderMap),
+    body: CrossAssetRequest,
+    state: AppState,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let key = bearer_from_headers(&headers).unwrap_or_else(|| ip.clone());
+    if state.limiter.check_key(&key).is_err() {
+        return Ok(warp::reply::with_status(
+            warp::reply::json(&json_error("rate_limited", "Too many requests")),
+            StatusCode::TOO_MANY_REQUESTS,
+        ));
+    }
+
+    let signal = state.cross_asset_fusion
+        .generate_fusion_signal(&body.primary_asset)
+        .await
+        .map_err(|e| warp::reject::custom(AnalysisError(e)))?;
+
+    tracing::info!(
+        %req_id,
+        primary_asset=%body.primary_asset,
+        regime=%signal.regime.mood,
+        "cross_asset_signal_generated"
+    );
+
+    Ok(warp::reply::with_status(
+        warp::reply::json(&signal),
+        StatusCode::OK,
+    ))
+}
+
+#[instrument(skip(state, headers), fields(req_id=%request_id(&headers)))]
+async fn rl_recommend_handler(
+    (ip, req_id, headers): (String, String, HeaderMap),
+    body: RLRecommendRequest,
+    state: AppState,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let key = bearer_from_headers(&headers).unwrap_or_else(|| ip.clone());
+    if state.limiter.check_key(&key).is_err() {
+        return Ok(warp::reply::with_status(
+            warp::reply::json(&json_error("rate_limited", "Too many requests")),
+            StatusCode::TOO_MANY_REQUESTS,
+        ));
+    }
+
+    let recommendation = state.rl_engine
+        .recommend_strategies(&body.user_id, body.context, body.available_strategies)
+        .await
+        .map_err(|e| warp::reject::custom(AnalysisError(e)))?;
+
+    tracing::info!(
+        %req_id,
+        user_id=%body.user_id,
+        strategies=%recommendation.recommended_strategies.len(),
+        "rl_recommendation_generated"
+    );
+
+    Ok(warp::reply::with_status(
+        warp::reply::json(&recommendation),
+        StatusCode::OK,
+    ))
+}
+
+#[instrument(skip(state, headers), fields(req_id=%request_id(&headers)))]
+async fn rl_update_handler(
+    (ip, req_id, headers): (String, String, HeaderMap),
+    body: RLUpdateRequest,
+    state: AppState,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let key = bearer_from_headers(&headers).unwrap_or_else(|| ip.clone());
+    if state.limiter.check_key(&key).is_err() {
+        return Ok(warp::reply::with_status(
+            warp::reply::json(&json_error("rate_limited", "Too many requests")),
+            StatusCode::TOO_MANY_REQUESTS,
+        ));
+    }
+
+    let reward = body.reward.clone();
+    let user_id = reward.user_id();
+    let reward_value = reward.reward;
+    let strategy_name = reward.action.strategy_name.clone();
+
+    state.rl_engine
+        .update_policy(reward)
+        .await
+        .map_err(|e| warp::reject::custom(AnalysisError(e)))?;
+
+    tracing::info!(
+        %req_id,
+        user_id=%user_id,
+        reward=%reward_value,
+        strategy=%strategy_name,
+        "rl_policy_updated"
+    );
+    Ok(warp::reply::with_status(
+        warp::reply::json(&serde_json::json!({
+            "success": true,
+            "message": "Policy updated"
+        })),
         StatusCode::OK,
     ))
 }

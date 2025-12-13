@@ -12,8 +12,7 @@ import {
 } from 'react-native';
 import { useQuery, gql } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_BASE, API_RUST_BASE } from '../../config/api';
+import { API_RUST_BASE } from '../../config/api';
 
 const GET_RUST_FOREX_ANALYSIS = gql`
   query GetRustForexAnalysis($pair: String!) {
@@ -42,84 +41,39 @@ type TrendLabel = 'Up' | 'Down' | 'Sideways';
 type VolLabel = 'Calm' | 'Normal' | 'Wild';
 type ExecLabel = 'Tight' | 'Normal' | 'Wide';
 
-// Deterministic response type matching backend
-interface AlphaOracleResponse {
-  symbol?: string;
-  global_mood?: string;
-  regime_headline?: string;
-  regime_action?: string;
-  ml_label?: string;
-  ml_confidence?: number;
-  explanation?: string;
-  alpha_score?: number;
-  conviction?: string;
-  one_sentence?: string;
-  position_sizing?: {
-    quantity?: number;
-    stop_loss_pct?: number;
-    dollar_risk?: number;
-    target_notional?: number;
-  };
-  risk_guard?: {
-    allow?: boolean;
-    adjusted?: {
-      quantity?: number;
-      dollar_risk?: number;
-      target_notional?: number;
-    };
-    reason?: string;
-  };
-}
-
 function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
-
 function safeNum(n: any): number | null {
   if (n === null || n === undefined) return null;
   const v = Number(n);
   return Number.isFinite(v) ? v : null;
 }
-
 function fmt5(n?: number | null) {
   if (n === null || n === undefined || Number.isNaN(n)) return '—';
-  if (n === 0) return '—';
   return n.toFixed(5);
 }
-
 function fmt2(n?: number | null) {
   if (n === null || n === undefined || Number.isNaN(n)) return '—';
-  if (n === 0) return '—';
   return n.toFixed(2);
 }
-
-function formatTimeAgo(timestamp: number): string {
-  const seconds = Math.floor((Date.now() - timestamp) / 1000);
-  if (seconds < 60) return 'just now';
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-  return `${Math.floor(seconds / 3600)}h ago`;
-}
-
 function trendToLabel(trend: string | null | undefined): TrendLabel {
   if (!trend) return 'Sideways';
   if (trend === 'BULLISH') return 'Up';
   if (trend === 'BEARISH') return 'Down';
   return 'Sideways';
 }
-
 function trendColor(label: TrendLabel) {
   if (label === 'Up') return '#10B981';
   if (label === 'Down') return '#EF4444';
   return '#6B7280';
 }
-
 function volatilityLabel(volFraction: number | null): { label: VolLabel; color: string } {
   const v = volFraction ?? 0;
   if (v < 0.006) return { label: 'Calm', color: '#10B981' };
   if (v < 0.015) return { label: 'Normal', color: '#F59E0B' };
   return { label: 'Wild', color: '#EF4444' };
 }
-
 function executionLabel(spread: number | null, mid: number | null): { label: ExecLabel; color: string; bps: number | null } {
   if (!spread || !mid || mid <= 0) return { label: 'Normal', color: '#6B7280', bps: null };
   const bps = (spread / mid) * 10000;
@@ -128,27 +82,11 @@ function executionLabel(spread: number | null, mid: number | null): { label: Exe
   return { label: 'Wide', color: '#EF4444', bps };
 }
 
-/** ---- Alpha Oracle (REST) ---- */
-// Rust backend runs on port 3001, Python/Django on 8000
-// Use centralized API config for proper device/IP handling
-const getRustApiUrl = () => {
-  // Check for explicit Rust API URL override
-  const rustUrl = process.env.EXPO_PUBLIC_RUST_API_URL;
-  if (rustUrl) return rustUrl;
-  
-  // Derive from API_BASE (replace port 8000 with 3001)
-  const base = API_BASE || 'http://localhost:8000';
-  return base.replace(':8000', ':3001').replace('localhost', '127.0.0.1');
-};
-
-const API_BASE_URL = getRustApiUrl();
-const EQUITY_STORAGE_KEY = 'rr_equity';
-
-type AlphaOracleState =
+type LoadState =
   | { status: 'idle' }
   | { status: 'loading' }
-  | { status: 'error'; message: string }
-  | { status: 'ready'; payload: AlphaOracleResponse; timestamp: number };
+  | { status: 'error'; message: string; raw?: any }
+  | { status: 'ready'; payload: any; ms?: number };
 
 function convictionColor(conv: string) {
   const c = (conv || '').toUpperCase();
@@ -157,6 +95,50 @@ function convictionColor(conv: string) {
   if (c.includes('NEUTRAL')) return '#6B7280';
   if (c.includes('DUMP') || c.includes('SELL')) return '#EF4444';
   return '#6B7280';
+}
+
+async function postJson(path: string, body: any) {
+  if (!API_RUST_BASE) throw new Error('Missing API_RUST_BASE');
+  const t0 = Date.now();
+  const res = await fetch(`${API_RUST_BASE}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const json = await res.json().catch(() => ({}));
+  const ms = Date.now() - t0;
+
+  if (!res.ok) {
+    const msg =
+      (typeof json?.error === 'string' && json.error) ||
+      (typeof json?.message === 'string' && json.message) ||
+      `Request failed (${res.status})`;
+    const err: any = new Error(msg);
+    err.raw = json;
+    err.ms = ms;
+    throw err;
+  }
+  return { json, ms };
+}
+
+async function getJson(path: string) {
+  if (!API_RUST_BASE) throw new Error('Missing API_RUST_BASE');
+  const t0 = Date.now();
+  const res = await fetch(`${API_RUST_BASE}${path}`);
+  const json = await res.json().catch(() => ({}));
+  const ms = Date.now() - t0;
+
+  if (!res.ok) {
+    const msg =
+      (typeof json?.error === 'string' && json.error) ||
+      (typeof json?.message === 'string' && json.message) ||
+      `Request failed (${res.status})`;
+    const err: any = new Error(msg);
+    err.raw = json;
+    err.ms = ms;
+    throw err;
+  }
+  return { json, ms };
 }
 
 export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large' }: RustForexWidgetProps) {
@@ -168,20 +150,27 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
   const [showExplain, setShowExplain] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
 
-  // Alpha Oracle UX: collapsed panel + single call
+  // Alpha Oracle
   const [showOracle, setShowOracle] = useState(false);
   const [equity, setEquity] = useState('25000');
   const [openPositions, setOpenPositions] = useState('0');
-  const [oracle, setOracle] = useState<AlphaOracleState>({ status: 'idle' });
+  const [oracle, setOracle] = useState<LoadState>({ status: 'idle' });
 
-  // Load persisted equity on mount
-  useEffect(() => {
-    AsyncStorage.getItem(EQUITY_STORAGE_KEY).then((stored) => {
-      if (stored) {
-        setEquity(stored);
-      }
-    });
-  }, []);
+  // Backtest (Prove it)
+  const [showBacktest, setShowBacktest] = useState(false);
+  const [strategy, setStrategy] = useState('fx_orb');
+  const [backtest, setBacktest] = useState<LoadState>({ status: 'idle' });
+  const [score, setScore] = useState<LoadState>({ status: 'idle' });
+
+  // Cross-asset fusion
+  const [showFusion, setShowFusion] = useState(false);
+  const [fusion, setFusion] = useState<LoadState>({ status: 'idle' });
+
+  // RL
+  const [showRL, setShowRL] = useState(false);
+  const [userId, setUserId] = useState('demo_user');
+  const [rlRec, setRlRec] = useState<LoadState>({ status: 'idle' });
+  const [rlUpdate, setRlUpdate] = useState<LoadState>({ status: 'idle' });
 
   useEffect(() => {
     if (Platform.OS === 'android') {
@@ -204,7 +193,15 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
     const trimmed = inputValue.trim().toUpperCase();
     if (!trimmed) return;
     setPair(trimmed);
-    setOracle({ status: 'idle' }); // reset oracle when pair changes
+
+    // reset advanced panels when switching symbol
+    setOracle({ status: 'idle' });
+    setBacktest({ status: 'idle' });
+    setScore({ status: 'idle' });
+    setFusion({ status: 'idle' });
+    setRlRec({ status: 'idle' });
+    setRlUpdate({ status: 'idle' });
+
     refetch({ pair: trimmed });
   };
 
@@ -243,13 +240,6 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
     const headline = `${pairPretty} is ${volPhrase} and ${trendPhrase}.`;
     const subline = `Volatility ${v.label} • Trend ${tLabel} • Execution ${ex.label}`;
 
-    const actionTitle = tLabel === 'Up' ? 'If you trade: wait for a pullback' : tLabel === 'Down' ? 'If you trade: wait for a bounce' : 'If you trade: stay patient';
-    const actionNote =
-      ex.label === 'Wide' ? 'Spreads are wide — avoid market orders.' :
-      v.label === 'Wild' ? 'Volatility is high — size smaller.' :
-      tLabel === 'Sideways' ? 'Sideways market — fewer clean setups.' :
-      'Conditions look reasonable — stay disciplined.';
-
     const explainBullets = [
       tLabel === 'Up'
         ? 'Price has been pushing higher more than it pulls back.'
@@ -287,97 +277,126 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
       confidence,
       headline,
       subline,
-      actionTitle,
-      actionNote,
       explainBullets,
       pairPretty,
     };
   }, [analysis]);
 
+  // ---- Actions: Alpha Oracle / Backtest / Fusion / RL ----
+
   async function askAlphaOracle() {
-    if (!API_RUST_BASE) {
-      setOracle({ status: 'error', message: 'Missing API_RUST_BASE URL' });
-      return;
-    }
-
+    const entry = computed.mid ?? computed.bid ?? computed.ask;
     const eq = safeNum(equity);
-    const openCount = Math.max(0, parseInt(openPositions || '0', 10));
+    const open = Math.max(0, parseInt(openPositions || '0', 10));
 
-    if (!eq || eq <= 0) {
-      setOracle({ status: 'error', message: 'Equity must be a positive number.' });
-      return;
-    }
-
-    // Get price from analysis - ensure we have a valid price
-    const price = computed.mid ?? computed.bid ?? computed.ask;
-    if (!price || price <= 0) {
-      setOracle({ status: 'error', message: 'No valid price data available. Please wait for analysis to complete.' });
-      return;
-    }
-
-    // Use price for entry_price
-    const entry = price;
-
-    // Persist equity
-    AsyncStorage.setItem(EQUITY_STORAGE_KEY, equity);
+    if (!entry) return setOracle({ status: 'error', message: 'No price available yet.' });
+    if (!eq || eq <= 0) return setOracle({ status: 'error', message: 'Equity must be a positive number.' });
 
     setOracle({ status: 'loading' });
 
     try {
-      // Build features from current analysis (use defaults if missing)
-      // For forex pairs, use "price" instead of "price_usd"
-      const features: Record<string, number> = {};
-      features.price = price; // Forex uses "price", not "price_usd"
-      if (computed.vol !== null && computed.vol > 0) {
-        features.volatility = computed.vol;
-      } else {
-        features.volatility = 0.01; // Default 1% volatility
-      }
-
-      const requestBody: any = {
+      const { json, ms } = await postJson('/v1/alpha/signal', {
         symbol: pair,
-        features,
         equity: eq,
         entry_price: entry,
-      };
-
-      // Backend expects open_positions as array of OpenRiskPosition, but we'll send count for now
-      // In production, fetch actual positions from portfolio
-      if (openCount > 0) {
-        // For now, send empty array - backend will handle it
-        requestBody.open_positions = [];
-      }
-
-      const url = `${API_RUST_BASE}/v1/alpha/signal`;
-      console.log('[RustForexWidget] Calling Alpha Oracle:', url);
-      console.log('[RustForexWidget] Request body:', JSON.stringify(requestBody, null, 2));
-      
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
+        open_positions: [],
+        features: {
+          price_usd: entry,
+          volatility: computed.vol ?? 0,
+        },
       });
-      
-      console.log('[RustForexWidget] Response status:', res.status);
-      console.log('[RustForexWidget] Response URL:', res.url);
-
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        const msg =
-          (typeof json?.error === 'string' && json.error) ||
-          (typeof json?.message === 'string' && json.message) ||
-          `Request failed (${res.status})`;
-        setOracle({ status: 'error', message: msg });
-        return;
-      }
-
-      setOracle({ status: 'ready', payload: json as AlphaOracleResponse, timestamp: Date.now() });
+      setOracle({ status: 'ready', payload: json, ms });
     } catch (e: any) {
-      setOracle({ status: 'error', message: e?.message || 'Network error' });
+      setOracle({ status: 'error', message: e?.message || 'Network error', raw: e?.raw });
     }
   }
 
-  // Loading/Error/Empty
+  async function runBacktest() {
+    setBacktest({ status: 'loading' });
+    try {
+      const { json, ms } = await postJson('/v1/backtest/run', {
+        strategy_name: strategy,
+        symbol: pair,
+        signals: [], // In production, this would come from historical data
+        config: null,
+      });
+      setBacktest({ status: 'ready', payload: json, ms });
+    } catch (e: any) {
+      setBacktest({ status: 'error', message: e?.message || 'Backtest error', raw: e?.raw });
+    }
+  }
+
+  async function fetchBacktestScore() {
+    setScore({ status: 'loading' });
+    try {
+      const { json, ms } = await getJson(`/v1/backtest/score/${encodeURIComponent(strategy)}/${encodeURIComponent(pair)}`);
+      setScore({ status: 'ready', payload: json, ms });
+    } catch (e: any) {
+      setScore({ status: 'error', message: e?.message || 'Score error', raw: e?.raw });
+    }
+  }
+
+  async function runFusion() {
+    setFusion({ status: 'loading' });
+    try {
+      const { json, ms } = await postJson('/v1/cross-asset/signal', {
+        primary_asset: pair,
+      });
+      setFusion({ status: 'ready', payload: json, ms });
+    } catch (e: any) {
+      setFusion({ status: 'error', message: e?.message || 'Fusion error', raw: e?.raw });
+    }
+  }
+
+  async function rlRecommend() {
+    setRlRec({ status: 'loading' });
+    try {
+      const { json, ms } = await postJson('/v1/rl/recommend', {
+        user_id: userId,
+        context: {
+          regime_mood: computed.tLabel === 'Up' ? 'Greed' : computed.tLabel === 'Down' ? 'Fear' : 'Neutral',
+          iv_regime: computed.vLabel === 'Calm' ? 'Low' : computed.vLabel === 'Wild' ? 'High' : 'Medium',
+          dte_bucket: '30-60',
+          account_size_tier: 'Medium',
+        },
+        available_strategies: ['fx_orb', 'fx_momentum', 'fx_mean_reversion'],
+      });
+      setRlRec({ status: 'ready', payload: json, ms });
+    } catch (e: any) {
+      setRlRec({ status: 'error', message: e?.message || 'RL recommend error', raw: e?.raw });
+    }
+  }
+
+  async function rlSendReward(reward: number) {
+    setRlUpdate({ status: 'loading' });
+    try {
+      const { json, ms } = await postJson('/v1/rl/update', {
+        reward: {
+          action: {
+            user_id: userId,
+            strategy_name: strategy,
+            symbol: pair,
+            context: {
+              regime_mood: computed.tLabel === 'Up' ? 'Greed' : computed.tLabel === 'Down' ? 'Fear' : 'Neutral',
+              iv_regime: computed.vLabel === 'Calm' ? 'Low' : computed.vLabel === 'Wild' ? 'High' : 'Medium',
+              dte_bucket: '30-60',
+              account_size_tier: 'Medium',
+            },
+            timestamp: new Date().toISOString(),
+          },
+          reward: reward > 0 ? 0.1 : -0.1, // Normalize to -1 to 1 range
+          outcome: reward > 0 ? 'Win' : 'Loss',
+          timestamp: new Date().toISOString(),
+        },
+      });
+      setRlUpdate({ status: 'ready', payload: json, ms });
+    } catch (e: any) {
+      setRlUpdate({ status: 'error', message: e?.message || 'RL update error', raw: e?.raw });
+    }
+  }
+
+  // ---- States ----
+
   if (loading && !analysis) {
     return (
       <View style={[styles.container, isCompact && styles.containerCompact]}>
@@ -388,7 +407,6 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
       </View>
     );
   }
-
   if (error && !analysis) {
     return (
       <View style={[styles.container, isCompact && styles.containerCompact]}>
@@ -400,7 +418,6 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
       </View>
     );
   }
-
   if (!analysis) {
     return (
       <View style={[styles.container, isCompact && styles.containerCompact]}>
@@ -409,7 +426,7 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
     );
   }
 
-  // Compact mode
+  // Compact mode stays simple
   if (isCompact) {
     return (
       <View style={styles.compactWrap}>
@@ -438,50 +455,51 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
     );
   }
 
-  // Large mode - deterministic parsing from root-level response
-  const resp = oracle.status === 'ready' ? oracle.payload : null;
+  // Alpha Oracle response (root-level)
+  const oracleResp = oracle.status === 'ready' ? oracle.payload : null;
+  const alphaScore = oracleResp ? safeNum(oracleResp.alpha_score) : null;
+  const conviction = oracleResp ? String(oracleResp.conviction ?? '') : '';
+  const oneSentence = oracleResp ? String(oracleResp.one_sentence ?? '') : '';
+  const regimeHeadline = oracleResp ? String(oracleResp.regime_headline ?? '') : '';
+  const mlConfidence = oracleResp ? safeNum(oracleResp.ml_confidence) : null;
+  const mlExpl = oracleResp ? String(oracleResp.explanation ?? '') : '';
 
-  const alphaScore = resp?.alpha_score ?? null;
-  const conviction = resp?.conviction ?? '';
-  const oneSentence = resp?.one_sentence ?? '';
-  const regimeHeadline = resp?.regime_headline ?? '';
-  const regimeAction = resp?.regime_action ?? '';
-  const globalMood = resp?.global_mood ?? '';
-  const mlExplanation = resp?.explanation ?? '';
-  const mlConfidence = resp?.ml_confidence ?? null;
+  const qty = oracleResp ? safeNum(oracleResp?.position_sizing?.quantity) : null;
+  const stop = oracleResp ? safeNum(oracleResp?.position_sizing?.stop_loss) : null;
+  const riskUsd = oracleResp ? safeNum(oracleResp?.position_sizing?.risk_usd) : null;
 
-  const qty = resp?.position_sizing?.quantity ?? null;
-  const stopLossPct = resp?.position_sizing?.stop_loss_pct ?? null;
-  const riskUsd = resp?.position_sizing?.dollar_risk ?? null;
-  const targetNotional = resp?.position_sizing?.target_notional ?? null;
-
-  const guardAllow = resp?.risk_guard?.allow ?? null;
-  const guardAdjusted = resp?.risk_guard?.adjusted ?? null;
-  const guardReason = resp?.risk_guard?.reason ?? '';
+  const approved = oracleResp ? oracleResp?.risk_guard?.approved : null;
+  const scale = oracleResp ? safeNum(oracleResp?.risk_guard?.scale) : null;
+  const reason = oracleResp ? String(oracleResp?.risk_guard?.reason ?? '') : '';
 
   const alphaColor = convictionColor(conviction);
   const alphaBarPct = alphaScore !== null ? clamp((alphaScore / 10) * 100, 0, 100) : 0;
 
-  // Jobs-grade "Why" section: 3 bullets (Macro, Micro, Risk)
-  const whyBullets: string[] = [];
-  if (regimeHeadline || globalMood) {
-    whyBullets.push(`Macro: ${regimeHeadline || `${globalMood} market conditions`}`);
-  }
-  if (mlExplanation || mlConfidence !== null) {
-    const microText = mlExplanation || `ML confidence: ${((mlConfidence ?? 0) * 100).toFixed(0)}%`;
-    whyBullets.push(`Micro: ${microText}`);
-  }
-  if (guardAllow === true) {
-    whyBullets.push('Risk: Approved full size');
-  } else if (guardAllow === false && guardReason) {
-    whyBullets.push(`Risk: ${guardReason}`);
-  } else if (riskUsd !== null) {
-    whyBullets.push(`Risk: $${riskUsd.toFixed(2)} at risk`);
-  }
+  // Backtest parsing (unknown shape) — show key fields if present, else raw JSON.
+  const backtestResp = backtest.status === 'ready' ? backtest.payload : null;
+  const btSharpe = backtestResp ? safeNum(backtestResp.sharpe ?? backtestResp.sharpe_ratio) : null;
+  const btWin = backtestResp ? safeNum(backtestResp.win_rate ?? backtestResp.winRate) : null;
+  const btReturn = backtestResp ? safeNum(backtestResp.total_return ?? backtestResp.totalReturn ?? backtestResp.total_return_pct) : null;
 
-  // Professional messaging for neutral/dump states
-  const isNeutralOrDump = conviction.toUpperCase().includes('NEUTRAL') || conviction.toUpperCase().includes('DUMP');
-  const passMessage = isNeutralOrDump ? 'No clean edge right now. Stay patient.' : null;
+  // Score response could be number or object
+  const scoreResp = score.status === 'ready' ? score.payload : null;
+  const scoreVal =
+    scoreResp === null ? null :
+    typeof scoreResp === 'number' ? scoreResp :
+    safeNum(scoreResp.score ?? scoreResp.value ?? scoreResp.overall_score ?? scoreResp.strategy_score);
+
+  // Fusion parsing (unknown shape)
+  const fusionResp = fusion.status === 'ready' ? fusion.payload : null;
+  const fusionSentence = fusionResp ? String(fusionResp.fusion_recommendation?.action ?? fusionResp.action ?? fusionResp.message ?? '') : '';
+  const fusionScore = fusionResp ? safeNum(fusionResp.fusion_recommendation?.confidence ?? fusionResp.confidence ?? fusionResp.score) : null;
+
+  // RL recommend parsing (unknown shape)
+  const rlResp = rlRec.status === 'ready' ? rlRec.payload : null;
+  const rlItems: Array<{ strategy?: string; weight?: number; score?: number; strategy_name?: string }> =
+    Array.isArray(rlResp?.recommended_strategies) ? rlResp.recommended_strategies :
+    Array.isArray(rlResp?.recommendations) ? rlResp.recommendations :
+    Array.isArray(rlResp) ? rlResp :
+    [];
 
   return (
     <View style={styles.container}>
@@ -492,11 +510,7 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
           <Text style={styles.topTitle}>Today's Read</Text>
         </View>
 
-        <TouchableOpacity
-          onPress={() => refetch({ pair })}
-          style={styles.refreshBtn}
-          activeOpacity={0.8}
-        >
+        <TouchableOpacity onPress={() => refetch({ pair })} style={styles.refreshBtn} activeOpacity={0.8}>
           <Icon name="refresh-ccw" size={16} color="#0B0B0F" />
         </TouchableOpacity>
       </View>
@@ -540,284 +554,361 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
         </View>
       </View>
 
-      {/* 3 traffic lights */}
+      {/* 3 lights */}
       <View style={styles.lightsRow}>
         <View style={styles.lightCard}>
           <Text style={styles.lightTitle}>Trend</Text>
           <View style={[styles.pill, { backgroundColor: computed.tColor + '22' }]}>
-            <Text 
-              style={[styles.pillText, { color: computed.tColor }]}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-            >
-              {computed.tLabel}
-            </Text>
+            <Text style={[styles.pillText, { color: computed.tColor }]} numberOfLines={1} adjustsFontSizeToFit>{computed.tLabel}</Text>
           </View>
         </View>
-
         <View style={styles.lightCard}>
           <Text style={styles.lightTitle}>Volatility</Text>
           <View style={[styles.pill, { backgroundColor: computed.vColor + '22' }]}>
-            <Text 
-              style={[styles.pillText, { color: computed.vColor }]}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-            >
-              {computed.vLabel}
-            </Text>
+            <Text style={[styles.pillText, { color: computed.vColor }]} numberOfLines={1} adjustsFontSizeToFit>{computed.vLabel}</Text>
           </View>
         </View>
-
         <View style={styles.lightCard}>
           <Text style={styles.lightTitle}>Execution</Text>
           <View style={[styles.pill, { backgroundColor: computed.exColor + '22' }]}>
-            <Text 
-              style={[styles.pillText, { color: computed.exColor }]}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-            >
-              {computed.exLabel}
-            </Text>
+            <Text style={[styles.pillText, { color: computed.exColor }]} numberOfLines={1} adjustsFontSizeToFit>{computed.exLabel}</Text>
           </View>
         </View>
       </View>
 
-      {/* Alpha Oracle (collapsed by default) */}
+      {/* Alpha Oracle */}
       <TouchableOpacity
         activeOpacity={0.9}
-        onPress={() => {
-          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-          setShowOracle(v => !v);
-        }}
-        style={styles.oracleToggle}
+        onPress={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setShowOracle(v => !v); }}
+        style={styles.toggle}
       >
-        <View style={styles.oracleToggleLeft}>
+        <View style={styles.toggleLeft}>
           <Icon name="zap" size={16} color="#0B0B0F" />
-          <Text style={styles.oracleToggleText}>Alpha Oracle</Text>
-          <View style={styles.oracleMiniBadge}>
-            <Text style={styles.oracleMiniBadgeText}>1 tap</Text>
-          </View>
+          <Text style={styles.toggleText}>Alpha Oracle</Text>
+          <View style={styles.miniBadge}><Text style={styles.miniBadgeText}>1 tap</Text></View>
         </View>
         <Icon name={showOracle ? 'chevron-up' : 'chevron-down'} size={18} color="#0B0B0F" />
       </TouchableOpacity>
 
       {showOracle && (
-        <View style={styles.oracleCard}>
-          <Text style={styles.oracleHeadline}>
-            Turn the advanced system into one clear move.
-          </Text>
+        <View style={styles.panel}>
+          <Text style={styles.panelHint}>One sentence. One move. Risk checked.</Text>
 
-          <View style={styles.oracleInputsRow}>
-            <View style={styles.oracleInputWrap}>
-              <Text style={styles.oracleLabel}>Equity</Text>
-              <View style={styles.oracleInputRow}>
-                <Text style={styles.oraclePrefix}>$</Text>
-                <TextInput
-                  value={equity}
-                  onChangeText={setEquity}
-                  keyboardType="numeric"
-                  style={styles.oracleInput}
-                  placeholder="25000"
-                />
+          <View style={styles.inputRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.smallLabel}>Equity</Text>
+              <View style={styles.moneyInputRow}>
+                <Text style={styles.moneyPrefix}>$</Text>
+                <TextInput value={equity} onChangeText={setEquity} keyboardType="numeric" style={styles.moneyInput} placeholder="25000" />
               </View>
             </View>
-
-            <View style={styles.oracleInputWrap}>
-              <Text style={styles.oracleLabel}>Open pos</Text>
-              <TextInput
-                value={openPositions}
-                onChangeText={setOpenPositions}
-                keyboardType="numeric"
-                style={styles.oracleInputSolo}
-                placeholder="0"
-              />
+            <View style={{ width: 110 }}>
+              <Text style={styles.smallLabel}>Open pos</Text>
+              <TextInput value={openPositions} onChangeText={setOpenPositions} keyboardType="numeric" style={styles.input} placeholder="0" />
             </View>
           </View>
 
-          <TouchableOpacity
-            onPress={askAlphaOracle}
-            activeOpacity={0.88}
-            style={styles.oracleBtn}
-            disabled={oracle.status === 'loading'}
-          >
+          <TouchableOpacity onPress={askAlphaOracle} activeOpacity={0.88} style={styles.primaryBtn}>
             {oracle.status === 'loading' ? (
               <>
                 <ActivityIndicator size="small" color="#FFFFFF" />
-                <Text style={[styles.oracleBtnText, { marginLeft: 10 }]}>Asking…</Text>
+                <Text style={[styles.primaryBtnText, { marginLeft: 10 }]}>Asking…</Text>
               </>
             ) : (
               <>
-                <Icon name="zap" size={16} color="#FFFFFF" />
-                <Text style={styles.oracleBtnText}>Ask Alpha Oracle</Text>
+                <Icon name="sparkles" size={16} color="#FFFFFF" />
+                <Text style={styles.primaryBtnText}>Ask Alpha Oracle</Text>
               </>
             )}
           </TouchableOpacity>
 
           {oracle.status === 'error' && (
-            <View style={styles.oracleError}>
+            <View style={styles.errorBox}>
               <Icon name="alert-circle" size={16} color="#EF4444" />
-              <Text style={styles.oracleErrorText}>{oracle.message}</Text>
-              <TouchableOpacity
-                onPress={askAlphaOracle}
-                style={styles.oracleRetryBtn}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.oracleRetryText}>Tap to retry</Text>
-              </TouchableOpacity>
+              <Text style={styles.errorText}>{oracle.message}</Text>
             </View>
           )}
 
           {oracle.status === 'ready' && (
-            <View style={styles.oracleResult}>
-              {/* Timestamp */}
-              <Text style={styles.oracleTimestamp}>
-                Updated {formatTimeAgo(oracle.timestamp)}
-              </Text>
+            <View style={{ marginTop: 12 }}>
+              <Text style={styles.bigSentence}>{oneSentence || 'Oracle response received.'}</Text>
 
-              {/* One sentence */}
-              <Text style={styles.oracleOneSentence}>
-                {oneSentence || 'Oracle response received.'}
-              </Text>
-
-              {/* Pass message for neutral/dump */}
-              {passMessage && (
-                <View style={styles.oraclePassMessage}>
-                  <Text style={styles.oraclePassText}>{passMessage}</Text>
-                </View>
-              )}
-
-              {/* Score + conviction */}
-              <View style={styles.oracleScoreRow}>
-                <View style={styles.oracleScoreLeft}>
-                  <Text style={styles.oracleScoreLabel}>Alpha score</Text>
-                  <Text style={styles.oracleScoreValue}>
+              <View style={styles.scoreRow}>
+                <View>
+                  <Text style={styles.smallLabel}>Alpha score</Text>
+                  <Text style={styles.scoreValue}>
                     {alphaScore !== null ? alphaScore.toFixed(1) : '—'}
-                    <Text style={styles.oracleScoreOutOf}> / 10</Text>
+                    <Text style={styles.scoreOutOf}> / 10</Text>
                   </Text>
                 </View>
-
-                <View style={[styles.oracleConvictionPill, { backgroundColor: alphaColor + '22' }]}>
-                  <Text style={[styles.oracleConvictionText, { color: alphaColor }]}>
-                    {(conviction || 'NEUTRAL').toUpperCase()}
-                  </Text>
+                <View style={[styles.convictionPill, { backgroundColor: alphaColor + '22' }]}>
+                  <Text style={[styles.convictionText, { color: alphaColor }]}>{(conviction || 'NEUTRAL').toUpperCase()}</Text>
                 </View>
               </View>
 
-              <View style={styles.oracleBarTrack}>
-                <View style={[styles.oracleBarFill, { width: `${alphaBarPct}%`, backgroundColor: alphaColor }]} />
+              <View style={styles.barTrack}>
+                <View style={[styles.barFill, { width: `${alphaBarPct}%` }]} />
               </View>
 
-              {/* Sizing + guard */}
-              {!isNeutralOrDump && (
-                <>
-                  <View style={styles.oracleGrid}>
-                    <View style={styles.oracleCell}>
-                      <Text style={styles.oracleCellLabel}>Qty</Text>
-                      <Text style={styles.oracleCellValue}>{qty !== null ? qty.toFixed(4) : '—'}</Text>
-                    </View>
-                    <View style={styles.oracleCell}>
-                      <Text style={styles.oracleCellLabel}>Stop</Text>
-                      <Text style={styles.oracleCellValue}>
-                        {stopLossPct !== null && computed.mid ? `${(computed.mid * (1 - stopLossPct)).toFixed(5)}` : '—'}
-                      </Text>
-                    </View>
-                    <View style={styles.oracleCell}>
-                      <Text style={styles.oracleCellLabel}>Risk</Text>
-                      <Text style={styles.oracleCellValue}>{riskUsd !== null ? `$${riskUsd.toFixed(2)}` : '—'}</Text>
-                    </View>
-                  </View>
-
-                  {targetNotional !== null && (
-                    <View style={styles.oracleNotional}>
-                      <Text style={styles.oracleNotionalLabel}>Target size</Text>
-                      <Text style={styles.oracleNotionalValue}>${targetNotional.toFixed(2)}</Text>
-                    </View>
-                  )}
-
-                  <View style={styles.oracleGuardRow}>
-                    <View style={[styles.oracleGuardDot, { backgroundColor: guardAllow === true ? '#10B981' : guardAllow === false ? '#EF4444' : '#6B7280' }]} />
-                    <Text style={styles.oracleGuardText}>
-                      {guardAllow === true ? 'RiskGuard: approved' : guardAllow === false ? 'RiskGuard: scaled/blocked' : 'RiskGuard: —'}
-                    </Text>
-                  </View>
-
-                  {guardAllow === false && guardReason && (
-                    <Text style={styles.oracleGuardReason}>
-                      RiskGuard reduced size to protect your account.
-                    </Text>
-                  )}
-                </>
-              )}
-
-              {/* Why section - Jobs-grade 3 bullets */}
-              {whyBullets.length > 0 && (
-                <View style={styles.oracleWhy}>
-                  <Text style={styles.oracleWhyTitle}>Why?</Text>
-                  {whyBullets.map((bullet, idx) => (
-                    <View key={idx} style={styles.oracleWhyItem}>
-                      <View style={styles.oracleWhyDot} />
-                      <Text style={styles.oracleWhyText}>{bullet}</Text>
-                    </View>
-                  ))}
+              <View style={styles.grid3}>
+                <View style={styles.cell}>
+                  <Text style={styles.cellLabel}>Qty</Text>
+                  <Text style={styles.cellValue}>{qty !== null ? qty.toFixed(4) : '—'}</Text>
                 </View>
-              )}
+                <View style={styles.cell}>
+                  <Text style={styles.cellLabel}>Stop</Text>
+                  <Text style={styles.cellValue}>{stop !== null ? stop.toFixed(5) : '—'}</Text>
+                </View>
+                <View style={styles.cell}>
+                  <Text style={styles.cellLabel}>Risk</Text>
+                  <Text style={styles.cellValue}>{riskUsd !== null ? `$${riskUsd.toFixed(2)}` : '—'}</Text>
+                </View>
+              </View>
 
-              <Text style={styles.disclaimer}>
-                Educational insights — not financial advice.
-              </Text>
+              <View style={styles.guardRow}>
+                <View style={[styles.guardDot, { backgroundColor: approved === true ? '#10B981' : approved === false ? '#EF4444' : '#6B7280' }]} />
+                <Text style={styles.guardText}>
+                  {approved === true ? 'RiskGuard: approved' : approved === false ? 'RiskGuard: scaled/blocked' : 'RiskGuard: —'}
+                  {scale !== null ? ` • scale ${scale.toFixed(2)}x` : ''}
+                </Text>
+              </View>
+              {!!reason && <Text style={styles.guardReason}>{reason}</Text>}
+
+              {/* WHY (Jobs-grade: 3 bullets max) */}
+              <View style={styles.whyBox}>
+                {!!regimeHeadline && <Text style={styles.whyLine}>• Macro: {regimeHeadline}</Text>}
+                {!!mlExpl && <Text style={styles.whyLine}>• Micro: {mlExpl}{mlConfidence !== null ? ` (${(mlConfidence * 100).toFixed(0)}%)` : ''}</Text>}
+                <Text style={styles.whyLine}>• Risk: {approved === true ? 'Guardrails OK' : approved === false ? 'Guardrails reduced exposure' : '—'}</Text>
+              </View>
+
+              {/* RL feedback: trains the meta-layer without making it scary */}
+              <View style={styles.feedbackRow}>
+                <TouchableOpacity style={styles.feedbackBtn} onPress={() => rlSendReward(+1)} activeOpacity={0.85}>
+                  <Icon name="thumbs-up" size={16} color="#0B0B0F" />
+                  <Text style={styles.feedbackText}>Helpful</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.feedbackBtn} onPress={() => rlSendReward(-1)} activeOpacity={0.85}>
+                  <Icon name="thumbs-down" size={16} color="#0B0B0F" />
+                  <Text style={styles.feedbackText}>Not helpful</Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.disclaimer}>Educational insights — not financial advice.</Text>
             </View>
           )}
         </View>
       )}
 
-      {/* Explain drawer */}
+      {/* Backtest: Prove it */}
       <TouchableOpacity
         activeOpacity={0.9}
-        onPress={() => {
-          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-          setShowExplain(v => !v);
-        }}
-        style={styles.explainToggle}
+        onPress={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setShowBacktest(v => !v); }}
+        style={styles.toggle}
       >
-        <View style={styles.explainToggleLeft}>
+        <View style={styles.toggleLeft}>
+          <Icon name="check-circle" size={16} color="#0B0B0F" />
+          <Text style={styles.toggleText}>Prove it</Text>
+          <View style={styles.miniBadgeLight}><Text style={styles.miniBadgeLightText}>backtest</Text></View>
+        </View>
+        <Icon name={showBacktest ? 'chevron-up' : 'chevron-down'} size={18} color="#0B0B0F" />
+      </TouchableOpacity>
+
+      {showBacktest && (
+        <View style={styles.panel}>
+          <Text style={styles.panelHint}>Trust comes from receipts.</Text>
+
+          <Text style={styles.smallLabel}>Strategy</Text>
+          <TextInput value={strategy} onChangeText={setStrategy} style={styles.input} placeholder="fx_orb" />
+
+          <View style={styles.twoBtnRow}>
+            <TouchableOpacity onPress={runBacktest} style={styles.secondaryBtn} activeOpacity={0.85}>
+              {backtest.status === 'loading' ? <ActivityIndicator size="small" color="#0B0B0F" /> : <Icon name="play" size={16} color="#0B0B0F" />}
+              <Text style={styles.secondaryBtnText}>Run backtest</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={fetchBacktestScore} style={styles.secondaryBtn} activeOpacity={0.85}>
+              {score.status === 'loading' ? <ActivityIndicator size="small" color="#0B0B0F" /> : <Icon name="bar-chart-2" size={16} color="#0B0B0F" />}
+              <Text style={styles.secondaryBtnText}>Get score</Text>
+            </TouchableOpacity>
+          </View>
+
+          {score.status === 'ready' && (
+            <View style={styles.scoreBox}>
+              <Text style={styles.smallLabel}>Strategy score</Text>
+              <Text style={styles.scoreBig}>{scoreVal !== null ? scoreVal.toFixed(2) : JSON.stringify(scoreResp)}</Text>
+              {score.ms ? <Text style={styles.mutedTiny}>Fetched in {score.ms}ms</Text> : null}
+            </View>
+          )}
+
+          {backtest.status === 'ready' && (
+            <View style={styles.btBox}>
+              <View style={styles.grid3}>
+                <View style={styles.cell}>
+                  <Text style={styles.cellLabel}>Sharpe</Text>
+                  <Text style={styles.cellValue}>{btSharpe !== null ? btSharpe.toFixed(2) : '—'}</Text>
+                </View>
+                <View style={styles.cell}>
+                  <Text style={styles.cellLabel}>Win rate</Text>
+                  <Text style={styles.cellValue}>{btWin !== null ? `${(btWin * 100).toFixed(0)}%` : '—'}</Text>
+                </View>
+                <View style={styles.cell}>
+                  <Text style={styles.cellLabel}>Return</Text>
+                  <Text style={styles.cellValue}>{btReturn !== null ? `${(btReturn * 100).toFixed(0)}%` : '—'}</Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                onPress={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setShowDetails(v => !v); }}
+                style={styles.detailsToggle}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.detailsToggleText}>{showDetails ? 'Hide raw' : 'Show raw'}</Text>
+                <Icon name={showDetails ? 'minus' : 'plus'} size={16} color="#111827" />
+              </TouchableOpacity>
+
+              {showDetails && (
+                <Text style={styles.mono}>
+                  {JSON.stringify(backtestResp, null, 2)}
+                </Text>
+              )}
+
+              {backtest.ms ? <Text style={styles.mutedTiny}>Backtest in {backtest.ms}ms</Text> : null}
+            </View>
+          )}
+
+          {backtest.status === 'error' && (
+            <View style={styles.errorBox}>
+              <Icon name="alert-circle" size={16} color="#EF4444" />
+              <Text style={styles.errorText}>{backtest.message}</Text>
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* Cross-asset fusion */}
+      <TouchableOpacity
+        activeOpacity={0.9}
+        onPress={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setShowFusion(v => !v); }}
+        style={styles.toggle}
+      >
+        <View style={styles.toggleLeft}>
+          <Icon name="shuffle" size={16} color="#0B0B0F" />
+          <Text style={styles.toggleText}>Across markets</Text>
+          <View style={styles.miniBadgeLight}><Text style={styles.miniBadgeLightText}>fusion</Text></View>
+        </View>
+        <Icon name={showFusion ? 'chevron-up' : 'chevron-down'} size={18} color="#0B0B0F" />
+      </TouchableOpacity>
+
+      {showFusion && (
+        <View style={styles.panel}>
+          <Text style={styles.panelHint}>See if the bigger world agrees.</Text>
+
+          <TouchableOpacity onPress={runFusion} style={styles.secondaryBtnFull} activeOpacity={0.85}>
+            {fusion.status === 'loading' ? <ActivityIndicator size="small" color="#0B0B0F" /> : <Icon name="activity" size={16} color="#0B0B0F" />}
+            <Text style={styles.secondaryBtnText}>Generate fusion signal</Text>
+          </TouchableOpacity>
+
+          {fusion.status === 'ready' && (
+            <View style={styles.fusionBox}>
+              <Text style={styles.bigSentence}>
+                {fusionSentence || 'Fusion signal received.'}
+              </Text>
+              <View style={styles.guardRow}>
+                <View style={[styles.guardDot, { backgroundColor: '#0B0B0F' }]} />
+                <Text style={styles.guardText}>
+                  {fusionScore !== null ? `Fusion score: ${fusionScore.toFixed(2)}` : 'Fusion score: —'}
+                </Text>
+              </View>
+              {fusion.ms ? <Text style={styles.mutedTiny}>Computed in {fusion.ms}ms</Text> : null}
+              <Text style={styles.disclaimer}>Educational insights — not financial advice.</Text>
+            </View>
+          )}
+
+          {fusion.status === 'error' && (
+            <View style={styles.errorBox}>
+              <Icon name="alert-circle" size={16} color="#EF4444" />
+              <Text style={styles.errorText}>{fusion.message}</Text>
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* RL: personalize */}
+      <TouchableOpacity
+        activeOpacity={0.9}
+        onPress={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setShowRL(v => !v); }}
+        style={styles.toggle}
+      >
+        <View style={styles.toggleLeft}>
+          <Icon name="cpu" size={16} color="#0B0B0F" />
+          <Text style={styles.toggleText}>Personalize</Text>
+          <View style={styles.miniBadgeLight}><Text style={styles.miniBadgeLightText}>RL</Text></View>
+        </View>
+        <Icon name={showRL ? 'chevron-up' : 'chevron-down'} size={18} color="#0B0B0F" />
+      </TouchableOpacity>
+
+      {showRL && (
+        <View style={styles.panel}>
+          <Text style={styles.panelHint}>Learns what works for you — in your market context.</Text>
+
+          <Text style={styles.smallLabel}>User</Text>
+          <TextInput value={userId} onChangeText={setUserId} style={styles.input} placeholder="demo_user" />
+
+          <TouchableOpacity onPress={rlRecommend} style={styles.secondaryBtnFull} activeOpacity={0.85}>
+            {rlRec.status === 'loading' ? <ActivityIndicator size="small" color="#0B0B0F" /> : <Icon name="star" size={16} color="#0B0B0F" />}
+            <Text style={styles.secondaryBtnText}>Get recommendations</Text>
+          </TouchableOpacity>
+
+          {rlRec.status === 'ready' && (
+            <View style={styles.rlBox}>
+              <Text style={styles.smallLabel}>Top picks</Text>
+              {rlItems.length === 0 ? (
+                <Text style={styles.muted}>No recommendations returned.</Text>
+              ) : (
+                rlItems.slice(0, 3).map((it, idx) => (
+                  <View key={`${idx}-${it.strategy_name ?? it.strategy ?? idx}`} style={styles.rlRow}>
+                    <Text style={styles.rlStrategy}>{it.strategy_name ?? it.strategy ?? '—'}</Text>
+                    <Text style={styles.rlScore}>{safeNum(it.weight ?? it.score)?.toFixed(2) ?? '—'}</Text>
+                  </View>
+                ))
+              )}
+              {rlRec.ms ? <Text style={styles.mutedTiny}>Computed in {rlRec.ms}ms</Text> : null}
+            </View>
+          )}
+
+          {rlUpdate.status === 'loading' && (
+            <Text style={styles.mutedTiny}>Saving feedback…</Text>
+          )}
+          {rlUpdate.status === 'error' && (
+            <View style={styles.errorBox}>
+              <Icon name="alert-circle" size={16} color="#EF4444" />
+              <Text style={styles.errorText}>{rlUpdate.message}</Text>
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* Explain */}
+      <TouchableOpacity
+        activeOpacity={0.9}
+        onPress={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setShowExplain(v => !v); }}
+        style={styles.toggle}
+      >
+        <View style={styles.toggleLeft}>
           <Icon name="info" size={16} color="#0B0B0F" />
-          <Text style={styles.explainToggleText}>Explain it simply</Text>
+          <Text style={styles.toggleText}>Explain it simply</Text>
         </View>
         <Icon name={showExplain ? 'chevron-up' : 'chevron-down'} size={18} color="#0B0B0F" />
       </TouchableOpacity>
 
       {showExplain && (
-        <View style={styles.explainCard}>
+        <View style={styles.panel}>
           {computed.explainBullets.map((b, idx) => (
             <View key={`${idx}-${b}`} style={styles.bulletRow}>
               <View style={styles.bulletDot} />
               <Text style={styles.bulletText}>{b}</Text>
             </View>
           ))}
-
-          <TouchableOpacity
-            onPress={() => {
-              LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-              setShowDetails(v => !v);
-            }}
-            style={styles.detailsToggle}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.detailsToggleText}>{showDetails ? 'Hide details' : 'Show details'}</Text>
-            <Icon name={showDetails ? 'minus' : 'plus'} size={16} color="#111827" />
-          </TouchableOpacity>
-
-          {showDetails && (
-            <View style={styles.detailsBox}>
-              <Text style={styles.detailLine}><Text style={styles.detailKey}>Pair: </Text>{computed.pairPretty}</Text>
-              <Text style={styles.detailLine}><Text style={styles.detailKey}>Trend raw: </Text>{analysis.trend ?? '—'}</Text>
-              <Text style={styles.detailLine}><Text style={styles.detailKey}>Volatility raw: </Text>{computed.vol !== null ? `${(computed.vol * 100).toFixed(3)}%` : '—'}</Text>
-              <Text style={styles.detailLine}><Text style={styles.detailKey}>Support: </Text>{computed.support !== null ? computed.support.toFixed(5) : '—'}</Text>
-              <Text style={styles.detailLine}><Text style={styles.detailKey}>Resistance: </Text>{computed.resistance !== null ? computed.resistance.toFixed(5) : '—'}</Text>
-              <Text style={styles.detailLine}><Text style={styles.detailKey}>Timestamp: </Text>{analysis.timestamp ?? '—'}</Text>
-            </View>
-          )}
-
           <Text style={styles.disclaimer}>Educational insights — not financial advice.</Text>
         </View>
       )}
@@ -826,44 +917,23 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
 }
 
 const styles = StyleSheet.create({
-  container: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#F1F1F4',
-  },
-  containerCompact: {
-    padding: 0,
-    borderWidth: 0,
-    backgroundColor: 'transparent',
-  },
+  container: { backgroundColor: '#FFFFFF', borderRadius: 18, padding: 16, borderWidth: 1, borderColor: '#F1F1F4' },
+  containerCompact: { padding: 0, borderWidth: 0, backgroundColor: 'transparent' },
 
   skeletonRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
   skeletonText: { marginLeft: 10, color: '#52525B', fontWeight: '600' },
-
   inlineHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   inlineHeaderText: { fontSize: 14, fontWeight: '800', color: '#111827' },
   muted: { marginTop: 6, color: '#71717A', fontWeight: '600' },
+  mutedTiny: { marginTop: 8, color: '#A1A1AA', fontWeight: '700', fontSize: 11 },
 
-  compactWrap: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: '#F2F2F6',
-  },
+  compactWrap: { backgroundColor: '#FFFFFF', borderRadius: 14, padding: 10, borderWidth: 1, borderColor: '#F2F2F6' },
   compactTop: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
   compactPair: { fontSize: 13, fontWeight: '900', color: '#0B0B0F' },
   compactPrices: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
   compactPriceItem: {
-    flex: 1,
-    backgroundColor: '#FAFAFB',
-    borderRadius: 12,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderWidth: 1,
-    borderColor: '#F1F1F4',
+    flex: 1, backgroundColor: '#FAFAFB', borderRadius: 12, paddingVertical: 8, paddingHorizontal: 10,
+    borderWidth: 1, borderColor: '#F1F1F4',
   },
   compactLabel: { fontSize: 10, color: '#71717A', fontWeight: '700' },
   compactValue: { marginTop: 2, fontSize: 13, fontWeight: '900', color: '#0B0B0F' },
@@ -887,16 +957,15 @@ const styles = StyleSheet.create({
   searchLabel: { fontSize: 12, color: '#71717A', fontWeight: '700', marginBottom: 8 },
   searchRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   searchInput: {
-    flex: 1, height: 44, backgroundColor: '#FFFFFF',
-    borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 14,
-    paddingHorizontal: 14, fontSize: 14, fontWeight: '700', color: '#0B0B0F',
+    flex: 1, height: 44, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5E7EB',
+    borderRadius: 14, paddingHorizontal: 14, fontSize: 14, fontWeight: '700', color: '#0B0B0F',
   },
   searchButton: { width: 44, height: 44, backgroundColor: '#0B0B0F', borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
 
   prices: { marginTop: 14, flexDirection: 'row', gap: 10 },
   priceCard: {
-    flex: 1, backgroundColor: '#FAFAFB', borderRadius: 14,
-    paddingVertical: 12, paddingHorizontal: 12, borderWidth: 1, borderColor: '#F1F1F4',
+    flex: 1, backgroundColor: '#FAFAFB', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 12,
+    borderWidth: 1, borderColor: '#F1F1F4',
   },
   priceLabel: { fontSize: 11, color: '#71717A', fontWeight: '800' },
   priceValue: { marginTop: 5, fontSize: 15, fontWeight: '900', color: '#0B0B0F' },
@@ -904,23 +973,10 @@ const styles = StyleSheet.create({
   lightsRow: { marginTop: 12, flexDirection: 'row', gap: 10 },
   lightCard: { flex: 1, backgroundColor: '#FFFFFF', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: '#F1F1F4' },
   lightTitle: { fontSize: 11, color: '#71717A', fontWeight: '900', marginBottom: 8 },
-  pill: { 
-    alignSelf: 'flex-start', 
-    paddingHorizontal: 12, 
-    paddingVertical: 6, 
-    borderRadius: 999,
-    minWidth: 70,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pillText: { 
-    fontSize: 13, 
-    fontWeight: '900',
-    textAlign: 'center',
-  },
+  pill: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 },
+  pillText: { fontSize: 13, fontWeight: '900' },
 
-  // Alpha Oracle
-  oracleToggle: {
+  toggle: {
     marginTop: 12,
     backgroundColor: '#FAFAFB',
     borderRadius: 14,
@@ -932,44 +988,21 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  oracleToggleLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  oracleToggleText: { fontSize: 13, fontWeight: '900', color: '#0B0B0F' },
-  oracleMiniBadge: {
-    marginLeft: 6,
-    backgroundColor: '#0B0B0F',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
-  },
-  oracleMiniBadgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '900' },
+  toggleLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  toggleText: { fontSize: 13, fontWeight: '900', color: '#0B0B0F' },
 
-  oracleCard: {
-    marginTop: 10,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#F1F1F4',
-  },
-  oracleHeadline: { fontSize: 12, color: '#52525B', fontWeight: '800', lineHeight: 18 },
+  miniBadge: { backgroundColor: '#0B0B0F', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, marginLeft: 6 },
+  miniBadgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '900' },
+  miniBadgeLight: { backgroundColor: '#EDEDF2', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, marginLeft: 6 },
+  miniBadgeLightText: { color: '#0B0B0F', fontSize: 10, fontWeight: '900' },
 
-  oracleInputsRow: { marginTop: 12, flexDirection: 'row', gap: 10 },
-  oracleInputWrap: { flex: 1 },
-  oracleLabel: { fontSize: 11, color: '#71717A', fontWeight: '900', marginBottom: 6 },
-  oracleInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FAFAFB',
-    borderWidth: 1,
-    borderColor: '#F1F1F4',
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    height: 44,
-    gap: 8,
-  },
-  oraclePrefix: { fontSize: 13, fontWeight: '900', color: '#0B0B0F' },
-  oracleInput: { flex: 1, height: 44, fontSize: 13, fontWeight: '900', color: '#0B0B0F' },
-  oracleInputSolo: {
+  panel: { marginTop: 10, backgroundColor: '#FFFFFF', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: '#F1F1F4' },
+  panelHint: { fontSize: 12, color: '#52525B', fontWeight: '800', lineHeight: 18 },
+
+  inputRow: { marginTop: 12, flexDirection: 'row', gap: 10, alignItems: 'flex-end' },
+  smallLabel: { fontSize: 11, color: '#71717A', fontWeight: '900', marginBottom: 6 },
+
+  input: {
     height: 44,
     backgroundColor: '#FAFAFB',
     borderWidth: 1,
@@ -980,29 +1013,59 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#0B0B0F',
   },
+  moneyInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FAFAFB',
+    borderWidth: 1,
+    borderColor: '#F1F1F4',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    height: 44,
+    gap: 8,
+  },
+  moneyPrefix: { fontSize: 13, fontWeight: '900', color: '#0B0B0F' },
+  moneyInput: { flex: 1, height: 44, fontSize: 13, fontWeight: '900', color: '#0B0B0F' },
 
-  oracleBtn: {
+  primaryBtn: {
     marginTop: 12,
-    height: 50,
+    height: 46,
     borderRadius: 14,
     backgroundColor: '#0B0B0F',
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
   },
-  oracleBtnDisabled: {
-    backgroundColor: '#9CA3AF',
-    opacity: 0.8,
-  },
-  oracleBtnText: { marginLeft: 10, color: '#FFFFFF', fontWeight: '900', fontSize: 14 },
-  oracleBtnTextDisabled: { color: '#FFFFFF' },
+  primaryBtnText: { marginLeft: 10, color: '#FFFFFF', fontWeight: '900', fontSize: 13 },
 
-  oracleError: {
+  twoBtnRow: { marginTop: 12, flexDirection: 'row', gap: 10 },
+  secondaryBtn: {
+    flex: 1,
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: '#FAFAFB',
+    borderWidth: 1,
+    borderColor: '#F1F1F4',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 10,
+  },
+  secondaryBtnFull: {
+    marginTop: 12,
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: '#FAFAFB',
+    borderWidth: 1,
+    borderColor: '#F1F1F4',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 10,
+  },
+  secondaryBtnText: { fontWeight: '900', color: '#0B0B0F', fontSize: 13 },
+
+  errorBox: {
     marginTop: 12,
     flexDirection: 'row',
     alignItems: 'center',
@@ -1013,53 +1076,22 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 14,
   },
-  oracleErrorText: { flex: 1, color: '#B91C1C', fontWeight: '800', fontSize: 12 },
-  oracleRetryBtn: {
-    marginTop: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    backgroundColor: '#EF4444',
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-  },
-  oracleRetryText: { color: '#FFFFFF', fontWeight: '900', fontSize: 11 },
+  errorText: { flex: 1, color: '#B91C1C', fontWeight: '800', fontSize: 12 },
 
-  oracleResult: { marginTop: 12 },
-  oracleTimestamp: { fontSize: 10, color: '#A1A1AA', fontWeight: '700', marginBottom: 8 },
-  oracleOneSentence: { fontSize: 14, fontWeight: '900', color: '#0B0B0F', lineHeight: 20 },
-  oraclePassMessage: {
-    marginTop: 10,
-    padding: 12,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  oraclePassText: { fontSize: 13, color: '#52525B', fontWeight: '700', lineHeight: 18 },
+  bigSentence: { fontSize: 14, fontWeight: '900', color: '#0B0B0F', lineHeight: 20 },
 
-  oracleScoreRow: { marginTop: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 },
-  oracleScoreLeft: {},
-  oracleScoreLabel: { fontSize: 11, color: '#71717A', fontWeight: '900' },
-  oracleScoreValue: { marginTop: 4, fontSize: 18, fontWeight: '900', color: '#0B0B0F' },
-  oracleScoreOutOf: { fontSize: 12, fontWeight: '900', color: '#71717A' },
+  scoreRow: { marginTop: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 },
+  scoreValue: { marginTop: 2, fontSize: 18, fontWeight: '900', color: '#0B0B0F' },
+  scoreOutOf: { fontSize: 12, fontWeight: '900', color: '#71717A' },
 
-  oracleConvictionPill: { paddingHorizontal: 10, paddingVertical: 7, borderRadius: 999 },
-  oracleConvictionText: { fontSize: 11, fontWeight: '900', letterSpacing: 0.5 },
+  convictionPill: { paddingHorizontal: 10, paddingVertical: 7, borderRadius: 999 },
+  convictionText: { fontSize: 11, fontWeight: '900', letterSpacing: 0.5 },
 
-  oracleBarTrack: {
-    marginTop: 10,
-    height: 10,
-    backgroundColor: '#F1F1F4',
-    borderRadius: 999,
-    overflow: 'hidden',
-  },
-  oracleBarFill: {
-    height: 10,
-    borderRadius: 999,
-  },
+  barTrack: { marginTop: 10, height: 10, backgroundColor: '#F1F1F4', borderRadius: 999, overflow: 'hidden' },
+  barFill: { height: 10, backgroundColor: '#0B0B0F', borderRadius: 999 },
 
-  oracleGrid: { marginTop: 12, flexDirection: 'row', gap: 10 },
-  oracleCell: {
+  grid3: { marginTop: 12, flexDirection: 'row', gap: 10 },
+  cell: {
     flex: 1,
     backgroundColor: '#FAFAFB',
     borderWidth: 1,
@@ -1068,72 +1100,56 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
   },
-  oracleCellLabel: { fontSize: 10, color: '#71717A', fontWeight: '900' },
-  oracleCellValue: { marginTop: 4, fontSize: 12, color: '#0B0B0F', fontWeight: '900' },
+  cellLabel: { fontSize: 10, color: '#71717A', fontWeight: '900' },
+  cellValue: { marginTop: 4, fontSize: 12, color: '#0B0B0F', fontWeight: '900' },
 
-  oracleNotional: {
-    marginTop: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    backgroundColor: '#F8F9FF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8FF',
-  },
-  oracleNotionalLabel: { fontSize: 11, color: '#69707F', fontWeight: '900' },
-  oracleNotionalValue: { marginTop: 4, fontSize: 14, fontWeight: '900', color: '#1F1F1F' },
+  guardRow: { marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  guardDot: { width: 10, height: 10, borderRadius: 5 },
+  guardText: { color: '#52525B', fontWeight: '800', fontSize: 12 },
+  guardReason: { marginTop: 6, color: '#71717A', fontWeight: '800', fontSize: 12, lineHeight: 18 },
 
-  oracleGuardRow: { marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  oracleGuardDot: { width: 10, height: 10, borderRadius: 5 },
-  oracleGuardText: { color: '#52525B', fontWeight: '800', fontSize: 12 },
-  oracleGuardReason: { marginTop: 6, color: '#71717A', fontWeight: '800', fontSize: 12, lineHeight: 18 },
-
-  oracleWhy: {
-    marginTop: 14,
-    padding: 12,
-    backgroundColor: '#FAFAFB',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#F1F1F4',
-  },
-  oracleWhyTitle: { fontSize: 12, fontWeight: '900', color: '#0B0B0F', marginBottom: 8 },
-  oracleWhyItem: { flexDirection: 'row', gap: 10, marginBottom: 8, alignItems: 'flex-start' },
-  oracleWhyDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#0B0B0F', marginTop: 6 },
-  oracleWhyText: { flex: 1, fontSize: 12, color: '#52525B', fontWeight: '700', lineHeight: 18 },
-
-  // Explain drawer
-  explainToggle: {
+  whyBox: {
     marginTop: 12,
     backgroundColor: '#FAFAFB',
+    borderWidth: 1,
+    borderColor: '#F1F1F4',
+    borderRadius: 14,
+    padding: 10,
+  },
+  whyLine: { fontSize: 12, color: '#52525B', fontWeight: '800', lineHeight: 18 },
+
+  feedbackRow: { marginTop: 12, flexDirection: 'row', gap: 10 },
+  feedbackBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#FAFAFB',
+    borderWidth: 1,
+    borderColor: '#F1F1F4',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 10,
+  },
+  feedbackText: { fontWeight: '900', color: '#0B0B0F', fontSize: 13 },
+
+  scoreBox: {
+    marginTop: 12,
+    backgroundColor: '#FFFFFF',
     borderRadius: 14,
     borderWidth: 1,
     borderColor: '#F1F1F4',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    padding: 12,
   },
-  explainToggleLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  explainToggleText: { fontSize: 13, fontWeight: '900', color: '#0B0B0F' },
-  explainCard: {
-    marginTop: 10,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#F1F1F4',
-  },
-  bulletRow: { flexDirection: 'row', gap: 10, marginBottom: 10, alignItems: 'flex-start' },
-  bulletDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#0B0B0F', marginTop: 6 },
-  bulletText: { flex: 1, fontSize: 12, color: '#52525B', fontWeight: '700', lineHeight: 18 },
+  scoreBig: { marginTop: 4, fontSize: 22, fontWeight: '900', color: '#0B0B0F' },
 
+  btBox: { marginTop: 12 },
   detailsToggle: {
-    marginTop: 2,
+    marginTop: 12,
     paddingVertical: 10,
     paddingHorizontal: 10,
     borderRadius: 12,
-    backgroundColor: '#FAFAFB',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#F1F1F4',
     flexDirection: 'row',
@@ -1141,9 +1157,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   detailsToggleText: { fontSize: 12, fontWeight: '900', color: '#111827' },
-  detailsBox: { marginTop: 10, backgroundColor: '#FFFFFF', borderRadius: 12, borderWidth: 1, borderColor: '#F1F1F4', padding: 12 },
-  detailLine: { fontSize: 12, color: '#52525B', fontWeight: '700', marginBottom: 6 },
-  detailKey: { color: '#0B0B0F', fontWeight: '900' },
+
+  mono: {
+    marginTop: 10,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#111827',
+    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace' }),
+  },
+
+  fusionBox: { marginTop: 12 },
+  rlBox: { marginTop: 12 },
+  rlRow: {
+    marginTop: 10,
+    backgroundColor: '#FAFAFB',
+    borderWidth: 1,
+    borderColor: '#F1F1F4',
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  rlStrategy: { fontWeight: '900', color: '#0B0B0F' },
+  rlScore: { fontWeight: '900', color: '#52525B' },
+
+  bulletRow: { flexDirection: 'row', gap: 10, marginBottom: 10, alignItems: 'flex-start', marginTop: 8 },
+  bulletDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#0B0B0F', marginTop: 6 },
+  bulletText: { flex: 1, fontSize: 12, color: '#52525B', fontWeight: '700', lineHeight: 18 },
 
   disclaimer: { marginTop: 12, fontSize: 11, color: '#A1A1AA', fontWeight: '700', textAlign: 'center' },
 });
