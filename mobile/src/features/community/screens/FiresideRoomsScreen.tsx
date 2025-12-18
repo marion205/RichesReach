@@ -12,6 +12,8 @@ const demoRooms: Room[] = [
 
 export default function FiresideRoomsScreen() {
   const navigation = useNavigation<any>();
+  console.log('[FiresideRoomsScreen] Component mounted');
+  
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -23,7 +25,15 @@ export default function FiresideRoomsScreen() {
         keyExtractor={(r) => r.id}
         contentContainerStyle={{ padding: 16, gap: 12 }}
         renderItem={({ item }) => (
-          <TouchableOpacity style={styles.room} onPress={() => navigation.navigate('fireside-room')}>
+          <TouchableOpacity style={styles.room} onPress={() => {
+            console.log('[FiresideRoomsScreen] Room pressed:', item.id);
+            try {
+              navigation.navigate('fireside-room');
+              console.log('[FiresideRoomsScreen] Navigation successful');
+            } catch (error) {
+              console.error('[FiresideRoomsScreen] Navigation error:', error);
+            }
+          }}>
             <Icon name="mic" size={18} color="#8E8E93" />
             <View style={{ flex: 1, marginLeft: 10 }}>
               <Text style={styles.roomTitle}>{item.title}</Text>

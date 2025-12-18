@@ -29,8 +29,12 @@ try {
 import { connectSignal } from '../../../realtime/signal';
 import { getJwt } from '../../../auth/token';
 import { useRoute } from '@react-navigation/native';
+import logger from '../../../utils/logger';
 
 export default function FiresideRoomScreen() {
+  console.log('[FiresideRoomScreen] Component mounted');
+  logger.log('[FiresideRoomScreen] Component mounted');
+  
   const [micEnabled, setMicEnabled] = useState(false);
   const [status, setStatus] = useState<string>('Connecting...');
   const [connected, setConnected] = useState(false);
@@ -192,43 +196,143 @@ export default function FiresideRoomScreen() {
 
   // Boot signaling + WebRTC
   useEffect(() => {
-    // Skip WebRTC if not available (Expo Go)
-    if (!isWebRTCAvailable() || !mediaDevices) {
-      setStatus('WebRTC not available in Expo Go. Use development build for voice features.');
-      return;
+    console.log('[FiresideRoomScreen] useEffect triggered');
+    logger.log('[FiresideRoomScreen] useEffect triggered');
+    console.log('[FiresideRoomScreen] WebRTC available:', isWebRTCAvailable());
+    console.log('[FiresideRoomScreen] mediaDevices available:', !!mediaDevices);
+    
+    // Check if WebRTC is available
+    const webrtcAvailable = isWebRTCAvailable() && mediaDevices;
+    
+    if (!webrtcAvailable) {
+      console.warn('[FiresideRoomScreen] WebRTC not available - using text-only mode');
+      logger.warn('[FiresideRoomScreen] WebRTC not available - using text-only mode');
+      setStatus('Text-only mode (voice requires development build)');
+      
+      // Still connect to Socket.io for text chat and presence
+      const socket = connectSignal(getJwt);
+      socketRef.current = socket;
+      
+      socket.on('connect', () => {
+        console.log('✅ [Fireside] Connected (text-only mode)', socket.id);
+        logger.log('✅ [Fireside] Connected (text-only mode)', socket.id);
+        mySocketIdRef.current = socket.id;
+        setConnected(true);
+        socket.emit('join-room', { room: `circle-${circleId}` });
+        setStatus('Connected (text-only mode)');
+      });
+      
+      socket.on('room-joined', (data: any) => {
+        console.log('✅ [Fireside] Room joined (text-only):', data);
+        setStatus('Connected (text-only mode)');
+      });
+      
+      socket.on('user-joined', (data: any) => {
+        const newUserId = data.userId || data.from;
+        if (newUserId && newUserId !== mySocketIdRef.current) {
+          setUsersInRoom(prev => {
+            if (!prev.includes(newUserId)) {
+              return [...prev, newUserId];
+            }
+            return prev;
+          });
+        }
+      });
+      
+      socket.on('user-left', (data: any) => {
+        const leftUserId = data.userId || data.from;
+        setUsersInRoom(prev => prev.filter(id => id !== leftUserId));
+      });
+      
+      socket.on('connect_error', (error) => {
+        console.error('❌ [Fireside] Connection error:', error);
+        setStatus(`Connection error: ${error?.message || 'Unknown'}`);
+      });
+      
+      return; // Exit early - no WebRTC setup
     }
+    
+    console.log('[FiresideRoomScreen] Starting connection process...');
+    logger.log('[FiresideRoomScreen] Starting connection process...');
 
     (async () => {
       // Local mic - create stream and store it in state
       try {
+        console.log('[Fireside] Requesting microphone access...');
+        logger.log('[Fireside] Requesting microphone access...');
         const stream = await mediaDevices.getUserMedia({ audio: true, video: false });
-        console.log('[Fireside] Local audio stream created, tracks:', stream.getAudioTracks().length);
+        console.log('[Fireside] ✅ Local audio stream created, tracks:', stream.getAudioTracks().length);
+        logger.log('[Fireside] ✅ Local audio stream created');
         stream.getTracks().forEach(t => {
-          console.log('[Fireside] Adding track:', { kind: t.kind, enabled: t.enabled, id: t.id });
+          console.log('[Fireside] Track:', { kind: t.kind, enabled: t.enabled, id: t.id });
         });
         setLocalStream(stream);
         localStreamRef.current = stream;
         console.log('[Fireside] Local stream stored in state');
+        logger.log('[Fireside] Local stream stored in state');
         // Update status if socket is already connected
         if (connected) {
           setStatus('Ready');
+        } else {
+          setStatus('Audio ready - connecting...');
         }
-      } catch (e) {
-        console.warn('[Fireside] Mic permission denied or getUserMedia failed:', e);
-        setStatus('Mic unavailable: permission denied');
+      } catch (e: any) {
+        const errorMsg = e?.message || String(e);
+        console.warn('[Fireside] ❌ Mic permission denied or getUserMedia failed:', errorMsg);
+        logger.warn('[Fireside] ❌ Mic permission denied or getUserMedia failed:', errorMsg);
+        if (errorMsg.includes('permission') || errorMsg.includes('Permission')) {
+          setStatus('Mic unavailable: permission denied. Please enable microphone access in settings.');
+        } else {
+          setStatus(`Mic unavailable: ${errorMsg.substring(0, 50)}`);
+        }
       }
 
       // Signaling
+      console.log('[FiresideRoomScreen] Calling connectSignal...');
+      logger.log('[FiresideRoomScreen] Calling connectSignal...');
       const socket = connectSignal(getJwt);
       socketRef.current = socket;
+      console.log('[FiresideRoomScreen] Socket created, setting up listeners...');
+      logger.log('[FiresideRoomScreen] Socket created, setting up listeners...');
+      
+      // Update status to show we're attempting connection
+      setStatus('Connecting to server...');
+      
+      // Timeout handler - use a ref to track if we've connected
+      let hasConnected = false;
+      const connectionTimeout = setTimeout(() => {
+        if (!hasConnected) {
+          console.warn('⏱️ [Fireside] Connection timeout after 10s');
+          setStatus('Connection timeout - check your network or server');
+          setConnected(false);
+        }
+      }, 10000);
       
       // Connection handlers with better error feedback
       socket.on('connect', () => {
+        hasConnected = true;
+        clearTimeout(connectionTimeout);
         console.log('✅ [Fireside] WebSocket connected', socket.id);
+        logger.log('✅ [Fireside] WebSocket connected', socket.id);
         mySocketIdRef.current = socket.id;
         setConnected(true);
+        
+        // Join the room
         socket.emit('join-room', { room: `circle-${circleId}` });
+        logger.log(`[Fireside] Emitted join-room for circle-${circleId}`);
+        
         // Update status based on whether we have localStream (use ref to avoid closure issue)
+        if (localStreamRef.current) {
+          setStatus('Ready');
+        } else {
+          setStatus('Connected - waiting for audio...');
+        }
+      });
+      
+      // Handle room join confirmation
+      socket.on('room-joined', (data: any) => {
+        console.log('✅ [Fireside] Room joined:', data);
+        logger.log('✅ [Fireside] Room joined:', data);
         if (localStreamRef.current) {
           setStatus('Ready');
         } else {
@@ -300,28 +404,25 @@ export default function FiresideRoomScreen() {
       });
       
       socket.on('disconnect', (reason) => {
+        hasConnected = false;
         console.log('❌ [Fireside] WebSocket disconnected:', reason);
         setConnected(false);
         setStatus('Disconnected');
       });
       
       socket.on('connect_error', (error) => {
+        hasConnected = false;
+        clearTimeout(connectionTimeout);
         console.error('❌ [Fireside] WebSocket connection error:', error);
         setConnected(false);
-        setStatus(`Connection failed: ${error.message || 'Unknown error'}`);
-      });
-      
-      // Timeout handler - if not connected after 10 seconds, show error
-      const connectionTimeout = setTimeout(() => {
-        if (!connected) {
-          console.warn('⏱️ [Fireside] Connection timeout after 10s');
-          setStatus('Connection timeout - check your network');
+        const errorMsg = error?.message || String(error);
+        if (errorMsg.includes('ECONNREFUSED') || errorMsg.includes('Network')) {
+          setStatus('Cannot reach server - check your network');
+        } else if (errorMsg.includes('401') || errorMsg.includes('Unauthorized')) {
+          setStatus('Authentication failed - please login again');
+        } else {
+          setStatus(`Connection failed: ${errorMsg}`);
         }
-      }, 10000);
-      
-      // Clear timeout on successful connection
-      socket.on('connect', () => {
-        clearTimeout(connectionTimeout);
       });
 
       // WebRTC signaling handlers
@@ -421,7 +522,11 @@ export default function FiresideRoomScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Fireside Room</Text>
-      <Text style={styles.subtitle}>{connected ? `Connected • ${usersInRoom.length} user${usersInRoom.length !== 1 ? 's' : ''}` : 'Connecting…'}</Text>
+      <Text style={styles.subtitle}>
+        {connected 
+          ? `Connected • ${usersInRoom.length} user${usersInRoom.length !== 1 ? 's' : ''}` 
+          : status || 'Connecting…'}
+      </Text>
       
       {/* User list */}
       {usersInRoom.length > 0 && (
@@ -457,14 +562,36 @@ export default function FiresideRoomScreen() {
       ))}
       
       <View style={{ flex: 1 }} />
-      <TouchableOpacity
-        onPress={handleMicToggle}
-        style={[styles.ptt, micEnabled ? styles.pttActive : null]}
-        disabled={!micAvailable}
-      >
-        <Icon name={micEnabled ? "mic" : "mic-off"} size={24} color="#fff" />
-        <Text style={styles.pttText}>{micLabel}</Text>
-      </TouchableOpacity>
+      
+      {/* Info message for Expo Go users */}
+      {!isWebRTCAvailable() && connected && (
+        <View style={styles.infoBox}>
+          <Icon name="info" size={16} color="#6B7280" />
+          <Text style={styles.infoText}>
+            Voice chat requires a development build. You're connected in text-only mode.
+          </Text>
+        </View>
+      )}
+      
+      {/* Mic toggle button - only show if WebRTC is available */}
+      {isWebRTCAvailable() && mediaDevices ? (
+        <TouchableOpacity
+          onPress={handleMicToggle}
+          style={[styles.ptt, micEnabled ? styles.pttActive : null]}
+          disabled={!micAvailable}
+        >
+          <Icon name={micEnabled ? "mic" : "mic-off"} size={24} color="#fff" />
+          <Text style={styles.pttText}>{micLabel}</Text>
+        </TouchableOpacity>
+      ) : (
+        <TouchableOpacity
+          style={[styles.ptt, { backgroundColor: '#6B7280', opacity: 0.6 }]}
+          disabled={true}
+        >
+          <Icon name="mic-off" size={24} color="#fff" />
+          <Text style={styles.pttText}>Mic unavailable (requires dev build)</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -484,6 +611,22 @@ const styles = StyleSheet.create({
   ptt: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#34C759', borderRadius: 24, paddingVertical: 14, position: 'absolute', left: 16, right: 16, bottom: 24 },
   pttActive: { backgroundColor: '#16A34A' },
   pttText: { color: '#fff', fontWeight: '700' },
+  infoBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F3F4F6',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+    marginHorizontal: 16,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#6B7280',
+    lineHeight: 16,
+  },
 });
 
 

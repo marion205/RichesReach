@@ -95,8 +95,8 @@ export default function TomorrowScreen({ navigation }: any) {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [usingCachedData, setUsingCachedData] = useState(false);
-  const [recommendations, setRecommendations] = useState<FuturesRecommendation[]>([]);
+  const [usingCachedData, setUsingCachedData] = useState(true); // Start with true to show mock data immediately
+  const [recommendations, setRecommendations] = useState<FuturesRecommendation[]>(getMockRecommendations()); // Initialize with mock data
   const [positions, setPositions] = useState<FuturesPosition[]>([]);
   const [showPositions, setShowPositions] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'heatmap'>('list');
@@ -153,9 +153,9 @@ export default function TomorrowScreen({ navigation }: any) {
       setError(null);
       setUsingCachedData(false);
       
-      // Add timeout wrapper (increased to 15s for slow connections)
+      // Add timeout wrapper (reduced to 5s for faster fallback to mock data)
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Request timeout')), 15000)
+        setTimeout(() => reject(new Error('Request timeout')), 5000)
       );
       
       const fetchPromise = FuturesService.getRecommendations();
@@ -163,6 +163,8 @@ export default function TomorrowScreen({ navigation }: any) {
       
       if (resp.recommendations && resp.recommendations.length > 0) {
         setRecommendations(resp.recommendations);
+        setUsingCachedData(false); // Clear cached flag when real data loads
+        setError(null); // Clear any previous errors
         // Initialize prices from recommendations (if included)
         const initialPrices: Record<string, { price: number; change: number; changePercent: number; priceHistory: number[] }> = {};
         resp.recommendations.forEach(rec => {

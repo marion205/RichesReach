@@ -6724,6 +6724,9 @@ try:
         room = data.get('room', 'default')
         await _sio.enter_room(sid, room)
         print(f"🔥 [Fireside] Client {sid} joined room {room}")
+        # Emit confirmation to the client that joined
+        await _sio.emit('room-joined', {'room': room, 'userId': sid}, room=sid)
+        # Notify other users in the room
         await _sio.emit('user-joined', {'userId': sid, 'room': room}, room=room, skip_sid=sid)
     
     @_sio.on('leave-room')

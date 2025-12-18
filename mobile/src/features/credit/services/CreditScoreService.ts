@@ -192,6 +192,49 @@ class CreditScoreService {
 
         const data = await response.json();
         console.log('[CreditScore] Successfully loaded snapshot from API');
+        
+        // Ensure actions and shield arrays exist (backend might return empty arrays)
+        if (!data.actions || data.actions.length === 0) {
+          data.actions = [
+            {
+              id: '1',
+              type: 'AUTOPAY_SETUP',
+              title: 'Set Up Autopay',
+              description: 'Automate your credit card payments to never miss a due date',
+              completed: false,
+              projectedScoreGain: 15,
+              dueDate: null,
+            },
+            {
+              id: '2',
+              type: 'UTILIZATION_REDUCED',
+              title: 'Reduce Utilization Below 30%',
+              description: 'Pay down $150 to get your utilization under the optimal 30% threshold',
+              completed: false,
+              projectedScoreGain: 25,
+              dueDate: null,
+            },
+          ];
+        }
+        
+        // Ensure shield alerts exist if utilization is high (but not if it's 0%)
+        if (!data.shield || data.shield.length === 0) {
+          const utilization = data.utilization?.currentUtilization || 0;
+          if (utilization > 0.3 && utilization > 0) {
+            data.shield = [
+              {
+                type: 'HIGH_UTILIZATION',
+                inDays: null,
+                message: `Utilization is ${Math.round(utilization * 100)}% - aim for under 30%`,
+                suggestion: 'REDUCE_UTILIZATION',
+              },
+            ];
+          } else {
+            // If utilization is 0% or low, still show helpful actions
+            data.shield = [];
+          }
+        }
+        
         return data;
       } catch (fetchError: any) {
         clearTimeout(timeoutId);
@@ -215,11 +258,11 @@ class CreditScoreService {
         cards: [],
         utilization: {
           totalLimit: 1000,
-          totalBalance: 450,
-          currentUtilization: 0.45,
+          totalBalance: 0,
+          currentUtilization: 0,
           optimalUtilization: 0.3,
-          paydownSuggestion: 150,
-          projectedScoreGain: 8,
+          paydownSuggestion: 0,
+          projectedScoreGain: 0,
         },
         projection: {
           scoreGain6m: 42,

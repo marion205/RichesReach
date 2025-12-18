@@ -66,6 +66,10 @@ export default function SignalUpdatesScreen() {
       fetchPolicy: 'cache-and-network',
       errorPolicy: 'all', // Continue even if there are errors
       notifyOnNetworkStatusChange: false,
+      context: {
+        // Increase timeout for signal updates
+        timeout: 30000, // 30 seconds
+      },
     }
   );
 
@@ -242,6 +246,53 @@ export default function SignalUpdatesScreen() {
   // Single stock signal view
   // Gracefully handle null/undefined signalUpdates
   const signal = signalData?.signalUpdates ?? null;
+
+  // Log for debugging
+  if (__DEV__) {
+    console.log('[SignalUpdates] Data state:', {
+      hasData: !!signalData,
+      hasSignalUpdates: !!signalData?.signalUpdates,
+      signal: signal ? {
+        symbol: signal.symbol,
+        fusionScore: signal.fusionScore,
+        recommendation: signal.recommendation,
+        hasAlerts: !!signal.alerts?.length,
+      } : null,
+      error: signalError?.message,
+      loading: signalLoading,
+    });
+  }
+
+  // Show error state if there's an error and no data
+  if (signalError && !signal) {
+    return (
+      <ScrollView
+        style={styles.container}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        <View style={styles.errorCard}>
+          <Ionicons name="alert-circle" size={24} color="#EF4444" />
+          <Text style={styles.errorText}>
+            {signalError.message || 'Unable to load signal updates'}
+          </Text>
+          {signalError.graphQLErrors && signalError.graphQLErrors.length > 0 && (
+            <Text style={styles.errorDetailText}>
+              {signalError.graphQLErrors[0].message}
+            </Text>
+          )}
+        </View>
+        <View style={styles.emptyContainer}>
+          <Ionicons name="pulse-outline" size={48} color="#6B7280" />
+          <Text style={styles.emptyText}>
+            No AI signal updates yet. We'll notify you when something changes.
+          </Text>
+          <Text style={styles.emptySubtext}>
+            Signal data temporarily unavailable. Please try again later.
+          </Text>
+        </View>
+      </ScrollView>
+    );
+  }
 
   if (!signal) {
     return (

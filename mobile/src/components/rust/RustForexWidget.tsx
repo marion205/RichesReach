@@ -93,14 +93,52 @@ function convictionColor(conv: string) {
 }
 
 async function postJson(path: string, body: any) {
-  if (!API_RUST_BASE) throw new Error('Missing API_RUST_BASE');
+  if (!API_RUST_BASE) {
+    const err: any = new Error('Rust API server not configured. Please set EXPO_PUBLIC_RUST_API_URL.');
+    err.raw = { error: 'Missing API_RUST_BASE configuration' };
+    throw err;
+  }
+  
   const t0 = Date.now();
-  const res = await fetch(`${API_RUST_BASE}${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const json = await res.json().catch(() => ({}));
+  let res: Response;
+  let json: any = {};
+  
+  // Create AbortController for timeout (AbortSignal.timeout is not available in React Native)
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+  
+  try {
+    res = await fetch(`${API_RUST_BASE}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId); // Clear timeout if request succeeds
+    json = await res.json().catch(() => ({}));
+  } catch (fetchError: any) {
+    clearTimeout(timeoutId); // Clear timeout on error
+    const ms = Date.now() - t0;
+    // Handle network errors (connection refused, timeout, etc.)
+    if (fetchError.name === 'AbortError' || fetchError.name === 'TimeoutError' || fetchError.message?.includes('aborted')) {
+      const err: any = new Error('Request timed out. The Rust API server may be slow or unavailable.');
+      err.raw = { error: 'timeout', message: fetchError.message };
+      err.ms = ms;
+      throw err;
+    }
+    if (fetchError.message?.includes('Network request failed') || fetchError.message?.includes('Failed to connect')) {
+      const err: any = new Error(`Cannot connect to Rust API server at ${API_RUST_BASE}. Please ensure the server is running.`);
+      err.raw = { error: 'connection_failed', message: fetchError.message };
+      err.ms = ms;
+      throw err;
+    }
+    // Re-throw other errors
+    const err: any = new Error(fetchError.message || 'Network request failed');
+    err.raw = { error: 'unknown', message: fetchError.message };
+    err.ms = ms;
+    throw err;
+  }
+  
   const ms = Date.now() - t0;
 
   if (!res.ok) {
@@ -676,10 +714,17 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
           </TouchableOpacity>
 
           {oracle.status === 'error' && (
-            <View style={styles.errorBox}>
+            <TouchableOpacity 
+              style={styles.errorBox}
+              onPress={askAlphaOracle}
+              activeOpacity={0.7}
+            >
               <Icon name="alert-circle" size={16} color="#EF4444" />
               <Text style={styles.errorText}>{oracle.message}</Text>
-            </View>
+              <Text style={[styles.errorText, { fontSize: 11, marginTop: 4, opacity: 0.8 }]}>
+                Tap to retry
+              </Text>
+            </TouchableOpacity>
           )}
 
           {oracle.status === 'ready' && (

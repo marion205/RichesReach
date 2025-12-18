@@ -52,6 +52,10 @@ export default function ResearchReportScreen() {
     fetchPolicy: 'cache-and-network',
     errorPolicy: 'all', // Continue even if there are errors
     notifyOnNetworkStatusChange: true,
+    context: {
+      // Increase timeout for this specific query
+      timeout: 45000, // 45 seconds for research report generation
+    },
   });
 
   const [generateReport, { loading: generating }] = useMutation(GENERATE_RESEARCH_REPORT);
@@ -138,11 +142,15 @@ export default function ResearchReportScreen() {
     }
   };
 
+  // Show loading state
   if (loading || generating) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#007AFF" />
         <Text style={styles.loadingText}>Generating report...</Text>
+        <Text style={[styles.loadingText, { fontSize: 12, marginTop: 8, color: '#666' }]}>
+          This may take up to 45 seconds...
+        </Text>
       </View>
     );
   }
@@ -181,13 +189,37 @@ export default function ResearchReportScreen() {
   }
 
   if (!report) {
+    // Log what we received for debugging
+    console.log('⚠️ No report parsed. Data state:', {
+      hasData: !!data,
+      hasResearchReport: !!data?.researchReport,
+      researchReportType: typeof data?.researchReport,
+      researchReportPreview: data?.researchReport 
+        ? (typeof data.researchReport === 'string' 
+          ? data.researchReport.substring(0, 200) 
+          : JSON.stringify(data.researchReport).substring(0, 200))
+        : 'null',
+      loading,
+      error: error?.message,
+    });
+    
     return (
       <View style={styles.emptyContainer}>
         <Ionicons name="document-text" size={64} color="#9CA3AF" />
         <Text style={styles.emptyText}>No report available</Text>
         <Text style={styles.errorDetailText}>
-          {data?.researchReport ? 'Report data exists but failed to parse' : 'No report data in response'}
+          {data?.researchReport 
+            ? 'Report data exists but failed to parse. Check console for details.' 
+            : 'No report data in response. Try generating a new report.'}
         </Text>
+        {data?.researchReport && (
+          <TouchableOpacity style={styles.retryButton} onPress={() => {
+            console.log('Raw report data:', data.researchReport);
+            Alert.alert('Debug Info', `Report type: ${typeof data.researchReport}\nLength: ${typeof data.researchReport === 'string' ? data.researchReport.length : 'N/A'}`);
+          }}>
+            <Text style={styles.retryButtonText}>Show Debug Info</Text>
+          </TouchableOpacity>
+        )}
         <TouchableOpacity style={styles.generateButton} onPress={handleGenerateReport}>
           <Text style={styles.generateButtonText}>Generate Report</Text>
         </TouchableOpacity>

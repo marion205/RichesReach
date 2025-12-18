@@ -744,6 +744,7 @@ export default function PortfolioPerformanceCard({
               term="Total Value"
               explanation={getTermExplanation('Total Value')}
               position="top"
+              hideExternalIcon={true}
             >
               <TouchableOpacity
                 activeOpacity={0.8}
@@ -753,14 +754,35 @@ export default function PortfolioPerformanceCard({
                   setShowEducationModal(true);
                 }}
               >
-                <Text
-                  style={[styles.value, { color: palette.text }]}
-                  numberOfLines={1}
-                  adjustsFontSizeToFit={true}
-                  minimumFontScale={0.8}
-                >
-                  {fmtCompactUsd(curValue)}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text
+                    style={[styles.value, { color: palette.text }]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit={true}
+                    minimumFontScale={0.8}
+                  >
+                    {fmtCompactUsd(curValue)}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setClickedElement('totalValue');
+                      setShowEducationModal(true);
+                    }}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <View style={{
+                      width: 16,
+                      height: 16,
+                      borderRadius: 8,
+                      backgroundColor: '#007AFF',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}>
+                      <Icon name="info" size={10} color="#FFFFFF" />
+                    </View>
+                  </TouchableOpacity>
+                </View>
                 <Text style={[styles.kpiLabel, { color: palette.sub }]}>Total Value</Text>
               </TouchableOpacity>
             </EducationalTooltip>

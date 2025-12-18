@@ -18,12 +18,12 @@ const GET_EXECUTION_QUALITY_STATS = gql`
 `;
 
 interface ExecutionQualityStats {
-  avgSlippagePct: number;
-  avgQualityScore: number;
-  chasedCount: number;
-  totalFills: number;
-  improvementTips: string[];
-  periodDays: number;
+  avgSlippagePct: number | null;
+  avgQualityScore: number | null;
+  chasedCount: number | null;
+  totalFills: number | null;
+  improvementTips: string[] | null;
+  periodDays: number | null;
 }
 
 interface ExecutionQualityDashboardProps {
@@ -92,8 +92,30 @@ export default function ExecutionQualityDashboard({
     );
   }
 
-  const qualityColor = effectiveStats.avgQualityScore >= 8 ? C.success : 
-                       effectiveStats.avgQualityScore >= 6 ? C.warning : C.danger;
+  // Helper function to safely format numbers with null checks
+  const safeToFixed = (value: number | null | undefined, decimals: number): string => {
+    if (value === null || value === undefined || isNaN(value)) {
+      return 'N/A';
+    }
+    return value.toFixed(decimals);
+  };
+
+  // Helper function to safely compare numbers
+  const safeCompare = (value: number | null | undefined, compare: number, operator: '>=' | '<' | '>' | '<=' = '>='): boolean => {
+    if (value === null || value === undefined || isNaN(value)) {
+      return false;
+    }
+    switch (operator) {
+      case '>=': return value >= compare;
+      case '<': return value < compare;
+      case '>': return value > compare;
+      case '<=': return value <= compare;
+      default: return false;
+    }
+  };
+
+  const qualityColor = safeCompare(effectiveStats.avgQualityScore, 8) ? C.success : 
+                       safeCompare(effectiveStats.avgQualityScore, 6) ? C.warning : C.danger;
   
   // Show warning banner if using mock data
   const isUsingMockData = !stats && error;
@@ -128,11 +150,11 @@ export default function ExecutionQualityDashboard({
             <Text style={[styles.statLabel, { color: C.sub }]}>Avg Slippage</Text>
           </View>
           <Text style={[styles.statValue, { color: C.text }]}>
-            {effectiveStats.avgSlippagePct.toFixed(2)}%
+            {safeToFixed(effectiveStats.avgSlippagePct, 2)}%
           </Text>
           <Text style={[styles.statSubtext, { color: C.sub }]}>
-            {effectiveStats.avgSlippagePct < 0.2 ? 'Excellent' : 
-             effectiveStats.avgSlippagePct < 0.5 ? 'Good' : 'Needs Improvement'}
+            {safeCompare(effectiveStats.avgSlippagePct, 0.2, '<') ? 'Excellent' : 
+             safeCompare(effectiveStats.avgSlippagePct, 0.5, '<') ? 'Good' : 'Needs Improvement'}
           </Text>
         </View>
 
@@ -143,11 +165,11 @@ export default function ExecutionQualityDashboard({
             <Text style={[styles.statLabel, { color: C.sub }]}>Quality Score</Text>
           </View>
           <Text style={[styles.statValue, { color: qualityColor }]}>
-            {effectiveStats.avgQualityScore.toFixed(1)}/10
+            {safeToFixed(effectiveStats.avgQualityScore, 1)}/10
           </Text>
           <Text style={[styles.statSubtext, { color: C.sub }]}>
-            {effectiveStats.avgQualityScore >= 8 ? 'Excellent' : 
-             effectiveStats.avgQualityScore >= 6 ? 'Good' : 'Needs Work'}
+            {safeCompare(effectiveStats.avgQualityScore, 8) ? 'Excellent' : 
+             safeCompare(effectiveStats.avgQualityScore, 6) ? 'Good' : 'Needs Work'}
           </Text>
         </View>
 
@@ -158,10 +180,10 @@ export default function ExecutionQualityDashboard({
             <Text style={[styles.statLabel, { color: C.sub }]}>Price Chased</Text>
           </View>
           <Text style={[styles.statValue, { color: C.danger }]}>
-            {effectiveStats.chasedCount}
+            {effectiveStats.chasedCount ?? 'N/A'}
           </Text>
           <Text style={[styles.statSubtext, { color: C.sub }]}>
-            {effectiveStats.totalFills > 0 
+            {effectiveStats.totalFills && effectiveStats.totalFills > 0 && effectiveStats.chasedCount !== null
               ? `${((effectiveStats.chasedCount / effectiveStats.totalFills) * 100).toFixed(0)}% of trades`
               : 'No data'}
           </Text>
@@ -174,10 +196,10 @@ export default function ExecutionQualityDashboard({
             <Text style={[styles.statLabel, { color: C.sub }]}>Total Fills</Text>
           </View>
           <Text style={[styles.statValue, { color: C.text }]}>
-            {effectiveStats.totalFills}
+            {effectiveStats.totalFills ?? 'N/A'}
           </Text>
           <Text style={[styles.statSubtext, { color: C.sub }]}>
-            Last {effectiveStats.periodDays} days
+            Last {effectiveStats.periodDays ?? days} days
           </Text>
         </View>
       </View>

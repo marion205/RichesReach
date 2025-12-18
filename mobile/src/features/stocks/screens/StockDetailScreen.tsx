@@ -385,6 +385,7 @@ const ChartRoute = React.memo(({
   loading: boolean;
 }) => {
   const translateX = useSharedValue(0);
+  const [chartType, setChartType] = useState<'moments' | 'candlestick'>('candlestick');
 
   // Reset translateX when component mounts or timeframe changes
   useEffect(() => {
@@ -530,22 +531,71 @@ const ChartRoute = React.memo(({
             ))}
           </View>
 
-          {/* Key Moments Integration (Story Chart) - Moved to first position */}
-          {priceSeriesForMoments.length > 0 ? (
-            <StockMomentsIntegration
-              symbol={symbol}
-              priceSeries={priceSeriesForMoments}
-              chartRange={chartRange}
-            />
-          ) : (
-            <View style={{ padding: 16, alignItems: 'center' }}>
-              <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>
-                Chart data loading... Key moments will appear here.
+          {/* Chart Type Selector */}
+          <View style={styles.chartTypeSelector}>
+            <TouchableOpacity
+              style={[
+                styles.chartTypeBtn,
+                chartType === 'moments' && styles.activeChartTypeBtn,
+              ]}
+              onPress={() => setChartType('moments')}
+            >
+              <Icon 
+                name="zap" 
+                size={14} 
+                color={chartType === 'moments' ? '#FFFFFF' : theme.colors.textSecondary} 
+                style={{ marginRight: 6 }}
+              />
+              <Text style={[
+                styles.chartTypeText,
+                chartType === 'moments' && styles.activeChartTypeText,
+              ]}>
+                Key Moments
               </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.chartTypeBtn,
+                chartType === 'candlestick' && styles.activeChartTypeBtn,
+              ]}
+              onPress={() => setChartType('candlestick')}
+            >
+              <Icon 
+                name="bar-chart-2" 
+                size={14} 
+                color={chartType === 'candlestick' ? '#FFFFFF' : theme.colors.textSecondary} 
+                style={{ marginRight: 6 }}
+              />
+              <Text style={[
+                styles.chartTypeText,
+                chartType === 'candlestick' && styles.activeChartTypeText,
+              ]}>
+                Candlestick
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Key Moments Integration (Story Chart) */}
+          {chartType === 'moments' && (
+            <View style={{ marginTop: 16 }}>
+              {priceSeriesForMoments.length > 0 ? (
+                <StockMomentsIntegration
+                  symbol={symbol}
+                  priceSeries={priceSeriesForMoments}
+                  chartRange={chartRange}
+                />
+              ) : (
+                <View style={{ padding: 16, alignItems: 'center' }}>
+                  <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>
+                    Chart data loading... Key moments will appear here.
+                  </Text>
+                </View>
+              )}
             </View>
           )}
 
           {/* Advanced Candlestick Chart with Volume Bars */}
+          {chartType === 'candlestick' && (
           <View style={styles.chartContainer}>
             <CandlestickChart.Provider data={processedData}>
               <CandlestickChart
@@ -626,6 +676,7 @@ const ChartRoute = React.memo(({
               </Text>
             </View>
           </View>
+          )}
           </ScrollView>
         </Animated.View>
       </PanGestureHandler>
@@ -1490,18 +1541,25 @@ export default function StockDetailScreen({ navigation, route }: StockDetailScre
           )}
           
           {/* Rust Sentiment Analysis */}
-          <RustSentimentWidget symbol={symbol} />
+          <View style={{ marginBottom: 24 }}>
+            <RustSentimentWidget symbol={symbol} />
+          </View>
           
-          <ConsumerSpendingSurgeChart
-            symbol={symbol}
-            spendingData={spendingData}
-            category={stockData?.sector}
-          />
-          <SmartMoneyFlowChart
-            symbol={symbol}
-            priceData={priceData.length > 0 ? priceData : spendingData.map((s: any) => ({ date: s.date, price: s.price }))}
-            optionsFlowData={optionsFlowData}
-          />
+          <View style={{ marginBottom: 24 }}>
+            <ConsumerSpendingSurgeChart
+              symbol={symbol}
+              spendingData={spendingData}
+              category={stockData?.sector}
+            />
+          </View>
+          
+          <View style={{ marginBottom: 24 }}>
+            <SmartMoneyFlowChart
+              symbol={symbol}
+              priceData={priceData.length > 0 ? priceData : spendingData.map((s: any) => ({ date: s.date, price: s.price }))}
+              optionsFlowData={optionsFlowData}
+            />
+          </View>
           {analysisLoading && (
             <View style={{ padding: 20, alignItems: 'center' }}>
               <ActivityIndicator size="small" color="#00cc99" />
@@ -1782,7 +1840,7 @@ const styles = StyleSheet.create({
   timeframeSelector: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    marginBottom: theme.spacing.lg,
+    marginBottom: theme.spacing.md,
     backgroundColor: theme.colors.surface,
     borderRadius: theme.borderRadius,
     padding: theme.spacing.sm,
@@ -1801,6 +1859,35 @@ const styles = StyleSheet.create({
     color: theme.colors.textSecondary,
   },
   activeTimeframeText: {
+    color: '#FFF',
+  },
+  chartTypeSelector: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: theme.spacing.md,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.borderRadius,
+    padding: theme.spacing.xs,
+    gap: theme.spacing.xs,
+  },
+  chartTypeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: 8,
+    flex: 1,
+    justifyContent: 'center',
+  },
+  activeChartTypeBtn: {
+    backgroundColor: theme.colors.primary,
+  },
+  chartTypeText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: theme.colors.textSecondary,
+  },
+  activeChartTypeText: {
     color: '#FFF',
   },
   chartContainer: {

@@ -24,31 +24,38 @@ export function connectSignal(getJwt: () => Promise<string> | string): Socket {
   }
   
   logger.log(`[Signal] Connecting socket.io to ${signalUrl}`);
+  logger.log(`[Signal] Original SIGNAL_URL: ${ENV.SIGNAL_URL}`);
+  logger.log(`[Signal] Using path: /socket.io`);
+  logger.log(`[Signal] Forcing websocket transport for Expo compatibility`);
 
   const socket: Socket = io(signalUrl, {
     path: '/socket.io',         // must match socketio_path on server
-    transports: ['websocket'],  // RN: skip long-polling, go straight to WS
-    forceNew: true,
-    timeout: 8000,
+    transports: ['websocket'],  // Force websocket only (avoids polling issues in Expo)
+    forceNew: true,             // Helps with reconnects
+    timeout: 10000,
     autoConnect: false,
     reconnection: true,
-    reconnectionAttempts: 10,
-    reconnectionDelay: 500,
+    reconnectionAttempts: 5,
+    reconnectionDelay: 1000,
     reconnectionDelayMax: 5000,
   });
 
   // Connection event handlers with detailed logging
   socket.on('connect', () => {
-    logger.log(`✅ [Fireside] Socket connected ${socket.id}`);
+    logger.log(`✅ [Fireside] Socket connected! ID: ${socket.id}`);
+    console.log(`✅ [Fireside] Socket connected! ID: ${socket.id}`);
   });
 
   socket.on('connect_error', (err: any) => {
-    logger.warn('❌ [Fireside] connect_error', {
+    const errorDetails = {
       message: err?.message,
       description: err?.description,
       data: err?.data,
       type: err?.type,
-    });
+      code: err?.code,
+    };
+    logger.warn('❌ [Fireside] connect_error', errorDetails);
+    console.error('❌ [Fireside] Connection error:', err?.message || String(err));
     
     // Handle 401 auth errors
     const errorMessage = err?.message || String(err);
@@ -77,6 +84,27 @@ export function connectSignal(getJwt: () => Promise<string> | string): Socket {
 
   socket.on('disconnect', (reason: string) => {
     logger.log(`👋 [Fireside] Socket disconnected: ${reason}`);
+    console.log(`👋 [Fireside] Disconnected: ${reason}`);
+  });
+
+  // Additional debugging events
+  socket.on('reconnect', (attemptNumber: number) => {
+    logger.log(`🔄 [Fireside] Reconnected after ${attemptNumber} attempts`);
+    console.log(`🔄 [Fireside] Reconnected after ${attemptNumber} attempts`);
+  });
+
+  socket.on('reconnect_attempt', (attemptNumber: number) => {
+    logger.log(`🔄 [Fireside] Reconnection attempt ${attemptNumber}`);
+  });
+
+  socket.on('reconnect_error', (error: any) => {
+    logger.warn(`❌ [Fireside] Reconnection error:`, error);
+    console.error(`❌ [Fireside] Reconnection error:`, error?.message || String(error));
+  });
+
+  socket.on('reconnect_failed', () => {
+    logger.error(`❌ [Fireside] Reconnection failed after all attempts`);
+    console.error(`❌ [Fireside] Reconnection failed after all attempts`);
   });
 
   // Connect with auth token

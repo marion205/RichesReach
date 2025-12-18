@@ -18,10 +18,31 @@ import Icon from 'react-native-vector-icons/Feather';
 import { CreditScoreOrb } from '../components/CreditScoreOrb';
 import { CreditUtilizationGauge } from '../components/CreditUtilizationGauge';
 import { CreditScoreTrendChart } from '../components/CreditScoreTrendChart';
+import { StatementDatePlanner } from '../components/StatementDatePlanner';
+import ScoreSimulator from '../components/ScoreSimulator';
+import { CreditShield } from '../components/CreditShield';
+import { AutopilotMode } from '../components/AutopilotMode';
+import { CreditTwinSimulator } from '../components/CreditTwinSimulator';
+import { EcosystemPerks } from '../components/EcosystemPerks';
+import { CreditOracle } from '../components/CreditOracle';
+import { SustainabilityLayer } from '../components/SustainabilityLayer';
 import { creditScoreService } from '../services/CreditScoreService';
 import { creditUtilizationService } from '../services/CreditUtilizationService';
 import { creditNotificationService } from '../services/CreditNotificationService';
-import { CreditSnapshot, CreditAction, CreditScore } from '../types/CreditTypes';
+import { scoreSimulatorService } from '../services/ScoreSimulatorService';
+import { 
+  CreditSnapshot, 
+  CreditAction, 
+  CreditScore, 
+  StatementDatePlan, 
+  CreditShieldPlan,
+  AutopilotStatus,
+  CreditTwinState,
+  CreditTwinScenario,
+  EcosystemIntegration,
+  CreditOracle as CreditOracleType,
+  SustainabilityTracking,
+} from '../types/CreditTypes';
 
 interface CreditQuestScreenProps {
   visible: boolean;
@@ -38,6 +59,55 @@ export const CreditQuestScreen: React.FC<CreditQuestScreenProps> = ({
   const [refreshing, setRefreshing] = useState(false);
   const [scoreHistory, setScoreHistory] = useState<CreditScore[]>([]);
   const [showTrends, setShowTrends] = useState(false);
+  const [statementPlans, setStatementPlans] = useState<StatementDatePlan[]>([]);
+  const [shieldPlan, setShieldPlan] = useState<CreditShieldPlan | null>(null);
+  const [autopilotStatus, setAutopilotStatus] = useState<AutopilotStatus>({
+    enabled: false,
+    currentWeek: {
+      weekStart: new Date().toISOString(),
+      weekEnd: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      selectedActions: [],
+      completedActions: [],
+      progress: 0,
+    },
+    weeklyHistory: [],
+    streak: 0,
+    totalActionsCompleted: 0,
+  });
+  const [creditTwinState, setCreditTwinState] = useState<CreditTwinState>({
+    baseScore: 580,
+    scenarioHistory: [],
+    projectedScore: 580,
+  });
+  const [ecosystemIntegration, setEcosystemIntegration] = useState<EcosystemIntegration>({
+    perks: [],
+    unlockedPerks: [],
+    availablePerks: [],
+    totalSavings: 0,
+  });
+  const [creditOracle, setCreditOracle] = useState<CreditOracleType>({
+    insights: [],
+    localTrends: [],
+    warnings: [],
+    opportunities: [],
+    lastUpdated: new Date().toISOString(),
+  });
+  const [sustainabilityTracking, setSustainabilityTracking] = useState<SustainabilityTracking>({
+    totalImpact: {
+      treesPlanted: 0,
+      co2Offset: 0,
+      actionsCompleted: 0,
+      milestones: [],
+    },
+    weeklyImpact: {
+      treesPlanted: 0,
+      co2Offset: 0,
+      actionsCompleted: 0,
+      milestones: [],
+    },
+    goals: [],
+    partnerIntegrations: [],
+  });
 
   useEffect(() => {
     if (visible) {
@@ -51,6 +121,160 @@ export const CreditQuestScreen: React.FC<CreditQuestScreenProps> = ({
       // getSnapshot() now returns fallback data on error, so it won't throw
       const data = await creditScoreService.getSnapshot();
       setSnapshot(data);
+      
+      // Initialize Credit Twin with current score
+      setCreditTwinState({
+        baseScore: data.score?.score || 580,
+        scenarioHistory: [],
+        projectedScore: data.score?.score || 580,
+      });
+      
+      // Initialize mock ecosystem perks
+      setEcosystemIntegration({
+        perks: [
+          {
+            id: '1',
+            name: 'Eco-Friendly Discount',
+            description: '10% off sustainable products',
+            category: 'discount',
+            unlockRequirement: { type: 'utilization_target', value: 30 },
+            partner: 'Amazon',
+            discount: 10,
+          },
+          {
+            id: '2',
+            name: 'Premium Event Access',
+            description: 'Priority access to financial wellness events',
+            category: 'access',
+            unlockRequirement: { type: 'score_threshold', value: 700 },
+            partner: 'RichesReach',
+          },
+        ],
+        unlockedPerks: [],
+        availablePerks: ['1'],
+        totalSavings: 0,
+      });
+      
+      // Initialize mock oracle insights
+      setCreditOracle({
+        insights: [
+          {
+            id: '1',
+            type: 'trend',
+            title: 'Q4 Score Drops Expected',
+            description: 'Historical data shows 15% of users see score drops in Q4 due to holiday spending',
+            confidence: 0.75,
+            timeHorizon: 'Q4 2025',
+            source: 'crowdsourced',
+            recommendation: 'Plan ahead: reduce utilization before November',
+          },
+        ],
+        localTrends: [],
+        warnings: [],
+        opportunities: [],
+        lastUpdated: new Date().toISOString(),
+      });
+      
+      // Initialize sustainability tracking
+      setSustainabilityTracking({
+        totalImpact: {
+          treesPlanted: 12,
+          co2Offset: 2.4,
+          actionsCompleted: 8,
+          milestones: [
+            { id: '1', name: 'First Tree Planted', date: new Date().toISOString(), impact: 1 },
+          ],
+        },
+        weeklyImpact: {
+          treesPlanted: 2,
+          co2Offset: 0.4,
+          actionsCompleted: 1,
+          milestones: [],
+        },
+        goals: [
+          { id: '1', name: 'Plant 50 Trees', target: 50, current: 12, unit: 'trees' },
+          { id: '2', name: 'Offset 10kg CO₂', target: 10, current: 2.4, unit: 'co2_kg' },
+        ],
+        partnerIntegrations: [
+          { name: 'Tree-Nation', type: 'tree_planting', contribution: 10 },
+          { name: 'Carbon Offset Co', type: 'carbon_offset', contribution: 2.4 },
+        ],
+      });
+      
+      // Generate statement-date plans from cards
+      if (data.cards && data.cards.length > 0) {
+        const plans: StatementDatePlan[] = data.cards.map((card, index) => {
+          const statementCloseDate = new Date();
+          statementCloseDate.setDate(statementCloseDate.getDate() + (7 + index * 3)); // Stagger dates
+          const paymentDueDate = new Date(statementCloseDate);
+          paymentDueDate.setDate(paymentDueDate.getDate() + 21); // 21 days after statement
+          
+          const daysUntilClose = Math.ceil((statementCloseDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+          const targetUtilization = 0.09; // 9% optimal
+          const currentBalance = card.balance;
+          const targetBalance = card.limit * targetUtilization;
+          const recommendedPaydown = Math.max(0, currentBalance - targetBalance);
+          
+          return {
+            cardId: card.id,
+            cardName: card.name,
+            currentBalance,
+            limit: card.limit,
+            currentUtilization: card.utilization,
+            statementCloseDate: statementCloseDate.toISOString(),
+            paymentDueDate: paymentDueDate.toISOString(),
+            recommendedPaydown,
+            targetUtilization,
+            daysUntilClose,
+            projectedScoreGain: recommendedPaydown > 0 ? Math.round(recommendedPaydown / 100) : 0,
+          };
+        });
+        setStatementPlans(plans);
+      }
+      
+      // Generate shield plan
+      if (data.cards && data.cards.length > 0) {
+        const upcomingPayments = data.cards
+          .filter(card => card.paymentDueDate)
+          .map(card => {
+            const dueDate = new Date(card.paymentDueDate!);
+            const daysUntilDue = Math.ceil((dueDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+            let riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' = 'LOW';
+            if (daysUntilDue <= 3) riskLevel = 'HIGH';
+            else if (daysUntilDue <= 7) riskLevel = 'MEDIUM';
+            
+            return {
+              cardName: card.name,
+              dueDate: card.paymentDueDate!,
+              minimumPayment: card.minimumPayment || card.balance * 0.02,
+              daysUntilDue,
+              riskLevel,
+            };
+          });
+        
+        const totalMinimum = upcomingPayments.reduce((sum, p) => sum + p.minimumPayment, 0);
+        const overallRisk = upcomingPayments.some(p => p.riskLevel === 'HIGH') ? 'HIGH' :
+                           upcomingPayments.some(p => p.riskLevel === 'MEDIUM') ? 'MEDIUM' : 'LOW';
+        
+        const recommendations: string[] = [];
+        if (overallRisk === 'HIGH') {
+          recommendations.push('Set up autopay immediately to avoid late fees');
+        }
+        if (totalMinimum > 0) {
+          recommendations.push(`Ensure $${totalMinimum.toFixed(0)} is available for minimum payments`);
+        }
+        if (upcomingPayments.length > 0) {
+          recommendations.push('Review payment due dates and set reminders');
+        }
+        
+        setShieldPlan({
+          riskLevel: overallRisk,
+          totalMinimumPayments: totalMinimum,
+          upcomingPayments,
+          safetyBuffer: totalMinimum * 1.5, // 1.5x buffer
+          recommendations,
+        });
+      }
       
       // Load score history for trends
       try {
@@ -267,12 +491,47 @@ export const CreditQuestScreen: React.FC<CreditQuestScreenProps> = ({
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>This Month</Text>
           <CreditUtilizationGauge utilization={utilization} />
+          
+          {/* Score Simulator Trigger */}
+          {snapshot.score && (
+            <View style={styles.simulatorContainer}>
+              <ScoreSimulator
+                currentScore={snapshot.score.score || 580}
+                onSimulate={(inputs) => scoreSimulatorService.simulateScore(
+                  snapshot.score?.score || 580,
+                  inputs
+                )}
+              />
+            </View>
+          )}
         </View>
 
-        {/* Top Action */}
+        {/* Credit Shield */}
+        {shieldPlan && (
+          <View style={styles.section}>
+            <CreditShield plan={shieldPlan} />
+          </View>
+        )}
+
+        {/* Statement-Date Planner */}
+        {statementPlans.length > 0 && (
+          <View style={styles.section}>
+            <StatementDatePlanner plans={statementPlans} />
+          </View>
+        )}
+
+        {/* Top Action - Enhanced with Beginner-Friendly Coaching */}
         {topAction && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Top Action</Text>
+            <Text style={styles.sectionTitle}>Your #1 Move This Month</Text>
+            <View style={styles.coachingBox}>
+              <Text style={styles.coachingText}>
+                {topAction.description}
+              </Text>
+              <Text style={styles.coachingImpact}>
+                Expected impact: {topAction.projectedScoreGain ? `+${topAction.projectedScoreGain} points` : 'Small to medium'} within 1-2 cycles
+              </Text>
+            </View>
             <TouchableOpacity 
               style={styles.primaryButton}
               onPress={handlePrimaryAction}
@@ -338,6 +597,132 @@ export const CreditQuestScreen: React.FC<CreditQuestScreenProps> = ({
             ))}
           </View>
         )}
+
+        {/* Autopilot Mode */}
+        <View style={styles.section}>
+          <AutopilotMode
+            status={autopilotStatus}
+            availableActions={snapshot.actions}
+            onToggle={(enabled) => {
+              setAutopilotStatus(prev => ({ ...prev, enabled }));
+            }}
+            onCompleteAction={(actionId) => {
+              setAutopilotStatus(prev => {
+                const newCompleted = [...prev.currentWeek.completedActions, actionId];
+                const progress = (newCompleted.length / prev.currentWeek.selectedActions.length) * 100;
+                return {
+                  ...prev,
+                  currentWeek: {
+                    ...prev.currentWeek,
+                    completedActions: newCompleted,
+                    progress,
+                  },
+                  totalActionsCompleted: prev.totalActionsCompleted + 1,
+                };
+              });
+            }}
+            onSelectActions={(actions) => {
+              setAutopilotStatus(prev => ({
+                ...prev,
+                currentWeek: {
+                  ...prev.currentWeek,
+                  selectedActions: actions,
+                },
+              }));
+            }}
+          />
+        </View>
+
+        {/* Credit Twin Simulator */}
+        <View style={styles.section}>
+          <CreditTwinSimulator
+            initialState={creditTwinState}
+            scenarios={[
+              {
+                id: '1',
+                name: 'Miss a Payment',
+                description: 'What happens if you miss a credit card payment?',
+                inputs: { paymentMissed: true },
+                projectedOutcome: {
+                  scoreChange: -50,
+                  timeToImpact: '1-2 cycles',
+                  factors: ['Payment history drops significantly'],
+                },
+              },
+              {
+                id: '2',
+                name: 'Take a Solar Loan',
+                description: 'How does a $20k solar panel loan affect your score?',
+                inputs: { loanAmount: 20000, loanType: 'solar' },
+                projectedOutcome: {
+                  scoreChange: -15,
+                  timeToImpact: '3-6 months',
+                  factors: ['New account inquiry', 'Credit mix improvement'],
+                },
+              },
+              {
+                id: '3',
+                name: 'Reduce Utilization to 9%',
+                description: 'Pay down all cards to optimal utilization',
+                inputs: { utilizationChange: -30 },
+                projectedOutcome: {
+                  scoreChange: 25,
+                  timeToImpact: '1-2 cycles',
+                  factors: ['Utilization optimization'],
+                },
+              },
+            ]}
+            onScenarioSelect={(scenario) => {
+              setCreditTwinState(prev => ({
+                ...prev,
+                currentScenario: scenario,
+                scenarioHistory: [...prev.scenarioHistory, scenario],
+                projectedScore: Math.max(300, Math.min(850, prev.projectedScore + scenario.projectedOutcome.scoreChange)),
+              }));
+            }}
+            onReset={() => {
+              setCreditTwinState({
+                baseScore: snapshot.score?.score || 580,
+                scenarioHistory: [],
+                projectedScore: snapshot.score?.score || 580,
+              });
+            }}
+          />
+        </View>
+
+        {/* Ecosystem Perks */}
+        {ecosystemIntegration.perks.length > 0 && (
+          <View style={styles.section}>
+            <EcosystemPerks
+              integration={ecosystemIntegration}
+              onRedeemPerk={(perkId) => {
+                Alert.alert('Redeem Perk', `Redirecting to redeem ${perkId}...`);
+              }}
+            />
+          </View>
+        )}
+
+        {/* Credit Oracle */}
+        {creditOracle.insights.length > 0 && (
+          <View style={styles.section}>
+            <CreditOracle
+              oracle={creditOracle}
+              onInsightPress={(insight) => {
+                Alert.alert(insight.title, insight.recommendation);
+              }}
+            />
+          </View>
+        )}
+
+        {/* Sustainability Layer */}
+        <View style={styles.section}>
+          <SustainabilityLayer
+            tracking={sustainabilityTracking}
+            onViewDetails={() => {
+              Alert.alert('Impact Report', 'Full sustainability impact report coming soon!');
+            }}
+          />
+        </View>
       </ScrollView>
     </View>
   );
@@ -519,6 +904,28 @@ const styles = StyleSheet.create({
   },
   trendSection: {
     marginTop: 16,
+  },
+  simulatorContainer: {
+    marginTop: 16,
+  },
+  coachingBox: {
+    backgroundColor: '#F0F8FF',
+    borderRadius: 10,
+    padding: 16,
+    marginBottom: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: '#007AFF',
+  },
+  coachingText: {
+    fontSize: 15,
+    color: '#1C1C1E',
+    lineHeight: 22,
+    marginBottom: 8,
+  },
+  coachingImpact: {
+    fontSize: 13,
+    color: '#007AFF',
+    fontWeight: '600',
   },
 });
 

@@ -923,15 +923,30 @@ class PremiumQueries(graphene.ObjectType):
 
     def resolve_research_report(self, info, symbol: str, report_type: str = 'comprehensive'):
         """Generate research report for a stock"""
-        user = getattr(info.context, "user", None)
-        user_id = user.id if user and not user.is_anonymous else None
-        
-        from .research_report_service import ResearchReportService
-        service = ResearchReportService()
-        
-        report = service.generate_stock_report(symbol, user_id, report_type)
-        # Return dict directly - graphene.JSONString handles serialization
-        return report if report else {'error': 'Report generation failed'}
+        try:
+            logger.info(f"[ResearchReport] Starting report generation for {symbol}, type: {report_type}")
+            user = getattr(info.context, "user", None)
+            user_id = user.id if user and not user.is_anonymous else None
+            
+            from .research_report_service import ResearchReportService
+            service = ResearchReportService()
+            
+            logger.info(f"[ResearchReport] Calling generate_stock_report for {symbol}")
+            report = service.generate_stock_report(symbol, user_id, report_type)
+            
+            if not report:
+                logger.error(f"[ResearchReport] Report generation returned None for {symbol}")
+                return {'error': 'Report generation failed', 'symbol': symbol}
+            
+            if 'error' in report:
+                logger.warning(f"[ResearchReport] Report has error field: {report.get('error')}")
+            
+            logger.info(f"[ResearchReport] ✅ Successfully generated report for {symbol}, keys: {list(report.keys()) if isinstance(report, dict) else 'not a dict'}")
+            # Return dict directly - graphene.JSONString handles serialization
+            return report
+        except Exception as e:
+            logger.error(f"[ResearchReport] ❌ Exception generating report for {symbol}: {e}", exc_info=True)
+            return {'error': str(e), 'symbol': symbol}
     
     def resolve_options_analysis(self, info, symbol):
         """Get comprehensive options analysis for a symbol"""

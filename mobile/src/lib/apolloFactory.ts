@@ -388,9 +388,19 @@ export function makeApolloClient() {
       })() : '';
       
       // Slow operations that need more time
-      const slowOperations = ['GetOracleInsights', 'GetAIRecommendations', 'GenerateAIRecommendations'];
+      const slowOperations = [
+        'GetOracleInsights', 
+        'GetAIRecommendations', 
+        'GenerateAIRecommendations',
+        'GetResearchReport',
+        'GenerateResearchReport',
+        'GetStockAnalysis',
+        'rustStockAnalysis',
+        'GetSignalUpdates',
+        'GetPortfolioSignals'
+      ];
       const isSlowOperation = slowOperations.some(op => operationName.includes(op));
-      const timeoutMs = isSlowOperation ? 30000 : 15000; // 30s for slow, 15s for normal
+      const timeoutMs = isSlowOperation ? 45000 : 15000; // 45s for slow operations, 15s for normal
       
       const controller = new AbortController();
       const timeoutId = setTimeout(() => {
