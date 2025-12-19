@@ -27,6 +27,16 @@ import { useNavigation } from '@react-navigation/native';
 
 const { width } = Dimensions.get('window');
 
+// Safe navigation hook that works both inside and outside NavigationContainer
+const useSafeNavigation = () => {
+  try {
+    return useNavigation<any>();
+  } catch (error) {
+    // Not inside NavigationContainer, return null
+    return null;
+  }
+};
+
 // Utils
 const fmtMoney = (n?: number) =>
   typeof n === 'number' ? n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00';
@@ -132,7 +142,7 @@ const INITIATE_FUNDING = gql`
 `;
 
 const BankAccountScreen = ({ navigateTo }: { navigateTo?: (screen: string, params?: any) => void }) => {
-  const navigation = useNavigation<any>();
+  const navigation = useSafeNavigation();
   
   // Debug: Log navigateTo prop on mount and changes
   React.useEffect(() => {

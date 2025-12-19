@@ -615,11 +615,37 @@ export default function AppNavigator() {
                 />
               ),
             }}
-            listeners={{
+            listeners={({ navigation }) => ({
               tabPress: (e) => {
                 logger.log('Learn tab pressed');
+                // Prevent default navigation and ensure we go to LearnMain
+                const state = navigation.getState();
+                const learnRoute = state?.routes?.find((r: any) => r.name === 'Learn');
+                if (learnRoute?.state) {
+                  const currentRoute = learnRoute.state.routes?.[learnRoute.state.index || 0];
+                  logger.log('Current Learn stack route:', currentRoute?.name);
+                  if (currentRoute?.name !== 'LearnMain') {
+                    e.preventDefault();
+                    // Navigate to LearnMain
+                    logger.log('Navigating to LearnMain from:', currentRoute?.name);
+                    navigation.navigate('Learn', { 
+                      screen: 'LearnMain',
+                      params: undefined 
+                    });
+                  } else {
+                    logger.log('Already on LearnMain, allowing default navigation');
+                  }
+                } else {
+                  // If no state, navigate to LearnMain
+                  e.preventDefault();
+                  logger.log('No Learn stack state, navigating to LearnMain');
+                  navigation.navigate('Learn', { 
+                    screen: 'LearnMain',
+                    params: undefined 
+                  });
+                }
               },
-            }}
+            })}
           />
           <Tab.Screen 
             name="Community" 
