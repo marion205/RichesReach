@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,9 +12,22 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useQuery, useMutation } from '@apollo/client';
 // import { BlurView } from 'expo-blur'; // Removed for Expo Go compatibility
 // import LottieView from 'lottie-react-native'; // Removed for Expo Go compatibility
 import { useTheme } from '../theme/PersonalizedThemes';
+import {
+  SECURITY_EVENTS,
+  BIOMETRIC_SETTINGS,
+  COMPLIANCE_STATUSES,
+  SECURITY_SCORE,
+  UPDATE_BIOMETRIC_SETTINGS,
+  RESOLVE_SECURITY_EVENT,
+} from '../graphql/queries_corrected';
+import { connectSignal } from '../realtime/signal';
+import { useAuth } from '../contexts/AuthContext';
+import { SecurityInsights } from './SecurityInsights';
+import { SecurityGamification } from './SecurityGamification';
 
 const { width } = Dimensions.get('window');
 
@@ -45,17 +58,77 @@ export default function SecurityFortress({ onNavigate, onBiometricSetup, onSecur
   const handleBiometricSetup = onBiometricSetup || (() => {});
   const handleSecurityEventPress = onSecurityEventPress || (() => {});
   const theme = useTheme();
-  const [activeTab, setActiveTab] = useState<'overview' | 'biometrics' | 'events' | 'compliance'>('overview');
+  const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState<'overview' | 'insights' | 'gamification' | 'biometrics' | 'events' | 'compliance'>('overview');
   const [securityScore, setSecurityScore] = useState(85);
-  const [securityEvents, setSecurityEvents] = useState<SecurityEvent[]>([]);
-  const [biometricSettings, setBiometricSettings] = useState<BiometricSettings>({
-    faceId: true,
+  const [socket, setSocket] = useState<any>(null);
+  const refetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectAttemptsRef = useRef(0);
+  
+  // GraphQL Queries
+  const { data: eventsData, loading: eventsLoading, refetch: refetchEvents } = useQuery(SECURITY_EVENTS, {
+    variables: { limit: 50, resolved: null },
+    fetchPolicy: 'cache-and-network',
+    errorPolicy: 'all',
+  });
+  
+  const { data: biometricData, loading: biometricLoading, refetch: refetchBiometric } = useQuery(BIOMETRIC_SETTINGS, {
+    fetchPolicy: 'cache-and-network',
+    errorPolicy: 'all',
+  });
+  
+  const { data: complianceData, loading: complianceLoading } = useQuery(COMPLIANCE_STATUSES, {
+    fetchPolicy: 'cache-and-network',
+    errorPolicy: 'all',
+  });
+  
+  const { data: scoreData, loading: scoreLoading, refetch: refetchScore } = useQuery(SECURITY_SCORE, {
+    fetchPolicy: 'cache-and-network',
+    errorPolicy: 'all',
+  });
+  
+  // GraphQL Mutations
+  const [updateBiometricSettings] = useMutation(UPDATE_BIOMETRIC_SETTINGS, {
+    refetchQueries: [{ query: BIOMETRIC_SETTINGS }, { query: SECURITY_SCORE }],
+  });
+  
+  const [resolveSecurityEvent] = useMutation(RESOLVE_SECURITY_EVENT, {
+    refetchQueries: [{ query: SECURITY_EVENTS }, { query: SECURITY_SCORE }],
+  });
+  
+  const loading = eventsLoading || biometricLoading || complianceLoading || scoreLoading;
+  
+  // Transform GraphQL data to component state
+  const securityEvents: SecurityEvent[] = eventsData?.securityEvents?.map((e: any) => ({
+    id: e.id,
+    type: e.eventType,
+    threatLevel: e.threatLevel,
+    description: e.description,
+    timestamp: e.timestamp || e.createdAt,
+    resolved: e.resolved,
+  })) || [];
+  
+  const biometricSettings: BiometricSettings = biometricData?.biometricSettings ? {
+    faceId: biometricData.biometricSettings.faceId || false,
+    voiceId: biometricData.biometricSettings.voiceId || false,
+    behavioralId: biometricData.biometricSettings.behavioralId || true,
+    deviceFingerprint: biometricData.biometricSettings.deviceFingerprint || true,
+    locationTracking: biometricData.biometricSettings.locationTracking || false,
+  } : {
+    faceId: false,
     voiceId: false,
     behavioralId: true,
     deviceFingerprint: true,
     locationTracking: false,
-  });
-  const [loading, setLoading] = useState(true);
+  };
+  
+  const complianceStatuses = complianceData?.complianceStatuses || [];
+  
+  useEffect(() => {
+    if (scoreData?.securityScore) {
+      setSecurityScore(scoreData.securityScore.score || 85);
+    }
+  }, [scoreData]);
   
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -63,10 +136,159 @@ export default function SecurityFortress({ onNavigate, onBiometricSetup, onSecur
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    loadData();
     startEntranceAnimation();
     startPulseAnimation();
   }, []);
+  
+  // Debounced refetch to prevent hammering the API
+  const debouncedRefetch = useCallback(() => {
+    // Clear existing timeout
+    if (refetchTimeoutRef.current) {
+      clearTimeout(refetchTimeoutRef.current);
+    }
+    
+    // Schedule a single refetch after 500ms
+    refetchTimeoutRef.current = setTimeout(() => {
+      console.log('[SecurityFortress] Debounced refetch triggered');
+      refetchEvents();
+      refetchScore();
+      refetchTimeoutRef.current = null;
+    }, 500);
+  }, [refetchEvents, refetchScore]);
+
+  // Real-time security event monitoring via WebSocket with resilience
+  useEffect(() => {
+    if (!user?.id) return;
+    
+    const setupWebSocket = async () => {
+      try {
+        const getJwt = async () => {
+          // Get JWT token for authentication
+          const { getJwt: getJwtToken } = await import('../auth/token');
+          return await getJwtToken();
+        };
+        
+        const ws = connectSignal(getJwt);
+        let isSubscribed = false;
+        
+        const subscribe = async () => {
+          if (!isSubscribed && ws.connected) {
+            try {
+              const token = await getJwt();
+              ws.emit('subscribe-security-events', { 
+                userId: user.id,
+                token: token,
+              });
+              isSubscribed = true;
+            } catch (error) {
+              console.error('[SecurityFortress] Failed to get token for subscription:', error);
+            }
+          }
+        };
+        
+        ws.on('connect', () => {
+          const correlationId = Math.random().toString(36).substring(7);
+          console.log(`[SecurityFortress] [${correlationId}] WebSocket connected`);
+          reconnectAttemptsRef.current = 0;
+          subscribe();
+        });
+        
+        ws.on('disconnect', () => {
+          console.log('[SecurityFortress] WebSocket disconnected');
+          isSubscribed = false;
+          
+          // Auto-reconnect with exponential backoff
+          const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000);
+          reconnectAttemptsRef.current++;
+          console.log(`[SecurityFortress] Reconnecting in ${delay}ms (attempt ${reconnectAttemptsRef.current})`);
+          
+          setTimeout(() => {
+            if (!ws.connected) {
+              ws.connect();
+            }
+          }, delay);
+        });
+        
+        ws.on('connect_error', (error: any) => {
+          console.error('[SecurityFortress] WebSocket connection error:', error);
+        });
+        
+        ws.on('security-events-subscribed', (data: any) => {
+          console.log(`[SecurityFortress] [${data.correlationId || 'unknown'}] Subscribed to security events:`, data);
+        });
+        
+        ws.on('security-events-error', (data: any) => {
+          console.error(`[SecurityFortress] [${data.correlationId || 'unknown'}] Security events error:`, data);
+        });
+        
+        ws.on('security-event-created', (data: any) => {
+          const correlationId = data.correlationId || 'unknown';
+          console.log(`[SecurityFortress] [${correlationId}] New security event received:`, {
+            eventId: data.event?.id,
+            userId: data.userId,
+            timestamp: new Date().toISOString(),
+          });
+          // Debounced refetch to prevent multiple rapid refetches
+          debouncedRefetch();
+        });
+        
+        ws.on('security-event-resolved', (data: any) => {
+          const correlationId = data.correlationId || 'unknown';
+          console.log(`[SecurityFortress] [${correlationId}] Security event resolved:`, {
+            eventId: data.event?.id,
+            userId: data.userId,
+            timestamp: new Date().toISOString(),
+          });
+          // Debounced refetch
+          debouncedRefetch();
+        });
+        
+        ws.connect();
+        setSocket(ws);
+        
+        // Fallback polling if WebSocket fails (every 30 seconds)
+        const pollInterval = setInterval(() => {
+          if (!ws.connected) {
+            console.log('[SecurityFortress] WebSocket not connected, using fallback polling');
+            refetchEvents();
+            refetchScore();
+          }
+        }, 30000);
+        
+        return () => {
+          clearInterval(pollInterval);
+          if (refetchTimeoutRef.current) {
+            clearTimeout(refetchTimeoutRef.current);
+          }
+          if (ws) {
+            ws.emit('unsubscribe-security-events', { userId: user.id });
+            ws.disconnect();
+          }
+        };
+      } catch (error) {
+        console.error('[SecurityFortress] WebSocket setup error:', error);
+        // Fallback to polling only
+        const pollInterval = setInterval(() => {
+          refetchEvents();
+          refetchScore();
+        }, 30000);
+        
+        return () => clearInterval(pollInterval);
+      }
+    };
+    
+    const cleanup = setupWebSocket();
+    
+    return () => {
+      if (cleanup) {
+        cleanup.then(fn => fn && fn());
+      }
+      if (socket) {
+        socket.emit('unsubscribe-security-events', { userId: user?.id });
+        socket.disconnect();
+      }
+    };
+  }, [user?.id, debouncedRefetch]);
 
   const startEntranceAnimation = () => {
     Animated.parallel([
@@ -100,46 +322,7 @@ export default function SecurityFortress({ onNavigate, onBiometricSetup, onSecur
     ).start();
   };
 
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      
-      // Simulate API calls
-      const mockSecurityEvents: SecurityEvent[] = [
-        {
-          id: '1',
-          type: 'suspicious_login',
-          threatLevel: 'medium',
-          description: 'Login attempt from new device in different location',
-          timestamp: '2 hours ago',
-          resolved: false,
-        },
-        {
-          id: '2',
-          type: 'fraud_detection',
-          threatLevel: 'high',
-          description: 'Unusual trading pattern detected - large position size',
-          timestamp: '1 day ago',
-          resolved: true,
-        },
-        {
-          id: '3',
-          type: 'biometric_failure',
-          threatLevel: 'low',
-          description: 'Face ID authentication failed multiple times',
-          timestamp: '3 days ago',
-          resolved: true,
-        },
-      ];
-      
-      setSecurityEvents(mockSecurityEvents);
-    } catch (error) {
-      console.error('Error loading security data:', error);
-      Alert.alert('Error', 'Failed to load security data');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Data is loaded via GraphQL queries, no need for separate loadData function
 
   const getSecurityScoreColor = (score: number) => {
     if (score >= 90) return '#34C759';
@@ -175,11 +358,37 @@ export default function SecurityFortress({ onNavigate, onBiometricSetup, onSecur
     }
   };
 
-  const toggleBiometricSetting = (setting: keyof BiometricSettings) => {
-    setBiometricSettings(prev => ({
-      ...prev,
-      [setting]: !prev[setting]
-    }));
+  const toggleBiometricSetting = async (setting: keyof BiometricSettings) => {
+    try {
+      const newValue = !biometricSettings[setting];
+      const variables: any = {};
+      
+      // Map camelCase to GraphQL variable names
+      if (setting === 'faceId') variables.faceId = newValue;
+      else if (setting === 'voiceId') variables.voiceId = newValue;
+      else if (setting === 'behavioralId') variables.behavioralId = newValue;
+      else if (setting === 'deviceFingerprint') variables.deviceFingerprint = newValue;
+      else if (setting === 'locationTracking') variables.locationTracking = newValue;
+      
+      await updateBiometricSettings({ variables });
+      await refetchBiometric();
+      await refetchScore();
+    } catch (error) {
+      console.error('Error updating biometric setting:', error);
+      Alert.alert('Error', 'Failed to update biometric setting');
+    }
+  };
+  
+  const handleResolveEvent = async (eventId: string) => {
+    try {
+      await resolveSecurityEvent({ variables: { eventId } });
+      await refetchEvents();
+      await refetchScore();
+      Alert.alert('Success', 'Security event resolved');
+    } catch (error) {
+      console.error('Error resolving security event:', error);
+      Alert.alert('Error', 'Failed to resolve security event');
+    }
   };
 
   if (loading) {
@@ -211,10 +420,17 @@ export default function SecurityFortress({ onNavigate, onBiometricSetup, onSecur
         <Text style={styles.headerSubtitle}>Your digital wealth protection</Text>
       </View>
 
-      {/* Tab Navigation */}
-      <View style={styles.tabNavigation}>
+      {/* Tab Navigation - Scrollable */}
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        style={styles.tabNavigationContainer}
+        contentContainerStyle={styles.tabNavigationContent}
+      >
         {[
           { id: 'overview', name: 'Overview', icon: '🛡️' },
+          { id: 'insights', name: 'Insights', icon: '🤖' },
+          { id: 'gamification', name: 'Badges', icon: '🏆' },
           { id: 'biometrics', name: 'Biometrics', icon: '👤' },
           { id: 'events', name: 'Events', icon: '🚨' },
           { id: 'compliance', name: 'Compliance', icon: '📋' },
@@ -228,19 +444,30 @@ export default function SecurityFortress({ onNavigate, onBiometricSetup, onSecur
             onPress={() => setActiveTab(tab.id as any)}
           >
             <Text style={styles.tabIcon}>{tab.icon}</Text>
-            <Text style={[
-              styles.tabText,
-              activeTab === tab.id && styles.tabTextActive,
-            ]}>
+            <Text 
+              style={[
+                styles.tabText,
+                activeTab === tab.id && styles.tabTextActive,
+              ]}
+              numberOfLines={1}
+            >
               {tab.name}
             </Text>
           </TouchableOpacity>
         ))}
-      </View>
+      </ScrollView>
 
       {/* Content */}
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {activeTab === 'overview' && (
+      {activeTab === 'insights' && (
+        <SecurityInsights />
+      )}
+      
+      {activeTab === 'gamification' && (
+        <SecurityGamification />
+      )}
+      
+      {activeTab === 'overview' && (
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
           <View style={styles.overviewContent}>
             {/* Security Score */}
             <View style={styles.securityScoreCard}>
@@ -319,7 +546,12 @@ export default function SecurityFortress({ onNavigate, onBiometricSetup, onSecur
                 <TouchableOpacity
                   key={event.id}
                   style={styles.eventItem}
-                  onPress={() => handleSecurityEventPress(event)}
+                  onPress={() => {
+                    if (!event.resolved) {
+                      handleResolveEvent(event.id);
+                    }
+                    handleSecurityEventPress(event);
+                  }}
                 >
                   <Text style={styles.eventIcon}>{getThreatLevelIcon(event.threatLevel)}</Text>
                   <View style={styles.eventInfo}>
@@ -340,9 +572,78 @@ export default function SecurityFortress({ onNavigate, onBiometricSetup, onSecur
               ))}
             </View>
           </View>
-        )}
+        </ScrollView>
+      )}
 
-        {activeTab === 'biometrics' && (
+      {activeTab === 'events' && (
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          <View style={styles.eventsContent}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Security Events</Text>
+              <Text style={styles.sectionSubtitle}>
+                Monitor and manage security alerts
+              </Text>
+            </View>
+
+            {securityEvents.length > 0 ? (
+              securityEvents.map((event) => (
+                <SecurityEventCard
+                  key={event.id}
+                  event={event}
+                  onPress={() => {
+                    if (!event.resolved) {
+                      handleResolveEvent(event.id);
+                    }
+                    onSecurityEventPress(event);
+                  }}
+                  getThreatLevelColor={getThreatLevelColor}
+                  getThreatLevelIcon={getThreatLevelIcon}
+                />
+              ))
+            ) : (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyStateText}>No security events</Text>
+              </View>
+            )}
+          </View>
+        </ScrollView>
+      )}
+
+      {activeTab === 'compliance' && (
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          <View style={styles.complianceContent}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Compliance Status</Text>
+              <Text style={styles.sectionSubtitle}>
+                Security standards and certifications
+              </Text>
+            </View>
+
+            {complianceStatuses.length > 0 ? (
+              complianceStatuses.map((compliance: any) => (
+                <ComplianceCard 
+                  key={compliance.id} 
+                  compliance={{
+                    standard: compliance.standard,
+                    status: compliance.status,
+                    score: compliance.score,
+                    lastAudit: compliance.lastAudit,
+                    nextAudit: compliance.nextAudit,
+                    color: compliance.status === 'Compliant' ? '#34C759' : '#FF9500',
+                  }} 
+                />
+              ))
+            ) : (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyStateText}>No compliance data available</Text>
+              </View>
+            )}
+          </View>
+        </ScrollView>
+      )}
+
+      {activeTab === 'biometrics' && (
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
           <View style={styles.biometricsContent}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Biometric Authentication</Text>
@@ -419,77 +720,8 @@ export default function SecurityFortress({ onNavigate, onBiometricSetup, onSecur
               </LinearGradient>
             </TouchableOpacity>
           </View>
-        )}
-
-        {activeTab === 'events' && (
-          <View style={styles.eventsContent}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Security Events</Text>
-              <Text style={styles.sectionSubtitle}>
-                Monitor and manage security alerts
-              </Text>
-            </View>
-
-            {securityEvents.map((event) => (
-              <SecurityEventCard
-                key={event.id}
-                event={event}
-                onPress={() => onSecurityEventPress(event)}
-                getThreatLevelColor={getThreatLevelColor}
-                getThreatLevelIcon={getThreatLevelIcon}
-              />
-            ))}
-          </View>
-        )}
-
-        {activeTab === 'compliance' && (
-          <View style={styles.complianceContent}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Compliance Status</Text>
-              <Text style={styles.sectionSubtitle}>
-                Security standards and certifications
-              </Text>
-            </View>
-
-            {[
-              {
-                standard: 'SOC 2 Type II',
-                status: 'Compliant',
-                score: 95,
-                lastAudit: '2024-01-15',
-                nextAudit: '2025-01-15',
-                color: '#34C759',
-              },
-              {
-                standard: 'PCI DSS',
-                status: 'Compliant',
-                score: 98,
-                lastAudit: '2024-02-01',
-                nextAudit: '2025-02-01',
-                color: '#34C759',
-              },
-              {
-                standard: 'GDPR',
-                status: 'Compliant',
-                score: 92,
-                lastAudit: '2024-01-20',
-                nextAudit: '2025-01-20',
-                color: '#34C759',
-              },
-              {
-                standard: 'CCPA',
-                status: 'Compliant',
-                score: 89,
-                lastAudit: '2024-01-25',
-                nextAudit: '2025-01-25',
-                color: '#34C759',
-              },
-            ].map((compliance, index) => (
-              <ComplianceCard key={index} compliance={compliance} />
-            ))}
-          </View>
-        )}
-      </ScrollView>
+        </ScrollView>
+      )}
     </Animated.View>
   );
 }
@@ -594,6 +826,17 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 4,
   },
+  tabNavigationContainer: {
+    backgroundColor: 'white',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+    maxHeight: 70,
+  },
+  tabNavigationContent: {
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+  },
   tabNavigation: {
     flexDirection: 'row',
     backgroundColor: 'white',
@@ -601,13 +844,15 @@ const styles = StyleSheet.create({
     borderBottomColor: '#e0e0e0',
   },
   tabButton: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginHorizontal: 4,
     borderBottomWidth: 2,
     borderBottomColor: 'transparent',
+    minWidth: 90,
   },
   tabButtonActive: {
     borderBottomColor: '#667eea',
@@ -943,5 +1188,15 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1a1a1a',
     marginTop: 2,
+  },
+  emptyState: {
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyStateText: {
+    fontSize: 14,
+    color: '#8E8E93',
+    textAlign: 'center',
   },
 });

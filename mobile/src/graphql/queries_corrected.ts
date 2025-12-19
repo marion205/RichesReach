@@ -820,3 +820,211 @@ export const ALL_QUERIES = {
   SUBSCRIPTION_PLANS,
   CURRENT_SUBSCRIPTION,
 };
+
+// ============================================================================
+// SECURITY FORTRESS QUERIES
+// ============================================================================
+
+export const SECURITY_EVENTS = gql`
+  query SecurityEvents($limit: Int, $resolved: Boolean) {
+    securityEvents(limit: $limit, resolved: $resolved) {
+      id
+      eventType
+      threatLevel
+      description
+      metadata
+      resolved
+      resolvedAt
+      timestamp
+      createdAt
+    }
+  }
+`;
+
+export const BIOMETRIC_SETTINGS = gql`
+  query BiometricSettings {
+    biometricSettings {
+      id
+      faceId
+      voiceId
+      behavioralId
+      deviceFingerprint
+      locationTracking
+      lastUpdated
+      createdAt
+    }
+  }
+`;
+
+export const COMPLIANCE_STATUSES = gql`
+  query ComplianceStatuses {
+    complianceStatuses {
+      id
+      standard
+      status
+      score
+      lastAudit
+      nextAudit
+      auditReportUrl
+      notes
+      updatedAt
+    }
+  }
+`;
+
+export const SECURITY_SCORE = gql`
+  query SecurityScore {
+    securityScore {
+      id
+      score
+      factors
+      calculatedAt
+    }
+  }
+`;
+
+// ============================================================================
+// SECURITY FORTRESS MUTATIONS
+// ============================================================================
+
+export const UPDATE_BIOMETRIC_SETTINGS = gql`
+  mutation UpdateBiometricSettings(
+    $faceId: Boolean
+    $voiceId: Boolean
+    $behavioralId: Boolean
+    $deviceFingerprint: Boolean
+    $locationTracking: Boolean
+  ) {
+    updateBiometricSettings(
+      faceId: $faceId
+      voiceId: $voiceId
+      behavioralId: $behavioralId
+      deviceFingerprint: $deviceFingerprint
+      locationTracking: $locationTracking
+    ) {
+      success
+      message
+      biometricSettings {
+        id
+        faceId
+        voiceId
+        behavioralId
+        deviceFingerprint
+        locationTracking
+      }
+    }
+  }
+`;
+
+export const RESOLVE_SECURITY_EVENT = gql`
+  mutation ResolveSecurityEvent($eventId: String!) {
+    resolveSecurityEvent(eventId: $eventId) {
+      success
+      message
+      event {
+        id
+        resolved
+        resolvedAt
+      }
+    }
+  }
+`;
+
+// ============================================================================
+// ZERO TRUST ARCHITECTURE QUERIES
+// ============================================================================
+
+export const DEVICE_TRUSTS = gql`
+  query DeviceTrusts {
+    deviceTrusts {
+      id
+      deviceId
+      trustScore
+      isTrusted
+      lastVerified
+      firstSeen
+      verificationCount
+    }
+  }
+`;
+
+export const ACCESS_POLICIES = gql`
+  query AccessPolicies {
+    accessPolicies {
+      id
+      action
+      resource
+      policyType
+      conditions
+    }
+  }
+`;
+
+export const ZERO_TRUST_SUMMARY = gql`
+  query ZeroTrustSummary {
+    zeroTrustSummary {
+      userId
+      devices
+      averageTrustScore
+      lastVerification
+      requiresMfa
+      riskLevel
+    }
+  }
+`;
+
+export const REGISTER_DEVICE = gql`
+  mutation RegisterDevice($deviceId: String!, $deviceFingerprint: String!) {
+    registerDevice(deviceId: $deviceId, deviceFingerprint: $deviceFingerprint) {
+      success
+      message
+      deviceTrust {
+        id
+        deviceId
+        trustScore
+        isTrusted
+      }
+    }
+  }
+`;
+
+export const UPDATE_DEVICE_TRUST = gql`
+  mutation UpdateDeviceTrust($deviceId: String!, $trustScore: Int!, $reason: String) {
+    updateDeviceTrust(deviceId: $deviceId, trustScore: $trustScore, reason: $reason) {
+      success
+      message
+      deviceTrust {
+        id
+        trustScore
+        isTrusted
+      }
+    }
+  }
+`;
+
+// ============================================================================
+// AI SECURITY INSIGHTS QUERIES
+// ============================================================================
+
+export const SECURITY_INSIGHTS = gql`
+  query SecurityInsights {
+    securityScore {
+      id
+      score
+      factors
+      calculatedAt
+    }
+    zeroTrustSummary {
+      averageTrustScore
+      riskLevel
+      requiresMfa
+    }
+    securityEvents(limit: 7, resolved: false) {
+      id
+      eventType
+      threatLevel
+      description
+      createdAt
+    }
+  }
+`;

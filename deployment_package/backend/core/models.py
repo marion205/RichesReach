@@ -420,6 +420,262 @@ from .paper_trading_models import (
     PaperTradingTrade,
 )
 
+# Security Fortress Models
+class SecurityEvent(models.Model):
+    """Track security events and threats"""
+    THREAT_LEVELS = [
+        ('low', 'Low'),
+        ('medium', 'Medium'),
+        ('high', 'High'),
+        ('critical', 'Critical'),
+    ]
+    
+    EVENT_TYPES = [
+        ('suspicious_login', 'Suspicious Login'),
+        ('fraud_detection', 'Fraud Detection'),
+        ('biometric_failure', 'Biometric Failure'),
+        ('unusual_activity', 'Unusual Activity'),
+        ('device_change', 'Device Change'),
+        ('location_change', 'Location Change'),
+        ('password_breach', 'Password Breach'),
+        ('api_abuse', 'API Abuse'),
+    ]
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='security_events')
+    event_type = models.CharField(max_length=50, choices=EVENT_TYPES)
+    threat_level = models.CharField(max_length=20, choices=THREAT_LEVELS)
+    description = models.TextField()
+    metadata = models.JSONField(default=dict, blank=True)  # Store additional event data
+    resolved = models.BooleanField(default=False)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    resolved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='resolved_events')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', '-created_at']),
+            models.Index(fields=['threat_level', 'resolved']),
+        ]
+    
+    def __str__(self):
+        return f"{self.user.email} - {self.event_type} ({self.threat_level})"
+
+
+class BiometricSettings(models.Model):
+    """User biometric authentication settings"""
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='biometric_settings')
+    face_id_enabled = models.BooleanField(default=False)
+    voice_id_enabled = models.BooleanField(default=False)
+    behavioral_id_enabled = models.BooleanField(default=True)
+    device_fingerprint_enabled = models.BooleanField(default=True)
+    location_tracking_enabled = models.BooleanField(default=False)
+    face_id_data = models.TextField(blank=True)  # Encrypted biometric data
+    voice_id_data = models.TextField(blank=True)  # Encrypted voice print
+    device_fingerprint = models.CharField(max_length=255, blank=True)
+    last_updated = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"Biometric Settings for {self.user.email}"
+
+
+class ComplianceStatus(models.Model):
+    """Track compliance readiness and controls coverage
+    
+    NOTE: These scores represent internal readiness indicators, not official certifications.
+    For production, consider renaming to 'ReadinessScore' or 'ControlsCoverage' to avoid
+    legal/compliance confusion.
+    """
+    STANDARDS = [
+        ('SOC2', 'SOC 2 Type II'),
+        ('PCI_DSS', 'PCI DSS'),
+        ('GDPR', 'GDPR'),
+        ('CCPA', 'CCPA'),
+        ('HIPAA', 'HIPAA'),
+    ]
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    standard = models.CharField(max_length=50, choices=STANDARDS, unique=True)
+    status = models.CharField(max_length=50, default='Compliant')  # Consider: 'ReadinessStatus'
+    score = models.IntegerField(default=0)  # 0-100 readiness score (not certification)
+    last_audit_date = models.DateField(null=True, blank=True)
+    next_audit_date = models.DateField(null=True, blank=True)
+    audit_report_url = models.URLField(blank=True, null=True)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['standard']
+    
+    def __str__(self):
+        return f"{self.standard} - {self.status}"
+
+
+class SecurityScore(models.Model):
+    """Track user security score over time"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='security_scores')
+    score = models.IntegerField(default=0)  # 0-100
+    factors = models.JSONField(default=dict)  # Breakdown of score factors
+    calculated_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-calculated_at']
+        indexes = [
+            models.Index(fields=['user', '-calculated_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.user.email} - {self.score}/100"
+
+
+class DeviceTrust(models.Model):
+    """Zero Trust: Device trust scores and fingerprints"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='trusted_devices')
+    device_id = models.CharField(max_length=255, db_index=True)
+    device_fingerprint = models.TextField()  # JSON-encoded device characteristics
+    trust_score = models.IntegerField(default=50)  # 0-100
+    first_seen = models.DateTimeField(auto_now_add=True)
+    last_verified = models.DateTimeField(auto_now=True)
+    last_ip_address = models.GenericIPAddressField(null=True, blank=True)
+    is_trusted = models.BooleanField(default=False)
+    verification_count = models.IntegerField(default=0)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = [['user', 'device_id']]
+        indexes = [
+            models.Index(fields=['user', 'device_id']),
+            models.Index(fields=['user', '-trust_score']),
+        ]
+    
+    def __str__(self):
+        return f"{self.user.email} - Device {self.device_id[:8]} (Trust: {self.trust_score})"
+
+
+class AccessPolicy(models.Model):
+    """Zero Trust: Access policies for least privilege"""
+    POLICY_TYPES = [
+        ('allow', 'Allow'),
+        ('deny', 'Deny'),
+        ('mfa_required', 'MFA Required'),
+    ]
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='access_policies')
+    action = models.CharField(max_length=100)  # e.g., 'create_trade', 'withdraw_funds'
+    resource = models.CharField(max_length=100)  # e.g., 'trading', 'banking'
+    policy_type = models.CharField(max_length=20, choices=POLICY_TYPES, default='mfa_required')
+    conditions = models.JSONField(default=dict)  # e.g., {'trust_score_min': 70, 'device_trusted': True}
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = [['user', 'action', 'resource']]
+        indexes = [
+            models.Index(fields=['user', 'action', 'resource']),
+        ]
+    
+    def __str__(self):
+        return f"{self.user.email} - {self.action} on {self.resource}: {self.policy_type}"
+
+
+class SupplyChainVendor(models.Model):
+    """Supply chain vendor monitoring for compliance"""
+    VENDOR_TYPES = [
+        ('payment_processor', 'Payment Processor'),
+        ('data_provider', 'Data Provider'),
+        ('cloud_provider', 'Cloud Provider'),
+        ('security_service', 'Security Service'),
+        ('ai_service', 'AI Service'),
+    ]
+    
+    STATUS_CHOICES = [
+        ('active', 'Active'),
+        ('monitoring', 'Under Monitoring'),
+        ('suspended', 'Suspended'),
+        ('terminated', 'Terminated'),
+    ]
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=255)
+    vendor_type = models.CharField(max_length=50, choices=VENDOR_TYPES)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
+    compliance_certifications = models.JSONField(default=list)  # e.g., ['SOC2', 'ISO27001', 'PCI-DSS']
+    last_audit_date = models.DateTimeField(null=True, blank=True)
+    next_audit_date = models.DateTimeField(null=True, blank=True)
+    risk_score = models.IntegerField(default=50)  # 0-100
+    security_incidents = models.IntegerField(default=0)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-risk_score', 'name']
+        indexes = [
+            models.Index(fields=['vendor_type', 'status']),
+            models.Index(fields=['risk_score']),
+        ]
+    
+    def __str__(self):
+        return f"{self.name} ({self.vendor_type}) - Risk: {self.risk_score}"
+
+
+class ComplianceAutomation(models.Model):
+    """Automated compliance checks and reports"""
+    COMPLIANCE_STANDARDS = [
+        ('SOC2', 'SOC 2'),
+        ('ISO27001', 'ISO 27001'),
+        ('PCI-DSS', 'PCI-DSS'),
+        ('GDPR', 'GDPR'),
+        ('CCPA', 'CCPA'),
+        ('HIPAA', 'HIPAA'),
+    ]
+    
+    CHECK_TYPES = [
+        ('automated', 'Automated'),
+        ('manual', 'Manual'),
+        ('scheduled', 'Scheduled'),
+    ]
+    
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('running', 'Running'),
+        ('passed', 'Passed'),
+        ('failed', 'Failed'),
+        ('warning', 'Warning'),
+    ]
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    standard = models.CharField(max_length=50, choices=COMPLIANCE_STANDARDS)
+    check_type = models.CharField(max_length=20, choices=CHECK_TYPES, default='automated')
+    check_name = models.CharField(max_length=255)
+    description = models.TextField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    last_run = models.DateTimeField(null=True, blank=True)
+    next_run = models.DateTimeField(null=True, blank=True)
+    result = models.JSONField(default=dict, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['standard', 'check_name']
+        indexes = [
+            models.Index(fields=['standard', 'status']),
+            models.Index(fields=['next_run']),
+        ]
+    
+    def __str__(self):
+        return f"{self.standard} - {self.check_name} ({self.status})"
+
+
 # Import signal performance models so Django can detect them for migrations
 from .signal_performance_models import (
     DayTradingSignal,

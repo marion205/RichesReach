@@ -6689,33 +6689,219 @@ try:
     import socketio
     from socketio import ASGIApp
     
-    # Create socket.io server
-    _sio = socketio.AsyncServer(
-        cors_allowed_origins="*",
-        async_mode='asgi',
-        logger=True,
-        engineio_logger=True,
-    )
+    # Create socket.io server with Redis adapter for multi-instance support
+    # This allows broadcasting across multiple workers/containers
+    redis_url = os.getenv('REDIS_URL', None)
+    if not redis_url and _redis_client:
+        # Construct Redis URL from existing client config
+        redis_host = os.getenv('REDIS_HOST', 'localhost')
+        redis_port = int(os.getenv('REDIS_PORT', 6379))
+        redis_password = os.getenv('REDIS_PASSWORD', None)
+        if redis_password:
+            redis_url = f"redis://:{redis_password}@{redis_host}:{redis_port}/0"
+        else:
+            redis_url = f"redis://{redis_host}:{redis_port}/0"
+    
+    if redis_url:
+        # Use Redis adapter for production (multi-instance support)
+        try:
+            # Try python-socketio[redis] adapter
+            from socketio import AsyncRedisManager
+            redis_manager = AsyncRedisManager(redis_url)
+            _sio = socketio.AsyncServer(
+                client_manager=redis_manager,
+                cors_allowed_origins="*",
+                async_mode='asgi',
+                logger=True,
+                engineio_logger=True,
+            )
+            print(f"✅ Socket.io using Redis adapter for multi-instance support: {redis_url}")
+        except ImportError:
+            print("⚠️ python-socketio[redis] not installed. Install with: pip install 'python-socketio[redis]'")
+            print("⚠️ Falling back to in-memory adapter (single instance only)")
+            _sio = socketio.AsyncServer(
+                cors_allowed_origins="*",
+                async_mode='asgi',
+                logger=True,
+                engineio_logger=True,
+            )
+        except Exception as e:
+            print(f"⚠️ Redis adapter failed ({e}), using in-memory: {e}")
+            _sio = socketio.AsyncServer(
+                cors_allowed_origins="*",
+                async_mode='asgi',
+                logger=True,
+                engineio_logger=True,
+            )
+    else:
+        # Fallback to in-memory for development
+        _sio = socketio.AsyncServer(
+            cors_allowed_origins="*",
+            async_mode='asgi',
+            logger=True,
+            engineio_logger=True,
+        )
+        print("⚠️ Socket.io using in-memory adapter (single instance only)")
+        print("   Set REDIS_URL for multi-instance support")
+    
+    # Set Redis client for Django to publish events
+    try:
+        from core.websocket_broadcast import set_redis_client
+        set_redis_client(_redis_client)
+        if _redis_client:
+            print(f"✅ Redis client set for Django→Socket.IO broadcasting (multi-instance safe)")
+        else:
+            print(f"⚠️ No Redis client - multi-instance broadcasting will not work")
+    except Exception as e:
+        print(f"⚠️ Could not set Redis client for broadcasting: {e}")
+    
+    # Start Redis subscriber for security events (if Redis available)
+    _redis_subscriber_task = None
+    if _redis_client:
+        try:
+            import asyncio
+            import json
+            
+            async def redis_security_subscriber():
+                """Subscribe to Redis and emit security events to Socket.IO rooms
+                
+                PRODUCTION PATTERN: Django publishes JSON → Redis → Socket.IO instances emit
+                """
+                # Use async Redis client if available, otherwise use sync with asyncio
+                try:
+                    import aioredis
+                    redis_async = await aioredis.from_url(redis_url or f"redis://localhost:6379/0")
+                    pubsub = redis_async.pubsub()
+                    await pubsub.subscribe('socketio:security:events')
+                    print("✅ Redis async subscriber started for security events")
+                    
+                    async for message in pubsub.listen():
+                        if message['type'] == 'message':
+                            try:
+                                envelope = json.loads(message['data'])
+                                
+                                # Extract room from userId
+                                user_id = envelope.get('userId')
+                                room = f'security-events-{user_id}'
+                                event_type = envelope.get('type')
+                                correlation_id = envelope.get('correlationId', 'unknown')
+                                
+                                # Emit to room (works across instances via Redis adapter)
+                                await _sio.emit(event_type, envelope, room=room)
+                                
+                                print(f"🔒 [Security] [{correlation_id}] Emitted {event_type} to room {room}")
+                            except Exception as e:
+                                print(f"⚠️ Redis subscriber message processing error: {e}")
+                except ImportError:
+                    # Fallback: Use sync Redis with asyncio.to_thread
+                    print("⚠️ aioredis not available, using sync Redis with polling")
+                    pubsub = _redis_client.pubsub()
+                    pubsub.subscribe('socketio:security:events')
+                    
+                    while True:
+                        try:
+                            # Poll for messages (non-blocking)
+                            message = pubsub.get_message(ignore_subscribe_messages=True, timeout=0.1)
+                            if message and message['type'] == 'message':
+                                envelope = json.loads(message['data'])
+                                
+                                user_id = envelope.get('userId')
+                                room = f'security-events-{user_id}'
+                                event_type = envelope.get('type')
+                                correlation_id = envelope.get('correlationId', 'unknown')
+                                
+                                await _sio.emit(event_type, envelope, room=room)
+                                print(f"🔒 [Security] [{correlation_id}] Emitted {event_type} to room {room}")
+                            
+                            await asyncio.sleep(0.1)  # Small delay to prevent CPU spinning
+                        except Exception as e:
+                            print(f"⚠️ Redis subscriber error: {e}")
+                            await asyncio.sleep(1)
+            
+            # Start subscriber task
+            # Note: This will start when the ASGI app runs (event loop is active)
+            # The task will be created and scheduled automatically
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    _redis_subscriber_task = loop.create_task(redis_security_subscriber())
+                    print("✅ Redis subscriber task started (event loop running)")
+                else:
+                    # Event loop not running yet - will start when app runs
+                    print("✅ Redis subscriber task will start when event loop begins")
+                    # Store the coroutine to start later
+                    _redis_subscriber_coro = redis_security_subscriber()
+            except RuntimeError:
+                # No event loop - will be created when app starts
+                print("✅ Redis subscriber will start when ASGI app initializes")
+                _redis_subscriber_coro = redis_security_subscriber()
+        except Exception as e:
+            print(f"⚠️ Could not start Redis subscriber: {e}")
+            import traceback
+            traceback.print_exc()
     
     # Socket.io event handlers for Fireside Room
+    # Store authenticated user IDs per socket
+    _socket_users = {}  # {sid: user_id}
+    
     @_sio.event
     async def connect(sid, environ, auth):
-        # Allow all connections for now (auth can be added later)
-        # Check for auth token if provided
+        """Handle client connection with authentication and auto-join security room"""
+        import uuid
+        correlation_id = str(uuid.uuid4())[:8]
+        
+        # Extract auth token
         auth_token = None
         if auth and isinstance(auth, dict):
             auth_token = auth.get('token')
         elif environ.get('HTTP_AUTHORIZATION'):
-            # Extract token from Authorization header
             auth_header = environ.get('HTTP_AUTHORIZATION', '')
             if auth_header.startswith('Bearer '):
                 auth_token = auth_header[7:]
         
-        print(f"✅ [Socket.IO] Client connected: {sid} (auth: {'yes' if auth_token else 'no'})")
-        return True  # Always allow connection
+        # Authenticate user and extract user_id
+        user_id = None
+        if auth_token:
+            try:
+                # Verify JWT token and extract user_id
+                from core.authentication import get_user_from_token
+                import asyncio
+                from concurrent.futures import ThreadPoolExecutor
+                
+                # Run synchronous JWT verification in thread pool
+                loop = asyncio.get_event_loop()
+                executor = ThreadPoolExecutor(max_workers=1)
+                
+                # Verify token and get user
+                user = await loop.run_in_executor(executor, get_user_from_token, auth_token)
+                
+                if user and not user.is_anonymous:
+                    user_id = str(user.id)
+                    print(f"🔒 [Security] [{correlation_id}] User authenticated: {user.email} (ID: {user_id})")
+                else:
+                    print(f"🔒 [Security] [{correlation_id}] Auth failed: Invalid token or user not found")
+            except Exception as e:
+                print(f"🔒 [Security] [{correlation_id}] Auth error: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        # Store user_id for this socket
+        if user_id:
+            _socket_users[sid] = user_id
+            # Auto-join security events room (server-assigned, not client-provided)
+            room = f'security-events-{user_id}'
+            await _sio.enter_room(sid, room)
+            print(f"🔒 [Security] [{correlation_id}] Socket {sid} auto-joined room {room} (user: {user_id})")
+        else:
+            print(f"✅ [Socket.IO] [{correlation_id}] Client connected: {sid} (anonymous)")
+        
+        return True  # Allow connection (can restrict later)
     
     @_sio.event
     async def disconnect(sid):
+        # Clean up user mapping
+        if sid in _socket_users:
+            del _socket_users[sid]
         print(f"👋 [Socket.IO] Client disconnected: {sid}")
     
     # Fireside Room handlers - use 'on' decorator for custom event names
@@ -6735,6 +6921,87 @@ try:
         await _sio.leave_room(sid, room)
         print(f"🔥 [Fireside] Client {sid} left room {room}")
         await _sio.emit('user-left', {'userId': sid, 'room': room}, room=room)
+    
+    # Rate limiting for subscribe/unsubscribe
+    _subscribe_attempts = {}  # {sid: {'count': int, 'reset_at': timestamp}}
+    _MAX_SUBSCRIBE_ATTEMPTS = 5
+    _SUBSCRIBE_WINDOW_SECONDS = 60
+    
+    @_sio.on('subscribe-security-events')
+    async def subscribe_security_events(sid, data):
+        """
+        Subscribe to security events (legacy - room is auto-joined on connect)
+        
+        NEW PATTERN: Room is server-assigned on connect based on authenticated user.
+        This handler is kept for backward compatibility and rate limiting.
+        """
+        import uuid
+        import time
+        correlation_id = str(uuid.uuid4())[:8]
+        
+        # Rate limiting
+        now = time.time()
+        if sid in _subscribe_attempts:
+            attempts = _subscribe_attempts[sid]
+            if now < attempts['reset_at']:
+                attempts['count'] += 1
+                if attempts['count'] > _MAX_SUBSCRIBE_ATTEMPTS:
+                    print(f"🔒 [Security] [{correlation_id}] Rate limit exceeded for {sid}")
+                    await _sio.emit('security-events-error', {
+                        'error': 'Rate limit exceeded',
+                        'correlationId': correlation_id
+                    }, room=sid)
+                    return
+            else:
+                attempts['count'] = 1
+                attempts['reset_at'] = now + _SUBSCRIBE_WINDOW_SECONDS
+        else:
+            _subscribe_attempts[sid] = {'count': 1, 'reset_at': now + _SUBSCRIBE_WINDOW_SECONDS}
+        
+        # Get user_id from socket mapping (set on connect via JWT verification)
+        user_id = _socket_users.get(sid)
+        
+        if not user_id:
+            print(f"🔒 [Security] [{correlation_id}] Rejected: Socket not authenticated (no user_id in mapping)")
+            await _sio.emit('security-events-error', {
+                'error': 'Not authenticated - please reconnect with valid JWT token',
+                'correlationId': correlation_id
+            }, room=sid)
+            return
+        
+        # Room already joined on connect, just confirm
+        room = f'security-events-{user_id}'
+        
+        # Get last seen event ID if provided (for catch-up)
+        last_seen_event_id = data.get('lastSeenEventId')
+        last_seen_at = data.get('lastSeenAt')
+        
+        print(f"🔒 [Security] [{correlation_id}] Subscription confirmed | user_id={user_id} room={room}")
+        
+        await _sio.emit('security-events-subscribed', {
+            'userId': str(user_id),
+            'room': room,
+            'correlationId': correlation_id,
+            'lastSeenEventId': last_seen_event_id,  # Echo back for client tracking
+        }, room=sid)
+        
+        # If client provided lastSeenEventId, send missed events
+        if last_seen_event_id:
+            # TODO: Query SecurityEvent for events after lastSeenEventId
+            # For now, just trigger a refetch suggestion
+            await _sio.emit('security-events-catchup', {
+                'message': 'Please refetch events to catch up',
+                'correlationId': correlation_id
+            }, room=sid)
+    
+    @_sio.on('unsubscribe-security-events')
+    async def unsubscribe_security_events(sid, data):
+        """Unsubscribe from security events"""
+        user_id = data.get('userId')
+        if user_id:
+            room = f'security-events-{user_id}'
+            await _sio.leave_room(sid, room)
+            print(f"🔒 [Security] Client {sid} unsubscribed from security events for user {user_id}")
     
     @_sio.on('offer')
     async def offer(sid, data):

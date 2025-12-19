@@ -4,10 +4,10 @@ import graphene
 from django.contrib.auth import get_user_model
 
 
-from .types import UserType, PostType, ChatSessionType, ChatMessageType, CommentType, StockType, StockDataType, WatchlistType, AIPortfolioRecommendationType, StockMomentType, ChartRangeEnum, DayTradingDataType, DayTradingStatsType, ProfileInput, AIRecommendationsType, SwingTradingDataType, SwingTradingStatsType, ExecutionSuggestionType, EntryTimingSuggestionType, ExecutionQualityStatsType, PreMarketDataType, RustOptionsAnalysisType
+from .types import UserType, PostType, ChatSessionType, ChatMessageType, CommentType, StockType, StockDataType, WatchlistType, AIPortfolioRecommendationType, StockMomentType, ChartRangeEnum, DayTradingDataType, DayTradingStatsType, ProfileInput, AIRecommendationsType, SwingTradingDataType, SwingTradingStatsType, ExecutionSuggestionType, EntryTimingSuggestionType, ExecutionQualityStatsType, PreMarketDataType, RustOptionsAnalysisType, SecurityEventType, BiometricSettingsType, ComplianceStatusType, SecurityScoreType, DeviceTrustType, AccessPolicyType, ZeroTrustSummaryType
 
 
-from .models import Post, ChatSession, ChatMessage, Comment, User, Stock, StockData, Watchlist, AIPortfolioRecommendation, StockDiscussion, DiscussionComment, Portfolio, StockMoment
+from .models import Post, ChatSession, ChatMessage, Comment, User, Stock, StockData, Watchlist, AIPortfolioRecommendation, StockDiscussion, DiscussionComment, Portfolio, StockMoment, SecurityEvent, BiometricSettings, ComplianceStatus, SecurityScore, DeviceTrust, AccessPolicy
 
 
 from .benchmark_types import BenchmarkSeriesType, BenchmarkDataPointType
@@ -457,6 +457,21 @@ class Query(graphene.ObjectType):
         primary=graphene.String(required=True),
         secondary=graphene.String()
     )
+    
+    # Security Fortress Queries
+    securityEvents = graphene.List(
+        SecurityEventType,
+        limit=graphene.Int(required=False),
+        resolved=graphene.Boolean(required=False)
+    )
+    biometricSettings = graphene.Field(BiometricSettingsType)
+    complianceStatuses = graphene.List(ComplianceStatusType)
+    securityScore = graphene.Field(SecurityScoreType)
+    
+    # Zero Trust Architecture Queries
+    deviceTrusts = graphene.List(DeviceTrustType)
+    accessPolicies = graphene.List(AccessPolicyType)
+    zeroTrustSummary = graphene.Field(ZeroTrustSummaryType)
 
     @staticmethod
     def _calculate_fundamental_scores(features: dict, has_rust_data: bool) -> 'FundamentalAnalysisType':
@@ -1211,6 +1226,125 @@ class Query(graphene.ObjectType):
                 confidence=0.0,
                 timestamp=''
             )
+    
+    def resolve_securityEvents(self, info, limit=None, resolved=None):
+        """Get security events for current user"""
+        from .graphql_utils import get_user_from_context
+        user = get_user_from_context(info.context)
+        
+        if not user or getattr(user, "is_anonymous", True):
+            return []
+        
+        queryset = SecurityEvent.objects.filter(user=user)
+        
+        if resolved is not None:
+            queryset = queryset.filter(resolved=resolved)
+        
+        queryset = queryset.order_by('-created_at')
+        
+        if limit:
+            queryset = queryset[:limit]
+        
+        return queryset
+    
+    def resolve_biometricSettings(self, info):
+        """Get biometric settings for current user"""
+        from .graphql_utils import get_user_from_context
+        user = get_user_from_context(info.context)
+        
+        if not user or getattr(user, "is_anonymous", True):
+            return None
+        
+        settings, _ = BiometricSettings.objects.get_or_create(user=user)
+        return settings
+    
+    def resolve_complianceStatuses(self, info):
+        """Get all compliance statuses"""
+        return ComplianceStatus.objects.all()
+    
+    def resolve_securityScore(self, info):
+        """Get latest security score for current user"""
+        from .graphql_utils import get_user_from_context
+        from .security_service import SecurityService
+        user = get_user_from_context(info.context)
+        
+        if not user or getattr(user, "is_anonymous", True):
+            return None
+        
+        # Get or calculate security score
+        service = SecurityService()
+        score_data = service.calculate_security_score(user)
+        
+        # Save to database
+        security_score = SecurityScore.objects.create(
+            user=user,
+            score=score_data['score'],
+            factors=score_data['factors']
+        )
+        
+        return security_score
+    
+    def resolve_deviceTrusts(self, info):
+        """Get trusted devices for current user"""
+        from .graphql_utils import get_user_from_context
+        user = get_user_from_context(info.context)
+        
+        if not user or getattr(user, "is_anonymous", True):
+            return []
+        
+        return DeviceTrust.objects.filter(user=user).order_by('-trust_score', '-last_verified')
+    
+    def resolve_accessPolicies(self, info):
+        """Get access policies for current user"""
+        from .graphql_utils import get_user_from_context
+        user = get_user_from_context(info.context)
+        
+        if not user or getattr(user, "is_anonymous", True):
+            return []
+        
+        return AccessPolicy.objects.filter(user=user)
+    
+    def resolve_zeroTrustSummary(self, info):
+        """Get Zero Trust summary for current user"""
+        from .graphql_utils import get_user_from_context
+        from .zero_trust_service import zero_trust_service
+        user = get_user_from_context(info.context)
+        
+        if not user or getattr(user, "is_anonymous", True):
+            return None
+        
+        summary = zero_trust_service.get_trust_summary(user.id)
+        
+        # Calculate risk level
+        avg_score = summary['average_trust_score']
+        if avg_score >= 80:
+            risk_level = 'low'
+        elif avg_score >= 60:
+            risk_level = 'medium'
+        elif avg_score >= 40:
+            risk_level = 'high'
+        else:
+            risk_level = 'critical'
+        
+        # Check if MFA required
+        recent_events = SecurityEvent.objects.filter(
+            user_id=user.id,
+            created_at__gte=timezone.now() - timedelta(days=7),
+            resolved=False,
+            threat_level__in=['high', 'critical']
+        ).count()
+        
+        requires_mfa = avg_score < 70 or recent_events > 0
+        
+        from .types import ZeroTrustSummaryType
+        return ZeroTrustSummaryType(
+            userId=str(user.id),
+            devices=summary['devices'],
+            averageTrustScore=summary['average_trust_score'],
+            lastVerification=summary['last_verification'].isoformat() if summary['last_verification'] else None,
+            requiresMfa=requires_mfa,
+            riskLevel=risk_level
+        )
     
     def resolve_rust_correlation_analysis(self, info, primary, secondary=None):
         """Get Rust engine correlation analysis"""

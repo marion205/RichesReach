@@ -1,5 +1,10 @@
 from django.contrib import admin
-from .models import User, Post, ChatSession, ChatMessage, Source, Like, Comment, Follow, Stock, StockData, Watchlist
+from .models import (
+    User, Post, ChatSession, ChatMessage, Source, Like, Comment, Follow, 
+    Stock, StockData, Watchlist, SecurityEvent, BiometricSettings, 
+    ComplianceStatus, SecurityScore, DeviceTrust, AccessPolicy, 
+    SupplyChainVendor, ComplianceAutomation
+)
 
 @admin.register(User)
 class UserAdmin(admin.ModelAdmin):
@@ -92,3 +97,64 @@ class WatchlistAdmin(admin.ModelAdmin):
     search_fields = ('user__username', 'stock__symbol', 'notes')
     ordering = ('-added_at',)
     readonly_fields = ('added_at',)
+
+@admin.register(SecurityEvent)
+class SecurityEventAdmin(admin.ModelAdmin):
+    list_display = ('user', 'event_type', 'threat_level', 'resolved', 'created_at')
+    list_filter = ('threat_level', 'resolved', 'event_type', 'created_at')
+    search_fields = ('user__email', 'description', 'event_type')
+    ordering = ('-created_at',)
+    readonly_fields = ('id', 'created_at', 'updated_at')
+
+@admin.register(BiometricSettings)
+class BiometricSettingsAdmin(admin.ModelAdmin):
+    list_display = ('user', 'face_id_enabled', 'voice_id_enabled', 'behavioral_id_enabled', 'device_fingerprint_enabled', 'location_tracking_enabled')
+    list_filter = ('face_id_enabled', 'voice_id_enabled', 'behavioral_id_enabled', 'device_fingerprint_enabled', 'location_tracking_enabled')
+    search_fields = ('user__email',)
+    readonly_fields = ('created_at', 'last_updated')
+
+@admin.register(ComplianceStatus)
+class ComplianceStatusAdmin(admin.ModelAdmin):
+    list_display = ('standard', 'status', 'score', 'last_audit_date', 'next_audit_date')
+    list_filter = ('status', 'standard')
+    search_fields = ('standard', 'status', 'notes')
+    readonly_fields = ('id', 'created_at', 'updated_at')
+
+@admin.register(SecurityScore)
+class SecurityScoreAdmin(admin.ModelAdmin):
+    list_display = ('user', 'score', 'calculated_at')
+    list_filter = ('calculated_at',)
+    search_fields = ('user__email',)
+    ordering = ('-calculated_at',)
+    readonly_fields = ('calculated_at',)
+
+
+@admin.register(DeviceTrust)
+class DeviceTrustAdmin(admin.ModelAdmin):
+    list_display = ('user', 'device_id', 'trust_score', 'is_trusted', 'last_verified')
+    list_filter = ('is_trusted', 'last_verified')
+    search_fields = ('user__email', 'device_id')
+    readonly_fields = ('first_seen', 'created_at', 'updated_at')
+
+
+@admin.register(AccessPolicy)
+class AccessPolicyAdmin(admin.ModelAdmin):
+    list_display = ('user', 'action', 'resource', 'policy_type')
+    list_filter = ('policy_type', 'resource')
+    search_fields = ('user__email', 'action', 'resource')
+
+
+@admin.register(SupplyChainVendor)
+class SupplyChainVendorAdmin(admin.ModelAdmin):
+    list_display = ('name', 'vendor_type', 'status', 'risk_score', 'last_audit_date')
+    list_filter = ('vendor_type', 'status', 'risk_score')
+    search_fields = ('name',)
+    readonly_fields = ('created_at', 'updated_at')
+
+
+@admin.register(ComplianceAutomation)
+class ComplianceAutomationAdmin(admin.ModelAdmin):
+    list_display = ('standard', 'check_name', 'check_type', 'status', 'last_run')
+    list_filter = ('standard', 'check_type', 'status')
+    search_fields = ('check_name', 'description')
+    readonly_fields = ('created_at', 'updated_at')

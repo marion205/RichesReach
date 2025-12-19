@@ -43,6 +43,10 @@ from .models import (
     Portfolio,
     StockDiscussion,
     DiscussionComment,
+    BiometricSettings,
+    SecurityEvent,
+    DeviceTrust,
+    AccessPolicy,
 )
 
 from .types import UserType, PostType, CommentType, ChatSessionType, ChatMessageType
@@ -897,6 +901,215 @@ class SendMessage(graphene.Mutation):
             return SendMessage(success=False)
 
 
+class UpdateBiometricSettings(graphene.Mutation):
+    """Update biometric authentication settings"""
+    class Arguments:
+        face_id = graphene.Boolean(required=False)
+        voice_id = graphene.Boolean(required=False)
+        behavioral_id = graphene.Boolean(required=False)
+        device_fingerprint = graphene.Boolean(required=False)
+        location_tracking = graphene.Boolean(required=False)
+    
+    success = graphene.Boolean()
+    message = graphene.String()
+    biometric_settings = graphene.Field('core.types.BiometricSettingsType')
+    
+    def mutate(self, info, face_id=None, voice_id=None, behavioral_id=None, 
+               device_fingerprint=None, location_tracking=None):
+        from .graphql_utils import get_user_from_context
+        user = get_user_from_context(info.context)
+        
+        if not user or getattr(user, "is_anonymous", True):
+            raise GraphQLError("Authentication required")
+        
+        settings, created = BiometricSettings.objects.get_or_create(user=user)
+        
+        if face_id is not None:
+            settings.face_id_enabled = face_id
+        if voice_id is not None:
+            settings.voice_id_enabled = voice_id
+        if behavioral_id is not None:
+            settings.behavioral_id_enabled = behavioral_id
+        if device_fingerprint is not None:
+            settings.device_fingerprint_enabled = device_fingerprint
+        if location_tracking is not None:
+            settings.location_tracking_enabled = location_tracking
+        
+        settings.save()
+        
+        return UpdateBiometricSettings(
+            success=True,
+            message="Biometric settings updated successfully",
+            biometric_settings=settings
+        )
+
+
+class ResolveSecurityEvent(graphene.Mutation):
+    """Resolve a security event"""
+    class Arguments:
+        event_id = graphene.String(required=True)
+    
+    success = graphene.Boolean()
+    message = graphene.String()
+    event = graphene.Field('core.types.SecurityEventType')
+    
+    def mutate(self, info, event_id):
+        from .graphql_utils import get_user_from_context
+        from .security_service import SecurityService
+        user = get_user_from_context(info.context)
+        
+        if not user or getattr(user, "is_anonymous", True):
+            raise GraphQLError("Authentication required")
+        
+        service = SecurityService()
+        event = service.resolve_security_event(user, event_id)
+        
+        if not event:
+            raise GraphQLError("Security event not found or already resolved")
+        
+        return ResolveSecurityEvent(
+            success=True,
+            message="Security event resolved successfully",
+            event=event
+        )
+
+
+class RegisterDevice(graphene.Mutation):
+    """Register a device for Zero Trust"""
+    class Arguments:
+        device_id = graphene.String(required=True)
+        device_fingerprint = graphene.String(required=True)
+    
+    success = graphene.Boolean()
+    message = graphene.String()
+    device_trust = graphene.Field('core.types.DeviceTrustType')
+    
+    def mutate(self, info, device_id, device_fingerprint):
+        from .graphql_utils import get_user_from_context
+        from .zero_trust_service import zero_trust_service
+        from .models import DeviceTrust
+        import json
+        
+        user = get_user_from_context(info.context)
+        
+        if not user or getattr(user, "is_anonymous", True):
+            raise GraphQLError("Authentication required")
+        
+        try:
+            # Parse device fingerprint
+            fingerprint_data = json.loads(device_fingerprint) if isinstance(device_fingerprint, str) else device_fingerprint
+            
+            # Register device
+            zero_trust_service.register_device(user.id, device_id, fingerprint_data)
+            
+            # Create or update DeviceTrust record
+            device_trust, created = DeviceTrust.objects.update_or_create(
+                user=user,
+                device_id=device_id,
+                defaults={
+                    'device_fingerprint': json.dumps(fingerprint_data) if isinstance(fingerprint_data, dict) else device_fingerprint,
+                    'trust_score': 50,  # Start with neutral
+                    'is_trusted': False,  # Require verification first
+                }
+            )
+            
+            return RegisterDevice(
+                success=True,
+                message="Device registered successfully. Trust will build over time.",
+                device_trust=device_trust
+            )
+        except Exception as e:
+            raise GraphQLError(f"Failed to register device: {str(e)}")
+
+
+class UpdateDeviceTrust(graphene.Mutation):
+    """Update device trust score"""
+    class Arguments:
+        device_id = graphene.String(required=True)
+        trust_score = graphene.Int(required=True)
+        reason = graphene.String(required=False)
+    
+    success = graphene.Boolean()
+    message = graphene.String()
+    device_trust = graphene.Field('core.types.DeviceTrustType')
+    
+    def mutate(self, info, device_id, trust_score, reason=None):
+        from .graphql_utils import get_user_from_context
+        from .zero_trust_service import zero_trust_service
+        from .models import DeviceTrust
+        
+        user = get_user_from_context(info.context)
+        
+        if not user or getattr(user, "is_anonymous", True):
+            raise GraphQLError("Authentication required")
+        
+        try:
+            # Update in service
+            zero_trust_service.update_device_trust(user.id, device_id, trust_score, reason or '')
+            
+            # Update database record
+            try:
+                device_trust = DeviceTrust.objects.get(user=user, device_id=device_id)
+                device_trust.trust_score = trust_score
+                device_trust.is_trusted = trust_score >= 70
+                device_trust.verification_count += 1
+                device_trust.save()
+            except DeviceTrust.DoesNotExist:
+                raise GraphQLError("Device not found")
+            
+            return UpdateDeviceTrust(
+                success=True,
+                message=f"Device trust updated to {trust_score}",
+                device_trust=device_trust
+            )
+        except Exception as e:
+            raise GraphQLError(f"Failed to update device trust: {str(e)}")
+
+
+class CreateAccessPolicy(graphene.Mutation):
+    """Create an access policy (least privilege)"""
+    class Arguments:
+        action = graphene.String(required=True)
+        resource = graphene.String(required=True)
+        policy_type = graphene.String(required=True)  # 'allow', 'deny', 'mfa_required'
+        conditions = graphene.JSONString(required=False)
+    
+    success = graphene.Boolean()
+    message = graphene.String()
+    access_policy = graphene.Field('core.types.AccessPolicyType')
+    
+    def mutate(self, info, action, resource, policy_type, conditions=None):
+        from .graphql_utils import get_user_from_context
+        from .models import AccessPolicy
+        
+        user = get_user_from_context(info.context)
+        
+        if not user or getattr(user, "is_anonymous", True):
+            raise GraphQLError("Authentication required")
+        
+        if policy_type not in ['allow', 'deny', 'mfa_required']:
+            raise GraphQLError("Invalid policy_type. Must be 'allow', 'deny', or 'mfa_required'")
+        
+        try:
+            access_policy, created = AccessPolicy.objects.update_or_create(
+                user=user,
+                action=action,
+                resource=resource,
+                defaults={
+                    'policy_type': policy_type,
+                    'conditions': conditions or {},
+                }
+            )
+            
+            return CreateAccessPolicy(
+                success=True,
+                message=f"Access policy {'created' if created else 'updated'} successfully",
+                access_policy=access_policy
+            )
+        except Exception as e:
+            raise GraphQLError(f"Failed to create access policy: {str(e)}")
+
+
 class GetChatHistory(graphene.Mutation):
 
     messages = graphene.List(ChatMessageType)
@@ -1583,3 +1796,12 @@ class Mutation(graphene.ObjectType):
     send_message = SendMessage.Field()
 
     get_chat_history = GetChatHistory.Field()
+    
+    # Security Fortress Mutations
+    update_biometric_settings = UpdateBiometricSettings.Field()
+    resolve_security_event = ResolveSecurityEvent.Field()
+    
+    # Zero Trust Architecture Mutations
+    register_device = RegisterDevice.Field()
+    update_device_trust = UpdateDeviceTrust.Field()
+    create_access_policy = CreateAccessPolicy.Field()

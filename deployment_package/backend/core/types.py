@@ -1,7 +1,7 @@
 # core/types.py
 import graphene
 from graphene_django import DjangoObjectType
-from .models import User, Post, ChatSession, ChatMessage, Source, Like, Comment, Follow, Stock, StockData, Watchlist, IncomeProfile, AIPortfolioRecommendation, Portfolio, StockDiscussion, DiscussionComment, StockMoment, MomentCategory
+from .models import User, Post, ChatSession, ChatMessage, Source, Like, Comment, Follow, Stock, StockData, Watchlist, IncomeProfile, AIPortfolioRecommendation, Portfolio, StockDiscussion, DiscussionComment, StockMoment, MomentCategory, SecurityEvent, BiometricSettings, ComplianceStatus, SecurityScore, DeviceTrust, AccessPolicy
 
 
 class UserType(DjangoObjectType):
@@ -1204,3 +1204,122 @@ class ResearchHubType(graphene.ObjectType):
     marketRegime = graphene.Field(ResearchMarketRegimeType)
     peers = graphene.List(graphene.String)
     updatedAt = graphene.String()
+
+
+# Security Fortress Types
+class SecurityEventType(DjangoObjectType):
+    """Security event GraphQL type"""
+    class Meta:
+        model = SecurityEvent
+        fields = '__all__'
+    
+    timestamp = graphene.String()
+    
+    def resolve_timestamp(self, info):
+        """Return human-readable timestamp"""
+        from django.utils import timezone
+        delta = timezone.now() - self.created_at
+        if delta.days > 0:
+            return f"{delta.days} day{'s' if delta.days > 1 else ''} ago"
+        elif delta.seconds > 3600:
+            hours = delta.seconds // 3600
+            return f"{hours} hour{'s' if hours > 1 else ''} ago"
+        elif delta.seconds > 60:
+            minutes = delta.seconds // 60
+            return f"{minutes} minute{'s' if minutes > 1 else ''} ago"
+        return "Just now"
+
+
+class BiometricSettingsType(DjangoObjectType):
+    """Biometric settings GraphQL type"""
+    class Meta:
+        model = BiometricSettings
+        fields = '__all__'
+    
+    # CamelCase aliases for frontend
+    faceId = graphene.Boolean()
+    voiceId = graphene.Boolean()
+    behavioralId = graphene.Boolean()
+    deviceFingerprint = graphene.Boolean()
+    locationTracking = graphene.Boolean()
+    
+    def resolve_faceId(self, info):
+        return self.face_id_enabled
+    
+    def resolve_voiceId(self, info):
+        return self.voice_id_enabled
+    
+    def resolve_behavioralId(self, info):
+        return self.behavioral_id_enabled
+    
+    def resolve_deviceFingerprint(self, info):
+        return self.device_fingerprint_enabled
+    
+    def resolve_locationTracking(self, info):
+        return self.location_tracking_enabled
+
+
+class ComplianceStatusType(DjangoObjectType):
+    """Compliance status GraphQL type"""
+    class Meta:
+        model = ComplianceStatus
+        fields = '__all__'
+    
+    lastAudit = graphene.String()
+    nextAudit = graphene.String()
+    
+    def resolve_lastAudit(self, info):
+        return self.last_audit_date.strftime('%Y-%m-%d') if self.last_audit_date else None
+    
+    def resolve_nextAudit(self, info):
+        return self.next_audit_date.strftime('%Y-%m-%d') if self.next_audit_date else None
+
+
+class SecurityScoreType(DjangoObjectType):
+    """Security score GraphQL type"""
+    class Meta:
+        model = SecurityScore
+        fields = '__all__'
+
+
+# Zero Trust Architecture Types
+class DeviceTrustType(DjangoObjectType):
+    """Device trust GraphQL type"""
+    class Meta:
+        model = DeviceTrust
+        fields = '__all__'
+    
+    isTrusted = graphene.Boolean()
+    trustScore = graphene.Int()
+    lastVerified = graphene.String()
+    
+    def resolve_isTrusted(self, info):
+        return self.is_trusted
+    
+    def resolve_trustScore(self, info):
+        return self.trust_score
+    
+    def resolve_lastVerified(self, info):
+        return self.last_verified.isoformat() if self.last_verified else None
+
+
+class AccessPolicyType(DjangoObjectType):
+    """Access policy GraphQL type"""
+    class Meta:
+        model = AccessPolicy
+        fields = '__all__'
+    
+    policyType = graphene.String()
+    
+    def resolve_policyType(self, info):
+        return self.policy_type
+
+
+class ZeroTrustSummaryType(graphene.ObjectType):
+    """Zero Trust summary for user"""
+    userId = graphene.String()
+    devices = graphene.Int()
+    averageTrustScore = graphene.Float()
+    lastVerification = graphene.String()
+    requiresMfa = graphene.Boolean()
+    riskLevel = graphene.String()  # 'low', 'medium', 'high', 'critical'

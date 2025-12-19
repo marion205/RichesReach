@@ -67,6 +67,7 @@ MIDDLEWARE = [
 'core.rate_limiting.RateLimitMiddleware',  # Rate limiting
 'django.middleware.csrf.CsrfViewMiddleware',
 'django.contrib.auth.middleware.AuthenticationMiddleware',
+'core.zero_trust_middleware.ZeroTrustMiddleware',  # Zero Trust Architecture
 'django.contrib.messages.middleware.MessageMiddleware',
 'django.middleware.clickjacking.XFrameOptionsMiddleware',
 'core.performance_monitoring.PerformanceMonitoringMiddleware',  # Performance monitoring
