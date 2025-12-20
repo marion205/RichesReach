@@ -159,7 +159,10 @@ export const CreditTwinSimulator: React.FC<CreditTwinSimulatorProps> = ({
                 >
                   <View style={styles.scenarioHeader}>
                     <Text style={styles.scenarioName}>{scenario.name}</Text>
-                    <Icon name="chevron-right" size={20} color="#8E8E93" />
+                    <View style={styles.creditIndicator}>
+                      <Icon name="credit-card" size={14} color="#007AFF" />
+                      <Text style={styles.creditIndicatorText}>Credit</Text>
+                    </View>
                   </View>
                   <Text style={styles.scenarioDescription}>{scenario.description}</Text>
                   <View style={styles.scenarioOutcome}>
@@ -394,6 +397,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#1C1C1E',
+  },
+  creditIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#E3F2FD',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  creditIndicatorText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#007AFF',
   },
   scenarioDescription: {
     fontSize: 14,

@@ -461,7 +461,8 @@ return (
     onPress={() => setShowCreditQuest(true)}
     style={styles.creditButton}
   >
-    <Icon name="trending-up" size={20} color="#007AFF" />
+    <Icon name="credit-card" size={18} color="#007AFF" />
+    <Text style={styles.creditButtonLabel}>Credit</Text>
   </TouchableOpacity>
   <TouchableOpacity
     onPress={() => setShowFamilyManagement(true)}
@@ -521,7 +522,8 @@ return (
     onPress={() => setShowCreditQuest(true)}
     style={styles.creditButton}
   >
-    <Icon name="trending-up" size={20} color="#007AFF" />
+    <Icon name="credit-card" size={18} color="#007AFF" />
+    <Text style={styles.creditButtonLabel}>Credit</Text>
   </TouchableOpacity>
   <TouchableOpacity
     onPress={() => setShowFamilyManagement(true)}

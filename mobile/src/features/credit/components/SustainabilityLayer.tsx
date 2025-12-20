@@ -184,7 +184,10 @@ Your impact grows with every credit action you complete!`,
       {onViewDetails && (
         <TouchableOpacity style={styles.detailsButton} onPress={onViewDetails}>
           <Text style={styles.detailsButtonText}>View Full Impact Report</Text>
-          <Icon name="arrow-right" size={16} color="#007AFF" />
+          <View style={styles.creditBadge}>
+            <Icon name="credit-card" size={14} color="#007AFF" />
+            <Text style={styles.creditBadgeText}>Credit</Text>
+          </View>
         </TouchableOpacity>
       )}
     </View>
@@ -431,6 +434,22 @@ const styles = StyleSheet.create({
   detailsButtonText: {
     fontSize: 14,
     fontWeight: '600',
+    color: '#007AFF',
+  },
+  creditBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#007AFF',
+  },
+  creditBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
     color: '#007AFF',
   },
 });
