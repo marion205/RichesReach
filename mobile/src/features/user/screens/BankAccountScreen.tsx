@@ -541,13 +541,19 @@ const BankAccountScreen = ({ navigateTo }: { navigateTo?: (screen: string, param
         showsVerticalScrollIndicator={false}
         nestedScrollEnabled={true}
         keyboardShouldPersistTaps="handled"
+        contentContainerStyle={styles.scrollContent}
       >
         {/* Linked Accounts */}
         <View style={styles.section}>
           <SectionHeader
             title="Linked Accounts"
             right={
-              <View style={styles.actionRow}>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                style={styles.actionRowScroll}
+                contentContainerStyle={styles.actionRowContent}
+              >
                 <TouchableOpacity 
                   style={styles.ghostBtn} 
                   onPress={() => {
@@ -556,20 +562,20 @@ const BankAccountScreen = ({ navigateTo }: { navigateTo?: (screen: string, param
                   }}
                   disabled={yodleeLoading}
                 >
-                  <Icon name="credit-card" size={16} color="#2457D6" />
+                  <Icon name="credit-card" size={15} color="#2457D6" />
                   <Text style={styles.ghostBtnText}>
                     {yodleeLoading ? 'Loading...' : 'Link Bank'}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.ghostBtn} onPress={() => setShowFundingModal(true)}>
-                  <Icon name="plus-circle" size={16} color="#2457D6" />
+                  <Icon name="plus-circle" size={15} color="#2457D6" />
                   <Text style={styles.ghostBtnText}>Add Funds</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.ghostBtn} onPress={() => setShowSBLOCModal(true)}>
-                  <Icon name="trending-up" size={16} color="#F59E0B" />
+                  <Icon name="trending-up" size={15} color="#F59E0B" />
                   <Text style={[styles.ghostBtnText, { color: '#F59E0B' }]}>SBLOC</Text>
                 </TouchableOpacity>
-              </View>
+              </ScrollView>
             }
           />
 
@@ -691,7 +697,18 @@ const BankAccountScreen = ({ navigateTo }: { navigateTo?: (screen: string, param
           
           return (
             <View style={styles.section} pointerEvents="box-none">
-              <SectionHeader title="Quick Funding" />
+              <SectionHeader 
+                title="Quick Funding"
+                right={
+                  <TouchableOpacity 
+                    style={styles.ghostBtn} 
+                    onPress={() => setShowSblocCalculator(true)}
+                  >
+                    <Icon name="percent" size={15} color="#F59E0B" />
+                    <Text style={[styles.ghostBtnText, { color: '#F59E0B' }]}>Calculator</Text>
+                  </TouchableOpacity>
+                }
+              />
               <SblocFundingCard
                 maxBorrow={maxBorrow}
                 aprPct={apr * 100}
@@ -963,7 +980,14 @@ const BankAccountScreen = ({ navigateTo }: { navigateTo?: (screen: string, param
       <SblocCalculatorModal
         visible={showSblocCalculator}
         onClose={() => setShowSblocCalculator(false)}
-        equity={sblocData?.sblocOffer?.eligibleEquity ?? 50000}
+        apr={(sblocData?.sblocOffer?.apr ?? 0.085) * 100}
+        eligibleEquity={sblocData?.sblocOffer?.eligibleEquity ?? 50000}
+        maxLtvPct={(sblocData?.sblocOffer?.ltv ?? 0.5) * 100}
+        currentDebt={0}
+        onApply={(amount) => {
+          setShowSblocCalculator(false);
+          handleSBLOCNavigation(amount);
+        }}
       />
     </SafeAreaView>
   );
@@ -998,6 +1022,9 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: 20,
+  },
+  scrollContent: {
+    paddingBottom: 40,
   },
   section: {
     marginBottom: 32,
@@ -1298,8 +1325,10 @@ const styles = StyleSheet.create({
 
   // Actions
   actionRow: { flexDirection:'row', gap:8 },
-  ghostBtn: { flexDirection:'row', alignItems:'center', gap:6, backgroundColor:'#EFF6FF', paddingHorizontal:10, paddingVertical:6, borderRadius:8, minWidth: 80 },
-  ghostBtnText: { color:'#2457D6', fontWeight:'700', fontSize: 12 },
+  actionRowScroll: { maxWidth: '100%' },
+  actionRowContent: { flexDirection:'row', gap:6, paddingRight: 4 },
+  ghostBtn: { flexDirection:'row', alignItems:'center', gap:5, backgroundColor:'#EFF6FF', paddingHorizontal:9, paddingVertical:6, borderRadius:8, minWidth: 0 },
+  ghostBtnText: { color:'#2457D6', fontWeight:'700', fontSize: 11 },
 
   // Skeletons
   skeletonBlock: { marginTop:6 },
