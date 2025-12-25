@@ -90,7 +90,15 @@ class FamilySharingService {
 
         if (!response.ok) {
           if (response.status === 404) {
-            return null; // User not in a family group
+            // User not in a family group - this is normal, not an error
+            return null;
+          }
+          // For 500 errors, log but don't throw - allow app to continue
+          if (response.status === 500) {
+            const errorText = await response.text().catch(() => 'Unknown error');
+            console.warn('[FamilySharing] Server error fetching family group (500):', errorText);
+            // Return null to allow app to continue - user just doesn't have a family group
+            return null;
           }
           throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -99,13 +107,16 @@ class FamilySharingService {
       } catch (fetchError: any) {
         clearTimeout(timeoutId);
         if (fetchError.name === 'AbortError') {
-          throw new Error('Request timed out. Please check your network connection and ensure the backend server is running.');
+          console.warn('[FamilySharing] Request timed out, returning null');
+          return null; // Return null instead of throwing for timeout
         }
-        throw fetchError;
+        // For other fetch errors, log but return null to allow app to continue
+        console.warn('[FamilySharing] Fetch error (non-critical):', fetchError.message || fetchError);
+        return null;
       }
     } catch (error: any) {
-      console.error('[FamilySharing] Failed to fetch family group:', error);
-      // Return null for network errors to allow app to continue
+      // Log but don't throw - return null to allow app to continue
+      console.warn('[FamilySharing] Error fetching family group (non-critical):', error.message || error);
       return null;
     }
   }

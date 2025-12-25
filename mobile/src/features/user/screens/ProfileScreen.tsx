@@ -25,6 +25,7 @@ import { FEATURES } from '../../../config/featureFlags';
 import { globalNavigate } from '../../../navigation/NavigationService';
 import { PrivacyDashboard } from '../../privacy/components/PrivacyDashboard';
 import { useAuth } from '../../../contexts/AuthContext';
+import AccountManagementScreen from './AccountManagementScreen';
 
 // --- Design tokens (light theme) ---
 const UI = {
@@ -144,6 +145,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigateTo, onLogout }) =
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const [showSblocCalculator, setShowSblocCalculator] = useState(false);
   const [showPrivacyDashboard, setShowPrivacyDashboard] = useState(false);
+  const [showAccountManagement, setShowAccountManagement] = useState(false);
   
   // Helper function to navigate - tries React Navigation first, then fallback
   const navigate = (screen: string, params?: any) => {
@@ -433,7 +435,7 @@ return (
           style={styles.settingsItem}
           onPress={() => {
             setShowSettingsMenu(false);
-            Alert.alert('Account Settings', 'Account settings feature coming soon!');
+            setShowAccountManagement(true);
           }}
         >
           <Icon name="settings" size={16} color="#333" />
@@ -910,6 +912,29 @@ onPress={() => navigateTo?.('ai-portfolio')}
         }
       }}
     />
+
+    {/* Account Management Modal */}
+    <Modal
+      visible={showAccountManagement}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={() => setShowAccountManagement(false)}
+    >
+      <View style={{ flex: 1 }}>
+        <AccountManagementScreen 
+          navigateTo={(screen: string) => {
+            // If navigating back to profile, close the modal instead
+            if (screen === 'profile') {
+              setShowAccountManagement(false);
+            } else if (navigateTo) {
+              navigateTo(screen);
+            } else {
+              navigate(screen);
+            }
+          }}
+        />
+      </View>
+    </Modal>
   </SafeAreaView>
 );
 };

@@ -635,9 +635,14 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
     // Mic button listener from TopHeader -> open calm goal flow
     useEffect(() => {
       const sub = DeviceEventEmitter.addListener('calm_goal_mic', () => {
+        console.log('🎤 [HomeScreen] Received calm_goal_mic event, opening Calm Goal sheet');
         setShowCalmSheet(true);
       });
-      return () => sub.remove();
+      console.log('🎤 [HomeScreen] Registered calm_goal_mic event listener');
+      return () => {
+        console.log('🎤 [HomeScreen] Removing calm_goal_mic event listener');
+        sub.remove();
+      };
     }, []);
     
   

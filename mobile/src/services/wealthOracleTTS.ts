@@ -4,16 +4,19 @@ import * as Speech from "expo-speech";
 import { TTS_API_BASE_URL } from "../config/api";
 import type { StockMoment } from "../components/charts/ChartWithMoments";
 import logger from "../utils/logger";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 let currentSound: Audio.Sound | null = null;
 let currentSpeechId: string | null = null;
 let isPlaying = false; // Track if we're currently playing to prevent double playback
 
 // Wealth Oracle persona options for expo-speech fallback
+// Improved settings for more natural sound
 const wealthOracleVoiceOptions: Speech.SpeechOptions = {
   language: "en-US",
-  rate: 0.9,
-  pitch: 1.05,
+  rate: 0.85,  // Slightly slower for more natural delivery
+  pitch: 1.0,  // Neutral pitch (less robotic)
+  quality: Speech.VoiceQuality.Enhanced,  // Use enhanced quality if available
 };
 
 // Max text length for TTS (prevent accidentally passing novels)
@@ -28,6 +31,13 @@ const TTS_TIMEOUT_MS = 15000; // 15 seconds - enough for 5000 char audio generat
 let ttsServiceAvailable: boolean | null = null;
 let ttsHealthCheckTime: number = 0;
 const TTS_HEALTH_CHECK_TTL = 60000; // Check every 60 seconds
+
+// Force reset cache - call this if service is restarted
+export function resetTTSCache(): void {
+  ttsServiceAvailable = null;
+  ttsHealthCheckTime = 0;
+  logger.log("[WealthOracleTTS] TTS cache reset - will retry service on next call");
+}
 
 /**
  * Quick health check for TTS service (very fast - 500ms max)
@@ -62,11 +72,37 @@ async function checkTTSServiceHealth(): Promise<boolean> {
   }
 }
 
+// Get voice from settings or use default
+async function getSelectedVoice(): Promise<string> {
+  try {
+    const saved = await AsyncStorage.getItem('voice_settings');
+    if (saved) {
+      const settings = JSON.parse(saved);
+      // Map voice IDs to OpenAI voice names
+      const voiceMap: { [key: string]: string } = {
+        'alloy': 'alloy',
+        'echo': 'echo',
+        'fable': 'fable',
+        'onyx': 'onyx',
+        'nova': 'nova',
+        'shimmer': 'shimmer',
+      };
+      const selectedVoice = settings.selectedVoice || 'onyx';
+      return voiceMap[selectedVoice] || selectedVoice || 'onyx';
+    }
+  } catch (error) {
+    logger.warn('[WealthOracleTTS] Failed to load voice settings:', error);
+  }
+  // Default to onyx if no settings found
+  return process.env.EXPO_PUBLIC_TTS_VOICE || 'onyx';
+}
+
 export async function playWealthOracle(
   text: string,
   symbol: string,
   moment: StockMoment,
   onComplete?: () => void,
+  voiceOverride?: string, // Allow voice to be overridden per call
 ): Promise<void> {
   // CRITICAL: Stop anything currently playing FIRST
   // This prevents double playback
@@ -102,16 +138,22 @@ export async function playWealthOracle(
     logger.log(`[WealthOracleTTS] Attempting TTS service: ${TTS_API_BASE_URL}/tts`);
     logger.log(`[WealthOracleTTS] Text length: ${text.length} chars, truncated: ${truncatedText.length} chars`);
     
-    // Create abort controller with fast timeout
+    // Get voice from settings, override, or default
+    const voiceToUse = voiceOverride || await getSelectedVoice() || "onyx";
+    logger.log(`[WealthOracleTTS] Using voice: ${voiceToUse}`);
+    
+    // Create abort controller with longer timeout for HD model (can take 5-10s for long text)
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), TTS_TIMEOUT_MS);
+    
+    logger.log(`[WealthOracleTTS] Requesting TTS with timeout: ${TTS_TIMEOUT_MS}ms`);
     
     const res = await fetch(`${TTS_API_BASE_URL}/tts`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         text: truncatedText,
-        voice: "wealth_oracle_v1",
+        voice: voiceToUse,  // Configurable voice (onyx, nova, shimmer, echo, fable, alloy)
         symbol,
         moment_id: moment.id,
       }),

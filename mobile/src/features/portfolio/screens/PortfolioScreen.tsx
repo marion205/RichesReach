@@ -116,6 +116,21 @@ const insets = useSafeAreaInsets();
   // Money snapshot hook (for Constellation Orb)
   const { snapshot, loading: snapshotLoading, hasBankLinked, refetch: refetchSnapshot, error: snapshotError } = useMoneySnapshot();
   
+  // Ensure all modals are closed when screen mounts (prevent blocking overlays)
+  useEffect(() => {
+    logger.log('[PortfolioScreen] Screen mounted, ensuring all modals are closed');
+    setShowLifeEvents(false);
+    setShowShield(false);
+    setShowGrowth(false);
+    setShowWhatIf(false);
+    setShowQuickActions(false);
+    setShowBreakdown(false);
+    setShowFamilyManagement(false);
+    setShowDawnRitual(false);
+    setShowCreditQuest(false);
+    setCelebrateTitle(null);
+  }, []); // Only run on mount
+  
   // Load family group on mount - memoized to prevent recreation
   const loadFamilyGroup = useCallback(async () => {
     try {
@@ -150,19 +165,24 @@ const insets = useSafeAreaInsets();
     return () => subscription.remove();
   }, []);
   
-  // Debug logging
+  // Debug logging - debounced to prevent excessive logging
   useEffect(() => {
     if (__DEV__) {
-      logger.log('[PortfolioScreen] Constellation Orb Debug:', {
-        hasBankLinked,
-        hasSnapshot: !!snapshot,
-        snapshotLoading,
-        snapshotError: snapshotError?.message,
-        bankAccountsCount: snapshot?.breakdown?.bankAccountsCount,
-        willShowOrb: hasBankLinked && !!snapshot,
-        hasFamilyGroup: !!familyGroup,
-        familyMembers: familyGroup?.members.length || 0,
-      });
+      // Use timeout to debounce logging and prevent blocking
+      const timeoutId = setTimeout(() => {
+        logger.log('[PortfolioScreen] Constellation Orb Debug:', {
+          hasBankLinked,
+          hasSnapshot: !!snapshot,
+          snapshotLoading,
+          snapshotError: snapshotError?.message,
+          bankAccountsCount: snapshot?.breakdown?.bankAccountsCount,
+          willShowOrb: hasBankLinked && !!snapshot,
+          hasFamilyGroup: !!familyGroup,
+          familyMembers: familyGroup?.members.length || 0,
+        });
+      }, 500); // Debounce by 500ms
+      
+      return () => clearTimeout(timeoutId);
     }
   }, [hasBankLinked, snapshot, snapshotLoading, snapshotError, familyGroup]);
   
@@ -181,13 +201,27 @@ const insets = useSafeAreaInsets();
     }
   }, [portfolioLoading]);
   
-  const go = (name: string, params?: NavigationParams) => {
+  const go = useCallback((name: string, params?: NavigationParams) => {
     logger.log('PortfolioScreen: Navigating to', name, params);
+    
+    // Map screen names to their correct navigation names
+    const screenNameMap: Record<string, string> = {
+      'ai-portfolio': 'AIPortfolio', // Map to the correct React Navigation screen name
+      'ai-recommendations': 'AIPortfolio', // Also support this alias
+      'portfolio-management': 'PortfolioManagement',
+      'premium-analytics': 'premium-analytics',
+      'trading': 'trading',
+      'stock': 'Stocks', // Map to Stocks screen name
+      'StockDetail': 'StockDetail',
+    };
+    
+    const mappedName = screenNameMap[name] || name;
+    
     try {
       if (navigation && 'navigate' in navigation && typeof navigation.navigate === 'function') {
-        logger.log('PortfolioScreen: Using navigation.navigate');
-        // For screens in the same stack, navigate directly
-        navigation.navigate(name as never, params as never);
+        logger.log('PortfolioScreen: Using navigation.navigate with mapped name:', mappedName);
+        // For screens in the same stack (InvestStack), navigate directly
+        navigation.navigate(mappedName as never, params as never);
         return;
       }
     } catch (error) {
@@ -195,10 +229,11 @@ const insets = useSafeAreaInsets();
       // Try alternative navigation approach
       try {
         // If direct navigation fails, try nested navigation for InvestStack screens
-        const investStackScreens = ['premium-analytics', 'portfolio-management', 'trading', 'stock', 'StockDetail'];
-        if (investStackScreens.includes(name) && 'navigate' in navigation && typeof navigation.navigate === 'function') {
+        const investStackScreens = ['premium-analytics', 'PortfolioManagement', 'trading', 'Stocks', 'StockDetail', 'AIPortfolio'];
+        if (investStackScreens.includes(mappedName) && 'navigate' in navigation && typeof navigation.navigate === 'function') {
+          logger.log('PortfolioScreen: Trying nested navigation to Invest stack');
           navigation.navigate('Invest' as never, {
-            screen: name,
+            screen: mappedName,
             params: params
           } as never);
           return;
@@ -208,8 +243,12 @@ const insets = useSafeAreaInsets();
       }
     }
     logger.log('PortfolioScreen: Using navigateTo fallback');
-    navigateTo?.(name);
-  };
+    if (navigateTo) {
+      navigateTo(name, params);
+    } else {
+      logger.warn('PortfolioScreen: No navigation method available');
+    }
+  }, [navigation, navigateTo]);
 // Ref to track if we're currently fetching prices to prevent concurrent calls
 const fetchingPricesRef = useRef(false);
 
@@ -303,22 +342,31 @@ useEffect(() => {
   if (portfoliosDataString !== portfoliosRef.current) {
     portfoliosRef.current = portfoliosDataString;
     
-    if (portfolioData?.myPortfolios?.portfolios) {
-      const allHoldings = portfolioData.myPortfolios.portfolios.flatMap((p: Portfolio) => p.holdings || []);
-      if (allHoldings.length > 0) {
-        fetchRealTimePrices(allHoldings);
+    // Use a timeout to debounce and prevent blocking the main thread
+    const timeoutId = setTimeout(() => {
+      if (portfolioData?.myPortfolios?.portfolios) {
+        const allHoldings = portfolioData.myPortfolios.portfolios.flatMap((p: Portfolio) => p.holdings || []);
+        if (allHoldings.length > 0) {
+          // Fetch prices asynchronously to avoid blocking
+          fetchRealTimePrices(allHoldings).catch((error) => {
+            logger.error('[PortfolioScreen] Error fetching prices:', error);
+            setLoadingPrices(false);
+          });
+        } else {
+          // No holdings, ensure loading is false
+          setLoadingPrices(false);
+        }
       } else {
-        // No holdings, ensure loading is false
+        // No portfolio data yet, but don't block rendering
         setLoadingPrices(false);
       }
-    } else {
-      // No portfolio data yet, but don't block rendering
-      setLoadingPrices(false);
-    }
+    }, 100); // Small delay to prevent blocking initial render
+    
+    return () => clearTimeout(timeoutId);
   }
-  // Only depend on portfoliosDataString and fetchRealTimePrices - portfolioData is accessed inside but not needed as dependency
+  // Only depend on portfoliosDataString - fetchRealTimePrices is stable (empty deps)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [portfoliosDataString, fetchRealTimePrices]);
+}, [portfoliosDataString]);
   const onRefresh = async () => {
 setRefreshing(true);
 try {
@@ -396,9 +444,14 @@ setRefreshing(false);
     });
   });
   
-  logger.log('PortfolioScreen: Transformed holdings:', holdings.length, holdings);
-  logger.log('PortfolioScreen: Portfolios data:', portfolios);
-  logger.log('PortfolioScreen: Real-time prices:', realTimePrices);
+  // Only log in development and limit log size to prevent performance issues
+  if (__DEV__ && holdings.length > 0) {
+    logger.log('PortfolioScreen: Transformed holdings:', holdings.length);
+    // Only log first few holdings to avoid huge logs
+    if (holdings.length <= 5) {
+      logger.log('PortfolioScreen: Holdings:', holdings);
+    }
+  }
   return holdings;
   }, [portfolios, realTimePrices]);
 
@@ -419,14 +472,28 @@ setRefreshing(false);
           <Text style={styles.headerTitle}>Portfolio</Text>
           <View style={styles.headerButtons}>
             <TouchableOpacity
-              onPress={() => setShowCreditQuest(true)}
+              onPress={() => {
+                try {
+                  logger.log('[PortfolioScreen] Credit Quest button pressed');
+                  setShowCreditQuest(true);
+                } catch (error) {
+                  logger.error('[PortfolioScreen] Error opening Credit Quest:', error);
+                }
+              }}
               style={styles.creditButton}
             >
               <Icon name="activity" size={18} color="#007AFF" />
               <Text style={styles.creditButtonLabel}>Credit</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              onPress={() => setShowFamilyManagement(true)}
+              onPress={() => {
+                try {
+                  logger.log('[PortfolioScreen] Family Management button pressed');
+                  setShowFamilyManagement(true);
+                } catch (error) {
+                  logger.error('[PortfolioScreen] Error opening Family Management:', error);
+                }
+              }}
               style={styles.familyButton}
             >
               <Icon 
@@ -724,17 +791,45 @@ return (
 
 {/* Portfolio Holdings - Mid Section */}
 <View style={{ marginTop: 24, marginBottom: 16, paddingHorizontal: 16 }}>
-  <PortfolioHoldings
-    holdings={allHoldings}
-    onStockPress={(symbol) => go('StockDetail', { symbol })}
-    onBuy={(holding) => {
-      go('trading', { symbol: holding.symbol, action: 'buy' });
-    }}
-    onSell={(holding) => {
-      go('trading', { symbol: holding.symbol, action: 'sell' });
-    }}
-    loading={loadingPrices && !portfolioLoadingTimeout && portfolioLoading}
-    onAddHoldings={() => go('portfolio-management')}
+    <PortfolioHoldings
+      holdings={allHoldings}
+      onStockPress={(symbol) => {
+        try {
+          logger.log('[PortfolioScreen] Stock pressed:', symbol);
+          go('StockDetail', { symbol });
+        } catch (error) {
+          logger.error('[PortfolioScreen] Error navigating to StockDetail:', error);
+          Alert.alert('Navigation Error', `Could not open ${symbol} details. Please try again.`);
+        }
+      }}
+      onBuy={(holding) => {
+        try {
+          logger.log('[PortfolioScreen] Buy button pressed for:', holding.symbol);
+          go('trading', { symbol: holding.symbol, action: 'buy' });
+        } catch (error) {
+          logger.error('[PortfolioScreen] Error navigating to trading:', error);
+          Alert.alert('Navigation Error', 'Could not open trading screen. Please try again.');
+        }
+      }}
+      onSell={(holding) => {
+        try {
+          logger.log('[PortfolioScreen] Sell button pressed for:', holding.symbol);
+          go('trading', { symbol: holding.symbol, action: 'sell' });
+        } catch (error) {
+          logger.error('[PortfolioScreen] Error navigating to trading (sell):', error);
+          Alert.alert('Navigation Error', 'Could not open trading screen. Please try again.');
+        }
+      }}
+      loading={loadingPrices && !portfolioLoadingTimeout && portfolioLoading}
+      onAddHoldings={() => {
+        try {
+          logger.log('[PortfolioScreen] Add Holdings button pressed');
+          go('portfolio-management');
+        } catch (error) {
+          logger.error('[PortfolioScreen] Error navigating to portfolio-management:', error);
+          Alert.alert('Navigation Error', 'Could not open portfolio management. Please try again.');
+        }
+      }}
   />
 </View>
 
@@ -743,7 +838,15 @@ return (
                <Text style={styles.actionsTitle}>Portfolio Management</Text>
 <TouchableOpacity 
  style={styles.actionButton}
- onPress={() => go('portfolio-management')}
+ onPress={() => {
+   try {
+     logger.log('[PortfolioScreen] Portfolio Management button pressed');
+     go('portfolio-management');
+   } catch (error) {
+     logger.error('[PortfolioScreen] Error navigating to portfolio-management:', error);
+     Alert.alert('Navigation Error', 'Could not open portfolio management. Please try again.');
+   }
+ }}
 >
 <View style={styles.actionContent}>
 <Icon name="edit" size={24} color="#34C759" />
@@ -758,7 +861,15 @@ Add, edit, or remove stocks from your portfolio
 </TouchableOpacity>
 <TouchableOpacity 
  style={styles.actionButton}
- onPress={() => go('stock')}
+ onPress={() => {
+   try {
+     logger.log('[PortfolioScreen] Stock Discovery button pressed');
+     go('stock');
+   } catch (error) {
+     logger.error('[PortfolioScreen] Error navigating to stock:', error);
+     Alert.alert('Navigation Error', 'Could not open stock discovery. Please try again.');
+   }
+ }}
 >
 <View style={styles.actionContent}>
 <Icon name="search" size={24} color="#34C759" />
@@ -773,7 +884,15 @@ Find new stocks to add to your watchlist
 </TouchableOpacity>
 <TouchableOpacity 
  style={styles.actionButton}
- onPress={() => go('ai-portfolio')}
+ onPress={() => {
+   try {
+     logger.log('[PortfolioScreen] AI Portfolio button pressed');
+     go('ai-portfolio');
+   } catch (error) {
+     logger.error('[PortfolioScreen] Error navigating to ai-portfolio:', error);
+     Alert.alert('Navigation Error', 'Could not open AI recommendations. Please try again.');
+   }
+ }}
 >
 <View style={styles.actionContent}>
 <Icon name="cpu" size={24} color="#34C759" />
@@ -788,7 +907,15 @@ Get personalized stock recommendations
 </TouchableOpacity>
 <TouchableOpacity 
  style={styles.actionButton}
- onPress={() => go('trading')}
+ onPress={() => {
+   try {
+     logger.log('[PortfolioScreen] Trading button pressed');
+     go('trading');
+   } catch (error) {
+     logger.error('[PortfolioScreen] Error navigating to trading:', error);
+     Alert.alert('Navigation Error', 'Could not open trading. Please try again.');
+   }
+ }}
 >
 <View style={styles.actionContent}>
 <Icon name="dollar-sign" size={24} color="#34C759" />
@@ -803,7 +930,15 @@ Place buy/sell orders and manage your trades
 </TouchableOpacity>
 <TouchableOpacity 
   style={[styles.actionButton, { backgroundColor: '#FFF8E1' }]}
-  onPress={() => go('premium-analytics')}
+  onPress={() => {
+    try {
+      logger.log('[PortfolioScreen] Premium Analytics button pressed');
+      go('premium-analytics');
+    } catch (error) {
+      logger.error('[PortfolioScreen] Error navigating to premium-analytics:', error);
+      Alert.alert('Navigation Error', 'Could not open premium analytics. Please try again.');
+    }
+  }}
 >
 <View style={styles.actionContent}>
 <Icon name="star" size={24} color="#FFD700" />
@@ -819,7 +954,14 @@ Advanced options strategies and market sentiment
         {/* Dawn Ritual - Manual Trigger */}
         <TouchableOpacity 
           style={[styles.actionButton, { backgroundColor: '#FFF4E6', borderWidth: 1, borderColor: '#FF9500' }]}
-          onPress={() => setShowDawnRitual(true)}
+          onPress={() => {
+            try {
+              logger.log('[PortfolioScreen] Dawn Ritual button pressed');
+              setShowDawnRitual(true);
+            } catch (error) {
+              logger.error('[PortfolioScreen] Error opening Dawn Ritual:', error);
+            }
+          }}
         >
           <View style={styles.actionContent}>
             <Icon name="sunrise" size={24} color="#FF9500" />

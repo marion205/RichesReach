@@ -513,6 +513,7 @@ async def create_family_group(
 async def get_family_group(user: User = Depends(get_current_user)):
     """
     Get current user's family group.
+    Returns 404 if user is not in a family group (this is normal, not an error).
     """
     if FamilyGroup is None:
         raise HTTPException(status_code=404, detail="No family group found")
@@ -522,42 +523,60 @@ async def get_family_group(user: User = Depends(get_current_user)):
         
         def get_and_convert_sync():
             """Get family group and convert to response synchronously"""
-            connections.close_all()  # Close connections before ORM operations
-            
-            # Get user ID to avoid passing user object (which might have lazy attributes)
-            user_id = user.id if hasattr(user, 'id') else None
-            if not user_id:
-                raise HTTPException(status_code=401, detail="Invalid user")
-            
-            # Try to find group where user is owner or member
-            # Use select_related and prefetch_related to eagerly load relationships
-            group = FamilyGroup.objects.select_related('owner').prefetch_related('members__user').filter(owner_id=user_id).first()
-            if not group:
-                member = FamilyMember.objects.select_related('family_group__owner', 'user').prefetch_related('family_group__members__user').filter(user_id=user_id).first()
-                if member:
-                    group = member.family_group
-                    # Reload with prefetch to ensure all relationships are loaded
-                    group = FamilyGroup.objects.select_related('owner').prefetch_related('members__user').get(id=group.id)
-                else:
-                    raise HTTPException(status_code=404, detail="No family group found")
-            
-            # Force evaluation of all relationships to ensure they're loaded
-            _ = group.owner  # Access owner
-            members_list = list(group.members.all())  # Force evaluation of members
-            for member in members_list:
-                _ = member.user  # Access user for each member
-            
-            # Convert to response (all ORM access happens here)
-            return family_group_to_response(group)
+            try:
+                connections.close_all()  # Close connections before ORM operations
+                
+                # Get user ID to avoid passing user object (which might have lazy attributes)
+                user_id = user.id if hasattr(user, 'id') else None
+                if not user_id:
+                    logger.warning(f"Invalid user object in get_family_group: {type(user)}")
+                    return None  # Return None instead of raising - will be handled as 404
+                
+                # Try to find group where user is owner or member
+                # Use select_related and prefetch_related to eagerly load relationships
+                group = FamilyGroup.objects.select_related('owner').prefetch_related('members__user').filter(owner_id=user_id).first()
+                if not group:
+                    member = FamilyMember.objects.select_related('family_group__owner', 'user').prefetch_related('family_group__members__user').filter(user_id=user_id).first()
+                    if member:
+                        group = member.family_group
+                        # Reload with prefetch to ensure all relationships are loaded
+                        group = FamilyGroup.objects.select_related('owner').prefetch_related('members__user').get(id=group.id)
+                    else:
+                        # User not in a family group - this is normal, return None
+                        logger.info(f"User {user_id} is not in a family group")
+                        return None
+                
+                # Force evaluation of all relationships to ensure they're loaded
+                _ = group.owner  # Access owner
+                members_list = list(group.members.all())  # Force evaluation of members
+                for member in members_list:
+                    _ = member.user  # Access user for each member
+                
+                # Convert to response (all ORM access happens here)
+                return family_group_to_response(group)
+            except FamilyGroup.DoesNotExist:
+                logger.info(f"Family group not found for user {user_id}")
+                return None
+            except Exception as sync_error:
+                logger.error(f"Error in get_and_convert_sync: {sync_error}", exc_info=True)
+                # Re-raise to be caught by outer try/except
+                raise
         
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, get_and_convert_sync)
+        result = await loop.run_in_executor(None, get_and_convert_sync)
+        
+        # If result is None, user is not in a family group (normal case)
+        if result is None:
+            raise HTTPException(status_code=404, detail="No family group found")
+        
+        return result
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error fetching family group: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error fetching family group: {e}", exc_info=True)
+        # Return 500 only for actual errors, not for "not found" cases
+        raise HTTPException(status_code=500, detail=f"Error fetching family group: {str(e)}")
 
 
 @router.post("/invite")

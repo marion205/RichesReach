@@ -112,7 +112,7 @@ if (ENV_API_BASE_URL_RUST) {
 }
 
 // TTS API base URL
-const TTS_PORT = process.env.EXPO_PUBLIC_TTS_PORT || "8001";
+const TTS_PORT = process.env.EXPO_PUBLIC_TTS_PORT || "8002";
 const TTS_HOST = isDev ? DEV_BACKEND.replace(/^https?:\/\//, '').split(':')[0] : PROD_HOST.replace(/^https?:\/\//, '').split(':')[0];
 const defaultTTSUrl = `http://${TTS_HOST}:${TTS_PORT}`;
 

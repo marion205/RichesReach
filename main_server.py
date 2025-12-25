@@ -1461,6 +1461,151 @@ except ImportError as e:
 except Exception as e:
     print(f"⚠️ Error registering Futures API router: {e}")
 
+# Register AI Options API router
+try:
+    import sys
+    import os
+    deployment_backend_path = os.path.join(os.path.dirname(__file__), 'deployment_package', 'backend')
+    if os.path.exists(deployment_backend_path) and deployment_backend_path not in sys.path:
+        sys.path.insert(0, deployment_backend_path)
+    
+    backend_path = os.path.join(os.path.dirname(__file__), 'backend', 'backend')
+    if backend_path not in sys.path:
+        sys.path.insert(0, backend_path)
+    
+    from core.ai_options_api import router as ai_options_router
+    app.include_router(ai_options_router)
+    print("✅ AI Options API router registered")
+except ImportError as e:
+    print(f"⚠️ AI Options API router not available: {e}")
+except Exception as e:
+    print(f"⚠️ Error registering AI Options API router: {e}")
+
+# Tax Optimization endpoints (from deployment_package/backend/main.py)
+@app.get("/api/tax/optimization-summary")
+async def get_tax_optimization_summary(request: Request):
+    """
+    Get tax optimization summary with portfolio holdings for tax analysis.
+    Returns holdings data needed for tax loss harvesting, capital gains analysis, etc.
+    """
+    try:
+        # Import Django dependencies
+        from django.contrib.auth import get_user_model
+        from asgiref.sync import sync_to_async
+        
+        # Check if Django is available
+        try:
+            User = get_user_model()
+            DJANGO_AVAILABLE = True
+        except Exception:
+            DJANGO_AVAILABLE = False
+        
+        if not DJANGO_AVAILABLE:
+            raise HTTPException(status_code=503, detail="Tax optimization service not available")
+        
+        # Check if graphql_jwt is available
+        try:
+            from graphql_jwt.shortcuts import get_user_by_token
+            GRAPHQL_JWT_AVAILABLE = True
+        except ImportError:
+            GRAPHQL_JWT_AVAILABLE = False
+        
+        # Extract token from Authorization header (supports both Token and Bearer)
+        auth_header = request.headers.get("Authorization", "")
+        token = None
+        if auth_header.startswith("Token "):
+            token = auth_header.replace("Token ", "")
+        elif auth_header.startswith("Bearer "):
+            token = auth_header.replace("Bearer ", "")
+        
+        # Get user - try to validate JWT token if available, otherwise use demo user
+        user = None
+        
+        if token and GRAPHQL_JWT_AVAILABLE:
+            try:
+                # Try to get user from JWT token
+                user = await sync_to_async(get_user_by_token)(token)
+            except Exception as e:
+                logger.debug(f"JWT token validation failed: {e}")
+        
+        # Fallback: get user from email or use demo user
+        if not user:
+            try:
+                # Try to get demo user or first user
+                user = await sync_to_async(User.objects.filter(email='demo@example.com').first)()
+                if not user:
+                    user = await sync_to_async(User.objects.first)()
+                if not user:
+                    # Create demo user if none exists
+                    user, _ = await sync_to_async(User.objects.get_or_create)(
+                        email='demo@example.com',
+                        defaults={'name': 'Demo User'}
+                    )
+            except Exception as e:
+                logger.warning(f"Error getting user: {e}")
+                raise HTTPException(status_code=401, detail="Invalid authentication")
+        
+        # Get portfolio holdings using PremiumAnalyticsService
+        from core.premium_analytics import PremiumAnalyticsService
+        service = PremiumAnalyticsService()
+        metrics = await sync_to_async(service.get_portfolio_performance_metrics)(user.id)
+        
+        # Format holdings for tax optimization
+        holdings = []
+        if metrics and metrics.get('holdings'):
+            for holding in metrics['holdings']:
+                holdings.append({
+                    'symbol': holding.get('symbol', ''),
+                    'companyName': holding.get('company_name', holding.get('name', '')),
+                    'shares': holding.get('shares', 0),
+                    'currentPrice': float(holding.get('current_price', 0) or 0),
+                    'costBasis': float(holding.get('cost_basis', holding.get('average_price', 0)) or 0),
+                    'totalValue': float(holding.get('total_value', 0) or 0),
+                    'returnAmount': float(holding.get('return_amount', 0) or 0),
+                    'returnPercent': float(holding.get('return_percent', 0) or 0),
+                    'sector': holding.get('sector', 'Unknown'),
+                })
+        
+        # If no holdings from metrics, try to get from Portfolio model directly
+        if not holdings:
+            from core.models import Portfolio, Stock
+            portfolio_holdings = await sync_to_async(list)(
+                Portfolio.objects.filter(user=user).select_related('stock')[:20]
+            )
+            
+            for ph in portfolio_holdings:
+                stock = ph.stock
+                current_price = float(ph.current_price or (stock.current_price if stock else 0) or 0)
+                cost_basis = float(ph.average_price or 0)
+                shares = ph.shares or 0
+                total_value = float(ph.total_value or (current_price * shares) if current_price and shares else 0)
+                return_amount = float((current_price - cost_basis) * shares if current_price and cost_basis and shares else 0)
+                return_percent = float(((current_price - cost_basis) / cost_basis * 100) if cost_basis and current_price else 0)
+                
+                holdings.append({
+                    'symbol': stock.symbol if stock else '',
+                    'companyName': stock.company_name if stock else '',
+                    'shares': shares,
+                    'currentPrice': current_price,
+                    'costBasis': cost_basis,
+                    'totalValue': total_value,
+                    'returnAmount': return_amount,
+                    'returnPercent': return_percent,
+                    'sector': stock.sector if stock else 'Unknown',
+                })
+        
+        return {
+            'holdings': holdings,
+            'totalPortfolioValue': metrics.get('total_value', 0) if metrics else 0,
+            'totalUnrealizedGains': metrics.get('total_return', 0) if metrics else 0,
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in tax optimization summary: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error fetching tax optimization data: {str(e)}")
+
 @app.get("/health")
 async def health():
     return {"status": "ok", "schemaVersion": "1.0.0", "timestamp": datetime.now().isoformat()}

@@ -16,7 +16,7 @@ import 'react-native-url-polyfill/auto';
 // Note: LogBox setup moved to index.js (before App import) to catch early errors
 
 import React, { useState, useEffect, lazy, Suspense } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, LogBox } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, LogBox, DeviceEventEmitter } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import ApolloProvider from './ApolloProvider';
@@ -43,6 +43,7 @@ const priceAlertService = expoGoCompatiblePriceAlertService;
 import HomeScreen from './navigation/HomeScreen';
 import AppNavigator from './navigation/AppNavigator';
 import LoginScreen from './features/auth/screens/LoginScreen';
+import CalmGoalSheet from './components/CalmGoalSheet';
 import ForgotPasswordScreen from './features/auth/screens/ForgotPasswordScreen';
 import SignUpScreen from './features/auth/screens/SignUpScreen';
 import ProfileScreen from './features/user/screens/ProfileScreen';
@@ -150,6 +151,8 @@ const [currentScreen, setCurrentScreen] = useState('login');
 const [currentScreenParams, setCurrentScreenParams] = useState<any>({});
 // Version 2 State
 const [showARPreview, setShowARPreview] = useState(false);
+// Global state for Calm Goal sheet (accessible from any screen)
+const [showCalmSheet, setShowCalmSheet] = useState(false);
 
 // Store setCurrentScreen in a ref to ensure it's always available
 const setCurrentScreenRef = React.useRef(setCurrentScreen);
@@ -331,6 +334,33 @@ useEffect(() => {
     setHasCompletedOnboarding(null);
   }
 }, [isAuthenticated]);
+
+// Global listener for calm_goal_mic event (works from any screen)
+useEffect(() => {
+  console.log('🎤 [App] Registering global calm_goal_mic event listener');
+  const sub = DeviceEventEmitter.addListener('calm_goal_mic', () => {
+    console.log('🎤 [App] Received calm_goal_mic event globally, navigating to home and opening sheet');
+    // Navigate to home first
+    setCurrentScreen('home');
+    // Then open the Calm Goal sheet after a short delay to ensure HomeScreen is mounted
+    setTimeout(() => {
+      setShowCalmSheet(true);
+      console.log('🎤 [App] Calm Goal sheet should now be visible');
+    }, 500);
+  });
+  return () => {
+    console.log('🎤 [App] Removing global calm_goal_mic event listener');
+    sub.remove();
+  };
+}, []);
+
+// Close CalmGoalSheet when navigating away from home screen
+useEffect(() => {
+  if (currentScreen !== 'home' && showCalmSheet) {
+    console.log('🎤 [App] Closing CalmGoalSheet because we navigated away from home');
+    setShowCalmSheet(false);
+  }
+}, [currentScreen, showCalmSheet]);
 
 // Initialize services and check onboarding status (non-blocking for demo)
 useEffect(() => {
@@ -1032,6 +1062,21 @@ return (
 )}
 
 <Toast />
+
+{/* Global Calm Goal Sheet (accessible from any screen) */}
+<CalmGoalSheet
+  visible={showCalmSheet}
+  onClose={() => setShowCalmSheet(false)}
+  onConfirm={(plan) => {
+    setShowCalmSheet(false);
+    logger.log('Calm goal confirmed from global listener', plan);
+    // Navigate to home if not already there
+    if (currentScreen !== 'home') {
+      setCurrentScreen('home');
+    }
+  }}
+/>
+
 </GestureHandlerRootView>
 </ThemeProvider>
 );

@@ -62,17 +62,40 @@ const TopHeader: React.FC<TopHeaderProps> = ({
             <TouchableOpacity
               style={styles.micButton}
               onPress={() => {
-                // Try custom navigateTo first (for shell screens), then globalNavigate, then onNavigate
-                if (navigateTo) {
-                  navigateTo('home');
-                } else {
-                  try { 
-                    globalNavigate('Home'); 
-                  } catch {
-                    onNavigate('home');
+                console.log('🎤 [TopHeader] Microphone button pressed');
+                
+                // Always emit the event - don't wait for navigation
+                // The event listener in HomeScreen will handle it regardless of current screen
+                console.log('🎤 [TopHeader] Emitting calm_goal_mic event immediately');
+                DeviceEventEmitter.emit('calm_goal_mic');
+                
+                // Try to navigate to home (but don't block on it)
+                // Use a small delay to ensure event is emitted first
+                setTimeout(() => {
+                  try {
+                    // Try custom navigateTo first (for shell screens), then globalNavigate, then onNavigate
+                    if (navigateTo) {
+                      console.log('🎤 [TopHeader] Using navigateTo to go to home');
+                      navigateTo('home');
+                    } else {
+                      try { 
+                        console.log('🎤 [TopHeader] Using globalNavigate to go to Home');
+                        globalNavigate('Home'); 
+                      } catch (navError) {
+                        console.warn('🎤 [TopHeader] globalNavigate failed, trying onNavigate:', navError);
+                        try {
+                          onNavigate('home');
+                        } catch (onNavError) {
+                          console.warn('🎤 [TopHeader] onNavigate also failed:', onNavError);
+                          // Navigation failed, but event was already emitted, so it's okay
+                        }
+                      }
+                    }
+                  } catch (error) {
+                    console.warn('🎤 [TopHeader] Navigation error (non-critical):', error);
+                    // Navigation failed, but event was already emitted, so it's okay
                   }
-                }
-                setTimeout(() => DeviceEventEmitter.emit('calm_goal_mic'), 150);
+                }, 100);
               }}
               accessibilityLabel="Voice"
             >
