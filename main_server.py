@@ -1481,6 +1481,26 @@ except ImportError as e:
 except Exception as e:
     print(f"⚠️ Error registering AI Options API router: {e}")
 
+# Register Daily Brief API router
+try:
+    import sys
+    import os
+    deployment_backend_path = os.path.join(os.path.dirname(__file__), 'deployment_package', 'backend')
+    if os.path.exists(deployment_backend_path) and deployment_backend_path not in sys.path:
+        sys.path.insert(0, deployment_backend_path)
+    
+    backend_path = os.path.join(os.path.dirname(__file__), 'backend', 'backend')
+    if backend_path not in sys.path:
+        sys.path.insert(0, backend_path)
+    
+    from core.daily_brief_api import router as daily_brief_router
+    app.include_router(daily_brief_router)
+    print("✅ Daily Brief API router registered")
+except ImportError as e:
+    print(f"⚠️ Daily Brief API router not available: {e}")
+except Exception as e:
+    print(f"⚠️ Error registering Daily Brief API router: {e}")
+
 # Tax Optimization endpoints (from deployment_package/backend/main.py)
 @app.get("/api/tax/optimization-summary")
 async def get_tax_optimization_summary(request: Request):

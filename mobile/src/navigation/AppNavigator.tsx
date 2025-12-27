@@ -231,6 +231,9 @@ function HomeStack() {
       <Stack.Screen name="market-commentary" component={MarketCommentaryScreen} />
       <Stack.Screen name="ai-trading-coach" component={AITradingCoachScreen} />
       <Stack.Screen name="daily-voice-digest" component={DailyVoiceDigestScreen} />
+      <Stack.Screen name="daily-brief" component={require('../features/learning/screens/DailyBriefScreen').default} options={{ headerShown: false }} />
+      <Stack.Screen name="streak-progress" component={require('../features/learning/screens/StreakProgressScreen').default} options={{ headerShown: false }} />
+      <Stack.Screen name="lesson-library" component={require('../features/learning/screens/LessonLibraryScreen').default} options={{ headerShown: false }} />
       <Stack.Screen name="notification-center" component={NotificationCenterScreen} />
       <Stack.Screen name="wealth-circles" component={WealthCirclesScreen} />
       <Stack.Screen name="circle-detail" component={SimpleCircleDetailScreen} />
@@ -378,6 +381,7 @@ function LearnStack() {
       <Stack.Screen name="tutor-ask-explain" component={TutorAskExplainScreen} />
       <Stack.Screen name="tutor-quiz" component={TutorQuizScreen} />
       <Stack.Screen name="tutor-module" component={TutorModuleScreen} />
+      <Stack.Screen name="lesson-library" component={require('../features/learning/screens/LessonLibraryScreen').default} options={{ headerShown: false }} />
     </Stack.Navigator>
   );
 }

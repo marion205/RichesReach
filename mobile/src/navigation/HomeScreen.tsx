@@ -27,7 +27,8 @@ import { usePortfolioHistory, setPortfolioHistory } from '../shared/portfolioHis
 import { FEATURE_PORTFOLIO_METRICS } from '../config/flags';
 import { isMarketDataHealthy } from '../services/healthService';
 import { mark, PerformanceMarkers } from '../utils/timing';
-import { API_BASE } from '../config/api';
+import { API_BASE, API_HTTP } from '../config/api';
+import { useAuth } from '../contexts/AuthContext';
 // Create a safe logger that always works, even if the import fails
 // This prevents "Property 'logger' doesn't exist" errors
 const createSafeLogger = () => {
@@ -428,10 +429,16 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
   const HomeScreen = ({ navigateTo }: { navigateTo?: (screen: string, data?: NavigateParams) => void }) => {
     const client = useApolloClient();
     const navigation = useNavigation();
+    const { token } = useAuth();
     
     // Smart portfolio metrics state
     const [canQueryMetrics, setCanQueryMetrics] = useState(false);
     const [marketDataHealth, setMarketDataHealth] = useState<MarketDataHealth | null>(null);
+    
+    // Daily Brief streak state
+    const [dailyBriefStreak, setDailyBriefStreak] = useState<number | null>(null);
+    const [dailyBriefLoading, setDailyBriefLoading] = useState(false);
+    const hasCheckedDailyBrief = useRef(false);
   
     // GraphQL
     const {
@@ -506,6 +513,80 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
         setCanQueryMetrics(false);
       };
     }, []); // Run once when component mounts
+  
+    // Fetch Daily Brief streak
+    useEffect(() => {
+      const fetchDailyBriefProgress = async () => {
+        if (!token) return;
+        
+        try {
+          setDailyBriefLoading(true);
+          const response = await fetch(`${API_HTTP}/api/daily-brief/progress`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            setDailyBriefStreak(data.streak || 0);
+          } else {
+            // If API not available or user not found, set to 0
+            setDailyBriefStreak(0);
+          }
+        } catch (error) {
+          // Silently fail - don't show error, just don't display streak
+          setDailyBriefStreak(0);
+        } finally {
+          setDailyBriefLoading(false);
+        }
+      };
+      
+      fetchDailyBriefProgress();
+    }, [token]);
+
+    // Auto-navigate to Daily Brief if not completed today (only once per session)
+    useEffect(() => {
+      const checkAndNavigateToDailyBrief = async () => {
+        if (!token || hasCheckedDailyBrief.current) return;
+        
+        try {
+          const response = await fetch(`${API_HTTP}/api/daily-brief/today`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            // If brief exists but not completed, navigate to it
+            if (!data.is_completed) {
+              hasCheckedDailyBrief.current = true;
+              // Small delay to ensure home screen is rendered first
+              setTimeout(() => {
+                if (navigateTo) {
+                  navigateTo('daily-brief');
+                } else {
+                  navigation.navigate('daily-brief' as never);
+                }
+              }, 500);
+            }
+          }
+        } catch (error) {
+          // Silently fail - don't navigate if API is unavailable
+          console.log('Daily brief check failed:', error);
+        }
+      };
+      
+      // Only check once when component mounts and token is available
+      if (token && !hasCheckedDailyBrief.current) {
+        checkAndNavigateToDailyBrief();
+      }
+    }, [token, navigateTo, navigation]);
   
     // Profile
     const [userProfile, setUserProfile] = useState<ExtendedUserProfile | null>(null);
@@ -1142,6 +1223,42 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
                 setShowBreathCheck(true);
               }} />
 
+              {/* Daily Brief card */}
+              <TouchableOpacity 
+                style={[styles.learningCard, { backgroundColor: '#FFF4E6', borderWidth: 1, borderColor: '#FFE5CC' }]} 
+                onPress={() => {
+                  logger.log('Daily Brief pressed');
+                  try {
+                    if (navigateTo) {
+                      navigateTo('daily-brief');
+                    } else {
+                      navigation.navigate('daily-brief' as never);
+                    }
+                  } catch (error) {
+                    logger.error('Navigation error:', error);
+                    globalNavigate('daily-brief');
+                  }
+                }}
+              >
+                <View style={[styles.learningCardIcon, { backgroundColor: '#FF6B35' }]}>
+                  <Text style={{ fontSize: 24, color: '#FFFFFF' }}>🔥</Text>
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={[styles.learningCardTitle, { color: '#1a1a1a' }]}>🔥 Daily Brief</Text>
+                  <Text style={[styles.learningCardDescription, { color: '#666' }]}>
+                    {dailyBriefStreak !== null && dailyBriefStreak > 0 
+                      ? `Day ${dailyBriefStreak} of your streak`
+                      : 'Your 2-minute investing guide'}
+                  </Text>
+                  <Text style={[styles.learningCardMeta, { color: '#FF6B35', fontWeight: '600' }]}>
+                    {dailyBriefStreak !== null && dailyBriefStreak > 0 
+                      ? 'Keep it going!'
+                      : 'Plain English • Personalized'}
+                  </Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+
               <TouchableOpacity style={styles.learningCard} onPress={() => setShowNextMove(true)} onLongPress={() => setShowVoice(true)}>
                 <View style={styles.learningCardIcon}>
                   <Icon name="compass" size={24} color="#0EA5E9" />
@@ -1430,6 +1547,17 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
                 <View style={styles.learningCardContent}>
                   <Text style={styles.learningCardTitle}>Learning Modules</Text>
                   <Text style={styles.learningCardDescription}>Structured learning topics</Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.learningCard} onPress={() => go('Learn', { screen: 'lesson-library' })}>
+                <View style={styles.learningCardIcon}>
+                  <Icon name="book-open" size={24} color="#8B5CF6" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={styles.learningCardTitle}>Lesson Library</Text>
+                  <Text style={styles.learningCardDescription}>Browse all investing lessons</Text>
                 </View>
                 <Icon name="chevron-right" size={16} color="#8E8E93" />
               </TouchableOpacity>

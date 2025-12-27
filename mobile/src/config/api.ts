@@ -14,8 +14,8 @@ import { Platform } from 'react-native';
 const LOCALHOST = Platform.OS === 'android' ? '10.0.2.2' : '127.0.0.1';
 
 // Your Mac's LAN IP - for physical devices only
-// Current IP: 192.168.1.151 (updated automatically)
-const LAN_IP = '192.168.1.151';
+// Current IP: 192.168.1.246 (updated automatically)
+const LAN_IP = '192.168.1.246';
 
 // For simulator/emulator, use localhost; for physical devices, use LAN IP
 // In dev mode, prefer localhost for simulator (faster, more reliable)
