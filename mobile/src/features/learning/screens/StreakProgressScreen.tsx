@@ -51,8 +51,13 @@ const achievementIcons: Record<string, string> = {
   'streak_7': '🔥',
   'streak_30': '🏆',
   'lessons_10': '📚',
+  'lessons_25': '📚',
+  'lessons_50': '📚',
   'first_lesson': '🎓',
   'first_action': '✅',
+  'weekly_goal': '🎯',
+  'confidence_7': '💪',
+  'confidence_9': '🌟',
 };
 
 const achievementNames: Record<string, string> = {
@@ -60,8 +65,13 @@ const achievementNames: Record<string, string> = {
   'streak_7': '7-Day Streak',
   'streak_30': '30-Day Streak',
   'lessons_10': '10 Lessons Learned',
+  'lessons_25': '25 Lessons Learned',
+  'lessons_50': '50 Lessons Learned',
   'first_lesson': 'First Lesson',
   'first_action': 'First Action',
+  'weekly_goal': 'Weekly Goal Achieved',
+  'confidence_7': 'Confidence Level 7',
+  'confidence_9': 'Confidence Level 9',
 };
 
 export default function StreakProgressScreen({ navigateTo }: { navigateTo?: (screen: string) => void }) {

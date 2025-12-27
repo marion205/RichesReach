@@ -13,8 +13,9 @@ import {
   ActivityIndicator,
   SafeAreaView,
   TextInput,
+  Alert,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, NavigationProp, CommonActions } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import { LinearGradient } from 'expo-linear-gradient';
 import { API_HTTP } from '../../../config/api';
@@ -55,9 +56,9 @@ const difficultyColors: Record<string, string> = {
   advanced: '#EF4444',
 };
 
-export default function LessonLibraryScreen({ navigateTo }: { navigateTo?: (screen: string) => void }) {
+export default function LessonLibraryScreen({ navigateTo }: { navigateTo?: (screen: string, params?: any) => void }) {
   const { token } = useAuth();
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationProp<any>>();
   const [loading, setLoading] = useState(true);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [filteredLessons, setFilteredLessons] = useState<Lesson[]>([]);
@@ -67,11 +68,7 @@ export default function LessonLibraryScreen({ navigateTo }: { navigateTo?: (scre
 
   useEffect(() => {
     loadLessons();
-  }, [token]);
-
-  useEffect(() => {
-    filterLessons();
-  }, [lessons, selectedCategory, searchQuery]);
+  }, [token, selectedCategory, searchQuery]); // Reload when filters change
 
   const loadLessons = async () => {
     try {
@@ -82,59 +79,31 @@ export default function LessonLibraryScreen({ navigateTo }: { navigateTo?: (scre
         throw new Error('Authentication required');
       }
 
-      // TODO: Replace with actual API endpoint when available
-      // For now, using mock data
-      const mockLessons: Lesson[] = [
-        {
-          id: '1',
-          title: 'What is a Stock?',
-          description: 'Learn the fundamentals of stocks and how they work',
-          duration_minutes: 2,
-          difficulty: 'beginner',
-          category: 'basics',
-          concepts: ['stocks', 'equity', 'ownership'],
-          completed: false,
-          progress_percent: 0,
-        },
-        {
-          id: '2',
-          title: 'Understanding Market Volatility',
-          description: 'Why markets go up and down, and what it means for you',
-          duration_minutes: 3,
-          difficulty: 'beginner',
-          category: 'basics',
-          concepts: ['volatility', 'market cycles'],
-          completed: true,
-          progress_percent: 100,
-        },
-        {
-          id: '3',
-          title: 'Building Your First Portfolio',
-          description: 'Step-by-step guide to creating a diversified portfolio',
-          duration_minutes: 5,
-          difficulty: 'intermediate',
-          category: 'portfolio',
-          concepts: ['diversification', 'asset allocation'],
-          completed: false,
-          progress_percent: 0,
-        },
-        {
-          id: '4',
-          title: 'Risk vs. Reward',
-          description: 'Understanding the relationship between risk and potential returns',
-          duration_minutes: 4,
-          difficulty: 'intermediate',
-          category: 'risk',
-          concepts: ['risk', 'returns', 'correlation'],
-          completed: false,
-          progress_percent: 45,
-        },
-      ];
+      // Build query parameters
+      const params = new URLSearchParams();
+      if (selectedCategory) {
+        params.append('category', selectedCategory);
+      }
+      if (searchQuery.trim()) {
+        params.append('search', searchQuery.trim());
+      }
 
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 500));
+      const url = `${API_HTTP}/api/lessons/${params.toString() ? '?' + params.toString() : ''}`;
       
-      setLessons(mockLessons);
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setLessons(data);
     } catch (error: any) {
       console.error('Error loading lessons:', error);
       setError(error.message || 'Failed to load lessons');
@@ -143,33 +112,70 @@ export default function LessonLibraryScreen({ navigateTo }: { navigateTo?: (scre
     }
   };
 
-  const filterLessons = () => {
-    let filtered = [...lessons];
-
-    // Filter by category
-    if (selectedCategory) {
-      filtered = filtered.filter(lesson => lesson.category === selectedCategory);
-    }
-
-    // Filter by search query
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(lesson =>
-        lesson.title.toLowerCase().includes(query) ||
-        lesson.description.toLowerCase().includes(query) ||
-        lesson.concepts.some(concept => concept.toLowerCase().includes(query))
-      );
-    }
-
-    setFilteredLessons(filtered);
-  };
+  // Filtering is now done on the backend via API
+  // Just set filtered lessons to current lessons
+  useEffect(() => {
+    setFilteredLessons(lessons);
+  }, [lessons]);
 
   const handleLessonPress = (lesson: Lesson) => {
-    // Navigate to lesson detail screen
-    // TODO: Create lesson detail screen
-    console.log('Lesson pressed:', lesson.id);
-    // For now, just show an alert
-    // navigation.navigate('lesson-detail', { lessonId: lesson.id });
+    console.log('[LessonLibrary] 🔵 Lesson pressed:', lesson.id, lesson.title);
+    
+    // First, try globalNavigate which handles nested navigation properly
+    try {
+      console.log('[LessonLibrary] Attempting navigation via globalNavigate (nested)...');
+      const { globalNavigate } = require('../../../navigation/NavigationService');
+      globalNavigate('Learn', {
+        screen: 'lesson-detail',
+        params: { lessonId: lesson.id },
+      });
+      console.log('[LessonLibrary] ✅ globalNavigate called successfully');
+      return;
+    } catch (error: any) {
+      console.error('[LessonLibrary] ❌ globalNavigate error:', error);
+    }
+    
+    // Try using CommonActions with the current navigator
+    try {
+      console.log('[LessonLibrary] Attempting CommonActions navigation...');
+      const action = CommonActions.navigate({
+        name: 'lesson-detail',
+        params: { lessonId: lesson.id },
+      });
+      navigation.dispatch(action);
+      console.log('[LessonLibrary] ✅ CommonActions navigation dispatched');
+      return;
+    } catch (error: any) {
+      console.error('[LessonLibrary] ❌ CommonActions error:', error);
+    }
+    
+    // Try direct navigation (should work since we're in the same stack)
+    if (navigation && typeof (navigation as any).navigate === 'function') {
+      try {
+        console.log('[LessonLibrary] Attempting direct navigation...');
+        (navigation as any).navigate('lesson-detail', { lessonId: lesson.id });
+        console.log('[LessonLibrary] ✅ Direct navigation called (may still fail)');
+        // Don't return here - let it try other methods if this fails
+      } catch (error: any) {
+        console.error('[LessonLibrary] ❌ Direct navigation error:', error.message);
+      }
+    }
+    
+    // Last resort: use navigateTo if available
+    if (navigateTo) {
+      console.log('[LessonLibrary] Trying navigateTo function...');
+      try {
+        navigateTo('lesson-detail', { lessonId: lesson.id });
+        console.log('[LessonLibrary] ✅ navigateTo called successfully');
+        return;
+      } catch (navError) {
+        console.error('[LessonLibrary] ❌ navigateTo error:', navError);
+      }
+    }
+    
+    // Final fallback: show error
+    console.error('[LessonLibrary] ❌ All navigation methods failed');
+    Alert.alert('Navigation Error', `Unable to open lesson "${lesson.title}". The screen may not be registered in the navigator.`);
   };
 
   const getDifficultyBadge = (difficulty: string) => {
@@ -210,7 +216,10 @@ export default function LessonLibraryScreen({ navigateTo }: { navigateTo?: (scre
     return (
       <TouchableOpacity
         style={styles.lessonCard}
-        onPress={() => handleLessonPress(item)}
+        onPress={() => {
+          console.log('[LessonLibrary] 🔵 TouchableOpacity onPress triggered for:', item.id);
+          handleLessonPress(item);
+        }}
         activeOpacity={0.7}
       >
         <View style={styles.lessonHeader}>

@@ -660,6 +660,48 @@ async def complete_brief(request: Request, completion: CompleteBriefRequest):
         if created:
             achievements_unlocked.append('lessons_10')
     
+    if progress.concepts_learned == 25:
+        achievement, created = await sync_to_async(UserAchievement.objects.get_or_create)(
+            user=user,
+            achievement_type='lessons_25',
+        )
+        if created:
+            achievements_unlocked.append('lessons_25')
+    
+    if progress.concepts_learned == 50:
+        achievement, created = await sync_to_async(UserAchievement.objects.get_or_create)(
+            user=user,
+            achievement_type='lessons_50',
+        )
+        if created:
+            achievements_unlocked.append('lessons_50')
+    
+    # Weekly goal achievement
+    if progress.weekly_briefs_completed >= progress.weekly_goal:
+        achievement, created = await sync_to_async(UserAchievement.objects.get_or_create)(
+            user=user,
+            achievement_type='weekly_goal',
+        )
+        if created:
+            achievements_unlocked.append('weekly_goal')
+    
+    # Confidence milestones
+    if progress.confidence_score >= 7 and progress.confidence_score < 8:
+        achievement, created = await sync_to_async(UserAchievement.objects.get_or_create)(
+            user=user,
+            achievement_type='confidence_7',
+        )
+        if created:
+            achievements_unlocked.append('confidence_7')
+    
+    if progress.confidence_score >= 9:
+        achievement, created = await sync_to_async(UserAchievement.objects.get_or_create)(
+            user=user,
+            achievement_type='confidence_9',
+        )
+        if created:
+            achievements_unlocked.append('confidence_9')
+    
     return JSONResponse({
         "success": True,
         "message": "Daily brief completed",

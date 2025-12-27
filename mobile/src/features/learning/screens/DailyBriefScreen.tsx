@@ -25,6 +25,7 @@ import { API_HTTP } from '../../../config/api';
 import { useAuth } from '../../../contexts/AuthContext';
 import * as Haptics from 'expo-haptics';
 import DailyBriefOnboardingScreen, { isDailyBriefOnboardingCompleted } from './DailyBriefOnboardingScreen';
+import { dailyBriefNotificationScheduler } from '../services/DailyBriefNotificationScheduler';
 
 interface DailyBrief {
   id: string;
@@ -119,29 +120,23 @@ export default function DailyBriefScreen({ navigateTo }: DailyBriefScreenProps) 
   };
 
   useEffect(() => {
-    // Temporarily skip onboarding check to fix loading issue
-    // TODO: Re-enable onboarding after fixing the issue
-    console.log('[DailyBrief] useEffect triggered, token exists:', !!token);
-    console.log('[DailyBrief] Loading brief (onboarding temporarily disabled)');
-    
-    if (token) {
-      console.log('[DailyBrief] Token available, calling loadBrief()...');
-      loadBrief();
-    } else {
-      console.log('[DailyBrief] No token, setting loading to false');
-      setLoading(false);
-    }
-    
-    // Original onboarding check (commented out for now)
-    /*
+    // Check if onboarding is needed with proper error handling
     const checkOnboarding = async () => {
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+
       try {
+        // Add timeout to prevent hanging - if check takes > 300ms, skip onboarding
         const onboardingCheck = Promise.race([
           isDailyBriefOnboardingCompleted(),
-          new Promise<boolean>((resolve) => setTimeout(() => {
-            console.log('[DailyBrief] Onboarding check timed out, skipping onboarding');
-            resolve(true);
-          }, 500)),
+          new Promise<boolean>((resolve) => {
+            setTimeout(() => {
+              console.log('[DailyBrief] Onboarding check timed out, skipping onboarding');
+              resolve(true); // Default to completed after timeout
+            }, 300);
+          }),
         ]);
         
         const completed = await onboardingCheck;
@@ -154,16 +149,25 @@ export default function DailyBriefScreen({ navigateTo }: DailyBriefScreenProps) 
         }
       } catch (error) {
         console.error('[DailyBrief] Error checking onboarding status:', error);
+        // On error, skip onboarding and load brief directly
         loadBrief();
       }
     };
     
-    if (token) {
-      checkOnboarding();
-    } else {
-      setLoading(false);
-    }
-    */
+    checkOnboarding();
+
+    // Initialize daily reminder notification (non-blocking)
+    const initializeNotifications = async () => {
+      try {
+        const preferences = await dailyBriefNotificationScheduler.getPreferences();
+        if (preferences.enabled) {
+          await dailyBriefNotificationScheduler.scheduleDailyReminder(preferences);
+        }
+      } catch (error) {
+        console.error('[DailyBrief] Error initializing notifications:', error);
+      }
+    };
+    initializeNotifications();
   }, [token]);
 
   const loadBrief = async (isRetry = false) => {
@@ -264,16 +268,27 @@ export default function DailyBriefScreen({ navigateTo }: DailyBriefScreenProps) 
       if (!isRetryingRef.current) {
         setLoading(false);
         
-        let errorMessage = 'Backend server is not responding.';
+        let errorMessage = 'Unable to load your daily brief.';
+        let errorTitle = 'Connection Error';
+        
         if (error.message?.includes('Network request failed') || error.message?.includes('Failed to fetch') || error.name === 'AbortError') {
-          errorMessage = 'Cannot connect to backend server.\n\nPlease make sure:\n• Backend is running (python3 main_server.py)\n• Server is on port 8000\n• Try restarting the backend';
+          errorTitle = 'Connection Failed';
+          errorMessage = 'Cannot connect to the server.\n\nPlease check:\n• Your internet connection\n• Backend server is running\n• Try again in a moment';
         } else if (error.message?.includes('starting up')) {
-          errorMessage = error.message;
-        } else if (error.message?.includes('Authentication')) {
-          errorMessage = error.message;
+          errorTitle = 'Service Starting';
+          errorMessage = 'The daily brief service is starting up. Please wait a moment and try again.';
+        } else if (error.message?.includes('Authentication') || error.message?.includes('401')) {
+          errorTitle = 'Authentication Required';
+          errorMessage = 'Please log in again to access your daily brief.';
+        } else if (error.message?.includes('503')) {
+          errorTitle = 'Service Unavailable';
+          errorMessage = 'The service is temporarily unavailable. Please try again in a few moments.';
+        } else if (error.message?.includes('500')) {
+          errorTitle = 'Server Error';
+          errorMessage = 'Something went wrong on our end. We\'re working on it!';
         }
         
-        Alert.alert('Connection Error', errorMessage, [
+        Alert.alert(errorTitle, errorMessage, [
           { text: 'Retry', onPress: () => {
             retryCountRef.current = 0;
             isRetryingRef.current = false;
@@ -384,7 +399,15 @@ export default function DailyBriefScreen({ navigateTo }: DailyBriefScreenProps) 
       }
     } catch (error: any) {
       console.error('Error completing brief:', error);
-      Alert.alert('Error', 'Failed to complete daily brief. Please try again.');
+      let errorMessage = 'Failed to complete daily brief.';
+      if (error.message?.includes('Network') || error.message?.includes('Failed to fetch')) {
+        errorMessage = 'Connection error. Your progress may not have been saved. Please check your connection and try again.';
+      } else if (error.message?.includes('409')) {
+        errorMessage = 'This brief has already been completed.';
+      } else if (error.message?.includes('401')) {
+        errorMessage = 'Please log in again to save your progress.';
+      }
+      Alert.alert('Error', errorMessage);
       completionInProgressRef.current = false;
     } finally {
       setCompleting(false);
@@ -513,8 +536,14 @@ export default function DailyBriefScreen({ navigateTo }: DailyBriefScreenProps) 
       'streak_3': '🎉 3-Day Streak! You\'re building a great habit!',
       'streak_7': '🔥 7-Day Streak! You\'re on fire!',
       'streak_30': '🏆 30-Day Streak! You\'re a champion!',
+      'lessons_10': '📚 10 Lessons Learned! Keep learning!',
+      'lessons_25': '📚 25 Lessons Learned! You\'re becoming an expert!',
+      'lessons_50': '📚 50 Lessons Learned! Master investor!',
       'first_lesson': '📚 First Lesson Complete! Keep learning!',
       'first_action': '✅ First Action Taken! Great start!',
+      'weekly_goal': '🎯 Weekly Goal Achieved! You\'re consistent!',
+      'confidence_7': '💪 Confidence Level 7! You\'re getting there!',
+      'confidence_9': '🌟 Confidence Level 9! You\'re a pro!',
     };
     return messages[achievement] || `🎉 Achievement Unlocked: ${achievement}`;
   };

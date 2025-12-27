@@ -1494,8 +1494,11 @@ try:
         sys.path.insert(0, backend_path)
     
     from core.daily_brief_api import router as daily_brief_router
+    from core.lesson_api import router as lesson_router
     app.include_router(daily_brief_router)
+    app.include_router(lesson_router)
     print("✅ Daily Brief API router registered")
+    print("✅ Lesson API router registered")
 except ImportError as e:
     print(f"⚠️ Daily Brief API router not available: {e}")
 except Exception as e:

@@ -382,6 +382,7 @@ function LearnStack() {
       <Stack.Screen name="tutor-quiz" component={TutorQuizScreen} />
       <Stack.Screen name="tutor-module" component={TutorModuleScreen} />
       <Stack.Screen name="lesson-library" component={require('../features/learning/screens/LessonLibraryScreen').default} options={{ headerShown: false }} />
+      <Stack.Screen name="lesson-detail" component={require('../features/learning/screens/LessonDetailScreen').default} options={{ headerShown: false }} />
     </Stack.Navigator>
   );
 }
