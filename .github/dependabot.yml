@@ -1,0 +1,51 @@
+version: 2
+updates:
+  # Python dependencies (backend)
+  - package-ecosystem: "pip"
+    directory: "/deployment_package/backend"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 10
+    labels:
+      - "security"
+      - "dependencies"
+      - "python"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+    reviewers:
+      - "marioncollins"
+    assignees:
+      - "marioncollins"
+    # Group updates by dependency type
+    groups:
+      security-updates:
+        patterns:
+          - "*"
+        update-types:
+          - "security"
+
+  # npm dependencies (mobile)
+  - package-ecosystem: "npm"
+    directory: "/mobile"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 10
+    labels:
+      - "security"
+      - "dependencies"
+      - "javascript"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+    reviewers:
+      - "marioncollins"
+    assignees:
+      - "marioncollins"
+    groups:
+      security-updates:
+        patterns:
+          - "*"
+        update-types:
+          - "security"
+
