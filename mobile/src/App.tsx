@@ -386,12 +386,16 @@ if (priceAlertService) {
         priceAlertService.initialize().catch(() => {});
       }
       
-      // Initialize Dawn Ritual scheduler
-      const { dawnRitualScheduler } = await import('./features/rituals/services/DawnRitualScheduler');
-      const preferences = await dawnRitualScheduler.getPreferences();
-      if (preferences.enabled) {
-        await dawnRitualScheduler.scheduleDailyRitual(preferences);
-      }
+      // Initialize Dawn Ritual scheduler - DISABLED
+      // const { dawnRitualScheduler } = await import('./features/rituals/services/DawnRitualScheduler');
+      // const preferences = await dawnRitualScheduler.getPreferences();
+      // if (preferences.enabled) {
+      //   await dawnRitualScheduler.scheduleDailyRitual(preferences);
+      // }
+      
+      // Cancel any existing Dawn Ritual notifications
+      const { Notifications } = await import('expo-notifications');
+      await Notifications.cancelScheduledNotificationAsync('dawn_ritual_daily');
 } catch (error) {
 logger.error('Error initializing services:', error);
 } finally {

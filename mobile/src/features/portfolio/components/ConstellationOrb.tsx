@@ -17,6 +17,7 @@ import {
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
+  useDerivedValue,
   withSpring,
   withRepeat,
   withTiming,
@@ -30,6 +31,13 @@ import {
   Gesture,
   GestureHandlerRootView,
 } from 'react-native-gesture-handler';
+import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { 
+  Line as SvgLine, 
+  Defs, 
+  LinearGradient as SvgLinearGradient, 
+  Stop
+} from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import Icon from 'react-native-vector-icons/Feather';
 import { MoneySnapshot } from '../services/MoneySnapshotService';
@@ -38,6 +46,7 @@ import { gestureAnalyticsService } from '../services/GestureAnalyticsService';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const ORB_SIZE = Math.min(SCREEN_WIDTH * 0.7, 280);
 const ORB_CENTER = ORB_SIZE / 2;
+
 
 interface ConstellationOrbProps {
   snapshot: MoneySnapshot;
@@ -67,6 +76,16 @@ export const ConstellationOrb: React.FC<ConstellationOrbProps> = ({
   onSwipeRight,
   onPinch,
 }) => {
+  // Safety check - return placeholder if snapshot is missing
+  if (!snapshot) {
+    return (
+      <View style={styles.container}>
+        <View style={[styles.coreOrb, { backgroundColor: '#1C1C1E', width: ORB_SIZE, height: ORB_SIZE, borderRadius: ORB_SIZE / 2 }]}>
+          <Text style={[styles.netWorthLabel, { color: '#FFFFFF' }]}>Loading...</Text>
+        </View>
+      </View>
+    );
+  }
   // Core orb animation (pulsing)
   const orbScale = useSharedValue(1);
   const orbOpacity = useSharedValue(0.9);
@@ -77,6 +96,27 @@ export const ConstellationOrb: React.FC<ConstellationOrbProps> = ({
   const satellite1Angle = useSharedValue(0);
   const satellite2Angle = useSharedValue(120);
   const satellite3Angle = useSharedValue(240);
+  
+  // Position satellite animations - Initialize all 6 upfront (max positions)
+  const positionAngles = useRef<Animated.SharedValue<number>[]>([
+    useSharedValue(60),
+    useSharedValue(120),
+    useSharedValue(180),
+    useSharedValue(240),
+    useSharedValue(300),
+    useSharedValue(360),
+  ]);
+  const positionScales = useRef<Animated.SharedValue<number>[]>([
+    useSharedValue(1),
+    useSharedValue(1),
+    useSharedValue(1),
+    useSharedValue(1),
+    useSharedValue(1),
+    useSharedValue(1),
+  ]);
+  
+  // Performance-based color (based on cashflow and net worth trend)
+  const performanceColor = useSharedValue(0); // -1 (loss) to 1 (gain)
   
   // Gesture feedback animations
   const feedbackScale = useSharedValue(1);
@@ -146,6 +186,39 @@ export const ConstellationOrb: React.FC<ConstellationOrbProps> = ({
     );
   };
 
+  // Initialize position satellite animations
+  useEffect(() => {
+    const positions = snapshot?.positions ?? [];
+    const numPositions = Math.min(positions.length, 6); // Support up to 6 positions
+    
+    // Reset and animate only the positions we need
+    positionAngles.current.forEach((angle, index) => {
+      if (index < numPositions) {
+        // Reset to initial angle based on position
+        const baseAngle = (index * (360 / numPositions)) + 60;
+        angle.value = baseAngle;
+        
+        // Start rotation animation
+        angle.value = withRepeat(
+          withTiming(baseAngle + 360, { duration: 30000 + (index * 5000) }),
+          -1,
+          false
+        );
+        
+        // Start pulsing animation
+        positionScales.current[index]!.value = withRepeat(
+          withSpring(1.2, { damping: 8, stiffness: 100 }),
+          -1,
+          true
+        );
+      } else {
+        // Stop animations for unused positions
+        angle.value = angle.value; // Keep current value
+        positionScales.current[index]!.value = 1; // Reset to 1
+      }
+    });
+  }, [snapshot?.positions?.length]);
+
   // Initialize animations
   useEffect(() => {
     // Enhanced pulsing orb animation with rotation
@@ -191,7 +264,16 @@ export const ConstellationOrb: React.FC<ConstellationOrbProps> = ({
       -1,
       false
     );
-  }, []);
+    
+    // Calculate performance color based on cashflow
+    const cashflowDelta = snapshot?.cashflow?.delta ?? 0;
+    const netWorth = snapshot?.netWorth ?? 0;
+    // Normalize performance: positive cashflow = positive performance
+    const normalizedPerformance = netWorth > 0 
+      ? Math.max(-1, Math.min(1, cashflowDelta / (netWorth * 0.1))) // 10% of net worth as max
+      : cashflowDelta > 0 ? 0.5 : -0.5;
+    performanceColor.value = withTiming(normalizedPerformance, { duration: 1000 });
+  }, [snapshot]);
 
   // Core orb animated style with enhanced effects
   const orbStyle = useAnimatedStyle(() => {
@@ -213,11 +295,19 @@ export const ConstellationOrb: React.FC<ConstellationOrbProps> = ({
     };
   });
 
-  // Glow effect style
+  // Glow effect style with performance-based color
   const glowStyle = useAnimatedStyle(() => {
+    // Interpolate glow color based on performance
+    const glowColor = interpolate(
+      performanceColor.value,
+      [-1, 0, 1],
+      [0xFF3B30, 0x8E8E93, 0x34C759], // Red, Gray, Green
+      Extrapolate.CLAMP
+    );
     return {
       shadowOpacity: glowIntensity.value,
       shadowRadius: 20 + glowIntensity.value * 10,
+      shadowColor: `#${Math.round(glowColor).toString(16).padStart(6, '0')}`,
     };
   });
 
@@ -337,13 +427,119 @@ export const ConstellationOrb: React.FC<ConstellationOrbProps> = ({
   const cashflowIcon = cashflowDelta >= 0 ? 'arrow-up' : 'arrow-down';
   const netWorth = snapshot?.netWorth ?? 0;
   const positions = snapshot?.positions ?? [];
+  
+  // Calculate performance for gradient
+  const normalizedPerformance = netWorth > 0 
+    ? Math.max(-1, Math.min(1, cashflowDelta / (netWorth * 0.1)))
+    : cashflowDelta > 0 ? 0.5 : -0.5;
+  
+  // Get gradient colors based on performance
+  const getGradientColors = (): string[] => {
+    if (normalizedPerformance > 0.2) {
+      return ['#1C1C1E', '#1a2e1a', '#0d4d0d', '#1C1C1E']; // Green gradient
+    } else if (normalizedPerformance < -0.2) {
+      return ['#1C1C1E', '#2e1a1a', '#4d0d0d', '#1C1C1E']; // Red gradient
+    } else {
+      return ['#1C1C1E', '#1a1a2e', '#2d1a4d', '#1C1C1E']; // Blue/purple gradient
+    }
+  };
+  
+  const orbGradientColors = getGradientColors();
 
   return (
-    <GestureHandlerRootView style={styles.container}>
-      <GestureDetector gesture={composedGesture}>
-        <View style={styles.orbContainer}>
-          {/* Core Orb - Net Worth */}
-          <Animated.View style={[styles.coreOrb, orbStyle, glowStyle]}>
+      <GestureHandlerRootView style={styles.container}>
+        <GestureDetector gesture={composedGesture}>
+          <View style={styles.orbContainer}>
+            {/* Constellation Lines using SVG - Render behind orb with enhancements */}
+            <Svg 
+              width={ORB_SIZE} 
+              height={ORB_SIZE} 
+              style={StyleSheet.absoluteFill}
+              pointerEvents="none"
+            >
+              {/* Defs for gradients */}
+              <Defs>
+                {/* Gradient for cash flow lines - brighter center fade */}
+                <SvgLinearGradient id="cashflowGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <Stop offset="0%" stopColor={cashflowColor || '#34C759'} stopOpacity="0.5" />
+                  <Stop offset="30%" stopColor={cashflowColor || '#34C759'} stopOpacity="1" />
+                  <Stop offset="70%" stopColor={cashflowColor || '#34C759'} stopOpacity="1" />
+                  <Stop offset="100%" stopColor={cashflowColor || '#34C759'} stopOpacity="0.3" />
+                </SvgLinearGradient>
+                
+                {/* Gradient for position lines - brighter center fade */}
+                <SvgLinearGradient id="positionGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <Stop offset="0%" stopColor="#34C759" stopOpacity="0.5" />
+                  <Stop offset="30%" stopColor="#34C759" stopOpacity="1" />
+                  <Stop offset="70%" stopColor="#34C759" stopOpacity="1" />
+                  <Stop offset="100%" stopColor="#34C759" stopOpacity="0.3" />
+                </SvgLinearGradient>
+              </Defs>
+              
+              {/* Cash flow satellite lines with gradient and glow */}
+              {cashflowDelta !== 0 && (
+                <>
+                  <SvgLine
+                    x1={ORB_CENTER}
+                    y1={ORB_CENTER}
+                    x2={ORB_CENTER + (ORB_SIZE * 0.4)}
+                    y2={ORB_CENTER}
+                    stroke="url(#cashflowGradient)"
+                    strokeWidth={6}
+                    strokeOpacity={0.9}
+                    strokeDasharray="12,6"
+                    strokeLinecap="round"
+                  />
+                  <SvgLine
+                    x1={ORB_CENTER}
+                    y1={ORB_CENTER}
+                    x2={ORB_CENTER + (ORB_SIZE * 0.45 * Math.cos((120 * Math.PI) / 180))}
+                    y2={ORB_CENTER + (ORB_SIZE * 0.45 * Math.sin((120 * Math.PI) / 180))}
+                    stroke="url(#cashflowGradient)"
+                    strokeWidth={6}
+                    strokeOpacity={0.9}
+                    strokeDasharray="12,6"
+                    strokeLinecap="round"
+                  />
+                </>
+              )}
+              
+              {/* Position satellite lines with gradient and glow */}
+              {positions.slice(0, 6).map((position, index) => {
+                const numPositions = Math.min(positions.length, 6);
+                const baseAngle = (index * (360 / numPositions)) + 60;
+                const radius = ORB_SIZE * 0.35;
+                const rad = (baseAngle * Math.PI) / 180;
+                
+                // Calculate line thickness based on position value (if available)
+                const positionValue = position.value ?? 0;
+                const lineThickness = Math.min(6, Math.max(4, 4 + (Math.abs(positionValue) / 5000)));
+                
+                return (
+                  <SvgLine
+                    key={`line-${position.symbol}`}
+                    x1={ORB_CENTER}
+                    y1={ORB_CENTER}
+                    x2={ORB_CENTER + radius * Math.cos(rad)}
+                    y2={ORB_CENTER + radius * Math.sin(rad)}
+                    stroke="url(#positionGradient)"
+                    strokeWidth={lineThickness}
+                    strokeOpacity={0.9}
+                    strokeDasharray="12,6"
+                    strokeLinecap="round"
+                  />
+                );
+              })}
+            </Svg>
+            
+            {/* Core Orb - Net Worth with Gradient */}
+            <Animated.View style={[styles.coreOrb, orbStyle, glowStyle]}>
+            <LinearGradient
+              colors={orbGradientColors}
+              style={StyleSheet.absoluteFill}
+              start={{ x: 0.5, y: 0.5 }}
+              end={{ x: 1, y: 1 }}
+            />
             <Animated.View style={[styles.orbInner, innerContentStyle]}>
               <Text style={styles.netWorthLabel}>Net Worth</Text>
               <Text style={styles.netWorthValue}>
@@ -378,31 +574,76 @@ export const ConstellationOrb: React.FC<ConstellationOrbProps> = ({
             </>
           )}
 
-          {/* Satellites - Portfolio Positions (starry cluster) */}
-          {positions.slice(0, 3).map((position, index) => {
-            const angle = (index * 120) + 60; // Distribute around orb
+          {/* Satellites - Portfolio Positions (starry cluster) - Animated */}
+          {positions.slice(0, 6).map((position, index) => {
+            const numPositions = Math.min(positions.length, 6);
             const radius = ORB_SIZE * 0.35;
-            const rad = (angle * Math.PI) / 180;
-            const x = ORB_CENTER + radius * Math.cos(rad) - 6;
-            const y = ORB_CENTER + radius * Math.sin(rad) - 6;
+            
+            // Get animated angle and scale for this position
+            const angleValue = positionAngles.current[index];
+            const scaleValue = positionScales.current[index];
+            
+            if (!angleValue || !scaleValue) {
+              // Fallback to static position if animation not initialized
+              const baseAngle = (index * (360 / numPositions)) + 60;
+              const rad = (baseAngle * Math.PI) / 180;
+              const x = ORB_CENTER + radius * Math.cos(rad) - 6;
+              const y = ORB_CENTER + radius * Math.sin(rad) - 6;
+              
+              const positionValue = position.value ?? 0;
+              const positionColor = positionValue >= 0 ? '#34C759' : '#FF3B30';
+              const positionSize = Math.min(8, Math.max(4, 4 + (Math.abs(positionValue) / 1000)));
+
+              return (
+                <View
+                  key={position.symbol}
+                  style={[styles.positionSatellite, { left: x, top: y }]}
+                >
+                  <View style={[styles.positionDot, { 
+                    backgroundColor: positionColor,
+                    width: positionSize,
+                    height: positionSize,
+                    borderRadius: positionSize / 2,
+                  }]} />
+                  <Text style={styles.positionSymbol}>{position.symbol}</Text>
+                </View>
+              );
+            }
+            
+            // Calculate position based on animated angle
+            const positionStyle = useAnimatedStyle(() => {
+              const rad = (angleValue.value * Math.PI) / 180;
+              const x = ORB_CENTER + radius * Math.cos(rad) - 6;
+              const y = ORB_CENTER + radius * Math.sin(rad) - 6;
+              
+              return {
+                position: 'absolute',
+                left: x,
+                top: y,
+                transform: [{ scale: scaleValue.value }],
+              };
+            });
+            
+            // Determine position color based on performance (if available)
+            const positionValue = position.value ?? 0;
+            const positionColor = positionValue >= 0 ? '#34C759' : '#FF3B30';
+            const positionSize = Math.min(8, Math.max(4, 4 + (Math.abs(positionValue) / 1000)));
 
             return (
-              <View
+              <Animated.View
                 key={position.symbol}
-                style={[
-                  styles.positionSatellite,
-                  {
-                    left: x,
-                    top: y,
-                  },
-                ]}
+                style={[styles.positionSatellite, positionStyle]}
               >
-                <View style={styles.positionDot} />
+                <View style={[styles.positionDot, { 
+                  backgroundColor: positionColor,
+                  width: positionSize,
+                  height: positionSize,
+                  borderRadius: positionSize / 2,
+                }]} />
                 <Text style={styles.positionSymbol}>{position.symbol}</Text>
-              </View>
+              </Animated.View>
             );
           })}
-
         </View>
       </GestureDetector>
       {/* Gesture Hint (subtle) - Outside orbContainer to avoid clipping */}
@@ -432,7 +673,7 @@ const styles = StyleSheet.create({
     width: ORB_SIZE,
     height: ORB_SIZE,
     borderRadius: ORB_SIZE / 2,
-    backgroundColor: '#1C1C1E',
+    overflow: 'hidden', // For gradient
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#34C759',
@@ -487,6 +728,11 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: '#34C759',
     marginBottom: 2,
+    shadowColor: '#34C759',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 4,
+    elevation: 3,
   },
   positionSymbol: {
     fontSize: 10,
@@ -507,6 +753,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     flexShrink: 1,
     includeFontPadding: false,
+  },
+  constellationLine: {
+    position: 'absolute',
+    opacity: 0.7,
+    borderRadius: 1,
   },
 });
 

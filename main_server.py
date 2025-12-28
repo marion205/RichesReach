@@ -3358,22 +3358,42 @@ async def create_regime_alert(request: Request):
 
 # Yodlee Banking Integration Endpoints
 @app.get("/api/yodlee/fastlink/start")
-async def yodlee_fastlink_start(request: Request):
+def yodlee_fastlink_start(request: Request):
     """Create FastLink session for bank account linking"""
     try:
         _setup_django_once()
+        # Close any existing connections to ensure clean sync context
+        from django.db import connections
+        connections.close_all()
+        
         from deployment_package.backend.core.banking_views import StartFastlinkView
-        view = StartFastlinkView()
-        # Convert FastAPI request to Django request
         from django.http import HttpRequest
+        
+        # Convert FastAPI request to Django request
         django_request = HttpRequest()
         django_request.method = 'GET'
-        django_request.user = request.state.user if hasattr(request.state, 'user') else None
-        django_request.META = dict(request.headers)
+        django_request.user = None  # Will be set by _authenticate_request
+        # Convert headers properly
+        django_request.META = {}
+        for key, value in request.headers.items():
+            django_key = f'HTTP_{key.upper().replace("-", "_")}'
+            django_request.META[django_key] = value
+        # Also set Authorization directly
+        if 'authorization' in request.headers:
+            django_request.META['HTTP_AUTHORIZATION'] = request.headers.get('authorization')
+        django_request.path = request.url.path
+        django_request.path_info = request.url.path
+        
+        # Call Django view directly (FastAPI runs def endpoints in threadpool automatically)
+        view = StartFastlinkView()
         response = view.get(django_request)
+        
+        # Close connections after ORM operations
+        connections.close_all()
+        
         return JSONResponse(content=json.loads(response.content), status_code=response.status_code)
     except Exception as e:
-        print(f"Error in Yodlee FastLink start: {e}")
+        print(f"Error in Yodlee FastLink start: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/yodlee/fastlink/callback")
@@ -3381,56 +3401,89 @@ async def yodlee_callback(request: Request):
     """Handle FastLink callback"""
     try:
         _setup_django_once()
-        from deployment_package.backend.core.banking_views import YodleeCallbackView
-        view = YodleeCallbackView()
-        from django.http import HttpRequest
-        django_request = HttpRequest()
-        django_request.method = 'POST'
-        django_request.user = request.state.user if hasattr(request.state, 'user') else None
+        # Capture body before entering sync context
         body = await request.body()
-        django_request._body = body
-        django_request.META = dict(request.headers)
-        response = view.post(django_request)
+        headers_dict = dict(request.headers)
+        
+        from asgiref.sync import sync_to_async
+        from django.db import close_old_connections
+        
+        def _process_callback_sync(body_bytes, headers):
+            """Process callback in sync context"""
+            close_old_connections()
+            from deployment_package.backend.core.banking_views import YodleeCallbackView
+            from django.http import HttpRequest
+            
+            view = YodleeCallbackView()
+            django_request = HttpRequest()
+            django_request.method = 'POST'
+            django_request.user = None  # Will be set by view if needed
+            django_request._body = body_bytes
+            django_request.META = {}
+            for key, value in headers.items():
+                django_key = f'HTTP_{key.upper().replace("-", "_")}'
+                django_request.META[django_key] = value
+            response = view.post(django_request)
+            close_old_connections()
+            return response
+        
+        response = await sync_to_async(_process_callback_sync, thread_sensitive=True)(body, headers_dict)
         return JSONResponse(content=json.loads(response.content), status_code=response.status_code)
     except Exception as e:
-        print(f"Error in Yodlee callback: {e}")
+        print(f"Error in Yodlee callback: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/yodlee/accounts")
-async def yodlee_accounts(request: Request):
+def yodlee_accounts(request: Request):
     """Get user's bank accounts"""
     try:
         _setup_django_once()
         from deployment_package.backend.core.banking_views import AccountsView
-        view = AccountsView()
         from django.http import HttpRequest
+        
+        view = AccountsView()
         django_request = HttpRequest()
         django_request.method = 'GET'
-        django_request.user = request.state.user if hasattr(request.state, 'user') else None
-        django_request.META = dict(request.headers)
+        django_request.user = None  # Will be set by _authenticate_request
+        django_request.META = {}
+        for key, value in request.headers.items():
+            django_key = f'HTTP_{key.upper().replace("-", "_")}'
+            django_request.META[django_key] = value
+        if 'authorization' in request.headers:
+            django_request.META['HTTP_AUTHORIZATION'] = request.headers.get('authorization')
+        django_request.path = request.url.path
+        django_request.path_info = request.url.path
         response = view.get(django_request)
         return JSONResponse(content=json.loads(response.content), status_code=response.status_code)
     except Exception as e:
-        print(f"Error getting Yodlee accounts: {e}")
+        print(f"Error getting Yodlee accounts: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/yodlee/transactions")
-async def yodlee_transactions(request: Request):
+def yodlee_transactions(request: Request):
     """Get bank transactions"""
     try:
         _setup_django_once()
         from deployment_package.backend.core.banking_views import TransactionsView
-        view = TransactionsView()
         from django.http import HttpRequest
+        
+        view = TransactionsView()
         django_request = HttpRequest()
         django_request.method = 'GET'
         django_request.GET = request.query_params
-        django_request.user = request.state.user if hasattr(request.state, 'user') else None
-        django_request.META = dict(request.headers)
+        django_request.user = None  # Will be set by _authenticate_request
+        django_request.META = {}
+        for key, value in request.headers.items():
+            django_key = f'HTTP_{key.upper().replace("-", "_")}'
+            django_request.META[django_key] = value
+        if 'authorization' in request.headers:
+            django_request.META['HTTP_AUTHORIZATION'] = request.headers.get('authorization')
+        django_request.path = request.url.path
+        django_request.path_info = request.url.path
         response = view.get(django_request)
         return JSONResponse(content=json.loads(response.content), status_code=response.status_code)
     except Exception as e:
-        print(f"Error getting Yodlee transactions: {e}")
+        print(f"Error getting Yodlee transactions: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/yodlee/refresh")
@@ -3438,37 +3491,62 @@ async def yodlee_refresh(request: Request):
     """Refresh bank account data"""
     try:
         _setup_django_once()
-        from deployment_package.backend.core.banking_views import RefreshAccountView
-        view = RefreshAccountView()
-        from django.http import HttpRequest
-        django_request = HttpRequest()
-        django_request.method = 'POST'
-        django_request.user = request.state.user if hasattr(request.state, 'user') else None
+        # Capture body before entering sync context
         body = await request.body()
-        django_request._body = body
-        django_request.META = dict(request.headers)
-        response = view.post(django_request)
+        headers_dict = dict(request.headers)
+        
+        from asgiref.sync import sync_to_async
+        from django.db import close_old_connections
+        
+        def _refresh_account_sync(body_bytes, headers):
+            """Refresh account in sync context"""
+            close_old_connections()
+            from deployment_package.backend.core.banking_views import RefreshAccountView
+            from django.http import HttpRequest
+            
+            view = RefreshAccountView()
+            django_request = HttpRequest()
+            django_request.method = 'POST'
+            django_request.user = None  # Will be set by view if needed
+            django_request._body = body_bytes
+            django_request.META = {}
+            for key, value in headers.items():
+                django_key = f'HTTP_{key.upper().replace("-", "_")}'
+                django_request.META[django_key] = value
+            response = view.post(django_request)
+            close_old_connections()
+            return response
+        
+        response = await sync_to_async(_refresh_account_sync, thread_sensitive=True)(body, headers_dict)
         return JSONResponse(content=json.loads(response.content), status_code=response.status_code)
     except Exception as e:
-        print(f"Error refreshing Yodlee account: {e}")
+        print(f"Error refreshing Yodlee account: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/api/yodlee/bank-link/{bank_link_id}")
-async def yodlee_delete_bank_link(request: Request, bank_link_id: int):
+def yodlee_delete_bank_link(request: Request, bank_link_id: int):
     """Delete bank link"""
     try:
         _setup_django_once()
         from deployment_package.backend.core.banking_views import DeleteBankLinkView
-        view = DeleteBankLinkView()
         from django.http import HttpRequest
+        
+        view = DeleteBankLinkView()
         django_request = HttpRequest()
         django_request.method = 'DELETE'
-        django_request.user = request.state.user if hasattr(request.state, 'user') else None
-        django_request.META = dict(request.headers)
+        django_request.user = None  # Will be set by _authenticate_request
+        django_request.META = {}
+        for key, value in request.headers.items():
+            django_key = f'HTTP_{key.upper().replace("-", "_")}'
+            django_request.META[django_key] = value
+        if 'authorization' in request.headers:
+            django_request.META['HTTP_AUTHORIZATION'] = request.headers.get('authorization')
+        django_request.path = request.url.path
+        django_request.path_info = request.url.path
         response = view.delete(django_request, bank_link_id)
         return JSONResponse(content=json.loads(response.content), status_code=response.status_code)
     except Exception as e:
-        print(f"Error deleting Yodlee bank link: {e}")
+        print(f"Error deleting Yodlee bank link: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/yodlee/webhook")
@@ -3476,18 +3554,36 @@ async def yodlee_webhook(request: Request):
     """Handle Yodlee webhook events"""
     try:
         _setup_django_once()
-        from deployment_package.backend.core.banking_views import WebhookView
-        view = WebhookView()
-        from django.http import HttpRequest
-        django_request = HttpRequest()
-        django_request.method = 'POST'
+        # Capture body before entering sync context
         body = await request.body()
-        django_request._body = body
-        django_request.META = dict(request.headers)
-        response = view.post(django_request)
+        headers_dict = dict(request.headers)
+        
+        from asgiref.sync import sync_to_async
+        from django.db import close_old_connections
+        
+        def _process_webhook_sync(body_bytes, headers):
+            """Process webhook in sync context"""
+            close_old_connections()
+            from deployment_package.backend.core.banking_views import WebhookView
+            from django.http import HttpRequest
+            
+            view = WebhookView()
+            django_request = HttpRequest()
+            django_request.method = 'POST'
+            django_request.user = None  # Webhooks don't need user auth
+            django_request._body = body_bytes
+            django_request.META = {}
+            for key, value in headers.items():
+                django_key = f'HTTP_{key.upper().replace("-", "_")}'
+                django_request.META[django_key] = value
+            response = view.post(django_request)
+            close_old_connections()
+            return response
+        
+        response = await sync_to_async(_process_webhook_sync, thread_sensitive=True)(body, headers_dict)
         return JSONResponse(content=json.loads(response.content), status_code=response.status_code)
     except Exception as e:
-        print(f"Error processing Yodlee webhook: {e}")
+        print(f"Error processing Yodlee webhook: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/money/snapshot")

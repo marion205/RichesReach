@@ -114,7 +114,7 @@ const insets = useSafeAreaInsets();
   });
 
   // Money snapshot hook (for Constellation Orb)
-  const { snapshot, loading: snapshotLoading, hasBankLinked, refetch: refetchSnapshot, error: snapshotError } = useMoneySnapshot();
+  const { snapshot: baseSnapshot, loading: snapshotLoading, hasBankLinked, refetch: refetchSnapshot, error: snapshotError } = useMoneySnapshot();
   
   // Ensure all modals are closed when screen mounts (prevent blocking overlays)
   useEffect(() => {
@@ -417,6 +417,38 @@ setRefreshing(false);
   const totalPortfolios = (portfolioData?.myPortfolios?.totalPortfolios != null)
     ? portfolioData.myPortfolios.totalPortfolios
     : portfolios.length;
+
+  // Merge portfolio holdings from GraphQL into snapshot positions for the orb
+  const snapshot = useMemo(() => {
+    if (!baseSnapshot) return baseSnapshot;
+    
+    // Get all holdings from GraphQL portfolios
+    const graphqlPositions = portfolios.flatMap((portfolio: Portfolio) => {
+      if (!portfolio.holdings || portfolio.holdings.length === 0) return [];
+      return portfolio.holdings.map((holding: PortfolioHolding) => {
+        const symbol = holding.stock?.symbol || holding.symbol || '';
+        const quantity = holding.shares || holding.quantity || 0;
+        const currentPrice = realTimePrices[symbol] || holding.currentPrice || holding.stock?.currentPrice || 0;
+        const totalValue = quantity * currentPrice || holding.totalValue || 0;
+        
+        return {
+          symbol,
+          value: totalValue,
+          shares: quantity,
+        };
+      }).filter(pos => pos.symbol && pos.value > 0); // Only include valid positions
+    });
+    
+    // If we have GraphQL positions, use them; otherwise use snapshot positions
+    const mergedPositions = graphqlPositions.length > 0 
+      ? graphqlPositions 
+      : (baseSnapshot.positions || []);
+    
+    return {
+      ...baseSnapshot,
+      positions: mergedPositions,
+    };
+  }, [baseSnapshot, portfolios, realTimePrices]);
 
   // Transform portfolio holdings into format expected by PortfolioHoldings component
   // MUST BE BEFORE ANY EARLY RETURNS

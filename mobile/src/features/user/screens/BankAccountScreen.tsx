@@ -548,12 +548,7 @@ const BankAccountScreen = ({ navigateTo }: { navigateTo?: (screen: string, param
           <SectionHeader
             title="Linked Accounts"
             right={
-              <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false}
-                style={styles.actionRowScroll}
-                contentContainerStyle={styles.actionRowContent}
-              >
+              <View style={styles.actionRowWrap}>
                 <TouchableOpacity 
                   style={styles.ghostBtn} 
                   onPress={() => {
@@ -575,7 +570,7 @@ const BankAccountScreen = ({ navigateTo }: { navigateTo?: (screen: string, param
                   <Icon name="trending-up" size={15} color="#F59E0B" />
                   <Text style={[styles.ghostBtnText, { color: '#F59E0B' }]}>SBLOC</Text>
                 </TouchableOpacity>
-              </ScrollView>
+              </View>
             }
           />
 
@@ -1327,6 +1322,7 @@ const styles = StyleSheet.create({
   actionRow: { flexDirection:'row', gap:8 },
   actionRowScroll: { maxWidth: '100%' },
   actionRowContent: { flexDirection:'row', gap:6, paddingRight: 4 },
+  actionRowWrap: { flexDirection:'row', flexWrap:'wrap', gap:6, alignItems: 'center', maxWidth: 200 },
   ghostBtn: { flexDirection:'row', alignItems:'center', gap:5, backgroundColor:'#EFF6FF', paddingHorizontal:9, paddingVertical:6, borderRadius:8, minWidth: 0 },
   ghostBtnText: { color:'#2457D6', fontWeight:'700', fontSize: 11 },
 
