@@ -63,4 +63,10 @@ class AuthenticatedGraphQLView(GraphQLView):
 
 # Create the view instance with the core schema
 from .schema import schema
+# CSRF exempt because:
+# 1. GraphQL endpoint uses Authorization: Bearer <token> header
+# 2. No cookie-based sessions for GraphQL API
+# 3. Stateless API design (JWT tokens)
+# 4. Mobile app uses Bearer tokens exclusively
+# See: CSRF_VERIFICATION_CHECKLIST.md for full justification
 graphql_view = csrf_exempt(AuthenticatedGraphQLView.as_view(schema=schema, graphiql=True))

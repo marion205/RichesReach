@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
+# CSRF exempt - Bearer token auth only (see CSRF_VERIFICATION_CHECKLIST.md)
 @method_decorator(csrf_exempt, name='dispatch')
 class WealthCirclePostsView(View):
     """

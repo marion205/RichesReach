@@ -133,8 +133,9 @@ class AdvancedMarketDataService:
             if 'macos' in sys.platform.lower() or 'darwin' in sys.platform.lower():
                 import ssl
                 ssl_context = ssl.create_default_context()
-                ssl_context.check_hostname = False
-                ssl_context.verify_mode = ssl.CERT_NONE
+                # Use production-safe SSL context
+                from core.security_utils import get_ssl_context
+                ssl_context = get_ssl_context()
             async with session.get(url, headers=headers, params=params, ssl=ssl_context) as response:
                 if response.status == 200:
                     return await response.json()

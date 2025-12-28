@@ -9,6 +9,7 @@ from typing import Optional, List
 import logging
 import sys
 import os
+import secrets
 from datetime import datetime, timedelta
 
 # Setup logger
@@ -54,7 +55,7 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> User:
             return User.objects.create_user(
                 email='test@example.com',
                 name='Test User',
-                password='test123'
+                password=os.getenv('DEV_TEST_USER_PASSWORD', secrets.token_urlsafe(16))
             )
         
         loop = asyncio.get_event_loop()
@@ -73,7 +74,7 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> User:
             return User.objects.create_user(
                 email='test@example.com',
                 name='Test User',
-                password='test123'
+                password=os.getenv('DEV_TEST_USER_PASSWORD', secrets.token_urlsafe(16))
             )
         
         loop = asyncio.get_event_loop()
@@ -86,7 +87,7 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> User:
         return User.objects.first() or User.objects.create_user(
             email='test@example.com',
             name='Test User',
-            password='test123'
+                password=os.getenv('DEV_TEST_USER_PASSWORD', secrets.token_urlsafe(16))
         )
     
     loop = asyncio.get_event_loop()

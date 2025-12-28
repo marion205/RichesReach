@@ -1331,6 +1331,83 @@ async def respond_with_buy_multiple_stocks(transcript: str, history: list, conte
 
 app = FastAPI(title="RichesReach Main Server", version="1.0.0")
 
+# Security Headers Middleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """
+    Add security headers to responses.
+    
+    IMPORTANT: This is an API-only service (returns JSON).
+    - X-Frame-Options: Not set (API responses don't need it; FastLink is embedded by frontend)
+    - CSP: Only applied to HTML responses (if any)
+    - Frame-ancestors via CSP: 'none' for API endpoints (prevents embedding API responses)
+    """
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        
+        # Get content type to determine if this is HTML
+        content_type = response.headers.get("content-type", "").lower()
+        is_html = "text/html" in content_type
+        
+        # Always apply these headers (safe for JSON APIs)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        
+        # X-Frame-Options: Only apply to HTML responses
+        # For API (JSON), we rely on CSP frame-ancestors instead
+        # This prevents breaking FastLink if backend ever serves HTML wrapper
+        if is_html:
+            # For HTML pages, use SAMEORIGIN (allows same-origin framing)
+            # FastLink is embedded by frontend, so this is safe
+            response.headers["X-Frame-Options"] = "SAMEORIGIN"
+        
+        # HSTS (only in production/HTTPS, and only if all subdomains are HTTPS)
+        if IS_PRODUCTION or os.getenv('FORCE_HTTPS', 'false').lower() == 'true':
+            hsts_seconds = int(os.getenv('SECURE_HSTS_SECONDS', '31536000'))  # 1 year
+            # Only include preload if ALL subdomains are HTTPS forever
+            include_preload = os.getenv('HSTS_PRELOAD', 'false').lower() == 'true'
+            hsts_header = f"max-age={hsts_seconds}; includeSubDomains"
+            if include_preload:
+                hsts_header += "; preload"
+            response.headers["Strict-Transport-Security"] = hsts_header
+        
+        # Content Security Policy (CSP) - only meaningful for HTML
+        # For JSON API responses, CSP is a no-op but harmless
+        if is_html:
+            # CSP for HTML pages (if we ever serve any)
+            csp_policy = (
+                "default-src 'self'; "
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "  # Adjust for your needs
+                "style-src 'self' 'unsafe-inline'; "
+                "img-src 'self' data: https:; "
+                "font-src 'self' data:; "
+                "connect-src 'self' https://api.yodlee.com https://sandbox.api.yodlee.com https://fastlink.yodlee.com https://fl4.sandbox.yodlee.com; "
+                "frame-src 'self' https://fastlink.yodlee.com https://fl4.sandbox.yodlee.com; "
+                "frame-ancestors 'none'; "  # Prevents embedding our HTML pages
+            )
+            response.headers["Content-Security-Policy"] = csp_policy
+        else:
+            # For API responses, minimal CSP to prevent embedding API responses as HTML
+            # This is mostly a no-op for JSON, but prevents confusion if someone tries to embed
+            response.headers["Content-Security-Policy"] = "frame-ancestors 'none';"
+        
+        # Permissions Policy (formerly Feature Policy) - safe for all responses
+        response.headers["Permissions-Policy"] = (
+            "geolocation=(), "
+            "microphone=(), "
+            "camera=(), "
+            "payment=(), "
+            "usb=()"
+        )
+        
+        return response
+
+# Add security headers middleware (before CORS)
+app.add_middleware(SecurityHeadersMiddleware)
+
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,

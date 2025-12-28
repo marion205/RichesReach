@@ -40,18 +40,23 @@ class EnhancedAPIService:
 
 
     def __init__(self):
-
-        # Multiple API keys for rotation (move to env vars in production)
-
-        self.api_keys: List[str] = [
-
-            "K0A7XYLDNXHNQ1WI",  # Primary key
-
-            "OHYSFF1AE446O7CR",  # Secondary key (from logs)
-
-            # Add more keys as needed
-
-        ]
+        # Load API keys from environment or Secrets Manager
+        # NEVER hardcode API keys in production
+        from .secrets_manager import get_secret
+        
+        self.api_keys: List[str] = []
+        
+        # Try to load from environment or secrets manager
+        key1 = get_secret('alpha_vantage_key_1', default=os.getenv('ALPHA_VANTAGE_API_KEY'))
+        key2 = get_secret('alpha_vantage_key_2', default=os.getenv('ALPHA_VANTAGE_API_KEY_2'))
+        
+        if key1:
+            self.api_keys.append(key1)
+        if key2:
+            self.api_keys.append(key2)
+        
+        if not self.api_keys:
+            logger.warning("No Alpha Vantage API keys found. Set ALPHA_VANTAGE_API_KEY or configure Secrets Manager.")
 
         self.current_key_index: int = 0
 

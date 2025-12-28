@@ -183,7 +183,10 @@ EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True').lower() == 'true'
 EMAIL_USE_SSL = False # Disable SSL for local development
 EMAIL_SSL_CERTFILE = '' # No SSL certificate file
 EMAIL_SSL_KEYFILE = '' # No SSL key file
-EMAIL_SSL_CHECK_HOSTNAME = False # Disable hostname verification
+# Email SSL verification - production-safe
+EMAIL_SSL_CHECK_HOSTNAME = os.getenv('EMAIL_SSL_CHECK_HOSTNAME', 'true').lower() == 'true'
+if os.getenv('ENVIRONMENT', '').lower() == 'production' and not EMAIL_SSL_CHECK_HOSTNAME:
+    raise ValueError("EMAIL_SSL_CHECK_HOSTNAME cannot be False in production")
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@richesreach.com')

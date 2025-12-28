@@ -23,6 +23,11 @@ except ImportError:
     logger.warning("graphql_jwt not available. Using dev tokens for authentication.")
 
 
+# CSRF exempt because:
+# 1. Login endpoint returns JWT token (no session cookies)
+# 2. All subsequent requests use Bearer token auth
+# 3. Stateless API design
+# See: CSRF_VERIFICATION_CHECKLIST.md for full justification
 @method_decorator(csrf_exempt, name='dispatch')
 class LoginView(View):
     """
@@ -99,13 +104,20 @@ class LoginView(View):
                             }
                         )
                         if created:
-                            user.set_password('demo123')
+                            # Development fallback - use environment variable
+                            demo_password = os.getenv('DEV_DEMO_USER_PASSWORD', None)
+                            if not demo_password:
+                                import secrets
+                                demo_password = secrets.token_urlsafe(16)
+                                logger.warning("DEV_DEMO_USER_PASSWORD not set, generated random password")
+                            user.set_password(demo_password)
                             user.save()
                             logger.info("Created demo user for development")
                         else:
-                            # Ensure password is set correctly
-                            if not user.check_password('demo123'):
-                                user.set_password('demo123')
+                            # Ensure password is set correctly (only in development)
+                            demo_password = os.getenv('DEV_DEMO_USER_PASSWORD', None)
+                            if demo_password and not user.check_password(demo_password):
+                                user.set_password(demo_password)
                                 user.save()
                                 logger.info("Reset demo user password")
                         # In development, allow login with demo@example.com regardless of password

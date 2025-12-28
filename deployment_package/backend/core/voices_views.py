@@ -10,6 +10,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+# CSRF exempt - Bearer token auth only (see CSRF_VERIFICATION_CHECKLIST.md)
 @method_decorator(csrf_exempt, name='dispatch')
 class VoicesListView(View):
     """

@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 alpaca_service = AlpacaBrokerService()
 
 
+# CSRF exempt - Bearer token auth only (see CSRF_VERIFICATION_CHECKLIST.md)
 @method_decorator(csrf_exempt, name='dispatch')
 @method_decorator(login_required, name='dispatch')
 class BrokerOnboardView(View):
@@ -113,6 +114,7 @@ class BrokerOnboardView(View):
             return JsonResponse({'error': str(e)}, status=500)
 
 
+# CSRF exempt - Bearer token auth only (see CSRF_VERIFICATION_CHECKLIST.md)
 @method_decorator(csrf_exempt, name='dispatch')
 @method_decorator(login_required, name='dispatch')
 class BrokerAccountView(View):
@@ -169,6 +171,7 @@ class BrokerAccountView(View):
             return JsonResponse({'error': str(e)}, status=500)
 
 
+# CSRF exempt - Bearer token auth only (see CSRF_VERIFICATION_CHECKLIST.md)
 @method_decorator(csrf_exempt, name='dispatch')
 @method_decorator(login_required, name='dispatch')
 class BrokerOrdersView(View):
@@ -319,6 +322,7 @@ class BrokerOrdersView(View):
             return JsonResponse({'error': str(e)}, status=500)
 
 
+# CSRF exempt - Bearer token auth only (see CSRF_VERIFICATION_CHECKLIST.md)
 @method_decorator(csrf_exempt, name='dispatch')
 @method_decorator(login_required, name='dispatch')
 class BrokerPositionsView(View):
@@ -340,6 +344,7 @@ class BrokerPositionsView(View):
             return JsonResponse({'error': str(e)}, status=500)
 
 
+# CSRF exempt - Bearer token auth only (see CSRF_VERIFICATION_CHECKLIST.md)
 @method_decorator(csrf_exempt, name='dispatch')
 @method_decorator(login_required, name='dispatch')
 class BrokerActivitiesView(View):

@@ -22,8 +22,32 @@ class YodleeClient:
         self.app_id = os.getenv('YODLEE_APP_ID', '').strip()
         self.fastlink_url = os.getenv('YODLEE_FASTLINK_URL', 'https://fastlink.yodlee.com').strip()
         self.webhook_secret = os.getenv('YODLEE_WEBHOOK_SECRET', '').strip()
+        self.admin_loginname = os.getenv('YODLEE_ADMIN_LOGINNAME', '').strip()
         
-        # Debug logging for credential validation
+        # Check API key rotation status
+        try:
+            from .api_key_rotation import get_api_key_rotation_service
+            rotation_service = get_api_key_rotation_service()
+            
+            # Check Yodlee credentials rotation status
+            client_id_status = rotation_service.check_rotation_needed('YODLEE_CLIENT_ID')
+            secret_status = rotation_service.check_rotation_needed('YODLEE_SECRET')
+            
+            if client_id_status.get('needs_rotation') or secret_status.get('needs_rotation'):
+                logger.warning(f"⚠️  Yodlee credentials need rotation: CLIENT_ID={client_id_status.get('needs_rotation')}, SECRET={secret_status.get('needs_rotation')}")
+            elif client_id_status.get('needs_warning') or secret_status.get('needs_warning'):
+                logger.info(f"🔑 Yodlee credentials rotation warning: CLIENT_ID={client_id_status.get('days_until_rotation')} days, SECRET={secret_status.get('days_until_rotation')} days")
+            
+            # Record key creation if first time
+            if self.client_id:
+                rotation_service.record_key_creation('YODLEE_CLIENT_ID')
+            if self.client_secret:
+                rotation_service.record_key_creation('YODLEE_SECRET')
+        except Exception as e:
+            logger.debug(f"API key rotation service not available: {e}")
+        
+        # Debug logging for credential validation (NO SECRETS LOGGED)
+        # Only log lengths and validation issues, never actual secret values
         if self.client_id and self.client_secret:
             logger.info(f"🔵 YodleeClient initialized: base_url={self.base_url}, client_id_length={len(self.client_id)}, secret_length={len(self.client_secret)}")
             # Check for common issues
@@ -59,33 +83,15 @@ class YodleeClient:
         
         return headers
     
-    def _get_user_token_headers(self, user_id: str) -> Dict[str, str]:
-        """Get headers with user-specific access token"""
-        headers = self._get_headers(include_auth=True)
-        
-        # Get or create user token
-        token = self._get_user_token(user_id)
-        if token:
-            headers['Authorization'] = f"Bearer {token}"
-        
-        return headers
-    
-    def _get_user_token(self, user_id: str) -> Optional[str]:
-        """Get or create user access token"""
+    def _auth_token(self, login_name: str) -> Optional[str]:
+        """Get access token for a given loginName (admin or user)"""
         # Validate credentials first
         if not self.client_id or not self.client_secret:
             logger.error("Yodlee credentials not configured. Set YODLEE_CLIENT_ID and YODLEE_SECRET environment variables.")
             return None
         
-        # Check cache first
-        if user_id in self._user_tokens:
-            logger.debug(f"🔵 Using cached token for user {user_id}")
-            return self._user_tokens[user_id]
-        
-        # Create user session/login
         try:
             login_url = f"{self.base_url}/auth/token"
-            login_name = f"user_{user_id}"  # Yodlee expects unique loginName per user
             
             # Yodlee expects form-urlencoded, not JSON
             headers = {
@@ -100,9 +106,7 @@ class YodleeClient:
                 'secret': self.client_secret.strip(),
             }
             
-            logger.info(f"🔵 Requesting user token: URL={login_url}, loginName={login_name}")
-            logger.debug(f"🔵 Request headers: {list(headers.keys())}")
-            logger.debug(f"🔵 Credential lengths: client_id={len(data['clientId'])}, secret={len(data['secret'])}")
+            logger.info(f"🔵 Requesting token: URL={login_url}, loginName={login_name}")
             
             response = requests.post(
                 login_url,
@@ -113,76 +117,156 @@ class YodleeClient:
             
             logger.info(f"🔵 Token response: status={response.status_code}")
             
-            if response.status_code == 200:
-                data = response.json()
-                token = data.get('token', {}).get('accessToken')
+            if response.status_code in (200, 201):
+                response_data = response.json()
+                # Handle both formats: {"token": {"accessToken": "..."}} and {"accessToken": "..."}
+                if 'token' in response_data:
+                    token = response_data.get('token', {}).get('accessToken')
+                else:
+                    token = response_data.get('accessToken')
+                
                 if token:
-                    self._user_tokens[user_id] = token
-                    logger.info(f"✅ User token obtained for user {user_id}")
+                    logger.info(f"✅ Token obtained for loginName={login_name}")
                     return token
                 else:
-                    logger.warning(f"⚠️  Token response missing accessToken: {data}")
+                    logger.warning(f"⚠️  Token response missing accessToken: {response_data}")
             else:
                 error_text = response.text[:500] if response.text else "No error text"
-                logger.error(f"❌ Failed to get user token: {response.status_code} - {error_text}")
-                # If Y303, log detailed diagnostic info
-                if 'Y303' in error_text or response.status_code == 400:
-                    logger.error(f"🔍 Y303 Diagnostic: client_id length={len(self.client_id)}, secret length={len(self.client_secret)}, base_url={self.base_url}")
-                    logger.error(f"🔍 Y303 Diagnostic: client_id stripped={self.client_id == self.client_id.strip()}, secret stripped={self.client_secret == self.client_secret.strip()}")
+                logger.error(f"❌ Failed to get token: {response.status_code} - {error_text}")
         
         except Exception as e:
-            logger.error(f"Error getting user token: {e}", exc_info=True)
+            logger.error(f"Error getting token: {e}", exc_info=True)
         
         return None
     
-    def register_user(self, user_id: str) -> bool:
-        """Register a new user in Yodlee (may require admin loginName)"""
+    def admin_token(self) -> Optional[str]:
+        """Get admin access token"""
+        if not self.admin_loginname:
+            logger.error("YODLEE_ADMIN_LOGINNAME not configured. Required for user registration.")
+            return None
+        return self._auth_token(self.admin_loginname)
+    
+    def _get_user_token(self, login_name: str) -> Optional[str]:
+        """Get user access token (cached)"""
+        # Check cache first
+        if login_name in self._user_tokens:
+            logger.debug(f"🔵 Using cached token for loginName={login_name}")
+            return self._user_tokens[login_name]
+        
+        # Get fresh token
+        token = self._auth_token(login_name)
+        if token:
+            self._user_tokens[login_name] = token
+        return token
+    
+    def _get_user_token_headers(self, user_id: str) -> Dict[str, str]:
+        """Get headers with user-specific access token (legacy method - uses user_id)"""
+        headers = self._get_headers(include_auth=True)
+        
+        # Legacy: try to get token using user_id as loginName
+        login_name = f"user_{user_id}"
+        token = self._get_user_token(login_name)
+        if token:
+            headers['Authorization'] = f"Bearer {token}"
+        
+        return headers
+    
+    def register_user(self, admin_token: str, login_name: str, email: str) -> bool:
+        """Register a new user in Yodlee using admin token"""
         try:
-            # In Yodlee sandbox, users typically need to be pre-registered
-            # OR you need an admin loginName to register them programmatically
-            # For now, we'll log that registration is needed but return True
-            # to allow the token request to proceed (it will fail with Y305 if user doesn't exist)
-            login_name = f"user_{user_id}"
-            logger.info(f"🔵 User registration check: loginName={login_name}")
-            logger.info(f"ℹ️  Note: In Yodlee sandbox, users must be pre-registered via admin console")
-            logger.info(f"ℹ️  OR use admin loginName in YODLEE_ADMIN_LOGINNAME env var")
+            register_url = f"{self.base_url}/user/register"
             
-            # Check if admin loginName is configured
-            admin_login = os.getenv('YODLEE_ADMIN_LOGINNAME', '').strip()
-            if admin_login:
-                logger.info(f"🔵 Admin loginName configured, attempting user registration...")
-                # TODO: Implement admin-based user registration if needed
-                # For now, return True to allow token request (will fail with Y305 if user doesn't exist)
+            headers = {
+                'Api-Version': '1.1',
+                'Authorization': f'Bearer {admin_token}',
+                'Content-Type': 'application/json',
+            }
+            
+            payload = {
+                'user': {
+                    'loginName': login_name,
+                    'email': email,
+                    'locale': 'en_US',
+                    'preferences': {
+                        'currency': 'USD'
+                    }
+                }
+            }
+            
+            logger.info(f"🔵 Registering Yodlee user: loginName={login_name}, email={email}")
+            
+            response = requests.post(
+                register_url,
+                headers=headers,
+                json=payload,
+                timeout=20
+            )
+            
+            if response.status_code in (200, 201):
+                logger.info(f"✅ User registered in Yodlee: {login_name}")
                 return True
-            else:
-                logger.warning(f"⚠️  No YODLEE_ADMIN_LOGINNAME configured - users must be pre-registered")
-                return True  # Return True to allow token attempt (will fail gracefully with Y305)
+            
+            # Check for specific error codes
+            try:
+                error_data = response.json()
+                error_code = error_data.get('errorCode', '')
+                error_msg = (error_data.get('errorMessage') or '').lower()
+                
+                # If user already exists, treat as OK
+                if 'already' in error_msg and 'exist' in error_msg:
+                    logger.info(f"✅ User already exists in Yodlee: {login_name}")
+                    return True
+                
+                # Y820: User registration not supported (sandbox limitation)
+                if error_code == 'Y820' or 'not supported for sandbox' in error_msg:
+                    logger.warning(f"⚠️  Sandbox limitation: Programmatic user registration not supported (Y820)")
+                    logger.warning(f"⚠️  Users must be pre-registered in Yodlee admin console for sandbox")
+                    return False  # Registration failed, but this is expected in sandbox
+            except Exception:
+                pass
+            
+            # Log error but don't raise (will try token request anyway)
+            error_text = response.text[:500] if response.text else "No error text"
+            logger.warning(f"⚠️  User registration response: {response.status_code} - {error_text}")
+            return False
                 
         except Exception as e:
-            logger.error(f"Error in user registration check: {e}", exc_info=True)
-            return True  # Allow token attempt anyway
-    
-    def ensure_user(self, user_id: str) -> bool:
-        """Ensure Yodlee user exists (register if needed, then get token)"""
-        try:
-            # First, try to register the user
-            registered = self.register_user(user_id)
-            if not registered:
-                logger.warning(f"⚠️  User registration may have failed, but trying to get token anyway")
-            
-            # Then try to get token
-            token = self._get_user_token(user_id)
-            return token is not None
-        except Exception as e:
-            logger.error(f"Error ensuring user: {e}")
+            logger.error(f"Error registering user: {e}", exc_info=True)
             return False
     
-    def create_fastlink_token(self, user_id: str) -> Optional[str]:
-        """Create FastLink token for user"""
+    def ensure_user_registered(self, login_name: str, email: str) -> bool:
+        """Ensure Yodlee user exists (register if needed using admin token) - Idempotent"""
         try:
-            token = self._get_user_token(user_id)
+            # First, try to get user token - if this succeeds, user already exists
+            existing_token = self._get_user_token(login_name)
+            if existing_token:
+                logger.info(f"✅ User already exists in Yodlee: {login_name}")
+                return True
+            
+            # User doesn't exist, register them
+            logger.info(f"🔵 User not found, registering: {login_name}")
+            
+            # Get admin token
+            admin_token = self.admin_token()
+            if not admin_token:
+                logger.error("❌ Cannot register user: admin token unavailable")
+                return False
+            
+            # Register user
+            registered = self.register_user(admin_token, login_name, email)
+            if registered:
+                logger.info(f"✅ New Yodlee user registered: {login_name} (email: {email})")
+            return registered
+        except Exception as e:
+            logger.error(f"Error ensuring user registered: {e}", exc_info=True)
+            return False
+    
+    def create_fastlink_token(self, login_name: str) -> Optional[str]:
+        """Create FastLink token for user (must use user token, not admin)"""
+        try:
+            token = self._get_user_token(login_name)
             if not token:
-                logger.error("Failed to get user token for FastLink")
+                logger.error(f"Failed to get user token for FastLink: loginName={login_name}")
                 return None
             
             # FastLink token is the same as user access token

@@ -207,8 +207,9 @@ class MarketDataAPIService:
             # Ensure we have an aiohttp session
             if self.session is None:
                 ssl_context = ssl.create_default_context()
-                ssl_context.check_hostname = False
-                ssl_context.verify_mode = ssl.CERT_NONE
+                # Use production-safe SSL context
+                from core.security_utils import get_ssl_context
+                ssl_context = get_ssl_context()
                 connector = aiohttp.TCPConnector(ssl=ssl_context)
                 self.session = aiohttp.ClientSession(connector=connector)
 

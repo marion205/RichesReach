@@ -69,7 +69,7 @@ def get_or_create_test_user():
     return User.objects.create_user(
         email='test@example.com',
         name='Test User',
-        password='test123'
+        password=os.getenv('DEV_TEST_USER_PASSWORD', secrets.token_urlsafe(16))
     )
 
 async def get_current_user(authorization: Optional[str] = Header(None)) -> User:
@@ -93,7 +93,7 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> User:
             import asyncio
             loop = asyncio.get_event_loop()
             user = await loop.run_in_executor(None, lambda: User.objects.first() or User.objects.create_user(
-                email='test@example.com', name='Test User', password='test123'
+                email='test@example.com', name='Test User', password=os.getenv('DEV_TEST_USER_PASSWORD', secrets.token_urlsafe(16))
             ))
             return user
     
@@ -116,7 +116,7 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> User:
                     _ = getattr(user, 'name', None) or getattr(user, 'username', None)
                     return user
                 user = User.objects.create_user(
-                    email='test@example.com', name='Test User', password='test123'
+                    email='test@example.com', name='Test User', password=os.getenv('DEV_TEST_USER_PASSWORD', secrets.token_urlsafe(16))
                 )
                 # Materialize all attributes
                 _ = user.id
@@ -150,9 +150,9 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> User:
     try:
         import asyncio
         loop = asyncio.get_event_loop()
-        user = await loop.run_in_executor(None, lambda: User.objects.first() or User.objects.create_user(
-            email='test@example.com', name='Test User', password='test123'
-        ))
+            user = await loop.run_in_executor(None, lambda: User.objects.first() or User.objects.create_user(
+                email='test@example.com', name='Test User', password=os.getenv('DEV_TEST_USER_PASSWORD', secrets.token_urlsafe(16))
+            ))
         logger.info(f"Using fallback user: {user.email}")
         return user
     except Exception as e:

@@ -41,6 +41,12 @@ def _is_yodlee_enabled() -> bool:
     return os.getenv('USE_YODLEE', 'false').lower() == 'true'
 
 
+# CSRF exempt because:
+# 1. All requests use Authorization: Bearer <token> (stateless API)
+# 2. No cookie-based sessions for API endpoints
+# 3. CORS configured without credentials
+# 4. Mobile app uses Bearer tokens exclusively
+# See: CSRF_VERIFICATION_CHECKLIST.md for full justification
 @method_decorator(csrf_exempt, name='dispatch')
 class StartFastlinkView(View):
     """Create FastLink session for bank account linking"""
@@ -103,10 +109,16 @@ class StartFastlinkView(View):
                 User = get_user_model()
                 user = User.objects.first()
                 if not user:
+                    # Development fallback - use environment variable or generate random password
+                    test_password = os.getenv('DEV_TEST_USER_PASSWORD', None)
+                    if not test_password:
+                        import secrets
+                        test_password = secrets.token_urlsafe(16)
+                        logger.warning(f"DEV_TEST_USER_PASSWORD not set, generated random password for test user")
                     user = User.objects.create_user(
                         email='test@example.com',
                         name='Test User',
-                        password='test123'
+                        password=test_password
                     )
                     logger.info(f"🔵 StartFastlinkView: Created test user: {user.email}")
                 else:
@@ -131,10 +143,15 @@ class StartFastlinkView(View):
             # For dev tokens, use first user or create test user
             user = User.objects.first()
             if not user:
+                # Development fallback - use environment variable or generate random password
+                import secrets
+                test_password = os.getenv('DEV_TEST_USER_PASSWORD', secrets.token_urlsafe(16))
+                if not os.getenv('DEV_TEST_USER_PASSWORD'):
+                    logger.warning(f"DEV_TEST_USER_PASSWORD not set, generated random password for test user")
                 user = User.objects.create_user(
                     email='test@example.com',
                     name='Test User',
-                    password='test123'
+                    password=test_password
                 )
                 logger.info(f"🔵 StartFastlinkView: Created test user: {user.email}")
             else:
@@ -181,6 +198,13 @@ class StartFastlinkView(View):
         logger.info(f"🔵✅ Authentication successful - user: {user.email}")
         
         try:
+            # Check rate limiting for sensitive endpoint
+            from .rate_limiting import RateLimitMiddleware
+            rate_limiter = RateLimitMiddleware()
+            rate_limit_response = rate_limiter.check_rate_limit(request)
+            if rate_limit_response:
+                return rate_limit_response
+            
             # Use enhanced client with retry logic
             yodlee = EnhancedYodleeClient()
             
@@ -195,28 +219,64 @@ class StartFastlinkView(View):
                     status=503
                 )
             
-            user_id = str(user.id)
+            # Get or create Yodlee loginName for this user
+            # Format: rr_{user_id} (must be unique, no spaces, 3-150 chars)
+            if not user.yodlee_loginname:
+                # Generate unique loginName
+                yodlee_loginname = f"rr_{user.id}"
+                # Ensure it's valid (no spaces, within length limits)
+                yodlee_loginname = yodlee_loginname.replace(' ', '_')[:150]
+                user.yodlee_loginname = yodlee_loginname
+                user.save(update_fields=['yodlee_loginname'])
+                logger.info(f"🔵 Created Yodlee loginName for user {user.id}: {yodlee_loginname}")
+            else:
+                yodlee_loginname = user.yodlee_loginname
+                logger.info(f"🔵 Using existing Yodlee loginName: {yodlee_loginname}")
             
-            # Ensure user exists in Yodlee
-            if not yodlee.ensure_user(user_id):
+            # Step 1: Get admin token
+            admin_token = yodlee.admin_token()
+            if not admin_token:
+                logger.error("❌ Cannot proceed: admin token unavailable. Set YODLEE_ADMIN_LOGINNAME.")
                 return JsonResponse(
-                    {'error': 'Failed to create Yodlee user session'},
-                    status=500
+                    {
+                        'error': 'Yodlee admin configuration required',
+                        'details': 'YODLEE_ADMIN_LOGINNAME environment variable must be set for user registration.'
+                    },
+                    status=503
                 )
             
-            # Create FastLink token
-            token = yodlee.create_fastlink_token(user_id)
+            # Step 2: Register user if needed (using admin token)
+            # Note: In sandbox, programmatic registration may not be supported (Y820)
+            # Users may need to be pre-registered in Yodlee admin console
+            registered = yodlee.ensure_user_registered(yodlee_loginname, user.email)
+            
+            # Step 3: Get user token (not admin token - FastLink requires user token)
+            token = yodlee.create_fastlink_token(yodlee_loginname)
             if not token:
+                # Check if it's Y305 (user not registered)
+                error_msg = "User not registered in Yodlee"
+                error_details = (
+                    "In sandbox mode, users must be pre-registered in the Yodlee admin console. "
+                    "Please contact support to register your account, or use production credentials."
+                )
+                logger.error(f"❌ {error_msg}: loginName={yodlee_loginname}")
                 return JsonResponse(
-                    {'error': 'Failed to create FastLink token'},
-                    status=500
+                    {
+                        'error': error_msg,
+                        'details': error_details,
+                        'loginName': yodlee_loginname,  # Include for admin reference
+                    },
+                    status=503  # Service unavailable (user needs to be registered)
                 )
             
             fastlink_url = yodlee.fastlink_url
             
+            logger.info(f"✅ FastLink session created for user {user.id} (loginName: {yodlee_loginname})")
+            
             return JsonResponse({
                 'fastlinkUrl': fastlink_url,
-                'accessToken': token,
+                'accessToken': token,  # User-specific token (not admin)
+                'loginName': yodlee_loginname,
                 'expiresAt': int((timezone.now() + timedelta(hours=1)).timestamp()),
             })
         
@@ -225,6 +285,7 @@ class StartFastlinkView(View):
             return JsonResponse({'error': str(e)}, status=500)
 
 
+# CSRF exempt - Bearer token auth only (see StartFastlinkView comment above)
 @method_decorator(csrf_exempt, name='dispatch')
 class YodleeCallbackView(View):
     """Handle FastLink callback after bank account linking"""
@@ -272,7 +333,21 @@ class YodleeCallbackView(View):
             # Import models inside view to avoid "Apps aren't loaded" errors
             from .banking_models import BankProviderAccount, BankAccount
             
-            # Store provider account
+            # Get user's Yodlee loginName to retrieve access token
+            yodlee_loginname = request.user.yodlee_loginname
+            if not yodlee_loginname:
+                # Fallback to generating loginName if not set
+                yodlee_loginname = f"rr_{request.user.id}"
+            
+            # Get user's access token (for storing encrypted)
+            user_token = None
+            try:
+                yodlee_client = YodleeClient()
+                user_token = yodlee_client._get_user_token(yodlee_loginname)
+            except Exception as e:
+                logger.warning(f"Could not retrieve user token for storage: {e}")
+            
+            # Store provider account with encrypted tokens
             provider_account, created = BankProviderAccount.objects.get_or_create(
                 user=request.user,
                 provider_account_id=str(provider_account_id),
@@ -280,8 +355,15 @@ class YodleeCallbackView(View):
                     'provider_name': provider_accounts[0].get('providerName', ''),
                     'provider_id': provider_accounts[0].get('providerId', ''),
                     'status': 'ACTIVE',
+                    'access_token_enc': encrypt_token(user_token) if user_token else '',
+                    # Note: Refresh tokens are handled separately by Yodlee
                 }
             )
+            
+            # Update tokens if account already existed
+            if not created and user_token:
+                provider_account.access_token_enc = encrypt_token(user_token)
+                provider_account.save(update_fields=['access_token_enc'])
             
             # Store normalized bank accounts
             bank_link_ids = []

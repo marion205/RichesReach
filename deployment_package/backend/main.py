@@ -1197,11 +1197,9 @@ async def get_stock_price(symbol: str, force_refresh: bool = False) -> dict:
                     'APCA-API-KEY-ID': alpaca_key,
                     'APCA-API-SECRET-KEY': alpaca_secret,
                 }
-                # Create SSL context (disable verification for development)
-                import ssl
-                ssl_context = ssl.create_default_context()
-                ssl_context.check_hostname = False
-                ssl_context.verify_mode = ssl.CERT_NONE
+                # Create SSL context (production-safe)
+                from core.security_utils import get_ssl_context
+                ssl_context = get_ssl_context()
                 connector = aiohttp.TCPConnector(ssl=ssl_context)
                 
                 async with aiohttp.ClientSession(connector=connector) as session:
@@ -1272,11 +1270,9 @@ async def get_stock_price(symbol: str, force_refresh: bool = False) -> dict:
                 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
                 'Accept': 'application/json',
             }
-            # Create SSL context that doesn't verify certificates (for development)
-            import ssl
-            ssl_context = ssl.create_default_context()
-            ssl_context.check_hostname = False
-            ssl_context.verify_mode = ssl.CERT_NONE
+            # Create SSL context (production-safe)
+            from core.security_utils import get_ssl_context
+            ssl_context = get_ssl_context()
             connector = aiohttp.TCPConnector(ssl=ssl_context)
             
             async with aiohttp.ClientSession(headers=headers, connector=connector) as session:

@@ -49,6 +49,7 @@ except Exception as e:
 
 
 
+# CSRF exempt - Bearer token auth only (see CSRF_VERIFICATION_CHECKLIST.md)
 @method_decorator(csrf_exempt, name="dispatch")
 
 class QuotesView(View):

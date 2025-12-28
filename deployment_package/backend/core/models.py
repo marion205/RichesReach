@@ -33,6 +33,15 @@ class User(AbstractBaseUser, PermissionsMixin):
     email_verified = models.BooleanField(default=False)
     two_factor_enabled = models.BooleanField(default=False)
     two_factor_secret = models.CharField(max_length=32, blank=True)
+    # Yodlee integration
+    yodlee_loginname = models.CharField(
+        max_length=150,
+        blank=True,
+        null=True,
+        unique=True,
+        db_index=True,
+        help_text='Yodlee loginName for this user (format: rr_userid)'
+    )
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
