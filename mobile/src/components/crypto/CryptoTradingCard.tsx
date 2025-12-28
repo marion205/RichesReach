@@ -32,6 +32,7 @@ const SLIPPAGE_BPS = 50;         // 0.50% estimate for preview
 const CryptoTradingCard: React.FC<CryptoTradingCardProps> = ({
   onTradeSuccess, balances, usdAvailable,
 }) => {
+  const [showLicensingDisclosure, setShowLicensingDisclosure] = useState(false);
   const [selectedSymbol, setSelectedSymbol] = useState('BTC');
   const [tradeType, setTradeType] = useState<TradeSide>('BUY');
 
@@ -209,10 +210,33 @@ const CryptoTradingCard: React.FC<CryptoTradingCardProps> = ({
 
   const openConfirm = () => {
     if (!canSubmit) return;
+    
+    // Block trading if feature is disabled
+    if (!FEATURES.CRYPTO_TRADING_ENABLED) {
+      Alert.alert(
+        'Trading Not Available',
+        FEATURES.CRYPTO_TRADING_MESSAGE,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'View Licensing Info', 
+            onPress: () => setShowLicensingDisclosure(true)
+          }
+        ]
+      );
+      return;
+    }
+    
     setConfirmOpen(true);
   };
 
   const submitTrade = async () => {
+    // Double-check trading is enabled before executing
+    if (!FEATURES.CRYPTO_TRADING_ENABLED) {
+      Alert.alert('Trading Not Available', FEATURES.CRYPTO_TRADING_MESSAGE);
+      return;
+    }
+
     setConfirmOpen(false);
     setIsSubmitting(true);
     try {
@@ -253,6 +277,7 @@ const CryptoTradingCard: React.FC<CryptoTradingCardProps> = ({
 
   /* ---------- Render ---------- */
   return (
+    <>
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       {/* Side */}
       <View style={styles.segment}>
@@ -503,7 +528,18 @@ const CryptoTradingCard: React.FC<CryptoTradingCardProps> = ({
           </View>
         </View>
       </Modal>
+
+      {/* Licensing Disclosure Modal */}
+      <Modal
+        visible={showLicensingDisclosure}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowLicensingDisclosure(false)}
+      >
+        <LicensingDisclosureScreen onClose={() => setShowLicensingDisclosure(false)} />
+      </Modal>
     </ScrollView>
+    </>
   );
 };
 

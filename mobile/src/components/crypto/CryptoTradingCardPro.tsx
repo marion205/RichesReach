@@ -15,6 +15,8 @@ import {
   GET_CRYPTO_PRICE,
   EXECUTE_CRYPTO_TRADE,
 } from '../../cryptoQueries';
+import { FEATURES } from '../../config/featureFlags';
+import LicensingDisclosureScreen from '../LicensingDisclosureScreen';
 
 type TradeSide = 'BUY' | 'SELL';
 type InputMode = 'QTY' | 'USD';
@@ -36,6 +38,7 @@ const SLIPPAGE_BPS = 50;         // 0.50% estimate for preview
 const CryptoTradingCardPro: React.FC<CryptoTradingCardProps> = ({
   onTradeSuccess, balances, usdAvailable, defaultSymbol = 'BTC', assetIcons = {},
 }) => {
+  const [showLicensingDisclosure, setShowLicensingDisclosure] = useState(false);
   const [selectedSymbol, setSelectedSymbol] = useState(defaultSymbol);
   const [tradeType, setTradeType] = useState<TradeSide>('BUY');
 
@@ -334,10 +337,33 @@ const CryptoTradingCardPro: React.FC<CryptoTradingCardProps> = ({
 
   const openConfirm = () => {
     if (!canSubmit) return;
+    
+    // Block trading if feature is disabled
+    if (!FEATURES.CRYPTO_TRADING_ENABLED) {
+      Alert.alert(
+        'Trading Not Available',
+        FEATURES.CRYPTO_TRADING_MESSAGE,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'View Licensing Info', 
+            onPress: () => setShowLicensingDisclosure(true)
+          }
+        ]
+      );
+      return;
+    }
+    
     setConfirmOpen(true);
   };
 
   const submitTrade = async () => {
+    // Double-check trading is enabled before executing
+    if (!FEATURES.CRYPTO_TRADING_ENABLED) {
+      Alert.alert('Trading Not Available', FEATURES.CRYPTO_TRADING_MESSAGE);
+      return;
+    }
+
     setConfirmOpen(false);
     setIsSubmitting(true);
     try {

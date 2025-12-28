@@ -358,6 +358,12 @@ export default function DailyBriefScreen({ navigateTo }: DailyBriefScreenProps) 
 
       const data = await response.json();
 
+      // Update brief state to mark as completed
+      setBrief(prev => prev ? { ...prev, is_completed: true } : null);
+
+      // Clear cache to prevent stale data
+      await AsyncStorage.removeItem(CACHE_KEY);
+
       // Haptic feedback
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
@@ -382,16 +388,22 @@ export default function DailyBriefScreen({ navigateTo }: DailyBriefScreenProps) 
           }),
         ]).start(() => {
           setShowAchievement(null);
-          // Navigate after celebration
-          if (navigateTo) {
+          // Use goBack() instead of navigate to prevent loop
+          // This ensures we go back to previous screen, not trigger home screen's auto-navigate
+          if (navigation.canGoBack()) {
+            navigation.goBack();
+          } else if (navigateTo) {
             navigateTo('home');
           } else {
             navigation.navigate('HomeMain' as never);
           }
         });
       } else {
-        // Navigate to home screen immediately
-        if (navigateTo) {
+        // Use goBack() instead of navigate to prevent loop
+        // This ensures we go back to previous screen, not trigger home screen's auto-navigate
+        if (navigation.canGoBack()) {
+          navigation.goBack();
+        } else if (navigateTo) {
           navigateTo('home');
         } else {
           navigation.navigate('HomeMain' as never);
@@ -622,7 +634,7 @@ export default function DailyBriefScreen({ navigateTo }: DailyBriefScreenProps) 
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Icon name="target" size={20} color="#10B981" />
-              <Text style={styles.sectionTitle}>What you should do today</Text>
+              <Text style={styles.sectionTitle}>Suggested action for today</Text>
             </View>
             <Text style={styles.sectionContent}>{brief.personalized_action}</Text>
             <TouchableOpacity 

@@ -6,6 +6,8 @@ import {
 import { useQuery, useMutation } from '@apollo/client';
 import { gql } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
+import { FEATURES } from '../../../config/featureFlags';
+import LicensingDisclosureScreen from '../../../components/LicensingDisclosureScreen';
 
 // GraphQL Queries and Mutations
 const GET_CRYPTO_ASSETS = gql`
@@ -131,6 +133,8 @@ interface CryptoTradingScreenProps {
 }
 
 const CryptoTradingScreen: React.FC<CryptoTradingScreenProps> = ({ navigation }) => {
+  const [showLicensingDisclosure, setShowLicensingDisclosure] = useState(false);
+
   const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'assets'>('overview');
   const [refreshing, setRefreshing] = useState(false);
   const [showOrderModal, setShowOrderModal] = useState(false);
@@ -197,6 +201,22 @@ const CryptoTradingScreen: React.FC<CryptoTradingScreenProps> = ({ navigation })
   };
 
   const handlePlaceOrder = async () => {
+    // Block trading if feature is disabled
+    if (!FEATURES.CRYPTO_TRADING_ENABLED) {
+      Alert.alert(
+        'Trading Not Available',
+        FEATURES.CRYPTO_TRADING_MESSAGE,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'View Licensing Info', 
+            onPress: () => setShowLicensingDisclosure(true)
+          }
+        ]
+      );
+      return;
+    }
+
     if (!cryptoAccount) {
       Alert.alert(
         'Crypto Account Required',
@@ -704,12 +724,75 @@ const CryptoTradingScreen: React.FC<CryptoTradingScreenProps> = ({ navigation })
       </View>
 
       {renderOrderModal()}
+
+      {/* Licensing Disclosure Modal */}
+      <Modal
+        visible={showLicensingDisclosure}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowLicensingDisclosure(false)}
+      >
+        <LicensingDisclosureScreen onClose={() => setShowLicensingDisclosure(false)} />
+      </Modal>
     </SafeAreaView>
+    </>
   );
 };
 
 // Styles
 const styles = StyleSheet.create({
+  disabledContainer: {
+    flex: 1,
+    backgroundColor: '#F5F6FA',
+  },
+  disabledContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  disabledTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1C1C1E',
+    marginTop: 24,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  disabledMessage: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 32,
+  },
+  linkButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    backgroundColor: '#F5F6FA',
+    borderRadius: 12,
+    marginBottom: 16,
+    gap: 8,
+  },
+  linkText: {
+    fontSize: 16,
+    color: '#007AFF',
+    fontWeight: '600',
+  },
+  backButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    backgroundColor: '#007AFF',
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  backButtonText: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
   container: {
     flex: 1,
     backgroundColor: C.bg,

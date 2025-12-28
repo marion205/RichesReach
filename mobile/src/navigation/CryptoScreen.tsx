@@ -13,9 +13,12 @@ import {
   RefreshControl,
   SafeAreaView,
   TouchableOpacity,
+  Modal,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useQuery } from '@apollo/client';
+import LicensingDisclosureScreen from '../components/LicensingDisclosureScreen';
+import { FEATURES } from '../config/featureFlags';
 
 // GraphQL Queries
 import { GET_CRYPTO_PORTFOLIO, GET_CRYPTO_ANALYTICS } from '../cryptoQueries';
@@ -88,6 +91,7 @@ interface CryptoScreenProps {
 }
 
 const CryptoScreen: React.FC<CryptoScreenProps> = ({ navigation }) => {
+  const [showLicensingDisclosure, setShowLicensingDisclosure] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'portfolio' | 'trading' | 'aave' | 'signals' | 'yields' | 'optimizer'>('portfolio');
   const [hideBalances, setHideBalances] = useState(false);
@@ -255,6 +259,28 @@ const CryptoScreen: React.FC<CryptoScreenProps> = ({ navigation }) => {
           />
         );
       case 'trading':
+        if (!FEATURES.CRYPTO_TRADING_ENABLED) {
+          return (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+              <Icon name="alert-circle" size={64} color="#F59E0B" />
+              <Text style={{ fontSize: 20, fontWeight: 'bold', marginTop: 16, marginBottom: 8, textAlign: 'center' }}>
+                Cryptocurrency Trading Not Available
+              </Text>
+              <Text style={{ fontSize: 14, color: '#666', textAlign: 'center', marginBottom: 24 }}>
+                {FEATURES.CRYPTO_TRADING_MESSAGE}
+              </Text>
+              <TouchableOpacity 
+                style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 20, backgroundColor: '#007AFF', borderRadius: 8 }}
+                onPress={() => setShowLicensingDisclosure(true)}
+              >
+                <Icon name="file-text" size={16} color="#fff" />
+                <Text style={{ color: '#fff', marginLeft: 8, fontSize: 16, fontWeight: '600' }}>
+                  View Regulatory & Licensing Info
+                </Text>
+              </TouchableOpacity>
+            </View>
+          );
+        }
         return (
           <CryptoTradingCardPro 
             onTradeSuccess={() => {
@@ -318,13 +344,14 @@ const CryptoScreen: React.FC<CryptoScreenProps> = ({ navigation }) => {
   }, [activeTab, portfolioData, analyticsData, navigation]);
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Crypto DeFi</Text>
-        <Pressable onPress={() => setHideBalances(!hideBalances)} style={styles.hideButton}>
-          <Icon name={hideBalances ? 'eye-off' : 'eye'} size={20} color="#fff" />
-        </Pressable>
-      </View>
+    <>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Crypto DeFi</Text>
+          <Pressable onPress={() => setHideBalances(!hideBalances)} style={styles.hideButton}>
+            <Icon name={hideBalances ? 'eye-off' : 'eye'} size={20} color="#fff" />
+          </Pressable>
+        </View>
 
       <View style={styles.tabContainer}>
         <ScrollView 
@@ -430,10 +457,21 @@ const CryptoScreen: React.FC<CryptoScreenProps> = ({ navigation }) => {
           style={styles.contentContainer}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         >
-          {renderTabContent}
-        </ScrollView>
+        {renderTabContent}
+      </ScrollView>
       )}
     </View>
+
+    {/* Licensing Disclosure Modal */}
+    <Modal
+      visible={showLicensingDisclosure}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={() => setShowLicensingDisclosure(false)}
+    >
+      <LicensingDisclosureScreen onClose={() => setShowLicensingDisclosure(false)} />
+    </Modal>
+    </>
   );
 };
 
@@ -503,6 +541,58 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6c757d',
     textAlign: 'center',
+  },
+  disabledContainer: {
+    flex: 1,
+    backgroundColor: '#F5F6FA',
+  },
+  disabledContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  disabledTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1C1C1E',
+    marginTop: 24,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  disabledMessage: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 32,
+  },
+  linkButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    backgroundColor: '#F5F6FA',
+    borderRadius: 12,
+    marginBottom: 16,
+    gap: 8,
+  },
+  linkText: {
+    fontSize: 16,
+    color: '#007AFF',
+    fontWeight: '600',
+  },
+  backButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    backgroundColor: '#007AFF',
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  backButtonText: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
   errorContainer: {
     flex: 1,

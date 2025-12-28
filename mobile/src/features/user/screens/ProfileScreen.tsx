@@ -26,6 +26,7 @@ import { globalNavigate } from '../../../navigation/NavigationService';
 import { PrivacyDashboard } from '../../privacy/components/PrivacyDashboard';
 import { useAuth } from '../../../contexts/AuthContext';
 import AccountManagementScreen from './AccountManagementScreen';
+import LicensingDisclosureScreen from '../../../components/LicensingDisclosureScreen';
 
 // --- Design tokens (light theme) ---
 const UI = {
@@ -146,6 +147,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigateTo, onLogout }) =
   const [showSblocCalculator, setShowSblocCalculator] = useState(false);
   const [showPrivacyDashboard, setShowPrivacyDashboard] = useState(false);
   const [showAccountManagement, setShowAccountManagement] = useState(false);
+  const [showLicensingDisclosure, setShowLicensingDisclosure] = useState(false);
   
   // Helper function to navigate - tries React Navigation first, then fallback
   const navigate = (screen: string, params?: any) => {
@@ -440,6 +442,16 @@ return (
         >
           <Icon name="settings" size={16} color="#333" />
           <Text style={styles.settingsItemText}>Account Settings</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={styles.settingsItem}
+          onPress={() => {
+            setShowSettingsMenu(false);
+            setShowLicensingDisclosure(true);
+          }}
+        >
+          <Icon name="file-text" size={16} color="#333" />
+          <Text style={styles.settingsItemText}>Regulatory & Licensing Info</Text>
         </TouchableOpacity>
 <TouchableOpacity 
   style={[styles.settingsItem, styles.logoutItem]}
@@ -934,6 +946,16 @@ onPress={() => navigateTo?.('ai-portfolio')}
           }}
         />
       </View>
+    </Modal>
+
+    {/* Licensing Disclosure Modal */}
+    <Modal
+      visible={showLicensingDisclosure}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={() => setShowLicensingDisclosure(false)}
+    >
+      <LicensingDisclosureScreen onClose={() => setShowLicensingDisclosure(false)} />
     </Modal>
   </SafeAreaView>
 );

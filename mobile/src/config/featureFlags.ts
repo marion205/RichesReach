@@ -17,6 +17,9 @@ export const FEATURES = {
   PAYMENTS_ENABLED: (process.env.EXPO_PUBLIC_PAYMENTS_ENABLED ?? 'true').toLowerCase() !== 'false',
   LEARNING_ENABLED: (process.env.EXPO_PUBLIC_LEARNING_ENABLED ?? 'true').toLowerCase() !== 'false',
   THEME_SETTINGS_ENABLED: (process.env.EXPO_PUBLIC_THEME_SETTINGS_ENABLED ?? 'false').toLowerCase() !== 'false',
+  // Crypto trading disabled for App Store compliance (regulatory requirements)
+  CRYPTO_TRADING_ENABLED: (process.env.EXPO_PUBLIC_CRYPTO_TRADING_ENABLED ?? 'false').toLowerCase() !== 'false',
+  CRYPTO_TRADING_MESSAGE: 'Cryptocurrency trading is currently not available. This feature will be available in the future once all regulatory requirements are met.',
 };
 
 // Production guardrails - hard fail if features are disabled in release

@@ -553,6 +553,9 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
         if (!token || hasCheckedDailyBrief.current) return;
         
         try {
+          // Add a small delay to prevent race conditions with brief completion
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
           const response = await fetch(`${API_HTTP}/api/daily-brief/today`, {
             method: 'GET',
             headers: {
@@ -564,21 +567,30 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
           if (response.ok) {
             const data = await response.json();
             // If brief exists but not completed, navigate to it
-            if (!data.is_completed) {
+            // Only navigate if we haven't checked yet and brief is truly not completed
+            if (!data.is_completed && !hasCheckedDailyBrief.current) {
               hasCheckedDailyBrief.current = true;
-              // Small delay to ensure home screen is rendered first
+              // Additional delay to ensure home screen is fully rendered
               setTimeout(() => {
-                if (navigateTo) {
-                  navigateTo('daily-brief');
-                } else {
-                  navigation.navigate('daily-brief' as never);
+                // Double-check that we still haven't navigated
+                if (hasCheckedDailyBrief.current) {
+                  if (navigateTo) {
+                    navigateTo('daily-brief');
+                  } else {
+                    navigation.navigate('daily-brief' as never);
+                  }
                 }
               }, 500);
+            } else if (data.is_completed) {
+              // Brief is completed, mark as checked so we don't navigate
+              hasCheckedDailyBrief.current = true;
             }
           }
         } catch (error) {
           // Silently fail - don't navigate if API is unavailable
           console.log('Daily brief check failed:', error);
+          // Mark as checked on error to prevent retries
+          hasCheckedDailyBrief.current = true;
         }
       };
       
