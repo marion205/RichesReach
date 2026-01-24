@@ -55,6 +55,8 @@ class AIOrchestrator:
         self._gemini_service: Optional[GeminiService] = None
         self._chatgpt_service: Optional[AIServiceAsync] = None
         self._algorithm_service: Optional[AlgorithmService] = None
+        self._compliance_guardrails = None
+        self._tax_alpha_calculator = None
         
         # Configuration
         self.enable_pii_scrubbing = getattr(settings, "ENABLE_PII_SCRUBBING", True)
@@ -224,16 +226,27 @@ class AIOrchestrator:
         # Step 3: Route to appropriate model or algorithm
         try:
             # Check if quantitative algorithm is needed
+            # BUT: Direct Indexing, TSPT, and Tax Alpha Dashboard use function calling instead
             intent = routing_decision.get('intent')
             if intent and self.intent_classifier.requires_quantitative_algorithm(intent):
-                return await self._handle_quantitative_algorithm(
-                    intent,
-                    user_query,
-                    scrubbed_messages,
-                    scrubbed_context,
-                    routing_decision,
-                    t0
-                )
+                # These intents should use function calling, not the old algorithm path
+                if intent in [
+                    IntentType.DIRECT_INDEXING,
+                    IntentType.TAX_SMART_TRANSITION,
+                    IntentType.TAX_ALPHA_DASHBOARD
+                ]:
+                    # Fall through to ChatGPT with function calling below
+                    routing_decision['use_chatgpt'] = True
+                    routing_decision['model'] = 'chatgpt'
+                else:
+                    return await self._handle_quantitative_algorithm(
+                        intent,
+                        user_query,
+                        scrubbed_messages,
+                        scrubbed_context,
+                        routing_decision,
+                        t0
+                    )
             
             if routing_decision['use_gemini']:
                 gemini_service = await self._get_gemini_service()

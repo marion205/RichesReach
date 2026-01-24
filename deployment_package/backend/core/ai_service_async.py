@@ -119,8 +119,10 @@ class AIServiceAsync:
             "- Portfolio Optimization: Optimize asset allocation (call optimize_portfolio_allocation tool)\n"
             "- Goal Simulation: Calculate probability of reaching financial goals (call run_monte_carlo_goal_simulation tool)\n"
             "- Retirement Planning: Calculate retirement safety scores (call run_retirement_simulation tool)\n\n"
-            "When users ask about 'tax alpha dashboard', 'show tax savings', 'direct indexing', 'track SPY but exclude', "
-            "'diversify employer stock', or 'tax-smart transition', use the appropriate tools to provide detailed, actionable responses with visualizations."
+            "IMPORTANT: When users ask about 'tax alpha dashboard', 'show tax savings', 'show my tax alpha', "
+            "'direct indexing', 'track SPY but exclude', 'diversify employer stock', or 'tax-smart transition', "
+            "you MUST call the appropriate tool (get_tax_alpha_dashboard, create_direct_index, or create_tax_smart_transition). "
+            "Do NOT respond without calling the tool - the tools provide the data and visualizations needed for accurate responses."
         )
         
         # Sanitize user_context to prevent prompt injection
