@@ -1799,6 +1799,94 @@ async def tutor_ask(request: Request):
             status_code=500
         )
 
+@app.post("/assistant/query")
+async def assistant_query(request: Request):
+    """
+    Assistant Query endpoint - Main AI chat interface for mobile app.
+    Routes to AI Orchestrator with function calling support.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        data = await request.json()
+        user_id = data.get("user_id", "anonymous")
+        prompt = data.get("prompt", "").strip()
+        context = data.get("context")
+        market_context = data.get("market_context")
+        
+        if not prompt:
+            return JSONResponse(
+                {"answer": "Please provide a question or request.", "response": "Please provide a question or request."},
+                status_code=400
+            )
+        
+        logger.info(f"💬 [Assistant] Query from {user_id}: '{prompt[:100]}...'")
+        
+        # Use Django's AI orchestrator (with function calling)
+        try:
+            # Setup Django if not already done
+            if not _django_initialized:
+                _setup_django_once()
+            
+            # Import orchestrator
+            import sys
+            import os
+            backend_path = os.path.join(os.path.dirname(__file__), 'deployment_package', 'backend')
+            if backend_path not in sys.path:
+                sys.path.insert(0, backend_path)
+            
+            from core.ai_orchestrator import AIOrchestrator
+            
+            # Create messages format for orchestrator
+            messages = [{"role": "user", "content": prompt}]
+            user_context = None
+            if context:
+                user_context = json.dumps(context) if isinstance(context, dict) else str(context)
+            
+            # Get orchestrator instance and route request
+            orchestrator = await AIOrchestrator.get_instance()
+            response = await orchestrator.route_request(
+                messages=messages,
+                user_context=user_context,
+                has_attachments=False,
+                attachment_type=None,
+                force_model=None
+            )
+            
+            # Extract content from response
+            content = response.get("content", response.get("text", ""))
+            if not content:
+                content = "I'm having trouble processing that request. Could you rephrase it?"
+            
+            logger.info(f"✅ [Assistant] Generated response ({len(content)} chars)")
+            
+            return {
+                "answer": content,
+                "response": content,  # Support both formats
+                "model": response.get("model_used", "unknown"),
+                "confidence": response.get("confidence", 0.8)
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ [Assistant] Orchestrator error: {e}", exc_info=True)
+            # Fallback to simple response
+            return {
+                "answer": f"I understand you're asking about: {prompt}. I'm having trouble processing that right now, but I'd be happy to help with investment strategies, portfolio analysis, or tax optimization.",
+                "response": f"I understand you're asking about: {prompt}. I'm having trouble processing that right now, but I'd be happy to help with investment strategies, portfolio analysis, or tax optimization.",
+                "model": None,
+                "confidence": 0.5
+            }
+            
+    except Exception as e:
+        import traceback
+        logger.error(f"❌ [Assistant] Error in assistant_query endpoint: {e}")
+        logger.error(f"❌ [Assistant] Traceback: {traceback.format_exc()}")
+        return JSONResponse(
+            {"answer": "Internal server error", "response": "Internal server error", "detail": str(e)},
+            status_code=500
+        )
+
 @app.post("/tutor/explain")
 async def tutor_explain(request: Request):
     """
