@@ -29,6 +29,9 @@ class IntentType(str, Enum):
     PORTFOLIO_OPTIMIZATION = "PORTFOLIO_OPTIMIZATION"  # MPT/Black-Litterman
     TAX_LOSS_HARVESTING = "TAX_LOSS_HARVESTING"  # TLH opportunities
     REBALANCING_CHECK = "REBALANCING_CHECK"  # Should I rebalance?
+    DIRECT_INDEXING = "DIRECT_INDEXING"  # Direct indexing requests
+    TAX_SMART_TRANSITION = "TAX_SMART_TRANSITION"  # TSPT requests
+    TAX_ALPHA_DASHBOARD = "TAX_ALPHA_DASHBOARD"  # Tax alpha dashboard requests
 
 
 class IntentClassifier:
@@ -102,6 +105,21 @@ class IntentClassifier:
         IntentType.TAX_LOSS_HARVESTING: [
             'tax loss', 'harvest losses', 'offset gains', 'tax savings',
             'losing positions', 'realized gains'
+        ],
+        # Direct Indexing and TSPT intents
+        IntentType.DIRECT_INDEXING: [
+            'direct index', 'direct indexing', 'track spy', 'track s&p',
+            'exclude stock', 'exclude employer', 'custom index', 'individual stocks',
+            'replicate etf', 'unbundle etf', 'tax efficient index'
+        ],
+        IntentType.TAX_SMART_TRANSITION: [
+            'diversify', 'concentrated position', 'employer stock', 'tax smart transition',
+            'tspt', 'gradual sale', 'tax efficient sale', 'diversify position',
+            'sell stock', 'transition portfolio', 'reduce concentration'
+        ],
+        IntentType.TAX_ALPHA_DASHBOARD: [
+            'tax alpha', 'tax alpha dashboard', 'show tax savings', 'tax dashboard',
+            'harvested losses', 'tax benefits', 'tax alpha metrics', 'tax savings breakdown'
         ],
         IntentType.REBALANCING_CHECK: [
             'rebalance', 'rebalancing', 'portfolio drift', 'should i rebalance',
@@ -197,6 +215,18 @@ class IntentClassifier:
         if any(keyword in query_lower for keyword in self.ALGORITHM_KEYWORDS[IntentType.REBALANCING_CHECK]):
             return IntentType.REBALANCING_CHECK
         
+        # Check for Direct Indexing
+        if any(keyword in query_lower for keyword in self.ALGORITHM_KEYWORDS.get(IntentType.DIRECT_INDEXING, [])):
+            return IntentType.DIRECT_INDEXING
+        
+        # Check for TSPT
+        if any(keyword in query_lower for keyword in self.ALGORITHM_KEYWORDS.get(IntentType.TAX_SMART_TRANSITION, [])):
+            return IntentType.TAX_SMART_TRANSITION
+        
+        # Check for Tax Alpha Dashboard
+        if any(keyword in query_lower for keyword in self.ALGORITHM_KEYWORDS.get(IntentType.TAX_ALPHA_DASHBOARD, [])):
+            return IntentType.TAX_ALPHA_DASHBOARD
+        
         # Default to general query (will use default model)
         return IntentType.GENERAL_QUERY
     
@@ -251,7 +281,10 @@ class IntentClassifier:
             IntentType.RETIREMENT_SIMULATION,
             IntentType.PORTFOLIO_OPTIMIZATION,
             IntentType.TAX_LOSS_HARVESTING,
-            IntentType.REBALANCING_CHECK
+            IntentType.REBALANCING_CHECK,
+            IntentType.DIRECT_INDEXING,
+            IntentType.TAX_SMART_TRANSITION,
+            IntentType.TAX_ALPHA_DASHBOARD
         }
         return intent in algorithm_intents
     

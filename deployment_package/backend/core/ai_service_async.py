@@ -110,7 +110,17 @@ class AIServiceAsync:
             "No guarantees. Provide risk-aware guidance. "
             "If user asks what to buy/sell, provide education about risks and suggest consulting a licensed professional. "
             "Avoid guaranteeing returns. "
-            "If user indicates financial distress, suggest professional help."
+            "If user indicates financial distress, suggest professional help.\n\n"
+            "Available capabilities:\n"
+            "- Direct Indexing: Create tax-efficient portfolios that track ETFs using individual stocks (call create_direct_index tool)\n"
+            "- Tax-Smart Transitions: Plan gradual diversification of concentrated positions (call create_tax_smart_transition tool)\n"
+            "- Tax Alpha Dashboard: Show tax savings metrics from direct indexing (call get_tax_alpha_dashboard tool)\n"
+            "- Tax-Loss Harvesting: Find opportunities to offset gains (call find_tax_loss_harvesting_opportunities tool)\n"
+            "- Portfolio Optimization: Optimize asset allocation (call optimize_portfolio_allocation tool)\n"
+            "- Goal Simulation: Calculate probability of reaching financial goals (call run_monte_carlo_goal_simulation tool)\n"
+            "- Retirement Planning: Calculate retirement safety scores (call run_retirement_simulation tool)\n\n"
+            "When users ask about 'tax alpha dashboard', 'show tax savings', 'direct indexing', 'track SPY but exclude', "
+            "'diversify employer stock', or 'tax-smart transition', use the appropriate tools to provide detailed, actionable responses with visualizations."
         )
         
         # Sanitize user_context to prevent prompt injection

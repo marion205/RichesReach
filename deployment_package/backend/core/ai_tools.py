@@ -308,6 +308,31 @@ class AITools:
                         "required": ["concentrated_position", "target_allocation"]
                     }
                 }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_tax_alpha_dashboard",
+                    "description": "Get Tax Alpha Dashboard metrics showing real-time tax savings from direct indexing. Displays harvested losses, potential harvestable losses, annual tax alpha percentage, and net alpha (tax alpha minus tracking error). Use this when user asks to 'show tax alpha dashboard' or 'show tax savings'.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "portfolio_value": {
+                                "type": "number",
+                                "description": "Total portfolio value (default: 100000 if not provided)"
+                            },
+                            "harvested_losses_ytd": {
+                                "type": "number",
+                                "description": "Harvested losses year-to-date (default: calculated if not provided)"
+                            },
+                            "tracking_error_pct": {
+                                "type": "number",
+                                "description": "Tracking error percentage (default: 0.5 if not provided)"
+                            }
+                        },
+                        "required": []
+                    }
+                }
             }
         ]
     
@@ -424,6 +449,21 @@ class ToolRunner:
                     annual_income=arguments.get("annual_income", 0),
                     tax_bracket=arguments.get("tax_bracket", "high")
                 )
+            
+            elif tool_name == "get_tax_alpha_dashboard":
+                from .tax_alpha_calculator import get_tax_alpha_calculator
+                calculator = get_tax_alpha_calculator()
+                portfolio_value = arguments.get("portfolio_value", 100000)
+                harvested_losses_ytd = arguments.get("harvested_losses_ytd")
+                tracking_error_pct = arguments.get("tracking_error_pct", 0.5)
+                
+                # Get dashboard data
+                dashboard_data = calculator.get_dashboard_data(
+                    portfolio_value=portfolio_value,
+                    harvested_losses_ytd=harvested_losses_ytd,
+                    tracking_error_pct=tracking_error_pct
+                )
+                return dashboard_data
             
             else:
                 return {
