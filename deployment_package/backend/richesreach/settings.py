@@ -279,6 +279,23 @@ OPENAI_TIMEOUT_S = 15.0 # Request timeout in seconds
 OPENAI_MAX_RETRIES = 2 # Maximum retries on transient errors
 OPENAI_MAX_CONCURRENCY = 10 # Maximum concurrent OpenAI calls (async only)
 OPENAI_MAX_HISTORY = 20 # Maximum message history to include in prompts
+
+# Google Gemini Configuration (Hybrid AI Architecture)
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY') # Set this in environment variable GEMINI_API_KEY
+GEMINI_MODEL = "gemini-1.5-pro" # Use "gemini-1.5-flash" for faster responses
+GEMINI_MAX_OUTPUT_TOKENS = 8192 # Maximum output tokens (Gemini supports large contexts)
+GEMINI_TEMPERATURE = 0.7 # Temperature for responses (0.0-2.0)
+GEMINI_TIMEOUT_S = 30.0 # Longer timeout for large documents
+GEMINI_MAX_RETRIES = 2 # Maximum retries on transient errors
+GEMINI_MAX_CONCURRENCY = 5 # Lower than ChatGPT (Gemini can be slower for large docs)
+
+# Hybrid AI Orchestrator Configuration
+ENABLE_HYBRID_AI_ROUTING = os.getenv('ENABLE_HYBRID_AI_ROUTING', 'true').lower() == 'true'
+ENABLE_PII_SCRUBBING = os.getenv('ENABLE_PII_SCRUBBING', 'true').lower() == 'true'
+ENABLE_AI_FUNCTION_CALLING = os.getenv('ENABLE_AI_FUNCTION_CALLING', 'true').lower() == 'true'  # Enable LLM function calling (tools)
+ENABLE_AUDIT_TRAIL = os.getenv('ENABLE_AUDIT_TRAIL', 'true').lower() == 'true'  # Enable audit trail logging for compliance
+DEFAULT_AI_MODEL = os.getenv('DEFAULT_AI_MODEL', 'chatgpt') # Fallback model: 'chatgpt' or 'gemini'
+
 # AI rate limiting
 AI_RATE_LIMIT_PER_USER = 30 # Requests per user per minute
 AI_RATE_LIMIT_WINDOW_S = 60 # Rate limit window in seconds

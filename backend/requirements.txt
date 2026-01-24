@@ -55,6 +55,14 @@ pytest-asyncio>=0.21.0
 # Security
 cryptography>=41.0.0
 
+# AI/ML - Hybrid Architecture
+openai>=1.0.0
+google-generativeai>=0.3.0
+
+# Quantitative Finance
+PyPortfolioOpt>=1.5.0
+prophet>=1.1.0
+
 # Channels (WebSocket support)
 channels>=4.0.0
 channels-redis>=4.1.0

@@ -219,7 +219,9 @@ class AIServiceAsync:
     async def get_chat_response_async(
         self,
         messages: List[Dict[str, Any]],
-        user_context: Optional[str] = None
+        user_context: Optional[str] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        tool_choice: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Get async chat response from OpenAI.
@@ -250,13 +252,21 @@ class AIServiceAsync:
             t0 = time.perf_counter()
 
             async def call():
-                # Chat Completions API (still supported, Responses API is newer)
-                return await self.async_client.chat.completions.create(
-                    model=self.cfg.model,
-                    messages=payload,
-                    max_tokens=self.cfg.max_tokens,
-                    temperature=self.cfg.temperature,
-                )
+                # Chat Completions API with optional function calling
+                kwargs = {
+                    "model": self.cfg.model,
+                    "messages": payload,
+                    "max_tokens": self.cfg.max_tokens,
+                    "temperature": self.cfg.temperature,
+                }
+                
+                # Add tools if provided
+                if tools:
+                    kwargs["tools"] = tools
+                    if tool_choice:
+                        kwargs["tool_choice"] = tool_choice
+                
+                return await self.async_client.chat.completions.create(**kwargs)
 
             try:
                 resp = await self._with_retries(call)
@@ -265,10 +275,22 @@ class AIServiceAsync:
                 choice = resp.choices[0] if resp.choices else None
                 content = choice.message.content if choice and choice.message else ""
                 tokens_used = resp.usage.total_tokens if resp.usage else 0
+                
+                # Check for function calls
+                tool_calls = []
+                if choice and choice.message.tool_calls:
+                    tool_calls = [
+                        {
+                            "id": tc.id,
+                            "name": tc.function.name,
+                            "arguments": tc.function.arguments
+                        }
+                        for tc in choice.message.tool_calls
+                    ]
 
                 logger.info(
-                    "openai.chat ok model=%s tokens=%s ms=%s",
-                    self.cfg.model, tokens_used, dt_ms
+                    "openai.chat ok model=%s tokens=%s ms=%s tool_calls=%s",
+                    self.cfg.model, tokens_used, dt_ms, len(tool_calls)
                 )
 
                 return {
@@ -279,6 +301,7 @@ class AIServiceAsync:
                     "latency_ms": dt_ms,
                     "fallback_used": False,
                     "error_type": None,
+                    "tool_calls": tool_calls,  # Include tool calls in response
                 }
             except Exception as e:
                 dt_ms = int((time.perf_counter() - t0) * 1000)
