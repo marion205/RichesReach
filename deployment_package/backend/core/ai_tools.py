@@ -457,12 +457,26 @@ class ToolRunner:
                 harvested_losses_ytd = arguments.get("harvested_losses_ytd")
                 tracking_error_pct = arguments.get("tracking_error_pct", 0.5)
                 
-                # Get dashboard data
-                dashboard_data = calculator.get_dashboard_data(
-                    portfolio_value=portfolio_value,
-                    harvested_losses_ytd=harvested_losses_ytd,
-                    tracking_error_pct=tracking_error_pct
-                )
+                # If no harvested losses provided, use default demo data
+                if harvested_losses_ytd is None:
+                    # Create demo direct index positions for calculation
+                    demo_positions = [
+                        {"symbol": "MSFT", "cost_basis": 300, "current_price": 280, "shares": 100},
+                        {"symbol": "GOOGL", "cost_basis": 140, "current_price": 135, "shares": 200},
+                        {"symbol": "AMZN", "cost_basis": 150, "current_price": 145, "shares": 150},
+                    ]
+                    dashboard_data = calculator.get_dashboard_data(
+                        direct_index_positions=demo_positions,
+                        benchmark_etf="SPY",
+                        portfolio_value=portfolio_value
+                    )
+                else:
+                    # Use provided data
+                    dashboard_data = calculator.get_dashboard_data(
+                        portfolio_value=portfolio_value,
+                        harvested_losses_ytd=harvested_losses_ytd,
+                        tracking_error_pct=tracking_error_pct
+                    )
                 return dashboard_data
             
             else:
