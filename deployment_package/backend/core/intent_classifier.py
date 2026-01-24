@@ -191,15 +191,19 @@ class IntentClassifier:
         if any(keyword in query_lower for keyword in self.CHATGPT_KEYWORDS[IntentType.COMPLEX_MATH]):
             return IntentType.COMPLEX_MATH
         
-        # Check for tax optimization (ChatGPT strength)
-        if any(keyword in query_lower for keyword in self.CHATGPT_KEYWORDS[IntentType.TAX_OPTIMIZATION]):
-            return IntentType.TAX_OPTIMIZATION
+        # Check for quantitative algorithm intents FIRST (more specific)
+        # Check for Tax Alpha Dashboard (most specific tax-related intent)
+        if any(keyword in query_lower for keyword in self.ALGORITHM_KEYWORDS.get(IntentType.TAX_ALPHA_DASHBOARD, [])):
+            return IntentType.TAX_ALPHA_DASHBOARD
         
-        # Check for retirement planning (ChatGPT strength)
-        if any(keyword in query_lower for keyword in self.CHATGPT_KEYWORDS[IntentType.RETIREMENT_PLANNING]):
-            return IntentType.RETIREMENT_PLANNING
+        # Check for Direct Indexing
+        if any(keyword in query_lower for keyword in self.ALGORITHM_KEYWORDS.get(IntentType.DIRECT_INDEXING, [])):
+            return IntentType.DIRECT_INDEXING
         
-        # Check for quantitative algorithm intents
+        # Check for TSPT
+        if any(keyword in query_lower for keyword in self.ALGORITHM_KEYWORDS.get(IntentType.TAX_SMART_TRANSITION, [])):
+            return IntentType.TAX_SMART_TRANSITION
+        
         if any(keyword in query_lower for keyword in self.ALGORITHM_KEYWORDS[IntentType.GOAL_SIMULATION]):
             return IntentType.GOAL_SIMULATION
         
@@ -215,17 +219,13 @@ class IntentClassifier:
         if any(keyword in query_lower for keyword in self.ALGORITHM_KEYWORDS[IntentType.REBALANCING_CHECK]):
             return IntentType.REBALANCING_CHECK
         
-        # Check for Direct Indexing
-        if any(keyword in query_lower for keyword in self.ALGORITHM_KEYWORDS.get(IntentType.DIRECT_INDEXING, [])):
-            return IntentType.DIRECT_INDEXING
+        # Check for tax optimization (ChatGPT strength) - AFTER specific intents
+        if any(keyword in query_lower for keyword in self.CHATGPT_KEYWORDS[IntentType.TAX_OPTIMIZATION]):
+            return IntentType.TAX_OPTIMIZATION
         
-        # Check for TSPT
-        if any(keyword in query_lower for keyword in self.ALGORITHM_KEYWORDS.get(IntentType.TAX_SMART_TRANSITION, [])):
-            return IntentType.TAX_SMART_TRANSITION
-        
-        # Check for Tax Alpha Dashboard
-        if any(keyword in query_lower for keyword in self.ALGORITHM_KEYWORDS.get(IntentType.TAX_ALPHA_DASHBOARD, [])):
-            return IntentType.TAX_ALPHA_DASHBOARD
+        # Check for retirement planning (ChatGPT strength)
+        if any(keyword in query_lower for keyword in self.CHATGPT_KEYWORDS[IntentType.RETIREMENT_PLANNING]):
+            return IntentType.RETIREMENT_PLANNING
         
         # Default to general query (will use default model)
         return IntentType.GENERAL_QUERY

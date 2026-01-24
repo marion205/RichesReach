@@ -96,7 +96,12 @@ class AuditTrailLogger:
         
         # Configure audit logger (separate from application logs)
         if not self.audit_logger.handlers:
-            handler = logging.FileHandler("logs/audit_trail.log")
+            # Ensure logs directory exists
+        import os
+        log_dir = "logs"
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir, exist_ok=True)
+        handler = logging.FileHandler(os.path.join(log_dir, "audit_trail.log"))
             handler.setFormatter(
                 logging.Formatter('%(asctime)s | %(message)s')
             )
