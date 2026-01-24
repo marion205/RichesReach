@@ -1,6 +1,7 @@
 """
 Enhanced API Service with intelligent caching and rate limiting
 """
+import os
 import time
 
 import hashlib

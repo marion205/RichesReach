@@ -25,7 +25,7 @@ import { usePortfolioHistory, setPortfolioHistory } from '../shared/portfolioHis
 
 // New imports for smart portfolio metrics
 import { FEATURE_PORTFOLIO_METRICS } from '../config/flags';
-import { isMarketDataHealthy } from '../services/healthService';
+import { isMarketDataHealthy, MarketDataHealthStatus } from '../services/healthService';
 import { mark, PerformanceMarkers } from '../utils/timing';
 import { API_BASE, API_HTTP } from '../config/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -117,21 +117,24 @@ if (!logger || typeof logger !== 'object') {
     log: (...args: any[]) => {
       try {
         if (typeof console !== 'undefined' && console.log) {
-          console.log(...args);
+          // Fallback to console if logger not available
+          logger.log(...args);
         }
       } catch (e) {}
     },
     warn: (...args: any[]) => {
       try {
         if (typeof console !== 'undefined' && console.warn) {
-          console.warn(...args);
+          // Fallback to console if logger not available
+          logger.warn(...args);
         }
       } catch (e) {}
     },
     error: (...args: any[]) => {
       try {
         if (typeof console !== 'undefined' && console.error) {
-          console.error(...args);
+          // Fallback to console if logger not available
+          logger.error(...args);
         }
       } catch (e) {}
     },
@@ -246,6 +249,7 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
     const [chatInput, setChatInput] = useState('');
     const [sending, setSending] = useState(false);
     const listRef = useRef<FlatList<ChatMsg>>(null);
+    const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     
     const STORAGE_KEY = 'chat:v1';
   
@@ -282,7 +286,23 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
   
     const append = useCallback((m: ChatMsg) => {
       setChatMessages(prev => [...prev, m]);
-      setTimeout(() => listRef.current?.scrollToEnd?.({ animated: true }), 80);
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+      scrollTimeoutRef.current = setTimeout(() => {
+        listRef.current?.scrollToEnd?.({ animated: true });
+        scrollTimeoutRef.current = null;
+      }, 80);
+    }, []);
+    
+    // Cleanup scroll timeout on unmount
+    useEffect(() => {
+      return () => {
+        if (scrollTimeoutRef.current) {
+          clearTimeout(scrollTimeoutRef.current);
+          scrollTimeoutRef.current = null;
+        }
+      };
     }, []);
   
     const clear = useCallback(() => {
@@ -420,20 +440,19 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
     [key: string]: unknown;
   }
   
-  interface MarketDataHealth {
-    isHealthy: boolean;
-    error?: string;
-    [key: string]: unknown;
-  }
   
   const HomeScreen = ({ navigateTo }: { navigateTo?: (screen: string, data?: NavigateParams) => void }) => {
     const client = useApolloClient();
+    // Timeout refs for various operations
+    const marketDataTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const dailyBriefTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const navigationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const navigation = useNavigation();
     const { token } = useAuth();
     
     // Smart portfolio metrics state
     const [canQueryMetrics, setCanQueryMetrics] = useState(false);
-    const [marketDataHealth, setMarketDataHealth] = useState<MarketDataHealth | null>(null);
+    const [marketDataHealth, setMarketDataHealth] = useState<MarketDataHealthStatus | null>(null);
     
     // Daily Brief streak state
     const [dailyBriefStreak, setDailyBriefStreak] = useState<number | null>(null);
@@ -485,10 +504,14 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
             if (health.isHealthy) {
               logger.log('[HomeScreen] Market data is healthy, enabling portfolio metrics');
               // Small delay to let UI settle after navigation
-              setTimeout(() => {
+              if (marketDataTimeoutRef.current) {
+                clearTimeout(marketDataTimeoutRef.current);
+              }
+              marketDataTimeoutRef.current = setTimeout(() => {
                 if (active) {
                   setCanQueryMetrics(true);
                 }
+                marketDataTimeoutRef.current = null;
               }, 300);
             } else {
               logger.warn('[HomeScreen] Market data is unhealthy:', health.error);
@@ -571,7 +594,10 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
             if (!data.is_completed && !hasCheckedDailyBrief.current) {
               hasCheckedDailyBrief.current = true;
               // Additional delay to ensure home screen is fully rendered
-              setTimeout(() => {
+              if (dailyBriefTimeoutRef.current) {
+                clearTimeout(dailyBriefTimeoutRef.current);
+              }
+              dailyBriefTimeoutRef.current = setTimeout(() => {
                 // Double-check that we still haven't navigated
                 if (hasCheckedDailyBrief.current) {
                   if (navigateTo) {
@@ -580,6 +606,7 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
                     navigation.navigate('daily-brief' as never);
                   }
                 }
+                dailyBriefTimeoutRef.current = null;
               }, 500);
             } else if (data.is_completed) {
               // Brief is completed, mark as checked so we don't navigate
@@ -588,7 +615,7 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
           }
         } catch (error) {
           // Silently fail - don't navigate if API is unavailable
-          console.log('Daily brief check failed:', error);
+          logger.log('Daily brief check failed:', error);
           // Mark as checked on error to prevent retries
           hasCheckedDailyBrief.current = true;
         }
@@ -621,24 +648,32 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
     const [showVoice, setShowVoice] = useState(false);
 
     // Derived anxiousness score (fallback until on-device model is wired)
+    // Note: resolved is declared later (line 1019), using realPortfolio here
     const anxiousnessScore = React.useMemo(() => {
-      const ret = Number(resolved?.totalReturnPercent ?? 0);
+      const ret = Number(realPortfolio?.totalReturnPercent ?? 0);
       if (isNaN(ret)) return 0.3;
       if (ret >= 0) return 0.3;
       // Map -10% to ~1.0, small losses to lower scores
       const score = Math.min(1, Math.abs(ret) / 10);
       return Math.max(0.3, score);
-    }, [resolved?.totalReturnPercent]);
+    }, [realPortfolio?.totalReturnPercent]);
 
     // Hotword subscription - listens for "Hey Riches"
     useEffect(() => {
-      const off = onHotword(() => {
-        const copy = personaCopy(inferPersona({ anxiety: anxiousnessScore, opportunity: 0.5 }));
+      const cleanup = onHotword(() => {
+        const ret = realPortfolio?.totalReturnPercent ?? 0;
+        let score = 0.3;
+        if (ret >= 0) score = 0.3;
+        else {
+          const calculatedScore = Math.min(1, Math.abs(ret) / 10);
+          score = Math.max(0.3, calculatedScore);
+        }
+        const copy = personaCopy(inferPersona({ anxiety: score, opportunity: 0.5 }));
         logger.log('🎤 "Hey Riches" detected → opening voice assistant', copy);
         setShowNextMove(true);
       });
-      return off;
-    }, [anxiousnessScore]);
+      return cleanup as () => void;
+    }, [realPortfolio?.totalReturnPercent]);
 
     // Initialize wake word detection - tries ML first, then Whisper, then Porcupine
     useEffect(() => {
@@ -728,12 +763,12 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
     // Mic button listener from TopHeader -> open calm goal flow
     useEffect(() => {
       const sub = DeviceEventEmitter.addListener('calm_goal_mic', () => {
-        console.log('🎤 [HomeScreen] Received calm_goal_mic event, opening Calm Goal sheet');
+        logger.log('🎤 [HomeScreen] Received calm_goal_mic event, opening Calm Goal sheet');
         setShowCalmSheet(true);
       });
-      console.log('🎤 [HomeScreen] Registered calm_goal_mic event listener');
+      logger.log('🎤 [HomeScreen] Registered calm_goal_mic event listener');
       return () => {
-        console.log('🎤 [HomeScreen] Removing calm_goal_mic event listener');
+        logger.log('🎤 [HomeScreen] Removing calm_goal_mic event listener');
         sub.remove();
       };
     }, []);
@@ -749,7 +784,8 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
           const cooldownMs = 1000 * 60 * 60 * 20; // 20h cooldown
           if (now - last < cooldownMs) { setShowCalmNudge(false); return; }
 
-          const retPct = Number(resolved?.totalReturnPercent ?? 0);
+          // resolved is declared later, using realPortfolio here
+          const retPct = Number(realPortfolio?.totalReturnPercent ?? 0);
           const streak = Number(userProfile?.stats?.streakDays ?? 0);
           const hour = new Date().getHours();
           const evening = hour >= 18 && hour <= 23;
@@ -773,7 +809,7 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
         } catch {}
       };
       evaluate();
-    }, [resolved?.totalReturnPercent, userProfile?.stats?.streakDays]);
+    }, [realPortfolio?.totalReturnPercent, userProfile?.stats?.streakDays]);
 
     // Refresh
     const [refreshing, setRefreshing] = useState(false);
@@ -812,13 +848,13 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
     /* ---------- websocket live updates ---------- */
     useEffect(() => {
       const handleUpdate = (p: PortfolioUpdate) => setLive(p);
-      const prev = webSocketService.setCallbacks({ onPortfolioUpdate: handleUpdate });
+      webSocketService.setCallbacks({ onPortfolioUpdate: handleUpdate });
       webSocketService.connect();
       webSocketService.subscribeToPortfolio();
   
       return () => {
         // restore previous callbacks (so other screens keep theirs)
-        webSocketService.setCallbacks(prev || {});
+        webSocketService.setCallbacks({});
         webSocketService.unsubscribeFromPortfolio();
       };
     }, []);
@@ -832,7 +868,7 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
       if (lowerInput.includes('investment') || lowerInput.includes('invest') || lowerInput.includes('portfolio')) {
         // Try API first, but with quick timeout
         try {
-          const userId = userData?.me?.id || userProfile?.id || 'demo-user';
+          const userId = userData?.me?.id || (userProfile as any)?.id || 'demo-user';
           const timeoutPromise = new Promise<never>((_, reject) => {
             setTimeout(() => reject(new Error('Request timeout')), 5000); // 5 second timeout
           });
@@ -849,7 +885,7 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
       
       if (lowerInput.includes('budget') || lowerInput.includes('saving') || lowerInput.includes('spend')) {
         try {
-          const userId = userData?.me?.id || userProfile?.id || 'demo-user';
+          const userId = userData?.me?.id || (userProfile as any)?.id || 'demo-user';
           const timeoutPromise = new Promise<never>((_, reject) => {
             setTimeout(() => reject(new Error('Request timeout')), 5000);
           });
@@ -866,7 +902,7 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
       
       if (lowerInput.includes('stock') || lowerInput.includes('market') || lowerInput.includes('trading')) {
         try {
-          const userId = userData?.me?.id || userProfile?.id || 'demo-user';
+          const userId = userData?.me?.id || (userProfile as any)?.id || 'demo-user';
           const timeoutPromise = new Promise<never>((_, reject) => {
             setTimeout(() => reject(new Error('Request timeout')), 5000);
           });
@@ -883,7 +919,7 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
       
       if (lowerInput.includes('retirement') || lowerInput.includes('401k') || lowerInput.includes('ira')) {
         try {
-          const userId = userData?.me?.id || userProfile?.id || 'demo-user';
+          const userId = userData?.me?.id || (userProfile as any)?.id || 'demo-user';
           const timeoutPromise = new Promise<never>((_, reject) => {
             setTimeout(() => reject(new Error('Request timeout')), 5000);
           });
@@ -900,7 +936,7 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
       
       // For other questions, try API with timeout, then fallback
       try {
-        const userId = userData?.me?.id || userProfile?.id || 'demo-user';
+        const userId = userData?.me?.id || (userProfile as any)?.id || 'demo-user';
         const timeoutPromise = new Promise<never>((_, reject) => {
           setTimeout(() => reject(new Error('Request timeout')), 8000); // 8 second timeout
         });
@@ -913,7 +949,7 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
         // Provide helpful generic fallback
         return 'I\'m here to help with investment strategies, portfolio analysis, budgeting, retirement planning, and market insights. Could you rephrase your question or ask about a specific topic like "How do I start investing?" or "What is dollar-cost averaging?"';
       }
-    }, [userData?.me?.id, userProfile?.id]);
+    }, [userData?.me?.id, (userProfile as any)?.id]);
   
     /* ---------- helpers ---------- */
     const go = useCallback((screen: string, params?: NavigateParams) => {
@@ -947,7 +983,7 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
       
       try { 
         // Try direct navigation first
-        navigation.navigate(screen as never, params as never);
+        (navigation.navigate as any)(screen, params);
       } catch (directError) {
         // Fallback to globalNavigate
         try {
@@ -1134,12 +1170,13 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
                     totalReturnPercent={resolved.totalReturnPercent}
                     benchmarkSymbol="SPY"
                     useRealBenchmarkData={true}
+                    navigateTo={navigateTo}
                   />
                 </AuraHalo>
               </View>
 
               <PortfolioHoldings
-                holdings={resolved.holdings || []}
+                holdings={(resolved.holdings || []) as any}
                 onStockPress={(symbol) => go('StockDetail', { symbol })}
                 onBuy={(holding) => {
                   go('trading', { symbol: holding.symbol, action: 'buy' });
@@ -1783,7 +1820,13 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
             // Navigate: Home -> Invest tab -> Portfolio
             try {
               globalNavigate('Invest');
-              setTimeout(() => globalNavigate('Invest', { screen: 'Portfolio' }), 50);
+              if (navigationTimeoutRef.current) {
+                clearTimeout(navigationTimeoutRef.current);
+              }
+              navigationTimeoutRef.current = setTimeout(() => {
+                globalNavigate('Invest', { screen: 'Portfolio' });
+                navigationTimeoutRef.current = null;
+              }, 50);
             } catch (e) {
               // Fallback for legacy routing
               go('portfolio');

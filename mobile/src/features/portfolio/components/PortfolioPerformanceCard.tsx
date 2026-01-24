@@ -1,1150 +1,1588 @@
-import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
   TouchableOpacity,
-  useColorScheme,
+  ScrollView,
+  Dimensions,
+  Modal,
   Alert,
-  PanResponder,
-  GestureResponderEvent,
-  PanResponderGestureState,
+  StatusBar,
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { LineChart } from 'react-native-chart-kit';
-import Svg, {
-  Line as SvgLine,
-  Circle as SvgCircle,
-  Rect as SvgRect,
-  Text as SvgText,
-} from 'react-native-svg';
-import Icon from '@expo/vector-icons/Feather';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useQuery } from '@apollo/client';
-import EducationalTooltip from '../../../components/common/EducationalTooltip';
-import PortfolioEducationModal from './PortfolioEducationModal';
-import { getTermExplanation } from '../../../shared/financialTerms';
-import webSocketService, { PortfolioUpdate } from '../../../services/WebSocketService';
-import { useOptimizedPolling } from '../../../hooks/useOptimizedPolling';
-import { useOptimizedDataService } from '../../../services/OptimizedDataService';
-import {
-  GET_BENCHMARK_SERIES,
-  GET_AVAILABLE_BENCHMARKS,
-  BenchmarkSeries,
-  extractBenchmarkValues,
-  getBenchmarkSummary,
-  calculateAlpha,
-  formatBenchmarkSymbol,
-  getBenchmarkColor,
-} from '../../../graphql/benchmarkQueries';
-import type {
-  BenchmarkSeriesType,
-  ExtendedQueryBenchmarkSeriesQuery,
-  ExtendedQueryBenchmarkSeriesQueryVariables,
-  ExtendedQueryAvailableBenchmarksQuery,
-} from '../../../generated/graphql';
-import BenchmarkSelector from './BenchmarkSelector';
-import { computeYDomain, getPeriodReturnLabel } from '../utils/chartUtils';
+import Icon from 'react-native-vector-icons/Feather';
+import { LinearGradient } from 'expo-linear-gradient';
+import UI from '../../../shared/constants';
 import logger from '../../../utils/logger';
-// Conditionally import Skia chart - only available in development builds, not Expo Go
-let InnovativeChart: any = null;
-let isSkiaAvailable = false;
-try {
-  InnovativeChart = require('../../../components/charts/InnovativeChartSkia').default;
-  // Check if Skia library is actually available (same check as in InnovativeChartSkia.tsx)
-  try {
-    const SkiaComponents = require('@shopify/react-native-skia');
-    // Check for the actual Skia components (Canvas, Path, Skia) like the component does
-    const { Canvas, Path, Skia } = SkiaComponents || {};
-    isSkiaAvailable = !!(SkiaComponents && Canvas && Path && Skia);
-    if (!isSkiaAvailable) {
-      logger.warn('Skia components not fully available - Canvas, Path, or Skia missing');
-    }
-  } catch (e) {
-    // Skia library not available
-    isSkiaAvailable = false;
-    logger.warn(
-      '@shopify/react-native-skia not installed. Install with: npm install @shopify/react-native-skia'
-    );
-  }
-} catch (e) {
-  // Skia not available - will use fallback chart
-  logger.warn('Skia chart component not available, using fallback chart');
-  isSkiaAvailable = false;
+
+const { width: screenWidth } = Dimensions.get('window');
+
+const TABS = ['1D', '1W', '1M', '3M', '1Y', 'All'];
+const BENCHMARKS = ['SPY', 'QQQ', 'DIA', 'IWM', 'VTI'];
+
+interface PortfolioPerformanceCardProps {
+  totalValue?: number;
+  totalReturn?: number;
+  totalReturnPercent?: number;
+  benchmarkReturn?: number;
+  navigateTo?: (screen: string, params?: any) => void;
 }
 
-const { width } = Dimensions.get('window');
-const PREF_SHOW_BENCH = 'rr.pref.show_benchmark'; // NEW
-
-type Props = {
-  totalValue: number;
-  totalReturn: number;
-  totalReturnPercent: number;
-  benchmarkSymbol?: string; // e.g., 'SPY'
-  benchmarkSeries?: number[]; // optional: pass real benchmark series (same length as current timeframe)
-  useRealBenchmarkData?: boolean; // whether to fetch real benchmark data from GraphQL
-};
-
-const TABS = ['1D', '1W', '1M', '3M', '1Y', 'All'] as const;
-type Timeframe = (typeof TABS)[number];
-
-const fmtCompactUsd = (n: number) =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    notation: 'compact',
-    maximumFractionDigits: 2,
-  }).format(n || 0);
-
-const fmtUsd = (n: number) =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 2,
-  }).format(n || 0);
-
-const fmtPct = (p: number) => `${(p || 0) >= 0 ? '+' : ''}${(p || 0).toFixed(2)}%`;
+interface InfoModalContent {
+  title: string;
+  content: string;
+  formula?: string;
+  percentage?: string;
+  example?: string;
+  interpretation?: string;
+}
 
 export default function PortfolioPerformanceCard({
-  totalValue,
-  totalReturn,
-  totalReturnPercent,
-  benchmarkSymbol = 'SPY',
-  benchmarkSeries,
-  useRealBenchmarkData = true,
-}: Props) {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
-  const [selectedBenchmarkSymbol, setSelectedBenchmarkSymbol] = useState<string>(benchmarkSymbol);
-
-  const palette = {
-    bg: isDark ? '#111214' : '#FFFFFF',
-    text: isDark ? '#F5F6F8' : '#1C1C1E',
-    sub: isDark ? '#A1A7AF' : '#6B7280',
-    border: isDark ? '#23262B' : '#E5E7EB',
-    grid: isDark ? '#2A2E34' : '#EDF0F2',
-    green: '#22C55E',
-    red: '#EF4444',
-    accent: isDark ? '#3B82F6' : '#2563EB',
-    bench: getBenchmarkColor(selectedBenchmarkSymbol, isDark), // benchmark color based on selected symbol
-    chipBg: isDark ? '#1A1C1F' : '#F3F4F6',
-    chipActiveBg: isDark ? '#2B2F36' : '#111827',
-    chipActiveText: '#FFFFFF',
-    tooltipBg: isDark ? '#1C1F24' : '#0F172A',
-    tooltipText: '#FFFFFF',
-    tooltipBorder: isDark ? '#2E3440' : '#1F2937',
-  };
-
-  const [showEducationModal, setShowEducationModal] = useState(false);
-  const [clickedElement, setClickedElement] = useState<string>('');
-  const [tab, setTab] = useState<Timeframe>('1M');
-  const [showBenchmark, setShowBenchmark] = useState<boolean>(true);
-  // Only enable advanced chart if Skia is available
-  const [useAdvancedChart, setUseAdvancedChart] = useState<boolean>(false); // Start with regular chart, can switch to advanced
-
-  // GraphQL queries for benchmark data with error handling
-  // ✅ Now using typed queries
-  const {
-    data: benchmarkData,
-    loading: benchmarkLoading,
-    error: benchmarkError,
-  } = useQuery<ExtendedQueryBenchmarkSeriesQuery, ExtendedQueryBenchmarkSeriesQueryVariables>(
-    GET_BENCHMARK_SERIES,
-    {
-      variables: { symbol: selectedBenchmarkSymbol || '', timeframe: tab },
-      skip: !useRealBenchmarkData || !showBenchmark,
-      fetchPolicy: 'cache-and-network',
-      errorPolicy: 'all', // Continue rendering even if query has errors
-      onError: error => {
-        logger.warn('Benchmark series query error:', error);
-      },
-    }
-  );
-
-  const { data: availableBenchmarksData, error: availableBenchmarksError } = useQuery<
-    ExtendedQueryAvailableBenchmarksQuery
-  >(GET_AVAILABLE_BENCHMARKS, {
-    skip: !useRealBenchmarkData,
-    errorPolicy: 'all', // Continue rendering even if query has errors
-    onError: error => {
-      logger.warn('Available benchmarks query error:', error);
-    },
+  totalValue: initialTotalValue = 125430.50,
+  totalReturn: initialTotalReturn = 8430.50,
+  totalReturnPercent: initialTotalReturnPercent,
+  benchmarkReturn = 5.45,
+  navigateTo,
+}: PortfolioPerformanceCardProps = {}) {
+  const navigation = useNavigation<any>();
+  const [tab, setTab] = useState('1M');
+  const [showBenchmark, setShowBenchmark] = useState(true);
+  const [useAdvancedChart, setUseAdvancedChart] = useState(false);
+  const [selectedBenchmark, setSelectedBenchmark] = useState('SPY');
+  const [showBenchmarkSelector, setShowBenchmarkSelector] = useState(false);
+  const [showInfoModal, setShowInfoModal] = useState(false);
+  const [infoModalContent, setInfoModalContent] = useState<InfoModalContent | null>(null);
+  const [chartData, setChartData] = useState<{ portfolio: number[]; benchmark: number[]; labels: string[] }>({
+    portfolio: [],
+    benchmark: [],
+    labels: [],
   });
 
-  const [liveTotalValue, setLiveTotalValue] = useState(totalValue);
-  const [liveTotalReturn, setLiveTotalReturn] = useState(totalReturn);
-  const [liveTotalReturnPercent, setLiveTotalReturnPercent] = useState(totalReturnPercent);
-  const [isLiveData, setIsLiveData] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const wsRef = useRef(webSocketService);
+  // Dynamic values that can change
+  const [totalValue, setTotalValue] = useState(initialTotalValue);
+  const [totalReturn, setTotalReturn] = useState(initialTotalReturn);
 
-  const curValue = isLiveData ? liveTotalValue : totalValue;
-  const curReturn = isLiveData ? liveTotalReturn : totalReturn;
-  const curReturnPct = isLiveData ? liveTotalReturnPercent : totalReturnPercent;
+  // Calculate totalReturnPercent if not provided
+  const totalReturnPercent = useMemo(() => {
+    if (initialTotalReturnPercent !== undefined) {
+      return initialTotalReturnPercent;
+    }
+    const base = totalValue - totalReturn;
+    return base > 0 ? (totalReturn / base) * 100 : 0;
+  }, [initialTotalReturnPercent, totalValue, totalReturn]);
 
-  const positive = curReturn >= 0 && curReturnPct >= 0;
-  const accent = positive ? palette.green : palette.red;
-  const trendIcon = positive ? 'trending-up' : 'trending-down';
+  const alpha = totalReturnPercent - benchmarkReturn;
+  const positive = totalReturn >= 0;
 
-  // NEW: hydrate persisted toggle on mount
-  useEffect(() => {
-    (async () => {
-      try {
-        const raw = await AsyncStorage.getItem(PREF_SHOW_BENCH);
-        if (raw != null) {
-          setShowBenchmark(raw === '1');
-        }
-      } catch {}
-    })();
-  }, []);
+  const formatCurrency = (value: number) => {
+    if (value >= 1000000) return `$${(value / 1000000).toFixed(2)}M`;
+    if (value >= 1000) return `$${(value / 1000).toFixed(1)}K`;
+    return `$${value.toFixed(0)}`;
+  };
 
-  // NEW: persist on change
-  useEffect(() => {
-    AsyncStorage.setItem(PREF_SHOW_BENCH, showBenchmark ? '1' : '0').catch(() => {});
-  }, [showBenchmark]);
+  const formatPercent = (value: number) => {
+    return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
+  };
 
-  // === Series generation (stub) ===
-  const pointsForTab = (t: Timeframe) => {
-    switch (t) {
-      case '1D':
-        return 24; // hourly-ish
-      case '1W':
-        return 7;
-      case '1M':
-        return 30;
-      case '3M':
-        return 13; // weekly points
-      case '1Y':
-        return 12; // monthly points
-      case 'All':
-        return 60; // arbitrary
+  // Educational content for info buttons
+  const getInfoContent = (type: string): InfoModalContent | null => {
+    const base = totalValue - totalReturn;
+    switch (type) {
+      case 'totalValue':
+        return {
+          title: 'Total Portfolio Value',
+          content:
+            'The total current market value of all your investments combined. This includes stocks, bonds, ETFs, and other securities in your portfolio.',
+          formula: 'Total Value = Sum of (Shares × Current Price) for all holdings',
+          example:
+            'If you own 10 shares of Stock A at $100 and 5 shares of Stock B at $200, your total value is $2,000.',
+        };
+      case 'totalReturn':
+        return {
+          title: 'Total Return',
+          content:
+            'The total profit or loss on your investments, shown both in dollar amount and percentage. This reflects how much your portfolio has grown or declined since your initial investment.',
+          formula: 'Total Return = Current Value - Initial Investment',
+          percentage: 'Return % = (Total Return / Initial Investment) × 100',
+          example: `If you invested ${formatCurrency(base)} and your portfolio is now worth ${formatCurrency(totalValue)}, your return is ${formatCurrency(Math.abs(totalReturn))} or ${formatPercent(totalReturnPercent)}.`,
+        };
+      case 'alpha':
+        return {
+          title: 'Alpha (Outperformance)',
+          content:
+            'Alpha measures how much your portfolio outperformed (or underperformed) the benchmark index. Positive alpha means you are beating the market!',
+          formula: 'Alpha = Your Return % - Benchmark Return %',
+          example: `Your portfolio returned ${totalReturnPercent.toFixed(2)}% while ${selectedBenchmark} returned ${benchmarkReturn}%, giving you an alpha of ${alpha.toFixed(2)}%.`,
+          interpretation: alpha > 0 ? "You're outperforming the market! 🎉" : "Your portfolio is underperforming the benchmark.",
+        };
+      default:
+        return null;
     }
   };
 
-  const genPortfolioSeries = useCallback(
-    (points: number) => {
-      const series: number[] = [];
-      const base = curValue;
-      const vol = 0.012;
-      const drift = positive ? 0.0003 : -0.0002;
-      for (let i = 0; i < points; i++) {
-        const noise = (Math.random() - 0.5) * vol;
-        const v = base * (1 + drift * i + noise * (0.6 + 0.4 * Math.sin(i * 0.3)));
-        series.push(Math.max(v, base * 0.85));
-      }
-      series[series.length - 1] = curValue;
-      return series;
-    },
-    [curValue, positive]
-  );
+  const openInfoModal = (type: string) => {
+    const content = getInfoContent(type);
+    if (content) {
+      setInfoModalContent(content);
+      setShowInfoModal(true);
+    }
+  };
 
-  const genBenchmarkSeries = useCallback(
-    (points: number) => {
-      // Use real benchmark data if available
-      if (useRealBenchmarkData && benchmarkData?.benchmarkSeries) {
-        const realValues = extractBenchmarkValues(benchmarkData.benchmarkSeries);
-        if (realValues.length > 0) {
-          return realValues;
+  // Generate dynamic data based on timeframe
+  const generateData = (points: number) => {
+    const data: number[] = [];
+    const benchData: number[] = [];
+    const labels: string[] = [];
+    const base = totalValue - totalReturn;
+    const timeNow = Date.now();
+
+    const timeStep =
+      tab === '1D'
+        ? 3600000 // 1 hour
+        : tab === '1W'
+          ? 86400000 // 1 day
+          : tab === '1M'
+            ? 86400000 // 1 day
+            : tab === '3M'
+              ? 86400000 // 1 day
+              : tab === '1Y'
+                ? 86400000 // 1 day
+                : 86400000 * 7; // 1 week for 'All'
+
+    for (let i = 0; i < points; i++) {
+      const progress = i / (points - 1);
+      const noise = (Math.random() - 0.5) * 0.015;
+      const trendNoise = Math.sin(i * 0.3) * 0.01;
+
+      const portfolioValue = base + totalReturn * progress + base * (noise + trendNoise);
+      const benchValue = base + totalReturn * 0.76 * progress + base * (noise * 0.8 + trendNoise * 0.7);
+
+      const timestamp = timeNow - (points - i - 1) * timeStep;
+
+      data.push(Math.max(portfolioValue, base * 0.85));
+      benchData.push(Math.max(benchValue, base * 0.85));
+
+      // Generate labels based on timeframe
+      if (tab === '1D') {
+        const date = new Date(timestamp);
+        labels.push(`${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`);
+      } else if (tab === '1W') {
+        const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        const date = new Date(timestamp);
+        labels.push(days[date.getDay()] || '');
+      } else {
+        labels.push('');
+      }
+    }
+
+    // Ensure last point matches current value
+    if (data.length > 0) {
+      data[data.length - 1] = totalValue;
+    }
+
+    return { portfolio: data, benchmark: benchData, labels };
+  };
+
+  // Update data when timeframe changes
+  useEffect(() => {
+    const points =
+      tab === '1D' ? 24 : tab === '1W' ? 7 : tab === '1M' ? 30 : tab === '3M' ? 90 : tab === '1Y' ? 365 : 500;
+    const newData = generateData(points);
+    setChartData(newData);
+  }, [tab, totalValue, totalReturn]);
+
+  // Simulate live updates every 5 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // Simulate small price changes
+      const change = (Math.random() - 0.5) * 500;
+      setTotalValue((prev) => Math.max(prev + change, 100000));
+      setTotalReturn((prev) => prev + change);
+
+      // Update last point in chart
+      setChartData((prev) => {
+        const newPortfolio = [...prev.portfolio];
+        const newBenchmark = [...prev.benchmark];
+
+        if (newPortfolio.length > 0) {
+          newPortfolio[newPortfolio.length - 1] = totalValue + change;
+          newBenchmark[newBenchmark.length - 1] += change * 0.76;
         }
-      }
 
-      // Fallback to provided benchmark series
-      if (benchmarkSeries && benchmarkSeries.length >= points) {
-        return benchmarkSeries.slice(-points);
-      }
+        return { ...prev, portfolio: newPortfolio, benchmark: newBenchmark };
+      });
+    }, 5000);
 
-      // Fallback to synthetic data
-      const series: number[] = [];
-      const base = curValue * 0.98; // start close to portfolio
-      const vol = 0.007;
-      const drift = 0.0002;
-      for (let i = 0; i < points; i++) {
-        const noise = (Math.random() - 0.5) * vol;
-        const v = base * (1 + drift * i + noise * (0.5 + 0.3 * Math.sin(i * 0.25)));
-        series.push(Math.max(v, base * 0.9));
-      }
-      series[series.length - 1] = curValue * 0.995; // finish near portfolio but not identical
-      return series;
-    },
-    [benchmarkSeries, curValue, useRealBenchmarkData, benchmarkData]
-  );
+    return () => clearInterval(interval);
+  }, [totalValue]);
 
-  const [history, setHistory] = useState<number[]>([]);
-  const [bench, setBench] = useState<number[]>([]);
-
-  useEffect(() => {
-    setIsLoading(true);
-    const pts = pointsForTab(tab);
-    const newHistory = genPortfolioSeries(pts);
-    const newBench = genBenchmarkSeries(pts);
-    setHistory(newHistory);
-    setBench(newBench);
-    logger.log('📈 Generated portfolio history:', newHistory.length, 'points');
-    const tid = setTimeout(() => setIsLoading(false), 200);
-    return () => clearTimeout(tid);
-  }, [tab, genPortfolioSeries, genBenchmarkSeries]);
-
-  // Debug AR chart state - moved after innovativeChartSeries definition
-
-  // Transform data for InnovativeChartSkia (advanced AR chart)
-  const innovativeChartSeries = useMemo(() => {
-    if (!history.length) {
-      return [];
-    }
-    const now = Date.now();
-    const pointsPerDay = Math.max(1, Math.floor(history.length / 30)); // Approximate days
-    return history.map((price, idx) => ({
-      t: now - (history.length - idx - 1) * ((24 * 60 * 60 * 1000) / pointsPerDay),
-      price,
-    }));
-  }, [history]);
-
-  // Debug AR chart state
-  useEffect(() => {
-    if (useAdvancedChart) {
-      logger.log('🎯 AR Chart Mode Active');
-      logger.log('  - History points:', history.length);
-      logger.log('  - InnovativeChartSeries points:', innovativeChartSeries.length);
-      logger.log('  - InnovativeChart available:', !!InnovativeChart);
-      logger.log('  - Skia available:', isSkiaAvailable);
-      if (innovativeChartSeries.length > 0) {
-        logger.log('  - Sample series data:', innovativeChartSeries.slice(0, 3));
-      }
-    }
-  }, [useAdvancedChart, history.length, innovativeChartSeries.length]);
-
-  const innovativeChartBenchmark = useMemo(() => {
-    if (!showBenchmark || !bench.length) {
-      return [];
-    }
-    const now = Date.now();
-    const pointsPerDay = Math.max(1, Math.floor(bench.length / 30));
-    return bench.map((price, idx) => ({
-      t: now - (bench.length - idx - 1) * ((24 * 60 * 60 * 1000) / pointsPerDay),
-      price,
-    }));
-  }, [bench, showBenchmark]);
-
-  // live updates push to tail (portfolio only here)
-  useEffect(() => {
-    wsRef.current.setCallbacks({
-      onPortfolioUpdate: (p: PortfolioUpdate) => {
-        setLiveTotalValue(p.totalValue);
-        setLiveTotalReturn(p.totalReturn);
-        setLiveTotalReturnPercent(p.totalReturnPercent);
-        setIsLiveData(true);
-        setHistory(prev => {
-          const cap = pointsForTab(tab);
-          const next = [...prev, p.totalValue];
-          return next.length > cap ? next.slice(-cap) : next;
-        });
+  const chartDataForDisplay = useMemo(() => {
+    const datasets = [
+      {
+        data: chartData.portfolio,
+        color: (opacity = 1) => `rgba(59, 130, 246, ${opacity})`, // Blue
+        strokeWidth: 3,
       },
-    });
-    wsRef.current.connect();
-    setTimeout(() => wsRef.current?.subscribeToPortfolio(), 600);
-  }, [tab]);
+    ];
 
-  // Use chartUtils to compute proper y-domain (prevents -100% issues)
-  const chartPoints = useMemo(() => {
-    const allPoints: { t: number; v: number }[] = [];
-    // Portfolio points
-    history.forEach((val, idx) => {
-      allPoints.push({ t: idx, v: val });
-    });
-    // Benchmark points
-    if (showBenchmark && bench.length) {
-      bench.forEach((val, idx) => {
-        allPoints.push({ t: idx, v: val });
+    if (showBenchmark && chartData.benchmark.length > 0) {
+      datasets.push({
+        data: chartData.benchmark,
+        color: (opacity = 1) => `rgba(168, 85, 247, ${opacity * 0.4})`, // Purple with opacity
+        strokeWidth: 2,
       });
     }
-    // If no history, use current value
-    if (!allPoints.length) {
-      allPoints.push({ t: 0, v: curValue });
-    }
-    return allPoints;
-  }, [history, bench, curValue, showBenchmark]);
 
-  const [yMin, yMax] = useMemo(() => {
-    return computeYDomain(chartPoints, false); // false = dollar values, not percentages
-  }, [chartPoints]);
-
-  const minAll = yMin;
-  const maxAll = yMax;
-
-  // ---- Crosshair / Tooltip state ----
-  const [pointer, setPointer] = useState<{
-    index: number;
-    x: number;
-    y: number;
-    value: number;
-  } | null>(null);
-
-  const chartWidth = width;
-  const chartHeight = 200;
-  const pointCount = Math.max(1, history.length || 1);
-  const stepX = pointCount > 1 ? chartWidth / (pointCount - 1) : 0;
-
-  const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
-  const indexForX = (x: number) => clamp(Math.round(x / stepX), 0, pointCount - 1);
-
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => true,
-        onPanResponderGrant: () => {
-          // Tooltips disabled
-        },
-        onPanResponderMove: () => {
-          // Tooltips disabled
-        },
-        onPanResponderRelease: () => {
-          setPointer(null);
-        },
-        onPanResponderTerminate: () => {
-          setPointer(null);
-        },
-      }),
-    [history, curValue, stepX, pointCount]
-  );
-
-  // period returns - use real benchmark data if available
-  // Prevent -100% issues when start value is 0 or very small
-  const pStart = history[0] ?? curValue;
-  const pEnd = history[history.length - 1] ?? curValue;
-  const pRetPct = pStart && pStart > 0 ? ((pEnd - pStart) / pStart) * 100 : 0;
-
-  // Use real benchmark performance if available
-  const benchmarkSummary =
-    useRealBenchmarkData && benchmarkData?.benchmarkSeries
-      ? getBenchmarkSummary(benchmarkData.benchmarkSeries)
-      : null;
-
-  const bStart = benchmarkSummary?.startValue ?? bench[0] ?? pStart;
-  const bEnd = benchmarkSummary?.endValue ?? bench[bench.length - 1] ?? pEnd;
-  // Prevent division by zero in benchmark return calculation
-  const bRetPct =
-    benchmarkSummary?.totalReturnPercent ??
-    (bStart && bStart > 0 ? ((bEnd - bStart) / bStart) * 100 : 0);
-  const vsBenchmark = calculateAlpha(pRetPct, bRetPct); // + means outperformance
-
-  // Datasets (portfolio + optional benchmark)
-  const chartData = useMemo(() => {
-    // Ensure we always have at least 2 data points for the chart to render
-    const portfolioData = history.length >= 2 
-      ? history 
-      : history.length === 1 
-        ? [history[0] * 0.99, history[0]] // Create a second point slightly lower
-        : [curValue * 0.99, curValue]; // Fallback: create 2 points from current value
-    
-    const benchmarkData = bench.length >= 2
-      ? bench
-      : bench.length === 1
-        ? [bench[0] * 0.99, bench[0]]
-        : [curValue * 0.98, curValue * 0.99];
-    
-    const pointCount = Math.max(portfolioData.length, 6);
-    
     return {
-      labels: new Array(pointCount).fill(''),
-      datasets: [
-        // Portfolio (accent)
-        {
-          data: portfolioData,
-          color: () => accent,
-          strokeWidth: 2.6,
-        } as any,
-        // Benchmark (faint)
-        ...(showBenchmark
-          ? [
-              {
-                data: benchmarkData,
-                color: (opacity = 1) =>
-                  `${palette.bench}${Math.round(opacity * 200)
-                    .toString(16)
-                    .padStart(2, '0')}`,
-                strokeWidth: 2,
-              } as any,
-            ]
-          : []),
-      ],
+      labels: chartData.labels.length > 0 ? chartData.labels : chartData.portfolio.map(() => ''),
+      datasets,
     };
-  }, [history, bench, curValue, accent, palette.bench, showBenchmark]);
+  }, [chartData, showBenchmark]);
 
-  const chartConfig = useMemo(
-    () => ({
-      backgroundColor: palette.bg,
-      backgroundGradientFrom: palette.bg,
-      backgroundGradientTo: palette.bg,
-      decimalPlaces: 0,
-      color: () => accent,
-      labelColor: () => palette.sub,
-      style: { borderRadius: 12 },
-      propsForDots: { r: '0' },
-      propsForBackgroundLines: {
-        strokeDasharray: '4 8',
-        stroke: palette.grid,
-        strokeWidth: 1,
-      },
-      // keep subtle fill so the main series stands out; benchmark inherits but line is faint
-      fillShadowGradientFrom: accent,
-      fillShadowGradientTo: accent,
-      fillShadowGradientFromOpacity: 0.12,
-      fillShadowGradientToOpacity: 0.02,
-      // Format y-axis labels to prevent confusing scales
-      formatYLabel: (value: string) => {
-        const numValue = Number(value);
-        if (isNaN(numValue)) {
-          return value;
+  const handleViewAnalytics = () => {
+    try {
+      // Try navigateTo first if provided
+      if (navigateTo) {
+        navigateTo('portfolio');
+        return;
+      }
+      
+      // Fallback to React Navigation
+      if (navigation && navigation.navigate) {
+        // Try navigating to Invest stack, then portfolio screen
+        try {
+          navigation.navigate('Invest' as never, {
+            screen: 'Portfolio' as never,
+          } as never);
+          return;
+        } catch (investError) {
+          // If that fails, try direct navigation
+          try {
+            navigation.navigate('Portfolio' as never);
+            return;
+          } catch (directError) {
+            // If all navigation fails, show alert
+            logger.error('Navigation failed:', { investError, directError });
+          }
         }
-        // Handle very small values
-        if (Math.abs(numValue) < 0.01) {
-          return '$0';
-        }
-        if (numValue >= 1000000) {
-          return `$${(numValue / 1000000).toFixed(1)}M`;
-        }
-        if (numValue >= 1000) {
-          return `$${(numValue / 1000).toFixed(1)}K`;
-        }
-        return `$${numValue.toFixed(0)}`;
-      },
-    }),
-    [accent, palette]
-  );
-
-  const handleExplain = (what: string) => {
-    setClickedElement(what);
-    setShowEducationModal(true);
+      }
+    } catch (error) {
+      logger.error('Error in handleViewAnalytics:', error);
+    }
+    
+    // Final fallback: show alert
+    Alert.alert(
+      'Detailed Analytics',
+      'Opening portfolio screen...\n\nThis would show:\n• Performance breakdown by holding\n• Risk metrics\n• Tax implications\n• Rebalancing suggestions',
+      [{ text: 'OK' }],
+    );
   };
 
-  // Tooltip overlay (shows both series at pointer) - DISABLED
-  const Decorator = () => {
-    // Tooltips disabled - always return null
-    return null;
-    if (!pointer || pointCount < 2) {
-      return null;
-    }
-
-    const x = pointer.x;
-    const pVal = history[pointer.index] ?? curValue;
-    const bVal = bench[pointer.index] ?? null;
-
-    const range = maxAll - minAll || 1;
-    const tP = clamp((pVal - minAll) / range, 0, 1);
-    const yP = (1 - tP) * (chartHeight - 16) + 8;
-
-    const tooltipW = 160;
-    const tooltipH = showBenchmark ? 52 : 34;
-    const tipX = clamp(x - tooltipW / 2, 6, chartWidth - tooltipW - 6);
-    const tipY = clamp(yP - tooltipH - 10, 6, chartHeight - tooltipH - 6);
-
-    const pctAt = (v: number, first: number) => ((v - first) / first) * 100;
-
-    const pPctAt = pctAt(pVal, pStart);
-    const bPctAt = bVal ? pctAt(bVal, bStart) : null;
-
-    return (
-      <Svg>
-        {/* crosshair */}
-        <SvgLine
-          x1={x}
-          y1={0}
-          x2={x}
-          y2={chartHeight}
-          stroke={accent}
-          strokeWidth={1.5}
-          opacity={0.5}
-        />
-        <SvgCircle cx={x} cy={yP} r={3.5} fill={accent} />
-
-        {/* tooltip box */}
-        <SvgRect
-          x={tipX}
-          y={tipY}
-          rx={8}
-          ry={8}
-          width={tooltipW}
-          height={tooltipH}
-          fill={palette.tooltipBg}
-          stroke={palette.tooltipBorder}
-          strokeWidth={1}
-          opacity={0.98}
-        />
-        <SvgText
-          x={tipX + 10}
-          y={tipY + 18}
-          fill={palette.tooltipText}
-          fontSize="12"
-          fontWeight="600"
-        >
-          {`Portfolio: ${fmtUsd(pVal)} (${fmtPct(pPctAt)})`}
-        </SvgText>
-        {showBenchmark && bVal != null && (
-          <SvgText x={tipX + 10} y={tipY + 36} fill={palette.tooltipText} fontSize="12">
-            {`${
-              useRealBenchmarkData
-                ? formatBenchmarkSymbol(selectedBenchmarkSymbol)
-                : selectedBenchmarkSymbol
-            }: ${fmtUsd(bVal)} (${fmtPct(bPctAt!)})`}
-          </SvgText>
-        )}
-      </Svg>
-    );
+  const chartConfig = {
+    backgroundColor: '#FFFFFF',
+    backgroundGradientFrom: '#FFFFFF',
+    backgroundGradientTo: '#FFFFFF',
+    decimalPlaces: 0,
+    color: (opacity = 1) => `rgba(59, 130, 246, ${opacity})`,
+    labelColor: (opacity = 1) => `rgba(100, 116, 139, ${opacity})`,
+    style: {
+      borderRadius: 16,
+    },
+    propsForDots: {
+      r: '4',
+      strokeWidth: '2',
+      stroke: positive ? '#10B981' : '#EF4444',
+    },
+    propsForBackgroundLines: {
+      strokeDasharray: '4 4',
+      stroke: '#E2E8F0',
+      strokeWidth: 1,
+    },
   };
 
   return (
-    <>
-      <View style={[styles.card, { backgroundColor: palette.bg, borderColor: palette.border }]}>
-        {/* Header */}
-        <View style={styles.headerRow}>
-          <View style={styles.titleWrap}>
-            <Icon name="pie-chart" size={18} color={palette.accent} />
-            <Text style={[styles.title, { color: palette.text }]} numberOfLines={1}>
-              Portfolio Performance
-            </Text>
-          </View>
+    <View style={styles.container}>
+      {/* Info Modal */}
+      <Modal
+        visible={showInfoModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowInfoModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowInfoModal(false)}
+        >
+          <View style={styles.infoModalContent}>
+            <View style={styles.infoModalHeader}>
+              <Text style={styles.infoModalTitle}>
+                {infoModalContent?.title || 'Information'}
+              </Text>
+              <TouchableOpacity onPress={() => setShowInfoModal(false)}>
+                <Icon name="x" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
 
-          <View style={styles.tabsWrap}>
-            {TABS.map(t => {
-              const active = t === tab;
-              return (
-                <TouchableOpacity
-                  key={t}
-                  onPress={() => {
-                    setTab(t);
-                    setPointer(null);
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Timeframe ${t}`}
+            <ScrollView style={styles.infoModalBody} showsVerticalScrollIndicator={false}>
+              <Text style={styles.infoModalText}>{infoModalContent?.content}</Text>
+
+              {infoModalContent?.formula && (
+                <View style={styles.formulaBox}>
+                  <Text style={styles.formulaText}>{infoModalContent.formula}</Text>
+                  {infoModalContent.percentage && (
+                    <Text style={[styles.formulaText, { marginTop: 8 }]}>
+                      {infoModalContent.percentage}
+                    </Text>
+                  )}
+                </View>
+              )}
+
+              {infoModalContent?.example && (
+                <View style={styles.exampleBox}>
+                  <Text style={styles.exampleLabel}>Example:</Text>
+                  <Text style={styles.exampleText}>{infoModalContent.example}</Text>
+                </View>
+              )}
+
+              {infoModalContent?.interpretation && (
+                <View
                   style={[
-                    styles.chip,
-                    {
-                      backgroundColor: active ? palette.chipActiveBg : palette.chipBg,
-                      borderColor: active ? palette.chipActiveBg : palette.border,
-                    },
+                    styles.interpretationBox,
+                    alpha > 0 ? styles.interpretationPositive : styles.interpretationNegative,
                   ]}
                 >
                   <Text
-                    style={{
-                      color: active ? palette.chipActiveText : palette.text,
-                      fontSize: 12,
-                      fontWeight: '600',
-                    }}
+                    style={[
+                      styles.interpretationText,
+                      alpha > 0 ? styles.positiveValue : styles.negativeValue,
+                    ]}
                   >
-                    {t}
+                    {infoModalContent.interpretation}
                   </Text>
-                </TouchableOpacity>
-              );
-            })}
-
-            {/* Benchmark controls on the same line */}
-            {useRealBenchmarkData && (
-              <BenchmarkSelector
-                selectedSymbol={selectedBenchmarkSymbol}
-                onSymbolChange={setSelectedBenchmarkSymbol}
-              />
-            )}
-
-            {/* Benchmark toggle */}
-            <TouchableOpacity
-              onPress={() => setShowBenchmark(v => !v)}
-              accessibilityRole="button"
-              accessibilityLabel={`Toggle ${selectedBenchmarkSymbol} benchmark`}
-              style={[
-                styles.benchToggle,
-                {
-                  borderColor: palette.border,
-                  backgroundColor: showBenchmark ? `${palette.bench}22` : palette.chipBg,
-                },
-              ]}
-            >
-              <View
-                style={{
-                  width: 10,
-                  height: 2,
-                  backgroundColor: palette.bench,
-                  marginRight: 6,
-                }}
-              />
-              <Text style={{ color: palette.text, fontSize: 12, fontWeight: '600' }}>
-                {selectedBenchmarkSymbol}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Chart Type Toggle - Switch between Regular and Advanced AR Chart */}
-            <TouchableOpacity
-              onPress={() => {
-                if (!isSkiaAvailable && !useAdvancedChart) {
-                  Alert.alert(
-                    'AR Chart Requires Rebuild',
-                    'The AR chart requires @shopify/react-native-skia which needs a rebuild to work. Please rebuild your development build using: npm run build:dev:ios or npm run build:dev:android',
-                    [{ text: 'OK' }]
-                  );
-                  return;
-                }
-                logger.log('🔄 Toggling AR chart, current state:', useAdvancedChart);
-                logger.log('📊 History length:', history.length);
-                logger.log('📊 InnovativeChartSeries length:', innovativeChartSeries.length);
-                logger.log('📊 InnovativeChart available:', !!InnovativeChart);
-                logger.log('📊 Skia available:', isSkiaAvailable);
-                setUseAdvancedChart(v => !v);
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={
-                useAdvancedChart ? 'Switch to regular chart' : 'Switch to advanced AR chart'
-              }
-              style={[
-                styles.chartTypeToggle,
-                {
-                  borderColor: palette.border,
-                  backgroundColor: useAdvancedChart ? `${palette.accent}22` : palette.chipBg,
-                  marginLeft: 8,
-                  opacity: isSkiaAvailable ? 1 : 0.6,
-                },
-              ]}
-            >
-              <Icon
-                name={useAdvancedChart ? 'zap' : 'bar-chart-2'}
-                size={14}
-                color={useAdvancedChart ? palette.accent : palette.text}
-                style={{ marginRight: 4 }}
-              />
-              <Text
-                style={{
-                  color: useAdvancedChart ? palette.accent : palette.text,
-                  fontSize: 12,
-                  fontWeight: '600',
-                }}
-              >
-                {useAdvancedChart ? 'AR' : 'Chart'}
-              </Text>
-              {!isSkiaAvailable && (
-                <View
-                  style={{
-                    position: 'absolute',
-                    top: -2,
-                    right: -2,
-                    width: 6,
-                    height: 6,
-                    borderRadius: 3,
-                    backgroundColor: '#EF4444',
-                  }}
-                />
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* KPI Row */}
-        <View style={styles.kpiRow}>
-          {/* Total value */}
-          <View style={styles.kpiLeft}>
-            <EducationalTooltip
-              term="Total Value"
-              explanation={getTermExplanation('Total Value')}
-              position="top"
-              hideExternalIcon={true}
-            >
-              <TouchableOpacity
-                activeOpacity={0.8}
-                onLongPress={() => Alert.alert('Total Value', fmtUsd(curValue))}
-                onPress={() => {
-                  setClickedElement('totalValue');
-                  setShowEducationModal(true);
-                }}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text
-                    style={[styles.value, { color: palette.text }]}
-                    numberOfLines={1}
-                    adjustsFontSizeToFit={true}
-                    minimumFontScale={0.8}
-                  >
-                    {fmtCompactUsd(curValue)}
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => {
-                      setClickedElement('totalValue');
-                      setShowEducationModal(true);
-                    }}
-                    activeOpacity={0.7}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <View style={{
-                      width: 16,
-                      height: 16,
-                      borderRadius: 8,
-                      backgroundColor: '#007AFF',
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                    }}>
-                      <Icon name="info" size={10} color="#FFFFFF" />
-                    </View>
-                  </TouchableOpacity>
                 </View>
-                <Text style={[styles.kpiLabel, { color: palette.sub }]}>Total Value</Text>
-              </TouchableOpacity>
-            </EducationalTooltip>
-          </View>
+              )}
+            </ScrollView>
 
-          {/* Return pill */}
-          <View style={styles.kpiRight}>
-            <EducationalTooltip
-              term="Total Return"
-              explanation={getTermExplanation('Total Return')}
-              position="top"
-            >
+            <View style={styles.infoModalFooter}>
+              <TouchableOpacity
+                style={styles.infoModalButton}
+                onPress={() => setShowInfoModal(false)}
+              >
+                <Text style={styles.infoModalButtonText}>Got it!</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      <View style={styles.card}>
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerTop}>
+            <View style={styles.titleContainer}>
+              <View style={styles.iconContainer}>
+                <Icon name="trending-up" size={20} color={UI.colors.primary} />
+              </View>
               <View>
+                <Text style={styles.title}>Portfolio Performance</Text>
+                <Text style={styles.subtitle}>Real-time tracking & analysis</Text>
+              </View>
+            </View>
+
+            {/* Controls Row */}
+            <View style={styles.controlsRow}>
+              {/* Timeframe Tabs */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.tabsContainer}
+              >
+                {TABS.map((t) => (
+                  <TouchableOpacity
+                    key={t}
+                    onPress={() => setTab(t)}
+                    style={[styles.tab, tab === t && styles.tabActive]}
+                  >
+                    <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>{t}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              {/* Benchmark Selector */}
+              <View style={styles.controlGroup}>
                 <TouchableOpacity
-                  activeOpacity={0.8}
-                  onPress={() => {
-                    setClickedElement('return');
-                    setShowEducationModal(true);
-                  }}
+                  onPress={() => setShowBenchmarkSelector(!showBenchmarkSelector)}
+                  style={[
+                    styles.benchmarkButton,
+                    showBenchmark && styles.benchmarkButtonActive,
+                  ]}
                 >
                   <View
                     style={[
-                      styles.deltaPill,
-                      {
-                        backgroundColor: `${accent}1A`,
-                        borderColor: `${accent}33`,
-                      },
+                      styles.benchmarkIndicator,
+                      showBenchmark && styles.benchmarkIndicatorActive,
+                    ]}
+                  />
+                  <Text
+                    style={[
+                      styles.benchmarkButtonText,
+                      showBenchmark && styles.benchmarkButtonTextActive,
                     ]}
                   >
-                    <Icon name={trendIcon} size={12} color={accent} />
-                    <Text style={[styles.deltaText, { color: accent }]} numberOfLines={1}>
-                      {`${fmtUsd(Math.abs(curReturn))} (${fmtPct(curReturnPct)})`}
-                    </Text>
-                  </View>
+                    {selectedBenchmark}
+                  </Text>
+                  <Icon name="chevron-down" size={14} color={showBenchmark ? '#A855F7' : '#64748B'} />
                 </TouchableOpacity>
 
-                {/* vs benchmark pill */}
-                {showBenchmark && (
-                  <View style={[styles.vsPill, { borderColor: palette.border }]}>
-                    <Text
-                      style={{
-                        fontSize: 10,
-                        color: palette.sub,
-                        marginRight: 4,
-                      }}
+                {showBenchmarkSelector && (
+                  <Modal
+                    visible={showBenchmarkSelector}
+                    transparent
+                    animationType="fade"
+                    onRequestClose={() => setShowBenchmarkSelector(false)}
+                  >
+                    <TouchableOpacity
+                      style={styles.modalOverlay}
+                      activeOpacity={1}
+                      onPress={() => setShowBenchmarkSelector(false)}
                     >
-                      vs{' '}
-                      {useRealBenchmarkData
-                        ? formatBenchmarkSymbol(selectedBenchmarkSymbol)
-                        : selectedBenchmarkSymbol}
-                    </Text>
-                    <Text
-                      style={{
-                        fontSize: 11,
-                        fontWeight: '700',
-                        color: vsBenchmark >= 0 ? palette.green : palette.red,
-                      }}
-                    >
-                      {fmtPct(vsBenchmark)}
-                    </Text>
-                  </View>
+                      <View style={styles.benchmarkDropdown}>
+                        {BENCHMARKS.map((bench) => (
+                          <TouchableOpacity
+                            key={bench}
+                            onPress={() => {
+                              setSelectedBenchmark(bench);
+                              setShowBenchmarkSelector(false);
+                            }}
+                            style={[
+                              styles.benchmarkOption,
+                              selectedBenchmark === bench && styles.benchmarkOptionActive,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.benchmarkOptionText,
+                                selectedBenchmark === bench && styles.benchmarkOptionTextActive,
+                              ]}
+                            >
+                              {bench}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </TouchableOpacity>
+                  </Modal>
                 )}
               </View>
-            </EducationalTooltip>
-          </View>
-        </View>
 
-        {/* Chart + Crosshair - Advanced AR Chart or Regular Chart */}
-        <View style={styles.chartShell}>
-          {useAdvancedChart ? (
-            innovativeChartSeries.length > 0 && InnovativeChart && isSkiaAvailable ? (
-              <InnovativeChart
-                series={innovativeChartSeries}
-                benchmarkData={innovativeChartBenchmark}
-                costBasis={curValue - curReturn}
-                palette={{
-                  bg: palette.bg,
-                  grid: palette.grid,
-                  price: accent,
-                  text: palette.text,
-                  card: palette.bg,
-                  moneyGreen: palette.green,
-                  moneyRed: palette.red,
-                }}
-                height={chartHeight}
-                margin={16}
-              />
-            ) : (
-              <View
-                style={{
-                  flex: 1,
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  padding: 20,
-                  minHeight: chartHeight,
-                }}
+              {/* Benchmark Toggle */}
+              <TouchableOpacity
+                onPress={() => setShowBenchmark(!showBenchmark)}
+                style={[
+                  styles.toggleButton,
+                  showBenchmark && styles.toggleButtonActive,
+                ]}
               >
                 <Text
-                  style={{
-                    color: palette.sub,
-                    fontSize: 14,
-                    textAlign: 'center',
-                    marginBottom: 8,
-                  }}
+                  style={[
+                    styles.toggleButtonText,
+                    showBenchmark && styles.toggleButtonTextActive,
+                  ]}
                 >
-                  {!isSkiaAvailable
-                    ? 'AR Chart requires React Native Skia'
-                    : innovativeChartSeries.length === 0
-                    ? 'Loading chart data...'
-                    : 'Chart unavailable'}
+                  {showBenchmark ? 'Hide' : 'Show'} Benchmark
                 </Text>
-                {!isSkiaAvailable && (
-                  <>
-                    <Text
-                      style={{
-                        color: palette.sub,
-                        fontSize: 12,
-                        textAlign: 'center',
-                        marginTop: 8,
-                      }}
-                    >
-                      The advanced AR chart requires @shopify/react-native-skia library.
-                    </Text>
-                    <Text
-                      style={{
-                        color: palette.sub,
-                        fontSize: 12,
-                        textAlign: 'center',
-                        marginTop: 4,
-                      }}
-                    >
-                      This is not available in Expo Go. Use a development build instead.
-                    </Text>
-                  </>
-                )}
-                {innovativeChartSeries.length === 0 && (
-                  <Text
-                    style={{
-                      color: palette.sub,
-                      fontSize: 12,
-                      textAlign: 'center',
-                      marginTop: 8,
-                    }}
-                  >
-                    History data: {history.length} points
-                  </Text>
-                )}
-              </View>
-            )
-          ) : (
-            <View {...panResponder.panHandlers}>
-              <LineChart
-                data={chartData}
-                width={chartWidth}
-                height={200}
-                chartConfig={chartConfig}
-                bezier
-                withDots={false}
-                withShadow={false}
-                withInnerLines
-                withOuterLines={false}
-                withVerticalLines={false}
-                withHorizontalLines
-                style={styles.chart}
-                fromZero={false}
-                segments={4}
-                yAxisInterval={1}
-                onDataPointClick={dp => {
-                  setPointer({
-                    index: dp.index,
-                    x: dp.x,
-                    y: dp.y,
-                    value: dp.value as number,
-                  });
-                }}
-              />
+              </TouchableOpacity>
+
+              {/* Advanced Chart Toggle */}
               <TouchableOpacity
-                style={StyleSheet.absoluteFillObject}
-                activeOpacity={1}
-                onPress={() => setPointer(null)}
-                onPressIn={() => setPointer(null)}
-                pointerEvents="box-none"
-              />
+                onPress={() => setUseAdvancedChart(!useAdvancedChart)}
+                style={[
+                  styles.toggleButton,
+                  useAdvancedChart && styles.toggleButtonActive,
+                ]}
+              >
+                <Icon name="zap" size={14} color={useAdvancedChart ? '#F59E0B' : '#64748B'} />
+                <Text
+                  style={[
+                    styles.toggleButtonText,
+                    useAdvancedChart && styles.toggleButtonTextActive,
+                  ]}
+                >
+                  {useAdvancedChart ? 'AR' : 'Chart'}
+                </Text>
+              </TouchableOpacity>
             </View>
-          )}
+          </View>
         </View>
 
-        {/* NEW: Legend */}
-        <View style={styles.legendRow}>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendSwatch, { backgroundColor: accent }]} />
-            <Text style={styles.legendText}>Portfolio</Text>
+        {/* KPI Section */}
+        <View style={styles.kpiSection}>
+          <View style={styles.kpiGrid}>
+            {/* Total Value */}
+            <View style={styles.kpiCard}>
+              <View style={styles.kpiHeader}>
+                <Icon name="dollar-sign" size={16} color="#64748B" />
+                <Text style={styles.kpiLabel}>Total Value</Text>
+                <TouchableOpacity onPress={() => openInfoModal('totalValue')}>
+                  <View style={styles.infoButton}>
+                    <Icon name="info" size={12} color={UI.colors.primary} />
+                  </View>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.kpiValue}>{formatCurrency(totalValue)}</Text>
+            </View>
+
+            {/* Total Return */}
+            <View style={styles.kpiCard}>
+              <View style={styles.kpiHeader}>
+                {positive ? (
+                  <Icon name="trending-up" size={16} color="#10B981" />
+                ) : (
+                  <Icon name="trending-down" size={16} color="#EF4444" />
+                )}
+                <Text style={styles.kpiLabel}>Total Return</Text>
+                <TouchableOpacity onPress={() => openInfoModal('totalReturn')}>
+                  <View style={styles.infoButton}>
+                    <Icon name="info" size={12} color={UI.colors.primary} />
+                  </View>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.returnRow}>
+                <Text
+                  style={[
+                    styles.kpiValue,
+                    positive ? styles.positiveValue : styles.negativeValue,
+                  ]}
+                >
+                  {formatCurrency(Math.abs(totalReturn))}
+                </Text>
+                <Text
+                  style={[
+                    styles.returnPercent,
+                    positive ? styles.positiveValue : styles.negativeValue,
+                  ]}
+                >
+                  {formatPercent(totalReturnPercent)}
+                </Text>
+              </View>
+            </View>
+
+            {/* Alpha vs Benchmark */}
+            {showBenchmark && (
+              <View style={styles.kpiCard}>
+                <View style={styles.kpiHeader}>
+                  <Icon name="activity" size={16} color="#A855F7" />
+                  <Text style={styles.kpiLabel}>Alpha vs {selectedBenchmark}</Text>
+                  <TouchableOpacity onPress={() => openInfoModal('alpha')}>
+                    <View style={styles.infoButton}>
+                      <Icon name="info" size={12} color={UI.colors.primary} />
+                    </View>
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.alphaRow}>
+                  <View
+                    style={[
+                      styles.alphaBadge,
+                      alpha >= 0 ? styles.alphaBadgePositive : styles.alphaBadgeNegative,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.alphaValue,
+                        alpha >= 0 ? styles.positiveValue : styles.negativeValue,
+                      ]}
+                    >
+                      {formatPercent(alpha)}
+                    </Text>
+                  </View>
+                  <Text style={styles.benchmarkReturnText}>
+                    Benchmark: {formatPercent(benchmarkReturn)}
+                  </Text>
+                </View>
+              </View>
+            )}
           </View>
-          {showBenchmark && (
-            <View style={styles.legendItem}>
-              <View style={[styles.legendSwatch, { backgroundColor: palette.bench }]} />
-              <Text style={styles.legendText}>
-                {useRealBenchmarkData
-                  ? formatBenchmarkSymbol(selectedBenchmarkSymbol)
-                  : selectedBenchmarkSymbol}
-              </Text>
+        </View>
+
+        {/* Chart Section */}
+        <View style={styles.chartSection}>
+          {useAdvancedChart ? (
+            <ARChartView
+              portfolioData={chartData.portfolio}
+              benchmarkData={chartData.benchmark}
+              showBenchmark={showBenchmark}
+              totalValue={totalValue}
+              totalReturn={totalReturn}
+              positive={positive}
+              onClose={() => setUseAdvancedChart(false)}
+            />
+          ) : (
+            <View style={styles.chartContainer}>
+              {chartData.portfolio.length > 0 ? (
+                <LineChart
+                  data={chartDataForDisplay}
+                  width={screenWidth - 64}
+                  height={256}
+                  chartConfig={chartConfig}
+                  bezier
+                  style={styles.chart}
+                  withDots={false}
+                  withShadow={false}
+                  withInnerLines={true}
+                  withOuterLines={false}
+                  withVerticalLines={false}
+                  withHorizontalLines={true}
+                />
+              ) : (
+                <View style={styles.chartPlaceholder}>
+                  <Text style={styles.chartPlaceholderText}>Loading chart data...</Text>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* Legend - Only show when not in AR mode */}
+          {!useAdvancedChart && (
+            <View style={styles.legend}>
+              <View style={styles.legendItem}>
+                <View style={styles.legendLinePortfolio} />
+                <Text style={styles.legendText}>Portfolio</Text>
+              </View>
+              {showBenchmark && (
+                <View style={styles.legendItem}>
+                  <View style={styles.legendLineBenchmark} />
+                  <Text style={styles.legendText}>{selectedBenchmark}</Text>
+                </View>
+              )}
             </View>
           )}
         </View>
 
         {/* Footer */}
-        <View style={[styles.footer, { borderTopColor: palette.border }]}>
-          <Text style={[styles.footerText, { color: palette.sub }]}>
-            {isLoading ? 'Loading data…' : isLiveData ? 'Live data' : 'Recent data'} • Tap or drag
-            to inspect
-          </Text>
+        <View style={styles.footer}>
+          <View style={styles.footerRow}>
+            <View style={styles.statusIndicator}>
+              <View style={styles.statusDot} />
+              <Text style={styles.statusText}>Live data • Updated just now</Text>
+            </View>
+            <TouchableOpacity onPress={handleViewAnalytics}>
+              <View style={styles.footerLinkContainer}>
+                <Icon name="bar-chart-2" size={16} color={UI.colors.primary} />
+                <Text style={styles.footerLink}>View detailed analytics →</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
+    </View>
+  );
+}
 
-      <PortfolioEducationModal
-        visible={showEducationModal}
-        onClose={() => setShowEducationModal(false)}
-        isPositive={curReturn >= 0 && curReturnPct >= 0}
-        totalValue={curValue}
-        totalReturn={curReturn}
-        totalReturnPercent={curReturnPct}
-        clickedElement={clickedElement}
-      />
-    </>
+// AR Chart View Component
+function ARChartView({
+  portfolioData,
+  benchmarkData,
+  showBenchmark,
+  totalValue,
+  totalReturn,
+  positive,
+  onClose,
+}: {
+  portfolioData: number[];
+  benchmarkData: number[];
+  showBenchmark: boolean;
+  totalValue: number;
+  totalReturn: number;
+  positive: boolean;
+  onClose: () => void;
+}) {
+  const [rotation, setRotation] = useState(0);
+  const [scale, setScale] = useState(1);
+  const insets = useSafeAreaInsets();
+
+  const formatCurrency = (value: number) => {
+    if (value >= 1000000) return `$${(value / 1000000).toFixed(2)}M`;
+    if (value >= 1000) return `$${(value / 1000).toFixed(1)}K`;
+    return `$${value.toFixed(0)}`;
+  };
+
+  // Calculate 3D positions for the chart
+  const chartPoints = useMemo(() => {
+    if (portfolioData.length === 0) return [];
+    const min = Math.min(...portfolioData);
+    const max = Math.max(...portfolioData);
+    const range = max - min || 1;
+    const chartHeight = 300; // Fixed height for visualization
+
+    return portfolioData.map((value, i) => {
+      const x = (i / (portfolioData.length - 1)) * (screenWidth - 80); // X position in pixels
+      const normalizedY = (value - min) / range; // 0 to 1
+      const y = chartHeight - normalizedY * chartHeight; // Y position from bottom
+      return { x, y, value, normalizedY };
+    });
+  }, [portfolioData]);
+
+  return (
+    <Modal visible={true} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
+      <SafeAreaView style={styles.arContainer} edges={['top', 'bottom']}>
+        <StatusBar barStyle="dark-content" />
+        {/* AR Header */}
+        <View style={[styles.arHeader, { paddingTop: Math.max(insets.top + 8, 24) }]}>
+          <View style={styles.arHeaderLeft}>
+            <Icon name="zap" size={24} color="#F59E0B" />
+            <View>
+              <Text style={styles.arTitle}>AR Portfolio Walk</Text>
+              <Text style={styles.arSubtitle}>3D visualization of your portfolio journey</Text>
+            </View>
+          </View>
+          <TouchableOpacity onPress={onClose} style={styles.arCloseButton}>
+            <Icon name="x" size={24} color="#1E293B" />
+          </TouchableOpacity>
+        </View>
+
+        {/* AR Visualization Area */}
+        <View style={styles.arVisualizationArea}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.arScrollContent}
+          >
+            <View style={styles.arCanvas}>
+              {/* Grid Background */}
+              <View style={styles.arGrid}>
+                {[0, 1, 2, 3, 4].map((i) => (
+                  <View key={i} style={[styles.arGridLine, { top: `${i * 25}%` }]} />
+                ))}
+              </View>
+
+              {/* 3D Chart Line */}
+              <View style={styles.arChart3D}>
+                {chartPoints.map((point, i) => {
+                  const nextPoint = chartPoints[i + 1];
+                  if (!nextPoint) return null;
+
+                  const dx = nextPoint.x - point.x;
+                  const dy = nextPoint.y - point.y;
+                  const distance = Math.sqrt(dx * dx + dy * dy);
+                  const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+
+                  return (
+                    <View
+                      key={i}
+                      style={[
+                        styles.arChartSegment,
+                        {
+                          left: point.x,
+                          top: point.y,
+                          width: distance,
+                          transform: [{ rotate: `${angle}deg` }, { scale }],
+                        },
+                      ]}
+                    >
+                      <LinearGradient
+                        colors={
+                          positive
+                            ? ['#10B981', '#34D399', '#6EE7B7']
+                            : ['#EF4444', '#F87171', '#FCA5A5']
+                        }
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={styles.arChartSegmentGradient}
+                      />
+                    </View>
+                  );
+                })}
+
+                {/* Data Points */}
+                {chartPoints.map((point, i) => (
+                  <TouchableOpacity
+                    key={`point-${i}`}
+                    style={[
+                      styles.arDataPoint,
+                      {
+                        left: point.x - 6,
+                        top: point.y - 6,
+                        backgroundColor: positive ? '#10B981' : '#EF4444',
+                      },
+                    ]}
+                    onPress={() => {
+                      Alert.alert('Portfolio Value', formatCurrency(point.value));
+                    }}
+                  >
+                    <View style={styles.arDataPointGlow} />
+                  </TouchableOpacity>
+                ))}
+
+                {/* Current Value Indicator */}
+                {chartPoints.length > 0 && (
+                  <View
+                    style={[
+                      styles.arCurrentPoint,
+                      {
+                        left: chartPoints[chartPoints.length - 1].x - 12,
+                        top: chartPoints[chartPoints.length - 1].y - 12,
+                        backgroundColor: positive ? '#10B981' : '#EF4444',
+                      },
+                    ]}
+                  >
+                    <View style={styles.arCurrentPointGlow} />
+                    <Icon
+                      name={positive ? 'trending-up' : 'trending-down'}
+                      size={16}
+                      color="#FFFFFF"
+                    />
+                  </View>
+                )}
+              </View>
+
+              {/* Y-Axis Labels */}
+              <View style={styles.arYAxis}>
+                {chartPoints.length > 0 && (() => {
+                  const min = Math.min(...portfolioData);
+                  const max = Math.max(...portfolioData);
+                  const range = max - min || 1;
+                  return [0, 1, 2, 3, 4].map((i) => {
+                    const value = min + (range * i) / 4;
+                    return (
+                      <Text key={i} style={[styles.arYAxisLabel, { top: `${i * 25}%` }]}>
+                        {formatCurrency(value)}
+                      </Text>
+                    );
+                  });
+                })()}
+              </View>
+            </View>
+          </ScrollView>
+
+          {/* Instructions Overlay */}
+          <View style={styles.arInstructions}>
+            <Text style={styles.arInstructionsText}>
+              Swipe to explore • Pinch to zoom • Tap points for details
+            </Text>
+          </View>
+
+          {/* AR Stats Panel */}
+          <View style={styles.arStatsPanel}>
+            <View style={styles.arStatCard}>
+              <Text style={styles.arStatLabel}>Current Value</Text>
+              <Text style={styles.arStatValue}>{formatCurrency(totalValue)}</Text>
+            </View>
+            <View style={styles.arStatCard}>
+              <Text style={styles.arStatLabel}>Total Return</Text>
+              <Text style={[styles.arStatValue, positive ? styles.positiveValue : styles.negativeValue]}>
+                {formatCurrency(Math.abs(totalReturn))}
+              </Text>
+            </View>
+            <View style={styles.arStatCard}>
+              <Text style={styles.arStatLabel}>Performance</Text>
+              <Text style={[styles.arStatValue, positive ? styles.positiveValue : styles.negativeValue]}>
+                {positive ? '📈 Up' : '📉 Down'}
+              </Text>
+            </View>
+          </View>
+
+          {/* AR Controls */}
+          <View style={styles.arControls}>
+            <TouchableOpacity
+              style={styles.arControlButton}
+              onPress={() => setScale(Math.max(0.5, scale - 0.1))}
+            >
+              <Icon name="zoom-out" size={20} color="#1E293B" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.arControlButton}
+              onPress={() => setScale(Math.min(2, scale + 0.1))}
+            >
+              <Icon name="zoom-in" size={20} color="#1E293B" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.arControlButton}
+              onPress={() => setRotation((prev) => prev + 15)}
+            >
+              <Icon name="rotate-cw" size={20} color="#1E293B" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.arControlButton} onPress={() => setRotation(0)}>
+              <Icon name="refresh-cw" size={20} color="#1E293B" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* AR Footer */}
+        <View style={styles.arFooter}>
+          <View style={styles.arFooterInfo}>
+            <View style={styles.arFooterDot} />
+            <Text style={styles.arFooterText}>AR Preview Mode</Text>
+          </View>
+          <Text style={styles.arFooterNote}>
+            Full ARKit/ARCore integration coming soon
+          </Text>
+        </View>
+      </SafeAreaView>
+    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    padding: UI.spacing.md,
+  },
   card: {
-    marginHorizontal: 0,
-    marginVertical: 8,
-    borderRadius: 0,
-    padding: 16,
-    paddingHorizontal: 16,
-    borderWidth: 0,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
     elevation: 4,
+    overflow: 'hidden',
   },
-  headerRow: {
+  header: {
+    padding: UI.spacing.md,
+    paddingBottom: UI.spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  headerTop: {
+    gap: UI.spacing.md,
+  },
+  titleContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 12,
   },
-  titleWrap: {
+  iconContainer: {
+    padding: 10,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    borderRadius: 12,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  subtitle: {
+    fontSize: 14,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  controlsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    flexShrink: 1,
-    marginRight: 8,
+    flexWrap: 'wrap',
   },
-  title: { fontSize: 18, fontWeight: '700', flexShrink: 1 },
-  tabsWrap: {
+  tabsContainer: {
+    gap: 8,
+  },
+  tab: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+  },
+  tabActive: {
+    backgroundColor: UI.colors.primary,
+  },
+  tabText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  tabTextActive: {
+    color: '#FFFFFF',
+  },
+  controlGroup: {
+    position: 'relative',
+  },
+  benchmarkButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    flexWrap: 'wrap',
-  },
-  chip: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  benchmarkButtonActive: {
+    backgroundColor: 'rgba(168, 85, 247, 0.1)',
+    borderColor: 'rgba(168, 85, 247, 0.3)',
+  },
+  benchmarkIndicator: {
+    width: 8,
+    height: 2,
+    backgroundColor: '#94A3B8',
+  },
+  benchmarkIndicatorActive: {
+    backgroundColor: '#A855F7',
+  },
+  benchmarkButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  benchmarkButtonTextActive: {
+    color: '#A855F7',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  benchmarkDropdown: {
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1,
-    minWidth: 36,
-    alignItems: 'center',
+    borderColor: '#E2E8F0',
+    overflow: 'hidden',
+    minWidth: 120,
   },
-  benchToggle: {
+  benchmarkOption: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+  },
+  benchmarkOptionActive: {
+    backgroundColor: '#F3F4F6',
+  },
+  benchmarkOptionText: {
+    fontSize: 14,
+    color: '#1E293B',
+  },
+  benchmarkOptionTextActive: {
+    color: '#A855F7',
+    fontWeight: '600',
+  },
+  toggleButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 8,
+    backgroundColor: '#F1F5F9',
     borderWidth: 1,
-    maxWidth: 120,
+    borderColor: 'transparent',
   },
-  chartTypeToggle: {
+  toggleButtonActive: {
+    backgroundColor: 'rgba(168, 85, 247, 0.1)',
+    borderColor: 'rgba(168, 85, 247, 0.3)',
+  },
+  toggleButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  toggleButtonTextActive: {
+    color: '#A855F7',
+  },
+  kpiSection: {
+    padding: UI.spacing.md,
+    paddingBottom: UI.spacing.sm,
+  },
+  kpiGrid: {
+    gap: UI.spacing.md,
+  },
+  kpiCard: {
+    gap: 8,
+  },
+  kpiHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  kpiRow: {
-    marginTop: 4,
-    marginBottom: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    paddingHorizontal: 0,
-    gap: 16, // Increased gap to prevent overlap
-  },
-  kpiLeft: {
-    flex: 1,
-    minWidth: 0,
-    maxWidth: '55%', // Limit width to prevent wrapping
-    marginRight: 12,
-    paddingRight: 20, // Extra padding to account for EducationalTooltip info icon (right: -16)
-    flexShrink: 1,
-  },
-  kpiRight: {
-    flexShrink: 0,
-    alignItems: 'flex-end',
-    marginLeft: 12,
-    paddingLeft: 4, // Small padding for the return pill
-  },
-  value: {
-    fontSize: 20,
-    fontWeight: '700',
-    flexShrink: 0, // Prevent wrapping
+    gap: 6,
   },
   kpiLabel: {
     fontSize: 12,
-    marginTop: 2,
-    opacity: 0.7,
+    color: '#64748B',
+    flex: 1,
   },
-  deltaPill: {
+  kpiValue: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  returnRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 12,
+  },
+  returnPercent: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  positiveValue: {
+    color: '#10B981',
+  },
+  negativeValue: {
+    color: '#EF4444',
+  },
+  alphaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 999,
-    borderWidth: 1,
-    alignSelf: 'flex-end',
-    flexShrink: 0,
+    gap: 12,
   },
-  vsPill: {
-    marginTop: 3,
-    alignSelf: 'flex-end',
+  alphaBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  alphaBadgePositive: {
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderColor: 'rgba(16, 185, 129, 0.3)',
+  },
+  alphaBadgeNegative: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+  },
+  alphaValue: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  benchmarkReturnText: {
+    fontSize: 12,
+    color: '#94A3B8',
+  },
+  chartSection: {
+    padding: UI.spacing.md,
+    paddingBottom: UI.spacing.sm,
+  },
+  chartContainer: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 16,
+    overflow: 'hidden',
+  },
+  chart: {
+    borderRadius: 16,
+  },
+  legend: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 999,
-    borderWidth: 1,
-    flexShrink: 0,
-  },
-  deltaText: { fontSize: 12, fontWeight: '700' },
-  chartShell: { alignItems: 'center', marginTop: 4, marginBottom: 12, minHeight: 200, marginHorizontal: -16 },
-  chart: { borderRadius: 0, marginVertical: 8 },
-  // NEW: Legend styles
-  legendRow: {
-    flexDirection: 'row',
-    gap: 16,
     justifyContent: 'center',
+    gap: 24,
+    marginTop: UI.spacing.md,
+  },
+  legendItem: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
+    gap: 8,
+  },
+  legendLinePortfolio: {
+    width: 32,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: UI.colors.primary,
+  },
+  legendLineBenchmark: {
+    width: 32,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#A855F7',
+    opacity: 0.4,
+  },
+  legendText: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  footer: {
+    padding: UI.spacing.md,
+    paddingTop: UI.spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  footerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  statusIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#10B981',
+  },
+  statusText: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  footerLinkContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  footerLink: {
+    fontSize: 12,
+    color: UI.colors.primary,
+    fontWeight: '500',
+  },
+  infoButton: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  infoModalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    maxWidth: '90%',
+    maxHeight: '80%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  infoModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: UI.spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  infoModalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  infoModalBody: {
+    padding: UI.spacing.md,
+    maxHeight: 400,
+  },
+  infoModalText: {
+    fontSize: 14,
+    color: '#475569',
+    lineHeight: 22,
+    marginBottom: UI.spacing.md,
+  },
+  formulaBox: {
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: UI.spacing.md,
+    marginBottom: UI.spacing.md,
+  },
+  formulaText: {
+    fontSize: 12,
+    fontFamily: 'monospace',
+    color: UI.colors.primary,
+  },
+  exampleBox: {
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.3)',
+    borderRadius: 12,
+    padding: UI.spacing.md,
+    marginBottom: UI.spacing.md,
+  },
+  exampleLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: UI.colors.primary,
     marginBottom: 4,
   },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  legendSwatch: { width: 14, height: 4, borderRadius: 2 },
-  legendText: { fontSize: 13, fontWeight: '500', opacity: 0.8 },
-  footer: {
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.05)',
+  exampleText: {
+    fontSize: 12,
+    color: '#475569',
+    lineHeight: 18,
   },
-  footerText: { fontSize: 13, textAlign: 'center', opacity: 0.6 },
+  interpretationBox: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: UI.spacing.md,
+  },
+  interpretationPositive: {
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderColor: 'rgba(16, 185, 129, 0.3)',
+  },
+  interpretationNegative: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+  },
+  interpretationText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  infoModalFooter: {
+    padding: UI.spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+  },
+  infoModalButton: {
+    backgroundColor: UI.colors.primary,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  infoModalButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  chartPlaceholder: {
+    height: 256,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chartPlaceholderText: {
+    fontSize: 14,
+    color: '#64748B',
+  },
+  // AR Chart Styles
+  arContainer: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
+  arHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: UI.spacing.md,
+    paddingBottom: UI.spacing.md,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  arHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  arTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  arSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  arCloseButton: {
+    padding: 8,
+  },
+  arVisualizationArea: {
+    flex: 1,
+    backgroundColor: '#0F172A',
+    position: 'relative',
+  },
+  arScrollContent: {
+    paddingHorizontal: 20,
+  },
+  arCanvas: {
+    width: Math.max(screenWidth - 40, 600),
+    height: 300,
+    position: 'relative',
+    marginVertical: 20,
+  },
+  arChart3D: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  arChartSegment: {
+    position: 'absolute',
+    height: 4,
+    borderRadius: 2,
+  },
+  arChartSegmentGradient: {
+    flex: 1,
+    borderRadius: 2,
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  arDataPoint: {
+    position: 'absolute',
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  arDataPointGlow: {
+    position: 'absolute',
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(16, 185, 129, 0.3)',
+    top: -6,
+    left: -6,
+  },
+  arCurrentPoint: {
+    position: 'absolute',
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  arCurrentPointGlow: {
+    position: 'absolute',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(16, 185, 129, 0.4)',
+    top: -8,
+    left: -8,
+  },
+  arGrid: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  arGridLine: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  arYAxis: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 60,
+  },
+  arYAxisLabel: {
+    position: 'absolute',
+    fontSize: 10,
+    color: 'rgba(255, 255, 255, 0.6)',
+    fontWeight: '500',
+    transform: [{ translateY: -8 }],
+  },
+  arInstructions: {
+    position: 'absolute',
+    bottom: 100,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  arInstructionsText: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  arStatsPanel: {
+    flexDirection: 'row',
+    padding: UI.spacing.md,
+    backgroundColor: '#1E293B',
+    gap: UI.spacing.sm,
+  },
+  arStatCard: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    padding: UI.spacing.sm,
+    alignItems: 'center',
+  },
+  arStatLabel: {
+    fontSize: 10,
+    color: '#94A3B8',
+    marginBottom: 4,
+  },
+  arStatValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  arControls: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: UI.spacing.sm,
+    padding: UI.spacing.md,
+    backgroundColor: '#1E293B',
+  },
+  arControlButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  arFooter: {
+    padding: UI.spacing.md,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    alignItems: 'center',
+  },
+  arFooterInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  arFooterDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#10B981',
+  },
+  arFooterText: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  arFooterNote: {
+    fontSize: 10,
+    color: '#94A3B8',
+    marginTop: 4,
+  },
 });
