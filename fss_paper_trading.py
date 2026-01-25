@@ -276,27 +276,51 @@ class FSSPaperTrading:
             results = {
                 "start_date": portfolio.get('start_date'),
                 "initial_capital": self.initial_capital,
-                "daily_updates": []
+                "daily_updates": [],
+                "daily_returns": {},  # For transparency engine
+                "current_regime": "Expansion"
             }
         
         regime_aware = portfolio.get('regime_aware', {})
         ghost = portfolio.get('ghost_always_in', {})
         
+        # Calculate daily returns
+        prev_regime_value = results.get('daily_updates', [{}])[-1].get('regime_aware', {}).get('portfolio_value', self.initial_capital)
+        prev_ghost_value = results.get('daily_updates', [{}])[-1].get('ghost_always_in', {}).get('portfolio_value', self.initial_capital)
+        
+        current_regime_value = regime_aware.get('current_capital', self.initial_capital)
+        current_ghost_value = ghost.get('current_capital', self.initial_capital)
+        
+        fss_return = (current_regime_value / prev_regime_value - 1.0) if prev_regime_value > 0 else 0.0
+        ghost_return = (current_ghost_value / prev_ghost_value - 1.0) if prev_ghost_value > 0 else 0.0
+        
+        # Store daily returns for transparency engine
+        date_str = today.strftime('%Y-%m-%d')
+        if 'daily_returns' not in results:
+            results['daily_returns'] = {}
+        results['daily_returns'][date_str] = {
+            'fss_return': fss_return,
+            'ghost_return': ghost_return
+        }
+        
         results['daily_updates'].append({
             "date": today.isoformat(),
             "regime_aware": {
-                "portfolio_value": regime_aware.get('current_capital', self.initial_capital),
+                "portfolio_value": current_regime_value,
                 "positions": list(regime_aware.get('positions', {}).keys()),
                 "in_cash": regime_aware.get('cash', 0) > 0
             },
             "ghost_always_in": {
-                "portfolio_value": ghost.get('current_capital', self.initial_capital),
+                "portfolio_value": current_ghost_value,
                 "positions": list(ghost.get('positions', {}).keys())
             },
             "top_stocks": [s['symbol'] for s in top_stocks],
-            "safety_alpha": ((regime_aware.get('current_capital', self.initial_capital) - 
-                            ghost.get('current_capital', self.initial_capital)) / self.initial_capital) * 100
+            "safety_alpha": ((current_regime_value - current_ghost_value) / self.initial_capital) * 100
         })
+        
+        # Update current regime (if available from portfolio)
+        if 'current_regime' in portfolio:
+            results['current_regime'] = portfolio['current_regime']
         
         with open(self.results_file, 'w') as f:
             json.dump(results, f, indent=2, default=str)
